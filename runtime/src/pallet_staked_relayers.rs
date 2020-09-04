@@ -1,4 +1,4 @@
-use crate::runtime::pallet_security::{Security, SecurityEventsDecoder};
+use crate::pallet_security::{Security, SecurityEventsDecoder};
 use core::marker::PhantomData;
 use module_bitcoin::types::H256Le;
 use module_security::ErrorCode;

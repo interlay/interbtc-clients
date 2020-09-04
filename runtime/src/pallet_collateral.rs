@@ -1,5 +1,5 @@
-use crate::runtime::pallet_security::Security;
-use crate::runtime::pallet_security::SecurityEventsDecoder;
+use crate::pallet_security::Security;
+use crate::pallet_security::SecurityEventsDecoder;
 use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};
 use sp_runtime::traits::Member;
 use std::fmt::Debug;

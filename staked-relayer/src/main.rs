@@ -1,12 +1,10 @@
+use runtime::PolkaBTC;
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use substrate_subxt::{ClientBuilder, PairSigner};
 
 mod http;
 mod rpc;
-mod runtime;
-
-use runtime::PolkaBTC;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

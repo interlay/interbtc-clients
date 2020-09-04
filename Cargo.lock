@@ -2889,6 +2889,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "runtime"
+version = "0.1.0"
+dependencies = [
+ "bitcoin",
+ "frame-system",
+ "pallet-balances",
+ "pallet-indices",
+ "parity-scale-codec",
+ "security",
+ "sp-core",
+ "sp-keyring",
+ "sp-runtime",
+ "staked-relayers",
+ "substrate-subxt",
+ "substrate-subxt-proc-macro",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3724,6 +3742,7 @@ dependencies = [
  "pallet-balances",
  "pallet-indices",
  "parity-scale-codec",
+ "runtime",
  "security",
  "sp-core",
  "sp-keyring",
@@ -3731,6 +3750,7 @@ dependencies = [
  "staked-relayers",
  "substrate-subxt",
  "substrate-subxt-proc-macro",
+ "thiserror",
  "tokio",
  "warp",
 ]

@@ -1,5 +1,5 @@
 use crate::rpc::Provider;
-use crate::runtime::PolkaBTC;
+use runtime::PolkaBTC;
 use sp_core::Pair;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use std::convert::Infallible;

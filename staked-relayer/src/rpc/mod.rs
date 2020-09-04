@@ -1,10 +1,10 @@
-use crate::runtime::pallet_btc_relay::*;
-use crate::runtime::pallet_collateral::*;
-use crate::runtime::pallet_security::*;
-use crate::runtime::pallet_staked_relayers::*;
-use crate::runtime::PolkaBTC;
 use log::error;
 use module_bitcoin::types::RawBlockHeader;
+use runtime::pallet_btc_relay::*;
+use runtime::pallet_collateral::*;
+use runtime::pallet_security::*;
+use runtime::pallet_staked_relayers::*;
+use runtime::PolkaBTC;
 use sp_core::crypto::{Pair, Public};
 use sp_core::sr25519::Pair as KeyPair;
 use sp_runtime::traits::{IdentifyAccount, Verify};
