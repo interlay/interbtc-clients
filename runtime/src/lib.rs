@@ -1,4 +1,3 @@
-use module_bitcoin::types::H256Le;
 use sp_core::U256;
 use sp_runtime::{
     generic::Header,
@@ -15,6 +14,7 @@ impl Runtime for PolkaBTC {
     type Extra = DefaultExtra<Self>;
 }
 
+// TODO: use types from actual runtime
 impl system::System for PolkaBTC {
     type Index = u32;
     type BlockNumber = u32;
@@ -37,10 +37,12 @@ pub mod pallet_collateral;
 pub mod pallet_security;
 pub mod pallet_staked_relayers;
 
+pub use pallet_btc_relay::{BitcoinBlockHeight, H256Le, RawBlockHeader, RichBlockHeader};
 pub use pallet_security::{ErrorCode, StatusCode};
 
 impl pallet_btc_relay::BTCRelay for PolkaBTC {
     type H256Le = H256Le;
+    type RichBlockHeader = RichBlockHeader;
 }
 
 impl pallet_security::Security for PolkaBTC {}

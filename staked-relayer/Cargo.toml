@@ -15,29 +15,13 @@ tokio = { version = "0.2", features = ["full"] }
 warp = "0.2"
 hex = "0.4.2"
 thiserror = "1.0"
+futures = "0.3.5"
 
 runtime = { path = "../runtime" }
+relayer-core = { path = "../../relayer-core" }
 
 sp-keyring = { version = "2.0.0-rc6", package = "sp-keyring" }
 sp-runtime = { version = "2.0.0-rc6", package = "sp-runtime" }
 sp-core = { version = "2.0.0-rc6", package = "sp-core" }
 pallet-indices = { version = "2.0.0-rc6", package = "pallet-indices" }
 pallet-balances = { version = "2.0.0-rc6", package = "pallet-balances" }
-
-[dependencies.module-bitcoin]
-git = "https://gitlab.com/interlay/btc-parachain"
-version = "0.1.1"
-package = "bitcoin"
-branch = "dev"
-
-[dependencies.module-security]
-git = "https://gitlab.com/interlay/btc-parachain"
-version = "2.0.0-rc6"
-package = "security"
-branch = "dev"
-
-[dependencies.module-staked-relayers]
-git = "https://gitlab.com/interlay/btc-parachain"
-version = "2.0.0-rc6"
-package = "staked-relayers"
-branch = "dev"
