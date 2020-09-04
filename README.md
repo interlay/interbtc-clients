@@ -20,6 +20,6 @@ cargo build
 
 <p align="center">
   <a href="https://web3.foundation/grants/">
-    <img src="/docs/web3_foundation_grants_badge_black.png">
+    <img src="media/web3_grants.png">
   </a>
 </p>
