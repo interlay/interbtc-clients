@@ -6,6 +6,8 @@ pub enum Error {
     #[error("Could not subscribe to proposals")]
     SubscribeProposals,
 
+    #[error("Could not fetch best block: {0}")]
+    BestBlock(XtError),
     #[error("Could not fetch best block height: {0}")]
     BestBlockHeight(XtError),
     #[error("Could not fetch block hash: {0}")]

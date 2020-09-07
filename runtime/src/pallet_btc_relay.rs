@@ -30,6 +30,12 @@ pub struct StoreBlockHeaderCall<T: BTCRelay> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct BestBlockStore<T: BTCRelay> {
+    #[store(returns = T::H256Le)]
+    pub _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct BestBlockHeightStore<T: BTCRelay> {
     #[store(returns = BitcoinBlockHeight)]
     pub _runtime: PhantomData<T>,

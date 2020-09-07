@@ -23,9 +23,7 @@ pub fn start_relay(rpc: Provider) -> Result<(), Error> {
         Config {
             // TODO: pass config
             start_height: 1831944,
-            use_best_height: true,
             max_batch_size: 1,
-            initialize: false,
         },
     )?;
     runner.run()?;

@@ -1,11 +1,10 @@
 mod error;
 
-use crate::env;
 use crate::rpc::Provider;
 pub use error::Error;
 use futures::executor::block_on;
 use log::error;
-use relayer_core::{Config, Error as CoreError, Issuing, Runner};
+use relayer_core::{Error as CoreError, Issuing};
 use runtime::{H256Le, RawBlockHeader};
 
 pub struct Client {
@@ -23,6 +22,12 @@ fn encode_raw_header(bytes: Vec<u8>) -> Result<RawBlockHeader, CoreError<Error>>
 }
 
 impl Issuing<Error> for Client {
+    fn is_initialized(&self) -> Result<bool, CoreError<Error>> {
+        let hash = block_on(self.rpc.get_best_block())
+            .map_err(|e| CoreError::Issuing(Error::RpcError(e)))?;
+        Ok(!hash.is_zero())
+    }
+
     fn initialize(&self, header: Vec<u8>, height: u32) -> Result<(), CoreError<Error>> {
         block_on(
             self.rpc

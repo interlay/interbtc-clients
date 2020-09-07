@@ -28,6 +28,13 @@ impl<'a> Provider {
         self.signer.signer().public().into()
     }
 
+    pub async fn get_best_block(&self) -> Result<H256Le, Error> {
+        self.client
+            .best_block(None)
+            .await
+            .map_err(|err| Error::BestBlock(err))
+    }
+
     pub async fn get_best_block_height(&self) -> Result<u32, Error> {
         self.client
             .best_block_height(None)
