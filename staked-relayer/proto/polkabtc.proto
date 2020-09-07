@@ -1,0 +1,49 @@
+syntax = "proto3";
+package polkabtc;
+
+service StakedRelayer {
+    rpc GetAddress (AddressRequest) returns (AddressResponse);
+    rpc GetBestBlock (BestBlockRequest) returns (BestBlockResponse);
+    rpc GetStatus (StatusRequest) returns (StatusResponse);
+    rpc Register (RegisterRequest) returns (RegisterResponse);
+    rpc Deregister (DeregisterRequest) returns (DeregisterResponse);
+}
+
+message AddressRequest {
+}
+
+message AddressResponse {
+    string address = 1;
+}
+
+message BestBlockRequest {
+}
+
+message BestBlockResponse {
+    uint32 height = 1;
+}
+
+message StatusRequest {
+}
+
+message StatusResponse {
+    enum Status {
+        Running = 0;
+        Error = 1;
+        Shutdown = 2;
+    }
+    Status status = 1;
+}
+
+message RegisterRequest {
+    uint64 stake = 1;
+}
+
+message RegisterResponse {
+}
+
+message DeregisterRequest {
+}
+
+message DeregisterResponse {
+}

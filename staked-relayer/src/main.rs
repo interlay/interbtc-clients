@@ -1,10 +1,11 @@
 mod env;
 mod error;
-mod http;
+mod grpc;
 mod relay;
 mod rpc;
 
 use error::Error;
+use grpc::{Service, StakedRelayerServer};
 use relay::Client as PolkaClient;
 use relayer_core::{Config, Runner};
 use rpc::Provider;
@@ -12,6 +13,7 @@ use runtime::PolkaBTC;
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use substrate_subxt::{ClientBuilder, PairSigner};
+use tonic::transport::Server;
 
 pub fn start_relay(rpc: Provider) -> Result<(), Error> {
     let btc_client = env::bitcoin_from_env()?;
@@ -40,13 +42,18 @@ async fn main() -> Result<(), Error> {
     let relay_prov = api_prov.clone();
 
     let btc = tokio::task::spawn_blocking(move || start_relay(relay_prov));
-    let api = tokio::spawn(async move { http::start(api_prov).await });
+
+    let addr = "[::1]:50051".parse().unwrap();
+    let service = Service { rpc: api_prov };
+    let router = Server::builder().add_service(StakedRelayerServer::new(service));
+    let api = tokio::spawn(async move { router.serve(addr).await.unwrap() });
 
     let result = tokio::try_join!(api, btc);
     match result {
         Ok(_) => (),
         Err(err) => {
             println!("Error: {}", err);
+            std::process::exit(1);
         }
     };
     Ok(())

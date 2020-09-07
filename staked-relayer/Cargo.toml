@@ -13,10 +13,11 @@ parity-scale-codec = "1.3.1"
 frame-system = "2.0.0-rc6"
 substrate-subxt-proc-macro = "0.12.0"
 tokio = { version = "0.2", features = ["full"] }
-warp = "0.2"
 hex = "0.4.2"
 thiserror = "1.0"
 futures = "0.3.5"
+tonic = "0.3"
+prost = "0.6"
 
 runtime = { path = "../runtime" }
 relayer-core = { path = "../../relayer-core" }
@@ -26,3 +27,6 @@ sp-runtime = { version = "2.0.0-rc6", package = "sp-runtime" }
 sp-core = { version = "2.0.0-rc6", package = "sp-core" }
 pallet-indices = { version = "2.0.0-rc6", package = "pallet-indices" }
 pallet-balances = { version = "2.0.0-rc6", package = "pallet-balances" }
+
+[build-dependencies]
+tonic-build = "0.3"
