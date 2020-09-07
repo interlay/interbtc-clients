@@ -16,6 +16,7 @@ _This project is currently under active development_.
 
 ```bash
 cargo build
+curl -fX GET 127.0.0.1:3030/best_block
 ```
 
 <p align="center">

@@ -1,18 +1,36 @@
+mod env;
+mod error;
+mod http;
+mod relay;
+mod rpc;
+
+use error::Error;
+use relay::Client as PolkaClient;
 use relayer_core::{Config, Runner};
+use rpc::Provider;
 use runtime::PolkaBTC;
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use substrate_subxt::{ClientBuilder, PairSigner};
 
-mod client;
-mod env;
-mod error;
-mod http;
-mod rpc;
+pub fn start_relay(rpc: Provider) -> Result<(), Error> {
+    let btc_client = env::bitcoin_from_env()?;
+    let polka_client = PolkaClient::new(rpc)?;
 
-use client::Client as PolkadotClient;
-
-use error::Error;
+    let mut runner = Runner::new(
+        polka_client,
+        btc_client,
+        Config {
+            // TODO: pass config
+            start_height: 1831944,
+            use_best_height: true,
+            max_batch_size: 1,
+            initialize: false,
+        },
+    )?;
+    runner.run()?;
+    Ok(())
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -20,34 +38,18 @@ async fn main() -> Result<(), Error> {
 
     let client = ClientBuilder::<PolkaBTC>::new().build().await?;
     let signer = PairSigner::<PolkaBTC, _>::new(AccountKeyring::Alice.pair());
-    let provider = rpc::Provider::new(client, Arc::new(signer));
+    let api_prov = rpc::Provider::new(client, Arc::new(signer));
+    let relay_prov = api_prov.clone();
 
-    let btc_client = env::bitcoin_from_env().unwrap();
-    let polka_client = PolkadotClient::new(provider).unwrap();
+    let btc = tokio::task::spawn_blocking(move || start_relay(relay_prov));
+    let api = tokio::spawn(async move { http::start(api_prov).await });
 
-    let mut runner = Runner::new(
-        polka_client,
-        btc_client,
-        Config {
-            start_height: 1831396,
-            use_best_height: false,
-            max_batch_size: 10,
-            initialize: true,
-        },
-    )
-    .unwrap();
-    runner.run().unwrap();
-
-    // http::start(provider).await;
-
-    // let listen = node.on_proposal();
-
-    // // node.register_staked_relayer(100).await?;
-    // node.suggest_status_update(100, StatusCode::Shutdown)
-    //     .join(listen)
-    //     .await;
-
-    // node.deregister_staked_relayer().await?;
-    // println!("{:?}", result);
+    let result = tokio::try_join!(api, btc);
+    match result {
+        Ok(_) => (),
+        Err(err) => {
+            println!("Error: {}", err);
+        }
+    };
     Ok(())
 }

@@ -1,7 +1,11 @@
+mod error;
+
+use crate::env;
 use crate::rpc::Provider;
-use crate::Error;
+pub use error::Error;
 use futures::executor::block_on;
-use relayer_core::{Error as CoreError, Issuing};
+use log::error;
+use relayer_core::{Config, Error as CoreError, Issuing, Runner};
 use runtime::{H256Le, RawBlockHeader};
 
 pub struct Client {
@@ -15,7 +19,7 @@ impl Client {
 }
 
 fn encode_raw_header(bytes: Vec<u8>) -> Result<RawBlockHeader, CoreError<Error>> {
-    RawBlockHeader::from_bytes(bytes).map_err(|e| CoreError::Issuing(Error::Other(e.to_string())))
+    RawBlockHeader::from_bytes(bytes).map_err(|e| CoreError::Issuing(Error::SerializeHeader))
 }
 
 impl Issuing<Error> for Client {
@@ -28,14 +32,15 @@ impl Issuing<Error> for Client {
     }
 
     fn submit_block_header(&self, header: Vec<u8>) -> Result<(), CoreError<Error>> {
-        println!("submit_block_header");
-        block_on(self.rpc.store_block_header(encode_raw_header(header)?))
-            .map_err(|e| CoreError::Issuing(Error::RpcError(e)))
+        block_on(self.rpc.store_block_header(encode_raw_header(header)?)).map_err(|e| {
+            error!("Failed to submit block: {}", e);
+            CoreError::Issuing(Error::RpcError(e))
+        })
     }
 
     fn submit_block_header_batch(&self, _headers: Vec<u8>) -> Result<(), CoreError<Error>> {
-        println!("submit_block_header_batch");
-        Ok(())
+        // TODO: expose functionality on-chain
+        self.submit_block_header(_headers)
     }
 
     fn get_best_height(&self) -> Result<u32, CoreError<Error>> {
@@ -46,13 +51,11 @@ impl Issuing<Error> for Client {
     fn get_block_hash(&self, height: u32) -> Result<Vec<u8>, CoreError<Error>> {
         let hash = block_on(self.rpc.get_block_hash(height))
             .map_err(|e| CoreError::Issuing(Error::RpcError(e)))?;
-        hex::decode(hash.to_hex_be())
-            .map_err(|_| CoreError::Issuing(Error::Other("failed to decode hash".to_string())))
+        hex::decode(hash.to_hex_le()).map_err(|_| CoreError::Issuing(Error::DecodeHash))
     }
 
-    // TODO: check endianness
-    fn is_block_stored(&self, hash: Vec<u8>) -> Result<bool, CoreError<Error>> {
-        let head = block_on(self.rpc.get_block_header(H256Le::from_bytes_le(&hash)))
+    fn is_block_stored(&self, hash_le: Vec<u8>) -> Result<bool, CoreError<Error>> {
+        let head = block_on(self.rpc.get_block_header(H256Le::from_bytes_le(&hash_le)))
             .map_err(|e| CoreError::Issuing(Error::RpcError(e)))?;
         Ok(head.block_height > 0)
     }

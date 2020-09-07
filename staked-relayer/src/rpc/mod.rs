@@ -3,14 +3,10 @@ use runtime::pallet_btc_relay::*;
 use runtime::pallet_security::*;
 use runtime::pallet_staked_relayers::*;
 use runtime::PolkaBTC;
-use sp_core::crypto::{Pair, Public};
+use sp_core::crypto::{AccountId32, Pair};
 use sp_core::sr25519::Pair as KeyPair;
-use sp_runtime::traits::{IdentifyAccount, Verify};
 use std::sync::Arc;
-use substrate_subxt::{
-    system::System, Client, ClientBuilder, Error as XtError, EventSubscription, EventsDecoder,
-    MetadataError, PairSigner, Runtime,
-};
+use substrate_subxt::{Client, EventSubscription, EventsDecoder, PairSigner};
 
 // subxt doesn't decode errors
 mod error;
@@ -28,8 +24,8 @@ impl<'a> Provider {
         Self { client, signer }
     }
 
-    pub fn get_address(&self) -> String {
-        hex::encode(self.signer.signer().public().to_raw_vec())
+    pub fn get_address(&self) -> AccountId32 {
+        self.signer.signer().public().into()
     }
 
     pub async fn get_best_block_height(&self) -> Result<u32, Error> {
@@ -48,7 +44,6 @@ impl<'a> Provider {
     }
 
     pub async fn get_block_header(&self, hash: H256Le) -> Result<RichBlockHeader, Error> {
-        // TODO: adjust chain index
         self.client
             .block_headers(hash, None)
             .await
@@ -105,11 +100,17 @@ impl<'a> Provider {
     ) -> Result<(), Error> {
         let result = self
             .client
-            .suggest_status_update_and_watch(&*self.signer, deposit, status_code, None, None, None)
+            .suggest_status_update_and_watch(
+                &*self.signer,
+                deposit,
+                status_code,
+                Some(ErrorCode::InvalidBTCRelay),
+                None,
+                None,
+            )
             .await
             .map_err(|err| Error::SuggestStatusUpdate(err))?;
         println!("{:?}", result);
-
         Ok(())
     }
 

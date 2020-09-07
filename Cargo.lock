@@ -3047,7 +3047,7 @@ dependencies = [
  "sp-runtime",
  "staked-relayers",
  "substrate-subxt",
- "substrate-subxt-proc-macro",
+ "substrate-subxt-proc-macro 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3911,7 +3911,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "substrate-subxt",
- "substrate-subxt-proc-macro",
+ "substrate-subxt-proc-macro 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
  "tokio",
  "warp",
@@ -4013,8 +4013,6 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31fb7e8027a8445851f2a45fa82c30d2b005b9e6eb3be9db8669904d6d8ed5ab"
 dependencies = [
  "frame-metadata",
  "frame-support",
@@ -4033,9 +4031,22 @@ dependencies = [
  "sp-runtime",
  "sp-transaction-pool",
  "sp-version",
- "substrate-subxt-proc-macro",
+ "substrate-subxt-proc-macro 0.12.0",
  "thiserror",
  "url 2.1.1",
+]
+
+[[package]]
+name = "substrate-subxt-proc-macro"
+version = "0.12.0"
+dependencies = [
+ "heck",
+ "proc-macro-crate",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "synstructure",
 ]
 
 [[package]]
