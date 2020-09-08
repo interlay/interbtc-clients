@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 pub use module_security::{ErrorCode, StatusCode};
-use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};
+use parity_scale_codec::Encode;
 use sp_core::U256;
 use std::fmt::Debug;
 use substrate_subxt::system::{System, SystemEventsDecoder};

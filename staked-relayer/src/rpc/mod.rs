@@ -1,5 +1,6 @@
 use log::error;
 use runtime::pallet_btc_relay::*;
+use runtime::pallet_exchange_rate_oracle::*;
 use runtime::pallet_security::*;
 use runtime::pallet_staked_relayers::*;
 use runtime::pallet_vault_registry::*;
@@ -102,6 +103,16 @@ impl Provider {
             .vaults(bytes_to_address(&id)?.into(), None)
             .await
             .map_err(|err| Error::GetVault(err))
+    }
+
+    pub async fn get_exchange_rate_info(&self) -> Result<(u64, u64), Error> {
+        let get_rate = self.client.exchange_rate(None);
+        let get_time = self.client.last_exchange_rate_time(None);
+
+        match tokio::try_join!(get_rate, get_time) {
+            Ok((rate, time)) => Ok((rate.try_into()?, time.into())),
+            Err(_) => Err(Error::ExchangeRateInfo),
+        }
     }
 
     pub async fn initialize_btc_relay(

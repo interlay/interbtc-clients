@@ -11,6 +11,7 @@ pub use polkabtc::staked_relayer_server::StakedRelayerServer;
 use polkabtc::{DeregisterRequest, DeregisterResponse};
 use polkabtc::{GetAddressRequest, GetAddressResponse};
 use polkabtc::{GetBestBlockRequest, GetBestBlockResponse};
+use polkabtc::{GetExchangeRateRequest, GetExchangeRateResponse};
 use polkabtc::{GetStatusRequest, GetStatusResponse};
 use polkabtc::{GetStatusUpdateRequest, GetStatusUpdateResponse};
 use polkabtc::{GetVaultRequest, GetVaultResponse};
@@ -89,6 +90,14 @@ impl StakedRelayer for Service {
         Ok(Response::new(GetVaultResponse {
             btc_address: vault.btc_address.to_string(),
         }))
+    }
+
+    async fn get_exchange_rate(
+        &self,
+        _request: Request<GetExchangeRateRequest>,
+    ) -> Result<Response<GetExchangeRateResponse>, Status> {
+        let (rate, time) = self.rpc.get_exchange_rate_info().await?;
+        Ok(Response::new(GetExchangeRateResponse { rate, time }))
     }
 
     async fn register(

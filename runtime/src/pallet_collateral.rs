@@ -1,6 +1,6 @@
 use crate::pallet_security::Security;
 use crate::pallet_security::SecurityEventsDecoder;
-use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};
+use parity_scale_codec::{Codec, Decode, EncodeLike};
 use sp_runtime::traits::Member;
 use std::fmt::Debug;
 use substrate_subxt::balances::{Balances, BalancesEventsDecoder};

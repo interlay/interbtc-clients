@@ -8,6 +8,7 @@ service StakedRelayer {
     rpc GetStatus (GetStatusRequest) returns (GetStatusResponse);
     rpc GetStatusUpdate (GetStatusUpdateRequest) returns (GetStatusUpdateResponse);
     rpc GetVault (GetVaultRequest) returns (GetVaultResponse);
+    rpc GetExchangeRate (GetExchangeRateRequest) returns (GetExchangeRateResponse);
 
     rpc Register (RegisterRequest) returns (RegisterResponse);
     rpc Deregister (DeregisterRequest) returns (DeregisterResponse);
@@ -58,6 +59,14 @@ message GetVaultRequest {
 
 message GetVaultResponse {
     string btc_address = 1;
+}
+
+message GetExchangeRateRequest {
+}
+
+message GetExchangeRateResponse {
+    uint64 rate = 1;
+    uint64 time = 2;
 }
 
 message RegisterRequest {

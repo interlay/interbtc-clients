@@ -18,7 +18,7 @@ impl Client {
 }
 
 fn encode_raw_header(bytes: Vec<u8>) -> Result<RawBlockHeader, CoreError<Error>> {
-    RawBlockHeader::from_bytes(bytes).map_err(|e| CoreError::Issuing(Error::SerializeHeader))
+    RawBlockHeader::from_bytes(bytes).map_err(|_| CoreError::Issuing(Error::SerializeHeader))
 }
 
 impl Issuing<Error> for Client {

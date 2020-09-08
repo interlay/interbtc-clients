@@ -1,4 +1,5 @@
 use std::array::TryFromSliceError;
+use std::num::TryFromIntError;
 use substrate_subxt::Error as XtError;
 use thiserror::Error;
 
@@ -6,6 +7,8 @@ use thiserror::Error;
 pub enum Error {
     #[error("Could not subscribe to proposals")]
     SubscribeProposals,
+    #[error("Could not get exchange rate info")]
+    ExchangeRateInfo,
 
     #[error("Could not fetch best block: {0}")]
     BestBlock(XtError),
@@ -23,6 +26,8 @@ pub enum Error {
     SerializeAddress(#[from] TryFromSliceError),
     #[error("Could not get vault: {0}")]
     GetVault(XtError),
+    #[error("Could not serialize exchange rate: {0}")]
+    SerializeExchangeRate(#[from] TryFromIntError),
     #[error("Could not initialize parachain: {0}")]
     Initialize(XtError),
     #[error("Could not store block header: {0}")]

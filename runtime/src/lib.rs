@@ -34,8 +34,10 @@ impl balances::Balances for PolkaBTC {
 
 pub mod pallet_btc_relay;
 pub mod pallet_collateral;
+pub mod pallet_exchange_rate_oracle;
 pub mod pallet_security;
 pub mod pallet_staked_relayers;
+mod pallet_timestamp;
 pub mod pallet_vault_registry;
 
 pub use pallet_btc_relay::{BitcoinBlockHeight, H256Le, RawBlockHeader, RichBlockHeader};
@@ -62,3 +64,9 @@ impl pallet_collateral::Collateral for PolkaBTC {
 impl pallet_vault_registry::VaultRegistry for PolkaBTC {
     type PolkaBTC = u128;
 }
+
+impl pallet_timestamp::Timestamp for PolkaBTC {
+    type Moment = u64;
+}
+
+impl pallet_exchange_rate_oracle::ExchangeRateOracle for PolkaBTC {}
