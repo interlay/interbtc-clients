@@ -1,3 +1,4 @@
+use std::array::TryFromSliceError;
 use substrate_subxt::Error as XtError;
 use thiserror::Error;
 
@@ -18,6 +19,10 @@ pub enum Error {
     ParachainStatus(XtError),
     #[error("Could not fetch status update: {0}")]
     StatusUpdate(XtError),
+    #[error("Could not serialize address: {0}")]
+    SerializeAddress(#[from] TryFromSliceError),
+    #[error("Could not get vault: {0}")]
+    GetVault(XtError),
     #[error("Could not initialize parachain: {0}")]
     Initialize(XtError),
     #[error("Could not store block header: {0}")]

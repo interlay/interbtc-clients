@@ -2,9 +2,11 @@ use log::error;
 use runtime::pallet_btc_relay::*;
 use runtime::pallet_security::*;
 use runtime::pallet_staked_relayers::*;
+use runtime::pallet_vault_registry::*;
 use runtime::PolkaBTC;
 use sp_core::crypto::{AccountId32, Pair};
 use sp_core::sr25519::Pair as KeyPair;
+use std::convert::TryInto;
 use std::sync::Arc;
 use substrate_subxt::{system::System, Client, EventSubscription, EventsDecoder, PairSigner};
 
@@ -17,6 +19,10 @@ pub use error::Error;
 pub struct Provider {
     client: Client<PolkaBTC>,
     signer: Arc<PairSigner<PolkaBTC, KeyPair>>,
+}
+
+fn bytes_to_address(id: &[u8]) -> Result<[u8; 32], std::array::TryFromSliceError> {
+    id.try_into()
 }
 
 impl Provider {
@@ -79,6 +85,23 @@ impl Provider {
             .status_updates(id.into(), None)
             .await
             .map_err(|err| Error::StatusUpdate(err))
+    }
+
+    pub async fn get_vault(
+        &self,
+        id: Vec<u8>,
+    ) -> Result<
+        Vault<
+            <PolkaBTC as System>::AccountId,
+            <PolkaBTC as System>::BlockNumber,
+            <PolkaBTC as VaultRegistry>::PolkaBTC,
+        >,
+        Error,
+    > {
+        self.client
+            .vaults(bytes_to_address(&id)?.into(), None)
+            .await
+            .map_err(|err| Error::GetVault(err))
     }
 
     pub async fn initialize_btc_relay(

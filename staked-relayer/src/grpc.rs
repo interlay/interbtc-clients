@@ -13,6 +13,7 @@ use polkabtc::{GetAddressRequest, GetAddressResponse};
 use polkabtc::{GetBestBlockRequest, GetBestBlockResponse};
 use polkabtc::{GetStatusRequest, GetStatusResponse};
 use polkabtc::{GetStatusUpdateRequest, GetStatusUpdateResponse};
+use polkabtc::{GetVaultRequest, GetVaultResponse};
 use polkabtc::{RegisterRequest, RegisterResponse};
 
 pub mod polkabtc {
@@ -77,6 +78,16 @@ impl StakedRelayer for Service {
             old_status_code: serialize_status_code(update.old_status_code),
             block_number: update.time.into(),
             proposer: update.proposer.to_string(),
+        }))
+    }
+
+    async fn get_vault(
+        &self,
+        request: Request<GetVaultRequest>,
+    ) -> Result<Response<GetVaultResponse>, Status> {
+        let vault = self.rpc.get_vault(request.into_inner().id).await?;
+        Ok(Response::new(GetVaultResponse {
+            btc_address: vault.btc_address.to_string(),
         }))
     }
 

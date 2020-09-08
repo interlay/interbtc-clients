@@ -36,6 +36,7 @@ pub mod pallet_btc_relay;
 pub mod pallet_collateral;
 pub mod pallet_security;
 pub mod pallet_staked_relayers;
+pub mod pallet_vault_registry;
 
 pub use pallet_btc_relay::{BitcoinBlockHeight, H256Le, RawBlockHeader, RichBlockHeader};
 pub use pallet_security::{ErrorCode, StatusCode};
@@ -56,4 +57,8 @@ impl pallet_staked_relayers::StakedRelayers for PolkaBTC {
 
 impl pallet_collateral::Collateral for PolkaBTC {
     type DOT = u128;
+}
+
+impl pallet_vault_registry::VaultRegistry for PolkaBTC {
+    type PolkaBTC = u128;
 }

@@ -36,3 +36,10 @@ version = "2.0.0-rc6"
 package = "staked-relayers"
 # branch = "dev"
 path = "../../btc-parachain/crates/staked-relayers"
+
+[dependencies.module-vault-registry]
+# git = "https://gitlab.com/interlay/btc-parachain"
+version = "2.0.0-rc6"
+package = "vault-registry"
+# branch = "dev"
+path = "../../btc-parachain/crates/vault-registry"
