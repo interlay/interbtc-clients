@@ -16,6 +16,8 @@ pub enum Error {
     BlockHeader(XtError),
     #[error("Could not fetch parachain status: {0}")]
     ParachainStatus(XtError),
+    #[error("Could not fetch status update: {0}")]
+    StatusUpdate(XtError),
     #[error("Could not initialize parachain: {0}")]
     Initialize(XtError),
     #[error("Could not store block header: {0}")]

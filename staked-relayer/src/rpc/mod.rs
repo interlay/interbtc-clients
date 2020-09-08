@@ -6,7 +6,7 @@ use runtime::PolkaBTC;
 use sp_core::crypto::{AccountId32, Pair};
 use sp_core::sr25519::Pair as KeyPair;
 use std::sync::Arc;
-use substrate_subxt::{Client, EventSubscription, EventsDecoder, PairSigner};
+use substrate_subxt::{system::System, Client, EventSubscription, EventsDecoder, PairSigner};
 
 // subxt doesn't decode errors
 mod error;
@@ -19,7 +19,7 @@ pub struct Provider {
     signer: Arc<PairSigner<PolkaBTC, KeyPair>>,
 }
 
-impl<'a> Provider {
+impl Provider {
     pub fn new(client: Client<PolkaBTC>, signer: Arc<PairSigner<PolkaBTC, KeyPair>>) -> Self {
         Self { client, signer }
     }
@@ -62,6 +62,23 @@ impl<'a> Provider {
             .parachain_status(None)
             .await
             .map_err(|err| Error::ParachainStatus(err))
+    }
+
+    pub async fn get_status_update(
+        &self,
+        id: u64,
+    ) -> Result<
+        StatusUpdate<
+            <PolkaBTC as System>::AccountId,
+            <PolkaBTC as System>::BlockNumber,
+            <PolkaBTC as StakedRelayers>::DOT,
+        >,
+        Error,
+    > {
+        self.client
+            .status_updates(id.into(), None)
+            .await
+            .map_err(|err| Error::StatusUpdate(err))
     }
 
     pub async fn initialize_btc_relay(

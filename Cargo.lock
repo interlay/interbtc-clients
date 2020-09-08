@@ -347,7 +347,6 @@ checksum = "cdcf67bb7ba7797a081cd19009948ab533af7c355d5caf1d08c777582d351e9c"
 [[package]]
 name = "bitcoin"
 version = "0.1.1"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#f3645bea2358a114d804c30141250d84f1e162f0"
 dependencies = [
  "bitcoin_hashes",
  "hex 0.4.2",
@@ -357,22 +356,7 @@ dependencies = [
  "sha2 0.8.2",
  "sp-core",
  "sp-std",
- "x-core 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
-]
-
-[[package]]
-name = "bitcoin"
-version = "0.1.1"
-dependencies = [
- "bitcoin_hashes",
- "hex 0.4.2",
- "parity-scale-codec",
- "primitive-types",
- "serde",
- "sha2 0.8.2",
- "sp-core",
- "sp-std",
- "x-core 2.0.0-rc6",
+ "x-core",
 ]
 
 [[package]]
@@ -544,9 +528,8 @@ dependencies = [
 [[package]]
 name = "btc-relay"
 version = "2.0.0-rc6"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#f3645bea2358a114d804c30141250d84f1e162f0"
 dependencies = [
- "bitcoin 0.1.1 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "bitcoin 0.1.1",
  "frame-support",
  "frame-system",
  "hex 0.4.2",
@@ -558,7 +541,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-std",
- "x-core 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "x-core",
 ]
 
 [[package]]
@@ -630,14 +613,13 @@ dependencies = [
 [[package]]
 name = "collateral"
 version = "2.0.0-rc6"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#f3645bea2358a114d804c30141250d84f1e162f0"
 dependencies = [
  "frame-support",
  "frame-system",
  "pallet-balances",
  "parity-scale-codec",
  "serde",
- "x-core 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "x-core",
 ]
 
 [[package]]
@@ -853,7 +835,6 @@ checksum = "e1cd41440ae7e4734bbd42302f63eaba892afc93a3912dad84006247f0dedb0e"
 [[package]]
 name = "exchange-rate-oracle"
 version = "2.0.0-rc6"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#f3645bea2358a114d804c30141250d84f1e162f0"
 dependencies = [
  "collateral",
  "frame-support",
@@ -868,7 +849,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "treasury",
- "x-core 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "x-core",
 ]
 
 [[package]]
@@ -2830,9 +2811,8 @@ dependencies = [
 [[package]]
 name = "redeem"
 version = "2.0.0-rc6"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#f3645bea2358a114d804c30141250d84f1e162f0"
 dependencies = [
- "bitcoin 0.1.1 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "bitcoin 0.1.1",
  "btc-relay",
  "collateral",
  "exchange-rate-oracle",
@@ -2851,7 +2831,7 @@ dependencies = [
  "sp-std",
  "treasury",
  "vault-registry",
- "x-core 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "x-core",
 ]
 
 [[package]]
@@ -2942,9 +2922,8 @@ dependencies = [
 [[package]]
 name = "replace"
 version = "2.0.0-rc6"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#f3645bea2358a114d804c30141250d84f1e162f0"
 dependencies = [
- "bitcoin 0.1.1 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "bitcoin 0.1.1",
  "btc-relay",
  "collateral",
  "frame-support",
@@ -2962,7 +2941,7 @@ dependencies = [
  "sp-std",
  "treasury",
  "vault-registry",
- "x-core 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "x-core",
 ]
 
 [[package]]
@@ -3166,7 +3145,6 @@ dependencies = [
 [[package]]
 name = "security"
 version = "2.0.0-rc6"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#f3645bea2358a114d804c30141250d84f1e162f0"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -3176,7 +3154,7 @@ dependencies = [
  "sha2 0.8.2",
  "sp-core",
  "sp-std",
- "x-core 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "x-core",
 ]
 
 [[package]]
@@ -3846,9 +3824,8 @@ dependencies = [
 [[package]]
 name = "staked-relayers"
 version = "2.0.0-rc6"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#f3645bea2358a114d804c30141250d84f1e162f0"
 dependencies = [
- "bitcoin 0.1.1 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "bitcoin 0.1.1",
  "btc-relay",
  "collateral",
  "exchange-rate-oracle",
@@ -3869,7 +3846,7 @@ dependencies = [
  "sp-std",
  "treasury",
  "vault-registry",
- "x-core 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "x-core",
 ]
 
 [[package]]
@@ -4448,7 +4425,6 @@ checksum = "efd1f82c56340fdf16f2a953d7bda4f8fdffba13d93b00844c25572110b26079"
 [[package]]
 name = "treasury"
 version = "2.0.0-rc6"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#f3645bea2358a114d804c30141250d84f1e162f0"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -4459,7 +4435,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "x-core 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "x-core",
 ]
 
 [[package]]
@@ -4614,7 +4590,6 @@ dependencies = [
 [[package]]
 name = "vault-registry"
 version = "2.0.0-rc6"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#f3645bea2358a114d804c30141250d84f1e162f0"
 dependencies = [
  "collateral",
  "exchange-rate-oracle",
@@ -4632,7 +4607,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "treasury",
- "x-core 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "x-core",
 ]
 
 [[package]]
@@ -4889,16 +4864,6 @@ checksum = "d59cefebd0c892fa2dd6de581e937301d8552cb44489cdff035c6187cb63fa5e"
 dependencies = [
  "winapi 0.2.8",
  "winapi-build",
-]
-
-[[package]]
-name = "x-core"
-version = "2.0.0-rc6"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#f3645bea2358a114d804c30141250d84f1e162f0"
-dependencies = [
- "frame-support",
- "parity-scale-codec",
- "sp-std",
 ]
 
 [[package]]

@@ -24,13 +24,15 @@ package = "bitcoin"
 path = "../../btc-parachain/crates/bitcoin"
 
 [dependencies.module-security]
-git = "https://gitlab.com/interlay/btc-parachain"
+# git = "https://gitlab.com/interlay/btc-parachain"
 version = "2.0.0-rc6"
 package = "security"
-branch = "dev"
+# branch = "dev"
+path = "../../btc-parachain/crates/security"
 
 [dependencies.module-staked-relayers]
-git = "https://gitlab.com/interlay/btc-parachain"
+# git = "https://gitlab.com/interlay/btc-parachain"
 version = "2.0.0-rc6"
 package = "staked-relayers"
-branch = "dev"
+# branch = "dev"
+path = "../../btc-parachain/crates/staked-relayers"

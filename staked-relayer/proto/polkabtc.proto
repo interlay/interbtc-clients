@@ -2,37 +2,53 @@ syntax = "proto3";
 package polkabtc;
 
 service StakedRelayer {
-    rpc GetAddress (AddressRequest) returns (AddressResponse);
-    rpc GetBestBlock (BestBlockRequest) returns (BestBlockResponse);
-    rpc GetStatus (StatusRequest) returns (StatusResponse);
+    rpc GetAddress (GetAddressRequest) returns (GetAddressResponse);
+    // Latest Bitcoin block as reported by the BTC-Relay on the BTC Parachain.
+    rpc GetBestBlock (GetBestBlockRequest) returns (GetBestBlockResponse);
+    rpc GetStatus (GetStatusRequest) returns (GetStatusResponse);
+    rpc GetStatusUpdate (GetStatusUpdateRequest) returns (GetStatusUpdateResponse);
+
     rpc Register (RegisterRequest) returns (RegisterResponse);
     rpc Deregister (DeregisterRequest) returns (DeregisterResponse);
 }
 
-message AddressRequest {
+message GetAddressRequest {
 }
 
-message AddressResponse {
+message GetAddressResponse {
     string address = 1;
 }
 
-message BestBlockRequest {
+message GetBestBlockRequest {
 }
 
-message BestBlockResponse {
+message GetBestBlockResponse {
+    // TODO: bitcoin-core height (if available)
     uint32 height = 1;
 }
 
-message StatusRequest {
+enum Status {
+    Running = 0;
+    Error = 1;
+    Shutdown = 2;
 }
 
-message StatusResponse {
-    enum Status {
-        Running = 0;
-        Error = 1;
-        Shutdown = 2;
-    }
+message GetStatusRequest {
+}
+
+message GetStatusResponse {
     Status status = 1;
+}
+
+message GetStatusUpdateRequest {
+    uint64 id = 1;
+}
+
+message GetStatusUpdateResponse {
+    Status new_status_code = 1;
+    Status old_status_code = 2;
+    uint64 block_number = 3;
+    string proposer = 4;
 }
 
 message RegisterRequest {

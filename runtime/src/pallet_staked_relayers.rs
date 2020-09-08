@@ -2,6 +2,7 @@ use crate::pallet_security::{Security, SecurityEventsDecoder};
 use core::marker::PhantomData;
 use module_bitcoin::types::H256Le;
 use module_security::ErrorCode;
+pub use module_staked_relayers::types::StatusUpdate;
 pub use module_staked_relayers::Error as StakedRelayersError;
 use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};
 use sp_runtime::traits::Member;
@@ -69,4 +70,11 @@ pub struct StatusUpdateSuggestedEvent<T: StakedRelayers> {
 pub struct ActiveStakedRelayersCountStore<T: StakedRelayers> {
     #[store(returns = u64)]
     pub _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct StatusUpdatesStore<T: StakedRelayers> {
+    #[store(returns = StatusUpdate<T::AccountId, T::BlockNumber, T::DOT>)]
+    pub _runtime: PhantomData<T>,
+    pub status_id: T::U256,
 }
