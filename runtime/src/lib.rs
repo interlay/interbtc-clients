@@ -37,7 +37,7 @@ pub mod pallet_collateral;
 pub mod pallet_exchange_rate_oracle;
 pub mod pallet_security;
 pub mod pallet_staked_relayers;
-mod pallet_timestamp;
+pub mod pallet_timestamp;
 pub mod pallet_vault_registry;
 
 pub use pallet_btc_relay::{BitcoinBlockHeight, H256Le, RawBlockHeader, RichBlockHeader};

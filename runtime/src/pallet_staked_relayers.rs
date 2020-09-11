@@ -33,8 +33,8 @@ pub struct DeregisterStakedRelayerCall<T: StakedRelayers> {
 pub struct SuggestStatusUpdateCall<T: StakedRelayers> {
     pub deposit: T::DOT,
     pub status_code: T::StatusCode,
-    pub add_error: Option<ErrorCode>,
-    pub remove_error: Option<ErrorCode>,
+    pub add_error: Option<T::ErrorCode>,
+    pub remove_error: Option<T::ErrorCode>,
     pub block_hash: Option<H256Le>,
 }
 
@@ -54,8 +54,8 @@ pub struct DeregisterStakedRelayerEvent<T: StakedRelayers> {
 pub struct StatusUpdateSuggestedEvent<T: StakedRelayers> {
     pub status_update_id: T::U256,
     pub status_code: T::StatusCode,
-    pub add_error: T::ErrorCode,
-    pub remove_error: T::ErrorCode,
+    pub add_error: Option<T::ErrorCode>,
+    pub remove_error: Option<T::ErrorCode>,
     pub account_id: T::AccountId,
 }
 

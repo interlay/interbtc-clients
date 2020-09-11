@@ -9,6 +9,11 @@ use thiserror::Error;
 pub enum Error {
     #[error("Could not start Bitcoin client")]
     BitcoinClient,
+    #[error("Unknown status code")]
+    UnknownStatusCode,
+    #[error("Unknown error code")]
+    UnknownErrorCode,
+
     #[error("Read env error: {0}: {1}")]
     ReadVar(String, VarError),
     #[error("RpcError: {0}")]
@@ -19,6 +24,4 @@ pub enum Error {
     SubXtError(#[from] XtError),
     #[error("CoreError: {0}")]
     CoreError(#[from] CoreError<RelayError>),
-    #[error("Other: {0}")]
-    Other(String),
 }

@@ -2,15 +2,31 @@ syntax = "proto3";
 package polkabtc;
 
 service StakedRelayer {
+    // The address of the signer (account used to submit extrinsics).
     rpc GetAddress (GetAddressRequest) returns (GetAddressResponse);
+
     // Latest Bitcoin block as reported by the BTC-Relay on the BTC Parachain.
     rpc GetBestBlock (GetBestBlockRequest) returns (GetBestBlockResponse);
+
+    // Current status of the BTC-Parachain.
     rpc GetStatus (GetStatusRequest) returns (GetStatusResponse);
+
+    // Ongoing status update proposal - info and votes.
     rpc GetStatusUpdate (GetStatusUpdateRequest) returns (GetStatusUpdateResponse);
+
+    // Get info about a registered vault.
     rpc GetVault (GetVaultRequest) returns (GetVaultResponse);
+
+    // Get the last exchange rate submitted to the Parachain.
     rpc GetExchangeRate (GetExchangeRateRequest) returns (GetExchangeRateResponse);
 
+    // Manually propose status update to security module.
+    rpc SuggestStatusUpdate (SuggestStatusUpdateRequest) returns (SuggestStatusUpdateResponse);
+
+    // Bond collateral (DOT) in order to participate in governance.
     rpc Register (RegisterRequest) returns (RegisterResponse);
+
+    // Unbond collateral (DOT), the account cannot be participating in any proposals.
     rpc Deregister (DeregisterRequest) returns (DeregisterResponse);
 }
 
@@ -29,7 +45,7 @@ message GetBestBlockResponse {
     uint32 height = 1;
 }
 
-enum Status {
+enum StatusCode {
     Running = 0;
     Error = 1;
     Shutdown = 2;
@@ -39,7 +55,7 @@ message GetStatusRequest {
 }
 
 message GetStatusResponse {
-    Status status = 1;
+    StatusCode status = 1;
 }
 
 message GetStatusUpdateRequest {
@@ -47,8 +63,8 @@ message GetStatusUpdateRequest {
 }
 
 message GetStatusUpdateResponse {
-    Status new_status_code = 1;
-    Status old_status_code = 2;
+    StatusCode new_status_code = 1;
+    StatusCode old_status_code = 2;
     uint64 block_number = 3;
     string proposer = 4;
 }
@@ -65,8 +81,33 @@ message GetExchangeRateRequest {
 }
 
 message GetExchangeRateResponse {
+    // Last BTC / DOT price submitted by the oracle
     uint64 rate = 1;
+    // Time when this was submitted to the parachain
     uint64 time = 2;
+}
+
+enum ErrorCode {
+    // No error. Used as default value
+    None = 0;
+    // Missing transactional data for a block header submitted to BTC-Relay
+    NoDataBTCRelay = 1;
+    // Invalid transaction was detected in a block header submitted to BTC-Relay
+    InvalidBTCRelay = 2;
+    // The exchangeRateOracle experienced a liveness failure (no up-to-date exchange rate available)
+    OracleOffline = 3;
+    // At least one Vault is being liquidated. Redeem requests paid out partially in collateral (DOT).
+    Liquidation = 4;
+}
+
+message SuggestStatusUpdateRequest {
+    StatusCode status_code = 1;
+    ErrorCode add_error = 2;
+    ErrorCode remove_error = 3;
+    uint64 deposit = 4;
+}
+
+message SuggestStatusUpdateResponse {
 }
 
 message RegisterRequest {

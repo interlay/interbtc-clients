@@ -1,13 +1,15 @@
 use crate::rpc::Error as PolkaError;
 use crate::rpc::Provider as PolkaRPC;
-use runtime::StatusCode;
+use crate::Error;
+use runtime::{ErrorCode, StatusCode};
 use sp_core::crypto::Ss58Codec;
 
 use tonic::{Code, Request, Response, Status};
 
 pub use polkabtc::staked_relayer_server::StakedRelayer;
 pub use polkabtc::staked_relayer_server::StakedRelayerServer;
-// use polkabtc::status_response::Status as ParachainStatus;
+use polkabtc::ErrorCode as UserErrorCode;
+use polkabtc::StatusCode as UserStatusCode;
 use polkabtc::{DeregisterRequest, DeregisterResponse};
 use polkabtc::{GetAddressRequest, GetAddressResponse};
 use polkabtc::{GetBestBlockRequest, GetBestBlockResponse};
@@ -16,6 +18,7 @@ use polkabtc::{GetStatusRequest, GetStatusResponse};
 use polkabtc::{GetStatusUpdateRequest, GetStatusUpdateResponse};
 use polkabtc::{GetVaultRequest, GetVaultResponse};
 use polkabtc::{RegisterRequest, RegisterResponse};
+use polkabtc::{SuggestStatusUpdateRequest, SuggestStatusUpdateResponse};
 
 pub mod polkabtc {
     tonic::include_proto!("polkabtc");
@@ -31,12 +34,43 @@ impl From<PolkaError> for Status {
     }
 }
 
-fn serialize_status_code(status: StatusCode) -> i32 {
-    // TODO: use generated types, there is some weirdness here
+fn deserialize_status_code(status: StatusCode) -> i32 {
     match status {
-        StatusCode::Running => 0,
-        StatusCode::Error => 1,
-        StatusCode::Shutdown => 2,
+        StatusCode::Running => UserStatusCode::Running as i32,
+        StatusCode::Error => UserStatusCode::Error as i32,
+        StatusCode::Shutdown => UserStatusCode::Shutdown as i32,
+    }
+}
+
+fn serialize_status_code(code: i32) -> Result<StatusCode, Status> {
+    if let Some(status) = UserStatusCode::from_i32(code) {
+        Ok(match status {
+            UserStatusCode::Running => StatusCode::Running,
+            UserStatusCode::Error => StatusCode::Error,
+            UserStatusCode::Shutdown => StatusCode::Shutdown,
+        })
+    } else {
+        Err(Status::new(
+            Code::InvalidArgument,
+            Error::UnknownStatusCode.to_string(),
+        ))
+    }
+}
+
+fn serialize_error_code(code: i32) -> Result<Option<ErrorCode>, Status> {
+    if let Some(err_code) = UserErrorCode::from_i32(code) {
+        Ok(match err_code {
+            UserErrorCode::None => None,
+            UserErrorCode::NoDataBtcRelay => Some(ErrorCode::NoDataBTCRelay),
+            UserErrorCode::InvalidBtcRelay => Some(ErrorCode::InvalidBTCRelay),
+            UserErrorCode::Liquidation => Some(ErrorCode::Liquidation),
+            UserErrorCode::OracleOffline => Some(ErrorCode::OracleOffline),
+        })
+    } else {
+        Err(Status::new(
+            Code::InvalidArgument,
+            Error::UnknownErrorCode.to_string(),
+        ))
     }
 }
 
@@ -47,7 +81,7 @@ impl StakedRelayer for Service {
         _request: Request<GetAddressRequest>,
     ) -> Result<Response<GetAddressResponse>, Status> {
         Ok(Response::new(GetAddressResponse {
-            address: self.rpc.get_address().to_ss58check(),
+            address: self.rpc.get_address().await.to_ss58check(),
         }))
     }
 
@@ -65,7 +99,7 @@ impl StakedRelayer for Service {
         _request: Request<GetStatusRequest>,
     ) -> Result<Response<GetStatusResponse>, Status> {
         Ok(Response::new(GetStatusResponse {
-            status: serialize_status_code(self.rpc.get_parachain_status().await?),
+            status: deserialize_status_code(self.rpc.get_parachain_status().await?),
         }))
     }
 
@@ -75,8 +109,8 @@ impl StakedRelayer for Service {
     ) -> Result<Response<GetStatusUpdateResponse>, Status> {
         let update = self.rpc.get_status_update(request.into_inner().id).await?;
         Ok(Response::new(GetStatusUpdateResponse {
-            new_status_code: serialize_status_code(update.new_status_code),
-            old_status_code: serialize_status_code(update.old_status_code),
+            new_status_code: deserialize_status_code(update.new_status_code),
+            old_status_code: deserialize_status_code(update.old_status_code),
             block_number: update.time.into(),
             proposer: update.proposer.to_string(),
         }))
@@ -96,8 +130,24 @@ impl StakedRelayer for Service {
         &self,
         _request: Request<GetExchangeRateRequest>,
     ) -> Result<Response<GetExchangeRateResponse>, Status> {
-        let (rate, time) = self.rpc.get_exchange_rate_info().await?;
+        let (rate, time, _delay) = self.rpc.get_exchange_rate_info().await?;
         Ok(Response::new(GetExchangeRateResponse { rate, time }))
+    }
+
+    async fn suggest_status_update(
+        &self,
+        request: Request<SuggestStatusUpdateRequest>,
+    ) -> Result<Response<SuggestStatusUpdateResponse>, Status> {
+        let message = request.into_inner();
+        self.rpc
+            .suggest_status_update(
+                message.deposit.into(),
+                serialize_status_code(message.status_code)?,
+                serialize_error_code(message.add_error)?,
+                serialize_error_code(message.remove_error)?,
+            )
+            .await?;
+        Ok(Response::new(SuggestStatusUpdateResponse {}))
     }
 
     async fn register(
