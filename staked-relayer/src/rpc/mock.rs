@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct Mocker<R: Clone> {
     data: Option<R>,
 }
@@ -11,7 +12,7 @@ impl<R: Clone> Default for Mocker<R> {
 #[derive(Clone, Copy)]
 pub enum Error {}
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Provider {
     ret_get_exchange_rate_info: Mocker<Result<(u64, u64, u64), Error>>,
     ret_get_time_now: Mocker<Result<u64, Error>>,
@@ -23,6 +24,8 @@ impl<R: Clone> Mocker<R> {
     }
 }
 
+// implement custom provider since we cannot use async traits
+// and mocking libraries have proven unstable
 impl Provider {
     pub fn mock_get_exchange_rate_info(&mut self) -> &mut Mocker<Result<(u64, u64, u64), Error>> {
         &mut self.ret_get_exchange_rate_info

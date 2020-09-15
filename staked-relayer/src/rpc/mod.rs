@@ -1,5 +1,6 @@
 use log::error;
 use parity_scale_codec::Decode;
+use runtime::pallet_balances_dot::*;
 use runtime::pallet_btc_relay::*;
 use runtime::pallet_exchange_rate_oracle::*;
 use runtime::pallet_security::*;
@@ -12,18 +13,26 @@ use sp_core::sr25519::Pair as KeyPair;
 use sp_core::U256;
 use std::convert::TryInto;
 use std::sync::Arc;
-use substrate_subxt::{system::System, Client, EventSubscription, EventsDecoder, PairSigner};
+use substrate_subxt::{
+    balances::AccountData, system::System, Client, EventSubscription, EventsDecoder, PairSigner,
+};
 use tokio::sync::Mutex;
 
 mod error;
-mod report;
+mod oracle;
 
-pub use report::Verifier;
+pub use oracle::OracleChecker;
 
 #[cfg(test)]
-mod mock;
+pub mod mock;
 
 pub use error::Error;
+
+pub type PolkaBTCVault = Vault<
+    <PolkaBTC as System>::AccountId,
+    <PolkaBTC as System>::BlockNumber,
+    <PolkaBTC as VaultRegistry>::PolkaBTC,
+>;
 
 #[derive(Clone)]
 pub struct Provider {
@@ -68,6 +77,13 @@ impl Provider {
         Ok(self.client.block_headers(hash, None).await?)
     }
 
+    pub async fn get_account_data(
+        &self,
+        id: <PolkaBTC as System>::AccountId,
+    ) -> Result<AccountData<<PolkaBTC as DOT>::Balance>, Error> {
+        Ok(self.client.account(id, None).await?)
+    }
+
     pub async fn get_parachain_status(&self) -> Result<StatusCode, Error> {
         Ok(self.client.parachain_status(None).await?)
     }
@@ -86,21 +102,20 @@ impl Provider {
         Ok(self.client.status_updates(id.into(), None).await?)
     }
 
-    pub async fn get_vault(
-        &self,
-        id: Vec<u8>,
-    ) -> Result<
-        Vault<
-            <PolkaBTC as System>::AccountId,
-            <PolkaBTC as System>::BlockNumber,
-            <PolkaBTC as VaultRegistry>::PolkaBTC,
-        >,
-        Error,
-    > {
+    pub async fn get_vault(&self, id: Vec<u8>) -> Result<PolkaBTCVault, Error> {
         Ok(self
             .client
             .vaults(bytes_to_address(&id)?.into(), None)
             .await?)
+    }
+
+    pub async fn get_all_vaults(&self) -> Result<Vec<PolkaBTCVault>, Error> {
+        let mut vaults = Vec::new();
+        let mut iter = self.client.vaults_iter(None).await?;
+        while let Some((_, account)) = iter.next().await? {
+            vaults.push(account);
+        }
+        Ok(vaults)
     }
 
     pub async fn get_liquidation_threshold(&self) -> Result<u128, Error> {
@@ -132,6 +147,13 @@ impl Provider {
     pub async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error> {
         self.client
             .store_block_header_and_watch(&*self.signer.lock().await, header)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), Error> {
+        self.client
+            .register_vault_and_watch(&*self.signer.lock().await, collateral, btc_address)
             .await?;
         Ok(())
     }
@@ -207,6 +229,39 @@ impl Provider {
                         event.add_error,
                         event.remove_error,
                     );
+                }
+                Err(err) => {
+                    error!("{}", err);
+                }
+            };
+        }
+
+        Ok(())
+    }
+
+    pub async fn on_register<F>(&self, mut cb: F) -> Result<(), Error>
+    where
+        F: FnMut(
+            Vault<
+                <PolkaBTC as System>::AccountId,
+                <PolkaBTC as System>::BlockNumber,
+                <PolkaBTC as VaultRegistry>::PolkaBTC,
+            >,
+        ),
+    {
+        let sub = self.client.subscribe_events().await?;
+        let mut decoder = EventsDecoder::<PolkaBTC>::new(self.client.metadata().clone());
+        decoder.register_type_size::<u128>("Balance");
+        decoder.register_type_size::<u128>("DOT");
+
+        let mut sub = EventSubscription::<PolkaBTC>::new(sub, decoder);
+        sub.filter_event::<RegisterVaultEvent<_>>();
+        while let Some(result) = sub.next().await {
+            match result {
+                Ok(raw_event) => {
+                    let event = RegisterVaultEvent::<PolkaBTC>::decode(&mut &raw_event.data[..])?;
+                    let account = self.client.vaults(event.account_id, None).await?;
+                    cb(account);
                 }
                 Err(err) => {
                     error!("{}", err);

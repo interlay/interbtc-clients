@@ -32,6 +32,7 @@ impl balances::Balances for PolkaBTC {
     type Balance = u128;
 }
 
+pub mod pallet_balances_dot;
 pub mod pallet_btc_relay;
 pub mod pallet_collateral;
 pub mod pallet_exchange_rate_oracle;
@@ -62,6 +63,7 @@ impl pallet_collateral::Collateral for PolkaBTC {
 }
 
 impl pallet_vault_registry::VaultRegistry for PolkaBTC {
+    type DOT = u128;
     type PolkaBTC = u128;
 }
 
@@ -70,3 +72,7 @@ impl pallet_timestamp::Timestamp for PolkaBTC {
 }
 
 impl pallet_exchange_rate_oracle::ExchangeRateOracle for PolkaBTC {}
+
+impl pallet_balances_dot::DOT for PolkaBTC {
+    type Balance = u128;
+}

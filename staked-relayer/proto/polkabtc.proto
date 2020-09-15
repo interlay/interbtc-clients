@@ -23,6 +23,9 @@ service StakedRelayer {
     // Manually propose status update to security module.
     rpc SuggestStatusUpdate (SuggestStatusUpdateRequest) returns (SuggestStatusUpdateResponse);
 
+    // TODO: remove once we have test data
+    rpc RegisterVault (RegisterVaultRequest) returns (RegisterVaultResponse);
+
     // Bond collateral (DOT) in order to participate in governance.
     rpc Register (RegisterRequest) returns (RegisterResponse);
 
@@ -108,6 +111,14 @@ message SuggestStatusUpdateRequest {
 }
 
 message SuggestStatusUpdateResponse {
+}
+
+message RegisterVaultRequest {
+    uint64 collateral = 1;
+    bytes address = 2;
+}
+
+message RegisterVaultResponse {
 }
 
 message RegisterRequest {

@@ -3,6 +3,7 @@ use crate::rpc::Provider as PolkaRPC;
 use crate::Error;
 use runtime::{ErrorCode, StatusCode};
 use sp_core::crypto::Ss58Codec;
+use sp_core::H160;
 
 use tonic::{Code, Request, Response, Status};
 
@@ -18,6 +19,7 @@ use polkabtc::{GetStatusRequest, GetStatusResponse};
 use polkabtc::{GetStatusUpdateRequest, GetStatusUpdateResponse};
 use polkabtc::{GetVaultRequest, GetVaultResponse};
 use polkabtc::{RegisterRequest, RegisterResponse};
+use polkabtc::{RegisterVaultRequest, RegisterVaultResponse};
 use polkabtc::{SuggestStatusUpdateRequest, SuggestStatusUpdateResponse};
 
 pub mod polkabtc {
@@ -72,6 +74,19 @@ fn serialize_error_code(code: i32) -> Result<Option<ErrorCode>, Status> {
             Error::UnknownErrorCode.to_string(),
         ))
     }
+}
+
+fn btc_address_from_bytes<B: AsRef<[u8]>>(bytes: B) -> Result<H160, Status> {
+    let slice = bytes.as_ref();
+    if slice.len() != 20 {
+        return Err(Status::new(
+            Code::InvalidArgument,
+            Error::InvalidBtcAddress.to_string(),
+        ));
+    }
+    let mut result = [0u8; 20];
+    result.copy_from_slice(slice);
+    Ok(result.into())
 }
 
 #[tonic::async_trait]
@@ -148,6 +163,20 @@ impl StakedRelayer for Service {
             )
             .await?;
         Ok(Response::new(SuggestStatusUpdateResponse {}))
+    }
+
+    async fn register_vault(
+        &self,
+        request: Request<RegisterVaultRequest>,
+    ) -> Result<Response<RegisterVaultResponse>, Status> {
+        let message = request.into_inner();
+        self.rpc
+            .register_vault(
+                message.collateral.into(),
+                btc_address_from_bytes(message.address)?,
+            )
+            .await?;
+        Ok(Response::new(RegisterVaultResponse {}))
     }
 
     async fn register(
