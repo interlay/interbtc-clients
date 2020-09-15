@@ -10,7 +10,6 @@ use runtime::pallet_vault_registry::*;
 use runtime::PolkaBTC;
 use sp_core::crypto::{AccountId32, Pair};
 use sp_core::sr25519::Pair as KeyPair;
-use sp_core::U256;
 use std::convert::TryInto;
 use std::sync::Arc;
 use substrate_subxt::{
@@ -189,53 +188,6 @@ impl Provider {
                 None,
             )
             .await?;
-        Ok(())
-    }
-
-    /// # Status Updates
-    ///
-    /// In order to vote on a status update the staked relayer
-    /// must first check whether the proposal is valid. There are
-    /// four possible error codes as defined in the specification:
-    ///
-    /// * `NoDataBTCRelay` - missing transactional data for a block header
-    /// * `InvalidBTCRelay` - invalid transaction was detected in a block header
-    /// * `OracleOffline` - oracle liveness failure
-    /// * `Liquidation` - at least one vault is being liquidated
-    ///
-    pub async fn on_proposal<F>(&self, cb: F) -> Result<(), Error>
-    where
-        F: Fn(U256, StatusCode, Option<ErrorCode>, Option<ErrorCode>),
-    {
-        let sub = self.client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBTC>::new(self.client.metadata().clone());
-        decoder.register_type_size::<u128>("Balance");
-        decoder.register_type_size::<U256>("U256");
-        decoder.register_type_size::<StatusCode>("StatusCode");
-        decoder.register_type_size::<ErrorCode>("ErrorCode");
-
-        let mut sub = EventSubscription::<PolkaBTC>::new(sub, decoder);
-        sub.filter_event::<StatusUpdateSuggestedEvent<_>>();
-        while let Some(result) = sub.next().await {
-            match result {
-                Ok(raw_event) => {
-                    let event =
-                        StatusUpdateSuggestedEvent::<PolkaBTC>::decode(&mut &raw_event.data[..])?;
-
-                    // TODO: ignore self submitted
-                    cb(
-                        event.status_update_id,
-                        event.status_code,
-                        event.add_error,
-                        event.remove_error,
-                    );
-                }
-                Err(err) => {
-                    error!("{}", err);
-                }
-            };
-        }
-
         Ok(())
     }
 

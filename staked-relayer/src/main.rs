@@ -31,7 +31,6 @@ async fn main() -> Result<(), Error> {
     let signer = PairSigner::<PolkaBTC, _>::new(AccountKeyring::Alice.pair());
     let api_prov = Provider::new(client, Arc::new(Mutex::new(signer)));
     let relay_prov = api_prov.clone();
-    let proposal_prov = api_prov.clone();
     let register_prov = api_prov.clone();
     let other_prov = api_prov.clone();
 
@@ -80,16 +79,6 @@ async fn main() -> Result<(), Error> {
     let result = tokio::try_join!(
         // runs grpc server for incoming requests
         tokio::spawn(async move { router.serve(addr).await.unwrap() }),
-        // runs subscription service for status updates
-        tokio::spawn(async move {
-            proposal_prov
-                .on_proposal(|id, _code, _add, _remove| {
-                    info!("Found status update: {}", id);
-                    // TODO: verify & vote
-                })
-                .await
-                .unwrap()
-        }),
         // runs subscription service to update registered vaults
         tokio::spawn(async move {
             register_prov
