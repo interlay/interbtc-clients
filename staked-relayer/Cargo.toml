@@ -19,8 +19,8 @@ prost = "0.6"
 bitcoin = "0.23.0"
 serde_json = "1.0.57"
 clap = "3.0.0-beta.1"
-sp-keyring = { version = "2.0.0-rc6", package = "sp-keyring" }
-sp-core = { version = "2.0.0-rc6", package = "sp-core" }
+sp-keyring = "2.0.0-rc6"
+sp-core = "2.0.0-rc6"
 
 # TODO: https://github.com/paritytech/substrate-subxt/pull/158
 substrate-subxt = { path = "../../substrate-subxt" }
