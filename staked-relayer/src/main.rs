@@ -7,7 +7,6 @@ mod relay;
 mod rpc;
 
 use error::Error;
-use futures::stream::{FuturesUnordered, StreamExt};
 use grpc::{Service, StakedRelayerServer};
 use log::{error, info};
 use relay::Client as PolkaClient;
@@ -16,9 +15,7 @@ use rpc::Provider;
 use runtime::PolkaBTC;
 use sp_keyring::AccountKeyring;
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::RwLock;
-use std::time::Duration;
+use std::sync::{Arc, RwLock};
 use substrate_subxt::{ClientBuilder, PairSigner};
 use tokio::sync::Mutex;
 use tonic::transport::Server;
@@ -31,8 +28,9 @@ async fn main() -> Result<(), Error> {
     let signer = PairSigner::<PolkaBTC, _>::new(AccountKeyring::Alice.pair());
     let api_prov = Provider::new(client, Arc::new(Mutex::new(signer)));
     let relay_prov = api_prov.clone();
-    let register_prov = api_prov.clone();
-    let other_prov = api_prov.clone();
+    let vault_prov = api_prov.clone();
+    let oracle_prov = api_prov.clone();
+    let tx_prov = api_prov.clone();
 
     let addr = "[::1]:50051".parse().unwrap();
     let service = Service { rpc: api_prov };
@@ -51,27 +49,15 @@ async fn main() -> Result<(), Error> {
         },
     )?;
 
-    let vaults = other_prov
+    let vaults = vault_prov
         .get_all_vaults()
         .await?
         .into_iter()
         .map(|vault| (vault.btc_address, vault));
-
-    let all_vaults = vaults.clone();
+    println!("Vaults: {:?}", vaults);
 
     let vaults_rw: Arc<RwLock<HashMap<_, _>>> = Arc::new(RwLock::new(vaults.into_iter().collect()));
     let vaults_ro = vaults_rw.clone();
-    println!("vaults: {:?}", vaults_rw);
-
-    let mut workers = FuturesUnordered::new();
-
-    for vault in all_vaults {
-        workers.push(async {
-            poll::check_until_true(Duration::from_secs(3), || async { return (true, 100u32) }).await
-        });
-    }
-
-    // let verifier = rpc::OracleChecker { rpc: other_prov };
 
     let mut btc_height = 1834437;
     let btc_rpc = bitcoin::BitcoinMonitor::from_env()?;
@@ -81,7 +67,7 @@ async fn main() -> Result<(), Error> {
         tokio::spawn(async move { router.serve(addr).await.unwrap() }),
         // runs subscription service to update registered vaults
         tokio::spawn(async move {
-            register_prov
+            vault_prov
                 .on_register(|vault| {
                     info!("Vault registered: {}", vault.id);
                     vaults_rw.write().unwrap().insert(vault.btc_address, vault);
@@ -90,45 +76,53 @@ async fn main() -> Result<(), Error> {
                 .unwrap()
         }),
         // runs oracle liveness check
-        // tokio::spawn(async move {
-        //     poll::check_until_true(std::time::Duration::from_secs(5), || async {
-        //         match verifier.is_oracle_offline().await {
-        //             Ok(is_offline) => {
-        //                 if is_offline {
-        //                     // TODO: report
-        //                     info!("Oracle is offline, reporting...");
-        //                 }
-        //             }
-        //             Err(e) => error!("Liveness check failed: {}", e.to_string()),
-        //         }
-        //     })
-        //     .await
-        // }),
-        // runs vault liquidation checks
         tokio::spawn(async move {
-            poll::run_all(workers, |vault| async {
-                println!("hello");
+            let verifier = rpc::OracleChecker { rpc: oracle_prov };
+
+            poll::check_every(std::time::Duration::from_secs(5), || async {
+                match verifier.is_oracle_offline().await {
+                    Ok(is_offline) => {
+                        if is_offline {
+                            info!("Oracle is offline, reporting...");
+                            // TODO: report oracle offline
+                        }
+                    }
+                    Err(e) => error!("Liveness check failed: {}", e.to_string()),
+                }
             })
             .await
         }),
         // runs vault theft checks
         tokio::spawn(async move {
             loop {
+                info!("Scanning height {}", btc_height);
                 let hash = btc_rpc.wait_for_block(btc_height).await.unwrap();
                 for maybe_tx in btc_rpc.get_block_transactions(hash).unwrap() {
                     if let Some(tx) = maybe_tx {
                         // filter matching vaults
-                        let addrs = bitcoin::extract_btc_addresses(tx)
+                        let vault_ids = bitcoin::extract_btc_addresses(tx)
                             .into_iter()
-                            .filter(|addr| vaults_ro.read().unwrap().contains_key(addr))
+                            .filter_map(|addr| {
+                                let vaults = vaults_ro.read().unwrap();
+                                if let Some(vault) = vaults.get(&addr) {
+                                    return Some(vault.id.clone());
+                                }
+                                None
+                            })
                             .collect::<Vec<_>>();
-                        if addrs.len() > 0 {
-                            println!("{:?}", addrs);
+
+                        for vault_id in vault_ids {
+                            info!("Found tx from vault {}", vault_id);
+                            // check if matching redeem or replace request
+                            if tx_prov
+                                .is_transaction_invalid(vault_id, vec![])
+                                .await
+                                .unwrap()
+                            {
+                                info!("Transaction is invalid, reporting...");
+                                // TODO: report vault theft
+                            }
                         }
-
-                        // check if matching redeem or replace request
-
-                        // report vault theft
                     }
                 }
                 btc_height += 1;

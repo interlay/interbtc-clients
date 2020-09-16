@@ -1,4 +1,5 @@
 use parity_scale_codec::Error as CodecError;
+use serde_json::Error as SerdeJsonError;
 use std::array::TryFromSliceError;
 use std::num::TryFromIntError;
 use substrate_subxt::Error as XtError;
@@ -19,4 +20,6 @@ pub enum Error {
     XtError(#[from] XtError),
     #[error("Error decoding: {0}")]
     CodecError(#[from] CodecError),
+    #[error("Error encoding json data: {0}")]
+    SerdeJsonError(#[from] SerdeJsonError),
 }

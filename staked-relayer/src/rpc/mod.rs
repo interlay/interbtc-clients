@@ -13,7 +13,8 @@ use sp_core::sr25519::Pair as KeyPair;
 use std::convert::TryInto;
 use std::sync::Arc;
 use substrate_subxt::{
-    balances::AccountData, system::System, Client, EventSubscription, EventsDecoder, PairSigner,
+    balances::AccountData, system::System, to_json_value, Client, EventSubscription, EventsDecoder,
+    PairSigner, Params,
 };
 use tokio::sync::Mutex;
 
@@ -76,13 +77,6 @@ impl Provider {
         Ok(self.client.block_headers(hash, None).await?)
     }
 
-    pub async fn get_account_data(
-        &self,
-        id: <PolkaBTC as System>::AccountId,
-    ) -> Result<AccountData<<PolkaBTC as DOT>::Balance>, Error> {
-        Ok(self.client.account(id, None).await?)
-    }
-
     pub async fn get_parachain_status(&self) -> Result<StatusCode, Error> {
         Ok(self.client.parachain_status(None).await?)
     }
@@ -115,10 +109,6 @@ impl Provider {
             vaults.push(account);
         }
         Ok(vaults)
-    }
-
-    pub async fn get_liquidation_threshold(&self) -> Result<u128, Error> {
-        Ok(self.client.liquidation_collateral_threshold(None).await?)
     }
 
     pub async fn get_exchange_rate_info(&self) -> Result<(u64, u64, u64), Error> {
@@ -193,13 +183,7 @@ impl Provider {
 
     pub async fn on_register<F>(&self, mut cb: F) -> Result<(), Error>
     where
-        F: FnMut(
-            Vault<
-                <PolkaBTC as System>::AccountId,
-                <PolkaBTC as System>::BlockNumber,
-                <PolkaBTC as VaultRegistry>::PolkaBTC,
-            >,
-        ),
+        F: FnMut(PolkaBTCVault),
     {
         let sub = self.client.subscribe_events().await?;
         let mut decoder = EventsDecoder::<PolkaBTC>::new(self.client.metadata().clone());
@@ -222,5 +206,25 @@ impl Provider {
         }
 
         Ok(())
+    }
+
+    pub async fn is_transaction_invalid(
+        &self,
+        vault_id: <PolkaBTC as System>::AccountId,
+        raw_tx: Vec<u8>,
+    ) -> Result<bool, Error> {
+        Ok(
+            match self
+                .client
+                .send_msg(
+                    "stakedRelayers_isTransactionInvalid",
+                    Params::Array(vec![to_json_value(vault_id)?, to_json_value(raw_tx)?]),
+                )
+                .await
+            {
+                Ok(()) => true,
+                _ => false,
+            },
+        )
     }
 }

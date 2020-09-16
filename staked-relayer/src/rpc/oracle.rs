@@ -6,8 +6,6 @@ use super::Provider;
 #[cfg(test)]
 use super::mock::Provider;
 
-use super::PolkaBTCVault;
-
 #[derive(Clone)]
 pub struct OracleChecker {
     pub(crate) rpc: Provider,
@@ -24,37 +22,6 @@ impl OracleChecker {
             Err(_) => Err(Error::CheckOracleOffline),
         }
     }
-
-    // pub async fn is_vault_undercollateralized(&self, vault: PolkaBTCVault) -> Result<(), Error> {
-    //     // get the currently locked collateral for the vault
-    //     let collateral_in_dot = self.rpc.get_account_data(vault.id).await?.reserved;
-    //     // get the current threshold for the collateral
-    //     // NOTE: The liquidation threshold expresses the percentage of minimum collateral
-    //     // level required for the vault. If the vault is under this percentage,
-    //     // the vault is flagged for liquidation.
-    //     let liquidation_collateral_threshold = self.rpc.get_liquidation_threshold().await?;
-
-    //     // calculate how much PolkaBTC the vault should maximally have considering
-    //     // the liquidation threshold.
-    //     // NOTE: if the division fails, return 0 as maximum amount
-    //     let max_polka_btc_in_dot =
-    //         match collateral_in_dot.checked_div(liquidation_collateral_threshold) {
-    //             Some(v) => v,
-    //             None => 0,
-    //         };
-
-    //     // get the currently issued tokens of the vault
-    //     let amount_btc_in_dot = ext::oracle::btc_to_dots::<T>(vault.issued_tokens)?;
-
-    //     // // Ensure that the current amount of PolkaBTC (in DOT) is greater than
-    //     // // the allowed maximum of issued tokens to flag the vault for liquidation
-    //     // ensure!(
-    //     //     max_polka_btc_in_dot < raw_amount_btc_in_dot,
-    //     //     Error::<T>::CollateralOk,
-    //     // );
-
-    //     Ok(())
-    // }
 }
 
 #[cfg(test)]

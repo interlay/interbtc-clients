@@ -3925,6 +3925,7 @@ dependencies = [
  "prost",
  "relayer-core",
  "runtime",
+ "serde_json",
  "sp-core",
  "sp-keyring",
  "sp-runtime",
