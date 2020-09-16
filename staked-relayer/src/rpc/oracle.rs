@@ -1,4 +1,5 @@
 use super::Error;
+use std::sync::Arc;
 
 #[cfg(not(test))]
 use super::Provider;
@@ -8,10 +9,14 @@ use super::mock::Provider;
 
 #[derive(Clone)]
 pub struct OracleChecker {
-    pub(crate) rpc: Provider,
+    rpc: Arc<Provider>,
 }
 
 impl OracleChecker {
+    pub fn new(rpc: Arc<Provider>) -> Self {
+        OracleChecker { rpc }
+    }
+
     /// Verify that the oracle is offline
     pub async fn is_oracle_offline(&self) -> Result<bool, Error> {
         let get_info = self.rpc.get_exchange_rate_info();
@@ -41,7 +46,7 @@ mod tests {
             .mock_get_exchange_rate_info()
             .returns(Ok((0, 0, 0)));
         provider.mock_get_time_now().returns(Ok(1));
-        let verifier = OracleChecker { rpc: provider };
+        let verifier = OracleChecker::new(Arc::new(provider));
 
         assert_eq!(aw!(verifier.is_oracle_offline()).unwrap(), true);
     }

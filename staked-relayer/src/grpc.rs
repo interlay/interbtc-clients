@@ -1,10 +1,10 @@
-use crate::rpc::Error as PolkaError;
-use crate::rpc::Provider as PolkaRPC;
+use crate::rpc::Error as PolkaBTCError;
+use crate::rpc::Provider as PolkaBTCRPC;
 use crate::Error;
 use runtime::{ErrorCode, StatusCode};
 use sp_core::crypto::Ss58Codec;
 use sp_core::H160;
-
+use std::sync::Arc;
 use tonic::{Code, Request, Response, Status};
 
 pub use polkabtc::staked_relayer_server::StakedRelayer;
@@ -27,11 +27,17 @@ pub mod polkabtc {
 }
 
 pub struct Service {
-    pub(crate) rpc: PolkaRPC,
+    rpc: Arc<PolkaBTCRPC>,
 }
 
-impl From<PolkaError> for Status {
-    fn from(err: PolkaError) -> Self {
+impl Service {
+    pub fn new(rpc: Arc<PolkaBTCRPC>) -> Self {
+        Service { rpc }
+    }
+}
+
+impl From<PolkaBTCError> for Status {
+    fn from(err: PolkaBTCError) -> Self {
         Status::new(Code::Internal, err.to_string())
     }
 }

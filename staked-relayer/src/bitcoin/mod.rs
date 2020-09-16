@@ -2,9 +2,20 @@ mod block;
 
 pub use block::BitcoinMonitor;
 
-use bitcoincore_rpc::bitcoin::blockdata::opcodes;
-use bitcoincore_rpc::bitcoincore_rpc_json::GetRawTransactionResult;
+use crate::utils::read_env;
+use crate::Error;
+
+use relayer_core::bitcoin::bitcoincore_rpc::{
+    bitcoin::blockdata::opcodes, bitcoincore_rpc_json::GetRawTransactionResult, Auth, Client,
+};
 use sp_core::H160;
+
+pub fn bitcoin_rpc_from_env() -> Result<Client, Error> {
+    let url = read_env("BITCOIN_RPC_URL")?;
+    let user = read_env("BITCOIN_RPC_USER")?;
+    let pass = read_env("BITCOIN_RPC_PASS")?;
+    Ok(Client::new(url, Auth::UserPass(user, pass))?)
+}
 
 fn bytes_to_h160<B: AsRef<[u8]>>(bytes: B) -> H160 {
     let slice = bytes.as_ref();
@@ -44,9 +55,9 @@ pub fn extract_btc_addresses(tx: GetRawTransactionResult) -> Vec<H160> {
 mod tests {
     use super::*;
 
-    use bitcoincore_rpc::bitcoin::{Txid, Wtxid};
-    use bitcoincore_rpc::bitcoincore_rpc_json::{
-        GetRawTransactionResultVin, GetRawTransactionResultVinScriptSig,
+    use relayer_core::bitcoin::bitcoincore_rpc::{
+        bitcoin::{Txid, Wtxid},
+        bitcoincore_rpc_json::{GetRawTransactionResultVin, GetRawTransactionResultVinScriptSig},
     };
 
     #[test]

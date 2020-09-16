@@ -6,14 +6,15 @@ use futures::executor::block_on;
 use log::error;
 use relayer_core::{Error as CoreError, Issuing};
 use runtime::{H256Le, RawBlockHeader};
+use std::sync::Arc;
 
 pub struct Client {
-    rpc: Provider,
+    rpc: Arc<Provider>,
 }
 
 impl Client {
-    pub fn new(rpc: Provider) -> Result<Self, Error> {
-        Ok(Client { rpc })
+    pub fn new(rpc: Arc<Provider>) -> Self {
+        Client { rpc }
     }
 }
 

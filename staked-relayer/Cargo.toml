@@ -5,8 +5,6 @@ authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 
 [dependencies]
-# TODO: https://github.com/paritytech/substrate-subxt/pull/158
-substrate-subxt = { path = "../../substrate-subxt" }
 log = "0.4.0"
 env_logger = "0.7.1"
 parity-scale-codec = "1.3.1"
@@ -18,19 +16,16 @@ thiserror = "1.0"
 futures = "0.3.5"
 tonic = "0.3"
 prost = "0.6"
-
 bitcoin = "0.23.0"
-bitcoincore-rpc = "0.11.0"
 serde_json = "1.0.57"
+clap = "3.0.0-beta.1"
+sp-keyring = { version = "2.0.0-rc6", package = "sp-keyring" }
+sp-core = { version = "2.0.0-rc6", package = "sp-core" }
 
+# TODO: https://github.com/paritytech/substrate-subxt/pull/158
+substrate-subxt = { path = "../../substrate-subxt" }
 runtime = { path = "../runtime" }
 relayer-core = { path = "../../relayer-core" }
-
-sp-keyring = { version = "2.0.0-rc6", package = "sp-keyring" }
-sp-runtime = { version = "2.0.0-rc6", package = "sp-runtime" }
-sp-core = { version = "2.0.0-rc6", package = "sp-core" }
-pallet-indices = { version = "2.0.0-rc6", package = "pallet-indices" }
-pallet-balances = { version = "2.0.0-rc6", package = "pallet-balances" }
 
 [build-dependencies]
 tonic-build = "0.3"

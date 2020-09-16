@@ -1,6 +1,5 @@
 use log::error;
 use parity_scale_codec::Decode;
-use runtime::pallet_balances_dot::*;
 use runtime::pallet_btc_relay::*;
 use runtime::pallet_exchange_rate_oracle::*;
 use runtime::pallet_security::*;
@@ -13,8 +12,7 @@ use sp_core::sr25519::Pair as KeyPair;
 use std::convert::TryInto;
 use std::sync::Arc;
 use substrate_subxt::{
-    balances::AccountData, system::System, to_json_value, Client, EventSubscription, EventsDecoder,
-    PairSigner, Params,
+    system::System, to_json_value, Client, EventSubscription, EventsDecoder, PairSigner, Params,
 };
 use tokio::sync::Mutex;
 

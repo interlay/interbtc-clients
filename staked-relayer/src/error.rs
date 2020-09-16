@@ -1,6 +1,6 @@
 use crate::relay::Error as RelayError;
 use crate::rpc::Error as RpcError;
-use bitcoincore_rpc::Error as BtcRpcError;
+use relayer_core::bitcoin::bitcoincore_rpc::Error as BtcRpcError;
 use relayer_core::Error as CoreError;
 use std::env::VarError;
 use substrate_subxt::Error as XtError;
