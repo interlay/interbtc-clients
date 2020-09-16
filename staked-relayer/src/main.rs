@@ -2,7 +2,6 @@ mod bitcoin;
 mod env;
 mod error;
 mod grpc;
-mod poll;
 mod relay;
 mod rpc;
 
@@ -15,10 +14,23 @@ use rpc::Provider;
 use runtime::PolkaBTC;
 use sp_keyring::AccountKeyring;
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 use substrate_subxt::{ClientBuilder, PairSigner};
 use tokio::sync::Mutex;
+use tokio::time::delay_for;
 use tonic::transport::Server;
+
+pub async fn check_every<F>(duration: Duration, check: impl Fn() -> F)
+where
+    F: Future<Output = ()>,
+{
+    loop {
+        delay_for(duration).await;
+        check().await;
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -79,7 +91,7 @@ async fn main() -> Result<(), Error> {
         tokio::spawn(async move {
             let verifier = rpc::OracleChecker { rpc: oracle_prov };
 
-            poll::check_every(std::time::Duration::from_secs(5), || async {
+            check_every(std::time::Duration::from_secs(5), || async {
                 match verifier.is_oracle_offline().await {
                     Ok(is_offline) => {
                         if is_offline {
