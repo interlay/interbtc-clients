@@ -11,14 +11,14 @@ pub use polkabtc::staked_relayer_server::StakedRelayer;
 pub use polkabtc::staked_relayer_server::StakedRelayerServer;
 use polkabtc::ErrorCode as UserErrorCode;
 use polkabtc::StatusCode as UserStatusCode;
-use polkabtc::{DeregisterRequest, DeregisterResponse};
+use polkabtc::{DeregisterStakedRelayerRequest, DeregisterStakedRelayerResponse};
 use polkabtc::{GetAddressRequest, GetAddressResponse};
 use polkabtc::{GetBestBlockRequest, GetBestBlockResponse};
 use polkabtc::{GetExchangeRateRequest, GetExchangeRateResponse};
 use polkabtc::{GetStatusRequest, GetStatusResponse};
 use polkabtc::{GetStatusUpdateRequest, GetStatusUpdateResponse};
 use polkabtc::{GetVaultRequest, GetVaultResponse};
-use polkabtc::{RegisterRequest, RegisterResponse};
+use polkabtc::{RegisterStakedRelayerRequest, RegisterStakedRelayerResponse};
 use polkabtc::{RegisterVaultRequest, RegisterVaultResponse};
 use polkabtc::{SuggestStatusUpdateRequest, SuggestStatusUpdateResponse};
 
@@ -179,21 +179,21 @@ impl StakedRelayer for Service {
         Ok(Response::new(RegisterVaultResponse {}))
     }
 
-    async fn register(
+    async fn register_staked_relayer(
         &self,
-        request: Request<RegisterRequest>,
-    ) -> Result<Response<RegisterResponse>, Status> {
+        request: Request<RegisterStakedRelayerRequest>,
+    ) -> Result<Response<RegisterStakedRelayerResponse>, Status> {
         self.rpc
             .register_staked_relayer(request.into_inner().stake.into())
             .await?;
-        Ok(Response::new(RegisterResponse {}))
+        Ok(Response::new(RegisterStakedRelayerResponse {}))
     }
 
-    async fn deregister(
+    async fn deregister_staked_relayer(
         &self,
-        _request: Request<DeregisterRequest>,
-    ) -> Result<Response<DeregisterResponse>, Status> {
+        _request: Request<DeregisterStakedRelayerRequest>,
+    ) -> Result<Response<DeregisterStakedRelayerResponse>, Status> {
         self.rpc.deregister_staked_relayer().await?;
-        Ok(Response::new(DeregisterResponse {}))
+        Ok(Response::new(DeregisterStakedRelayerResponse {}))
     }
 }

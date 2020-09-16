@@ -23,14 +23,14 @@ service StakedRelayer {
     // Manually propose status update to security module.
     rpc SuggestStatusUpdate (SuggestStatusUpdateRequest) returns (SuggestStatusUpdateResponse);
 
-    // TODO: remove once we have test data
+    // Register vault by providing DOT collateral.
     rpc RegisterVault (RegisterVaultRequest) returns (RegisterVaultResponse);
 
     // Bond collateral (DOT) in order to participate in governance.
-    rpc Register (RegisterRequest) returns (RegisterResponse);
+    rpc RegisterStakedRelayer (RegisterStakedRelayerRequest) returns (RegisterStakedRelayerResponse);
 
     // Unbond collateral (DOT), the account cannot be participating in any proposals.
-    rpc Deregister (DeregisterRequest) returns (DeregisterResponse);
+    rpc DeregisterStakedRelayer (DeregisterStakedRelayerRequest) returns (DeregisterStakedRelayerResponse);
 }
 
 message GetAddressRequest {
@@ -121,15 +121,15 @@ message RegisterVaultRequest {
 message RegisterVaultResponse {
 }
 
-message RegisterRequest {
+message RegisterStakedRelayerRequest {
     uint64 stake = 1;
 }
 
-message RegisterResponse {
+message RegisterStakedRelayerResponse {
 }
 
-message DeregisterRequest {
+message DeregisterStakedRelayerRequest {
 }
 
-message DeregisterResponse {
+message DeregisterStakedRelayerResponse {
 }
