@@ -27,16 +27,27 @@ use tonic::transport::Server;
 #[derive(Clap)]
 #[clap(version = "0.1", author = "Interlay <contact@interlay.io>")]
 struct Opts {
+    /// Parachain URL, can be over WebSockets or HTTP.
+    #[clap(long, default_value = "ws://127.0.0.1:9944")]
+    polka_btc_url: String,
+
+    /// Address to listen on for GRPC requests.
     #[clap(long, default_value = "[::1]:50051")]
     grpc_addr: String,
 
+    /// Starting height for vault theft checks, if not defined
+    /// automatically start from the chain tip.
     #[clap(long)]
     scan_start_height: Option<u32>,
 
+    /// Starting height to relay block headers, if not defined
+    /// use the best height as reported by the relay module.
     #[clap(long)]
     relay_start_height: Option<u32>,
 
-    #[clap(long, default_value = "1")]
+    /// Max batch size for combined block header submission,
+    /// currently unsupported.
+    #[clap(long, default_value = "1", possible_value = "1")]
     max_batch_size: u32,
 }
 
@@ -48,7 +59,10 @@ async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
 
-    let client = ClientBuilder::<PolkaBTC>::new().build().await?;
+    let client = ClientBuilder::<PolkaBTC>::new()
+        .set_url(opts.polka_btc_url)
+        .build()
+        .await?;
     let signer = PairSigner::<PolkaBTC, _>::new(AccountKeyring::Alice.pair());
     let provider = Provider::new(client, Arc::new(Mutex::new(signer)));
     let shared_prov = Arc::new(provider);
@@ -134,9 +148,12 @@ async fn main() -> Result<(), Error> {
             loop {
                 info!("Scanning height {}", btc_height);
                 let hash = btc_rpc.wait_for_block(btc_height).await.unwrap();
-                for maybe_tx in btc_rpc.get_block_transactions(hash).unwrap() {
+                for maybe_tx in btc_rpc.get_block_transactions(&hash).unwrap() {
                     if let Some(tx) = maybe_tx {
                         let tx_id = tx.txid;
+                        // TODO: spawn_blocking?
+                        let raw_tx = btc_rpc.get_raw_tx(&tx_id, &hash).unwrap();
+                        let proof = btc_rpc.get_proof(tx_id.clone(), &hash).unwrap();
                         // filter matching vaults
                         let vault_ids = bitcoin::extract_btc_addresses(tx)
                             .into_iter()
@@ -153,7 +170,7 @@ async fn main() -> Result<(), Error> {
                             info!("Found tx from vault {}", vault_id);
                             // check if matching redeem or replace request
                             if tx_provider
-                                .is_transaction_invalid(vault_id.clone(), vec![])
+                                .is_transaction_invalid(vault_id.clone(), raw_tx.clone())
                                 .await
                                 .unwrap()
                             {
@@ -164,8 +181,8 @@ async fn main() -> Result<(), Error> {
                                         vault_id,
                                         H256Le::from_bytes_le(&tx_id.as_hash()),
                                         btc_height,
-                                        vec![],
-                                        vec![],
+                                        proof.clone(),
+                                        raw_tx.clone(),
                                     )
                                     .await
                                 {

@@ -1,7 +1,7 @@
-use bitcoin::hash_types::BlockHash;
-
 use relayer_core::bitcoin::bitcoincore_rpc::{
-    bitcoincore_rpc_json::GetRawTransactionResult, Client, RpcApi,
+    bitcoin::{consensus::encode::serialize, hash_types::BlockHash, Txid},
+    bitcoincore_rpc_json::GetRawTransactionResult,
+    Client, RpcApi,
 };
 use std::future::Future;
 use std::pin::Pin;
@@ -27,14 +27,14 @@ impl BitcoinMonitor {
 
     pub fn get_block_transactions(
         &self,
-        hash: BlockHash,
+        hash: &BlockHash,
     ) -> Result<Vec<Option<GetRawTransactionResult>>, Error> {
-        let info = self.rpc.get_block_info(&hash)?;
+        let info = self.rpc.get_block_info(hash)?;
         let txs = info
             .tx
             .iter()
             .map(
-                |id| match self.rpc.get_raw_transaction_info(&id, Some(&hash)) {
+                |id| match self.rpc.get_raw_transaction_info(&id, Some(hash)) {
                     Ok(tx) => Some(tx),
                     // TODO: log error
                     Err(_) => None,
@@ -42,6 +42,16 @@ impl BitcoinMonitor {
             )
             .collect::<Vec<Option<GetRawTransactionResult>>>();
         Ok(txs)
+    }
+
+    pub fn get_raw_tx(&self, tx_id: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
+        Ok(serialize(
+            &self.rpc.get_raw_transaction(tx_id, Some(block_hash))?,
+        ))
+    }
+
+    pub fn get_proof(&self, tx_id: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
+        Ok(self.rpc.get_tx_out_proof(&[tx_id], Some(block_hash))?)
     }
 }
 
