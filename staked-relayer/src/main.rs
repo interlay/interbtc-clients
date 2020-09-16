@@ -14,7 +14,7 @@ use relay::Error as RelayError;
 use relayer_core::bitcoin::Client as BtcClient;
 use relayer_core::{Backing, Config, Runner};
 use rpc::{OracleChecker, Provider};
-use runtime::PolkaBTC;
+use runtime::{ErrorCode, H256Le, PolkaBTC};
 use sp_keyring::AccountKeyring;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -31,9 +31,18 @@ struct Opts {
     grpc_addr: String,
 
     #[clap(long)]
-    scan_height: Option<u32>,
+    scan_start_height: Option<u32>,
+
+    #[clap(long)]
+    relay_start_height: Option<u32>,
+
+    #[clap(long, default_value = "1")]
+    max_batch_size: u32,
 }
 
+// Note: MockProvider in `rpc` breaks main so we ignore for tests
+// unfortunately this means we get lots of `unused` warnings
+#[cfg(not(test))]
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     env_logger::init();
@@ -44,13 +53,14 @@ async fn main() -> Result<(), Error> {
     let provider = Provider::new(client, Arc::new(Mutex::new(signer)));
     let shared_prov = Arc::new(provider);
 
-    let addr = opts.grpc_addr.parse().unwrap();
+    let grpc_addr = opts.grpc_addr.parse()?;
     let service = Service::new(shared_prov.clone());
     let router = Server::builder().add_service(StakedRelayerServer::new(service));
 
     let btc_client = BtcClient::new::<RelayError>(bitcoin::bitcoin_rpc_from_env()?);
 
-    let mut btc_height = if let Some(height) = opts.scan_height {
+    // scan from custom height or the current tip
+    let mut btc_height = if let Some(height) = opts.scan_start_height {
         height
     } else {
         btc_client.get_block_count()? + 1
@@ -61,9 +71,8 @@ async fn main() -> Result<(), Error> {
         PolkaClient::new(shared_prov.clone()),
         btc_client,
         Config {
-            // TODO: pass config
-            start_height: 1831944,
-            max_batch_size: 1,
+            start_height: opts.relay_start_height.unwrap_or(0),
+            max_batch_size: opts.max_batch_size,
         },
     )?;
 
@@ -74,6 +83,7 @@ async fn main() -> Result<(), Error> {
         .into_iter()
         .map(|vault| (vault.btc_address, vault));
 
+    // collect (btc_address, vault) into HashMap
     let vaults_rw: Arc<RwLock<HashMap<_, _>>> = Arc::new(RwLock::new(vaults.into_iter().collect()));
     let vaults_ro = vaults_rw.clone();
 
@@ -81,7 +91,7 @@ async fn main() -> Result<(), Error> {
 
     let result = tokio::try_join!(
         // runs grpc server for incoming requests
-        tokio::spawn(async move { router.serve(addr).await.unwrap() }),
+        tokio::spawn(async move { router.serve(grpc_addr).await.unwrap() }),
         // runs subscription service to update registered vaults
         tokio::spawn(async move {
             vault_prov
@@ -95,13 +105,23 @@ async fn main() -> Result<(), Error> {
         // runs oracle liveness check
         tokio::spawn(async move {
             let verifier = OracleChecker::new(shared_prov.clone());
-
             utils::check_every(std::time::Duration::from_secs(5), || async {
                 match verifier.is_oracle_offline().await {
                     Ok(is_offline) => {
                         if is_offline {
-                            info!("Oracle is offline, reporting...");
-                            // TODO: report oracle offline
+                            if let Ok(error_codes) = shared_prov.get_error_codes().await {
+                                if error_codes.contains(&ErrorCode::OracleOffline) {
+                                    info!("Oracle already reported");
+                                    return;
+                                }
+                            };
+                            info!("Oracle is offline");
+                            match shared_prov.report_oracle_offline().await {
+                                Ok(_) => info!("Successfully reported oracle offline"),
+                                Err(e) => {
+                                    error!("Failed to report oracle offline: {}", e.to_string())
+                                }
+                            }
                         }
                     }
                     Err(e) => error!("Liveness check failed: {}", e.to_string()),
@@ -116,6 +136,7 @@ async fn main() -> Result<(), Error> {
                 let hash = btc_rpc.wait_for_block(btc_height).await.unwrap();
                 for maybe_tx in btc_rpc.get_block_transactions(hash).unwrap() {
                     if let Some(tx) = maybe_tx {
+                        let tx_id = tx.txid;
                         // filter matching vaults
                         let vault_ids = bitcoin::extract_btc_addresses(tx)
                             .into_iter()
@@ -132,12 +153,28 @@ async fn main() -> Result<(), Error> {
                             info!("Found tx from vault {}", vault_id);
                             // check if matching redeem or replace request
                             if tx_provider
-                                .is_transaction_invalid(vault_id, vec![])
+                                .is_transaction_invalid(vault_id.clone(), vec![])
                                 .await
                                 .unwrap()
                             {
-                                info!("Transaction is invalid, reporting...");
-                                // TODO: report vault theft
+                                // TODO: prevent blocking here
+                                info!("Transaction is invalid");
+                                match tx_provider
+                                    .report_vault_theft(
+                                        vault_id,
+                                        H256Le::from_bytes_le(&tx_id.as_hash()),
+                                        btc_height,
+                                        vec![],
+                                        vec![],
+                                    )
+                                    .await
+                                {
+                                    Ok(_) => info!("Successfully reported invalid transaction"),
+                                    Err(e) => error!(
+                                        "Failed to report invalid transaction: {}",
+                                        e.to_string()
+                                    ),
+                                }
                             }
                         }
                     }

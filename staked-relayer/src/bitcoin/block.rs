@@ -1,12 +1,7 @@
 use bitcoin::hash_types::BlockHash;
 
 use relayer_core::bitcoin::bitcoincore_rpc::{
-    bitcoin::{
-        blockdata::opcodes::all as opcodes, blockdata::script::Builder, Address, Amount,
-        Transaction, TxOut, Txid,
-    },
-    bitcoincore_rpc_json::GetRawTransactionResult,
-    Client, RpcApi,
+    bitcoincore_rpc_json::GetRawTransactionResult, Client, RpcApi,
 };
 use std::future::Future;
 use std::pin::Pin;

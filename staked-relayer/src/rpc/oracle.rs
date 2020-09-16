@@ -5,7 +5,7 @@ use std::sync::Arc;
 use super::Provider;
 
 #[cfg(test)]
-use super::mock::Provider;
+use super::MockProvider as Provider;
 
 #[derive(Clone)]
 pub struct OracleChecker {
@@ -33,21 +33,17 @@ impl OracleChecker {
 mod tests {
     use super::*;
 
-    macro_rules! aw {
-        ($e:expr) => {
-            tokio_test::block_on($e)
-        };
-    }
-
     #[test]
     fn test_check_oracle_offline() {
-        let mut provider = Provider::default();
-        provider
-            .mock_get_exchange_rate_info()
-            .returns(Ok((0, 0, 0)));
-        provider.mock_get_time_now().returns(Ok(1));
-        let verifier = OracleChecker::new(Arc::new(provider));
+        let mut mock = Provider::default();
+        mock.expect_get_exchange_rate_info()
+            .returning(|| Ok((0, 0, 0)));
+        mock.expect_get_time_now().returning(|| Ok(1));
 
-        assert_eq!(aw!(verifier.is_oracle_offline()).unwrap(), true);
+        let verifier = OracleChecker::new(Arc::new(mock));
+        assert_eq!(
+            tokio_test::block_on(verifier.is_oracle_offline()).unwrap(),
+            true
+        );
     }
 }

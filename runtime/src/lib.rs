@@ -4,6 +4,7 @@ use sp_runtime::{
     traits::{BlakeTwo256, IdentifyAccount, Verify},
     MultiSignature, OpaqueExtrinsic,
 };
+use std::collections::BTreeSet;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, system, Runtime};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -49,11 +50,14 @@ impl pallet_btc_relay::BTCRelay for PolkaBTC {
     type RichBlockHeader = RichBlockHeader;
 }
 
-impl pallet_security::Security for PolkaBTC {}
+impl pallet_security::Security for PolkaBTC {
+    type ErrorCodes = BTreeSet<ErrorCode>;
+}
 
 impl pallet_staked_relayers::StakedRelayers for PolkaBTC {
     type DOT = u128;
     type U256 = U256;
+    type H256Le = H256Le;
     type StatusCode = StatusCode;
     type ErrorCode = ErrorCode;
 }

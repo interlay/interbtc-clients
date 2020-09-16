@@ -9,6 +9,7 @@ use runtime::pallet_vault_registry::*;
 use runtime::PolkaBTC;
 use sp_core::crypto::{AccountId32, Pair};
 use sp_core::sr25519::Pair as KeyPair;
+use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::sync::Arc;
 use substrate_subxt::{
@@ -19,12 +20,8 @@ use tokio::sync::Mutex;
 mod error;
 mod oracle;
 
-pub use oracle::OracleChecker;
-
-#[cfg(test)]
-pub mod mock;
-
 pub use error::Error;
+pub use oracle::OracleChecker;
 
 pub type PolkaBTCVault = Vault<
     <PolkaBTC as System>::AccountId,
@@ -77,6 +74,10 @@ impl Provider {
 
     pub async fn get_parachain_status(&self) -> Result<StatusCode, Error> {
         Ok(self.client.parachain_status(None).await?)
+    }
+
+    pub async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, Error> {
+        Ok(self.client.errors(None).await?)
     }
 
     pub async fn get_status_update(
@@ -179,6 +180,34 @@ impl Provider {
         Ok(())
     }
 
+    pub async fn report_oracle_offline(&self) -> Result<(), Error> {
+        self.client
+            .report_oracle_offline_and_watch(&*self.signer.lock().await)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn report_vault_theft(
+        &self,
+        vault_id: <PolkaBTC as System>::AccountId,
+        tx_id: H256Le,
+        tx_block_height: u32,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>,
+    ) -> Result<(), Error> {
+        self.client
+            .report_vault_theft_and_watch(
+                &*self.signer.lock().await,
+                vault_id,
+                tx_id,
+                tx_block_height,
+                merkle_proof,
+                raw_tx,
+            )
+            .await?;
+        Ok(())
+    }
+
     pub async fn on_register<F>(&self, mut cb: F) -> Result<(), Error>
     where
         F: FnMut(PolkaBTCVault),
@@ -224,5 +253,16 @@ impl Provider {
                 _ => false,
             },
         )
+    }
+}
+
+#[cfg(test)]
+mockall::mock! {
+    pub Provider {
+        async fn get_address(&self) -> AccountId32;
+
+        async fn get_exchange_rate_info(&self) -> Result<(u64, u64, u64), Error>;
+
+        async fn get_time_now(&self) -> Result<u64, Error>;
     }
 }

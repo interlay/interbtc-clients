@@ -3950,7 +3950,6 @@ name = "staked-relayer"
 version = "0.1.0"
 dependencies = [
  "bitcoin 0.23.0",
- "cfg-if",
  "clap",
  "env_logger",
  "frame-system",

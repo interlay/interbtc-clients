@@ -1,6 +1,5 @@
 use crate::pallet_security::{Security, SecurityEventsDecoder};
 use core::marker::PhantomData;
-use module_bitcoin::types::H256Le;
 pub use module_staked_relayers::types::StatusUpdate;
 pub use module_staked_relayers::Error as StakedRelayersError;
 use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};
@@ -14,6 +13,7 @@ use substrate_subxt_proc_macro::{module, Call, Event, Store};
 pub trait StakedRelayers: System + Security + Balances {
     type DOT: Codec + EncodeLike + Member + Default;
     type U256: Codec + EncodeLike + Member + Default;
+    type H256Le: Codec + EncodeLike + Member + Default;
     type StatusCode: Codec + EncodeLike + Member + Default;
     type ErrorCode: Codec + EncodeLike + Member + Default;
 }
@@ -34,7 +34,21 @@ pub struct SuggestStatusUpdateCall<T: StakedRelayers> {
     pub status_code: T::StatusCode,
     pub add_error: Option<T::ErrorCode>,
     pub remove_error: Option<T::ErrorCode>,
-    pub block_hash: Option<H256Le>,
+    pub block_hash: Option<T::H256Le>,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct ReportOracleOffline<T: StakedRelayers> {
+    pub _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct ReportVaultTheft<T: StakedRelayers> {
+    pub vault_id: T::AccountId,
+    pub tx_id: T::H256Le,
+    pub tx_block_height: u32,
+    pub merkle_proof: Vec<u8>,
+    pub raw_tx: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
@@ -56,6 +70,13 @@ pub struct StatusUpdateSuggestedEvent<T: StakedRelayers> {
     pub add_error: Option<T::ErrorCode>,
     pub remove_error: Option<T::ErrorCode>,
     pub account_id: T::AccountId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct ExecuteStatusUpdateEvent<T: StakedRelayers> {
+    pub status_code: T::StatusCode,
+    pub add_error: Option<T::ErrorCode>,
+    pub remove_error: Option<T::ErrorCode>,
 }
 
 // #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
