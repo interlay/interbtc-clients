@@ -21,12 +21,18 @@ mod error;
 mod oracle;
 
 pub use error::Error;
-pub use oracle::OracleChecker;
+pub use oracle::Oracle;
 
-pub type PolkaBTCVault = Vault<
+pub type PolkaBtcVault = Vault<
     <PolkaBTC as System>::AccountId,
     <PolkaBTC as System>::BlockNumber,
     <PolkaBTC as VaultRegistry>::PolkaBTC,
+>;
+
+pub type PolkaBtcStatusUpdate = StatusUpdate<
+    <PolkaBTC as System>::AccountId,
+    <PolkaBTC as System>::BlockNumber,
+    <PolkaBTC as StakedRelayers>::DOT,
 >;
 
 #[derive(Clone)]
@@ -44,64 +50,80 @@ impl Provider {
         client: Client<PolkaBTC>,
         signer: Arc<Mutex<PairSigner<PolkaBTC, KeyPair>>>,
     ) -> Self {
+        // there is a race condition on signing
+        // since we run the relayer in the background
         Self { client, signer }
     }
 
+    /// Get the address of the configured signer.
     pub async fn get_address(&self) -> AccountId32 {
         self.signer.lock().await.signer().public().into()
     }
 
+    /// Get the current time as defined by the `timestamp` pallet.
     pub async fn get_time_now(&self) -> Result<u64, Error> {
         Ok(self.client.now(None).await?)
     }
 
+    /// Get the hash of the current best tip.
     pub async fn get_best_block(&self) -> Result<H256Le, Error> {
         Ok(self.client.best_block(None).await?)
     }
 
+    /// Get the current best known height.
     pub async fn get_best_block_height(&self) -> Result<u32, Error> {
         Ok(self.client.best_block_height(None).await?)
     }
 
+    /// Get the block hash for the main chain at the specified height.
+    ///
+    /// # Arguments
+    /// * `height` - chain height
     pub async fn get_block_hash(&self, height: u32) -> Result<H256Le, Error> {
         // TODO: adjust chain index
         Ok(self.client.chains_hashes(0, height, None).await?)
     }
 
+    /// Get the corresponding block header for the given hash.
+    ///
+    /// # Arguments
+    /// * `hash` - little endian block hash
     pub async fn get_block_header(&self, hash: H256Le) -> Result<RichBlockHeader, Error> {
         Ok(self.client.block_headers(hash, None).await?)
     }
 
+    /// Get the current security status of the parachain.
+    /// Should be one of; `Running`, `Error` or `Shutdown`.
     pub async fn get_parachain_status(&self) -> Result<StatusCode, Error> {
         Ok(self.client.parachain_status(None).await?)
     }
 
+    /// Return any `ErrorCode`s set in the security module.
     pub async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, Error> {
         Ok(self.client.errors(None).await?)
     }
 
-    pub async fn get_status_update(
-        &self,
-        id: u64,
-    ) -> Result<
-        StatusUpdate<
-            <PolkaBTC as System>::AccountId,
-            <PolkaBTC as System>::BlockNumber,
-            <PolkaBTC as StakedRelayers>::DOT,
-        >,
-        Error,
-    > {
+    /// Fetch an ongoing proposal by ID.
+    ///
+    /// # Arguments
+    /// * `id` - ID of the status update
+    pub async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, Error> {
         Ok(self.client.status_updates(id.into(), None).await?)
     }
 
-    pub async fn get_vault(&self, id: Vec<u8>) -> Result<PolkaBTCVault, Error> {
+    /// Fetch a specific vault by ID.
+    ///
+    /// # Arguments
+    /// * `vault_id` - account ID of the vault
+    pub async fn get_vault(&self, vault_id: Vec<u8>) -> Result<PolkaBtcVault, Error> {
         Ok(self
             .client
-            .vaults(bytes_to_address(&id)?.into(), None)
+            .vaults(bytes_to_address(&vault_id)?.into(), None)
             .await?)
     }
 
-    pub async fn get_all_vaults(&self) -> Result<Vec<PolkaBTCVault>, Error> {
+    /// Fetch all active vaults.
+    pub async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, Error> {
         let mut vaults = Vec::new();
         let mut iter = self.client.vaults_iter(None).await?;
         while let Some((_, account)) = iter.next().await? {
@@ -110,6 +132,8 @@ impl Provider {
         Ok(vaults)
     }
 
+    /// Returns the last exchange rate, the time at which it was set
+    /// and the configured max delay.
     pub async fn get_exchange_rate_info(&self) -> Result<(u64, u64, u64), Error> {
         let get_rate = self.client.exchange_rate(None);
         let get_time = self.client.last_exchange_rate_time(None);
@@ -121,17 +145,30 @@ impl Provider {
         }
     }
 
+    /// Initializes the relay with the provided block header and height,
+    /// should be called automatically by `relayer_core` subject to the
+    /// result of `is_initialized`.
+    ///
+    /// # Arguments
+    /// * `header` - raw block header
+    /// * `height` - starting height
     pub async fn initialize_btc_relay(
         &self,
         header: RawBlockHeader,
         height: BitcoinBlockHeight,
     ) -> Result<(), Error> {
+        // TODO: can we initialize the relay through the chain-spec?
+        // we would also need to consider re-initialization per governance
         self.client
             .initialize_and_watch(&*self.signer.lock().await, header, height)
             .await?;
         Ok(())
     }
 
+    /// Stores a block header in the BTC-Relay.
+    ///
+    /// # Arguments
+    /// * `header` - raw block header
     pub async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error> {
         self.client
             .store_block_header_and_watch(&*self.signer.lock().await, header)
@@ -139,6 +176,11 @@ impl Provider {
         Ok(())
     }
 
+    /// Submit extrinsic to register a vault.
+    ///
+    /// # Arguments
+    /// * `collateral` - deposit
+    /// * `btc_address` - Bitcoin address hash
     pub async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), Error> {
         self.client
             .register_vault_and_watch(&*self.signer.lock().await, collateral, btc_address)
@@ -146,6 +188,10 @@ impl Provider {
         Ok(())
     }
 
+    /// Submit extrinsic to register the staked relayer.
+    ///
+    /// # Arguments
+    /// * `stake` - deposit
     pub async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error> {
         self.client
             .register_staked_relayer_and_watch(&*self.signer.lock().await, stake)
@@ -153,6 +199,7 @@ impl Provider {
         Ok(())
     }
 
+    /// Submit extrinsic to deregister the staked relayer.
     pub async fn deregister_staked_relayer(&self) -> Result<(), Error> {
         self.client
             .deregister_staked_relayer_and_watch(&*self.signer.lock().await)
@@ -160,6 +207,22 @@ impl Provider {
         Ok(())
     }
 
+    /// Submit extrinsic to suggest a new status update. There are
+    /// four possible error codes as defined in the specification:
+    ///
+    /// * `NoDataBTCRelay` - missing transactional data for a block header
+    /// * `InvalidBTCRelay` - invalid transaction was detected in a block header
+    /// * `OracleOffline` - oracle liveness failure
+    /// * `Liquidation` - at least one vault is being liquidated
+    ///
+    /// Currently only `NoDataBTCRelay` can be voted upon, but should not be suggested
+    /// automatically to prevent poor connectivity resulting in slashing.
+    ///
+    /// # Arguments
+    /// * `deposit` - collateral held while ballot underway
+    /// * `status_code` - one of `Running`, `Error`, `Shutdown`
+    /// * `add_error` - error to add to `BTreeSet<ErrorCode>`
+    /// * `remove_error` - error to remove from `BTreeSet<ErrorCode>`
     pub async fn suggest_status_update(
         &self,
         deposit: u128,
@@ -180,6 +243,7 @@ impl Provider {
         Ok(())
     }
 
+    /// Submit extrinsic to report that the oracle is offline.
     pub async fn report_oracle_offline(&self) -> Result<(), Error> {
         self.client
             .report_oracle_offline_and_watch(&*self.signer.lock().await)
@@ -187,6 +251,16 @@ impl Provider {
         Ok(())
     }
 
+    /// Submit extrinsic to report vault theft, consumer should
+    /// first check `is_transaction_invalid` to ensure this call
+    /// succeeds.
+    ///
+    /// # Arguments
+    /// * `vault_id` - account id for the malicious vault
+    /// * `tx_id` - transaction id
+    /// * `tx_block_height` - block height to check inclusion
+    /// * `merkle_proof` - merkle proof to verify inclusion
+    /// * `raw_tx` - raw transaction
     pub async fn report_vault_theft(
         &self,
         vault_id: <PolkaBTC as System>::AccountId,
@@ -208,9 +282,14 @@ impl Provider {
         Ok(())
     }
 
-    pub async fn on_register<F>(&self, mut cb: F) -> Result<(), Error>
+    /// Subscription service that should listen forever, only returns
+    /// if the initial subscription cannot be established.
+    ///
+    /// # Arguments
+    /// * `on_vault` - callback for newly registered vaults
+    pub async fn on_register<F>(&self, mut on_vault: F) -> Result<(), Error>
     where
-        F: FnMut(PolkaBTCVault),
+        F: FnMut(PolkaBtcVault),
     {
         let sub = self.client.subscribe_events().await?;
         let mut decoder = EventsDecoder::<PolkaBTC>::new(self.client.metadata().clone());
@@ -222,9 +301,10 @@ impl Provider {
         while let Some(result) = sub.next().await {
             match result {
                 Ok(raw_event) => {
+                    // TODO: handle errors here
                     let event = RegisterVaultEvent::<PolkaBTC>::decode(&mut &raw_event.data[..])?;
                     let account = self.client.vaults(event.account_id, None).await?;
-                    cb(account);
+                    on_vault(account);
                 }
                 Err(err) => {
                     error!("{}", err);
@@ -235,6 +315,16 @@ impl Provider {
         Ok(())
     }
 
+    /// Custom RPC that tests whether a Bitcoin transaction is invalid
+    /// according to the following conditions:
+    ///
+    /// - The specified vault is a signer
+    /// - The transaction is an invalid format
+    /// - The transaction is not part of any ongoing request
+    ///
+    /// # Arguments
+    /// * `vault_id` - vault account which features in vin
+    /// * `raw_tx` - raw Bitcoin transaction
     pub async fn is_transaction_invalid(
         &self,
         vault_id: <PolkaBTC as System>::AccountId,
@@ -264,5 +354,9 @@ mockall::mock! {
         async fn get_exchange_rate_info(&self) -> Result<(u64, u64, u64), Error>;
 
         async fn get_time_now(&self) -> Result<u64, Error>;
+
+        async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, Error>;
+
+        async fn report_oracle_offline(&self) -> Result<(), Error>;
     }
 }

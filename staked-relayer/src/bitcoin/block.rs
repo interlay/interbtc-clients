@@ -1,7 +1,8 @@
 use relayer_core::bitcoin::bitcoincore_rpc::{
     bitcoin::{consensus::encode::serialize, hash_types::BlockHash, Txid},
     bitcoincore_rpc_json::GetRawTransactionResult,
-    Client, RpcApi,
+    jsonrpc::Error as JsonRpcError,
+    Client, Error as BtcError, RpcApi,
 };
 use std::future::Future;
 use std::pin::Pin;
@@ -18,6 +19,11 @@ impl BitcoinMonitor {
         BitcoinMonitor { rpc }
     }
 
+    /// Return an asynchronous future that can be `await`ed on
+    /// the specified height.
+    ///
+    /// # Arguments
+    /// * `height` - block height to fetch
     pub fn wait_for_block(&self, height: u32) -> BlockMonitor {
         BlockMonitor {
             rpc: &self.rpc,
@@ -25,6 +31,11 @@ impl BitcoinMonitor {
         }
     }
 
+    /// Get all transactions in a block identified by the
+    /// given hash.
+    ///
+    /// # Arguments
+    /// * `hash` - block hash to query
     pub fn get_block_transactions(
         &self,
         hash: &BlockHash,
@@ -44,12 +55,23 @@ impl BitcoinMonitor {
         Ok(txs)
     }
 
+    /// Get the raw transaction identified by `Txid` and stored
+    /// in the specified block.
+    ///
+    /// # Arguments
+    /// * `tx_id` - transaction ID
+    /// * `block_hash` - hash of the block tx is stored in
     pub fn get_raw_tx(&self, tx_id: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
         Ok(serialize(
             &self.rpc.get_raw_transaction(tx_id, Some(block_hash))?,
         ))
     }
 
+    /// Get the merkle proof which can be used to validate transaction inclusion.
+    ///
+    /// # Arguments
+    /// * `tx_id` - transaction ID
+    /// * `block_hash` - hash of the block tx is stored in
     pub fn get_proof(&self, tx_id: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
         Ok(self.rpc.get_tx_out_proof(&[tx_id], Some(block_hash))?)
     }
@@ -66,10 +88,15 @@ impl<'a> Future for BlockMonitor<'a> {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.rpc.get_block_hash(self.height.into()) {
             Ok(hash) => Poll::Ready(Ok(hash)),
-            Err(_) => {
-                // TODO: check error
-                cx.waker().wake_by_ref();
-                Poll::Pending
+            Err(e) => {
+                if let BtcError::JsonRpc(JsonRpcError::Rpc(rpc_error)) = &e {
+                    // https://github.com/bitcoin/bitcoin/blob/be3af4f31089726267ce2dbdd6c9c153bb5aeae1/src/rpc/protocol.h#L43
+                    if rpc_error.code == -8 {
+                        cx.waker().wake_by_ref();
+                        return Poll::Pending;
+                    }
+                }
+                Poll::Ready(Err(e.into()))
             }
         }
     }

@@ -13,11 +13,12 @@ use relay::Client as PolkaClient;
 use relay::Error as RelayError;
 use relayer_core::bitcoin::Client as BtcClient;
 use relayer_core::{Backing, Config, Runner};
-use rpc::{OracleChecker, Provider};
-use runtime::{ErrorCode, H256Le, PolkaBTC};
+use rpc::{Oracle, Provider};
+use runtime::{H256Le, PolkaBTC};
 use sp_keyring::AccountKeyring;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 use substrate_subxt::{ClientBuilder, PairSigner};
 use tokio::sync::Mutex;
 use tonic::transport::Server;
@@ -49,6 +50,10 @@ struct Opts {
     /// currently unsupported.
     #[clap(long, default_value = "1", possible_value = "1")]
     max_batch_size: u32,
+
+    /// Timeout in milliseconds to repeat oracle liveness check.
+    #[clap(long, default_value = "5000")]
+    oracle_timeout_ms: u64,
 }
 
 // Note: MockProvider in `rpc` breaks main so we ignore for tests
@@ -58,6 +63,7 @@ struct Opts {
 async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
+    let oracle_timeout_ms = opts.oracle_timeout_ms;
 
     let client = ClientBuilder::<PolkaBTC>::new()
         .set_url(opts.polka_btc_url)
@@ -66,6 +72,7 @@ async fn main() -> Result<(), Error> {
     let signer = PairSigner::<PolkaBTC, _>::new(AccountKeyring::Alice.pair());
     let provider = Provider::new(client, Arc::new(Mutex::new(signer)));
     let shared_prov = Arc::new(provider);
+    let tx_provider = shared_prov.clone();
 
     let grpc_addr = opts.grpc_addr.parse()?;
     let service = Service::new(shared_prov.clone());
@@ -101,8 +108,6 @@ async fn main() -> Result<(), Error> {
     let vaults_rw: Arc<RwLock<HashMap<_, _>>> = Arc::new(RwLock::new(vaults.into_iter().collect()));
     let vaults_ro = vaults_rw.clone();
 
-    let tx_provider = shared_prov.clone();
-
     let result = tokio::try_join!(
         // runs grpc server for incoming requests
         tokio::spawn(async move { router.serve(grpc_addr).await.unwrap() }),
@@ -118,28 +123,9 @@ async fn main() -> Result<(), Error> {
         }),
         // runs oracle liveness check
         tokio::spawn(async move {
-            let verifier = OracleChecker::new(shared_prov.clone());
-            utils::check_every(std::time::Duration::from_secs(5), || async {
-                match verifier.is_oracle_offline().await {
-                    Ok(is_offline) => {
-                        if is_offline {
-                            if let Ok(error_codes) = shared_prov.get_error_codes().await {
-                                if error_codes.contains(&ErrorCode::OracleOffline) {
-                                    info!("Oracle already reported");
-                                    return;
-                                }
-                            };
-                            info!("Oracle is offline");
-                            match shared_prov.report_oracle_offline().await {
-                                Ok(_) => info!("Successfully reported oracle offline"),
-                                Err(e) => {
-                                    error!("Failed to report oracle offline: {}", e.to_string())
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => error!("Liveness check failed: {}", e.to_string()),
-                }
+            let oracle = Oracle::new(shared_prov.clone());
+            utils::check_every(Duration::from_millis(oracle_timeout_ms), || async {
+                oracle.report_offline().await
             })
             .await
         }),

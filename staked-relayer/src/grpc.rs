@@ -1,5 +1,5 @@
-use crate::rpc::Error as PolkaBTCError;
-use crate::rpc::Provider as PolkaBTCRPC;
+use crate::rpc::Error as PolkaBtcError;
+use crate::rpc::Provider as PolkaBtcRpc;
 use crate::Error;
 use runtime::{ErrorCode, StatusCode};
 use sp_core::crypto::Ss58Codec;
@@ -27,17 +27,17 @@ pub mod polkabtc {
 }
 
 pub struct Service {
-    rpc: Arc<PolkaBTCRPC>,
+    rpc: Arc<PolkaBtcRpc>,
 }
 
 impl Service {
-    pub fn new(rpc: Arc<PolkaBTCRPC>) -> Self {
+    pub fn new(rpc: Arc<PolkaBtcRpc>) -> Self {
         Service { rpc }
     }
 }
 
-impl From<PolkaBTCError> for Status {
-    fn from(err: PolkaBTCError) -> Self {
+impl From<PolkaBtcError> for Status {
+    fn from(err: PolkaBtcError) -> Self {
         Status::new(Code::Internal, err.to_string())
     }
 }
