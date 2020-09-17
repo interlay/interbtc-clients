@@ -21,6 +21,7 @@ serde_json = "1.0.57"
 clap = "3.0.0-beta.1"
 sp-keyring = "2.0.0-rc6"
 sp-core = "2.0.0-rc6"
+async-trait = "0.1.40"
 
 # TODO: https://github.com/paritytech/substrate-subxt/pull/158
 substrate-subxt = { path = "../../substrate-subxt" }

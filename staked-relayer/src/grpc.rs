@@ -1,5 +1,5 @@
 use crate::rpc::Error as PolkaBtcError;
-use crate::rpc::Provider as PolkaBtcRpc;
+use crate::rpc::{ExchangeRateOraclePallet, PolkaBtcProvider, SecurityPallet, StakedRelayerPallet};
 use crate::Error;
 use runtime::{ErrorCode, StatusCode};
 use sp_core::crypto::Ss58Codec;
@@ -27,11 +27,11 @@ pub mod polkabtc {
 }
 
 pub struct Service {
-    rpc: Arc<PolkaBtcRpc>,
+    rpc: Arc<PolkaBtcProvider>,
 }
 
 impl Service {
-    pub fn new(rpc: Arc<PolkaBtcRpc>) -> Self {
+    pub fn new(rpc: Arc<PolkaBtcProvider>) -> Self {
         Service { rpc }
     }
 }

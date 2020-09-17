@@ -1,6 +1,6 @@
 mod error;
 
-use crate::rpc::Provider;
+use crate::rpc::PolkaBtcProvider;
 pub use error::Error;
 use futures::executor::block_on;
 use log::error;
@@ -9,12 +9,12 @@ use runtime::{H256Le, RawBlockHeader};
 use std::sync::Arc;
 
 pub struct Client {
-    rpc: Arc<Provider>,
+    rpc: Arc<PolkaBtcProvider>,
 }
 
 impl Client {
-    pub fn new(rpc: Arc<Provider>) -> Self {
-        Client { rpc }
+    pub fn new(rpc: Arc<PolkaBtcProvider>) -> Self {
+        Self { rpc }
     }
 }
 

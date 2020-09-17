@@ -1,20 +1,19 @@
 use super::Error;
 use super::ErrorCode;
+use super::{ExchangeRateOraclePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet};
 use log::{error, info};
 use std::sync::Arc;
 
-#[cfg(not(test))]
-use super::Provider;
-
-#[cfg(test)]
-use super::MockProvider as Provider;
-
-pub struct Oracle {
-    rpc: Arc<Provider>,
+pub struct Oracle<
+    P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet,
+> {
+    rpc: Arc<P>,
 }
 
-impl Oracle {
-    pub fn new(rpc: Arc<Provider>) -> Self {
+impl<P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet>
+    Oracle<P>
+{
+    pub fn new(rpc: Arc<P>) -> Self {
         Self { rpc }
     }
 
@@ -53,13 +52,61 @@ impl Oracle {
 
 #[cfg(test)]
 mod tests {
+    use super::super::PolkaBtcStatusUpdate;
     use super::*;
+    use async_trait::async_trait;
+    use runtime::{ErrorCode, H256Le, PolkaBTC, StatusCode};
     use std::collections::BTreeSet;
     use std::iter::FromIterator;
+    use substrate_subxt::system::System;
+
+    #[cfg(test)]
+    mockall::mock! {
+        Provider {}
+
+        #[async_trait]
+        trait TimestampPallet {
+            async fn get_time_now(&self) -> Result<u64, Error>;
+        }
+
+        #[async_trait]
+        trait ExchangeRateOraclePallet {
+            async fn get_exchange_rate_info(&self) -> Result<(u64, u64, u64), Error>;
+        }
+
+        #[async_trait]
+        trait StakedRelayerPallet {
+            async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error>;
+            async fn deregister_staked_relayer(&self) -> Result<(), Error>;
+            async fn suggest_status_update(
+                &self,
+                deposit: u128,
+                status_code: StatusCode,
+                add_error: Option<ErrorCode>,
+                remove_error: Option<ErrorCode>,
+            ) -> Result<(), Error>;
+            async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, Error>;
+            async fn report_oracle_offline(&self) -> Result<(), Error>;
+            async fn report_vault_theft(
+                &self,
+                vault_id: <PolkaBTC as System>::AccountId,
+                tx_id: H256Le,
+                tx_block_height: u32,
+                merkle_proof: Vec<u8>,
+                raw_tx: Vec<u8>,
+            ) -> Result<(), Error>;
+        }
+
+        #[async_trait]
+        trait SecurityPallet {
+            async fn get_parachain_status(&self) -> Result<StatusCode, Error>;
+            async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, Error>;
+        }
+    }
 
     #[test]
     fn test_is_oracle_offline_true() {
-        let mut prov = Provider::default();
+        let mut prov = MockProvider::default();
         prov.expect_get_exchange_rate_info()
             .returning(|| Ok((0, 0, 0)));
         prov.expect_get_time_now().returning(|| Ok(1));
@@ -72,7 +119,7 @@ mod tests {
 
     #[test]
     fn test_is_oracle_offline_false() {
-        let mut prov = Provider::default();
+        let mut prov = MockProvider::default();
         prov.expect_get_exchange_rate_info()
             .returning(|| Ok((0, 1, 3)));
         prov.expect_get_time_now().returning(|| Ok(2));
@@ -85,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_report_oracle_offline_not_reported() {
-        let mut prov = Provider::default();
+        let mut prov = MockProvider::default();
 
         // is_offline should return true
         prov.expect_get_exchange_rate_info()
@@ -105,7 +152,7 @@ mod tests {
 
     #[test]
     fn test_report_oracle_offline_already_reported() {
-        let mut prov = Provider::default();
+        let mut prov = MockProvider::default();
 
         // is_offline should return true
         prov.expect_get_exchange_rate_info()

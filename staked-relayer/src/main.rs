@@ -13,7 +13,7 @@ use relay::Client as PolkaClient;
 use relay::Error as RelayError;
 use relayer_core::bitcoin::Client as BtcClient;
 use relayer_core::{Backing, Config, Runner};
-use rpc::{Oracle, Provider};
+use rpc::{Oracle, PolkaBtcProvider, StakedRelayerPallet};
 use runtime::{H256Le, PolkaBTC};
 use sp_keyring::AccountKeyring;
 use std::collections::HashMap;
@@ -56,9 +56,6 @@ struct Opts {
     oracle_timeout_ms: u64,
 }
 
-// Note: MockProvider in `rpc` breaks main so we ignore for tests
-// unfortunately this means we get lots of `unused` warnings
-#[cfg(not(test))]
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     env_logger::init();
@@ -70,7 +67,7 @@ async fn main() -> Result<(), Error> {
         .build()
         .await?;
     let signer = PairSigner::<PolkaBTC, _>::new(AccountKeyring::Alice.pair());
-    let provider = Provider::new(client, Arc::new(Mutex::new(signer)));
+    let provider = PolkaBtcProvider::new(client, Arc::new(Mutex::new(signer)));
     let shared_prov = Arc::new(provider);
     let tx_provider = shared_prov.clone();
 
