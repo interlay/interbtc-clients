@@ -1,4 +1,4 @@
-use crate::rpc::Error as RpcError;
+use runtime::Error as PolkaBtcError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -8,6 +8,6 @@ pub enum Error {
     #[error("Failed to serialize block header")]
     SerializeHeader,
 
-    #[error("RpcError: {0}")]
-    RpcError(#[from] RpcError),
+    #[error("PolkaBtcError: {0}")]
+    PolkaBtcError(#[from] PolkaBtcError),
 }

@@ -1,5 +1,5 @@
-use crate::pallet_security::Security;
-use crate::pallet_security::SecurityEventsDecoder;
+use crate::security::Security;
+use crate::security::SecurityEventsDecoder;
 use core::marker::PhantomData;
 pub use module_bitcoin::types::{H256Le, RawBlockHeader, RichBlockHeader};
 use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};

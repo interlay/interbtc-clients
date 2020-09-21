@@ -1,4 +1,4 @@
-use crate::pallet_security::{Security, SecurityEventsDecoder};
+use crate::security::{Security, SecurityEventsDecoder};
 use core::marker::PhantomData;
 pub use module_staked_relayers::types::StatusUpdate;
 pub use module_staked_relayers::Error as StakedRelayersError;

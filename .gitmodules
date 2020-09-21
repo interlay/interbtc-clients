@@ -1,0 +1,3 @@
+[submodule "vendor/relayer-core"]
+	path = vendor/relayer-core
+	url = git@gitlab.com:interlay/relayer-core.git

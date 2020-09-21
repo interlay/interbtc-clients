@@ -1,7 +1,8 @@
 use super::Error;
-use super::ErrorCode;
-use super::{ExchangeRateOraclePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet};
 use log::{error, info};
+use runtime::{
+    ErrorCode, ExchangeRateOraclePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
+};
 use std::sync::Arc;
 
 pub struct Oracle<
@@ -52,10 +53,10 @@ impl<P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + Secur
 
 #[cfg(test)]
 mod tests {
-    use super::super::PolkaBtcStatusUpdate;
     use super::*;
     use async_trait::async_trait;
-    use runtime::{ErrorCode, H256Le, PolkaBTC, StatusCode};
+    use runtime::PolkaBtcStatusUpdate;
+    use runtime::{ErrorCode, H256Le, PolkaBTCRuntime, StatusCode};
     use std::collections::BTreeSet;
     use std::iter::FromIterator;
     use substrate_subxt::system::System;
@@ -89,7 +90,7 @@ mod tests {
             async fn report_oracle_offline(&self) -> Result<(), Error>;
             async fn report_vault_theft(
                 &self,
-                vault_id: <PolkaBTC as System>::AccountId,
+                vault_id: <PolkaBTCRuntime as System>::AccountId,
                 tx_id: H256Le,
                 tx_block_height: u32,
                 merkle_proof: Vec<u8>,

@@ -1,7 +1,7 @@
 use crate::relay::Error as RelayError;
-use crate::rpc::Error as RpcError;
 use relayer_core::bitcoin::bitcoincore_rpc::Error as BtcRpcError;
 use relayer_core::Error as CoreError;
+use runtime::Error as RpcError;
 use std::env::VarError;
 use std::net::AddrParseError;
 use substrate_subxt::Error as XtError;
@@ -17,6 +17,8 @@ pub enum Error {
     InvalidBtcAddress,
     #[error("Invalid AccountId")]
     InvalidAccountId,
+    #[error("Could not verify that the oracle is offline")]
+    CheckOracleOffline,
 
     #[error("Read env error: {0}: {1}")]
     ReadVar(String, VarError),

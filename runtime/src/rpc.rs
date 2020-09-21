@@ -1,55 +1,71 @@
 use async_trait::async_trait;
-use log::error;
+use jsonrpsee::{
+    common::{to_value as to_json_value, Params},
+    Client as RpcClient,
+};
 use parity_scale_codec::Decode;
-use runtime::pallet_btc_relay::*;
-use runtime::pallet_exchange_rate_oracle::*;
-use runtime::pallet_security::*;
-use runtime::pallet_staked_relayers::*;
-use runtime::pallet_timestamp::*;
-use runtime::pallet_vault_registry::*;
-use runtime::PolkaBTC;
 use sp_core::crypto::{AccountId32, Pair};
 use sp_core::sr25519::Pair as KeyPair;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::sync::Arc;
+use substrate_subxt::Error as XtError;
 use substrate_subxt::{
-    system::System, to_json_value, Client, EventSubscription, EventsDecoder, PairSigner, Params,
+    system::System, Client, ClientBuilder, EventSubscription, EventsDecoder, PairSigner,
 };
 use tokio::sync::Mutex;
 
-mod error;
-mod oracle;
-
-pub use error::Error;
-pub use oracle::Oracle;
+use crate::btc_relay::*;
+use crate::exchange_rate_oracle::*;
+use crate::security::*;
+use crate::staked_relayers::*;
+use crate::timestamp::*;
+use crate::vault_registry::*;
+use crate::Error;
+use crate::PolkaBtcRuntime;
 
 pub type PolkaBtcVault = Vault<
-    <PolkaBTC as System>::AccountId,
-    <PolkaBTC as System>::BlockNumber,
-    <PolkaBTC as VaultRegistry>::PolkaBTC,
+    <PolkaBtcRuntime as System>::AccountId,
+    <PolkaBtcRuntime as System>::BlockNumber,
+    <PolkaBtcRuntime as VaultRegistry>::PolkaBTC,
 >;
 
 pub type PolkaBtcStatusUpdate = StatusUpdate<
-    <PolkaBTC as System>::AccountId,
-    <PolkaBTC as System>::BlockNumber,
-    <PolkaBTC as StakedRelayers>::DOT,
+    <PolkaBtcRuntime as System>::AccountId,
+    <PolkaBtcRuntime as System>::BlockNumber,
+    <PolkaBtcRuntime as StakedRelayers>::DOT,
 >;
 
 #[derive(Clone)]
 pub struct PolkaBtcProvider {
-    client: Client<PolkaBTC>,
-    signer: Arc<Mutex<PairSigner<PolkaBTC, KeyPair>>>,
+    rpc: RpcClient,
+    client: Client<PolkaBtcRuntime>,
+    signer: Arc<Mutex<PairSigner<PolkaBtcRuntime, KeyPair>>>,
 }
 
 impl PolkaBtcProvider {
-    pub fn new(
-        client: Client<PolkaBTC>,
-        signer: Arc<Mutex<PairSigner<PolkaBTC, KeyPair>>>,
-    ) -> Self {
+    pub async fn new(
+        url: String,
+        signer: Arc<Mutex<PairSigner<PolkaBtcRuntime, KeyPair>>>,
+    ) -> Result<Self, Error> {
+        let rpc = if url.starts_with("ws://") || url.starts_with("wss://") {
+            jsonrpsee::ws_client(&url).await?
+        } else {
+            jsonrpsee::http_client(&url)
+        };
+
+        let client = ClientBuilder::<PolkaBtcRuntime>::new()
+            .set_client(rpc.clone())
+            .build()
+            .await?;
+
         // there is a race condition on signing
         // since we run the relayer in the background
-        Self { client, signer }
+        Ok(Self {
+            rpc,
+            client,
+            signer,
+        })
     }
 
     /// Get the address of the configured signer.
@@ -90,7 +106,7 @@ impl PolkaBtcProvider {
     /// * `vault_id` - account ID of the vault
     pub async fn get_vault(
         &self,
-        vault_id: <PolkaBTC as System>::AccountId,
+        vault_id: <PolkaBtcRuntime as System>::AccountId,
     ) -> Result<PolkaBtcVault, Error> {
         Ok(self.client.vaults(vault_id, None).await?)
     }
@@ -153,28 +169,28 @@ impl PolkaBtcProvider {
     ///
     /// # Arguments
     /// * `on_vault` - callback for newly registered vaults
-    pub async fn on_register<F>(&self, mut on_vault: F) -> Result<(), Error>
+    pub async fn on_register<F, E>(&self, mut on_vault: F, on_error: E) -> Result<(), Error>
     where
         F: FnMut(PolkaBtcVault),
+        E: Fn(XtError),
     {
         let sub = self.client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBTC>::new(self.client.metadata().clone());
+        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.client.metadata().clone());
         decoder.register_type_size::<u128>("Balance");
         decoder.register_type_size::<u128>("DOT");
 
-        let mut sub = EventSubscription::<PolkaBTC>::new(sub, decoder);
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
         sub.filter_event::<RegisterVaultEvent<_>>();
         while let Some(result) = sub.next().await {
             match result {
                 Ok(raw_event) => {
                     // TODO: handle errors here
-                    let event = RegisterVaultEvent::<PolkaBTC>::decode(&mut &raw_event.data[..])?;
+                    let event =
+                        RegisterVaultEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])?;
                     let account = self.client.vaults(event.account_id, None).await?;
                     on_vault(account);
                 }
-                Err(err) => {
-                    error!("{}", err);
-                }
+                Err(err) => on_error(err),
             };
         }
 
@@ -193,13 +209,13 @@ impl PolkaBtcProvider {
     /// * `raw_tx` - raw Bitcoin transaction
     pub async fn is_transaction_invalid(
         &self,
-        vault_id: <PolkaBTC as System>::AccountId,
+        vault_id: <PolkaBtcRuntime as System>::AccountId,
         raw_tx: Vec<u8>,
     ) -> Result<bool, Error> {
         Ok(
             match self
-                .client
-                .send_msg(
+                .rpc
+                .request(
                     "stakedRelayers_isTransactionInvalid",
                     Params::Array(vec![to_json_value(vault_id)?, to_json_value(raw_tx)?]),
                 )
@@ -266,7 +282,7 @@ pub trait StakedRelayerPallet {
 
     async fn report_vault_theft(
         &self,
-        vault_id: <PolkaBTC as System>::AccountId,
+        vault_id: <PolkaBtcRuntime as System>::AccountId,
         tx_id: H256Le,
         tx_block_height: u32,
         merkle_proof: Vec<u8>,
@@ -359,7 +375,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// * `raw_tx` - raw transaction
     async fn report_vault_theft(
         &self,
-        vault_id: <PolkaBTC as System>::AccountId,
+        vault_id: <PolkaBtcRuntime as System>::AccountId,
         tx_id: H256Le,
         tx_block_height: u32,
         merkle_proof: Vec<u8>,

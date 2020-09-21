@@ -1,3 +1,4 @@
+use jsonrpsee::transport::ws::WsNewDnsError;
 use parity_scale_codec::Error as CodecError;
 use serde_json::Error as SerdeJsonError;
 use std::array::TryFromSliceError;
@@ -9,8 +10,6 @@ use thiserror::Error;
 pub enum Error {
     #[error("Could not get exchange rate info")]
     ExchangeRateInfo,
-    #[error("Could not verify that the oracle is offline")]
-    CheckOracleOffline,
 
     #[error("Error serializing: {0}")]
     Serialize(#[from] TryFromSliceError),
@@ -22,4 +21,7 @@ pub enum Error {
     CodecError(#[from] CodecError),
     #[error("Error encoding json data: {0}")]
     SerdeJsonError(#[from] SerdeJsonError),
+    /// Occurs during websocket handshake
+    #[error("Rpc error: {0}")]
+    WsHandshake(#[from] WsNewDnsError),
 }

@@ -8,36 +8,39 @@ edition = "2018"
 parity-scale-codec = "1.3.1"
 frame-support = "2.0.0-rc6"
 substrate-subxt-proc-macro = "0.12.0"
-
+async-trait = "0.1.40"
 sp-runtime = "2.0.0-rc6"
 sp-core = "2.0.0-rc6"
-
-substrate-subxt = { path = "../../substrate-subxt" }
+thiserror = "1.0"
+serde_json = "1.0.57"
+tokio = { version = "0.2.22", features = ["full"] }
+jsonrpsee = "0.1.0"
+substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branch = "master" }
 
 [dependencies.module-bitcoin]
-# git = "https://gitlab.com/interlay/btc-parachain"
+git = "https://gitlab.com/interlay/btc-parachain"
+branch = "dev"
 version = "0.1.1"
 package = "bitcoin"
-# branch = "dev"
-path = "../../btc-parachain/crates/bitcoin"
+# path = "../../btc-parachain/crates/bitcoin"
 
 [dependencies.module-security]
-# git = "https://gitlab.com/interlay/btc-parachain"
+git = "https://gitlab.com/interlay/btc-parachain"
+branch = "dev"
 version = "2.0.0-rc6"
 package = "security"
-# branch = "dev"
-path = "../../btc-parachain/crates/security"
+# path = "../../btc-parachain/crates/security"
 
 [dependencies.module-staked-relayers]
-# git = "https://gitlab.com/interlay/btc-parachain"
+git = "https://gitlab.com/interlay/btc-parachain"
+branch = "dev"
 version = "2.0.0-rc6"
 package = "staked-relayers"
-# branch = "dev"
-path = "../../btc-parachain/crates/staked-relayers"
+# path = "../../btc-parachain/crates/staked-relayers"
 
 [dependencies.module-vault-registry]
-# git = "https://gitlab.com/interlay/btc-parachain"
+git = "https://gitlab.com/interlay/btc-parachain"
+branch = "dev"
 version = "2.0.0-rc6"
 package = "vault-registry"
-# branch = "dev"
-path = "../../btc-parachain/crates/vault-registry"
+# path = "../../btc-parachain/crates/vault-registry"

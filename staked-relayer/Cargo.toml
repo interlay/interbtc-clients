@@ -22,10 +22,9 @@ sp-keyring = "2.0.0-rc6"
 sp-core = "2.0.0-rc6"
 async-trait = "0.1.40"
 
-# TODO: https://github.com/paritytech/substrate-subxt/pull/158
-substrate-subxt = { path = "../../substrate-subxt" }
+substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branch = "master" }
 runtime = { path = "../runtime" }
-relayer-core = { path = "../../relayer-core" }
+relayer-core = { path = "../vendor/relayer-core" }
 
 [build-dependencies]
 tonic-build = "0.3"
@@ -35,15 +34,3 @@ tokio-test = "0.2.1"
 mockall = "0.8.1"
 substrate-subxt-client = "0.4.0"
 tempdir = "0.3.7"
-
-[dev-dependencies.btc-parachain]
-path = "../../btc-parachain/parachain"
-
-[dev-dependencies.exchange-rate-oracle]
-path = "../../btc-parachain/crates/exchange-rate-oracle"
-
-[dev-dependencies.btc-relay]
-path = "../../btc-parachain/crates/btc-relay"
-
-[dev-dependencies.vault-registry]
-path = "../../btc-parachain/crates/vault-registry"

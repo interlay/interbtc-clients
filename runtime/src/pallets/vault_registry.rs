@@ -1,4 +1,4 @@
-use crate::pallet_security::{Security, SecurityEventsDecoder};
+use crate::security::{Security, SecurityEventsDecoder};
 use core::marker::PhantomData;
 pub use module_vault_registry::Vault;
 use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};

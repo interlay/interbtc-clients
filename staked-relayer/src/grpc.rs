@@ -1,7 +1,7 @@
-use crate::rpc::Error as PolkaBtcError;
-use crate::rpc::{ExchangeRateOraclePallet, PolkaBtcProvider, SecurityPallet, StakedRelayerPallet};
 use crate::Error;
+use runtime::Error as PolkaBtcError;
 use runtime::{ErrorCode, StatusCode};
+use runtime::{ExchangeRateOraclePallet, PolkaBtcProvider, SecurityPallet, StakedRelayerPallet};
 use sp_core::crypto::Ss58Codec;
 use sp_core::H160;
 use std::convert::TryInto;
@@ -37,10 +37,8 @@ impl Service {
     }
 }
 
-impl From<PolkaBtcError> for Status {
-    fn from(err: PolkaBtcError) -> Self {
-        Status::new(Code::Internal, err.to_string())
-    }
+fn polkabtc_error_to_status<R>(result: Result<R, PolkaBtcError>) -> Result<R, Status> {
+    result.map_err(|err| Status::new(Code::Internal, err.to_string()))
 }
 
 fn deserialize_status_code(status: StatusCode) -> i32 {
@@ -117,7 +115,7 @@ impl StakedRelayer for Service {
         _request: Request<GetBestBlockRequest>,
     ) -> Result<Response<GetBestBlockResponse>, Status> {
         Ok(Response::new(GetBestBlockResponse {
-            height: self.rpc.get_best_block_height().await?,
+            height: polkabtc_error_to_status(self.rpc.get_best_block_height().await)?,
         }))
     }
 
@@ -126,7 +124,9 @@ impl StakedRelayer for Service {
         _request: Request<GetStatusRequest>,
     ) -> Result<Response<GetStatusResponse>, Status> {
         Ok(Response::new(GetStatusResponse {
-            status: deserialize_status_code(self.rpc.get_parachain_status().await?),
+            status: deserialize_status_code(polkabtc_error_to_status(
+                self.rpc.get_parachain_status().await,
+            )?),
         }))
     }
 
@@ -134,7 +134,8 @@ impl StakedRelayer for Service {
         &self,
         request: Request<GetStatusUpdateRequest>,
     ) -> Result<Response<GetStatusUpdateResponse>, Status> {
-        let update = self.rpc.get_status_update(request.into_inner().id).await?;
+        let update =
+            polkabtc_error_to_status(self.rpc.get_status_update(request.into_inner().id).await)?;
         Ok(Response::new(GetStatusUpdateResponse {
             new_status_code: deserialize_status_code(update.new_status_code),
             old_status_code: deserialize_status_code(update.old_status_code),
@@ -147,10 +148,11 @@ impl StakedRelayer for Service {
         &self,
         request: Request<GetVaultRequest>,
     ) -> Result<Response<GetVaultResponse>, Status> {
-        let vault = self
-            .rpc
-            .get_vault(account_id_from_bytes(&request.into_inner().id)?.into())
-            .await?;
+        let vault = polkabtc_error_to_status(
+            self.rpc
+                .get_vault(account_id_from_bytes(&request.into_inner().id)?.into())
+                .await,
+        )?;
         Ok(Response::new(GetVaultResponse {
             btc_address: vault.btc_address.to_string(),
         }))
@@ -160,7 +162,8 @@ impl StakedRelayer for Service {
         &self,
         _request: Request<GetExchangeRateRequest>,
     ) -> Result<Response<GetExchangeRateResponse>, Status> {
-        let (rate, time, _delay) = self.rpc.get_exchange_rate_info().await?;
+        let (rate, time, _delay) =
+            polkabtc_error_to_status(self.rpc.get_exchange_rate_info().await)?;
         Ok(Response::new(GetExchangeRateResponse { rate, time }))
     }
 
@@ -169,14 +172,16 @@ impl StakedRelayer for Service {
         request: Request<SuggestStatusUpdateRequest>,
     ) -> Result<Response<SuggestStatusUpdateResponse>, Status> {
         let message = request.into_inner();
-        self.rpc
-            .suggest_status_update(
-                message.deposit.into(),
-                serialize_status_code(message.status_code)?,
-                serialize_error_code(message.add_error)?,
-                serialize_error_code(message.remove_error)?,
-            )
-            .await?;
+        polkabtc_error_to_status(
+            self.rpc
+                .suggest_status_update(
+                    message.deposit.into(),
+                    serialize_status_code(message.status_code)?,
+                    serialize_error_code(message.add_error)?,
+                    serialize_error_code(message.remove_error)?,
+                )
+                .await,
+        )?;
         Ok(Response::new(SuggestStatusUpdateResponse {}))
     }
 
@@ -185,12 +190,14 @@ impl StakedRelayer for Service {
         request: Request<RegisterVaultRequest>,
     ) -> Result<Response<RegisterVaultResponse>, Status> {
         let message = request.into_inner();
-        self.rpc
-            .register_vault(
-                message.collateral.into(),
-                btc_address_from_bytes(message.address)?,
-            )
-            .await?;
+        polkabtc_error_to_status(
+            self.rpc
+                .register_vault(
+                    message.collateral.into(),
+                    btc_address_from_bytes(message.address)?,
+                )
+                .await,
+        )?;
         Ok(Response::new(RegisterVaultResponse {}))
     }
 
@@ -198,9 +205,11 @@ impl StakedRelayer for Service {
         &self,
         request: Request<RegisterStakedRelayerRequest>,
     ) -> Result<Response<RegisterStakedRelayerResponse>, Status> {
-        self.rpc
-            .register_staked_relayer(request.into_inner().stake.into())
-            .await?;
+        polkabtc_error_to_status(
+            self.rpc
+                .register_staked_relayer(request.into_inner().stake.into())
+                .await,
+        )?;
         Ok(Response::new(RegisterStakedRelayerResponse {}))
     }
 
@@ -208,7 +217,7 @@ impl StakedRelayer for Service {
         &self,
         _request: Request<DeregisterStakedRelayerRequest>,
     ) -> Result<Response<DeregisterStakedRelayerResponse>, Status> {
-        self.rpc.deregister_staked_relayer().await?;
+        polkabtc_error_to_status(self.rpc.deregister_staked_relayer().await)?;
         Ok(Response::new(DeregisterStakedRelayerResponse {}))
     }
 }

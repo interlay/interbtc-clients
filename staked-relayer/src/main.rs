@@ -1,8 +1,8 @@
 mod bitcoin;
 mod error;
 mod grpc;
+mod oracle;
 mod relay;
-mod rpc;
 mod utils;
 
 #[cfg(test)]
@@ -12,17 +12,17 @@ use clap::Clap;
 use error::Error;
 use grpc::{Service, StakedRelayerServer};
 use log::{error, info};
+use oracle::Oracle;
 use relay::Client as PolkaClient;
 use relay::Error as RelayError;
 use relayer_core::bitcoin::Client as BtcClient;
 use relayer_core::{Backing, Config, Runner};
-use rpc::{Oracle, PolkaBtcProvider, StakedRelayerPallet};
-use runtime::{H256Le, PolkaBTC};
+use runtime::{H256Le, PolkaBtcProvider, PolkaBtcRuntime, StakedRelayerPallet};
 use sp_keyring::AccountKeyring;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-use substrate_subxt::{ClientBuilder, PairSigner};
+use substrate_subxt::PairSigner;
 use tokio::sync::Mutex;
 use tonic::transport::Server;
 
@@ -65,12 +65,8 @@ async fn main() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
     let oracle_timeout_ms = opts.oracle_timeout_ms;
 
-    let client = ClientBuilder::<PolkaBTC>::new()
-        .set_url(opts.polka_btc_url)
-        .build()
-        .await?;
-    let signer = PairSigner::<PolkaBTC, _>::new(AccountKeyring::Alice.pair());
-    let provider = PolkaBtcProvider::new(client, Arc::new(Mutex::new(signer)));
+    let signer = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Alice.pair());
+    let provider = PolkaBtcProvider::new(opts.polka_btc_url, Arc::new(Mutex::new(signer))).await?;
     let shared_prov = Arc::new(provider);
     let tx_provider = shared_prov.clone();
 
@@ -114,10 +110,13 @@ async fn main() -> Result<(), Error> {
         // runs subscription service to update registered vaults
         tokio::spawn(async move {
             vault_prov
-                .on_register(|vault| {
-                    info!("Vault registered: {}", vault.id);
-                    vaults_rw.write().unwrap().insert(vault.btc_address, vault);
-                })
+                .on_register(
+                    |vault| {
+                        info!("Vault registered: {}", vault.id);
+                        vaults_rw.write().unwrap().insert(vault.btc_address, vault);
+                    },
+                    |err| error!("{}", err.to_string()),
+                )
                 .await
                 .unwrap()
         }),

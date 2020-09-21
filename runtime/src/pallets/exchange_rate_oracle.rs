@@ -1,5 +1,5 @@
-use crate::pallet_timestamp::Timestamp;
-use crate::pallet_timestamp::TimestampEventsDecoder;
+use crate::timestamp::Timestamp;
+use crate::timestamp::TimestampEventsDecoder;
 use core::marker::PhantomData;
 pub use module_vault_registry::Vault;
 use parity_scale_codec::Encode;

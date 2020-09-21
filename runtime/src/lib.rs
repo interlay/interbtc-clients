@@ -1,3 +1,15 @@
+mod error;
+mod pallets;
+mod rpc;
+
+pub use btc_relay::{BitcoinBlockHeight, H256Le, RawBlockHeader, RichBlockHeader};
+pub use error::Error;
+use pallets::*;
+pub use rpc::{
+    ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcStatusUpdate, PolkaBtcVault,
+    SecurityPallet, StakedRelayerPallet, TimestampPallet,
+};
+pub use security::{ErrorCode, StatusCode};
 use sp_core::U256;
 use sp_runtime::{
     generic::Header,
@@ -8,15 +20,15 @@ use std::collections::BTreeSet;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, system, Runtime};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct PolkaBTC;
+pub struct PolkaBtcRuntime;
 
-impl Runtime for PolkaBTC {
+impl Runtime for PolkaBtcRuntime {
     type Signature = MultiSignature;
     type Extra = DefaultExtra<Self>;
 }
 
 // TODO: use types from actual runtime
-impl system::System for PolkaBTC {
+impl system::System for PolkaBtcRuntime {
     type Index = u32;
     type BlockNumber = u32;
     type Hash = sp_core::H256;
@@ -25,36 +37,23 @@ impl system::System for PolkaBTC {
     type Address = Self::AccountId;
     type Header = Header<Self::BlockNumber, BlakeTwo256>;
     type Extrinsic = OpaqueExtrinsic;
-    // type AccountData = balances::AccountData<<Self as balances::Balances>::Balance>;
     type AccountData = balances::AccountData<u128>;
 }
 
-impl balances::Balances for PolkaBTC {
+impl balances::Balances for PolkaBtcRuntime {
     type Balance = u128;
 }
 
-pub mod pallet_balances_dot;
-pub mod pallet_btc_relay;
-pub mod pallet_collateral;
-pub mod pallet_exchange_rate_oracle;
-pub mod pallet_security;
-pub mod pallet_staked_relayers;
-pub mod pallet_timestamp;
-pub mod pallet_vault_registry;
-
-pub use pallet_btc_relay::{BitcoinBlockHeight, H256Le, RawBlockHeader, RichBlockHeader};
-pub use pallet_security::{ErrorCode, StatusCode};
-
-impl pallet_btc_relay::BTCRelay for PolkaBTC {
+impl btc_relay::BTCRelay for PolkaBtcRuntime {
     type H256Le = H256Le;
     type RichBlockHeader = RichBlockHeader;
 }
 
-impl pallet_security::Security for PolkaBTC {
+impl security::Security for PolkaBtcRuntime {
     type ErrorCodes = BTreeSet<ErrorCode>;
 }
 
-impl pallet_staked_relayers::StakedRelayers for PolkaBTC {
+impl staked_relayers::StakedRelayers for PolkaBtcRuntime {
     type DOT = u128;
     type U256 = U256;
     type H256Le = H256Le;
@@ -62,22 +61,22 @@ impl pallet_staked_relayers::StakedRelayers for PolkaBTC {
     type ErrorCode = ErrorCode;
 }
 
-impl pallet_collateral::Collateral for PolkaBTC {
+impl collateral::Collateral for PolkaBtcRuntime {
     type DOT = u128;
 }
 
-impl pallet_vault_registry::VaultRegistry for PolkaBTC {
+impl vault_registry::VaultRegistry for PolkaBtcRuntime {
     type Balance = u128;
     type DOT = u128;
     type PolkaBTC = u128;
 }
 
-impl pallet_timestamp::Timestamp for PolkaBTC {
+impl timestamp::Timestamp for PolkaBtcRuntime {
     type Moment = u64;
 }
 
-impl pallet_exchange_rate_oracle::ExchangeRateOracle for PolkaBTC {}
+impl exchange_rate_oracle::ExchangeRateOracle for PolkaBtcRuntime {}
 
-impl pallet_balances_dot::DOT for PolkaBTC {
+impl balances_dot::DOT for PolkaBtcRuntime {
     type Balance = u128;
 }
