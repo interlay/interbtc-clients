@@ -5,6 +5,9 @@ mod relay;
 mod rpc;
 mod utils;
 
+#[cfg(test)]
+mod tests;
+
 use clap::Clap;
 use error::Error;
 use grpc::{Service, StakedRelayerServer};

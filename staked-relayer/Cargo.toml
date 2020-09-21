@@ -16,7 +16,6 @@ thiserror = "1.0"
 futures = "0.3.5"
 tonic = "0.3"
 prost = "0.6"
-bitcoin = "0.23.0"
 serde_json = "1.0.57"
 clap = "3.0.0-beta.1"
 sp-keyring = "2.0.0-rc6"
@@ -34,3 +33,17 @@ tonic-build = "0.3"
 [dev-dependencies]
 tokio-test = "0.2.1"
 mockall = "0.8.1"
+substrate-subxt-client = "0.4.0"
+tempdir = "0.3.7"
+
+[dev-dependencies.btc-parachain]
+path = "../../btc-parachain/parachain"
+
+[dev-dependencies.exchange-rate-oracle]
+path = "../../btc-parachain/crates/exchange-rate-oracle"
+
+[dev-dependencies.btc-relay]
+path = "../../btc-parachain/crates/btc-relay"
+
+[dev-dependencies.vault-registry]
+path = "../../btc-parachain/crates/vault-registry"

@@ -67,6 +67,7 @@ impl pallet_collateral::Collateral for PolkaBTC {
 }
 
 impl pallet_vault_registry::VaultRegistry for PolkaBTC {
+    type Balance = u128;
     type DOT = u128;
     type PolkaBTC = u128;
 }

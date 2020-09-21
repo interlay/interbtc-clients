@@ -4,6 +4,7 @@ use crate::Error;
 use runtime::{ErrorCode, StatusCode};
 use sp_core::crypto::Ss58Codec;
 use sp_core::H160;
+use std::convert::TryInto;
 use std::sync::Arc;
 use tonic::{Code, Request, Response, Status};
 
@@ -95,6 +96,11 @@ fn btc_address_from_bytes<B: AsRef<[u8]>>(bytes: B) -> Result<H160, Status> {
     Ok(result.into())
 }
 
+fn account_id_from_bytes(id: &[u8]) -> Result<[u8; 32], Status> {
+    id.try_into()
+        .map_err(|_| Status::new(Code::InvalidArgument, Error::InvalidAccountId.to_string()))
+}
+
 #[tonic::async_trait]
 impl StakedRelayer for Service {
     async fn get_address(
@@ -141,7 +147,10 @@ impl StakedRelayer for Service {
         &self,
         request: Request<GetVaultRequest>,
     ) -> Result<Response<GetVaultResponse>, Status> {
-        let vault = self.rpc.get_vault(request.into_inner().id).await?;
+        let vault = self
+            .rpc
+            .get_vault(account_id_from_bytes(&request.into_inner().id)?.into())
+            .await?;
         Ok(Response::new(GetVaultResponse {
             btc_address: vault.btc_address.to_string(),
         }))

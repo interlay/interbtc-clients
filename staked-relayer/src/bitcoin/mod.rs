@@ -1,6 +1,7 @@
 mod block;
 
 pub use block::BitcoinMonitor;
+pub use relayer_core::bitcoin::bitcoincore_rpc;
 
 use crate::utils::read_env;
 use crate::Error;

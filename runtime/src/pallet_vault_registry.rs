@@ -10,6 +10,7 @@ use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
 #[module]
 pub trait VaultRegistry: System + Security {
+    type Balance: Codec + EncodeLike + Member + Default;
     type DOT: Codec + EncodeLike + Member + Default;
     type PolkaBTC: Codec + EncodeLike + Member + Default;
 }

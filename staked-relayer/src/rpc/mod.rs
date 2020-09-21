@@ -42,10 +42,6 @@ pub struct PolkaBtcProvider {
     signer: Arc<Mutex<PairSigner<PolkaBTC, KeyPair>>>,
 }
 
-fn bytes_to_address(id: &[u8]) -> Result<[u8; 32], std::array::TryFromSliceError> {
-    id.try_into()
-}
-
 impl PolkaBtcProvider {
     pub fn new(
         client: Client<PolkaBTC>,
@@ -92,11 +88,11 @@ impl PolkaBtcProvider {
     ///
     /// # Arguments
     /// * `vault_id` - account ID of the vault
-    pub async fn get_vault(&self, vault_id: Vec<u8>) -> Result<PolkaBtcVault, Error> {
-        Ok(self
-            .client
-            .vaults(bytes_to_address(&vault_id)?.into(), None)
-            .await?)
+    pub async fn get_vault(
+        &self,
+        vault_id: <PolkaBTC as System>::AccountId,
+    ) -> Result<PolkaBtcVault, Error> {
+        Ok(self.client.vaults(vault_id, None).await?)
     }
 
     /// Fetch all active vaults.

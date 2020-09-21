@@ -15,6 +15,8 @@ pub enum Error {
     UnknownErrorCode,
     #[error("Invalid BTC address")]
     InvalidBtcAddress,
+    #[error("Invalid AccountId")]
+    InvalidAccountId,
 
     #[error("Read env error: {0}: {1}")]
     ReadVar(String, VarError),
