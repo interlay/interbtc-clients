@@ -9,5 +9,5 @@ edition = "2018"
 [dependencies]
 tokio = { version = "0.2.22", features = ["full"] }
 sp-keyring = "2.0.0-rc6"
-substrate-subxt = { path = "../../substrate-subxt" }
+substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branch = "master" }
 runtime = { path = "../runtime" }

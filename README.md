@@ -30,9 +30,21 @@ git clone git@github.com:paritytech/substrate-subxt.git
 
 ## Getting Started
 
+Clone the repository.
+
 ```bash
 git clone git@gitlab.com:interlay/polkabtc-clients.git
+```
+
+Clone the submodules.
+
+```bash
 cd polkabtc-clients 
+git submodule update --init --recursive
+```
+
+Build the project.
+```bash
 cargo build
 curl -fX GET 127.0.0.1:3030/best_block
 ```

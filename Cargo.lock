@@ -7741,9 +7741,8 @@ version = "0.1.0"
 dependencies = [
  "runtime",
  "sp-keyring",
- "staked-relayer",
  "substrate-subxt",
- "tokio",
+ "tokio 0.2.22",
 ]
 
 [[package]]
