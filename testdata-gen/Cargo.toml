@@ -1,0 +1,13 @@
+[package]
+name = "testdata-gen"
+version = "0.1.0"
+authors = ["Interlay <dev@interlay.io>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "0.2.22", features = ["full"] }
+sp-keyring = "2.0.0-rc6"
+substrate-subxt = { path = "../../substrate-subxt" }
+runtime = { path = "../runtime" }
