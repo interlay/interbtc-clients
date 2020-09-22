@@ -276,7 +276,7 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
     /// # Arguments
     /// * `btc_to_dot_rate` - the current BTC to DOT exchange rate encoded with the GRANULARITY 
     async fn set_exchange_rate_info(&self, btc_to_dot_rate: u128) -> Result<(), Error> {
-        self.client.set_exchange_rate_and_watch(&*self.signer.lock().await, btc_to_dot_rate).await?;
+        self.ext_client.set_exchange_rate_and_watch(&*self.signer.lock().await, btc_to_dot_rate).await?;
         Ok(())
     }
 }
