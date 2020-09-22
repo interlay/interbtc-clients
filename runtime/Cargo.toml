@@ -44,3 +44,13 @@ branch = "dev"
 version = "2.0.0-rc6"
 package = "vault-registry"
 # path = "../../btc-parachain/crates/vault-registry"
+
+[dev-dependencies]
+tokio-test = "0.2.1"
+substrate-subxt-client = "0.4.0"
+tempdir = "0.3.7"
+sp-keyring = "2.0.0-rc6"
+
+[dev-dependencies.btc-parachain]
+git = "https://gitlab.com/interlay/btc-parachain"
+branch = "dev"

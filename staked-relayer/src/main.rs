@@ -5,9 +5,6 @@ mod oracle;
 mod relay;
 mod utils;
 
-#[cfg(test)]
-mod tests;
-
 use clap::Clap;
 use error::Error;
 use grpc::{Service, StakedRelayerServer};
@@ -66,7 +63,8 @@ async fn main() -> Result<(), Error> {
     let oracle_timeout_ms = opts.oracle_timeout_ms;
 
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Alice.pair());
-    let provider = PolkaBtcProvider::new(opts.polka_btc_url, Arc::new(Mutex::new(signer))).await?;
+    let provider =
+        PolkaBtcProvider::from_url(opts.polka_btc_url, Arc::new(Mutex::new(signer))).await?;
     let shared_prov = Arc::new(provider);
     let tx_provider = shared_prov.clone();
 

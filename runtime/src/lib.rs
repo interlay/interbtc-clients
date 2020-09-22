@@ -2,6 +2,9 @@ mod error;
 mod pallets;
 mod rpc;
 
+#[cfg(test)]
+mod tests;
+
 pub use btc_relay::{BitcoinBlockHeight, H256Le, RawBlockHeader, RichBlockHeader};
 pub use error::Error;
 use pallets::*;

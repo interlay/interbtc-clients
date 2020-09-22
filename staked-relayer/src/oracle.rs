@@ -56,12 +56,11 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use runtime::PolkaBtcStatusUpdate;
-    use runtime::{ErrorCode, H256Le, PolkaBTCRuntime, StatusCode};
+    use runtime::{Error, ErrorCode, H256Le, PolkaBtcRuntime, StatusCode};
     use std::collections::BTreeSet;
     use std::iter::FromIterator;
     use substrate_subxt::system::System;
 
-    #[cfg(test)]
     mockall::mock! {
         Provider {}
 
@@ -90,7 +89,7 @@ mod tests {
             async fn report_oracle_offline(&self) -> Result<(), Error>;
             async fn report_vault_theft(
                 &self,
-                vault_id: <PolkaBTCRuntime as System>::AccountId,
+                vault_id: <PolkaBtcRuntime as System>::AccountId,
                 tx_id: H256Le,
                 tx_block_height: u32,
                 merkle_proof: Vec<u8>,
@@ -105,34 +104,34 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_is_oracle_offline_true() {
+    #[tokio::test]
+    async fn test_is_oracle_offline_true() {
         let mut prov = MockProvider::default();
         prov.expect_get_exchange_rate_info()
             .returning(|| Ok((0, 0, 0)));
         prov.expect_get_time_now().returning(|| Ok(1));
 
         assert_eq!(
-            tokio_test::block_on(Oracle::new(Arc::new(prov)).is_offline()).unwrap(),
+            Oracle::new(Arc::new(prov)).is_offline().await.unwrap(),
             true
         );
     }
 
-    #[test]
-    fn test_is_oracle_offline_false() {
+    #[tokio::test]
+    async fn test_is_oracle_offline_false() {
         let mut prov = MockProvider::default();
         prov.expect_get_exchange_rate_info()
             .returning(|| Ok((0, 1, 3)));
         prov.expect_get_time_now().returning(|| Ok(2));
 
         assert_eq!(
-            tokio_test::block_on(Oracle::new(Arc::new(prov)).is_offline()).unwrap(),
+            Oracle::new(Arc::new(prov)).is_offline().await.unwrap(),
             false
         );
     }
 
-    #[test]
-    fn test_report_oracle_offline_not_reported() {
+    #[tokio::test]
+    async fn test_report_oracle_offline_not_reported() {
         let mut prov = MockProvider::default();
 
         // is_offline should return true
@@ -148,11 +147,11 @@ mod tests {
             .once()
             .returning(|| Ok(()));
 
-        tokio_test::block_on(Oracle::new(Arc::new(prov)).report_offline());
+        Oracle::new(Arc::new(prov)).report_offline().await;
     }
 
-    #[test]
-    fn test_report_oracle_offline_already_reported() {
+    #[tokio::test]
+    async fn test_report_oracle_offline_already_reported() {
         let mut prov = MockProvider::default();
 
         // is_offline should return true
@@ -168,6 +167,6 @@ mod tests {
             .never()
             .returning(|| Ok(()));
 
-        tokio_test::block_on(Oracle::new(Arc::new(prov)).report_offline());
+        Oracle::new(Arc::new(prov)).report_offline().await;
     }
 }
