@@ -2,5 +2,6 @@ image: "rust:latest"
 
 test:cargo:
   script:
+    - git submodule update --init vendor/relayer-core
     - rustc --version && cargo --version
     - cargo test --workspace --verbose

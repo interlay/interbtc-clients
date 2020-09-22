@@ -24,7 +24,7 @@ async-trait = "0.1.40"
 
 substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branch = "master" }
 runtime = { path = "../runtime" }
-relayer-core = { git = "https://gitlab.com/interlay/relayer-core", branch = "main" }
+relayer-core = { path = "../vendor/relayer-core" }
 
 [build-dependencies]
 tonic-build = "0.3"
