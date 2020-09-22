@@ -1,5 +1,9 @@
-use super::{PolkaBtcProvider, PolkaBtcRuntime, SecurityPallet, StakedRelayerPallet, StatusCode};
-use sp_core::H160;
+use super::{PolkaBtcProvider, PolkaBtcRuntime, SecurityPallet, StatusCode};
+use module_bitcoin::{
+    formatter::Formattable,
+    types::{Address, BlockBuilder, RawBlockHeader},
+};
+use sp_core::{H160, U256};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use substrate_subxt::PairSigner;
@@ -41,20 +45,46 @@ async fn test_client_with(key: AccountKeyring) -> PolkaBtcProvider {
 }
 
 #[tokio::test]
-async fn test_runtime() {
+async fn test_parachain_status() {
     let provider = test_client_with(AccountKeyring::Alice).await;
 
     let status = provider.get_parachain_status().await.unwrap();
     assert_eq!(status, StatusCode::Running);
+}
 
-    // should register vault
+#[tokio::test]
+async fn test_register_vault() {
+    let provider = test_client_with(AccountKeyring::Alice).await;
+
     provider.register_vault(100, H160::zero()).await.unwrap();
     let vault = provider
         .get_vault(AccountKeyring::Alice.to_account_id())
         .await
         .unwrap();
     assert_eq!(vault.btc_address, H160::zero());
+}
 
-    // should register staked relayer
-    provider.register_staked_relayer(100).await.unwrap();
+#[tokio::test]
+async fn test_initialize_btc_relay() {
+    let provider = test_client_with(AccountKeyring::Alice).await;
+
+    let address = Address::from(*H160::zero().as_fixed_bytes());
+
+    let init_block = BlockBuilder::new()
+        .with_version(2)
+        .with_coinbase(&address, 50, 3)
+        .with_timestamp(1588813835)
+        .mine(U256::from(2).pow(254.into()));
+
+    let init_block_hash = init_block.header.hash();
+    let raw_init_block_header = RawBlockHeader::from_bytes(&init_block.header.format())
+        .expect("could not serialize block header");
+
+    provider
+        .initialize_btc_relay(raw_init_block_header, 1000)
+        .await
+        .unwrap();
+
+    assert_eq!(provider.get_best_block().await.unwrap(), init_block_hash);
+    assert_eq!(provider.get_best_block_height().await.unwrap(), 1000);
 }
