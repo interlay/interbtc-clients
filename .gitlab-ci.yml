@@ -2,6 +2,8 @@ image: "rust:latest"
 
 test:cargo:
   script:
+    - rustup toolchain install nightly-2020-06-01
+    - rustup default nightly-2020-06-01
     - git submodule update --init vendor/relayer-core
     - rustc --version && cargo --version
     - cargo test --workspace --verbose
