@@ -252,6 +252,8 @@ impl TimestampPallet for PolkaBtcProvider {
 #[async_trait]
 pub trait ExchangeRateOraclePallet {
     async fn get_exchange_rate_info(&self) -> Result<(u64, u64, u64), Error>;
+
+    async fn set_exchange_rate_info(&self, btc_to_dot_rate: u128) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -267,6 +269,15 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
             Ok((rate, time, delay)) => Ok((rate.try_into()?, time.into(), delay.into())),
             Err(_) => Err(Error::ExchangeRateInfo),
         }
+    }
+
+    /// Sets the current exchange rate as BTC/DOT
+    /// 
+    /// # Arguments
+    /// * `btc_to_dot_rate` - the current BTC to DOT exchange rate encoded with the GRANULARITY 
+    async fn set_exchange_rate_info(&self, btc_to_dot_rate: u128) -> Result<(), Error> {
+        self.client.set_exchange_rate_and_watch(&*self.signer.lock().await, btc_to_dot_rate).await?;
+        Ok(())
     }
 }
 

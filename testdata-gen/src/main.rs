@@ -17,8 +17,13 @@ async fn main() -> Result<(), Error> {
 
     let oracle_prov = shared_prov.clone();
 
-    let (rate, time, delay) = oracle_prov.get_exchange_rate_info().await?;
+    // get exchange rate
+    let (rate, _time, _delay) = oracle_prov.get_exchange_rate_info().await?;
     println!("{:?}", rate);
+
+    // set exchange rate to 0.00038 at granularity 5
+    btc_to_dot_rate: u128 = 38;
+    oracle_prov.set_exchange_rate_info(btc_to_dot_rate).await?;
 
     Ok(())
 }
