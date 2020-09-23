@@ -25,11 +25,11 @@ package = "bitcoin"
 # path = "../../btc-parachain/crates/bitcoin"
 
 [dependencies.module-security]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+# git = "https://gitlab.com/interlay/btc-parachain"
+# branch = "dev"
 version = "2.0.0-rc6"
 package = "security"
-# path = "../../btc-parachain/crates/security"
+path = "../../btc-parachain/crates/security"
 
 [dependencies.module-staked-relayers]
 git = "https://gitlab.com/interlay/btc-parachain"

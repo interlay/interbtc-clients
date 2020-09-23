@@ -14,20 +14,15 @@ tokio = { version = "0.2.22", features = ["full"] }
 hex = "0.4.2"
 thiserror = "1.0"
 futures = "0.3.5"
-tonic = "0.3"
-prost = "0.6"
-serde_json = "1.0.57"
 clap = "3.0.0-beta.1"
 sp-keyring = "2.0.0-rc6"
 sp-core = "2.0.0-rc6"
 async-trait = "0.1.40"
+warp = "0.2"
 
 substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branch = "master" }
 runtime = { path = "../runtime" }
 relayer-core = { path = "../vendor/relayer-core" }
-
-[build-dependencies]
-tonic-build = "0.3"
 
 [dev-dependencies]
 tokio-test = "0.2.1"
