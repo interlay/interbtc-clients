@@ -25,6 +25,7 @@ use crate::security::*;
 use crate::staked_relayers::*;
 use crate::timestamp::*;
 use crate::vault_registry::*;
+use crate::issue::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
 
