@@ -1,13 +1,12 @@
 mod bitcoin;
 mod error;
-mod grpc;
+mod http;
 mod oracle;
 mod relay;
 mod utils;
 
 use clap::Clap;
 use error::Error;
-use grpc::{Service, StakedRelayerServer};
 use log::{error, info};
 use oracle::Oracle;
 use relay::Client as PolkaClient;
@@ -21,7 +20,6 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use substrate_subxt::PairSigner;
 use tokio::sync::Mutex;
-use tonic::transport::Server;
 
 /// The Staked Relayer client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
@@ -68,10 +66,7 @@ async fn main() -> Result<(), Error> {
     let shared_prov = Arc::new(provider);
     let tx_provider = shared_prov.clone();
 
-    let grpc_addr = opts.grpc_addr.parse()?;
-    let service = Service::new(shared_prov.clone());
-    let router = Server::builder().add_service(StakedRelayerServer::new(service));
-
+    let api_prov = shared_prov.clone();
     let btc_client = BtcClient::new::<RelayError>(bitcoin::bitcoin_rpc_from_env()?);
 
     // scan from custom height or the current tip
@@ -104,7 +99,7 @@ async fn main() -> Result<(), Error> {
 
     let result = tokio::try_join!(
         // runs grpc server for incoming requests
-        tokio::spawn(async move { router.serve(grpc_addr).await.unwrap() }),
+        tokio::spawn(async move { http::start(api_prov).await }),
         // runs subscription service to update registered vaults
         tokio::spawn(async move {
             vault_prov
