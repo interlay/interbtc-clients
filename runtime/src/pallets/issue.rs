@@ -8,7 +8,7 @@ use substrate_subxt::system::{System, SystemEventsDecoder};
 use substrate_subxt_proc_macro::{module, Call, Event};
 
 #[module]
-pub trait Issue: System  {
+pub trait Issue: System {
     type Balance: Codec + EncodeLike + Member + Default;
     type DOT: Codec + EncodeLike + Member + Default;
     type PolkaBTC: Codec + EncodeLike + Member + Default;

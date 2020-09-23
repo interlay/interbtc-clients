@@ -437,6 +437,7 @@ impl SecurityPallet for PolkaBtcProvider {
 
 #[async_trait]
 pub trait IssuePallet {
+    /// Request a new issue
     async fn request_issue(
         &self,
         amount: u128,
@@ -444,6 +445,7 @@ pub trait IssuePallet {
         griefing_collateral: u128
     ) -> Result<(), Error>;
 
+    /// Execute a issue request by providing a Bitcoin transaction inclusion proof
     async fn execute_issue(
         &self,
         issue_id: H256,
@@ -453,9 +455,9 @@ pub trait IssuePallet {
         raw_tx: Vec<u8>
     ) -> Result<(), Error>;
     
+    /// Cancel an ongoing issue request
     async fn cancel_issue(
         &self,
-        requester: <PolkaBtcRuntime as System>::AccountId,
         issue_id: H256
     ) -> Result<(), Error>;
 }
@@ -493,7 +495,6 @@ impl IssuePallet for PolkaBtcProvider {
     
     async fn cancel_issue(
         &self,
-        requester: <PolkaBtcRuntime as System>::AccountId,
         issue_id: H256
     ) -> Result<(), Error> {
         self.ext_client.cancel_issue_and_watch(
