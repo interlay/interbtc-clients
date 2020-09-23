@@ -21,6 +21,7 @@ use crate::security::*;
 use crate::staked_relayers::*;
 use crate::timestamp::*;
 use crate::vault_registry::*;
+use crate::issue::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
 
@@ -431,5 +432,75 @@ impl SecurityPallet for PolkaBtcProvider {
     /// Return any `ErrorCode`s set in the security module.
     async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, Error> {
         Ok(self.ext_client.errors(None).await?)
+    }
+}
+
+#[async_trait]
+pub trait IssuePallet {
+    async fn request_issue(
+        &self,
+        amount: u128,
+        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        griefing_collateral: u128
+    ) -> Result<(), Error>;
+
+    async fn execute_issue(
+        &self,
+        issue_id: H256,
+        tx_id: H256Le,
+        tx_block_height: u32,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>
+    ) -> Result<(), Error>;
+    
+    async fn cancel_issue(
+        &self,
+        requester: <PolkaBtcRuntime as System>::AccountId,
+        issue_id: H256
+    ) -> Result<(), Error>;
+}
+
+#[async_trait]
+impl IssuePallet for PolkaBtcProvider {
+    async fn request_issue(
+        &self,
+        amount: u128,
+        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        griefing_collateral: u128
+    ) -> Result<(), Error> {
+        self.ext_client.request_issue_and_watch(&*self.signer.lock().await, amount, vault_id, griefing_collateral).await?;
+        Ok(())
+    }
+
+    async fn execute_issue(
+        &self,
+        issue_id: H256,
+        tx_id: H256Le,
+        tx_block_height: u32,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>
+    ) -> Result<(), Error> {
+        self.ext_client.execute_issue_and_watch(
+            &*self.signer.lock().await,
+            issue_id,
+            tx_id,
+            tx_block_height,
+            merkle_proof,
+            raw_tx
+        ).await?;
+        Ok(())
+    }
+    
+    async fn cancel_issue(
+        &self,
+        requester: <PolkaBtcRuntime as System>::AccountId,
+        issue_id: H256
+    ) -> Result<(), Error> {
+        self.ext_client.cancel_issue_and_watch(
+            &*self.signer.lock().await,
+            requester,
+            issue_id
+        ).await?;
+        Ok(())
     }
 }
