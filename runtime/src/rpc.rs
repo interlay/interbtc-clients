@@ -498,7 +498,6 @@ impl IssuePallet for PolkaBtcProvider {
     ) -> Result<(), Error> {
         self.ext_client.cancel_issue_and_watch(
             &*self.signer.lock().await,
-            requester,
             issue_id
         ).await?;
         Ok(())

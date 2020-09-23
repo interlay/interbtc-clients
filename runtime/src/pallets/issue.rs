@@ -49,8 +49,8 @@ pub struct ExecuteIssueEvent<T: Issue> {
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct CancelIssueCall<T: Issue> {
-    pub requester: T::AccountId,
     pub issue_id: H256,
+    pub _runtime: PhantomData<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
