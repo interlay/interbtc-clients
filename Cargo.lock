@@ -767,7 +767,7 @@ dependencies = [
  "parity-scale-codec",
  "redeem",
  "replace",
- "security 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "security",
  "serde",
  "sp-api",
  "sp-block-builder",
@@ -799,7 +799,7 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "primitive-types",
- "security 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "security",
  "serde",
  "sp-core",
  "sp-io",
@@ -1524,7 +1524,7 @@ dependencies = [
  "pallet-balances",
  "pallet-timestamp",
  "parity-scale-codec",
- "security 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "security",
  "serde",
  "sp-core",
  "sp-io",
@@ -2636,7 +2636,7 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "primitive-types",
- "security 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "security",
  "serde",
  "sha2 0.8.2",
  "sp-core",
@@ -5224,7 +5224,7 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "primitive-types",
- "security 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "security",
  "serde",
  "sha2 0.8.2",
  "sp-core",
@@ -5377,7 +5377,7 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "primitive-types",
- "security 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "security",
  "serde",
  "sha2 0.8.2",
  "sp-core",
@@ -5439,7 +5439,7 @@ dependencies = [
  "frame-support",
  "jsonrpsee",
  "parity-scale-codec",
- "security 2.0.0-rc6",
+ "security",
  "serde_json",
  "sp-core",
  "sp-keyring",
@@ -6500,20 +6500,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "security"
-version = "2.0.0-rc6"
-dependencies = [
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "primitive-types",
- "serde",
- "sha2 0.8.2",
- "sp-core",
- "sp-std",
-]
-
-[[package]]
 name = "security-framework"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7452,6 +7438,8 @@ dependencies = [
  "parity-scale-codec",
  "relayer-core",
  "runtime",
+ "serde",
+ "serde_json",
  "sp-core",
  "sp-keyring",
  "substrate-subxt",
@@ -7479,7 +7467,7 @@ dependencies = [
  "primitive-types",
  "redeem",
  "replace",
- "security 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "security",
  "serde",
  "sha2 0.8.2",
  "sp-core",
@@ -8611,7 +8599,7 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "primitive-types",
- "security 2.0.0-rc6 (git+https://gitlab.com/interlay/btc-parachain?branch=dev)",
+ "security",
  "serde",
  "sp-arithmetic",
  "sp-core",

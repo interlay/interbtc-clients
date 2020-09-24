@@ -30,9 +30,9 @@ struct Opts {
     #[clap(long, default_value = "ws://127.0.0.1:9944")]
     polka_btc_url: String,
 
-    /// Address to listen on for GRPC requests.
-    #[clap(long, default_value = "[::1]:50051")]
-    grpc_addr: String,
+    /// Address to listen on for JSON-RPC requests.
+    #[clap(long, default_value = "[::1]:3030")]
+    http_addr: String,
 
     /// Starting height for vault theft checks, if not defined
     /// automatically start from the chain tip.
@@ -97,9 +97,11 @@ async fn main() -> Result<(), Error> {
     let vaults_rw: Arc<RwLock<HashMap<_, _>>> = Arc::new(RwLock::new(vaults.into_iter().collect()));
     let vaults_ro = vaults_rw.clone();
 
+    let http_addr = opts.http_addr.parse()?;
+
     let result = tokio::try_join!(
         // runs grpc server for incoming requests
-        tokio::spawn(async move { http::start(api_prov).await }),
+        tokio::spawn(async move { http::start(api_prov, http_addr).await }),
         // runs subscription service to update registered vaults
         tokio::spawn(async move {
             vault_prov
