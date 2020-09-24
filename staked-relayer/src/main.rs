@@ -7,19 +7,24 @@ mod utils;
 
 use clap::Clap;
 use error::Error;
+use futures::stream::iter;
+use futures::stream::StreamExt;
 use log::{error, info};
 use oracle::Oracle;
 use relay::Client as PolkaClient;
 use relay::Error as RelayError;
 use relayer_core::bitcoin::Client as BtcClient;
 use relayer_core::{Backing, Config, Runner};
-use runtime::{H256Le, PolkaBtcProvider, PolkaBtcRuntime, StakedRelayerPallet};
+use runtime::{
+    AccountId, H256Le, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, StakedRelayerPallet,
+};
+use sp_core::H160;
 use sp_keyring::AccountKeyring;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::Duration;
 use substrate_subxt::PairSigner;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 /// The Staked Relayer client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
@@ -62,7 +67,7 @@ async fn main() -> Result<(), Error> {
 
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Alice.pair());
     let provider =
-        PolkaBtcProvider::from_url(opts.polka_btc_url, Arc::new(Mutex::new(signer))).await?;
+        PolkaBtcProvider::from_url(opts.polka_btc_url, Arc::new(RwLock::new(signer))).await?;
     let shared_prov = Arc::new(provider);
     let tx_provider = shared_prov.clone();
 
@@ -94,8 +99,9 @@ async fn main() -> Result<(), Error> {
         .map(|vault| (vault.btc_address, vault));
 
     // collect (btc_address, vault) into HashMap
-    let vaults_rw: Arc<RwLock<HashMap<_, _>>> = Arc::new(RwLock::new(vaults.into_iter().collect()));
-    let vaults_ro = vaults_rw.clone();
+    let vaults = Arc::new(Vaults::from(vaults.into_iter().collect()));
+    let vaults_rw = vaults.clone();
+    let vaults_ro = vaults.clone();
 
     let http_addr = opts.http_addr.parse()?;
 
@@ -106,9 +112,9 @@ async fn main() -> Result<(), Error> {
         tokio::spawn(async move {
             vault_prov
                 .on_register(
-                    |vault| {
+                    |vault| async {
                         info!("Vault registered: {}", vault.id);
-                        vaults_rw.write().unwrap().insert(vault.btc_address, vault);
+                        vaults_rw.write(vault.btc_address, vault).await;
                     },
                     |err| error!("{}", err.to_string()),
                 )
@@ -135,16 +141,10 @@ async fn main() -> Result<(), Error> {
                         let raw_tx = btc_rpc.get_raw_tx(&tx_id, &hash).unwrap();
                         let proof = btc_rpc.get_proof(tx_id.clone(), &hash).unwrap();
                         // filter matching vaults
-                        let vault_ids = bitcoin::extract_btc_addresses(tx)
-                            .into_iter()
-                            .filter_map(|addr| {
-                                let vaults = vaults_ro.read().unwrap();
-                                if let Some(vault) = vaults.get(&addr) {
-                                    return Some(vault.id.clone());
-                                }
-                                None
-                            })
-                            .collect::<Vec<_>>();
+                        let vault_ids = iter(bitcoin::extract_btc_addresses(tx))
+                            .filter_map(|addr| vaults_ro.contains_key(addr))
+                            .collect::<Vec<AccountId>>()
+                            .await;
 
                         for vault_id in vault_ids {
                             info!("Found tx from vault {}", vault_id);
@@ -191,4 +191,24 @@ async fn main() -> Result<(), Error> {
         }
     };
     Ok(())
+}
+
+struct Vaults(RwLock<HashMap<H160, PolkaBtcVault>>);
+
+impl Vaults {
+    fn from(vaults: HashMap<H160, PolkaBtcVault>) -> Self {
+        Self(RwLock::new(vaults))
+    }
+
+    async fn write(&self, key: H160, value: PolkaBtcVault) {
+        self.0.write().await.insert(key, value);
+    }
+
+    async fn contains_key(&self, addr: H160) -> Option<AccountId> {
+        let vaults = self.0.read().await;
+        if let Some(vault) = vaults.get(&addr.clone()) {
+            return Some(vault.id.clone());
+        }
+        None
+    }
 }
