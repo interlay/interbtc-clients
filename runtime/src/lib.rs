@@ -9,8 +9,8 @@ pub use btc_relay::{BitcoinBlockHeight, H256Le, RawBlockHeader, RichBlockHeader}
 pub use error::Error;
 use pallets::*;
 pub use rpc::{
-    ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcStatusUpdate, PolkaBtcVault,
-    SecurityPallet, StakedRelayerPallet, TimestampPallet, IssuePallet
+    ExchangeRateOraclePallet, IssuePallet, PolkaBtcProvider, PolkaBtcStatusUpdate, PolkaBtcVault,
+    SecurityPallet, StakedRelayerPallet, TimestampPallet,
 };
 pub use security::{ErrorCode, StatusCode};
 use sp_core::U256;
@@ -78,7 +78,11 @@ impl timestamp::Timestamp for PolkaBtcRuntime {
     type Moment = u64;
 }
 
-impl exchange_rate_oracle::ExchangeRateOracle for PolkaBtcRuntime {}
+impl exchange_rate_oracle::ExchangeRateOracle for PolkaBtcRuntime {
+    type u128 = u128;
+    type StatusCode = StatusCode;
+    type ErrorCode = ErrorCode;
+}
 
 impl balances_dot::DOT for PolkaBtcRuntime {
     type Balance = u128;

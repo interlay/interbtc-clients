@@ -1,14 +1,18 @@
-use crate::timestamp::Timestamp;
-use crate::timestamp::TimestampEventsDecoder;
-use crate::security::Security;
-use crate::security::SecurityEventsDecoder;
+use crate::security::{Security, SecurityEventsDecoder};
+use crate::timestamp::{Timestamp, TimestampEventsDecoder};
 use core::marker::PhantomData;
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};
+use sp_runtime::traits::Member;
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
 #[module]
-pub trait ExchangeRateOracle: Timestamp + Security {}
+pub trait ExchangeRateOracle: Timestamp + Security {
+    #[allow(non_camel_case_types)]
+    type u128: Codec + EncodeLike + Member + Default;
+    type StatusCode: Codec + EncodeLike + Member + Default;
+    type ErrorCode: Codec + EncodeLike + Member + Default;
+}
 
 /// Current BTC/DOT exchange rate
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]

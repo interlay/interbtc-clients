@@ -17,11 +17,11 @@ use tokio::sync::Mutex;
 
 use crate::btc_relay::*;
 use crate::exchange_rate_oracle::*;
+use crate::issue::*;
 use crate::security::*;
 use crate::staked_relayers::*;
 use crate::timestamp::*;
 use crate::vault_registry::*;
-use crate::issue::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
 
@@ -273,11 +273,13 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
     }
 
     /// Sets the current exchange rate as BTC/DOT
-    /// 
+    ///
     /// # Arguments
-    /// * `btc_to_dot_rate` - the current BTC to DOT exchange rate encoded with the GRANULARITY 
+    /// * `btc_to_dot_rate` - the current BTC to DOT exchange rate encoded with the GRANULARITY
     async fn set_exchange_rate_info(&self, btc_to_dot_rate: u128) -> Result<(), Error> {
-        self.ext_client.set_exchange_rate_and_watch(&*self.signer.lock().await, btc_to_dot_rate).await?;
+        self.ext_client
+            .set_exchange_rate_and_watch(&*self.signer.lock().await, btc_to_dot_rate)
+            .await?;
         Ok(())
     }
 }
@@ -442,7 +444,7 @@ pub trait IssuePallet {
         &self,
         amount: u128,
         vault_id: <PolkaBtcRuntime as System>::AccountId,
-        griefing_collateral: u128
+        griefing_collateral: u128,
     ) -> Result<(), Error>;
 
     /// Execute a issue request by providing a Bitcoin transaction inclusion proof
@@ -452,14 +454,11 @@ pub trait IssuePallet {
         tx_id: H256Le,
         tx_block_height: u32,
         merkle_proof: Vec<u8>,
-        raw_tx: Vec<u8>
+        raw_tx: Vec<u8>,
     ) -> Result<(), Error>;
-    
+
     /// Cancel an ongoing issue request
-    async fn cancel_issue(
-        &self,
-        issue_id: H256
-    ) -> Result<(), Error>;
+    async fn cancel_issue(&self, issue_id: H256) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -468,9 +467,16 @@ impl IssuePallet for PolkaBtcProvider {
         &self,
         amount: u128,
         vault_id: <PolkaBtcRuntime as System>::AccountId,
-        griefing_collateral: u128
+        griefing_collateral: u128,
     ) -> Result<(), Error> {
-        self.ext_client.request_issue_and_watch(&*self.signer.lock().await, amount, vault_id, griefing_collateral).await?;
+        self.ext_client
+            .request_issue_and_watch(
+                &*self.signer.lock().await,
+                amount,
+                vault_id,
+                griefing_collateral,
+            )
+            .await?;
         Ok(())
     }
 
@@ -480,27 +486,25 @@ impl IssuePallet for PolkaBtcProvider {
         tx_id: H256Le,
         tx_block_height: u32,
         merkle_proof: Vec<u8>,
-        raw_tx: Vec<u8>
+        raw_tx: Vec<u8>,
     ) -> Result<(), Error> {
-        self.ext_client.execute_issue_and_watch(
-            &*self.signer.lock().await,
-            issue_id,
-            tx_id,
-            tx_block_height,
-            merkle_proof,
-            raw_tx
-        ).await?;
+        self.ext_client
+            .execute_issue_and_watch(
+                &*self.signer.lock().await,
+                issue_id,
+                tx_id,
+                tx_block_height,
+                merkle_proof,
+                raw_tx,
+            )
+            .await?;
         Ok(())
     }
-    
-    async fn cancel_issue(
-        &self,
-        issue_id: H256
-    ) -> Result<(), Error> {
-        self.ext_client.cancel_issue_and_watch(
-            &*self.signer.lock().await,
-            issue_id
-        ).await?;
+
+    async fn cancel_issue(&self, issue_id: H256) -> Result<(), Error> {
+        self.ext_client
+            .cancel_issue_and_watch(&*self.signer.lock().await, issue_id)
+            .await?;
         Ok(())
     }
 }

@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
+pub use module_bitcoin::types::H256Le;
 use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};
 pub use sp_core::{H160, H256};
-pub use module_bitcoin::types::H256Le;
 use sp_runtime::traits::Member;
 use std::fmt::Debug;
 use substrate_subxt::system::{System, SystemEventsDecoder};
