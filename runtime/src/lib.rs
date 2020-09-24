@@ -9,7 +9,7 @@ pub use btc_relay::{BitcoinBlockHeight, H256Le, RawBlockHeader, RichBlockHeader}
 pub use error::Error;
 use pallets::*;
 pub use rpc::{
-    ExchangeRateOraclePallet, IssuePallet, RedeemPallet, PolkaBtcProvider, PolkaBtcStatusUpdate, PolkaBtcVault,
+    AccountId, ExchangeRateOraclePallet, IssuePallet, RedeemPallet, PolkaBtcProvider, PolkaBtcStatusUpdate, PolkaBtcVault,
     SecurityPallet, StakedRelayerPallet, TimestampPallet,
 };
 pub use security::{ErrorCode, StatusCode};

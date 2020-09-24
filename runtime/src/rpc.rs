@@ -8,12 +8,13 @@ use sp_core::crypto::{AccountId32, Pair};
 use sp_core::sr25519::Pair as KeyPair;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
+use std::future::Future;
 use std::sync::Arc;
 use substrate_subxt::Error as XtError;
 use substrate_subxt::{
     system::System, Client, ClientBuilder, EventSubscription, EventsDecoder, PairSigner,
 };
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 use crate::btc_relay::*;
 use crate::exchange_rate_oracle::*;
@@ -26,14 +27,16 @@ use crate::vault_registry::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
 
+pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
+
 pub type PolkaBtcVault = Vault<
-    <PolkaBtcRuntime as System>::AccountId,
+    AccountId,
     <PolkaBtcRuntime as System>::BlockNumber,
     <PolkaBtcRuntime as VaultRegistry>::PolkaBTC,
 >;
 
 pub type PolkaBtcStatusUpdate = StatusUpdate<
-    <PolkaBtcRuntime as System>::AccountId,
+    AccountId,
     <PolkaBtcRuntime as System>::BlockNumber,
     <PolkaBtcRuntime as StakedRelayers>::DOT,
 >;
@@ -42,13 +45,13 @@ pub type PolkaBtcStatusUpdate = StatusUpdate<
 pub struct PolkaBtcProvider {
     rpc_client: RpcClient,
     ext_client: Client<PolkaBtcRuntime>,
-    signer: Arc<Mutex<PairSigner<PolkaBtcRuntime, KeyPair>>>,
+    signer: Arc<RwLock<PairSigner<PolkaBtcRuntime, KeyPair>>>,
 }
 
 impl PolkaBtcProvider {
     pub async fn new<P: Into<jsonrpsee::Client>>(
         rpc_client: P,
-        signer: Arc<Mutex<PairSigner<PolkaBtcRuntime, KeyPair>>>,
+        signer: Arc<RwLock<PairSigner<PolkaBtcRuntime, KeyPair>>>,
     ) -> Result<Self, Error> {
         let rpc_client = rpc_client.into();
         let ext_client = ClientBuilder::<PolkaBtcRuntime>::new()
@@ -67,7 +70,7 @@ impl PolkaBtcProvider {
 
     pub async fn from_url(
         url: String,
-        signer: Arc<Mutex<PairSigner<PolkaBtcRuntime, KeyPair>>>,
+        signer: Arc<RwLock<PairSigner<PolkaBtcRuntime, KeyPair>>>,
     ) -> Result<Self, Error> {
         let rpc_client = if url.starts_with("ws://") || url.starts_with("wss://") {
             jsonrpsee::ws_client(&url).await?
@@ -80,7 +83,7 @@ impl PolkaBtcProvider {
 
     /// Get the address of the configured signer.
     pub async fn get_address(&self) -> AccountId32 {
-        self.signer.lock().await.signer().public().into()
+        self.signer.read().await.signer().public().into()
     }
 
     /// Get the hash of the current best tip.
@@ -146,7 +149,7 @@ impl PolkaBtcProvider {
         // TODO: can we initialize the relay through the chain-spec?
         // we would also need to consider re-initialization per governance
         self.ext_client
-            .initialize_and_watch(&*self.signer.lock().await, header, height)
+            .initialize_and_watch(&*self.signer.write().await, header, height)
             .await?;
         Ok(())
     }
@@ -157,7 +160,7 @@ impl PolkaBtcProvider {
     /// * `header` - raw block header
     pub async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error> {
         self.ext_client
-            .store_block_header_and_watch(&*self.signer.lock().await, header)
+            .store_block_header_and_watch(&*self.signer.write().await, header)
             .await?;
         Ok(())
     }
@@ -169,7 +172,7 @@ impl PolkaBtcProvider {
     /// * `btc_address` - Bitcoin address hash
     pub async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), Error> {
         self.ext_client
-            .register_vault_and_watch(&*self.signer.lock().await, collateral, btc_address)
+            .register_vault_and_watch(&*self.signer.write().await, collateral, btc_address)
             .await?;
         Ok(())
     }
@@ -179,9 +182,10 @@ impl PolkaBtcProvider {
     ///
     /// # Arguments
     /// * `on_vault` - callback for newly registered vaults
-    pub async fn on_register<F, E>(&self, mut on_vault: F, on_error: E) -> Result<(), Error>
+    pub async fn on_register<F, R, E>(&self, mut on_vault: F, on_error: E) -> Result<(), Error>
     where
-        F: FnMut(PolkaBtcVault),
+        F: FnMut(PolkaBtcVault) -> R,
+        R: Future<Output = ()>,
         E: Fn(XtError),
     {
         let sub = self.ext_client.subscribe_events().await?;
@@ -198,7 +202,7 @@ impl PolkaBtcProvider {
                     let event =
                         RegisterVaultEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])?;
                     let account = self.ext_client.vaults(event.account_id, None).await?;
-                    on_vault(account);
+                    on_vault(account).await;
                 }
                 Err(err) => on_error(err),
             };
@@ -321,7 +325,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// * `stake` - deposit
     async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error> {
         self.ext_client
-            .register_staked_relayer_and_watch(&*self.signer.lock().await, stake)
+            .register_staked_relayer_and_watch(&*self.signer.write().await, stake)
             .await?;
         Ok(())
     }
@@ -329,7 +333,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// Submit extrinsic to deregister the staked relayer.
     async fn deregister_staked_relayer(&self) -> Result<(), Error> {
         self.ext_client
-            .deregister_staked_relayer_and_watch(&*self.signer.lock().await)
+            .deregister_staked_relayer_and_watch(&*self.signer.write().await)
             .await?;
         Ok(())
     }
@@ -359,7 +363,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     ) -> Result<(), Error> {
         self.ext_client
             .suggest_status_update_and_watch(
-                &*self.signer.lock().await,
+                &*self.signer.write().await,
                 deposit,
                 status_code,
                 add_error,
@@ -381,7 +385,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// Submit extrinsic to report that the oracle is offline.
     async fn report_oracle_offline(&self) -> Result<(), Error> {
         self.ext_client
-            .report_oracle_offline_and_watch(&*self.signer.lock().await)
+            .report_oracle_offline_and_watch(&*self.signer.write().await)
             .await?;
         Ok(())
     }
@@ -406,7 +410,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     ) -> Result<(), Error> {
         self.ext_client
             .report_vault_theft_and_watch(
-                &*self.signer.lock().await,
+                &*self.signer.write().await,
                 vault_id,
                 tx_id,
                 tx_block_height,
