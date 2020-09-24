@@ -1,10 +1,12 @@
-#[path = "param.rs"] mod param;
-#[path = "utils.rs"] mod utils;
+#[path = "param.rs"]
+mod param;
+#[path = "utils.rs"]
+mod utils;
 
-use sp_core::{H160, H256, U256};
-use runtime::{PolkaBtcProvider, Error};
-use module_bitcoin::types::*;
 use module_bitcoin::formatter::Formattable;
+use module_bitcoin::types::*;
+use runtime::{Error, PolkaBtcProvider};
+use sp_core::{H160, H256, U256};
 
 pub struct BtcSimulator {
     prov: PolkaBtcProvider,
@@ -16,17 +18,14 @@ impl BtcSimulator {
         let prov = relay_prov;
         let height = height;
 
-        Self {prov, height}
+        Self { prov, height }
     }
 
     /// Initialize BTC Relay with a generated Bitcoin block
     pub async fn initialize(&mut self) -> Result<Block, Error> {
-        let alice_address = H160::from_slice(
-            hex::decode(param::ALICE_BTC_ADDRESS)
-                    .unwrap()
-                    .as_slice(),
-            ); 
-        let address = Address::from(*alice_address.as_fixed_bytes()); 
+        let alice_address =
+            H160::from_slice(hex::decode(param::ALICE_BTC_ADDRESS).unwrap().as_slice());
+        let address = Address::from(*alice_address.as_fixed_bytes());
         // initialize BTC Relay with one block
         let init_block = BlockBuilder::new()
             .with_version(2)
@@ -37,10 +36,16 @@ impl BtcSimulator {
         let init_block_hash = init_block.header.hash();
         let raw_init_block_header = RawBlockHeader::from_bytes(&init_block.header.format())
             .expect("could not serialize block header");
-        
-        &self.prov.initialize_btc_relay(raw_init_block_header, self.height).await?;
-        println!("Initialized BTC-Relay at height {:?} with hash {:?}", &self.height, init_block_hash);
-        
+
+        &self
+            .prov
+            .initialize_btc_relay(raw_init_block_header, self.height)
+            .await?;
+        println!(
+            "Initialized BTC-Relay at height {:?} with hash {:?}",
+            &self.height, init_block_hash
+        );
+
         self.height += 1;
         Ok(init_block)
     }
@@ -52,8 +57,8 @@ impl BtcSimulator {
         &mut self,
         prev_block: &Block,
         btc_address: &str,
-        amount: u128, 
-        return_data: H256
+        amount: u128,
+        return_data: H256,
     ) -> Result<(H256Le, u32, Vec<u8>, Vec<u8>), Error> {
         let dest_address = utils::get_address_from_string(btc_address);
         let address = Address::from(*dest_address.as_fixed_bytes());
@@ -88,6 +93,11 @@ impl BtcSimulator {
         let raw_tx = transaction.format_with(true);
 
         self.prov.store_block_header(raw_block_header).await?;
+        println!(
+            "Stored BTC block at height {:?} with hash {:?}",
+            &self.height,
+            raw_block_header.hash()
+        );
 
         // Mine six new blocks to get over required confirmations
         let mut prev_block_hash = block.header.hash();
@@ -105,6 +115,11 @@ impl BtcSimulator {
             let raw_conf_block_header = RawBlockHeader::from_bytes(&conf_block.header.format())
                 .expect("could not serialize block header");
             self.prov.store_block_header(raw_conf_block_header).await?;
+            println!(
+                "Stored BTC block at height {:?} with hash {:?}",
+                &self.height,
+                raw_conf_block_header.hash()
+            );
 
             prev_block_hash = conf_block.header.hash();
         }
