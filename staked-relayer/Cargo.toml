@@ -19,6 +19,8 @@ sp-keyring = "2.0.0-rc6"
 sp-core = "2.0.0-rc6"
 async-trait = "0.1.40"
 warp = "0.2"
+serde = "1.0.116"
+serde_json = { version = "1.0.57", features = ["raw_value"] }
 
 substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branch = "master" }
 runtime = { path = "../runtime" }
