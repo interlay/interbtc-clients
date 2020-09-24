@@ -10,6 +10,10 @@ use thiserror::Error;
 pub enum Error {
     #[error("Could not get exchange rate info")]
     ExchangeRateInfo,
+    #[error("Could not get issue id")]
+    RequestIssueIDNotFound,
+    #[error("Could not get redeem id")]
+    RequestRedeemIDNotFound,
 
     #[error("Error serializing: {0}")]
     Serialize(#[from] TryFromSliceError),

@@ -9,7 +9,7 @@ pub use btc_relay::{BitcoinBlockHeight, H256Le, RawBlockHeader, RichBlockHeader}
 pub use error::Error;
 use pallets::*;
 pub use rpc::{
-    ExchangeRateOraclePallet, IssuePallet, PolkaBtcProvider, PolkaBtcStatusUpdate, PolkaBtcVault,
+    ExchangeRateOraclePallet, IssuePallet, RedeemPallet, PolkaBtcProvider, PolkaBtcStatusUpdate, PolkaBtcVault,
     SecurityPallet, StakedRelayerPallet, TimestampPallet,
 };
 pub use security::{ErrorCode, StatusCode};
@@ -89,6 +89,12 @@ impl balances_dot::DOT for PolkaBtcRuntime {
 }
 
 impl issue::Issue for PolkaBtcRuntime {
+    type Balance = u128;
+    type DOT = u128;
+    type PolkaBTC = u128;
+}
+
+impl redeem::Redeem for PolkaBtcRuntime {
     type Balance = u128;
     type DOT = u128;
     type PolkaBTC = u128;
