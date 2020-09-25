@@ -4,12 +4,11 @@ mod http;
 mod oracle;
 mod relay;
 mod utils;
+mod vault;
 
 use bitcoin::{BlockHash, Hash};
 use clap::Clap;
 use error::Error;
-use futures::stream::iter;
-use futures::stream::StreamExt;
 use log::{error, info};
 use oracle::Oracle;
 use relay::Client as PolkaClient;
@@ -17,16 +16,15 @@ use relay::Error as RelayError;
 use relayer_core::bitcoin::Client as BtcClient;
 use relayer_core::{Backing, Config, Runner};
 use runtime::{
-    AccountId, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault,
-    StakedRelayerPallet, StatusCode,
+    ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcRuntime, StakedRelayerPallet, StatusCode,
 };
-use sp_core::H160;
 use sp_keyring::AccountKeyring;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use substrate_subxt::PairSigner;
 use tokio::sync::RwLock;
+
+use vault::{Vaults, VaultsWatcher};
 
 /// The Staked Relayer client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
@@ -76,13 +74,12 @@ async fn main() -> Result<(), Error> {
     let provider =
         PolkaBtcProvider::from_url(opts.polka_btc_url, Arc::new(RwLock::new(signer))).await?;
     let shared_prov = Arc::new(provider);
-    let tx_provider = shared_prov.clone();
 
     let api_prov = shared_prov.clone();
     let btc_client = BtcClient::new::<RelayError>(bitcoin::bitcoin_rpc_from_env()?);
 
     // scan from custom height or the current tip
-    let mut btc_height = if let Some(height) = opts.scan_start_height {
+    let btc_height = if let Some(height) = opts.scan_start_height {
         height
     } else {
         btc_client.get_block_count()? + 1
@@ -115,9 +112,12 @@ async fn main() -> Result<(), Error> {
         .map(|vault| (vault.btc_address, vault));
 
     // collect (btc_address, vault) into HashMap
-    let vaults = Arc::new(Vaults::from(vaults.into_iter().collect()));
-    let vaults_rw = vaults.clone();
-    let vaults_ro = vaults.clone();
+    let vaults_arc = Arc::new(Vaults::from(vaults.into_iter().collect()));
+    let vaults_rw = vaults_arc.clone();
+    let vaults_ro = vaults_arc.clone();
+
+    let mut vaults_watcher =
+        VaultsWatcher::new(btc_height, vault_btc_rpc, vaults_ro, vault_prov.clone());
 
     let http_addr = opts.http_addr.parse()?;
 
@@ -147,53 +147,7 @@ async fn main() -> Result<(), Error> {
         }),
         // runs vault theft checks
         tokio::spawn(async move {
-            loop {
-                info!("Scanning height {}", btc_height);
-                let hash = vault_btc_rpc.wait_for_block(btc_height).await.unwrap();
-                for maybe_tx in vault_btc_rpc.get_block_transactions(&hash).unwrap() {
-                    if let Some(tx) = maybe_tx {
-                        let tx_id = tx.txid;
-                        // TODO: spawn_blocking?
-                        let raw_tx = vault_btc_rpc.get_raw_tx(&tx_id, &hash).unwrap();
-                        let proof = vault_btc_rpc.get_proof(tx_id.clone(), &hash).unwrap();
-                        // filter matching vaults
-                        let vault_ids = iter(bitcoin::extract_btc_addresses(tx))
-                            .filter_map(|addr| vaults_ro.contains_key(addr))
-                            .collect::<Vec<AccountId>>()
-                            .await;
-
-                        for vault_id in vault_ids {
-                            info!("Found tx from vault {}", vault_id);
-                            // check if matching redeem or replace request
-                            if tx_provider
-                                .is_transaction_invalid(vault_id.clone(), raw_tx.clone())
-                                .await
-                                .unwrap()
-                            {
-                                // TODO: prevent blocking here
-                                info!("Transaction is invalid");
-                                match tx_provider
-                                    .report_vault_theft(
-                                        vault_id,
-                                        H256Le::from_bytes_le(&tx_id.as_hash()),
-                                        btc_height,
-                                        proof.clone(),
-                                        raw_tx.clone(),
-                                    )
-                                    .await
-                                {
-                                    Ok(_) => info!("Successfully reported invalid transaction"),
-                                    Err(e) => error!(
-                                        "Failed to report invalid transaction: {}",
-                                        e.to_string()
-                                    ),
-                                }
-                            }
-                        }
-                    }
-                }
-                btc_height += 1;
-            }
+            vaults_watcher.watch().await;
         }),
         // runs `NO_DATA` checks and submits status update
         tokio::spawn(async move {
@@ -275,26 +229,6 @@ async fn main() -> Result<(), Error> {
         }
     };
     Ok(())
-}
-
-struct Vaults(RwLock<HashMap<H160, PolkaBtcVault>>);
-
-impl Vaults {
-    fn from(vaults: HashMap<H160, PolkaBtcVault>) -> Self {
-        Self(RwLock::new(vaults))
-    }
-
-    async fn write(&self, key: H160, value: PolkaBtcVault) {
-        self.0.write().await.insert(key, value);
-    }
-
-    async fn contains_key(&self, addr: H160) -> Option<AccountId> {
-        let vaults = self.0.read().await;
-        if let Some(vault) = vaults.get(&addr.clone()) {
-            return Some(vault.id.clone());
-        }
-        None
-    }
 }
 
 fn convert_block_hash(hash: Option<H256Le>) -> Result<BlockHash, Error> {
