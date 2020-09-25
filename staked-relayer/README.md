@@ -1,16 +1,16 @@
-# Staked Relayer
+# PolkaBTC Staked Relayer
 
 ## Responsibilities
 
-  - Receive block headers from [Bitcoin Core](https://github.com/bitcoin/bitcoin) 
-  - Submit block headers to the [PolkaBTC Parachain](https://github.com/interlay/BTC-Parachain)
-  - Register and stake DOT collateral
-  - Participate in core governance procedures
-  - Monitor the BTC addresses of vaults to report BTC thefts
-  - Monitor and report under-collateralised vaults
-  - Monitor and report when the Oracle is offline
+- Receive block headers from [Bitcoin Core](https://github.com/bitcoin/bitcoin) 
+- Submit block headers to the [PolkaBTC Parachain](https://github.com/interlay/BTC-Parachain)
+- Register and stake DOT collateral
+- Participate in core governance procedures
+- Monitor the BTC addresses of vaults to report BTC thefts
+- Monitor and report under-collateralised vaults
+- Monitor and report when the Oracle is offline
 
-## Getting Started
+## Prerequisites
 
 Download and start [Bitcoin Core](https://bitcoin.org/en/bitcoin-core/):
 
@@ -26,7 +26,9 @@ cd btc-parachain
 cargo run --release -- --dev
 ```
 
-Compile your staked relayer:
+## Getting Started
+
+Run the staked relayer client:
 
 ```
 source .env
