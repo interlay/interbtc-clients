@@ -10,7 +10,7 @@ use bitcoin::{BlockHash, Hash};
 use clap::Clap;
 use error::Error;
 use log::{error, info};
-use oracle::Oracle;
+use oracle::OracleMonitor;
 use relay::Client as PolkaClient;
 use relay::Error as RelayError;
 use relayer_core::bitcoin::Client as BtcClient;
@@ -24,7 +24,7 @@ use std::time::Duration;
 use substrate_subxt::PairSigner;
 use tokio::sync::RwLock;
 
-use vault::{Vaults, VaultsWatcher};
+use vault::{Vaults, VaultsMonitor};
 
 /// The Staked Relayer client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
@@ -117,7 +117,7 @@ async fn main() -> Result<(), Error> {
     let vaults_ro = vaults_arc.clone();
 
     let mut vaults_watcher =
-        VaultsWatcher::new(btc_height, vault_btc_rpc, vaults_ro, vault_prov.clone());
+        VaultsMonitor::new(btc_height, vault_btc_rpc, vaults_ro, vault_prov.clone());
 
     let http_addr = opts.http_addr.parse()?;
 
@@ -139,7 +139,7 @@ async fn main() -> Result<(), Error> {
         }),
         // runs oracle liveness check
         tokio::spawn(async move {
-            let oracle = Oracle::new(shared_prov.clone());
+            let oracle = OracleMonitor::new(shared_prov.clone());
             utils::check_every(Duration::from_millis(oracle_timeout_ms), || async {
                 oracle.report_offline().await
             })
@@ -147,7 +147,7 @@ async fn main() -> Result<(), Error> {
         }),
         // runs vault theft checks
         tokio::spawn(async move {
-            vaults_watcher.watch().await;
+            vaults_watcher.scan().await;
         }),
         // runs `NO_DATA` checks and submits status update
         tokio::spawn(async move {

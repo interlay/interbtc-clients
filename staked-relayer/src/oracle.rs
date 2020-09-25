@@ -5,14 +5,14 @@ use runtime::{
 };
 use std::sync::Arc;
 
-pub struct Oracle<
+pub struct OracleMonitor<
     P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet,
 > {
     rpc: Arc<P>,
 }
 
 impl<P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet>
-    Oracle<P>
+    OracleMonitor<P>
 {
     pub fn new(rpc: Arc<P>) -> Self {
         Self { rpc }
@@ -56,10 +56,10 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use runtime::PolkaBtcStatusUpdate;
-    use runtime::{Error, ErrorCode, H256Le, PolkaBtcRuntime, StatusCode};
+    use runtime::{AccountId, Error, ErrorCode, H256Le, StatusCode};
+    use sp_core::U256;
     use std::collections::BTreeSet;
     use std::iter::FromIterator;
-    use substrate_subxt::system::System;
 
     mockall::mock! {
         Provider {}
@@ -72,6 +72,8 @@ mod tests {
         #[async_trait]
         trait ExchangeRateOraclePallet {
             async fn get_exchange_rate_info(&self) -> Result<(u64, u64, u64), Error>;
+
+            async fn set_exchange_rate_info(&self, btc_to_dot_rate: u128) -> Result<(), Error>;
         }
 
         #[async_trait]
@@ -84,17 +86,28 @@ mod tests {
                 status_code: StatusCode,
                 add_error: Option<ErrorCode>,
                 remove_error: Option<ErrorCode>,
+                block_hash: Option<H256Le>,
+            ) -> Result<(), Error>;
+            async fn vote_on_status_update(
+                &self,
+                status_update_id: U256,
+                approve: bool,
             ) -> Result<(), Error>;
             async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, Error>;
             async fn report_oracle_offline(&self) -> Result<(), Error>;
             async fn report_vault_theft(
                 &self,
-                vault_id: <PolkaBtcRuntime as System>::AccountId,
+                vault_id: AccountId,
                 tx_id: H256Le,
                 tx_block_height: u32,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), Error>;
+            async fn is_transaction_invalid(
+                &self,
+                vault_id: AccountId,
+                raw_tx: Vec<u8>,
+            ) -> Result<bool, Error>;
         }
 
         #[async_trait]
@@ -112,7 +125,10 @@ mod tests {
         prov.expect_get_time_now().returning(|| Ok(1));
 
         assert_eq!(
-            Oracle::new(Arc::new(prov)).is_offline().await.unwrap(),
+            OracleMonitor::new(Arc::new(prov))
+                .is_offline()
+                .await
+                .unwrap(),
             true
         );
     }
@@ -125,7 +141,10 @@ mod tests {
         prov.expect_get_time_now().returning(|| Ok(2));
 
         assert_eq!(
-            Oracle::new(Arc::new(prov)).is_offline().await.unwrap(),
+            OracleMonitor::new(Arc::new(prov))
+                .is_offline()
+                .await
+                .unwrap(),
             false
         );
     }
@@ -147,7 +166,7 @@ mod tests {
             .once()
             .returning(|| Ok(()));
 
-        Oracle::new(Arc::new(prov)).report_offline().await;
+        OracleMonitor::new(Arc::new(prov)).report_offline().await;
     }
 
     #[tokio::test]
@@ -167,6 +186,6 @@ mod tests {
             .never()
             .returning(|| Ok(()));
 
-        Oracle::new(Arc::new(prov)).report_offline().await;
+        OracleMonitor::new(Arc::new(prov)).report_offline().await;
     }
 }
