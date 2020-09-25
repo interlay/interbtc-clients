@@ -119,10 +119,7 @@ impl PolkaBtcProvider {
     ///
     /// # Arguments
     /// * `vault_id` - account ID of the vault
-    pub async fn get_vault(
-        &self,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
-    ) -> Result<PolkaBtcVault, Error> {
+    pub async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, Error> {
         Ok(self.ext_client.vaults(vault_id, None).await?)
     }
 
@@ -327,36 +324,6 @@ impl PolkaBtcProvider {
 
         Ok(())
     }
-
-    /// Custom RPC that tests whether a Bitcoin transaction is invalid
-    /// according to the following conditions:
-    ///
-    /// - The specified vault is a signer
-    /// - The transaction is an invalid format
-    /// - The transaction is not part of any ongoing request
-    ///
-    /// # Arguments
-    /// * `vault_id` - vault account which features in vin
-    /// * `raw_tx` - raw Bitcoin transaction
-    pub async fn is_transaction_invalid(
-        &self,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
-        raw_tx: Vec<u8>,
-    ) -> Result<bool, Error> {
-        Ok(
-            match self
-                .rpc_client
-                .request(
-                    "stakedRelayers_isTransactionInvalid",
-                    Params::Array(vec![to_json_value(vault_id)?, to_json_value(raw_tx)?]),
-                )
-                .await
-            {
-                Ok(()) => true,
-                _ => false,
-            },
-        )
-    }
 }
 
 #[async_trait]
@@ -433,12 +400,18 @@ pub trait StakedRelayerPallet {
 
     async fn report_vault_theft(
         &self,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        vault_id: AccountId,
         tx_id: H256Le,
         tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error>;
+
+    async fn is_transaction_invalid(
+        &self,
+        vault_id: AccountId,
+        raw_tx: Vec<u8>,
+    ) -> Result<bool, Error>;
 }
 
 #[async_trait]
@@ -549,7 +522,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// * `raw_tx` - raw transaction
     async fn report_vault_theft(
         &self,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        vault_id: AccountId,
         tx_id: H256Le,
         tx_block_height: u32,
         merkle_proof: Vec<u8>,
@@ -566,6 +539,36 @@ impl StakedRelayerPallet for PolkaBtcProvider {
             )
             .await?;
         Ok(())
+    }
+
+    /// Custom RPC that tests whether a Bitcoin transaction is invalid
+    /// according to the following conditions:
+    ///
+    /// - The specified vault is a signer
+    /// - The transaction is an invalid format
+    /// - The transaction is not part of any ongoing request
+    ///
+    /// # Arguments
+    /// * `vault_id` - vault account which features in vin
+    /// * `raw_tx` - raw Bitcoin transaction
+    async fn is_transaction_invalid(
+        &self,
+        vault_id: AccountId,
+        raw_tx: Vec<u8>,
+    ) -> Result<bool, Error> {
+        Ok(
+            match self
+                .rpc_client
+                .request(
+                    "stakedRelayers_isTransactionInvalid",
+                    Params::Array(vec![to_json_value(vault_id)?, to_json_value(raw_tx)?]),
+                )
+                .await
+            {
+                Ok(()) => true,
+                _ => false,
+            },
+        )
     }
 }
 

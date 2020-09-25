@@ -3,10 +3,13 @@ mod block;
 use crate::utils::read_env;
 use crate::Error;
 pub use block::BitcoinMonitor;
-pub use relayer_core::bitcoin::bitcoincore_rpc;
-pub use relayer_core::bitcoin::bitcoincore_rpc::bitcoin::{hash_types::BlockHash, hashes::Hash};
-use relayer_core::bitcoin::bitcoincore_rpc::{
-    bitcoin::blockdata::opcodes, bitcoincore_rpc_json::GetRawTransactionResult, Auth, Client,
+use relayer_core::bitcoin::bitcoincore_rpc::{bitcoin::blockdata::opcodes, Auth, Client};
+pub use relayer_core::bitcoin::{
+    bitcoincore_rpc,
+    bitcoincore_rpc::{
+        bitcoin::{hash_types::BlockHash, hashes::Hash, Txid},
+        bitcoincore_rpc_json::GetRawTransactionResult,
+    },
 };
 use sp_core::H160;
 
