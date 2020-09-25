@@ -1,7 +1,7 @@
 mod btc_relay;
 mod issue;
-mod redeem;
 mod param;
+mod redeem;
 mod utils;
 mod vault;
 
@@ -9,7 +9,7 @@ use runtime::{Error, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use substrate_subxt::PairSigner;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 /// Generates testdata to be used on a development environment of the BTC-Parachain
 #[tokio::main]
@@ -19,11 +19,11 @@ async fn main() -> Result<(), Error> {
     let bob = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Bob.pair());
     let alice_prov = PolkaBtcProvider::from_url(
         param::POLKA_BTC_URL.to_string(),
-        Arc::new(Mutex::new(alice)),
+        Arc::new(RwLock::new(alice)),
     )
     .await?;
     let bob_prov =
-        PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), Arc::new(Mutex::new(bob)))
+        PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), Arc::new(RwLock::new(bob)))
             .await?;
 
     // EXCHANGE RATE
@@ -40,7 +40,6 @@ async fn main() -> Result<(), Error> {
     // INIT BTC RELAY
     let mut btc_simulator = btc_relay::BtcSimulator::new(alice_prov.clone(), 1);
     let prev_block = &btc_simulator.initialize().await?;
-
 
     // ISSUE
     // register Bob as a vault
@@ -62,16 +61,24 @@ async fn main() -> Result<(), Error> {
 
     // Alice makes the BTC payment and the BTC tx is included in BTC-Relay
     let (tx_id, tx_block_height, merkle_proof, raw_tx) = &btc_simulator
-    .generate_transaction_and_include(
-        prev_block,
-        param::BOB_BTC_ADDRESS,
-        param::ALICE_ISSUE_AMOUNT,
-        issue_id,
-    )
-    .await?;
+        .generate_transaction_and_include(
+            prev_block,
+            param::BOB_BTC_ADDRESS,
+            param::ALICE_ISSUE_AMOUNT,
+            issue_id,
+        )
+        .await?;
 
     // Alice completes the issue request
-    issue::execute_issue(alice_prov.clone(), &issue_id, tx_id, tx_block_height, merkle_proof, raw_tx).await?;
+    issue::execute_issue(
+        alice_prov.clone(),
+        &issue_id,
+        tx_id,
+        tx_block_height,
+        merkle_proof,
+        raw_tx,
+    )
+    .await?;
 
     // REDEEM
     // Alice redeems PolkaBTC
@@ -79,22 +86,30 @@ async fn main() -> Result<(), Error> {
         alice_prov.clone(),
         param::ALICE_REDEEM_AMOUNT_1,
         param::ALICE_BTC_ADDRESS,
-        AccountKeyring::Bob.to_account_id()
+        AccountKeyring::Bob.to_account_id(),
     )
     .await?;
 
     // Bob (vault) makes the BTC payment and the BTC tx is included in BTC-Relay
     let (tx_id, tx_block_height, merkle_proof, raw_tx) = &btc_simulator
-    .generate_transaction_and_include(
-        prev_block,
-        param::ALICE_BTC_ADDRESS,
-        param::ALICE_REDEEM_AMOUNT_1,
-        redeem_id,
-    )
-    .await?;
+        .generate_transaction_and_include(
+            prev_block,
+            param::ALICE_BTC_ADDRESS,
+            param::ALICE_REDEEM_AMOUNT_1,
+            redeem_id,
+        )
+        .await?;
 
     // Bob (vault) completes the redeem request
-    redeem::execute_redeem(bob_prov.clone(), &redeem_id, tx_id, tx_block_height, merkle_proof, raw_tx).await?;
+    redeem::execute_redeem(
+        bob_prov.clone(),
+        &redeem_id,
+        tx_id,
+        tx_block_height,
+        merkle_proof,
+        raw_tx,
+    )
+    .await?;
 
     Ok(())
 }

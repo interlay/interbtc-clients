@@ -2,7 +2,7 @@ use crate::relay::Error as RelayError;
 use parity_scale_codec::Error as CodecError;
 use relayer_core::bitcoin::bitcoincore_rpc::Error as BtcRpcError;
 use relayer_core::Error as CoreError;
-use runtime::Error as RpcError;
+use runtime::Error as RuntimeError;
 use serde_json::Error as SerdeError;
 use std::env::VarError;
 use std::net::AddrParseError;
@@ -22,8 +22,8 @@ pub enum Error {
 
     #[error("Read env error: {0}: {1}")]
     ReadVar(String, VarError),
-    #[error("RpcError: {0}")]
-    RpcError(#[from] RpcError),
+    #[error("RuntimeError: {0}")]
+    RuntimeError(#[from] RuntimeError),
     #[error("BtcRpcError: {0}")]
     BtcRpcError(#[from] BtcRpcError),
     #[error("RelayError: {0}")]

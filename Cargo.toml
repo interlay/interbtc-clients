@@ -3,4 +3,5 @@ members = [
   "staked-relayer",
   "runtime",
   "testdata-gen",
+  "vault",
 ]
