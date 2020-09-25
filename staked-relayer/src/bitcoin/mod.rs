@@ -1,11 +1,10 @@
 mod block;
 
-pub use block::BitcoinMonitor;
-pub use relayer_core::bitcoin::bitcoincore_rpc;
-
 use crate::utils::read_env;
 use crate::Error;
-
+pub use block::BitcoinMonitor;
+pub use relayer_core::bitcoin::bitcoincore_rpc;
+pub use relayer_core::bitcoin::bitcoincore_rpc::bitcoin::{hash_types::BlockHash, hashes::Hash};
 use relayer_core::bitcoin::bitcoincore_rpc::{
     bitcoin::blockdata::opcodes, bitcoincore_rpc_json::GetRawTransactionResult, Auth, Client,
 };

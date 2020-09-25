@@ -5,6 +5,7 @@ mod oracle;
 mod relay;
 mod utils;
 
+use bitcoin::{BlockHash, Hash};
 use clap::Clap;
 use error::Error;
 use futures::stream::iter;
@@ -16,7 +17,8 @@ use relay::Error as RelayError;
 use relayer_core::bitcoin::Client as BtcClient;
 use relayer_core::{Backing, Config, Runner};
 use runtime::{
-    AccountId, H256Le, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, StakedRelayerPallet,
+    AccountId, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault,
+    StakedRelayerPallet, StatusCode,
 };
 use sp_core::H160;
 use sp_keyring::AccountKeyring;
@@ -57,6 +59,10 @@ struct Opts {
     /// Timeout in milliseconds to repeat oracle liveness check.
     #[clap(long, default_value = "5000")]
     oracle_timeout_ms: u64,
+
+    /// Timeout in milliseconds to repeat oracle liveness check.
+    #[clap(long, default_value = "100")]
+    status_update_deposit: u128,
 }
 
 #[tokio::main]
@@ -64,6 +70,7 @@ async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
     let oracle_timeout_ms = opts.oracle_timeout_ms;
+    let status_update_deposit = opts.status_update_deposit;
 
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Alice.pair());
     let provider =
@@ -80,7 +87,12 @@ async fn main() -> Result<(), Error> {
     } else {
         btc_client.get_block_count()? + 1
     };
-    let btc_rpc = bitcoin::BitcoinMonitor::new(bitcoin::bitcoin_rpc_from_env()?);
+    let btc_rpc = Arc::new(bitcoin::BitcoinMonitor::new(
+        bitcoin::bitcoin_rpc_from_env()?
+    ));
+    let vault_btc_rpc = btc_rpc.clone();
+    let block_btc_rpc = btc_rpc.clone();
+    let status_btc_rpc = btc_rpc.clone();
 
     let mut runner = Runner::new(
         PolkaClient::new(shared_prov.clone()),
@@ -90,6 +102,10 @@ async fn main() -> Result<(), Error> {
             max_batch_size: opts.max_batch_size,
         },
     )?;
+
+    let block_prov = shared_prov.clone();
+    let suggest_prov = shared_prov.clone();
+    let update_prov = shared_prov.clone();
 
     let vault_prov = shared_prov.clone();
     let vaults = vault_prov
@@ -133,13 +149,13 @@ async fn main() -> Result<(), Error> {
         tokio::spawn(async move {
             loop {
                 info!("Scanning height {}", btc_height);
-                let hash = btc_rpc.wait_for_block(btc_height).await.unwrap();
-                for maybe_tx in btc_rpc.get_block_transactions(&hash).unwrap() {
+                let hash = vault_btc_rpc.wait_for_block(btc_height).await.unwrap();
+                for maybe_tx in vault_btc_rpc.get_block_transactions(&hash).unwrap() {
                     if let Some(tx) = maybe_tx {
                         let tx_id = tx.txid;
                         // TODO: spawn_blocking?
-                        let raw_tx = btc_rpc.get_raw_tx(&tx_id, &hash).unwrap();
-                        let proof = btc_rpc.get_proof(tx_id.clone(), &hash).unwrap();
+                        let raw_tx = vault_btc_rpc.get_raw_tx(&tx_id, &hash).unwrap();
+                        let proof = vault_btc_rpc.get_proof(tx_id.clone(), &hash).unwrap();
                         // filter matching vaults
                         let vault_ids = iter(bitcoin::extract_btc_addresses(tx))
                             .filter_map(|addr| vaults_ro.contains_key(addr))
@@ -179,6 +195,74 @@ async fn main() -> Result<(), Error> {
                 btc_height += 1;
             }
         }),
+        // runs `NO_DATA` checks and submits status update
+        tokio::spawn(async move {
+            let block_btc_rpc = &block_btc_rpc;
+            let suggest_prov = &suggest_prov;
+            block_prov
+                .on_store_block(
+                    |height, hash| async move {
+                        // TODO: check if user submitted
+                        info!("Block submission: {}", hash);
+                        match block_btc_rpc.get_block_hash(height) {
+                            Ok(_) => info!("Block exists"),
+                            Err(_) => {
+                                if let Err(e) = suggest_prov
+                                    .suggest_status_update(
+                                        status_update_deposit,
+                                        StatusCode::Error,
+                                        Some(ErrorCode::NoDataBTCRelay),
+                                        None,
+                                        Some(hash),
+                                    )
+                                    .await
+                                {
+                                    error!("Failed to report block NO_DATA: {}", e.to_string());
+                                }
+                            }
+                        }
+                    },
+                    |err| error!("Error receiving store block event: {}", err.to_string()),
+                )
+                .await
+                .unwrap()
+        }),
+        // runs subscription service for suggested status updates
+        tokio::spawn(async move {
+            let status_btc_rpc = &status_btc_rpc;
+            let update_prov = &update_prov;
+            update_prov
+                .on_status_update_suggested(
+                    |event| async move {
+                        info!("Status update {} suggested", event.status_update_id);
+
+                        // TODO: ignore self submitted
+
+                        // we can only automate NO_DATA checks, all other suggestible
+                        // status updates can only be voted upon manually
+                        if let Some(ErrorCode::NoDataBTCRelay) = event.add_error {
+                            match status_btc_rpc
+                                .is_block_known(convert_block_hash(event.block_hash).unwrap())
+                            {
+                                Ok(true) => {
+                                    update_prov
+                                        .vote_on_status_update(event.status_update_id, false)
+                                        .await;
+                                }
+                                Ok(false) => {
+                                    update_prov
+                                        .vote_on_status_update(event.status_update_id, true)
+                                        .await;
+                                }
+                                Err(err) => error!("Error validating block: {}", err.to_string()),
+                            }
+                        }
+                    },
+                    |err| error!("Error receiving status update: {}", err.to_string()),
+                )
+                .await
+                .unwrap()
+        }),
         tokio::task::spawn_blocking(move || runner.run().unwrap())
     );
     match result {
@@ -211,4 +295,11 @@ impl Vaults {
         }
         None
     }
+}
+
+fn convert_block_hash(hash: Option<H256Le>) -> Result<BlockHash, Error> {
+    if let Some(hash) = hash {
+        return BlockHash::from_slice(&hash.to_bytes_le()).map_err(|_| Error::InvalidBlockHash);
+    }
+    Err(Error::EventNoBlockHash)
 }

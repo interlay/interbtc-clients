@@ -75,6 +75,26 @@ impl BitcoinMonitor {
     pub fn get_proof(&self, tx_id: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
         Ok(self.rpc.get_tx_out_proof(&[tx_id], Some(block_hash))?)
     }
+
+    /// Get the block hash for a given height.
+    ///
+    /// # Arguments
+    /// * `height` - block height
+    pub fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error> {
+        Ok(self.rpc.get_block_hash(height.into())?)
+    }
+
+    /// Checks if the local full node has seen the specified block hash.
+    ///
+    /// # Arguments
+    /// * `block_hash` - hash of the block to verify
+    pub fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error> {
+        // TODO: match exact error
+        Ok(match self.rpc.get_block(&block_hash) {
+            Ok(_) => true,
+            Err(_) => false,
+        })
+    }
 }
 
 pub struct BlockMonitor<'a> {
