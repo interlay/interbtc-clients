@@ -19,6 +19,9 @@ use tokio::sync::RwLock;
 
 use crate::btc_relay::*;
 use crate::exchange_rate_oracle::*;
+use crate::issue::*;
+use crate::redeem::*;
+use crate::redeem::*;
 use crate::security::*;
 use crate::staked_relayers::*;
 use crate::timestamp::*;
@@ -339,6 +342,8 @@ impl TimestampPallet for PolkaBtcProvider {
 #[async_trait]
 pub trait ExchangeRateOraclePallet {
     async fn get_exchange_rate_info(&self) -> Result<(u64, u64, u64), Error>;
+
+    async fn set_exchange_rate_info(&self, btc_to_dot_rate: u128) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -354,6 +359,17 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
             Ok((rate, time, delay)) => Ok((rate.try_into()?, time.into(), delay.into())),
             Err(_) => Err(Error::ExchangeRateInfo),
         }
+    }
+
+    /// Sets the current exchange rate as BTC/DOT
+    ///
+    /// # Arguments
+    /// * `btc_to_dot_rate` - the current BTC to DOT exchange rate encoded with the GRANULARITY
+    async fn set_exchange_rate_info(&self, btc_to_dot_rate: u128) -> Result<(), Error> {
+        self.ext_client
+            .set_exchange_rate_and_watch(&*self.signer.lock().await, btc_to_dot_rate)
+            .await?;
+        Ok(())
     }
 }
 
@@ -537,5 +553,264 @@ impl SecurityPallet for PolkaBtcProvider {
     /// Return any `ErrorCode`s set in the security module.
     async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, Error> {
         Ok(self.ext_client.errors(None).await?)
+    }
+}
+
+#[async_trait]
+pub trait IssuePallet {
+    /// Request a new issue
+    async fn request_issue(
+        &self,
+        amount: u128,
+        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        griefing_collateral: u128,
+    ) -> Result<H256, Error>;
+
+    /// Execute a issue request by providing a Bitcoin transaction inclusion proof
+    async fn execute_issue(
+        &self,
+        issue_id: H256,
+        tx_id: H256Le,
+        tx_block_height: u32,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>,
+    ) -> Result<(), Error>;
+
+    /// Cancel an ongoing issue request
+    async fn cancel_issue(&self, issue_id: H256) -> Result<(), Error>;
+}
+
+#[async_trait]
+impl IssuePallet for PolkaBtcProvider {
+    async fn request_issue(
+        &self,
+        amount: u128,
+        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        griefing_collateral: u128,
+    ) -> Result<H256, Error> {
+        let sub = self.ext_client.subscribe_events().await?;
+        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
+        // decoder.register_type_size::<u128>("Balance");
+        // decoder.register_type_size::<u128>("DOT");
+
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
+        sub.filter_event::<RequestIssueEvent<_>>();
+        self.ext_client
+            .request_issue_and_watch(
+                &*self.signer.lock().await,
+                amount,
+                vault_id,
+                griefing_collateral,
+            )
+            .await?;
+        let raw_event = sub.next().await.unwrap().unwrap();
+        let event = RequestIssueEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..]);
+        if let Ok(e) = event {
+            println!("Requested to issue PolkaBTC with ID: {:?}", e.issue_id);
+            Ok(e.issue_id)
+        } else {
+            Err(Error::RequestIssueIDNotFound)
+        }
+        Ok(())
+    }
+
+    async fn execute_issue(
+        &self,
+        issue_id: H256,
+        tx_id: H256Le,
+        tx_block_height: u32,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>,
+    ) -> Result<(), Error> {
+        self.ext_client
+            .execute_issue_and_watch(
+                &*self.signer.lock().await,
+                issue_id,
+                tx_id,
+                tx_block_height,
+                merkle_proof,
+                raw_tx,
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn cancel_issue(&self, issue_id: H256) -> Result<(), Error> {
+        self.ext_client
+            .cancel_issue_and_watch(&*self.signer.lock().await, issue_id)
+            .await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+pub trait RedeemPallet {
+    /// Request a new redeem
+    async fn request_redeem(
+        &self,
+        amount_polka_btc: u128,
+        btc_address: H160,
+        vault_id: <PolkaBtcRuntime as System>::AccountId,
+    ) -> Result<H256, Error>;
+
+    /// Execute a redeem request by providing a Bitcoin transaction inclusion proof
+    async fn execute_redeem(
+        &self,
+        redeem_id: H256,
+        tx_id: H256Le,
+        tx_block_height: u32,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>,
+    ) -> Result<(), Error>;
+
+    /// Cancel an ongoing redeem request
+    async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), Error>;
+}
+
+#[async_trait]
+impl RedeemPallet for PolkaBtcProvider {
+    async fn request_redeem(
+        &self,
+        amount_polka_btc: u128,
+        btc_address: H160,
+        vault_id: <PolkaBtcRuntime as System>::AccountId,
+    ) -> Result<H256, Error> {
+        let sub = self.ext_client.subscribe_events().await?;
+        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
+        // decoder.register_type_size::<u128>("Balance");
+        // decoder.register_type_size::<u128>("DOT");
+
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
+        sub.filter_event::<RequestRedeemEvent<_>>();
+        self.ext_client
+            .request_redeem_and_watch(
+                &*self.signer.lock().await,
+                amount_polka_btc,
+                btc_address,
+                vault_id,
+            )
+            .await?;
+        let raw_event = sub.next().await.unwrap().unwrap();
+        let event = RequestRedeemEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..]);
+        if let Ok(e) = event {
+            println!("Requested to redeem PolkaBTC with ID: {:?}", e.redeem_id);
+            Ok(e.redeem_id)
+        } else {
+            Err(Error::RequestRedeemIDNotFound)
+        }
+    }
+
+    async fn execute_redeem(
+        &self,
+        redeem_id: H256,
+        tx_id: H256Le,
+        tx_block_height: u32,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>,
+    ) -> Result<(), Error> {
+        self.ext_client
+            .execute_redeem_and_watch(
+                &*self.signer.lock().await,
+                redeem_id,
+                tx_id,
+                tx_block_height,
+                merkle_proof,
+                raw_tx,
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), Error> {
+        self.ext_client
+            .cancel_redeem_and_watch(&*self.signer.lock().await, redeem_id, reimburse)
+            .await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+pub trait RedeemPallet {
+    /// Request a new redeem
+    async fn request_redeem(
+        &self,
+        amount_polka_btc: u128,
+        btc_address: H160,
+        vault_id: <PolkaBtcRuntime as System>::AccountId,
+    ) -> Result<H256, Error>;
+
+    /// Execute a redeem request by providing a Bitcoin transaction inclusion proof
+    async fn execute_redeem(
+        &self,
+        redeem_id: H256,
+        tx_id: H256Le,
+        tx_block_height: u32,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>,
+    ) -> Result<(), Error>;
+
+    /// Cancel an ongoing redeem request
+    async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), Error>;
+}
+
+#[async_trait]
+impl RedeemPallet for PolkaBtcProvider {
+    async fn request_redeem(
+        &self,
+        amount_polka_btc: u128,
+        btc_address: H160,
+        vault_id: <PolkaBtcRuntime as System>::AccountId,
+    ) -> Result<H256, Error> {
+        let sub = self.ext_client.subscribe_events().await?;
+        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
+        // decoder.register_type_size::<u128>("Balance");
+        // decoder.register_type_size::<u128>("DOT");
+
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
+        sub.filter_event::<RequestRedeemEvent<_>>();
+        self.ext_client
+            .request_redeem_and_watch(
+                &*self.signer.lock().await,
+                amount_polka_btc,
+                btc_address,
+                vault_id,
+            )
+            .await?;
+        let raw_event = sub.next().await.unwrap().unwrap();
+        let event = RequestRedeemEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..]);
+        if let Ok(e) = event {
+            println!("Requested to redeem PolkaBTC with ID: {:?}", e.redeem_id);
+            Ok(e.redeem_id)
+        } else {
+            Err(Error::RequestRedeemIDNotFound)
+        }
+    }
+
+    async fn execute_redeem(
+        &self,
+        redeem_id: H256,
+        tx_id: H256Le,
+        tx_block_height: u32,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>,
+    ) -> Result<(), Error> {
+        self.ext_client
+            .execute_redeem_and_watch(
+                &*self.signer.lock().await,
+                redeem_id,
+                tx_id,
+                tx_block_height,
+                merkle_proof,
+                raw_tx,
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), Error> {
+        self.ext_client
+            .cancel_redeem_and_watch(&*self.signer.lock().await, redeem_id, reimburse)
+            .await?;
+        Ok(())
     }
 }

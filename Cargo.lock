@@ -7810,6 +7810,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "testdata-gen"
+version = "0.1.0"
+dependencies = [
+ "bitcoin 0.1.1",
+ "frame-system",
+ "hex 0.4.2",
+ "parity-scale-codec",
+ "primitive-types",
+ "runtime",
+ "sp-core",
+ "sp-keyring",
+ "substrate-subxt",
+ "substrate-subxt-proc-macro 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio 0.2.22",
+]
+
+[[package]]
 name = "textwrap"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

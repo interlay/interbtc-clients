@@ -10,7 +10,7 @@ pub use error::Error;
 use pallets::*;
 pub use rpc::{
     AccountId, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcStatusUpdate, PolkaBtcVault,
-    SecurityPallet, StakedRelayerPallet, TimestampPallet,
+    SecurityPallet, StakedRelayerPallet, TimestampPallet, IssuePallet, RedeemPallet
 };
 pub use security::{ErrorCode, StatusCode};
 use sp_core::U256;
@@ -78,8 +78,24 @@ impl timestamp::Timestamp for PolkaBtcRuntime {
     type Moment = u64;
 }
 
-impl exchange_rate_oracle::ExchangeRateOracle for PolkaBtcRuntime {}
+impl exchange_rate_oracle::ExchangeRateOracle for PolkaBtcRuntime {
+    type u128 = u128;
+    type StatusCode = StatusCode;
+    type ErrorCode = ErrorCode;
+}
 
 impl balances_dot::DOT for PolkaBtcRuntime {
     type Balance = u128;
+}
+
+impl issue::Issue for PolkaBtcRuntime {
+    type Balance = u128;
+    type DOT = u128;
+    type PolkaBTC = u128;
+}
+
+impl redeem::Redeem for PolkaBtcRuntime {
+    type Balance = u128;
+    type DOT = u128;
+    type PolkaBTC = u128;
 }

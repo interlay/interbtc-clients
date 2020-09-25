@@ -1,13 +1,18 @@
-use crate::timestamp::Timestamp;
-use crate::timestamp::TimestampEventsDecoder;
+use crate::security::{Security, SecurityEventsDecoder};
+use crate::timestamp::{Timestamp, TimestampEventsDecoder};
 use core::marker::PhantomData;
-pub use module_vault_registry::Vault;
-use parity_scale_codec::Encode;
+use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};
+use sp_runtime::traits::Member;
 use std::fmt::Debug;
-use substrate_subxt_proc_macro::{module, Store};
+use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
 #[module]
-pub trait ExchangeRateOracle: Timestamp {}
+pub trait ExchangeRateOracle: Timestamp + Security {
+    #[allow(non_camel_case_types)]
+    type u128: Codec + EncodeLike + Member + Default;
+    type StatusCode: Codec + EncodeLike + Member + Default;
+    type ErrorCode: Codec + EncodeLike + Member + Default;
+}
 
 /// Current BTC/DOT exchange rate
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
@@ -28,4 +33,16 @@ pub struct LastExchangeRateTimeStore<T: ExchangeRateOracle> {
 pub struct MaxDelayStore<T: ExchangeRateOracle> {
     #[store(returns = T::Moment)]
     pub _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct SetExchangeRateCall<T: ExchangeRateOracle> {
+    pub rate: u128,
+    pub _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct SetExchangeRateEvent<T: ExchangeRateOracle> {
+    pub sender: T::AccountId,
+    pub rate: u128,
 }
