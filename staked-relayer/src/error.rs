@@ -15,6 +15,10 @@ pub enum Error {
     CheckOracleOffline,
     #[error("JSON-RPC method expected input parameter")]
     ParamNotFound,
+    #[error("Could not convert block hash")]
+    InvalidBlockHash,
+    #[error("Suggested status update does not contain block hash")]
+    EventNoBlockHash,
 
     #[error("Read env error: {0}: {1}")]
     ReadVar(String, VarError),

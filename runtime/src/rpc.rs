@@ -6,6 +6,7 @@ use jsonrpsee::{
 use parity_scale_codec::Decode;
 use sp_core::crypto::{AccountId32, Pair};
 use sp_core::sr25519::Pair as KeyPair;
+use sp_core::U256;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::future::Future;
@@ -177,11 +178,53 @@ impl PolkaBtcProvider {
         Ok(())
     }
 
+    /// Subscription service that listens for status updates.
+    ///
+    /// # Arguments
+    /// * `on_proposal` - callback for suggested status updates
+    /// * `on_error` - callback for errors
+    pub async fn on_status_update_suggested<F, R, E>(
+        &self,
+        on_proposal: F,
+        on_error: E,
+    ) -> Result<(), Error>
+    where
+        F: Fn(StatusUpdateSuggestedEvent<PolkaBtcRuntime>) -> R,
+        R: Future<Output = ()>,
+        E: Fn(XtError),
+    {
+        let sub = self.ext_client.subscribe_events().await?;
+        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
+        decoder.register_type_size::<u128>("Balance");
+        decoder.register_type_size::<U256>("U256");
+        decoder.register_type_size::<StatusCode>("StatusCode");
+        decoder.register_type_size::<ErrorCode>("ErrorCode");
+        decoder.register_type_size::<H256Le>("H256Le");
+
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
+        sub.filter_event::<StatusUpdateSuggestedEvent<_>>();
+        while let Some(result) = sub.next().await {
+            match result {
+                Ok(raw_event) => {
+                    let event = StatusUpdateSuggestedEvent::<PolkaBtcRuntime>::decode(
+                        &mut &raw_event.data[..],
+                    )?;
+
+                    on_proposal(event).await;
+                }
+                Err(err) => on_error(err),
+            };
+        }
+
+        Ok(())
+    }
+
     /// Subscription service that should listen forever, only returns
     /// if the initial subscription cannot be established.
     ///
     /// # Arguments
     /// * `on_vault` - callback for newly registered vaults
+    /// * `on_error` - callback for errors
     pub async fn on_register<F, R, E>(&self, mut on_vault: F, on_error: E) -> Result<(), Error>
     where
         F: FnMut(PolkaBtcVault) -> R,
@@ -192,6 +235,7 @@ impl PolkaBtcProvider {
         let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
         decoder.register_type_size::<u128>("Balance");
         decoder.register_type_size::<u128>("DOT");
+        decoder.register_type_size::<H256Le>("H256Le");
 
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
         sub.filter_event::<RegisterVaultEvent<_>>();
@@ -203,6 +247,45 @@ impl PolkaBtcProvider {
                         RegisterVaultEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])?;
                     let account = self.ext_client.vaults(event.account_id, None).await?;
                     on_vault(account).await;
+                }
+                Err(err) => on_error(err),
+            };
+        }
+
+        Ok(())
+    }
+
+    /// Subscription service that should listen forever, only returns
+    /// if the initial subscription cannot be established.
+    ///
+    /// # Arguments
+    /// * `on_block` - callback for newly stored blocks
+    /// * `on_error` - callback for errors
+    pub async fn on_store_block<F, E>(
+        &self,
+        on_block: impl Fn(u32, H256Le) -> F,
+        on_error: E,
+    ) -> Result<(), Error>
+    where
+        F: Future<Output = ()>,
+        E: Fn(XtError),
+    {
+        let sub = self.ext_client.subscribe_events().await?;
+        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
+        decoder.register_type_size::<H256Le>("H256Le");
+        decoder.register_type_size::<StatusCode>("StatusCode");
+        decoder.register_type_size::<ErrorCode>("ErrorCode");
+
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
+        sub.filter_event::<StoreMainChainHeaderEvent<_>>();
+        while let Some(result) = sub.next().await {
+            match result {
+                Ok(raw_event) => {
+                    // TODO: handle errors here
+                    let event = StoreMainChainHeaderEvent::<PolkaBtcRuntime>::decode(
+                        &mut &raw_event.data[..],
+                    )?;
+                    on_block(event.block_height, event.block_header_hash).await;
                 }
                 Err(err) => on_error(err),
             };
@@ -301,6 +384,13 @@ pub trait StakedRelayerPallet {
         status_code: StatusCode,
         add_error: Option<ErrorCode>,
         remove_error: Option<ErrorCode>,
+        block_hash: Option<H256Le>,
+    ) -> Result<(), Error>;
+
+    async fn vote_on_status_update(
+        &self,
+        status_update_id: U256,
+        approve: bool,
     ) -> Result<(), Error>;
 
     async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, Error>;
@@ -346,20 +436,21 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// * `OracleOffline` - oracle liveness failure
     /// * `Liquidation` - at least one vault is being liquidated
     ///
-    /// Currently only `NoDataBTCRelay` can be voted upon, but should not be suggested
-    /// automatically to prevent poor connectivity resulting in slashing.
+    /// Currently only `NoDataBTCRelay` can be voted upon.
     ///
     /// # Arguments
     /// * `deposit` - collateral held while ballot underway
     /// * `status_code` - one of `Running`, `Error`, `Shutdown`
     /// * `add_error` - error to add to `BTreeSet<ErrorCode>`
     /// * `remove_error` - error to remove from `BTreeSet<ErrorCode>`
+    /// * `block_hash` - optional block hash for btc-relay reports
     async fn suggest_status_update(
         &self,
         deposit: u128,
         status_code: StatusCode,
         add_error: Option<ErrorCode>,
         remove_error: Option<ErrorCode>,
+        block_hash: Option<H256Le>,
     ) -> Result<(), Error> {
         self.ext_client
             .suggest_status_update_and_watch(
@@ -368,8 +459,24 @@ impl StakedRelayerPallet for PolkaBtcProvider {
                 status_code,
                 add_error,
                 remove_error,
-                None,
+                block_hash,
             )
+            .await?;
+        Ok(())
+    }
+
+    /// Vote on an ongoing proposal by ID.
+    ///
+    /// # Arguments
+    /// * `status_update_id` - ID of the status update
+    /// * `approve` - whether to approve or reject the proposal
+    async fn vote_on_status_update(
+        &self,
+        status_update_id: U256,
+        approve: bool,
+    ) -> Result<(), Error> {
+        self.ext_client
+            .vote_on_status_update_and_watch(&*self.signer.write().await, status_update_id, approve)
             .await?;
         Ok(())
     }
@@ -377,9 +484,15 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// Fetch an ongoing proposal by ID.
     ///
     /// # Arguments
-    /// * `id` - ID of the status update
-    async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, Error> {
-        Ok(self.ext_client.status_updates(id.into(), None).await?)
+    /// * `status_update_id` - ID of the status update
+    async fn get_status_update(
+        &self,
+        status_update_id: u64,
+    ) -> Result<PolkaBtcStatusUpdate, Error> {
+        Ok(self
+            .ext_client
+            .status_updates(status_update_id.into(), None)
+            .await?)
     }
 
     /// Submit extrinsic to report that the oracle is offline.

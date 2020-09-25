@@ -38,6 +38,12 @@ pub struct SuggestStatusUpdateCall<T: StakedRelayers> {
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct VoteOnStatusUpdateCall<T: StakedRelayers> {
+    pub status_update_id: T::U256,
+    pub approve: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct ReportOracleOffline<T: StakedRelayers> {
     pub _runtime: PhantomData<T>,
 }
@@ -66,10 +72,11 @@ pub struct DeregisterStakedRelayerEvent<T: StakedRelayers> {
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct StatusUpdateSuggestedEvent<T: StakedRelayers> {
     pub status_update_id: T::U256,
+    pub account_id: T::AccountId,
     pub status_code: T::StatusCode,
     pub add_error: Option<T::ErrorCode>,
     pub remove_error: Option<T::ErrorCode>,
-    pub account_id: T::AccountId,
+    pub block_hash: Option<T::H256Le>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
