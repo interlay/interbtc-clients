@@ -9,11 +9,12 @@ pub use btc_relay::{BitcoinBlockHeight, H256Le, RawBlockHeader, RichBlockHeader}
 pub use error::Error;
 use pallets::*;
 pub use rpc::{
-    AccountId, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcStatusUpdate, PolkaBtcVault,
-    SecurityPallet, StakedRelayerPallet, TimestampPallet, IssuePallet, RedeemPallet
+    AccountId, ExchangeRateOraclePallet, IssuePallet, PolkaBtcProvider, PolkaBtcStatusUpdate,
+    PolkaBtcVault, RedeemPallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
 };
 pub use security::{ErrorCode, StatusCode};
 use sp_core::U256;
+use sp_core::{H160, H256};
 use sp_runtime::{
     generic::Header,
     traits::{BlakeTwo256, IdentifyAccount, Verify},
@@ -90,8 +91,11 @@ impl balances_dot::DOT for PolkaBtcRuntime {
 
 impl issue::Issue for PolkaBtcRuntime {
     type Balance = u128;
+    type BTCBalance = u128;
     type DOT = u128;
     type PolkaBTC = u128;
+    type H160 = H160;
+    type H256 = H256;
 }
 
 impl redeem::Redeem for PolkaBtcRuntime {

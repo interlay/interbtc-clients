@@ -14,7 +14,7 @@ sp-keyring = "2.0.0-rc6"
 sp-core = "2.0.0-rc6"
 primitive-types = { default-features = false, version = "0.7.2", features = ["codec"]}
 hex = "0.4.2"
-substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branch = "master" }
+substrate-subxt = { path = "../../substrate-subxt" }
 substrate-subxt-proc-macro = "0.12.0"
 runtime = { path = "../runtime" }
 

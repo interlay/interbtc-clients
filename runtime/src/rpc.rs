@@ -20,7 +20,7 @@ use tokio::sync::RwLock;
 use crate::btc_relay::*;
 use crate::exchange_rate_oracle::*;
 use crate::issue::*;
-use crate::redeem::*;
+// use crate::redeem::*;
 use crate::redeem::*;
 use crate::security::*;
 use crate::staked_relayers::*;
@@ -588,14 +588,8 @@ impl IssuePallet for PolkaBtcProvider {
         vault_id: <PolkaBtcRuntime as System>::AccountId,
         griefing_collateral: u128,
     ) -> Result<H256, Error> {
-        let sub = self.ext_client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        // decoder.register_type_size::<u128>("Balance");
-        // decoder.register_type_size::<u128>("DOT");
-
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
-        sub.filter_event::<RequestIssueEvent<_>>();
-        self.ext_client
+        let result = self
+            .ext_client
             .request_issue_and_watch(
                 &*self.signer.write().await,
                 amount,
@@ -603,11 +597,9 @@ impl IssuePallet for PolkaBtcProvider {
                 griefing_collateral,
             )
             .await?;
-        let raw_event = sub.next().await.unwrap().unwrap();
-        let event = RequestIssueEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..]);
-        if let Ok(e) = event {
-            println!("Requested to issue PolkaBTC with ID: {:?}", e.issue_id);
-            Ok(e.issue_id)
+
+        if let Some(event) = result.request_issue()? {
+            Ok(event.issue_id)
         } else {
             Err(Error::RequestIssueIDNotFound)
         }
@@ -674,14 +666,8 @@ impl RedeemPallet for PolkaBtcProvider {
         btc_address: H160,
         vault_id: <PolkaBtcRuntime as System>::AccountId,
     ) -> Result<H256, Error> {
-        let sub = self.ext_client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        // decoder.register_type_size::<u128>("Balance");
-        // decoder.register_type_size::<u128>("DOT");
-
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
-        sub.filter_event::<RequestRedeemEvent<_>>();
-        self.ext_client
+        let result = self
+            .ext_client
             .request_redeem_and_watch(
                 &*self.signer.write().await,
                 amount_polka_btc,
@@ -689,11 +675,9 @@ impl RedeemPallet for PolkaBtcProvider {
                 vault_id,
             )
             .await?;
-        let raw_event = sub.next().await.unwrap().unwrap();
-        let event = RequestRedeemEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..]);
-        if let Ok(e) = event {
-            println!("Requested to redeem PolkaBTC with ID: {:?}", e.redeem_id);
-            Ok(e.redeem_id)
+
+        if let Some(event) = result.request_redeem()? {
+            Ok(event.redeem_id)
         } else {
             Err(Error::RequestRedeemIDNotFound)
         }

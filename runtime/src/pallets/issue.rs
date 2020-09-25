@@ -1,7 +1,6 @@
 use core::marker::PhantomData;
 pub use module_bitcoin::types::H256Le;
 use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};
-pub use sp_core::{H160, H256};
 use sp_runtime::traits::Member;
 use std::fmt::Debug;
 use substrate_subxt::system::{System, SystemEventsDecoder};
@@ -10,8 +9,11 @@ use substrate_subxt_proc_macro::{module, Call, Event};
 #[module]
 pub trait Issue: System {
     type Balance: Codec + EncodeLike + Member + Default;
+    type BTCBalance: Codec + EncodeLike + Member + Default;
     type DOT: Codec + EncodeLike + Member + Default;
     type PolkaBTC: Codec + EncodeLike + Member + Default;
+    type H256: Codec + EncodeLike + Member + Default;
+    type H160: Codec + EncodeLike + Member + Default;
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
@@ -23,16 +25,16 @@ pub struct RequestIssueCall<T: Issue> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct RequestIssueEvent<T: Issue> {
-    pub issue_id: H256,
+    pub issue_id: T::H256,
     pub requester: T::AccountId,
     pub amount: T::PolkaBTC,
     pub vault_id: T::AccountId,
-    pub btc_address: H160,
+    pub btc_address: T::H160,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct ExecuteIssueCall<T: Issue> {
-    pub issue_id: H256,
+    pub issue_id: T::H256,
     pub tx_id: H256Le,
     pub tx_block_height: u32,
     pub merkle_proof: Vec<u8>,
@@ -42,19 +44,19 @@ pub struct ExecuteIssueCall<T: Issue> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct ExecuteIssueEvent<T: Issue> {
-    pub issue_id: H256,
+    pub issue_id: T::H256,
     pub requester: T::AccountId,
     pub vault_id: T::AccountId,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct CancelIssueCall<T: Issue> {
-    pub issue_id: H256,
+    pub issue_id: T::H256,
     pub _runtime: PhantomData<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct CancelIssueEvent<T: Issue> {
-    pub issue_id: H256,
+    pub issue_id: T::H256,
     pub requester: T::AccountId,
 }

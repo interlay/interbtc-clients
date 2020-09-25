@@ -5,7 +5,9 @@ mod redeem;
 mod utils;
 mod vault;
 
-use runtime::{Error, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime};
+use runtime::{
+    Error, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime, TimestampPallet,
+};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use substrate_subxt::PairSigner;
@@ -34,8 +36,14 @@ async fn main() -> Result<(), Error> {
     oracle_prov.set_exchange_rate_info(btc_to_dot_rate).await?;
 
     // get exchange rate
-    let (rate, _time, _delay) = oracle_prov.get_exchange_rate_info().await?;
-    println!("Exchange Rate BTC/DOT {:?}", rate);
+    let (rate, time, delay) = oracle_prov.get_exchange_rate_info().await?;
+    println!(
+        "Exchange Rate BTC/DOT: {:?}, Last Update: {}, Delay: {}",
+        rate, time, delay
+    );
+
+    let current_time = oracle_prov.get_time_now().await?;
+    println!("Current Time: {}", current_time);
 
     // INIT BTC RELAY
     let mut btc_simulator = btc_relay::BtcSimulator::new(alice_prov.clone(), 1);

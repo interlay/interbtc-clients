@@ -15,7 +15,7 @@ thiserror = "1.0"
 serde_json = "1.0.57"
 tokio = { version = "0.2.22", features = ["full"] }
 jsonrpsee = "0.1.0"
-substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branch = "master" }
+substrate-subxt = { path = "../../substrate-subxt" }
 
 [dependencies.module-bitcoin]
 git = "https://gitlab.com/interlay/btc-parachain"
