@@ -46,7 +46,7 @@ pub struct ChainsHashesStore<T: BTCRelay> {
     #[store(returns = T::H256Le)]
     pub _runtime: PhantomData<T>,
     pub chain_index: u32,
-    pub block_height: u32,
+    pub block_height: BitcoinBlockHeight,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
