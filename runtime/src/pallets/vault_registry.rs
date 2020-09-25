@@ -41,3 +41,9 @@ pub struct LiquidationCollateralThresholdStore<T: VaultRegistry> {
     #[store(returns = u128)]
     pub _runtime: PhantomData<T>,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct IncreaseToBeIssuedTokensEvent<T: VaultRegistry> {
+    pub vault_id: T::AccountId,
+    pub tokens: T::PolkaBTC,
+}
