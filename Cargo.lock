@@ -5445,7 +5445,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "staked-relayers",
- "substrate-subxt 0.12.0",
+ "substrate-subxt",
  "substrate-subxt-client",
  "substrate-subxt-proc-macro 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempdir",
@@ -7442,7 +7442,7 @@ dependencies = [
  "serde_json",
  "sp-core",
  "sp-keyring",
- "substrate-subxt 0.12.0 (git+https://github.com/paritytech/substrate-subxt)",
+ "substrate-subxt",
  "substrate-subxt-proc-macro 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
  "tokio 0.2.22",
@@ -7666,32 +7666,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "substrate-subxt"
-version = "0.12.0"
-dependencies = [
- "frame-metadata",
- "frame-support",
- "futures 0.3.5",
- "hex 0.4.2",
- "jsonrpsee",
- "log 0.4.11",
- "num-traits",
- "pallet-indices",
- "parity-scale-codec",
- "sc-rpc-api",
- "serde",
- "serde_json",
- "sp-core",
- "sp-rpc",
- "sp-runtime",
- "sp-transaction-pool",
- "sp-version",
- "substrate-subxt-proc-macro 0.12.0",
- "thiserror",
- "url 2.1.1",
-]
-
-[[package]]
 name = "substrate-subxt-client"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7713,19 +7687,6 @@ dependencies = [
 name = "substrate-subxt-proc-macro"
 version = "0.12.0"
 source = "git+https://github.com/paritytech/substrate-subxt#0c7454dfcd75e267eca73e4364b737515772c579"
-dependencies = [
- "heck",
- "proc-macro-crate",
- "proc-macro-error 1.0.4",
- "proc-macro2",
- "quote",
- "syn",
- "synstructure",
-]
-
-[[package]]
-name = "substrate-subxt-proc-macro"
-version = "0.12.0"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -7860,7 +7821,7 @@ dependencies = [
  "runtime",
  "sp-core",
  "sp-keyring",
- "substrate-subxt 0.12.0",
+ "substrate-subxt",
  "substrate-subxt-proc-macro 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.2.22",
 ]
@@ -8629,12 +8590,14 @@ checksum = "05e42f7c18b8f902290b009cde6d651262f956c98bc51bca4cd1d511c9cd85c7"
 name = "vault"
 version = "0.1.0"
 dependencies = [
+ "bitcoincore-rpc",
  "clap 3.0.0-beta.1",
  "env_logger",
+ "hex 0.4.2",
  "log 0.4.11",
  "runtime",
  "sp-keyring",
- "substrate-subxt 0.12.0 (git+https://github.com/paritytech/substrate-subxt)",
+ "substrate-subxt",
  "thiserror",
  "tokio 0.2.22",
 ]

@@ -1,0 +1,18 @@
+[package]
+name = "vault"
+version = "0.1.0"
+authors = ["Interlay <contact@interlay.io>"]
+edition = "2018"
+
+[dependencies]
+log = "0.4.0"
+env_logger = "0.7.1"
+tokio = { version = "0.2.22", features = ["full"] }
+thiserror = "1.0"
+clap = "3.0.0-beta.1"
+sp-keyring = "2.0.0-rc6"
+bitcoincore-rpc = { git = "https://github.com/gregdhill/rust-bitcoincore-rpc" }
+hex = "0.4.2"
+
+substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branch = "master" }
+runtime = { path = "../runtime" }

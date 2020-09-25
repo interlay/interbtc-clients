@@ -295,6 +295,39 @@ impl PolkaBtcProvider {
         Ok(())
     }
 
+    pub async fn on_request_redeem<F, R, E>(
+        &self,
+        mut on_event: F,
+        on_error: E,
+    ) -> Result<(), Error>
+    where
+        F: FnMut(RequestRedeemEvent<PolkaBtcRuntime>) -> R,
+        R: Future<Output = ()>,
+        E: Fn(XtError),
+    {
+        let sub = self.ext_client.subscribe_events().await?;
+        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
+        decoder.register_type_size::<u128>("Balance");
+        decoder.register_type_size::<u128>("DOT");
+        decoder.register_type_size::<H256Le>("H256Le");
+
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
+        sub.filter_event::<RequestRedeemEvent<_>>();
+        while let Some(result) = sub.next().await {
+            match result {
+                Ok(raw_event) => {
+                    // TODO: handle errors here
+                    let event =
+                        RequestRedeemEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])?;
+                    on_event(event).await;
+                }
+                Err(err) => on_error(err),
+            };
+        }
+
+        Ok(())
+    }
+
     /// Custom RPC that tests whether a Bitcoin transaction is invalid
     /// according to the following conditions:
     ///
