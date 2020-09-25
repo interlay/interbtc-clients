@@ -20,12 +20,14 @@ use tokio::sync::RwLock;
 use crate::btc_relay::*;
 use crate::exchange_rate_oracle::*;
 use crate::issue::*;
+<<<<<<< HEAD
 use crate::redeem::*;
+=======
+>>>>>>> bfd83e4... add u128 type
 use crate::security::*;
 use crate::staked_relayers::*;
 use crate::timestamp::*;
 use crate::vault_registry::*;
-use crate::issue::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
 
@@ -564,7 +566,11 @@ pub trait IssuePallet {
         amount: u128,
         vault_id: <PolkaBtcRuntime as System>::AccountId,
         griefing_collateral: u128,
+<<<<<<< HEAD
     ) -> Result<H256, Error>;
+=======
+    ) -> Result<(), Error>;
+>>>>>>> bfd83e4... add u128 type
 
     /// Execute a issue request by providing a Bitcoin transaction inclusion proof
     async fn execute_issue(
@@ -587,6 +593,7 @@ impl IssuePallet for PolkaBtcProvider {
         amount: u128,
         vault_id: <PolkaBtcRuntime as System>::AccountId,
         griefing_collateral: u128,
+<<<<<<< HEAD
     ) -> Result<H256, Error> {
         let sub = self.ext_client.subscribe_events().await?;
         let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
@@ -595,6 +602,9 @@ impl IssuePallet for PolkaBtcProvider {
 
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
         sub.filter_event::<RequestIssueEvent<_>>();
+=======
+    ) -> Result<(), Error> {
+>>>>>>> bfd83e4... add u128 type
         self.ext_client
             .request_issue_and_watch(
                 &*self.signer.lock().await,
@@ -603,6 +613,7 @@ impl IssuePallet for PolkaBtcProvider {
                 griefing_collateral,
             )
             .await?;
+<<<<<<< HEAD
         let raw_event = sub.next().await.unwrap().unwrap();
         let event = RequestIssueEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..]);
         if let Ok(e) = event {
@@ -611,6 +622,9 @@ impl IssuePallet for PolkaBtcProvider {
         } else {
             Err(Error::RequestIssueIDNotFound)
         }
+=======
+        Ok(())
+>>>>>>> bfd83e4... add u128 type
     }
 
     async fn execute_issue(
@@ -631,6 +645,7 @@ impl IssuePallet for PolkaBtcProvider {
                 raw_tx,
             )
             .await?;
+<<<<<<< HEAD
         Ok(())
     }
 
@@ -723,6 +738,14 @@ impl RedeemPallet for PolkaBtcProvider {
     async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), Error> {
         self.ext_client
             .cancel_redeem_and_watch(&*self.signer.lock().await, redeem_id, reimburse)
+=======
+        Ok(())
+    }
+
+    async fn cancel_issue(&self, issue_id: H256) -> Result<(), Error> {
+        self.ext_client
+            .cancel_issue_and_watch(&*self.signer.lock().await, issue_id)
+>>>>>>> bfd83e4... add u128 type
             .await?;
         Ok(())
     }
