@@ -11,6 +11,7 @@ use sp_core::{H160, H256, U256};
 pub struct BtcSimulator {
     prov: PolkaBtcProvider,
     height: u32,
+    prev_block: Option<Block>,
 }
 
 impl BtcSimulator {
@@ -18,11 +19,17 @@ impl BtcSimulator {
         let prov = relay_prov;
         let height = height;
 
-        Self { prov, height }
+        let prev_block: Option<Block> = None;
+
+        Self {
+            prov,
+            height,
+            prev_block,
+        }
     }
 
     /// Initialize BTC Relay with a generated Bitcoin block
-    pub async fn initialize(&mut self) -> Result<Block, Error> {
+    pub async fn initialize(&mut self) -> Result<(), Error> {
         let alice_address =
             H160::from_slice(hex::decode(param::ALICE_BTC_ADDRESS).unwrap().as_slice());
         let address = Address::from(*alice_address.as_fixed_bytes());
@@ -46,8 +53,9 @@ impl BtcSimulator {
             &self.height, init_block_hash
         );
 
-        self.height += 1;
-        Ok(init_block)
+        self.prev_block = Some(init_block);
+
+        Ok(())
     }
 
     /// Generate the Bitcoin transaction and generate blocks according to the
@@ -55,11 +63,12 @@ impl BtcSimulator {
     /// Returns the transaction inclusion proof for the transaction.
     pub async fn generate_transaction_and_include(
         &mut self,
-        prev_block: &Block,
         btc_address: &str,
         amount: u128,
         return_data: H256,
     ) -> Result<(H256Le, u32, Vec<u8>, Vec<u8>), Error> {
+        self.height += 1;
+
         let dest_address = utils::get_address_from_string(btc_address);
         let address = Address::from(*dest_address.as_fixed_bytes());
         let value = amount as i64;
@@ -68,7 +77,7 @@ impl BtcSimulator {
             .add_input(
                 TransactionInputBuilder::new()
                     .with_coinbase(false)
-                    .with_previous_hash(prev_block.transactions[0].hash())
+                    .with_previous_hash(self.prev_block.as_ref().unwrap().transactions[0].hash())
                     .build(),
             )
             .add_output(TransactionOutput::p2pkh(value.into(), &address))
@@ -76,7 +85,7 @@ impl BtcSimulator {
             .build();
 
         let block = BlockBuilder::new()
-            .with_previous_hash(prev_block.header.hash())
+            .with_previous_hash(self.prev_block.as_ref().unwrap().header.hash())
             .with_version(2)
             .with_coinbase(&address, 50, 3)
             .with_timestamp(1588814835)
@@ -98,15 +107,15 @@ impl BtcSimulator {
             &self.height,
             raw_block_header.hash()
         );
+        self.prev_block = Some(block);
 
         // Mine six new blocks to get over required confirmations
-        let mut prev_block_hash = block.header.hash();
         let mut timestamp = 1588814835;
         for _ in 0..param::CONFIRMATIONS {
             self.height += 1;
             timestamp += 1000;
             let conf_block = BlockBuilder::new()
-                .with_previous_hash(prev_block_hash)
+                .with_previous_hash(self.prev_block.as_ref().unwrap().header.hash())
                 .with_version(2)
                 .with_coinbase(&address, 50, 3)
                 .with_timestamp(timestamp)
@@ -121,7 +130,7 @@ impl BtcSimulator {
                 raw_conf_block_header.hash()
             );
 
-            prev_block_hash = conf_block.header.hash();
+            self.prev_block = Some(conf_block);
         }
 
         Ok((tx_id, tx_block_height, bytes_proof, raw_tx))
