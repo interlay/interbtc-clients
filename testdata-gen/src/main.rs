@@ -47,7 +47,7 @@ async fn main() -> Result<(), Error> {
 
     // INIT BTC RELAY
     let mut btc_simulator = btc_relay::BtcSimulator::new(alice_prov.clone(), 1);
-    let prev_block = &btc_simulator.initialize().await?;
+    &btc_simulator.initialize().await?;
 
     // ISSUE
     // register Bob as a vault
@@ -59,7 +59,6 @@ async fn main() -> Result<(), Error> {
     .await?;
 
     // Alice issues with Bob
-    // FIXME: Error: XtError(Metadata(ErrorNotFound(1)))
     let issue_id = issue::request_issue(
         alice_prov.clone(),
         param::ALICE_ISSUE_AMOUNT,
@@ -70,7 +69,6 @@ async fn main() -> Result<(), Error> {
     // Alice makes the BTC payment and the BTC tx is included in BTC-Relay
     let (tx_id, tx_block_height, merkle_proof, raw_tx) = &btc_simulator
         .generate_transaction_and_include(
-            prev_block,
             param::BOB_BTC_ADDRESS,
             param::ALICE_ISSUE_AMOUNT,
             issue_id,
@@ -101,7 +99,6 @@ async fn main() -> Result<(), Error> {
     // Bob (vault) makes the BTC payment and the BTC tx is included in BTC-Relay
     let (tx_id, tx_block_height, merkle_proof, raw_tx) = &btc_simulator
         .generate_transaction_and_include(
-            prev_block,
             param::ALICE_BTC_ADDRESS,
             param::ALICE_REDEEM_AMOUNT_1,
             redeem_id,

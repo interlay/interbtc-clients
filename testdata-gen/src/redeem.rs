@@ -3,8 +3,8 @@ mod param;
 #[path = "utils.rs"]
 mod utils;
 
-use runtime::{Error, RedeemPallet, PolkaBtcProvider};
 use module_bitcoin::types::H256Le;
+use runtime::{Error, PolkaBtcProvider, RedeemPallet};
 use sp_core::crypto::AccountId32;
 use sp_core::H256;
 
@@ -37,9 +37,17 @@ pub async fn execute_redeem(
     tx_id: &H256Le,
     tx_block_height: &u32,
     merkle_proof: &Vec<u8>,
-    raw_tx: &Vec<u8>
+    raw_tx: &Vec<u8>,
 ) -> Result<(), Error> {
-    redeem_prov.execute_redeem(*redeem_id, *tx_id, *tx_block_height, merkle_proof.clone(), raw_tx.clone()).await?;
+    redeem_prov
+        .execute_redeem(
+            *redeem_id,
+            *tx_id,
+            *tx_block_height,
+            merkle_proof.clone(),
+            raw_tx.clone(),
+        )
+        .await?;
     println!("Executed redeem ID {:?}", redeem_id);
 
     Ok(())

@@ -10,8 +10,11 @@ use substrate_subxt_proc_macro::{module, Call, Event};
 #[module]
 pub trait Redeem: System {
     type Balance: Codec + EncodeLike + Member + Default;
+    type BTCBalance: Codec + EncodeLike + Member + Default;
     type DOT: Codec + EncodeLike + Member + Default;
     type PolkaBTC: Codec + EncodeLike + Member + Default;
+    type H256: Codec + EncodeLike + Member + Default;
+    type H160: Codec + EncodeLike + Member + Default;
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
