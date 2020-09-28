@@ -1,10 +1,38 @@
-image: "rust:latest"
+image: "registry.gitlab.com/interlay/btc-parachain:ci"
 
-test:cargo:
+variables:
+  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+
+stages:
+  - test
+  - build
+
+test-crates:
+  stage: test
+  before_script:
+    - rustc --version
+    - rustfmt --version
+    - cargo --version
   script:
-    - rustup toolchain install nightly-2020-06-01
-    - rustup default nightly-2020-06-01
-    - rustup target add wasm32-unknown-unknown --toolchain nightly-2020-06-01
     - git submodule update --init vendor/relayer-core
-    - rustc --version && cargo --version
-    - cargo test --workspace --verbose
+    # - cargo fmt -- --check
+    - cargo check --all
+    - cargo test --all 
+  cache:
+    key: cargo
+    paths:
+      - .cargo
+
+docker-publish-staked-relayer:
+  stage: build
+  image: docker:19.03.8
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+  services:
+    - docker:19.03.8-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build . -f staked-relayer/Dockerfile -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
