@@ -100,6 +100,9 @@ impl issue::Issue for PolkaBtcRuntime {
 
 impl redeem::Redeem for PolkaBtcRuntime {
     type Balance = u128;
+    type BTCBalance = u128;
     type DOT = u128;
     type PolkaBTC = u128;
+    type H160 = H160;
+    type H256 = H256;
 }

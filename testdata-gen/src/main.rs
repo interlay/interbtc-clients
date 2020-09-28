@@ -59,7 +59,6 @@ async fn main() -> Result<(), Error> {
     .await?;
 
     // Alice issues with Bob
-    // FIXME: Error: XtError(Metadata(ErrorNotFound(1)))
     let issue_id = issue::request_issue(
         alice_prov.clone(),
         param::ALICE_ISSUE_AMOUNT,
