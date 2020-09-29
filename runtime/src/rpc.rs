@@ -13,7 +13,7 @@ use std::future::Future;
 use std::sync::Arc;
 use substrate_subxt::Error as XtError;
 use substrate_subxt::{
-    system::System, Client, ClientBuilder, EventSubscription, EventsDecoder, PairSigner,
+    system::System, Client, ClientBuilder, EventSubscription, EventsDecoder, PairSigner, Signer,
 };
 use tokio::sync::RwLock;
 
@@ -316,6 +316,8 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
 
 #[async_trait]
 pub trait StakedRelayerPallet {
+    async fn get_stake(&self) -> Result<u64, Error>;
+
     async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error>;
 
     async fn deregister_staked_relayer(&self) -> Result<(), Error>;
@@ -357,6 +359,14 @@ pub trait StakedRelayerPallet {
 
 #[async_trait]
 impl StakedRelayerPallet for PolkaBtcProvider {
+    /// Get the stake registered for this staked relayer.
+    async fn get_stake(&self) -> Result<u64, Error> {
+        Ok(self
+            .ext_client
+            .active_staked_relayers(self.signer.read().await.account_id(), None)
+            .await?)
+    }
+
     /// Submit extrinsic to register the staked relayer.
     ///
     /// # Arguments

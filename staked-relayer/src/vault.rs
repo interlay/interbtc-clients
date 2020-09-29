@@ -8,6 +8,7 @@ use futures::stream::StreamExt;
 use log::{error, info};
 use runtime::{
     AccountId, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcVault, StakedRelayerPallet,
+    MINIMUM_STAKE,
 };
 use sp_core::H160;
 use std::collections::HashMap;
@@ -113,6 +114,10 @@ impl<P: StakedRelayerPallet, B: BitcoinCore> VaultsMonitor<P, B> {
     }
 
     async fn scan_next_height(&mut self) -> Result<(), Error> {
+        if self.polka_rpc.get_stake().await? < MINIMUM_STAKE {
+            return Ok(());
+        }
+
         info!("Scanning height {}", self.btc_height);
         let block_hash = self.btc_rpc.wait_for_block(self.btc_height).await?;
         for maybe_tx in self.btc_rpc.get_block_transactions(&block_hash)? {
@@ -170,6 +175,7 @@ mod tests {
 
         #[async_trait]
         trait StakedRelayerPallet {
+            async fn get_stake(&self) -> Result<u64, RuntimeError>;
             async fn register_staked_relayer(&self, stake: u128) -> Result<(), RuntimeError>;
             async fn deregister_staked_relayer(&self) -> Result<(), RuntimeError>;
             async fn suggest_status_update(
@@ -247,10 +253,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_report_valid_transaction() {
-        let mut prov = MockProvider::default();
-        prov.expect_is_transaction_invalid()
+        let mut parachain = MockProvider::default();
+        parachain
+            .expect_is_transaction_invalid()
             .returning(|_, _| Ok(false));
-        prov.expect_report_vault_theft()
+        parachain
+            .expect_report_vault_theft()
             .never()
             .returning(|_, _, _, _, _| Ok(()));
 
@@ -258,7 +266,7 @@ mod tests {
             0,
             Arc::new(MockBitcoin::default()),
             Arc::new(Vaults::default()),
-            Arc::new(prov),
+            Arc::new(parachain),
         );
 
         monitor
@@ -274,10 +282,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_report_invalid_transaction() {
-        let mut prov = MockProvider::default();
-        prov.expect_is_transaction_invalid()
+        let mut parachain = MockProvider::default();
+        parachain
+            .expect_is_transaction_invalid()
             .returning(|_, _| Ok(true));
-        prov.expect_report_vault_theft()
+        parachain
+            .expect_report_vault_theft()
             .once()
             .returning(|_, _, _, _, _| Ok(()));
 
@@ -285,7 +295,7 @@ mod tests {
             0,
             Arc::new(MockBitcoin::default()),
             Arc::new(Vaults::default()),
-            Arc::new(prov),
+            Arc::new(parachain),
         );
 
         monitor

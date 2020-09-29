@@ -24,6 +24,8 @@ use sp_runtime::{
 use std::collections::BTreeSet;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, system, Runtime};
 
+pub const MINIMUM_STAKE: u64 = 100;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PolkaBtcRuntime;
 

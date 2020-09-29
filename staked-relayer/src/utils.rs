@@ -1,4 +1,5 @@
 use crate::Error;
+use log::error;
 use std::env::var;
 use std::future::Future;
 use std::time::Duration;
@@ -10,10 +11,13 @@ pub fn read_env(s: &str) -> Result<String, Error> {
 
 pub async fn check_every<F>(duration: Duration, check: impl Fn() -> F)
 where
-    F: Future<Output = ()>,
+    F: Future<Output = Result<(), Error>>,
 {
     loop {
         delay_for(duration).await;
-        check().await;
+        match check().await {
+            Err(e) => error!("Error: {}", e.to_string()),
+            _ => (),
+        };
     }
 }
