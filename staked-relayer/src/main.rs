@@ -6,7 +6,7 @@ mod relay;
 mod utils;
 mod vault;
 
-use bitcoin::{BlockHash, Hash};
+use bitcoin::{BitcoinCore, BlockHash, Hash};
 use clap::Clap;
 use error::Error;
 use log::{error, info};

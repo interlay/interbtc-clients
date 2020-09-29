@@ -9,6 +9,22 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::Error;
+pub trait BitcoinCore {
+    fn wait_for_block(&self, height: u32) -> BlockMonitor;
+
+    fn get_block_transactions(
+        &self,
+        hash: &BlockHash,
+    ) -> Result<Vec<Option<GetRawTransactionResult>>, Error>;
+
+    fn get_raw_tx(&self, tx_id: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+
+    fn get_proof(&self, tx_id: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+
+    fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
+
+    fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
+}
 
 pub struct BitcoinMonitor {
     rpc: Client,
@@ -18,13 +34,15 @@ impl BitcoinMonitor {
     pub fn new(rpc: Client) -> Self {
         BitcoinMonitor { rpc }
     }
+}
 
+impl BitcoinCore for BitcoinMonitor {
     /// Return an asynchronous future that can be `await`ed on
     /// the specified height.
     ///
     /// # Arguments
     /// * `height` - block height to fetch
-    pub fn wait_for_block(&self, height: u32) -> BlockMonitor {
+    fn wait_for_block(&self, height: u32) -> BlockMonitor {
         BlockMonitor {
             rpc: &self.rpc,
             height,
@@ -36,7 +54,7 @@ impl BitcoinMonitor {
     ///
     /// # Arguments
     /// * `hash` - block hash to query
-    pub fn get_block_transactions(
+    fn get_block_transactions(
         &self,
         hash: &BlockHash,
     ) -> Result<Vec<Option<GetRawTransactionResult>>, Error> {
@@ -61,7 +79,7 @@ impl BitcoinMonitor {
     /// # Arguments
     /// * `tx_id` - transaction ID
     /// * `block_hash` - hash of the block tx is stored in
-    pub fn get_raw_tx(&self, tx_id: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
+    fn get_raw_tx(&self, tx_id: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
         Ok(serialize(
             &self.rpc.get_raw_transaction(tx_id, Some(block_hash))?,
         ))
@@ -72,7 +90,7 @@ impl BitcoinMonitor {
     /// # Arguments
     /// * `tx_id` - transaction ID
     /// * `block_hash` - hash of the block tx is stored in
-    pub fn get_proof(&self, tx_id: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
+    fn get_proof(&self, tx_id: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
         Ok(self.rpc.get_tx_out_proof(&[tx_id], Some(block_hash))?)
     }
 
@@ -80,7 +98,7 @@ impl BitcoinMonitor {
     ///
     /// # Arguments
     /// * `height` - block height
-    pub fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error> {
+    fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error> {
         Ok(self.rpc.get_block_hash(height.into())?)
     }
 
@@ -88,7 +106,7 @@ impl BitcoinMonitor {
     ///
     /// # Arguments
     /// * `block_hash` - hash of the block to verify
-    pub fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error> {
+    fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error> {
         // TODO: match exact error
         Ok(match self.rpc.get_block(&block_hash) {
             Ok(_) => true,

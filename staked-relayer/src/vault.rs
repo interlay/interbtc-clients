@@ -1,7 +1,7 @@
 use crate::Error;
 use crate::{
     bitcoin,
-    bitcoin::{BitcoinMonitor, BlockHash, GetRawTransactionResult, Txid},
+    bitcoin::{BitcoinCore, BitcoinMonitor, BlockHash, GetRawTransactionResult, Txid},
 };
 use futures::stream::iter;
 use futures::stream::StreamExt;
@@ -33,20 +33,15 @@ impl Vaults {
     }
 }
 
-pub struct VaultsMonitor<P: StakedRelayerPallet> {
+pub struct VaultsMonitor<P: StakedRelayerPallet, B: BitcoinCore> {
     btc_height: u32,
-    btc_rpc: Arc<BitcoinMonitor>,
-    vaults: Arc<Vaults>,
+    btc_rpc: Arc<B>,
     polka_rpc: Arc<P>,
+    vaults: Arc<Vaults>,
 }
 
-impl<P: StakedRelayerPallet> VaultsMonitor<P> {
-    pub fn new(
-        btc_height: u32,
-        btc_rpc: Arc<BitcoinMonitor>,
-        vaults: Arc<Vaults>,
-        polka_rpc: Arc<P>,
-    ) -> Self {
+impl<P: StakedRelayerPallet, B: BitcoinCore> VaultsMonitor<P, B> {
+    pub fn new(btc_height: u32, btc_rpc: Arc<B>, vaults: Arc<Vaults>, polka_rpc: Arc<P>) -> Self {
         Self {
             btc_height,
             btc_rpc,
@@ -147,8 +142,9 @@ async fn filter_matching_vaults(addresses: Vec<H160>, vaults: &Vaults) -> Vec<Ac
 mod tests {
     use super::*;
     use async_trait::async_trait;
+    use bitcoin::BlockMonitor;
     use runtime::PolkaBtcStatusUpdate;
-    use runtime::{AccountId, Error, ErrorCode, H256Le, StatusCode};
+    use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
     use sp_core::U256;
     use sp_keyring::AccountKeyring;
 
@@ -157,8 +153,8 @@ mod tests {
 
         #[async_trait]
         trait StakedRelayerPallet {
-            async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error>;
-            async fn deregister_staked_relayer(&self) -> Result<(), Error>;
+            async fn register_staked_relayer(&self, stake: u128) -> Result<(), RuntimeError>;
+            async fn deregister_staked_relayer(&self) -> Result<(), RuntimeError>;
             async fn suggest_status_update(
                 &self,
                 deposit: u128,
@@ -166,14 +162,14 @@ mod tests {
                 add_error: Option<ErrorCode>,
                 remove_error: Option<ErrorCode>,
                 block_hash: Option<H256Le>,
-            ) -> Result<(), Error>;
+            ) -> Result<(), RuntimeError>;
             async fn vote_on_status_update(
                 &self,
                 status_update_id: U256,
                 approve: bool,
-            ) -> Result<(), Error>;
-            async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, Error>;
-            async fn report_oracle_offline(&self) -> Result<(), Error>;
+            ) -> Result<(), RuntimeError>;
+            async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, RuntimeError>;
+            async fn report_oracle_offline(&self) -> Result<(), RuntimeError>;
             async fn report_vault_theft(
                 &self,
                 vault_id: AccountId,
@@ -181,12 +177,33 @@ mod tests {
                 tx_block_height: u32,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
-            ) -> Result<(), Error>;
+            ) -> Result<(), RuntimeError>;
             async fn is_transaction_invalid(
                 &self,
                 vault_id: AccountId,
                 raw_tx: Vec<u8>,
-            ) -> Result<bool, Error>;
+            ) -> Result<bool, RuntimeError>;
+        }
+    }
+
+    mockall::mock! {
+        BitcoinCore {}
+
+        trait BitcoinCore {
+            fn wait_for_block(&self, height: u32) -> BlockMonitor<'static>;
+
+            fn get_block_transactions(
+                &self,
+                hash: &BlockHash,
+            ) -> Result<Vec<Option<GetRawTransactionResult>>, Error>;
+
+            fn get_raw_tx(&self, tx_id: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+
+            fn get_proof(&self, tx_id: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+
+            fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
+
+            fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
         }
     }
 
@@ -222,9 +239,7 @@ mod tests {
 
         let monitor = VaultsMonitor::new(
             0,
-            Arc::new(bitcoin::BitcoinMonitor::new(
-                bitcoin::bitcoin_rpc_from_env().unwrap(),
-            )),
+            Arc::new(MockBitcoinCore::default()),
             Arc::new(Vaults::default()),
             Arc::new(prov),
         );
@@ -251,9 +266,7 @@ mod tests {
 
         let monitor = VaultsMonitor::new(
             0,
-            Arc::new(bitcoin::BitcoinMonitor::new(
-                bitcoin::bitcoin_rpc_from_env().unwrap(),
-            )),
+            Arc::new(MockBitcoinCore::default()),
             Arc::new(Vaults::default()),
             Arc::new(prov),
         );
