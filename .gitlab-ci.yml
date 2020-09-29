@@ -2,6 +2,8 @@ image: "registry.gitlab.com/interlay/btc-parachain:ci"
 
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/.cargo
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
 
 stages:
   - test
@@ -25,14 +27,19 @@ test-crates:
 
 docker-publish-staked-relayer:
   stage: build
-  image: docker:19.03.8
-  variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: "/certs"
+  image: docker:19.03.12
   services:
-    - docker:19.03.8-dind
+    - docker:19.03.12-dind
   before_script:
+    - apk add git
+    - git submodule update --init vendor/relayer-core
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
-    - docker build . -f staked-relayer/Dockerfile -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
-    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+    - docker pull $CI_REGISTRY_IMAGE:staked-relayer-latest || true
+    - |
+      docker build --cache-from $CI_REGISTRY_IMAGE:staked-relayer-latest \
+      --tag $CI_REGISTRY_IMAGE:staked-relayer-$CI_COMMIT_SHA \
+      --tag $CI_REGISTRY_IMAGE:staked-relayer-latest \
+      --file staked-relayer/Dockerfile .
+    - docker push $CI_REGISTRY_IMAGE:staked-relayer-$CI_COMMIT_SHA
+    - docker push $CI_REGISTRY_IMAGE:staked-relayer-latest
