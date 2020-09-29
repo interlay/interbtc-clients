@@ -43,6 +43,8 @@ pub type PolkaBtcStatusUpdate = StatusUpdate<
     <PolkaBtcRuntime as StakedRelayers>::DOT,
 >;
 
+pub type PolkaBtcStatusUpdateSuggestedEvent = StatusUpdateSuggestedEvent<PolkaBtcRuntime>;
+
 #[derive(Clone)]
 pub struct PolkaBtcProvider {
     rpc_client: RpcClient,
@@ -88,33 +90,6 @@ impl PolkaBtcProvider {
         self.signer.read().await.signer().public().into()
     }
 
-    /// Get the hash of the current best tip.
-    pub async fn get_best_block(&self) -> Result<H256Le, Error> {
-        Ok(self.ext_client.best_block(None).await?)
-    }
-
-    /// Get the current best known height.
-    pub async fn get_best_block_height(&self) -> Result<u32, Error> {
-        Ok(self.ext_client.best_block_height(None).await?)
-    }
-
-    /// Get the block hash for the main chain at the specified height.
-    ///
-    /// # Arguments
-    /// * `height` - chain height
-    pub async fn get_block_hash(&self, height: u32) -> Result<H256Le, Error> {
-        // TODO: adjust chain index
-        Ok(self.ext_client.chains_hashes(0, height, None).await?)
-    }
-
-    /// Get the corresponding block header for the given hash.
-    ///
-    /// # Arguments
-    /// * `hash` - little endian block hash
-    pub async fn get_block_header(&self, hash: H256Le) -> Result<RichBlockHeader, Error> {
-        Ok(self.ext_client.block_headers(hash, None).await?)
-    }
-
     /// Fetch a specific vault by ID.
     ///
     /// # Arguments
@@ -133,37 +108,6 @@ impl PolkaBtcProvider {
         Ok(vaults)
     }
 
-    /// Initializes the relay with the provided block header and height,
-    /// should be called automatically by `relayer_core` subject to the
-    /// result of `is_initialized`.
-    ///
-    /// # Arguments
-    /// * `header` - raw block header
-    /// * `height` - starting height
-    pub async fn initialize_btc_relay(
-        &self,
-        header: RawBlockHeader,
-        height: BitcoinBlockHeight,
-    ) -> Result<(), Error> {
-        // TODO: can we initialize the relay through the chain-spec?
-        // we would also need to consider re-initialization per governance
-        self.ext_client
-            .initialize_and_watch(&*self.signer.write().await, header, height)
-            .await?;
-        Ok(())
-    }
-
-    /// Stores a block header in the BTC-Relay.
-    ///
-    /// # Arguments
-    /// * `header` - raw block header
-    pub async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error> {
-        self.ext_client
-            .store_block_header_and_watch(&*self.signer.write().await, header)
-            .await?;
-        Ok(())
-    }
-
     /// Submit extrinsic to register a vault.
     ///
     /// # Arguments
@@ -173,47 +117,6 @@ impl PolkaBtcProvider {
         self.ext_client
             .register_vault_and_watch(&*self.signer.write().await, collateral, btc_address)
             .await?;
-        Ok(())
-    }
-
-    /// Subscription service that listens for status updates.
-    ///
-    /// # Arguments
-    /// * `on_proposal` - callback for suggested status updates
-    /// * `on_error` - callback for errors
-    pub async fn on_status_update_suggested<F, R, E>(
-        &self,
-        on_proposal: F,
-        on_error: E,
-    ) -> Result<(), Error>
-    where
-        F: Fn(StatusUpdateSuggestedEvent<PolkaBtcRuntime>) -> R,
-        R: Future<Output = ()>,
-        E: Fn(XtError),
-    {
-        let sub = self.ext_client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.register_type_size::<u128>("Balance");
-        decoder.register_type_size::<U256>("U256");
-        decoder.register_type_size::<StatusCode>("StatusCode");
-        decoder.register_type_size::<ErrorCode>("ErrorCode");
-        decoder.register_type_size::<H256Le>("H256Le");
-
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
-        sub.filter_event::<StatusUpdateSuggestedEvent<_>>();
-        while let Some(result) = sub.next().await {
-            match result {
-                Ok(raw_event) => {
-                    let event = StatusUpdateSuggestedEvent::<PolkaBtcRuntime>::decode(
-                        &mut &raw_event.data[..],
-                    )?;
-
-                    on_proposal(event).await;
-                }
-                Err(err) => on_error(err),
-            };
-        }
-
         Ok(())
     }
 
@@ -253,37 +156,39 @@ impl PolkaBtcProvider {
         Ok(())
     }
 
-    /// Subscription service that should listen forever, only returns
-    /// if the initial subscription cannot be established.
+    /// Subscription service that listens for status updates.
     ///
     /// # Arguments
-    /// * `on_block` - callback for newly stored blocks
+    /// * `on_proposal` - callback for suggested status updates
     /// * `on_error` - callback for errors
-    pub async fn on_store_block<F, E>(
+    pub async fn on_status_update_suggested<F, R, E>(
         &self,
-        on_block: impl Fn(u32, H256Le) -> F,
+        on_proposal: F,
         on_error: E,
     ) -> Result<(), Error>
     where
-        F: Future<Output = ()>,
+        F: Fn(PolkaBtcStatusUpdateSuggestedEvent) -> R,
+        R: Future<Output = ()>,
         E: Fn(XtError),
     {
         let sub = self.ext_client.subscribe_events().await?;
         let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.register_type_size::<H256Le>("H256Le");
+        decoder.register_type_size::<u128>("Balance");
+        decoder.register_type_size::<U256>("U256");
         decoder.register_type_size::<StatusCode>("StatusCode");
         decoder.register_type_size::<ErrorCode>("ErrorCode");
+        decoder.register_type_size::<H256Le>("H256Le");
 
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
-        sub.filter_event::<StoreMainChainHeaderEvent<_>>();
+        sub.filter_event::<StatusUpdateSuggestedEvent<_>>();
         while let Some(result) = sub.next().await {
             match result {
                 Ok(raw_event) => {
-                    // TODO: handle errors here
-                    let event = StoreMainChainHeaderEvent::<PolkaBtcRuntime>::decode(
+                    let event = StatusUpdateSuggestedEvent::<PolkaBtcRuntime>::decode(
                         &mut &raw_event.data[..],
                     )?;
-                    on_block(event.block_height, event.block_header_hash).await;
+
+                    on_proposal(event).await;
                 }
                 Err(err) => on_error(err),
             };
@@ -317,6 +222,42 @@ impl PolkaBtcProvider {
                     let event =
                         RequestRedeemEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])?;
                     on_event(event).await;
+                }
+                Err(err) => on_error(err),
+            };
+        }
+
+        Ok(())
+    }
+
+    /// Subscription service that should listen forever, only returns
+    /// if the initial subscription cannot be established.
+    ///
+    /// # Arguments
+    /// * `on_block` - callback for newly stored blocks
+    /// * `on_error` - callback for errors
+    pub async fn on_store_block<F, R, E>(&self, on_block: F, on_error: E) -> Result<(), Error>
+    where
+        F: Fn(u32, H256Le) -> R,
+        R: Future<Output = ()>,
+        E: Fn(XtError),
+    {
+        let sub = self.ext_client.subscribe_events().await?;
+        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
+        decoder.register_type_size::<H256Le>("H256Le");
+        decoder.register_type_size::<StatusCode>("StatusCode");
+        decoder.register_type_size::<ErrorCode>("ErrorCode");
+
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
+        sub.filter_event::<StoreMainChainHeaderEvent<_>>();
+        while let Some(result) = sub.next().await {
+            match result {
+                Ok(raw_event) => {
+                    // TODO: handle errors here
+                    let event = StoreMainChainHeaderEvent::<PolkaBtcRuntime>::decode(
+                        &mut &raw_event.data[..],
+                    )?;
+                    on_block(event.block_height, event.block_header_hash).await;
                 }
                 Err(err) => on_error(err),
             };
@@ -743,6 +684,128 @@ impl RedeemPallet for PolkaBtcProvider {
     async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), Error> {
         self.ext_client
             .cancel_redeem_and_watch(&*self.signer.write().await, redeem_id, reimburse)
+            .await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+pub trait BtcRelayPallet {
+    async fn get_best_block(&self) -> Result<H256Le, Error>;
+
+    async fn get_best_block_height(&self) -> Result<u32, Error>;
+
+    async fn get_block_hash(&self, height: u32) -> Result<H256Le, Error>;
+
+    async fn get_block_header(&self, hash: H256Le) -> Result<RichBlockHeader, Error>;
+
+    async fn initialize_btc_relay(
+        &self,
+        header: RawBlockHeader,
+        height: BitcoinBlockHeight,
+    ) -> Result<(), Error>;
+
+    async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error>;
+}
+
+#[async_trait]
+impl BtcRelayPallet for PolkaBtcProvider {
+    /// Get the hash of the current best tip.
+    async fn get_best_block(&self) -> Result<H256Le, Error> {
+        Ok(self.ext_client.best_block(None).await?)
+    }
+
+    /// Get the current best known height.
+    async fn get_best_block_height(&self) -> Result<u32, Error> {
+        Ok(self.ext_client.best_block_height(None).await?)
+    }
+
+    /// Get the block hash for the main chain at the specified height.
+    ///
+    /// # Arguments
+    /// * `height` - chain height
+    async fn get_block_hash(&self, height: u32) -> Result<H256Le, Error> {
+        // TODO: adjust chain index
+        Ok(self.ext_client.chains_hashes(0, height, None).await?)
+    }
+
+    /// Get the corresponding block header for the given hash.
+    ///
+    /// # Arguments
+    /// * `hash` - little endian block hash
+    async fn get_block_header(&self, hash: H256Le) -> Result<RichBlockHeader, Error> {
+        Ok(self.ext_client.block_headers(hash, None).await?)
+    }
+
+    /// Initializes the relay with the provided block header and height,
+    /// should be called automatically by `relayer_core` subject to the
+    /// result of `is_initialized`.
+    ///
+    /// # Arguments
+    /// * `header` - raw block header
+    /// * `height` - starting height
+    async fn initialize_btc_relay(
+        &self,
+        header: RawBlockHeader,
+        height: BitcoinBlockHeight,
+    ) -> Result<(), Error> {
+        // TODO: can we initialize the relay through the chain-spec?
+        // we would also need to consider re-initialization per governance
+        self.ext_client
+            .initialize_and_watch(&*self.signer.write().await, header, height)
+            .await?;
+        Ok(())
+    }
+
+    /// Stores a block header in the BTC-Relay.
+    ///
+    /// # Arguments
+    /// * `header` - raw block header
+    async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error> {
+        self.ext_client
+            .store_block_header_and_watch(&*self.signer.write().await, header)
+            .await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+pub trait VaultRegistryPallet {
+    async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, Error>;
+
+    async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, Error>;
+
+    async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), Error>;
+}
+
+#[async_trait]
+impl VaultRegistryPallet for PolkaBtcProvider {
+    /// Fetch a specific vault by ID.
+    ///
+    /// # Arguments
+    /// * `vault_id` - account ID of the vault
+    async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, Error> {
+        Ok(self.ext_client.vaults(vault_id, None).await?)
+    }
+
+    /// Fetch all active vaults.
+    async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, Error> {
+        let mut vaults = Vec::new();
+        let mut iter = self.ext_client.vaults_iter(None).await?;
+        while let Some((_, account)) = iter.next().await? {
+            vaults.push(account);
+        }
+        Ok(vaults)
+    }
+
+    /// Submit extrinsic to register a vault.
+    ///
+    /// # Arguments
+    /// * `collateral` - deposit
+    /// * `btc_address` - Bitcoin address hash
+    async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), Error> {
+        self.ext_client
+            .register_vault_and_watch(&*self.signer.write().await, collateral, btc_address)
             .await?;
         Ok(())
     }

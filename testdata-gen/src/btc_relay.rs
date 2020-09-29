@@ -5,7 +5,7 @@ mod utils;
 
 use module_bitcoin::formatter::Formattable;
 use module_bitcoin::types::*;
-use runtime::{Error, PolkaBtcProvider};
+use runtime::{BtcRelayPallet, Error, PolkaBtcProvider};
 use sp_core::{H160, H256, U256};
 
 pub struct BtcSimulator {

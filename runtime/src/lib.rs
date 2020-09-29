@@ -6,11 +6,12 @@ mod rpc;
 mod tests;
 
 pub use btc_relay::{BitcoinBlockHeight, H256Le, RawBlockHeader, RichBlockHeader};
-pub use error::Error;
+pub use error::{Error, XtError};
 use pallets::*;
 pub use rpc::{
-    AccountId, ExchangeRateOraclePallet, IssuePallet, PolkaBtcProvider, PolkaBtcStatusUpdate,
-    PolkaBtcVault, RedeemPallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
+    AccountId, BtcRelayPallet, ExchangeRateOraclePallet, IssuePallet, PolkaBtcProvider,
+    PolkaBtcStatusUpdate, PolkaBtcStatusUpdateSuggestedEvent, PolkaBtcVault, RedeemPallet,
+    SecurityPallet, StakedRelayerPallet, TimestampPallet, VaultRegistryPallet,
 };
 pub use security::{ErrorCode, StatusCode};
 use sp_core::U256;

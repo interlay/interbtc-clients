@@ -3,7 +3,7 @@ mod param;
 #[path = "utils.rs"]
 mod utils;
 
-use runtime::{Error, PolkaBtcProvider};
+use runtime::{Error, PolkaBtcProvider, VaultRegistryPallet};
 
 /// Register a vault with a Bitcoin address
 pub async fn register_vault(

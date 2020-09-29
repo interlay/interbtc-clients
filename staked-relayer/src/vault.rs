@@ -1,12 +1,14 @@
 use crate::Error;
 use crate::{
     bitcoin,
-    bitcoin::{BitcoinCore, BitcoinMonitor, BlockHash, GetRawTransactionResult, Txid},
+    bitcoin::{BitcoinCore, BlockHash, GetRawTransactionResult, Txid},
 };
 use futures::stream::iter;
 use futures::stream::StreamExt;
 use log::{error, info};
-use runtime::{AccountId, H256Le, PolkaBtcVault, StakedRelayerPallet};
+use runtime::{
+    AccountId, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcVault, StakedRelayerPallet,
+};
 use sp_core::H160;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -131,6 +133,21 @@ impl<P: StakedRelayerPallet, B: BitcoinCore> VaultsMonitor<P, B> {
     }
 }
 
+pub async fn listen_for_vaults_registered(
+    polka_rpc: Arc<PolkaBtcProvider>,
+    vaults: Arc<Vaults>,
+) -> Result<(), RuntimeError> {
+    polka_rpc
+        .on_register(
+            |vault| async {
+                info!("Vault registered: {}", vault.id);
+                vaults.write(vault.btc_address, vault).await;
+            },
+            |err| error!("Error: {}", err.to_string()),
+        )
+        .await
+}
+
 async fn filter_matching_vaults(addresses: Vec<H160>, vaults: &Vaults) -> Vec<AccountId> {
     iter(addresses)
         .filter_map(|addr| vaults.contains_key(addr))
@@ -187,7 +204,7 @@ mod tests {
     }
 
     mockall::mock! {
-        BitcoinCore {}
+        Bitcoin {}
 
         trait BitcoinCore {
             fn wait_for_block(&self, height: u32) -> BlockMonitor<'static>;
@@ -239,7 +256,7 @@ mod tests {
 
         let monitor = VaultsMonitor::new(
             0,
-            Arc::new(MockBitcoinCore::default()),
+            Arc::new(MockBitcoin::default()),
             Arc::new(Vaults::default()),
             Arc::new(prov),
         );
@@ -266,7 +283,7 @@ mod tests {
 
         let monitor = VaultsMonitor::new(
             0,
-            Arc::new(MockBitcoinCore::default()),
+            Arc::new(MockBitcoin::default()),
             Arc::new(Vaults::default()),
             Arc::new(prov),
         );
