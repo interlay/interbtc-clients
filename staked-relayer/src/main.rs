@@ -59,6 +59,10 @@ struct Opts {
     /// Timeout in milliseconds to repeat oracle liveness check.
     #[clap(long, default_value = "100")]
     status_update_deposit: u128,
+
+    /// Comma separated list of allowed origins.
+    #[clap(long, default_value = "*")]
+    rpc_cors_domain: String,
 }
 
 #[tokio::main]
@@ -119,7 +123,7 @@ async fn main() -> Result<(), Error> {
         opts.status_update_deposit,
     );
 
-    let api = http::start(provider.clone(), http_addr);
+    let api = http::start(provider.clone(), http_addr, opts.rpc_cors_domain);
 
     let result = tokio::try_join!(
         // runs json-rpc server for incoming requests
