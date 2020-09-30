@@ -1,0 +1,6 @@
+dependencies:
+- name: parachain
+  repository: file://../parachain
+  version: 0.1.0
+digest: sha256:7765173c3bd30d0dea2f1731948a5f7bd5d4a3d8e06374192a3aedcd83a7c211
+generated: "2020-09-29T12:09:19.718768236+01:00"
