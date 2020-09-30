@@ -11,6 +11,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::value::RawValue;
 use sp_core::crypto::Ss58Codec;
 use sp_core::U256;
+use std::convert::TryFrom;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use warp::{Filter, Rejection, Reply};
@@ -118,6 +119,10 @@ impl Response {
             }),
         }
     }
+
+    fn reply(&self) -> warp::reply::WithHeader<warp::reply::Json> {
+        allow_origin(warp::reply::json(self), "*")
+    }
 }
 
 #[derive(Serialize)]
@@ -133,6 +138,22 @@ struct ResponseError {
     code: i32,
     message: String,
     data: Option<String>,
+}
+
+fn allow_origin<T: Reply, V>(reply: T, origin: V) -> warp::reply::WithHeader<T>
+where
+    warp::http::HeaderValue: TryFrom<V>,
+    <warp::http::HeaderValue as TryFrom<V>>::Error: Into<warp::http::Error>,
+{
+    warp::reply::with_header(reply, "Access-Control-Allow-Origin", origin)
+}
+
+fn allow_headers<T: Reply, V>(reply: T, headers: V) -> warp::reply::WithHeader<T>
+where
+    warp::http::HeaderValue: TryFrom<V>,
+    <warp::http::HeaderValue as TryFrom<V>>::Error: Into<warp::http::Error>,
+{
+    warp::reply::with_header(reply, "Access-Control-Allow-Headers", headers)
 }
 
 fn json_rpc() -> impl Filter<Extract = (Request,), Error = warp::Rejection> + Clone {
@@ -153,12 +174,15 @@ async fn _get_address(
     req: Request,
     api: Arc<PolkaBtcProvider>,
 ) -> Result<Box<dyn Reply>, Rejection> {
-    Ok(Box::new(warp::reply::json(&Response::success_with(
-        req.id,
-        &GetAddressResponse {
-            address: api.get_address().await.to_ss58check(),
-        },
-    ))))
+    Ok(Box::new(
+        Response::success_with(
+            req.id,
+            &GetAddressResponse {
+                address: api.get_address().await.to_ss58check(),
+            },
+        )
+        .reply(),
+    ))
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -171,12 +195,11 @@ async fn _get_parachain_status(
     api: Arc<PolkaBtcProvider>,
 ) -> Result<Box<dyn Reply>, Rejection> {
     match api.get_parachain_status().await {
-        Ok(status) => Ok(Box::new(warp::reply::json(&Response::success_with(
-            req.id,
-            &GetParachainStatusResponse { status },
-        )))),
+        Ok(status) => Ok(Box::new(
+            Response::success_with(req.id, &GetParachainStatusResponse { status }).reply(),
+        )),
         Err(e) => Ok(Box::new(warp::reply::with_status(
-            warp::reply::json(&Response::error(req.id, -32603, e.to_string())),
+            Response::error(req.id, -32603, e.to_string()).reply(),
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
         ))),
     }
@@ -200,12 +223,11 @@ async fn _get_status_update(
     let data: GetStatusUpdateRequest =
         Decode::decode(&mut &param[0].0[..]).map_err(|err| Error::CodecError(err))?;
     match api.get_status_update(data.status_update_id).await {
-        Ok(status) => Ok(Box::new(warp::reply::json(&Response::success_with(
-            req.id,
-            &GetStatusUpdateResponse { status },
-        )))),
+        Ok(status) => Ok(Box::new(
+            Response::success_with(req.id, &GetStatusUpdateResponse { status }).reply(),
+        )),
         Err(e) => Ok(Box::new(warp::reply::with_status(
-            warp::reply::json(&Response::error(req.id, -32603, e.to_string())),
+            Response::error(req.id, -32603, e.to_string()).reply(),
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
         ))),
     }
@@ -224,9 +246,9 @@ async fn _register_staked_relayer(
     let data: RegisterStakedRelayerRequest =
         Decode::decode(&mut &param[0].0[..]).map_err(|err| Error::CodecError(err))?;
     match api.register_staked_relayer(data.stake).await {
-        Ok(_) => Ok(Box::new(warp::reply::json(&Response::success(req.id)))),
+        Ok(_) => Ok(Box::new(Response::success(req.id).reply())),
         Err(e) => Ok(Box::new(warp::reply::with_status(
-            warp::reply::json(&Response::error(req.id, -32603, e.to_string())),
+            Response::error(req.id, -32603, e.to_string()).reply(),
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
         ))),
     }
@@ -237,9 +259,9 @@ async fn _deregister_staked_relayer(
     api: Arc<PolkaBtcProvider>,
 ) -> Result<Box<dyn Reply>, Rejection> {
     match api.deregister_staked_relayer().await {
-        Ok(_) => Ok(Box::new(warp::reply::json(&Response::success(req.id)))),
+        Ok(_) => Ok(Box::new(Response::success(req.id).reply())),
         Err(e) => Ok(Box::new(warp::reply::with_status(
-            warp::reply::json(&Response::error(req.id, -32603, e.to_string())),
+            Response::error(req.id, -32603, e.to_string()).reply(),
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
         ))),
     }
@@ -271,12 +293,10 @@ async fn _suggest_status_update(
         )
         .await
     {
-        Ok(_) => Ok(Box::new(warp::reply::json(&Response::success(req.id)))),
-        Err(e) => Ok(Box::new(warp::reply::json(&Response::error(
-            req.id,
-            -32603,
-            e.to_string(),
-        )))),
+        Ok(_) => Ok(Box::new(Response::success(req.id).reply())),
+        Err(e) => Ok(Box::new(
+            Response::error(req.id, -32603, e.to_string()).reply(),
+        )),
     }
 }
 
@@ -313,7 +333,12 @@ fn with_api(
 }
 
 pub async fn start(api: Arc<PolkaBtcProvider>, addr: SocketAddr) {
-    let index = warp::any()
+    let before = warp::any()
+        .and(warp::filters::method::options())
+        .map(|| allow_origin(warp::reply::reply(), "*"))
+        .map(|reply| allow_headers(reply, "*"));
+
+    let after = warp::any()
         .and(json_rpc())
         .and(with_api(api.clone()))
         .and_then(move |req: Request, api| async move {
@@ -329,5 +354,5 @@ pub async fn start(api: Arc<PolkaBtcProvider>, addr: SocketAddr) {
             }
         });
 
-    warp::serve(index).run(addr).await;
+    warp::serve(before.or(after)).run(addr).await;
 }
