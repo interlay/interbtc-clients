@@ -43,3 +43,5 @@ docker-publish-staked-relayer:
       --file staked-relayer/Dockerfile .
     - docker push $CI_REGISTRY_IMAGE:staked-relayer-$CI_COMMIT_SHA
     - docker push $CI_REGISTRY_IMAGE:staked-relayer-latest
+  only:
+    - main
