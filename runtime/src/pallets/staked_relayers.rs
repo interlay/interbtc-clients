@@ -86,12 +86,12 @@ pub struct ExecuteStatusUpdateEvent<T: StakedRelayers> {
     pub remove_error: Option<T::ErrorCode>,
 }
 
-// #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-// pub struct ActiveStakedRelayersStore<T: StakedRelayers> {
-//     #[store(returns = u64)]
-//     pub _runtime: PhantomData<T>,
-//     pub account_id: T::AccountId,
-// }
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct ActiveStakedRelayersStore<'a, T: StakedRelayers> {
+    #[store(returns = u64)]
+    pub _runtime: PhantomData<T>,
+    pub account_id: &'a T::AccountId,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct ActiveStakedRelayersCountStore<T: StakedRelayers> {

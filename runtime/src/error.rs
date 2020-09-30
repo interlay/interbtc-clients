@@ -3,7 +3,7 @@ use parity_scale_codec::Error as CodecError;
 use serde_json::Error as SerdeJsonError;
 use std::array::TryFromSliceError;
 use std::num::TryFromIntError;
-use substrate_subxt::Error as XtError;
+pub use substrate_subxt::Error as XtError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

@@ -1,7 +1,8 @@
 use super::Error;
-use log::{error, info};
+use log::info;
 use runtime::{
     ErrorCode, ExchangeRateOraclePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
+    MINIMUM_STAKE,
 };
 use std::sync::Arc;
 
@@ -29,25 +30,23 @@ impl<P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + Secur
         }
     }
 
-    pub async fn report_offline(&self) {
-        match self.is_offline().await {
-            Ok(true) => {
-                if let Ok(error_codes) = self.rpc.get_error_codes().await {
-                    if error_codes.contains(&ErrorCode::OracleOffline) {
-                        info!("Oracle already reported");
-                        return;
-                    }
-                    info!("Oracle is offline");
-                    match self.rpc.report_oracle_offline().await {
-                        Ok(_) => info!("Successfully reported oracle offline"),
-                        Err(e) => error!("Failed to report oracle offline: {}", e.to_string()),
-                    }
-                };
-            }
-            // ignore if false
-            Ok(false) => (),
-            Err(e) => error!("Liveness check failed: {}", e.to_string()),
+    pub async fn report_offline(&self) -> Result<(), Error> {
+        if self.rpc.get_stake().await? < MINIMUM_STAKE {
+            return Ok(());
         }
+
+        if self.is_offline().await? {
+            if let Ok(error_codes) = self.rpc.get_error_codes().await {
+                if error_codes.contains(&ErrorCode::OracleOffline) {
+                    info!("Oracle already reported");
+                    return Ok(());
+                }
+            }
+            info!("Oracle is offline");
+            self.rpc.report_oracle_offline().await?;
+        };
+
+        Ok(())
     }
 }
 
@@ -78,6 +77,7 @@ mod tests {
 
         #[async_trait]
         trait StakedRelayerPallet {
+            async fn get_stake(&self) -> Result<u64, Error>;
             async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error>;
             async fn deregister_staked_relayer(&self) -> Result<(), Error>;
             async fn suggest_status_update(
@@ -119,13 +119,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_is_oracle_offline_true() {
-        let mut prov = MockProvider::default();
-        prov.expect_get_exchange_rate_info()
+        let mut parachain = MockProvider::default();
+        parachain
+            .expect_get_exchange_rate_info()
             .returning(|| Ok((0, 0, 0)));
-        prov.expect_get_time_now().returning(|| Ok(1));
+        parachain.expect_get_time_now().returning(|| Ok(1));
 
         assert_eq!(
-            OracleMonitor::new(Arc::new(prov))
+            OracleMonitor::new(Arc::new(parachain))
                 .is_offline()
                 .await
                 .unwrap(),
@@ -135,13 +136,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_is_oracle_offline_false() {
-        let mut prov = MockProvider::default();
-        prov.expect_get_exchange_rate_info()
+        let mut parachain = MockProvider::default();
+        parachain
+            .expect_get_exchange_rate_info()
             .returning(|| Ok((0, 1, 3)));
-        prov.expect_get_time_now().returning(|| Ok(2));
+        parachain.expect_get_time_now().returning(|| Ok(2));
 
         assert_eq!(
-            OracleMonitor::new(Arc::new(prov))
+            OracleMonitor::new(Arc::new(parachain))
                 .is_offline()
                 .await
                 .unwrap(),
@@ -151,41 +153,61 @@ mod tests {
 
     #[tokio::test]
     async fn test_report_oracle_offline_not_reported() {
-        let mut prov = MockProvider::default();
+        let mut parachain = MockProvider::default();
+        parachain
+            .expect_get_stake()
+            .once()
+            .returning(|| Ok(MINIMUM_STAKE));
 
         // is_offline should return true
-        prov.expect_get_exchange_rate_info()
+        parachain
+            .expect_get_exchange_rate_info()
             .returning(|| Ok((0, 0, 0)));
-        prov.expect_get_time_now().returning(|| Ok(1));
+        parachain.expect_get_time_now().returning(|| Ok(1));
 
         // should report if error not known
-        prov.expect_get_error_codes()
+        parachain
+            .expect_get_error_codes()
             .once()
             .returning(|| Ok(BTreeSet::new()));
-        prov.expect_report_oracle_offline()
+        parachain
+            .expect_report_oracle_offline()
             .once()
             .returning(|| Ok(()));
 
-        OracleMonitor::new(Arc::new(prov)).report_offline().await;
+        OracleMonitor::new(Arc::new(parachain))
+            .report_offline()
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn test_report_oracle_offline_already_reported() {
-        let mut prov = MockProvider::default();
+        let mut parachain = MockProvider::default();
+        parachain
+            .expect_get_stake()
+            .once()
+            .returning(|| Ok(MINIMUM_STAKE));
 
         // is_offline should return true
-        prov.expect_get_exchange_rate_info()
+        parachain
+            .expect_get_exchange_rate_info()
             .returning(|| Ok((0, 0, 0)));
-        prov.expect_get_time_now().returning(|| Ok(1));
+        parachain.expect_get_time_now().returning(|| Ok(1));
 
         // should not report if error already known
-        prov.expect_get_error_codes()
+        parachain
+            .expect_get_error_codes()
             .once()
             .returning(|| Ok(BTreeSet::from_iter(vec![ErrorCode::OracleOffline])));
-        prov.expect_report_oracle_offline()
+        parachain
+            .expect_report_oracle_offline()
             .never()
             .returning(|| Ok(()));
 
-        OracleMonitor::new(Arc::new(prov)).report_offline().await;
+        OracleMonitor::new(Arc::new(parachain))
+            .report_offline()
+            .await
+            .unwrap();
     }
 }

@@ -9,6 +9,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::Error;
+
 pub trait BitcoinCore {
     fn wait_for_block(&self, height: u32) -> BlockMonitor;
 

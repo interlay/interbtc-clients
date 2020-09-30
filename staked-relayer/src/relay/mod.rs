@@ -5,7 +5,7 @@ use futures::executor::block_on;
 use log::error;
 use relayer_core::{Error as CoreError, Issuing};
 use runtime::PolkaBtcProvider;
-use runtime::{H256Le, RawBlockHeader};
+use runtime::{BtcRelayPallet, H256Le, RawBlockHeader};
 use std::sync::Arc;
 
 pub struct Client {
