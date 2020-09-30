@@ -173,14 +173,16 @@ struct GetAddressResponse {
 async fn _get_address(
     req: Request,
     api: Arc<PolkaBtcProvider>,
-) -> Result<impl warp::Reply, Rejection> {
-    Ok(Response::success_with(
-        req.id,
-        &GetAddressResponse {
-            address: api.get_address().await.to_ss58check(),
-        },
-    )
-    .reply())
+) -> Result<Box<dyn Reply>, Rejection> {
+    Ok(Box::new(
+        Response::success_with(
+            req.id,
+            &GetAddressResponse {
+                address: api.get_address().await.to_ss58check(),
+            },
+        )
+        .reply(),
+    ))
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -191,15 +193,15 @@ struct GetParachainStatusResponse {
 async fn _get_parachain_status(
     req: Request,
     api: Arc<PolkaBtcProvider>,
-) -> Result<impl warp::Reply, Rejection> {
+) -> Result<Box<dyn Reply>, Rejection> {
     match api.get_parachain_status().await {
-        Ok(status) => {
-            Ok(Response::success_with(req.id, &GetParachainStatusResponse { status }).reply())
-        }
-        Err(e) => Ok(warp::reply::with_status(
+        Ok(status) => Ok(Box::new(
+            Response::success_with(req.id, &GetParachainStatusResponse { status }).reply(),
+        )),
+        Err(e) => Ok(Box::new(warp::reply::with_status(
             Response::error(req.id, -32603, e.to_string()).reply(),
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-        )),
+        ))),
     }
 }
 
@@ -216,18 +218,18 @@ struct GetStatusUpdateResponse {
 async fn _get_status_update(
     req: Request,
     api: Arc<PolkaBtcProvider>,
-) -> Result<impl warp::Reply, Rejection> {
+) -> Result<Box<dyn Reply>, Rejection> {
     let param = req.deserialize_param::<[RawBytes; 1]>()?;
     let data: GetStatusUpdateRequest =
         Decode::decode(&mut &param[0].0[..]).map_err(|err| Error::CodecError(err))?;
     match api.get_status_update(data.status_update_id).await {
-        Ok(status) => {
-            Ok(Response::success_with(req.id, &GetStatusUpdateResponse { status }).reply())
-        }
-        Err(e) => Ok(warp::reply::with_status(
+        Ok(status) => Ok(Box::new(
+            Response::success_with(req.id, &GetStatusUpdateResponse { status }).reply(),
+        )),
+        Err(e) => Ok(Box::new(warp::reply::with_status(
             Response::error(req.id, -32603, e.to_string()).reply(),
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-        )),
+        ))),
     }
 }
 
@@ -239,29 +241,29 @@ struct RegisterStakedRelayerRequest {
 async fn _register_staked_relayer(
     req: Request,
     api: Arc<PolkaBtcProvider>,
-) -> Result<impl warp::Reply, Rejection> {
+) -> Result<Box<dyn Reply>, Rejection> {
     let param = req.deserialize_param::<[RawBytes; 1]>()?;
     let data: RegisterStakedRelayerRequest =
         Decode::decode(&mut &param[0].0[..]).map_err(|err| Error::CodecError(err))?;
     match api.register_staked_relayer(data.stake).await {
-        Ok(_) => Ok(Response::success(req.id).reply()),
-        Err(e) => Ok(warp::reply::with_status(
+        Ok(_) => Ok(Box::new(Response::success(req.id).reply())),
+        Err(e) => Ok(Box::new(warp::reply::with_status(
             Response::error(req.id, -32603, e.to_string()).reply(),
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-        )),
+        ))),
     }
 }
 
 async fn _deregister_staked_relayer(
     req: Request,
     api: Arc<PolkaBtcProvider>,
-) -> Result<impl warp::Reply, Rejection> {
+) -> Result<Box<dyn Reply>, Rejection> {
     match api.deregister_staked_relayer().await {
-        Ok(_) => Ok(Response::success(req.id).reply()),
-        Err(e) => Ok(warp::reply::with_status(
+        Ok(_) => Ok(Box::new(Response::success(req.id).reply())),
+        Err(e) => Ok(Box::new(warp::reply::with_status(
             Response::error(req.id, -32603, e.to_string()).reply(),
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-        )),
+        ))),
     }
 }
 
@@ -277,7 +279,7 @@ struct SuggestStatusUpdateRequest {
 async fn _suggest_status_update(
     req: Request,
     api: Arc<PolkaBtcProvider>,
-) -> Result<impl warp::Reply, Rejection> {
+) -> Result<Box<dyn Reply>, Rejection> {
     let param = req.deserialize_param::<[RawBytes; 1]>()?;
     let data: SuggestStatusUpdateRequest =
         Decode::decode(&mut &param[0].0[..]).map_err(|err| Error::CodecError(err))?;
@@ -291,8 +293,10 @@ async fn _suggest_status_update(
         )
         .await
     {
-        Ok(_) => Ok(Response::success(req.id).reply()),
-        Err(e) => Ok(Response::error(req.id, -32603, e.to_string()).reply()),
+        Ok(_) => Ok(Box::new(Response::success(req.id).reply())),
+        Err(e) => Ok(Box::new(
+            Response::error(req.id, -32603, e.to_string()).reply(),
+        )),
     }
 }
 
@@ -305,7 +309,7 @@ struct VoteOnStatusUpdateRequest {
 async fn _vote_on_status_update(
     req: Request,
     api: Arc<PolkaBtcProvider>,
-) -> Result<impl warp::Reply, Rejection> {
+) -> Result<Box<dyn Reply>, Rejection> {
     let param = req.deserialize_param::<[RawBytes; 1]>()?;
     let data: VoteOnStatusUpdateRequest =
         Decode::decode(&mut &param[0].0[..]).map_err(|err| Error::CodecError(err))?;
