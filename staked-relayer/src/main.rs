@@ -83,11 +83,13 @@ async fn main() -> Result<(), Error> {
 
     let btc_client = BtcClient::new::<RelayError>(bitcoin::bitcoin_rpc_from_env()?);
 
+    let current_height = btc_client.get_block_count()?;
+
     // scan from custom height or the current tip
     let btc_height = if let Some(height) = opts.scan_start_height {
         height
     } else {
-        btc_client.get_block_count()? + 1
+        current_height + 1
     };
     let btc_rpc = Arc::new(bitcoin::BitcoinMonitor::new(
         bitcoin::bitcoin_rpc_from_env()?
@@ -97,7 +99,7 @@ async fn main() -> Result<(), Error> {
         PolkaClient::new(provider.clone()),
         btc_client,
         Config {
-            start_height: opts.relay_start_height.unwrap_or(0),
+            start_height: opts.relay_start_height.unwrap_or(current_height),
             max_batch_size: opts.max_batch_size,
         },
     )?;
