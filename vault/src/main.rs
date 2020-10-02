@@ -19,6 +19,10 @@ struct Opts {
     /// Parachain URL, can be over WebSockets or HTTP.
     #[clap(long, default_value = "ws://127.0.0.1:9944")]
     polka_btc_url: String,
+
+    /// Keyring for vault.
+    #[clap(long, default_value = "bob")]
+    keyring: AccountKeyring,
 }
 
 #[tokio::main]
@@ -28,7 +32,7 @@ async fn main() -> Result<(), Error> {
 
     let btc_rpc = Arc::new(BitcoinCore::new(bitcoin::bitcoin_rpc_from_env()?));
 
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Alice.pair());
+    let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
     let provider =
         PolkaBtcProvider::from_url(opts.polka_btc_url, Arc::new(RwLock::new(signer))).await?;
     let arc_provider = &Arc::new(provider.clone());
