@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "oracle",
   "staked-relayer",
   "runtime",
   "testdata-gen",
