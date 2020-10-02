@@ -5,7 +5,6 @@ use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
 use substrate_subxt::PairSigner;
-use tokio::sync::RwLock;
 use tokio::time::delay_for;
 
 /// Simple oracle liveness service to automatically update the
@@ -36,9 +35,7 @@ async fn main() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
 
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
-    let provider = Arc::new(
-        PolkaBtcProvider::from_url(opts.polka_btc_url, Arc::new(RwLock::new(signer))).await?,
-    );
+    let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
 
     let timeout = Duration::from_millis(opts.timeout_ms);
 

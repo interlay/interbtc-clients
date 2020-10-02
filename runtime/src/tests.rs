@@ -8,13 +8,11 @@ use module_bitcoin::{
 };
 use sp_core::{H160, U256};
 use sp_keyring::AccountKeyring;
-use std::sync::Arc;
 use substrate_subxt::PairSigner;
 use substrate_subxt_client::{
     DatabaseConfig, KeystoreConfig, Role, SubxtClient, SubxtClientConfig,
 };
 use tempdir::TempDir;
-use tokio::sync::RwLock;
 
 async fn test_client_with(key: AccountKeyring) -> PolkaBtcProvider {
     let tmp = TempDir::new("btc-parachain-").expect("failed to create tempdir");
@@ -41,7 +39,7 @@ async fn test_client_with(key: AccountKeyring) -> PolkaBtcProvider {
     PolkaBtcProvider::new(
         SubxtClient::from_config(config, btc_parachain::service::new_full)
             .expect("Error creating subxt client"),
-        Arc::new(RwLock::new(signer)),
+        signer,
     )
     .await
     .expect("Error creating client")

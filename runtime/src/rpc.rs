@@ -4,7 +4,6 @@ use jsonrpsee::{
     Client as RpcClient,
 };
 use parity_scale_codec::Decode;
-use sp_core::crypto::{AccountId32, Pair};
 use sp_core::sr25519::Pair as KeyPair;
 use sp_core::U256;
 use std::collections::BTreeSet;
@@ -50,13 +49,15 @@ pub struct PolkaBtcProvider {
     rpc_client: RpcClient,
     ext_client: Client<PolkaBtcRuntime>,
     signer: Arc<RwLock<PairSigner<PolkaBtcRuntime, KeyPair>>>,
+    account_id: AccountId,
 }
 
 impl PolkaBtcProvider {
     pub async fn new<P: Into<jsonrpsee::Client>>(
         rpc_client: P,
-        signer: Arc<RwLock<PairSigner<PolkaBtcRuntime, KeyPair>>>,
+        signer: PairSigner<PolkaBtcRuntime, KeyPair>,
     ) -> Result<Self, Error> {
+        let account_id = signer.account_id().clone();
         let rpc_client = rpc_client.into();
         let ext_client = ClientBuilder::<PolkaBtcRuntime>::new()
             .set_client(rpc_client.clone())
@@ -68,13 +69,14 @@ impl PolkaBtcProvider {
         Ok(Self {
             rpc_client,
             ext_client,
-            signer,
+            signer: Arc::new(RwLock::new(signer)),
+            account_id,
         })
     }
 
     pub async fn from_url(
         url: String,
-        signer: Arc<RwLock<PairSigner<PolkaBtcRuntime, KeyPair>>>,
+        signer: PairSigner<PolkaBtcRuntime, KeyPair>,
     ) -> Result<Self, Error> {
         let rpc_client = if url.starts_with("ws://") || url.starts_with("wss://") {
             jsonrpsee::ws_client(&url).await?
@@ -86,8 +88,8 @@ impl PolkaBtcProvider {
     }
 
     /// Get the address of the configured signer.
-    pub async fn get_address(&self) -> AccountId32 {
-        self.signer.read().await.signer().public().into()
+    pub async fn get_address(&self) -> &AccountId {
+        &self.account_id
     }
 
     /// Fetch a specific vault by ID.

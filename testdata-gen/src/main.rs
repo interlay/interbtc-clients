@@ -9,9 +9,7 @@ use runtime::{
     Error, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime, TimestampPallet,
 };
 use sp_keyring::AccountKeyring;
-use std::sync::Arc;
 use substrate_subxt::PairSigner;
-use tokio::sync::RwLock;
 
 /// Generates testdata to be used on a development environment of the BTC-Parachain
 #[tokio::main]
@@ -19,14 +17,8 @@ async fn main() -> Result<(), Error> {
     // setup BTC Parachain connection
     let alice = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Alice.pair());
     let bob = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Bob.pair());
-    let alice_prov = PolkaBtcProvider::from_url(
-        param::POLKA_BTC_URL.to_string(),
-        Arc::new(RwLock::new(alice)),
-    )
-    .await?;
-    let bob_prov =
-        PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), Arc::new(RwLock::new(bob)))
-            .await?;
+    let alice_prov = PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), alice).await?;
+    let bob_prov = PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), bob).await?;
 
     // EXCHANGE RATE
     let oracle_prov = bob_prov.clone();

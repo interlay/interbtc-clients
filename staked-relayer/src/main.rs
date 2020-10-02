@@ -19,7 +19,6 @@ use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
 use substrate_subxt::PairSigner;
-use tokio::sync::RwLock;
 
 use status::*;
 use vault::*;
@@ -77,9 +76,7 @@ async fn main() -> Result<(), Error> {
     let oracle_timeout_ms = opts.oracle_timeout_ms;
 
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
-    let provider = Arc::new(
-        PolkaBtcProvider::from_url(opts.polka_btc_url, Arc::new(RwLock::new(signer))).await?,
-    );
+    let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
 
     let btc_client = BtcClient::new::<RelayError>(bitcoin::bitcoin_rpc_from_env()?);
 

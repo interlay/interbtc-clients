@@ -9,7 +9,6 @@ use runtime::{H256Le, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use substrate_subxt::PairSigner;
-use tokio::sync::RwLock;
 
 /// The Vault client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
@@ -33,8 +32,7 @@ async fn main() -> Result<(), Error> {
     let btc_rpc = Arc::new(BitcoinCore::new(bitcoin::bitcoin_rpc_from_env()?));
 
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
-    let provider =
-        PolkaBtcProvider::from_url(opts.polka_btc_url, Arc::new(RwLock::new(signer))).await?;
+    let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
     let arc_provider = &Arc::new(provider.clone());
 
     provider
