@@ -4130,6 +4130,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77af24da69f9d9341038eba93a073b1fdaaa1b788221b00a69bce9e762cb32de"
 
 [[package]]
+name = "oracle"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap 3.0.0-beta.1",
+ "env_logger",
+ "log 0.4.11",
+ "runtime",
+ "sp-keyring",
+ "substrate-subxt",
+ "tokio 0.2.22",
+]
+
+[[package]]
 name = "os_str_bytes"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

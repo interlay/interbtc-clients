@@ -45,3 +45,24 @@ docker-publish-staked-relayer:
     - docker push $CI_REGISTRY_IMAGE:staked-relayer-latest
   only:
     - main
+
+docker-publish-oracle:
+  stage: build
+  image: docker:19.03.12
+  services:
+    - docker:19.03.12-dind
+  before_script:
+    - apk add git
+    - git submodule update --init vendor/relayer-core
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker pull $CI_REGISTRY_IMAGE:oracle-latest || true
+    - |
+      docker build --cache-from $CI_REGISTRY_IMAGE:oracle-latest \
+      --tag $CI_REGISTRY_IMAGE:oracle-$CI_COMMIT_SHA \
+      --tag $CI_REGISTRY_IMAGE:oracle-latest \
+      --file oracle/Dockerfile .
+    - docker push $CI_REGISTRY_IMAGE:oracle-$CI_COMMIT_SHA
+    - docker push $CI_REGISTRY_IMAGE:oracle-latest
+  only:
+    - main
