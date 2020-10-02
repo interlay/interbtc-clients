@@ -63,6 +63,10 @@ struct Opts {
     /// Comma separated list of allowed origins.
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
+
+    /// Staked relayer keyring.
+    #[clap(long, default_value = "alice")]
+    keyring: AccountKeyring,
 }
 
 #[tokio::main]
@@ -72,7 +76,7 @@ async fn main() -> Result<(), Error> {
     let http_addr = opts.http_addr.parse()?;
     let oracle_timeout_ms = opts.oracle_timeout_ms;
 
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Alice.pair());
+    let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
     let provider = Arc::new(
         PolkaBtcProvider::from_url(opts.polka_btc_url, Arc::new(RwLock::new(signer))).await?,
     );
