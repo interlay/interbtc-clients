@@ -7832,6 +7832,7 @@ dependencies = [
  "hex 0.4.2",
  "parity-scale-codec",
  "primitive-types",
+ "relayer-core",
  "runtime",
  "sp-core",
  "sp-keyring",
