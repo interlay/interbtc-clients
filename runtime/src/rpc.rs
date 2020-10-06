@@ -331,6 +331,7 @@ pub trait StakedRelayerPallet {
         add_error: Option<ErrorCode>,
         remove_error: Option<ErrorCode>,
         block_hash: Option<H256Le>,
+        message: String,
     ) -> Result<(), Error>;
 
     async fn vote_on_status_update(
@@ -411,6 +412,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
         add_error: Option<ErrorCode>,
         remove_error: Option<ErrorCode>,
         block_hash: Option<H256Le>,
+        message: String,
     ) -> Result<(), Error> {
         self.ext_client
             .suggest_status_update_and_watch(
@@ -420,6 +422,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
                 add_error,
                 remove_error,
                 block_hash,
+                message.into_bytes(),
             )
             .await?;
         Ok(())

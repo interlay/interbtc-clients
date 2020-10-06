@@ -185,6 +185,7 @@ mod tests {
                 add_error: Option<ErrorCode>,
                 remove_error: Option<ErrorCode>,
                 block_hash: Option<H256Le>,
+                message: String,
             ) -> Result<(), RuntimeError>;
             async fn vote_on_status_update(
                 &self,
