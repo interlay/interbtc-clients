@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod btc_relay;
 mod issue;
 mod param;
@@ -18,7 +19,7 @@ async fn main() -> Result<(), Error> {
     // setup BTC Parachain connection
     let alice = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Alice.pair());
     let bob = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Bob.pair());
-    let alice_prov = PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), alice).await?;
+    // let alice_prov = PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), alice).await?;
     let bob_prov = PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), bob).await?;
     let charlie = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Charlie.pair());
     let charlie_prov = PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), charlie).await?;
@@ -46,12 +47,12 @@ async fn main() -> Result<(), Error> {
 
     // ISSUE
     // register Bob as a vault
-    // vault::register_vault(
-    //     bob_prov.clone(),
-    //     param::BOB_BTC_ADDRESS,
-    //     param::BOB_VAULT_COLLATERAL,
-    // )
-    // .await?;
+    vault::register_vault(
+        bob_prov.clone(),
+        param::BOB_BTC_ADDRESS,
+        param::BOB_VAULT_COLLATERAL,
+    )
+    .await?;
     // register Charlie as a vault
     vault::register_vault(
         charlie_prov.clone(),
