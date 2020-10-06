@@ -274,6 +274,7 @@ struct SuggestStatusUpdateRequest {
     add_error: Option<PolkaBtcErrorCode>,
     remove_error: Option<PolkaBtcErrorCode>,
     block_hash: Option<H256Le>,
+    message: String,
 }
 
 async fn _suggest_status_update(
@@ -290,6 +291,7 @@ async fn _suggest_status_update(
             data.add_error,
             data.remove_error,
             data.block_hash,
+            data.message,
         )
         .await
     {

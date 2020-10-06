@@ -35,6 +35,7 @@ pub struct SuggestStatusUpdateCall<T: StakedRelayers> {
     pub add_error: Option<T::ErrorCode>,
     pub remove_error: Option<T::ErrorCode>,
     pub block_hash: Option<T::H256Le>,
+    pub message: Vec<u8>,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
