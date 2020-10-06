@@ -236,7 +236,7 @@ mod tests {
         parachain
             .expect_suggest_status_update()
             .never()
-            .returning(|_, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _, _, _| Ok(()));
         parachain
             .expect_get_stake()
             .once()
@@ -260,7 +260,7 @@ mod tests {
         parachain
             .expect_suggest_status_update()
             .once()
-            .returning(|_, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _, _, _| Ok(()));
         parachain
             .expect_get_stake()
             .once()
