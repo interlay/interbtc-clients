@@ -1,4 +1,4 @@
-image: "registry.gitlab.com/interlay/btc-parachain:ci"
+image: "registry.gitlab.com/interlay/btc-parachain:ci-nightly-2020-10-01"
 
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/.cargo
