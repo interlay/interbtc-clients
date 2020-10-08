@@ -16,16 +16,11 @@ _This project is currently under active development_.
 
 You need to have Rust installed.
 
-Clone the `relayer-core` package.
+Building requires `nightly`. Run the following commands to set it up:
 
-```bash
-git clone git@gitlab.com:interlay/relayer-core.git
 ```
-
-Clone the `substrate-subxt` package.
-
-```bash
-git clone git@github.com:paritytech/substrate-subxt.git
+rustup toolchain install nightly-2020-10-01
+rustup default nightly-2020-10-01
 ```
 
 ## Getting Started
@@ -44,9 +39,9 @@ git submodule update --init --recursive
 ```
 
 Build the project.
+
 ```bash
 cargo build
-curl -fX GET 127.0.0.1:3030/best_block
 ```
 
 <p align="center">
