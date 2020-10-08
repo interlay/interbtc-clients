@@ -55,6 +55,7 @@ impl balances::Balances for PolkaBtcRuntime {
 impl btc_relay::BTCRelay for PolkaBtcRuntime {
     type H256Le = H256Le;
     type RichBlockHeader = RichBlockHeader;
+    type H160 = H160;
 }
 
 impl security::Security for PolkaBtcRuntime {
