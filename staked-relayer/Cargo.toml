@@ -23,8 +23,8 @@ serde_json = { version = "1.0.57", features = ["raw_value"] }
 
 substrate-subxt-proc-macro = { git = "https://github.com/paritytech/substrate-subxt", branch = "master" }
 substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branch = "master" }
+relayer-core = { git = "https://gitlab.com/interlay/relayer-core", branch = "main" }
 runtime = { path = "../runtime" }
-relayer-core = { path = "../vendor/relayer-core" }
 
 [dev-dependencies]
 tokio-test = "0.2.1"

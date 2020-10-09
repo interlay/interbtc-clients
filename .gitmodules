@@ -1,3 +1,0 @@
-[submodule "vendor/relayer-core"]
-	path = vendor/relayer-core
-	url = ../../interlay/relayer-core.git
