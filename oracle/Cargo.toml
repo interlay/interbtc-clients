@@ -8,7 +8,7 @@ edition = "2018"
 log = "0.4.0"
 env_logger = "0.7.1"
 clap = "3.0.0-beta.1"
-sp-keyring = "2.0.0-rc6"
+sp-keyring = "2.0.0"
 tokio = { version = "0.2.22", features = ["full"] }
 substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branch = "master" }
 runtime = { path = "../runtime" }
