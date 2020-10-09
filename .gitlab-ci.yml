@@ -16,7 +16,6 @@ test-crates:
     - rustfmt --version
     - cargo --version
   script:
-    - git submodule update --init vendor/relayer-core
     # - cargo fmt -- --check
     - cargo check --all
     - cargo test --all 
@@ -32,7 +31,6 @@ docker-publish-staked-relayer:
     - docker:19.03.12-dind
   before_script:
     - apk add git
-    - git submodule update --init vendor/relayer-core
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
     - docker pull $CI_REGISTRY_IMAGE:staked-relayer-latest || true
@@ -53,7 +51,6 @@ docker-publish-oracle:
     - docker:19.03.12-dind
   before_script:
     - apk add git
-    - git submodule update --init vendor/relayer-core
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
     - docker pull $CI_REGISTRY_IMAGE:oracle-latest || true

@@ -5340,6 +5340,7 @@ dependencies = [
 [[package]]
 name = "relayer-core"
 version = "0.1.0"
+source = "git+https://gitlab.com/interlay/relayer-core?branch=main#9687813fc2b5a5cab40eefdf8c0a98ab737a486c"
 dependencies = [
  "bitcoincore-rpc",
  "hex 0.4.2",
