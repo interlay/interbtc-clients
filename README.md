@@ -14,9 +14,33 @@ _This project is currently under active development_.
 
 ## Prerequisites
 
-You need to have Rust installed.
+Before running the client software, please start Bitcoin Core and the PolkaBTC Parachain.
 
-Building requires `nightly`. Run the following commands to set it up:
+This repository contains a docker-compose file which starts PolkaBTC in `--dev` mode and
+a Bitcoin daemon in `-regtest` mode.
+
+```bash
+docker-compose up
+```
+
+Run the following command to generate an address and mine some blocks:
+
+```bash
+address=`bitcoin-cli -regtest getnewaddress`
+bitcoin-cli -regtest generatetoaddress 10 $address
+```
+
+> Note: This may require `rpcuser` and `rpcpassword` to be set.
+
+Alternatively run `bitcoin-cli` from docker: 
+
+```bash
+docker run --network host --entrypoint bitcoin-cli ruimarinho/bitcoin-core:0.20 -regtest -rpcuser=rpcuser -rpcpassword=rpcpassword ${COMMAND}
+```
+
+### Development
+
+Building requires Rust `nightly`. Run the following commands to set it up:
 
 ```
 rustup toolchain install nightly-2020-10-01
@@ -25,23 +49,29 @@ rustup default nightly-2020-10-01
 
 ## Getting Started
 
-Clone the repository.
+### Oracle
+
+PolkaBTC requires a price oracle to calculate collateralization rates, for local development we can run this client
+to automatically update the exchange rate at a pre-determined time interval.
 
 ```bash
-git clone git@gitlab.com:interlay/polkabtc-clients.git
+cargo run -p oracle
 ```
 
-Clone the submodules.
+### Staked Relayer
+
+The [Staked Relayer](./staked-relayer/README.md) client is responsible for submitting Bitcoin block headers to PolkaBTC and reporting on various error states.
 
 ```bash
-cd polkabtc-clients 
-git submodule update --init --recursive
+cargo run -p staked-relayer -- --http-addr '[::0]:3030'
 ```
 
-Build the project.
+### Vault
+
+The [Vault](./vault/README.md) client is used to intermediate assets between Bitcoin and PolkaBTC.
 
 ```bash
-cargo build
+cargo run -p vault
 ```
 
 <p align="center">
