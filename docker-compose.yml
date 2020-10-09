@@ -1,0 +1,20 @@
+version: "3.8"
+services:
+  polkabtc:
+    image: "registry.gitlab.com/interlay/btc-parachain:62904102a0caee2e0c24555ddefef89614cc9757"
+    command:
+      - btc-parachain
+      - --dev
+    network_mode: host
+    ports:
+      - "9944:9944"
+  bitcoind:
+    image: "ruimarinho/bitcoin-core:0.20"
+    command:
+      - -regtest
+      - -rpcuser=rpcuser
+      - -rpcpassword=rpcpassword
+      # - -debug
+    network_mode: host
+    ports:
+      - "18443:18443"
