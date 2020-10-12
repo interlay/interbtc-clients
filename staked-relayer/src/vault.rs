@@ -1,3 +1,4 @@
+use crate::utils;
 use crate::Error;
 use crate::{
     bitcoin,
@@ -8,11 +9,11 @@ use futures::stream::StreamExt;
 use log::{error, info};
 use runtime::{
     AccountId, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcVault, StakedRelayerPallet,
-    MINIMUM_STAKE,
 };
 use sp_core::H160;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 
 #[derive(Default)]
@@ -41,15 +42,23 @@ pub struct VaultsMonitor<P: StakedRelayerPallet, B: BitcoinCore> {
     btc_rpc: Arc<B>,
     polka_rpc: Arc<P>,
     vaults: Arc<Vaults>,
+    delay: Duration,
 }
 
 impl<P: StakedRelayerPallet, B: BitcoinCore> VaultsMonitor<P, B> {
-    pub fn new(btc_height: u32, btc_rpc: Arc<B>, vaults: Arc<Vaults>, polka_rpc: Arc<P>) -> Self {
+    pub fn new(
+        btc_height: u32,
+        btc_rpc: Arc<B>,
+        vaults: Arc<Vaults>,
+        polka_rpc: Arc<P>,
+        delay: Duration,
+    ) -> Self {
         Self {
             btc_height,
             btc_rpc,
-            vaults,
             polka_rpc,
+            vaults,
+            delay,
         }
     }
 
@@ -114,12 +123,13 @@ impl<P: StakedRelayerPallet, B: BitcoinCore> VaultsMonitor<P, B> {
     }
 
     async fn scan_next_height(&mut self) -> Result<(), Error> {
-        if self.polka_rpc.get_stake().await? < MINIMUM_STAKE {
-            return Ok(());
-        }
+        utils::wait_until_registered(&self.polka_rpc, self.delay).await;
 
         info!("Scanning height {}", self.btc_height);
-        let block_hash = self.btc_rpc.wait_for_block(self.btc_height).await?;
+        let block_hash = self
+            .btc_rpc
+            .wait_for_block(self.btc_height, self.delay)
+            .await?;
         for maybe_tx in self.btc_rpc.get_block_transactions(&block_hash)? {
             if let Some(tx) = maybe_tx {
                 self.check_transaction(tx, block_hash).await?
@@ -164,7 +174,6 @@ async fn filter_matching_vaults(addresses: Vec<H160>, vaults: &Vaults) -> Vec<Ac
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use bitcoin::BlockMonitor;
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
     use sp_core::U256;
@@ -213,8 +222,9 @@ mod tests {
     mockall::mock! {
         Bitcoin {}
 
+        #[async_trait]
         trait BitcoinCore {
-            fn wait_for_block(&self, height: u32) -> BlockMonitor<'static>;
+            async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, Error>;
 
             fn get_block_transactions(
                 &self,
@@ -268,6 +278,7 @@ mod tests {
             Arc::new(MockBitcoin::default()),
             Arc::new(Vaults::default()),
             Arc::new(parachain),
+            Duration::from_millis(100),
         );
 
         monitor
@@ -297,6 +308,7 @@ mod tests {
             Arc::new(MockBitcoin::default()),
             Arc::new(Vaults::default()),
             Arc::new(parachain),
+            Duration::from_millis(100),
         );
 
         monitor

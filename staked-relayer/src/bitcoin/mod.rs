@@ -2,7 +2,7 @@ mod block;
 
 use crate::utils::read_env;
 use crate::Error;
-pub use block::{BitcoinCore, BitcoinMonitor, BlockMonitor};
+pub use block::{BitcoinCore, BitcoinMonitor};
 use relayer_core::bitcoin::bitcoincore_rpc::{bitcoin::blockdata::opcodes, Auth, Client};
 pub use relayer_core::bitcoin::{
     bitcoincore_rpc,
