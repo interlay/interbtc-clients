@@ -1,9 +1,10 @@
 use super::Error;
 use crate::bitcoin::{BitcoinCore, BitcoinMonitor, BlockHash, Hash};
+use crate::utils;
 use log::{error, info};
 use runtime::{
     Error as RuntimeError, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcStatusUpdateSuggestedEvent,
-    StakedRelayerPallet, StatusCode, MINIMUM_STAKE,
+    StakedRelayerPallet, StatusCode,
 };
 use std::sync::Arc;
 
@@ -21,7 +22,7 @@ impl<B: BitcoinCore, P: StakedRelayerPallet> StatusUpdateMonitor<B, P> {
         &self,
         event: PolkaBtcStatusUpdateSuggestedEvent,
     ) -> Result<(), Error> {
-        if self.polka_rpc.get_stake().await? < MINIMUM_STAKE {
+        if !utils::is_registered(&self.polka_rpc).await {
             return Ok(());
         }
         // TODO: ignore self submitted
@@ -86,7 +87,7 @@ impl<B: BitcoinCore, P: StakedRelayerPallet> RelayMonitor<B, P> {
     }
 
     pub async fn on_store_block(&self, height: u32, hash: H256Le) -> Result<(), Error> {
-        if self.polka_rpc.get_stake().await? < MINIMUM_STAKE {
+        if !utils::is_registered(&self.polka_rpc).await {
             return Ok(());
         }
         info!("Block submission: {}", hash);
@@ -139,12 +140,13 @@ fn convert_block_hash(hash: Option<H256Le>) -> Result<BlockHash, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bitcoin::{BlockMonitor, GetRawTransactionResult, Txid};
+    use crate::bitcoin::{GetRawTransactionResult, Txid};
     use async_trait::async_trait;
     use runtime::PolkaBtcStatusUpdate;
-    use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
+    use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode, MINIMUM_STAKE};
     use sp_core::U256;
     use sp_keyring::AccountKeyring;
+    use std::time::Duration;
     use tokio_test::assert_ok;
 
     macro_rules! assert_err {
@@ -208,8 +210,9 @@ mod tests {
     mockall::mock! {
         Bitcoin {}
 
+        #[async_trait]
         trait BitcoinCore {
-            fn wait_for_block(&self, height: u32) -> BlockMonitor<'static>;
+            async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, Error>;
 
             fn get_block_transactions(
                 &self,

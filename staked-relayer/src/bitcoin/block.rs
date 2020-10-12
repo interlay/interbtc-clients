@@ -1,17 +1,17 @@
+use crate::Error;
+use async_trait::async_trait;
 use relayer_core::bitcoin::bitcoincore_rpc::{
     bitcoin::{consensus::encode::serialize, hash_types::BlockHash, Txid},
     bitcoincore_rpc_json::GetRawTransactionResult,
     jsonrpc::Error as JsonRpcError,
     Client, Error as BtcError, RpcApi,
 };
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::time::Duration;
+use tokio::time::delay_for;
 
-use crate::Error;
-
+#[async_trait]
 pub trait BitcoinCore {
-    fn wait_for_block(&self, height: u32) -> BlockMonitor;
+    async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, Error>;
 
     fn get_block_transactions(
         &self,
@@ -37,16 +37,29 @@ impl BitcoinMonitor {
     }
 }
 
+#[async_trait]
 impl BitcoinCore for BitcoinMonitor {
-    /// Return an asynchronous future that can be `await`ed on
-    /// the specified height.
+    /// Wait for a specified height to return a `BlockHash` or
+    /// exit on error.
     ///
     /// # Arguments
     /// * `height` - block height to fetch
-    fn wait_for_block(&self, height: u32) -> BlockMonitor {
-        BlockMonitor {
-            rpc: &self.rpc,
-            height,
+    /// * `delay` - wait period before re-checking
+    async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, Error> {
+        loop {
+            match self.rpc.get_block_hash(height.into()) {
+                Ok(hash) => return Ok(hash),
+                Err(e) => {
+                    delay_for(delay).await;
+                    if let BtcError::JsonRpc(JsonRpcError::Rpc(rpc_error)) = &e {
+                        // https://github.com/bitcoin/bitcoin/blob/be3af4f31089726267ce2dbdd6c9c153bb5aeae1/src/rpc/protocol.h#L43
+                        if rpc_error.code == -8 {
+                            continue;
+                        }
+                    }
+                    return Err(e.into());
+                }
+            }
         }
     }
 
@@ -113,30 +126,5 @@ impl BitcoinCore for BitcoinMonitor {
             Ok(_) => true,
             Err(_) => false,
         })
-    }
-}
-
-pub struct BlockMonitor<'a> {
-    rpc: &'a Client,
-    height: u32,
-}
-
-impl<'a> Future for BlockMonitor<'a> {
-    type Output = Result<BlockHash, Error>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.rpc.get_block_hash(self.height.into()) {
-            Ok(hash) => Poll::Ready(Ok(hash)),
-            Err(e) => {
-                if let BtcError::JsonRpc(JsonRpcError::Rpc(rpc_error)) = &e {
-                    // https://github.com/bitcoin/bitcoin/blob/be3af4f31089726267ce2dbdd6c9c153bb5aeae1/src/rpc/protocol.h#L43
-                    if rpc_error.code == -8 {
-                        cx.waker().wake_by_ref();
-                        return Poll::Pending;
-                    }
-                }
-                Poll::Ready(Err(e.into()))
-            }
-        }
     }
 }

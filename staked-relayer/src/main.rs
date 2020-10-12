@@ -41,6 +41,10 @@ struct Opts {
     #[clap(long)]
     scan_start_height: Option<u32>,
 
+    /// Delay for checking Bitcoin for new blocks (in seconds).
+    #[clap(long, default_value = "60")]
+    scan_block_delay: u64,
+
     /// Starting height to relay block headers, if not defined
     /// use the best height as reported by the relay module.
     #[clap(long)]
@@ -116,6 +120,7 @@ async fn main() -> Result<(), Error> {
         btc_rpc.clone(),
         vaults.clone(),
         provider.clone(),
+        Duration::from_secs(opts.scan_block_delay),
     );
 
     let vaults_listener = listen_for_vaults_registered(provider.clone(), vaults);
