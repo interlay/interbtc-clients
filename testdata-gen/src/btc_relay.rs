@@ -1,13 +1,12 @@
 #![allow(dead_code)]
 #[path = "param.rs"]
 mod param;
-#[path = "utils.rs"]
-mod utils;
 
 use module_bitcoin::formatter::Formattable;
 use module_bitcoin::types::*;
 use runtime::{BtcRelayPallet, Error, PolkaBtcProvider};
 use sp_core::{H160, H256, U256};
+use bitcoin::get_address_from_string;
 
 pub struct BtcSimulator {
     prov: PolkaBtcProvider,
@@ -70,7 +69,7 @@ impl BtcSimulator {
     ) -> Result<(H256Le, u32, Vec<u8>, Vec<u8>), Error> {
         self.height += 1;
 
-        let dest_address = utils::get_address_from_string(btc_address);
+        let dest_address = get_address_from_string(btc_address);
         let address = Address::from(*dest_address.as_fixed_bytes());
         let value = amount as i64;
         let transaction = TransactionBuilder::new()

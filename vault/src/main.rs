@@ -1,4 +1,3 @@
-mod bitcoin;
 mod error;
 
 use bitcoin::BitcoinCore;

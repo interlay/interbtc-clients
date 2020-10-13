@@ -5,8 +5,8 @@ mod btc_relay;
 mod issue;
 mod param;
 mod redeem;
-mod utils;
 mod vault;
+mod error;
 
 use runtime::{
     Error, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime, TimestampPallet,

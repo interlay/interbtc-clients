@@ -1,13 +1,12 @@
 #![allow(dead_code)]
 #[path = "param.rs"]
 mod param;
-#[path = "utils.rs"]
-mod utils;
 
 use module_bitcoin::types::H256Le;
 use runtime::{Error, PolkaBtcProvider, RedeemPallet};
 use sp_core::crypto::AccountId32;
 use sp_core::H256;
+use bitcoin::get_address_from_string;
 
 /// Request redeem of PolkaBTC
 pub async fn request_redeem(
@@ -16,7 +15,7 @@ pub async fn request_redeem(
     btc_address: &str,
     vault_id: AccountId32,
 ) -> Result<H256, Error> {
-    let address = utils::get_address_from_string(btc_address);
+    let address = get_address_from_string(btc_address);
     let redeem_id = redeem_prov
         .request_redeem(amount_polka_btc, address, vault_id.clone())
         .await?;
