@@ -1,11 +1,11 @@
 use core::marker::PhantomData;
 use frame_support::Parameter;
-use parity_scale_codec::{Codec, Encode};
+use parity_scale_codec::{Codec, Decode, Encode};
 use sp_runtime::traits::{AtLeast32Bit, MaybeSerialize, Member};
 use std::fmt::Debug;
 use substrate_subxt::balances::AccountData;
 use substrate_subxt::system::{System, SystemEventsDecoder};
-use substrate_subxt_proc_macro::{module, Store};
+use substrate_subxt_proc_macro::{module, Event, Store};
 
 #[module]
 pub trait DOT: System {
@@ -26,4 +26,10 @@ pub struct AccountStore<T: DOT> {
     #[store(returns = AccountData<T::Balance>)]
     pub _runtime: PhantomData<T>,
     pub account_id: T::AccountId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct ReservedEvent<T: DOT> {
+    pub account_id: T::AccountId,
+    pub balance: T::Balance,
 }

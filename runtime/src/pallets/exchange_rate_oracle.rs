@@ -10,14 +10,12 @@ use substrate_subxt_proc_macro::{module, Call, Event, Store};
 pub trait ExchangeRateOracle: Timestamp + Security {
     #[allow(non_camel_case_types)]
     type u128: Codec + EncodeLike + Member + Default;
-    type StatusCode: Codec + EncodeLike + Member + Default;
-    type ErrorCode: Codec + EncodeLike + Member + Default;
 }
 
 /// Current BTC/DOT exchange rate
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct ExchangeRateStore<T: ExchangeRateOracle> {
-    #[store(returns = u128)]
+    #[store(returns = T::u128)]
     pub _runtime: PhantomData<T>,
 }
 
@@ -37,12 +35,12 @@ pub struct MaxDelayStore<T: ExchangeRateOracle> {
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct SetExchangeRateCall<T: ExchangeRateOracle> {
-    pub rate: u128,
+    pub rate: T::u128,
     pub _runtime: PhantomData<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct SetExchangeRateEvent<T: ExchangeRateOracle> {
     pub sender: T::AccountId,
-    pub rate: u128,
+    pub rate: T::u128,
 }

@@ -12,10 +12,7 @@ use substrate_subxt_proc_macro::{module, Call, Event, Store};
 #[module]
 pub trait StakedRelayers: System + Security + Balances {
     type DOT: Codec + EncodeLike + Member + Default;
-    type U256: Codec + EncodeLike + Member + Default;
     type H256Le: Codec + EncodeLike + Member + Default;
-    type StatusCode: Codec + EncodeLike + Member + Default;
-    type ErrorCode: Codec + EncodeLike + Member + Default;
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
@@ -40,7 +37,8 @@ pub struct SuggestStatusUpdateCall<T: StakedRelayers> {
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct VoteOnStatusUpdateCall<T: StakedRelayers> {
-    pub status_update_id: T::U256,
+    pub _runtime: PhantomData<T>,
+    pub status_update_id: u64,
     pub approve: bool,
 }
 
@@ -50,7 +48,7 @@ pub struct ReportOracleOffline<T: StakedRelayers> {
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct ReportVaultTheft<T: StakedRelayers> {
+pub struct ReportVaultTheftCall<T: StakedRelayers> {
     pub vault_id: T::AccountId,
     pub tx_id: T::H256Le,
     pub tx_block_height: u32,
@@ -72,7 +70,7 @@ pub struct DeregisterStakedRelayerEvent<T: StakedRelayers> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct StatusUpdateSuggestedEvent<T: StakedRelayers> {
-    pub status_update_id: T::U256,
+    pub status_update_id: u64,
     pub account_id: T::AccountId,
     pub status_code: T::StatusCode,
     pub add_error: Option<T::ErrorCode>,
@@ -85,6 +83,7 @@ pub struct ExecuteStatusUpdateEvent<T: StakedRelayers> {
     pub status_code: T::StatusCode,
     pub add_error: Option<T::ErrorCode>,
     pub remove_error: Option<T::ErrorCode>,
+    pub block_hash: Option<T::H256Le>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
@@ -101,8 +100,8 @@ pub struct ActiveStakedRelayersCountStore<T: StakedRelayers> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct StatusUpdatesStore<T: StakedRelayers> {
+pub struct ActiveStatusUpdatesStore<T: StakedRelayers> {
     #[store(returns = StatusUpdate<T::AccountId, T::BlockNumber, T::DOT>)]
     pub _runtime: PhantomData<T>,
-    pub status_id: T::U256,
+    pub status_id: u64,
 }

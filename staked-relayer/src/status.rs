@@ -186,7 +186,7 @@ mod tests {
             ) -> Result<(), RuntimeError>;
             async fn vote_on_status_update(
                 &self,
-                status_update_id: U256,
+                status_update_id: u64,
                 approve: bool,
             ) -> Result<(), RuntimeError>;
             async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, RuntimeError>;
@@ -305,7 +305,7 @@ mod tests {
         assert_ok!(
             monitor
                 .on_status_update_suggested(PolkaBtcStatusUpdateSuggestedEvent {
-                    status_update_id: U256::zero(),
+                    status_update_id: 0,
                     account_id: AccountKeyring::Bob.to_account_id(),
                     status_code: StatusCode::Running,
                     add_error: None,
@@ -331,7 +331,7 @@ mod tests {
         assert_err!(
             monitor
                 .on_status_update_suggested(PolkaBtcStatusUpdateSuggestedEvent {
-                    status_update_id: U256::zero(),
+                    status_update_id: 0,
                     account_id: AccountKeyring::Bob.to_account_id(),
                     status_code: StatusCode::Error,
                     add_error: Some(ErrorCode::NoDataBTCRelay),
@@ -365,7 +365,7 @@ mod tests {
         assert_ok!(
             monitor
                 .on_status_update_suggested(PolkaBtcStatusUpdateSuggestedEvent {
-                    status_update_id: U256::zero(),
+                    status_update_id: 0,
                     account_id: AccountKeyring::Bob.to_account_id(),
                     status_code: StatusCode::Error,
                     add_error: Some(ErrorCode::NoDataBTCRelay),
@@ -398,7 +398,7 @@ mod tests {
         assert_ok!(
             monitor
                 .on_status_update_suggested(PolkaBtcStatusUpdateSuggestedEvent {
-                    status_update_id: U256::zero(),
+                    status_update_id: 0,
                     account_id: AccountKeyring::Bob.to_account_id(),
                     status_code: StatusCode::Error,
                     add_error: Some(ErrorCode::NoDataBTCRelay),
@@ -422,7 +422,7 @@ mod tests {
         assert_ok!(
             monitor
                 .on_status_update_suggested(PolkaBtcStatusUpdateSuggestedEvent {
-                    status_update_id: U256::zero(),
+                    status_update_id: 0,
                     account_id: AccountKeyring::Bob.to_account_id(),
                     status_code: StatusCode::Running,
                     add_error: None,
