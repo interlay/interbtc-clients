@@ -336,7 +336,7 @@ pub trait StakedRelayerPallet {
 
     async fn vote_on_status_update(
         &self,
-        status_update_id: U256,
+        status_update_id: u64,
         approve: bool,
     ) -> Result<(), Error>;
 
@@ -435,7 +435,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// * `approve` - whether to approve or reject the proposal
     async fn vote_on_status_update(
         &self,
-        status_update_id: U256,
+        status_update_id: u64,
         approve: bool,
     ) -> Result<(), Error> {
         self.ext_client
@@ -454,7 +454,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     ) -> Result<PolkaBtcStatusUpdate, Error> {
         Ok(self
             .ext_client
-            .status_updates(status_update_id.into(), None)
+            .active_status_updates(status_update_id, None)
             .await?)
     }
 

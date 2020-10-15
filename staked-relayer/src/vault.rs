@@ -198,7 +198,7 @@ mod tests {
             ) -> Result<(), RuntimeError>;
             async fn vote_on_status_update(
                 &self,
-                status_update_id: U256,
+                status_update_id: u64,
                 approve: bool,
             ) -> Result<(), RuntimeError>;
             async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, RuntimeError>;

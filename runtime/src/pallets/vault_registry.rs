@@ -13,6 +13,7 @@ pub trait VaultRegistry: System + Security {
     type Balance: Codec + EncodeLike + Member + Default;
     type DOT: Codec + EncodeLike + Member + Default;
     type PolkaBTC: Codec + EncodeLike + Member + Default;
+    type BTCBalance: Codec + EncodeLike + Member + Default;
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
@@ -45,5 +46,5 @@ pub struct LiquidationCollateralThresholdStore<T: VaultRegistry> {
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct IncreaseToBeIssuedTokensEvent<T: VaultRegistry> {
     pub vault_id: T::AccountId,
-    pub tokens: T::PolkaBTC,
+    pub tokens: T::BTCBalance,
 }

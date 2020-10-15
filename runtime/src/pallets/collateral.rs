@@ -9,6 +9,7 @@ use substrate_subxt_proc_macro::{module, Event};
 #[module]
 pub trait Collateral: System + Security {
     type DOT: Codec + EncodeLike + Member + Default;
+    type Balance: Codec + EncodeLike + Member + Default;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]

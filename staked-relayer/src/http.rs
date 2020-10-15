@@ -302,7 +302,7 @@ async fn _suggest_status_update(
 
 #[derive(Encode, Decode, Debug)]
 struct VoteOnStatusUpdateRequest {
-    pub status_update_id: U256,
+    pub status_update_id: u64,
     pub approve: bool,
 }
 
