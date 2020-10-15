@@ -1,5 +1,5 @@
 mod error;
-pub use error::Error;
+pub use error::{ConversionError, Error};
 
 pub use bitcoincore_rpc::{
     bitcoin::{
@@ -69,7 +69,7 @@ impl BitcoinCore {
 
         let mut tx = raw_tx.transaction().unwrap();
 
-        let recipient_addr = get_address_from_string(address.as_str());
+        let recipient_addr = get_hash_from_string(address.as_str())?;
         let recipient_raw = recipient_addr.as_bytes();
         let output0_addr = &tx.output[0].script_pubkey.as_bytes()[2..];
 
@@ -150,32 +150,37 @@ fn add_redeem_id(tx: &mut Transaction, redeem_id: &[u8; 32]) {
     );
 }
 
-pub fn get_address_from_string(btc_address: &str) -> H160 {
-    let addr = Address::from_str(btc_address).unwrap();
+pub fn get_hash_from_string(btc_address: &str) -> Result<H160, ConversionError> {
+    let addr = Address::from_str(btc_address)?;
     let hash = match addr.payload {
         Payload::PubkeyHash(hash) => hash.as_hash().into_inner(),
         Payload::ScriptHash(hash) => hash.as_hash().into_inner(),
         Payload::WitnessProgram {
             version: _,
             program,
-        } => program.try_into().unwrap(),
+        } => program
+            .try_into()
+            .map_err(|_| ConversionError::WitnessProgramError)?,
     };
-    H160::from(hash)
+    Ok(H160::from(hash))
 }
 
-pub fn get_address_from_hex(btc_address: &str) -> H160 {
-    H160::from_slice(hex::decode(btc_address).unwrap().as_slice())
+pub fn get_address_from_hex(btc_address: &str) -> Result<H160, ConversionError> {
+    let decoded = hex::decode(btc_address)?;
+    Ok(H160::from_slice(decoded.as_slice()))
 }
 
-pub fn hash_to_p2wpkh(btc_address: H160, network: Network) -> String {
+pub fn hash_to_p2wpkh(btc_address: H160, network: Network) -> Result<String, ConversionError> {
     let witness_script = Builder::new()
         .push_opcode(0.into())
         .push_slice(btc_address.as_bytes())
         .into_script();
 
-    let payload = Payload::from_script(&witness_script).unwrap();
+    let payload =
+        Payload::from_script(&witness_script).ok_or(ConversionError::WitnessProgramError)?;
     let address = Address { network, payload };
-    address.to_string()
+
+    Ok(address.to_string())
 }
 
 #[cfg(test)]
@@ -184,7 +189,7 @@ mod tests {
     #[test]
     fn test_hash_to_p2wpkh() {
         let addr = "bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f";
-        let addr_hash = get_address_from_string(addr);
+        let addr_hash = get_hash_from_string(addr);
         let rebuilt_addr = hash_to_p2wpkh(addr_hash, Network::Regtest);
         assert_eq!(addr, rebuilt_addr);
     }

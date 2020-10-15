@@ -2,11 +2,12 @@
 #[path = "param.rs"]
 mod param;
 
+use crate::Error;
+use bitcoin::get_hash_from_string;
 use module_bitcoin::formatter::Formattable;
 use module_bitcoin::types::*;
-use runtime::{BtcRelayPallet, Error, PolkaBtcProvider};
+use runtime::{BtcRelayPallet, PolkaBtcProvider};
 use sp_core::{H160, H256, U256};
-use bitcoin::get_address_from_string;
 
 pub struct BtcSimulator {
     prov: PolkaBtcProvider,
@@ -30,8 +31,7 @@ impl BtcSimulator {
 
     /// Initialize BTC Relay with a generated Bitcoin block
     pub async fn initialize(&mut self) -> Result<(), Error> {
-        let alice_address =
-            H160::from_slice(hex::decode(param::ALICE_BTC_ADDRESS).unwrap().as_slice());
+        let alice_address = get_hash_from_string(param::ALICE_BTC_ADDRESS)?;
         let address = Address::from(*alice_address.as_fixed_bytes());
         // initialize BTC Relay with one block
         let init_block = BlockBuilder::new()
@@ -69,7 +69,7 @@ impl BtcSimulator {
     ) -> Result<(H256Le, u32, Vec<u8>, Vec<u8>), Error> {
         self.height += 1;
 
-        let dest_address = get_address_from_string(btc_address);
+        let dest_address = get_hash_from_string(btc_address)?;
         let address = Address::from(*dest_address.as_fixed_bytes());
         let value = amount as i64;
         let transaction = TransactionBuilder::new()
