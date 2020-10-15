@@ -197,8 +197,8 @@ mod tests {
     #[test]
     fn test_hash_to_p2wpkh() {
         let addr = "bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f";
-        let addr_hash = get_hash_from_string(addr);
-        let rebuilt_addr = hash_to_p2wpkh(addr_hash, Network::Regtest);
+        let addr_hash = get_hash_from_string(addr).unwrap();
+        let rebuilt_addr = hash_to_p2wpkh(addr_hash, Network::Regtest).unwrap();
         assert_eq!(addr, rebuilt_addr);
     }
 }
