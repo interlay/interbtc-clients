@@ -50,7 +50,7 @@ impl BitcoinCore {
         address: String,
         sat: u64,
         redeem_id: &[u8; 32],
-    ) -> Result<Txid, crate::Error> {
+    ) -> Result<Txid, Error> {
         let mut recipients = HashMap::<String, Amount>::new();
         recipients.insert(address.clone(), Amount::from_sat(sat));
 
@@ -69,21 +69,8 @@ impl BitcoinCore {
 
         let mut tx = raw_tx.transaction().unwrap();
 
-        let recipient_addr = get_hash_from_string(address.as_str())?;
-        let recipient_raw = recipient_addr.as_bytes();
-        let output0_addr = &tx.output[0].script_pubkey.as_bytes()[2..];
+        fix_transaction_output_order(&mut tx, address)?;
 
-        if recipient_raw != output0_addr {
-            // most likely the return-to-self output was put first
-            if tx.output.len() > 1 && recipient_raw == &tx.output[1].script_pubkey.as_bytes()[2..] {
-                tx.output.swap(0, 1);
-            } else {
-                // if this executes we have a bug in the code
-                panic!("Could not find recipient address in bitcoin transaction");
-            }
-        }
-
-        // let q = tx.output[0].extract_address();
         // include the redeem is in the transaction
         add_redeem_id(&mut tx, redeem_id);
 
@@ -136,6 +123,27 @@ impl<'a> Future for TxMonitor<'a> {
     }
 }
 
+/// Ensures we follow the spec: the payment to the recipient needs to be the
+/// first uxto. Funding the transaction sometimes places the return-to-self
+/// uxto first, so this function performs a swap of uxtos if necessary
+fn fix_transaction_output_order(tx: &mut Transaction, recipient_address: String) -> Result<(), Error>{
+    let address_hash = get_hash_from_string(recipient_address.as_str())?;
+    let recipient_raw = address_hash.as_bytes();
+    let output0_addr = &tx.output[0].script_pubkey.as_bytes()[2..];
+
+    if recipient_raw != output0_addr {
+        // most likely the return-to-self output was put first
+        if tx.output.len() > 1 && recipient_raw == &tx.output[1].script_pubkey.as_bytes()[2..] {
+            tx.output.swap(0, 1);
+        } else {
+            // if this executes we have a bug in the code
+            panic!("Could not find recipient address in bitcoin transaction");
+        }
+    }
+    Ok(())
+}
+
+/// Adds op_return with the given id at index 1, occording to the redeem spec
 fn add_redeem_id(tx: &mut Transaction, redeem_id: &[u8; 32]) {
     // Index 1: Data UTXO: OP_RETURN containing identifier
     tx.output.insert(
