@@ -1,0 +1,11 @@
+[package]
+name = "bitcoin"
+version = "0.1.0"
+authors = ["Interlay <contact@interlay.io>"]
+edition = "2018"
+
+[dependencies]
+thiserror = "1.0"
+bitcoincore-rpc = { git = "https://github.com/gregdhill/rust-bitcoincore-rpc" }
+hex = "0.4.2"
+sp-core = "2.0.0-rc6"

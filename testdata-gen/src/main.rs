@@ -2,18 +2,17 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 mod btc_relay;
+mod error;
 mod issue;
 mod param;
 mod redeem;
-mod utils;
 mod vault;
 
-use runtime::{
-    Error, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime, TimestampPallet,
-};
+use error::Error;
+use runtime::{ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime, TimestampPallet};
+use sp_core::H256;
 use sp_keyring::AccountKeyring;
 use substrate_subxt::PairSigner;
-use sp_core::H256;
 
 /// Generates testdata to be used on a development environment of the BTC-Parachain
 #[tokio::main]
@@ -24,7 +23,8 @@ async fn main() -> Result<(), Error> {
     // let alice_prov = PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), alice).await?;
     let bob_prov = PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), bob).await?;
     let charlie = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Charlie.pair());
-    let charlie_prov = PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), charlie).await?;
+    let charlie_prov =
+        PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), charlie).await?;
 
     // EXCHANGE RATE
     let oracle_prov = bob_prov.clone();

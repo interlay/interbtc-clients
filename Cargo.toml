@@ -5,7 +5,7 @@ members = [
   "runtime",
   "testdata-gen",
   "vault",
+  "bitcoin"
 ]
-
 [patch.crates-io]
 jsonrpsee = { git = 'https://github.com/gregdhill/jsonrpsee', branch = '0.1.0', version = '0.1.0', features = ["ws"] }

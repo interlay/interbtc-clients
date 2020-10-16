@@ -18,6 +18,8 @@ substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branc
 substrate-subxt-proc-macro = "0.12.0"
 runtime = { path = "../runtime" }
 relayer-core = { git = "https://gitlab.com/interlay/relayer-core", branch = "main" }
+thiserror = "1.0"
+bitcoin = { path = "../bitcoin" }
 
 [dependencies.module-bitcoin]
 git = "https://gitlab.com/interlay/btc-parachain"

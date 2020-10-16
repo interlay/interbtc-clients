@@ -471,6 +471,16 @@ dependencies = [
 
 [[package]]
 name = "bitcoin"
+version = "0.1.0"
+dependencies = [
+ "bitcoincore-rpc",
+ "hex 0.4.2",
+ "sp-core",
+ "thiserror",
+]
+
+[[package]]
+name = "bitcoin"
 version = "0.1.1"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#2691be86644106e7c8fed904b1877d1886396feb"
 dependencies = [
@@ -7893,6 +7903,7 @@ dependencies = [
 name = "testdata-gen"
 version = "0.1.0"
 dependencies = [
+ "bitcoin 0.1.0",
  "bitcoin 0.1.1",
  "frame-system",
  "hex 0.4.2",
@@ -7904,6 +7915,7 @@ dependencies = [
  "sp-keyring",
  "substrate-subxt",
  "substrate-subxt-proc-macro 0.12.0",
+ "thiserror",
  "tokio 0.2.22",
 ]
 
@@ -8675,10 +8687,9 @@ checksum = "05e42f7c18b8f902290b009cde6d651262f956c98bc51bca4cd1d511c9cd85c7"
 name = "vault"
 version = "0.1.0"
 dependencies = [
- "bitcoincore-rpc",
+ "bitcoin 0.1.0",
  "clap 3.0.0-beta.2",
  "env_logger",
- "hex 0.4.2",
  "log 0.4.11",
  "runtime",
  "sp-keyring",

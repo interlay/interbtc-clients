@@ -1,9 +1,9 @@
 #[path = "param.rs"]
 mod param;
-#[path = "utils.rs"]
-mod utils;
 
-use runtime::{Error, PolkaBtcProvider, VaultRegistryPallet};
+use crate::Error;
+use bitcoin::get_hash_from_string;
+use runtime::{PolkaBtcProvider, VaultRegistryPallet};
 
 /// Register a vault with a Bitcoin address
 pub async fn register_vault(
@@ -11,7 +11,7 @@ pub async fn register_vault(
     btc_address: &str,
     collateral: u128,
 ) -> Result<(), Error> {
-    let address = utils::get_address_from_string(btc_address);
+    let address = get_hash_from_string(btc_address)?;
     vault_prov.register_vault(collateral, address).await?;
     println!("Registered vault {:?}", vault_prov.get_address().await);
 
