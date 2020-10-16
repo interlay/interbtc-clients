@@ -3,10 +3,10 @@ use bitcoin::Error as BitcoinError;
 use parity_scale_codec::Error as CodecError;
 use relayer_core::bitcoin::bitcoincore_rpc::Error as BtcRpcError;
 use relayer_core::Error as CoreError;
+use runtime::substrate_subxt::Error as XtError;
 use runtime::Error as RuntimeError;
 use serde_json::Error as SerdeError;
 use std::net::AddrParseError;
-use substrate_subxt::Error as XtError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

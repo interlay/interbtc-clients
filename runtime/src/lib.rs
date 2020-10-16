@@ -21,6 +21,7 @@ use sp_runtime::{
     MultiSignature, OpaqueExtrinsic,
 };
 use std::collections::BTreeSet;
+pub use substrate_subxt;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, system, Runtime};
 
 pub const MINIMUM_STAKE: u64 = 100;

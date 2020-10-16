@@ -4,10 +4,10 @@ use bitcoin::BitcoinCore;
 use clap::Clap;
 use error::Error;
 use log::{error, info};
+use runtime::substrate_subxt::PairSigner;
 use runtime::{H256Le, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
-use substrate_subxt::PairSigner;
 
 /// The Vault client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.

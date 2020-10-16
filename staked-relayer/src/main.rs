@@ -13,11 +13,11 @@ use relay::Client as PolkaClient;
 use relay::Error as RelayError;
 use relayer_core::bitcoin::Client as BtcClient;
 use relayer_core::{Backing, Config, Runner};
+use runtime::substrate_subxt::PairSigner;
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
-use substrate_subxt::PairSigner;
 
 use status::*;
 use vault::*;
