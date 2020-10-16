@@ -9,10 +9,10 @@ mod redeem;
 mod vault;
 
 use error::Error;
+use runtime::substrate_subxt::PairSigner;
 use runtime::{ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime, TimestampPallet};
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
-use substrate_subxt::PairSigner;
 
 /// Generates testdata to be used on a development environment of the BTC-Parachain
 #[tokio::main]

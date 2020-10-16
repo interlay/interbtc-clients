@@ -4134,7 +4134,6 @@ dependencies = [
  "log 0.4.11",
  "runtime",
  "sp-keyring",
- "substrate-subxt",
  "tokio 0.2.22",
 ]
 
@@ -5464,7 +5463,7 @@ dependencies = [
  "staked-relayers",
  "substrate-subxt",
  "substrate-subxt-client",
- "substrate-subxt-proc-macro 0.13.0",
+ "substrate-subxt-proc-macro",
  "tempdir",
  "thiserror",
  "tokio 0.2.22",
@@ -7538,8 +7537,6 @@ dependencies = [
  "serde_json",
  "sp-core",
  "sp-keyring",
- "substrate-subxt",
- "substrate-subxt-proc-macro 0.13.0",
  "thiserror",
  "tokio 0.2.22",
  "warp",
@@ -7763,7 +7760,7 @@ dependencies = [
  "sp-std",
  "sp-transaction-pool",
  "sp-version",
- "substrate-subxt-proc-macro 0.13.0",
+ "substrate-subxt-proc-macro",
  "thiserror",
  "url 2.1.1",
 ]
@@ -7784,21 +7781,6 @@ dependencies = [
  "serde_json",
  "sp-keyring",
  "thiserror",
-]
-
-[[package]]
-name = "substrate-subxt-proc-macro"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af1b2f3a945ccd397a1b14fea7abf5a92d1da60329d62362be3a146a1982eba7"
-dependencies = [
- "heck",
- "proc-macro-crate",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn",
- "synstructure",
 ]
 
 [[package]]
@@ -7915,8 +7897,6 @@ dependencies = [
  "runtime",
  "sp-core",
  "sp-keyring",
- "substrate-subxt",
- "substrate-subxt-proc-macro 0.12.0",
  "thiserror",
  "tokio 0.2.22",
 ]
@@ -8695,7 +8675,6 @@ dependencies = [
  "log 0.4.11",
  "runtime",
  "sp-keyring",
- "substrate-subxt",
  "thiserror",
  "tokio 0.2.22",
 ]
