@@ -5,7 +5,6 @@ use jsonrpsee::{
 };
 use parity_scale_codec::Decode;
 use sp_core::sr25519::Pair as KeyPair;
-use sp_core::U256;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::future::Future;
@@ -136,20 +135,22 @@ impl PolkaBtcProvider {
     {
         let sub = self.ext_client.subscribe_events().await?;
         let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.register_type_size::<u128>("Balance");
-        decoder.register_type_size::<u128>("DOT");
-        decoder.register_type_size::<H256Le>("H256Le");
+        decoder.with_vault_registry();
 
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
         sub.filter_event::<RegisterVaultEvent<_>>();
         while let Some(result) = sub.next().await {
-            match result {
-                Ok(raw_event) => {
-                    // TODO: handle errors here
-                    let event =
-                        RegisterVaultEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])?;
-                    let account = self.ext_client.vaults(event.account_id, None).await?;
-                    on_vault(account).await;
+            let decoded = result.and_then(|raw_event| {
+                RegisterVaultEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])
+                    .map_err(|e| e.into())
+            });
+
+            match decoded {
+                Ok(e) => {
+                    match self.ext_client.vaults(e.account_id, None).await {
+                        Ok(account) => on_vault(account).await,
+                        Err(err) => on_error(err),
+                    };
                 }
                 Err(err) => on_error(err),
             };
@@ -175,23 +176,18 @@ impl PolkaBtcProvider {
     {
         let sub = self.ext_client.subscribe_events().await?;
         let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.register_type_size::<u128>("Balance");
-        decoder.register_type_size::<U256>("U256");
-        decoder.register_type_size::<StatusCode>("StatusCode");
-        decoder.register_type_size::<ErrorCode>("ErrorCode");
-        decoder.register_type_size::<H256Le>("H256Le");
+        decoder.with_staked_relayers();
 
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
         sub.filter_event::<StatusUpdateSuggestedEvent<_>>();
         while let Some(result) = sub.next().await {
-            match result {
-                Ok(raw_event) => {
-                    let event = StatusUpdateSuggestedEvent::<PolkaBtcRuntime>::decode(
-                        &mut &raw_event.data[..],
-                    )?;
+            let decoded = result.and_then(|raw_event| {
+                StatusUpdateSuggestedEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])
+                    .map_err(|e| e.into())
+            });
 
-                    on_proposal(event).await;
-                }
+            match decoded {
+                Ok(e) => on_proposal(e).await,
                 Err(err) => on_error(err),
             };
         }
@@ -211,20 +207,18 @@ impl PolkaBtcProvider {
     {
         let sub = self.ext_client.subscribe_events().await?;
         let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.register_type_size::<u128>("Balance");
-        decoder.register_type_size::<u128>("DOT");
-        decoder.register_type_size::<H256Le>("H256Le");
+        decoder.with_redeem();
 
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
         sub.filter_event::<RequestRedeemEvent<_>>();
         while let Some(result) = sub.next().await {
-            match result {
-                Ok(raw_event) => {
-                    // TODO: handle errors here
-                    let event =
-                        RequestRedeemEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])?;
-                    on_event(event).await;
-                }
+            let decoded = result.and_then(|raw_event| {
+                RequestRedeemEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])
+                    .map_err(|e| e.into())
+            });
+
+            match decoded {
+                Ok(e) => on_event(e).await,
                 Err(err) => on_error(err),
             };
         }
@@ -246,21 +240,18 @@ impl PolkaBtcProvider {
     {
         let sub = self.ext_client.subscribe_events().await?;
         let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.register_type_size::<H256Le>("H256Le");
-        decoder.register_type_size::<StatusCode>("StatusCode");
-        decoder.register_type_size::<ErrorCode>("ErrorCode");
+        decoder.with_btc_relay();
 
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
         sub.filter_event::<StoreMainChainHeaderEvent<_>>();
         while let Some(result) = sub.next().await {
-            match result {
-                Ok(raw_event) => {
-                    // TODO: handle errors here
-                    let event = StoreMainChainHeaderEvent::<PolkaBtcRuntime>::decode(
-                        &mut &raw_event.data[..],
-                    )?;
-                    on_block(event.block_height, event.block_header_hash).await;
-                }
+            let decoded = result.and_then(|raw_event| {
+                StoreMainChainHeaderEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])
+                    .map_err(|e| e.into())
+            });
+
+            match decoded {
+                Ok(e) => on_block(e.block_height, e.block_header_hash).await,
                 Err(err) => on_error(err),
             };
         }

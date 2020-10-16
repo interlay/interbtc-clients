@@ -14,6 +14,7 @@ pub type BitcoinBlockHeight = u32;
 pub trait BTCRelay: System + Security {
     type H256Le: Codec + EncodeLike + Member + Default;
     type RichBlockHeader: Codec + EncodeLike + Member + Default;
+    type H160: Codec + EncodeLike + Member + Default;
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
