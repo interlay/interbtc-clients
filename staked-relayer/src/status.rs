@@ -1,6 +1,8 @@
 use super::Error;
-use crate::bitcoin::{BitcoinCore, BitcoinMonitor, BlockHash, Hash};
 use crate::utils;
+use bitcoin::ConversionError as BitcoinConversionError;
+use bitcoin::Error as BitcoinError;
+use bitcoin::{BitcoinCore, BitcoinCoreApi, BlockHash, Hash};
 use log::{error, info};
 use runtime::{
     Error as RuntimeError, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcStatusUpdateSuggestedEvent,
@@ -8,12 +10,12 @@ use runtime::{
 };
 use std::sync::Arc;
 
-pub struct StatusUpdateMonitor<B: BitcoinCore, P: StakedRelayerPallet> {
+pub struct StatusUpdateMonitor<B: BitcoinCoreApi, P: StakedRelayerPallet> {
     btc_rpc: Arc<B>,
     polka_rpc: Arc<P>,
 }
 
-impl<B: BitcoinCore, P: StakedRelayerPallet> StatusUpdateMonitor<B, P> {
+impl<B: BitcoinCoreApi, P: StakedRelayerPallet> StatusUpdateMonitor<B, P> {
     pub fn new(btc_rpc: Arc<B>, polka_rpc: Arc<P>) -> Self {
         Self { btc_rpc, polka_rpc }
     }
@@ -54,7 +56,7 @@ impl<B: BitcoinCore, P: StakedRelayerPallet> StatusUpdateMonitor<B, P> {
 }
 
 pub async fn listen_for_status_updates(
-    btc_rpc: Arc<BitcoinMonitor>,
+    btc_rpc: Arc<BitcoinCore>,
     polka_rpc: Arc<PolkaBtcProvider>,
 ) -> Result<(), RuntimeError> {
     let monitor = &StatusUpdateMonitor::new(btc_rpc, polka_rpc.clone());
@@ -71,13 +73,13 @@ pub async fn listen_for_status_updates(
         .await
 }
 
-pub struct RelayMonitor<B: BitcoinCore, P: StakedRelayerPallet> {
+pub struct RelayMonitor<B: BitcoinCoreApi, P: StakedRelayerPallet> {
     btc_rpc: Arc<B>,
     polka_rpc: Arc<P>,
     status_update_deposit: u128,
 }
 
-impl<B: BitcoinCore, P: StakedRelayerPallet> RelayMonitor<B, P> {
+impl<B: BitcoinCoreApi, P: StakedRelayerPallet> RelayMonitor<B, P> {
     pub fn new(btc_rpc: Arc<B>, polka_rpc: Arc<P>, status_update_deposit: u128) -> Self {
         Self {
             btc_rpc,
@@ -93,7 +95,7 @@ impl<B: BitcoinCore, P: StakedRelayerPallet> RelayMonitor<B, P> {
         info!("Block submission: {}", hash);
 
         // TODO: check if user submitted
-        match self.btc_rpc.get_block_hash(height) {
+        match self.btc_rpc.get_block_hash_for(height) {
             Ok(_) => info!("Block exists"),
             Err(_) => {
                 self.polka_rpc
@@ -113,7 +115,7 @@ impl<B: BitcoinCore, P: StakedRelayerPallet> RelayMonitor<B, P> {
 }
 
 pub async fn listen_for_blocks_stored(
-    btc_rpc: Arc<BitcoinMonitor>,
+    btc_rpc: Arc<BitcoinCore>,
     polka_rpc: Arc<PolkaBtcProvider>,
     status_update_deposit: u128,
 ) -> Result<(), RuntimeError> {
@@ -132,7 +134,8 @@ pub async fn listen_for_blocks_stored(
 
 fn convert_block_hash(hash: Option<H256Le>) -> Result<BlockHash, Error> {
     if let Some(hash) = hash {
-        return BlockHash::from_slice(&hash.to_bytes_le()).map_err(|_| Error::InvalidBlockHash);
+        return BlockHash::from_slice(&hash.to_bytes_le())
+            .map_err(|_| Error::from(BitcoinError::from(BitcoinConversionError::BlockHashError)));
     }
     Err(Error::EventNoBlockHash)
 }
@@ -140,14 +143,25 @@ fn convert_block_hash(hash: Option<H256Le>) -> Result<BlockHash, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bitcoin::{GetRawTransactionResult, Txid};
     use async_trait::async_trait;
+    use bitcoin::{GetRawTransactionResult, Txid};
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode, MINIMUM_STAKE};
-    use sp_core::U256;
     use sp_keyring::AccountKeyring;
     use std::time::Duration;
-    use tokio_test::assert_ok;
+
+    macro_rules! assert_ok {
+        ( $x:expr $(,)? ) => {
+            let is = $x;
+            match is {
+                Ok(_) => (),
+                _ => assert!(false, "Expected Ok(_). Got {:#?}", is),
+            }
+        };
+        ( $x:expr, $y:expr $(,)? ) => {
+            assert_eq!($x, Ok($y));
+        };
+    }
 
     macro_rules! assert_err {
         ($result:expr, $err:pat) => {{
@@ -211,21 +225,32 @@ mod tests {
         Bitcoin {}
 
         #[async_trait]
-        trait BitcoinCore {
-            async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, Error>;
+        trait BitcoinCoreApi {
+            async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, BitcoinError>;
 
             fn get_block_transactions(
                 &self,
                 hash: &BlockHash,
-            ) -> Result<Vec<Option<GetRawTransactionResult>>, Error>;
+            ) -> Result<Vec<Option<GetRawTransactionResult>>, BitcoinError>;
 
-            fn get_raw_tx(&self, tx_id: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+            fn get_raw_tx_for(
+                &self,
+                txid: &Txid,
+                block_hash: &BlockHash,
+            ) -> Result<Vec<u8>, BitcoinError>;
 
-            fn get_proof(&self, tx_id: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+            fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
 
-            fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
+            fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
 
-            fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
+            fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
+
+            async fn send_to_address(
+                &self,
+                address: String,
+                sat: u64,
+                redeem_id: &[u8; 32],
+            ) -> Result<Txid, BitcoinError>;
         }
     }
 
@@ -233,7 +258,7 @@ mod tests {
     async fn test_on_store_block_exists() {
         let mut bitcoin = MockBitcoin::default();
         bitcoin
-            .expect_get_block_hash()
+            .expect_get_block_hash_for()
             .returning(|_| Ok(BlockHash::from_slice(&[1; 32]).unwrap()));
         let mut parachain = MockProvider::default();
         parachain
@@ -257,8 +282,8 @@ mod tests {
     async fn test_on_store_block_not_exists() {
         let mut bitcoin = MockBitcoin::default();
         bitcoin
-            .expect_get_block_hash()
-            .returning(|_| Err(Error::InvalidBlockHash));
+            .expect_get_block_hash_for()
+            .returning(|_| Err(BitcoinConversionError::BlockHashError.into()));
         let mut parachain = MockProvider::default();
         parachain
             .expect_suggest_status_update()

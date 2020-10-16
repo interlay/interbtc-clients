@@ -473,10 +473,12 @@ dependencies = [
 name = "bitcoin"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "bitcoincore-rpc",
  "hex 0.4.2",
  "sp-core",
  "thiserror",
+ "tokio 0.2.22",
 ]
 
 [[package]]
@@ -7521,6 +7523,7 @@ name = "staked-relayer"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bitcoin 0.1.0",
  "clap 3.0.0-beta.2",
  "env_logger",
  "frame-system",
@@ -7539,7 +7542,6 @@ dependencies = [
  "substrate-subxt-proc-macro 0.13.0",
  "thiserror",
  "tokio 0.2.22",
- "tokio-test",
  "warp",
 ]
 

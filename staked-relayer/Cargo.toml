@@ -25,7 +25,7 @@ substrate-subxt-proc-macro = { git = "https://github.com/paritytech/substrate-su
 substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branch = "master" }
 relayer-core = { git = "https://gitlab.com/interlay/relayer-core", branch = "main" }
 runtime = { path = "../runtime" }
+bitcoin = { path = "../bitcoin" }
 
 [dev-dependencies]
-tokio-test = "0.2.1"
 mockall = "0.8.1"

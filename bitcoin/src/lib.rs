@@ -1,15 +1,24 @@
 mod error;
 pub use error::{ConversionError, Error};
 
+use async_trait::async_trait;
+use std::time::Duration;
+use tokio::time::delay_for;
+
 pub use bitcoincore_rpc::{
     bitcoin::{
         blockdata::opcodes::all as opcodes,
         blockdata::script::Builder,
+        consensus::encode::serialize,
+        hash_types::BlockHash,
         hashes::{hex::ToHex, Hash},
         util::{address::Payload, psbt::serialize::Serialize},
         Address, Amount, Network, Transaction, TxOut, Txid,
     },
-    json, Auth, Client, Error as BitcoinError, RpcApi,
+    bitcoincore_rpc_json::GetRawTransactionResult,
+    json,
+    jsonrpc::Error as JsonRpcError,
+    Auth, Client, Error as BitcoinError, RpcApi,
 };
 use sp_core::H160;
 use std::collections::HashMap;
@@ -30,6 +39,31 @@ pub fn bitcoin_rpc_from_env() -> Result<Client, Error> {
     Ok(Client::new(url, Auth::UserPass(user, pass))?)
 }
 
+#[async_trait]
+pub trait BitcoinCoreApi {
+    async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, Error>;
+
+    fn get_block_transactions(
+        &self,
+        hash: &BlockHash,
+    ) -> Result<Vec<Option<GetRawTransactionResult>>, Error>;
+
+    fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+
+    fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+
+    fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error>;
+
+    fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
+
+    async fn send_to_address(
+        &self,
+        address: String,
+        sat: u64,
+        redeem_id: &[u8; 32],
+    ) -> Result<Txid, Error>;
+}
+
 pub struct BitcoinCore {
     rpc: Client,
 }
@@ -38,6 +72,98 @@ impl BitcoinCore {
     pub fn new(rpc: Client) -> Self {
         Self { rpc }
     }
+}
+
+#[async_trait]
+impl BitcoinCoreApi for BitcoinCore {
+    /// Wait for a specified height to return a `BlockHash` or
+    /// exit on error.
+    ///
+    /// # Arguments
+    /// * `height` - block height to fetch
+    /// * `delay` - wait period before re-checking
+    async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, Error> {
+        loop {
+            match self.rpc.get_block_hash(height.into()) {
+                Ok(hash) => return Ok(hash),
+                Err(e) => {
+                    delay_for(delay).await;
+                    if let BitcoinError::JsonRpc(JsonRpcError::Rpc(rpc_error)) = &e {
+                        // https://github.com/bitcoin/bitcoin/blob/be3af4f31089726267ce2dbdd6c9c153bb5aeae1/src/rpc/protocol.h#L43
+                        if rpc_error.code == -8 {
+                            continue;
+                        }
+                    }
+                    return Err(e.into());
+                }
+            }
+        }
+    }
+
+    /// Get all transactions in a block identified by the
+    /// given hash.
+    ///
+    /// # Arguments
+    /// * `hash` - block hash to query
+    fn get_block_transactions(
+        &self,
+        hash: &BlockHash,
+    ) -> Result<Vec<Option<GetRawTransactionResult>>, Error> {
+        let info = self.rpc.get_block_info(hash)?;
+        let txs = info
+            .tx
+            .iter()
+            .map(
+                |id| match self.rpc.get_raw_transaction_info(&id, Some(hash)) {
+                    Ok(tx) => Some(tx),
+                    // TODO: log error
+                    Err(_) => None,
+                },
+            )
+            .collect::<Vec<Option<GetRawTransactionResult>>>();
+        Ok(txs)
+    }
+
+    /// Get the raw transaction identified by `Txid` and stored
+    /// in the specified block.
+    ///
+    /// # Arguments
+    /// * `txid` - transaction ID
+    /// * `block_hash` - hash of the block tx is stored in
+    fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
+        Ok(serialize(
+            &self.rpc.get_raw_transaction(txid, Some(block_hash))?,
+        ))
+    }
+
+    /// Get the merkle proof which can be used to validate transaction inclusion.
+    ///
+    /// # Arguments
+    /// * `txid` - transaction ID
+    /// * `block_hash` - hash of the block tx is stored in
+    fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
+        Ok(self.rpc.get_tx_out_proof(&[txid], Some(block_hash))?)
+    }
+
+    /// Get the block hash for a given height.
+    ///
+    /// # Arguments
+    /// * `height` - block height
+    fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error> {
+        Ok(self.rpc.get_block_hash(height.into())?)
+    }
+
+    /// Checks if the local full node has seen the specified block hash.
+    ///
+    /// # Arguments
+    /// * `block_hash` - hash of the block to verify
+    fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error> {
+        // TODO: match exact error
+        Ok(match self.rpc.get_block(&block_hash) {
+            Ok(_) => true,
+            Err(_) => false,
+        })
+    }
 
     /// Send an amount of Bitcoin to an address.
     ///
@@ -45,7 +171,7 @@ impl BitcoinCore {
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
     /// * `redeem_id` - the redeemid for which this transfer is being made
-    pub async fn send_to_address(
+    async fn send_to_address(
         &self,
         address: String,
         sat: u64,
@@ -88,16 +214,6 @@ impl BitcoinCore {
         }
         .await
     }
-
-    pub fn get_proof_for(&self, txid: Txid) -> Result<Vec<u8>, Error> {
-        let proof = self.rpc.get_tx_out_proof(&[txid], None)?;
-        Ok(proof)
-    }
-
-    pub fn get_raw_tx_for(&self, txid: Txid) -> Result<Vec<u8>, Error> {
-        let raw_tx = self.rpc.get_transaction(&txid, None)?;
-        Ok(raw_tx.transaction().unwrap().serialize())
-    }
 }
 
 pub struct TxMonitor<'a> {
@@ -126,7 +242,10 @@ impl<'a> Future for TxMonitor<'a> {
 /// Ensures we follow the spec: the payment to the recipient needs to be the
 /// first uxto. Funding the transaction sometimes places the return-to-self
 /// uxto first, so this function performs a swap of uxtos if necessary
-fn fix_transaction_output_order(tx: &mut Transaction, recipient_address: String) -> Result<(), Error>{
+fn fix_transaction_output_order(
+    tx: &mut Transaction,
+    recipient_address: String,
+) -> Result<(), Error> {
     let address_hash = get_hash_from_string(recipient_address.as_str())?;
     let recipient_raw = address_hash.as_bytes();
     let output0_addr = &tx.output[0].script_pubkey.as_bytes()[2..];
@@ -191,14 +310,93 @@ pub fn hash_to_p2wpkh(btc_address: H160, network: Network) -> Result<String, Con
     Ok(address.to_string())
 }
 
+fn bytes_to_h160<B: AsRef<[u8]>>(bytes: B) -> H160 {
+    let slice = bytes.as_ref();
+    let mut result = [0u8; 20];
+    result.copy_from_slice(slice);
+    result.into()
+}
+
+pub fn is_p2sh2wpkh(data: Vec<u8>) -> bool {
+    data.len() == 23 && data[0] == opcodes::OP_PUSHBYTES_22.into_u8()
+}
+
+pub fn extract_btc_addresses(tx: GetRawTransactionResult) -> Vec<H160> {
+    tx.vin
+        .into_iter()
+        .filter_map(|vin| {
+            if let Some(script_sig) = &vin.script_sig {
+                // this always returns ok so should be safe to unwrap
+                let script = script_sig.script().unwrap();
+                let bytes = script.to_bytes();
+                if script.is_p2sh() {
+                    return Some(bytes_to_h160(bytes[2..22].to_vec()));
+                } else if script.is_p2pkh() {
+                    return Some(bytes_to_h160(bytes[3..23].to_vec()));
+                } else if script.is_v0_p2wpkh() {
+                    return Some(bytes_to_h160(bytes[2..22].to_vec()));
+                } else if is_p2sh2wpkh(bytes.to_vec()) {
+                    return Some(bytes_to_h160(bytes[3..23].to_vec()));
+                }
+            }
+            None
+        })
+        .collect::<Vec<H160>>()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use bitcoincore_rpc::{
+        bitcoin::{Txid, Wtxid},
+        bitcoincore_rpc_json::{GetRawTransactionResultVin, GetRawTransactionResultVinScriptSig},
+    };
+
     #[test]
     fn test_hash_to_p2wpkh() {
         let addr = "bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f";
         let addr_hash = get_hash_from_string(addr).unwrap();
         let rebuilt_addr = hash_to_p2wpkh(addr_hash, Network::Regtest).unwrap();
         assert_eq!(addr, rebuilt_addr);
+    }
+
+    #[test]
+    fn test_tx_has_inputs() {
+        let mut addr = H160::zero();
+        addr.assign_from_slice(&hex::decode("4ef45ff516f84c62b09ad4f605f92abc103f916b").unwrap());
+
+        assert_eq!(
+            extract_btc_addresses(GetRawTransactionResult {
+                in_active_chain: None,
+                hex: vec![],
+                txid: Txid::default(),
+                hash: Wtxid::default(),
+                size: 0,
+                vsize: 0,
+                version: 0,
+                locktime: 0,
+                vin: vec![GetRawTransactionResultVin {
+                    sequence: 0,
+                    coinbase: None,
+                    txid: None,
+                    vout: None,
+                    script_sig: Some(GetRawTransactionResultVinScriptSig {
+                        asm: "".to_string(),
+                        hex: vec![
+                            169, 20, 78, 244, 95, 245, 22, 248, 76, 98, 176, 154, 212, 246, 5, 249,
+                            42, 188, 16, 63, 145, 107, 135
+                        ],
+                    }),
+                    txinwitness: None,
+                }],
+                vout: vec![],
+                blockhash: None,
+                confirmations: None,
+                time: None,
+                blocktime: None,
+            }),
+            vec![addr]
+        );
     }
 }

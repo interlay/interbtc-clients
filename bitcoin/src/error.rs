@@ -22,4 +22,6 @@ pub enum ConversionError {
     AddressError(#[from] AddressError),
     #[error("Witness program error")]
     WitnessProgramError,
+    #[error("Could not convert block hash")]
+    BlockHashError,
 }
