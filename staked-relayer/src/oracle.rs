@@ -56,7 +56,6 @@ mod tests {
     use async_trait::async_trait;
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error, ErrorCode, H256Le, StatusCode};
-    use sp_core::U256;
     use std::collections::BTreeSet;
     use std::iter::FromIterator;
 

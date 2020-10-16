@@ -11,7 +11,6 @@ use runtime::{
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::value::RawValue;
 use sp_core::crypto::Ss58Codec;
-use sp_core::U256;
 use std::convert::Infallible;
 use std::convert::TryFrom;
 use std::net::SocketAddr;

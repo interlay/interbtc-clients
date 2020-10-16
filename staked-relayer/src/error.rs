@@ -1,10 +1,10 @@
 use crate::relay::Error as RelayError;
+use bitcoin::Error as BitcoinError;
 use parity_scale_codec::Error as CodecError;
 use relayer_core::bitcoin::bitcoincore_rpc::Error as BtcRpcError;
 use relayer_core::Error as CoreError;
 use runtime::Error as RuntimeError;
 use serde_json::Error as SerdeError;
-use std::env::VarError;
 use std::net::AddrParseError;
 use substrate_subxt::Error as XtError;
 use thiserror::Error;
@@ -15,13 +15,9 @@ pub enum Error {
     CheckOracleOffline,
     #[error("JSON-RPC method expected input parameter")]
     ParamNotFound,
-    #[error("Could not convert block hash")]
-    InvalidBlockHash,
     #[error("Suggested status update does not contain block hash")]
     EventNoBlockHash,
 
-    #[error("Read env error: {0}: {1}")]
-    ReadVar(String, VarError),
     #[error("RuntimeError: {0}")]
     RuntimeError(#[from] RuntimeError),
     #[error("BtcRpcError: {0}")]
@@ -38,4 +34,6 @@ pub enum Error {
     SerdeError(#[from] SerdeError),
     #[error("CodecError: {0}")]
     CodecError(#[from] CodecError),
+    #[error("BitcoinError: {0}")]
+    BitcoinError(#[from] BitcoinError),
 }

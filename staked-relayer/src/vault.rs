@@ -1,9 +1,6 @@
 use crate::utils;
 use crate::Error;
-use crate::{
-    bitcoin,
-    bitcoin::{BitcoinCore, BlockHash, GetRawTransactionResult, Txid},
-};
+use bitcoin::{BitcoinCoreApi, BlockHash, GetRawTransactionResult, Txid};
 use futures::stream::iter;
 use futures::stream::StreamExt;
 use log::{error, info};
@@ -37,7 +34,7 @@ impl Vaults {
     }
 }
 
-pub struct VaultsMonitor<P: StakedRelayerPallet, B: BitcoinCore> {
+pub struct VaultsMonitor<P: StakedRelayerPallet, B: BitcoinCoreApi> {
     btc_height: u32,
     btc_rpc: Arc<B>,
     polka_rpc: Arc<P>,
@@ -45,7 +42,7 @@ pub struct VaultsMonitor<P: StakedRelayerPallet, B: BitcoinCore> {
     delay: Duration,
 }
 
-impl<P: StakedRelayerPallet, B: BitcoinCore> VaultsMonitor<P, B> {
+impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultsMonitor<P, B> {
     pub fn new(
         btc_height: u32,
         btc_rpc: Arc<B>,
@@ -67,8 +64,8 @@ impl<P: StakedRelayerPallet, B: BitcoinCore> VaultsMonitor<P, B> {
         tx_id: Txid,
         hash: &BlockHash,
     ) -> Result<(Vec<u8>, Vec<u8>), Error> {
-        let raw_tx = self.btc_rpc.get_raw_tx(&tx_id, hash)?;
-        let proof = self.btc_rpc.get_proof(tx_id, hash)?;
+        let raw_tx = self.btc_rpc.get_raw_tx_for(&tx_id, hash)?;
+        let proof = self.btc_rpc.get_proof_for(tx_id, hash)?;
         Ok((raw_tx, proof))
     }
 
@@ -174,9 +171,9 @@ async fn filter_matching_vaults(addresses: Vec<H160>, vaults: &Vaults) -> Vec<Ac
 mod tests {
     use super::*;
     use async_trait::async_trait;
+    use bitcoin::Error as BitcoinError;
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
-    use sp_core::U256;
     use sp_keyring::AccountKeyring;
 
     mockall::mock! {
@@ -223,21 +220,32 @@ mod tests {
         Bitcoin {}
 
         #[async_trait]
-        trait BitcoinCore {
-            async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, Error>;
+        trait BitcoinCoreApi {
+            async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, BitcoinError>;
 
             fn get_block_transactions(
                 &self,
                 hash: &BlockHash,
-            ) -> Result<Vec<Option<GetRawTransactionResult>>, Error>;
+            ) -> Result<Vec<Option<GetRawTransactionResult>>, BitcoinError>;
 
-            fn get_raw_tx(&self, tx_id: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+            fn get_raw_tx_for(
+                &self,
+                txid: &Txid,
+                block_hash: &BlockHash,
+            ) -> Result<Vec<u8>, BitcoinError>;
 
-            fn get_proof(&self, tx_id: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+            fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
 
-            fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
+            fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
 
-            fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
+            fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
+
+            async fn send_to_address(
+                &self,
+                address: String,
+                sat: u64,
+                redeem_id: &[u8; 32],
+            ) -> Result<Txid, BitcoinError>;
         }
     }
 

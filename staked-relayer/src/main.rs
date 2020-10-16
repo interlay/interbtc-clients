@@ -1,4 +1,3 @@
-mod bitcoin;
 mod error;
 mod http;
 mod oracle;
@@ -92,9 +91,7 @@ async fn main() -> Result<(), Error> {
     } else {
         current_height + 1
     };
-    let btc_rpc = Arc::new(bitcoin::BitcoinMonitor::new(
-        bitcoin::bitcoin_rpc_from_env()?
-    ));
+    let btc_rpc = Arc::new(bitcoin::BitcoinCore::new(bitcoin::bitcoin_rpc_from_env()?));
 
     let mut runner = Runner::new(
         PolkaClient::new(provider.clone()),

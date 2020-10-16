@@ -9,3 +9,5 @@ thiserror = "1.0"
 bitcoincore-rpc = { git = "https://github.com/gregdhill/rust-bitcoincore-rpc" }
 hex = "0.4.2"
 sp-core = "2.0.0-rc6"
+async-trait = "0.1.40"
+tokio = { version = "0.2.22", features = ["full"] }
