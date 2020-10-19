@@ -1,10 +1,7 @@
 mod error;
-pub use error::{ConversionError, Error};
 
 use async_trait::async_trait;
-use std::time::Duration;
-use tokio::time::delay_for;
-
+use backoff::{future::FutureOperation as _, ExponentialBackoff};
 pub use bitcoincore_rpc::{
     bitcoin::{
         blockdata::opcodes::all as opcodes,
@@ -15,18 +12,23 @@ pub use bitcoincore_rpc::{
         util::{address::Payload, psbt::serialize::Serialize},
         Address, Amount, Network, Transaction, TxOut, Txid,
     },
-    bitcoincore_rpc_json::GetRawTransactionResult,
+    bitcoincore_rpc_json::{GetRawTransactionResult, GetTransactionResult},
     json,
     jsonrpc::Error as JsonRpcError,
     Auth, Client, Error as BitcoinError, RpcApi,
 };
+pub use error::{ConversionError, Error};
 use sp_core::H160;
-use std::collections::HashMap;
-use std::env::var;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use std::{convert::TryInto, str::FromStr};
+use std::{collections::HashMap, convert::TryInto, env::var, str::FromStr, time::Duration};
+use tokio::time::delay_for;
+
+pub struct TransactionMetadata {
+    pub txid: Txid,
+    pub proof: Vec<u8>,
+    pub raw_tx: Vec<u8>,
+    pub block_height: u32,
+    pub block_hash: BlockHash,
+}
 
 pub fn read_env(s: &str) -> Result<String, Error> {
     var(s).map_err(|e| Error::ReadVar(s.to_string(), e))
@@ -61,7 +63,8 @@ pub trait BitcoinCoreApi {
         address: String,
         sat: u64,
         redeem_id: &[u8; 32],
-    ) -> Result<Txid, Error>;
+        op_timeout: Duration,
+    ) -> Result<TransactionMetadata, Error>;
 }
 
 pub struct BitcoinCore {
@@ -71,6 +74,49 @@ pub struct BitcoinCore {
 impl BitcoinCore {
     pub fn new(rpc: Client) -> Self {
         Self { rpc }
+    }
+
+    async fn wait_for_transaction_metadata(
+        &self,
+        txid: Txid,
+        op_timeout: Duration,
+    ) -> Result<TransactionMetadata, Error> {
+        let get_retry_policy = || ExponentialBackoff {
+            max_elapsed_time: Some(op_timeout),
+            ..Default::default()
+        };
+
+        let (block_height, block_hash) = (|| async {
+            Ok(match self.rpc.get_transaction(&txid, None) {
+                Ok(x)
+                    if x.info.confirmations > 0
+                        && x.info.blockhash.is_some()
+                        && x.info.blockheight.is_some() =>
+                {
+                    Ok((x.info.blockheight.unwrap(), x.info.blockhash.unwrap()))
+                }
+                Ok(_) => Err(Error::ConfirmationError),
+                Err(e) => Err(e.into()),
+            }?)
+        })
+        .retry(get_retry_policy())
+        .await?;
+
+        let proof = (|| async { Ok(self.get_proof_for(txid, &block_hash)?) })
+            .retry(get_retry_policy())
+            .await?;
+
+        let raw_tx = (|| async { Ok(self.get_raw_tx_for(&txid, &block_hash)?) })
+            .retry(get_retry_policy())
+            .await?;
+
+        Ok(TransactionMetadata {
+            txid,
+            block_hash,
+            block_height,
+            proof,
+            raw_tx,
+        })
     }
 }
 
@@ -159,24 +205,23 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `block_hash` - hash of the block to verify
     fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error> {
         // TODO: match exact error
-        Ok(match self.rpc.get_block(&block_hash) {
-            Ok(_) => true,
-            Err(_) => false,
-        })
+        Ok(self.rpc.get_block(&block_hash).is_ok())
     }
 
-    /// Send an amount of Bitcoin to an address.
+    /// Send an amount of Bitcoin to an address and wait until it has a confirmation.
     ///
     /// # Arguments
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
     /// * `redeem_id` - the redeemid for which this transfer is being made
+    /// * `op_timeout` - how long operations will be retried
     async fn send_to_address(
         &self,
         address: String,
         sat: u64,
         redeem_id: &[u8; 32],
-    ) -> Result<Txid, Error> {
+        op_timeout: Duration,
+    ) -> Result<TransactionMetadata, Error> {
         let mut recipients = HashMap::<String, Amount>::new();
         recipients.insert(address.clone(), Amount::from_sat(sat));
 
@@ -208,34 +253,7 @@ impl BitcoinCoreApi for BitcoinCore {
             .rpc
             .send_raw_transaction(signed_raw_tx.transaction().unwrap().serialize().to_hex())?;
 
-        TxMonitor {
-            rpc: &self.rpc,
-            txid,
-        }
-        .await
-    }
-}
-
-pub struct TxMonitor<'a> {
-    rpc: &'a Client,
-    txid: Txid,
-}
-
-impl<'a> Future for TxMonitor<'a> {
-    type Output = Result<Txid, Error>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.rpc.get_transaction(&self.txid, None) {
-            Ok(res) => {
-                if res.info.confirmations > 0 {
-                    Poll::Ready(Ok(self.txid))
-                } else {
-                    cx.waker().wake_by_ref();
-                    Poll::Pending
-                }
-            }
-            Err(err) => Poll::Ready(Err(err.into())),
-        }
+        Ok(self.wait_for_transaction_metadata(txid, op_timeout).await?)
     }
 }
 

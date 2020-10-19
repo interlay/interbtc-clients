@@ -12,6 +12,8 @@ pub enum Error {
     BitcoinError(#[from] BitcoinError),
     #[error("ConversionError: {0}")]
     ConversionError(#[from] ConversionError),
+    #[error("Could not confirm transaction")]
+    ConfirmationError,
 }
 
 #[derive(Error, Debug)]
