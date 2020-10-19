@@ -1,0 +1,200 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb", 
+            "request": "launch",
+            "name": "Debug executable 'vault'",
+            "env": {
+                "BITCOIN_RPC_URL": "http://127.0.0.1:18443",
+                "BITCOIN_RPC_USER": "a",
+                "BITCOIN_RPC_PASS": "b",
+                "RUST_LOG": "debug" 
+            },
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=vault",
+                    "--package=vault"
+                ],
+                "filter": {
+                    "name": "vault",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'oracle'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=oracle",
+                    "--package=oracle"
+                ],
+                "filter": {
+                    "name": "oracle",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'runtime'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=runtime"
+                ],
+                "filter": {
+                    "name": "runtime",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'staked-relayer'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=staked-relayer",
+                    "--package=staked-relayer"
+                ],
+                "filter": {
+                    "name": "staked-relayer",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'staked-relayer'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=staked-relayer",
+                    "--package=staked-relayer"
+                ],
+                "filter": {
+                    "name": "staked-relayer",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'relayer-core'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=relayer-core"
+                ],
+                "filter": {
+                    "name": "relayer-core",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'testdata-gen'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=testdata-gen",
+                    "--package=testdata-gen"
+                ],
+                "filter": {
+                    "name": "testdata-gen",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'testdata-gen'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=testdata-gen",
+                    "--package=testdata-gen"
+                ],
+                "filter": {
+                    "name": "testdata-gen",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'vault'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=vault",
+                    "--package=vault"
+                ],
+                "filter": {
+                    "name": "vault",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'vault'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=vault",
+                    "--package=vault"
+                ],
+                "filter": {
+                    "name": "vault",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
