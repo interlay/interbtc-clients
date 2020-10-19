@@ -42,6 +42,7 @@ pub type PolkaBtcStatusUpdate = StatusUpdate<
 >;
 
 pub type PolkaBtcStatusUpdateSuggestedEvent = StatusUpdateSuggestedEvent<PolkaBtcRuntime>;
+pub type PolkaBtcRequestRedeemEvent = RequestRedeemEvent<PolkaBtcRuntime>;
 
 #[derive(Clone)]
 pub struct PolkaBtcProvider {
@@ -201,7 +202,7 @@ impl PolkaBtcProvider {
         on_error: E,
     ) -> Result<(), Error>
     where
-        F: FnMut(RequestRedeemEvent<PolkaBtcRuntime>) -> R,
+        F: FnMut(PolkaBtcRequestRedeemEvent) -> R,
         R: Future<Output = ()>,
         E: Fn(XtError),
     {
