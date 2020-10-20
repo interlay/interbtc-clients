@@ -9,6 +9,7 @@ use runtime::{
     substrate_subxt::PairSigner, H256Le, PolkaBtcProvider, PolkaBtcRequestRedeemEvent,
     PolkaBtcRuntime, RedeemPallet,
 };
+use sp_core::crypto::AccountId32;
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
@@ -37,13 +38,13 @@ struct Opts {
 async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
-    let btc_rpc = &Arc::new(BitcoinCore::new(bitcoin::bitcoin_rpc_from_env()?));
+    let btc_rpc = Arc::new(BitcoinCore::new(bitcoin::bitcoin_rpc_from_env()?));
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
-    let arc_provider = &Arc::new(provider.clone());
+    let arc_provider = Arc::new(provider.clone());
 
     let num_confirmations = if opts.dev { 1 } else { 6 };
-    let vault_id = &opts.keyring.to_account_id();
+    let vault_id = opts.keyring.to_account_id();
 
     // log vault registration result, but keep going upon error, since it might just be
     // that this vault already registered. Note that we can't match this specific error
@@ -60,6 +61,54 @@ async fn main() -> Result<(), Error> {
         Err(e) => error!("Failed to register vault {:?} --- {}", e, e.to_string()),
     };
 
+    let issue_listener = listen_for_issue_requests(arc_provider.clone(), vault_id.clone());
+    let redeem_listener = listen_for_redeem_requests(arc_provider.clone(), btc_rpc.clone(), vault_id.clone(), num_confirmations);
+
+    let result = tokio::try_join!(
+        tokio::spawn(async move {
+            issue_listener.await;
+        }),
+        tokio::spawn(async move {
+            redeem_listener.await.unwrap();
+        }),
+    );
+    match result {
+        Ok(res) => {
+            println!("{:?}", res);
+        }
+        Err(err) => {
+            println!("Error: {}", err);
+            std::process::exit(1);
+        }
+    };
+
+    Ok(())
+}
+
+async fn listen_for_issue_requests(provider: Arc<PolkaBtcProvider>, vault_id: AccountId32) {
+    let vault_id = &vault_id;
+    provider
+        .on_request_issue(
+            |event| async move {
+                if event.vault_id == vault_id.clone() {
+                    info!("Received issue request #{}", event.issue_id);
+                }
+            },
+            |error| error!("Error reading issue event: {}", error.to_string()),
+        )
+        .await
+        .unwrap();
+}
+
+async fn listen_for_redeem_requests(
+    provider: Arc<PolkaBtcProvider>,
+    btc_rpc: Arc<BitcoinCore>,
+    vault_id: AccountId32,
+    num_confirmations: u16
+) -> Result<(), runtime::Error> {
+    let vault_id = &vault_id;
+    let provider = &provider;
+    let btc_rpc = &btc_rpc;
     provider
         .on_request_redeem(
             |event| async move {
@@ -67,7 +116,7 @@ async fn main() -> Result<(), Error> {
                     return;
                 }
                 info!("Received redeem request #{}", event.redeem_id);
-                match handle_redeem_request(&event, btc_rpc, arc_provider, num_confirmations).await
+                match handle_redeem_request(&event, btc_rpc.clone(), provider.clone(), num_confirmations).await
                 {
                     Ok(_) => info!("Completed redeem request #{}", event.redeem_id),
                     Err(e) => error!(
@@ -79,15 +128,13 @@ async fn main() -> Result<(), Error> {
             },
             |error| error!("Error reading redeem event: {}", error.to_string()),
         )
-        .await?;
-
-    Ok(())
+        .await
 }
 
 async fn handle_redeem_request(
     event: &PolkaBtcRequestRedeemEvent,
-    btc_rpc: &Arc<BitcoinCore>,
-    arc_provider: &Arc<PolkaBtcProvider>,
+    btc_rpc: Arc<BitcoinCore>,
+    arc_provider: Arc<PolkaBtcProvider>,
     num_confirmations: u16,
 ) -> Result<(), Error> {
     let address = bitcoin::hash_to_p2wpkh(event.btc_address, bitcoin::Network::Regtest)
