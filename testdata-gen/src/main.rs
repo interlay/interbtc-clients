@@ -85,6 +85,7 @@ async fn main() -> Result<(), Error> {
             param::ALICE_ISSUE_AMOUNT as u64,
             &issue_id.to_fixed_bytes(),
             Duration::from_secs(15 * 60),
+            1,
         )
         .await
         .unwrap();

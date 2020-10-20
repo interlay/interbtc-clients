@@ -28,6 +28,9 @@ struct Opts {
     /// Keyring for vault.
     #[clap(long, default_value = "bob")]
     keyring: AccountKeyring,
+
+    #[clap(long)]
+    dev: bool,
 }
 
 #[tokio::main]
@@ -39,6 +42,7 @@ async fn main() -> Result<(), Error> {
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
     let arc_provider = &Arc::new(provider.clone());
 
+    let num_confirmations = if opts.dev { 1 } else { 6 };
     let vault_id = &opts.keyring.to_account_id();
 
     // log vault registration result, but keep going upon error, since it might just be
@@ -63,7 +67,8 @@ async fn main() -> Result<(), Error> {
                     return;
                 }
                 info!("Received redeem request #{}", event.redeem_id);
-                match handle_redeem_request(&event, btc_rpc, arc_provider).await {
+                match handle_redeem_request(&event, btc_rpc, arc_provider, num_confirmations).await
+                {
                     Ok(_) => info!("Completed redeem request #{}", event.redeem_id),
                     Err(e) => error!(
                         "Failed to process redeem request #{}: {}",
@@ -83,6 +88,7 @@ async fn handle_redeem_request(
     event: &PolkaBtcRequestRedeemEvent,
     btc_rpc: &Arc<BitcoinCore>,
     arc_provider: &Arc<PolkaBtcProvider>,
+    num_confirmations: u16,
 ) -> Result<(), Error> {
     let address = bitcoin::hash_to_p2wpkh(event.btc_address, bitcoin::Network::Regtest)
         .map_err(|e| -> bitcoin::Error { e.into() })?;
@@ -96,6 +102,7 @@ async fn handle_redeem_request(
             event.amount_polka_btc as u64,
             &event.redeem_id.to_fixed_bytes(),
             MAX_RETRYING_TIME,
+            num_confirmations,
         )
         .await?;
 

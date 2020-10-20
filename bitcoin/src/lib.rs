@@ -64,6 +64,7 @@ pub trait BitcoinCoreApi {
         sat: u64,
         redeem_id: &[u8; 32],
         op_timeout: Duration,
+        num_confirmations: u16,
     ) -> Result<TransactionMetadata, Error>;
 }
 
@@ -76,10 +77,19 @@ impl BitcoinCore {
         Self { rpc }
     }
 
+    /// Waits for the required number of confirmations, and collects data about the
+    /// transaction
+    ///
+    /// # Arguments
+    /// * `txid` - transaction ID
+    /// * `op_timeout` - wait period before re-checking
+    /// * `op_timeout` - how long operations will be retried
+    /// * `num_confirmations` - how many confirmations we need to wait for
     async fn wait_for_transaction_metadata(
         &self,
         txid: Txid,
         op_timeout: Duration,
+        num_confirmations: u16,
     ) -> Result<TransactionMetadata, Error> {
         let get_retry_policy = || ExponentialBackoff {
             max_elapsed_time: Some(op_timeout),
@@ -89,7 +99,7 @@ impl BitcoinCore {
         let (block_height, block_hash) = (|| async {
             Ok(match self.rpc.get_transaction(&txid, None) {
                 Ok(x)
-                    if x.info.confirmations > 0
+                    if x.info.confirmations >= num_confirmations as i32
                         && x.info.blockhash.is_some()
                         && x.info.blockheight.is_some() =>
                 {
@@ -215,12 +225,14 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `sat` - number of Satoshis to transfer
     /// * `redeem_id` - the redeemid for which this transfer is being made
     /// * `op_timeout` - how long operations will be retried
+    /// * `num_confirmations` - how many confirmations we need to wait for
     async fn send_to_address(
         &self,
         address: String,
         sat: u64,
         redeem_id: &[u8; 32],
         op_timeout: Duration,
+        num_confirmations: u16,
     ) -> Result<TransactionMetadata, Error> {
         let mut recipients = HashMap::<String, Amount>::new();
         recipients.insert(address.clone(), Amount::from_sat(sat));
@@ -253,7 +265,9 @@ impl BitcoinCoreApi for BitcoinCore {
             .rpc
             .send_raw_transaction(signed_raw_tx.transaction().unwrap().serialize().to_hex())?;
 
-        Ok(self.wait_for_transaction_metadata(txid, op_timeout).await?)
+        Ok(self
+            .wait_for_transaction_metadata(txid, op_timeout, num_confirmations)
+            .await?)
     }
 }
 

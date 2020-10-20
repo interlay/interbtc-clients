@@ -252,6 +252,7 @@ mod tests {
                 sat: u64,
                 redeem_id: &[u8; 32],
                 op_timeout: Duration,
+                num_confirmations: u16,
             ) -> Result<TransactionMetadata, BitcoinError>;
         }
     }
