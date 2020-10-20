@@ -196,6 +196,33 @@ impl PolkaBtcProvider {
         Ok(())
     }
 
+    pub async fn on_request_issue<F, R, E>(&self, mut on_event: F, on_error: E) -> Result<(), Error>
+    where
+        F: FnMut(RequestIssueEvent<PolkaBtcRuntime>) -> R,
+        R: Future<Output = ()>,
+        E: Fn(XtError),
+    {
+        let sub = self.ext_client.subscribe_events().await?;
+        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
+        decoder.with_issue();
+
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
+        sub.filter_event::<RequestIssueEvent<_>>();
+        while let Some(result) = sub.next().await {
+            let decoded = result.and_then(|raw_event| {
+                RequestIssueEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])
+                    .map_err(|e| e.into())
+            });
+
+            match decoded {
+                Ok(e) => on_event(e).await,
+                Err(err) => on_error(err),
+            };
+        }
+
+        Ok(())
+    }
+
     pub async fn on_request_redeem<F, R, E>(
         &self,
         mut on_event: F,

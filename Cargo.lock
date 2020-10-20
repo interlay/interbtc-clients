@@ -8688,6 +8688,7 @@ dependencies = [
  "env_logger",
  "log 0.4.11",
  "runtime",
+ "sp-core",
  "sp-keyring",
  "thiserror",
  "tokio 0.2.22",
