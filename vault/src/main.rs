@@ -6,8 +6,9 @@ use clap::Clap;
 use error::Error;
 use log::{error, info};
 use runtime::{
-    substrate_subxt::PairSigner, H256Le, PolkaBtcProvider, PolkaBtcRequestRedeemEvent,
-    PolkaBtcRuntime, RedeemPallet,
+    pallets::{issue::RequestIssueEvent, redeem::RequestRedeemEvent},
+    substrate_subxt::PairSigner,
+    H256Le, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet,
 };
 use sp_core::crypto::AccountId32;
 use sp_keyring::AccountKeyring;
@@ -62,7 +63,12 @@ async fn main() -> Result<(), Error> {
     };
 
     let issue_listener = listen_for_issue_requests(arc_provider.clone(), vault_id.clone());
-    let redeem_listener = listen_for_redeem_requests(arc_provider.clone(), btc_rpc.clone(), vault_id.clone(), num_confirmations);
+    let redeem_listener = listen_for_redeem_requests(
+        arc_provider.clone(),
+        btc_rpc.clone(),
+        vault_id.clone(),
+        num_confirmations,
+    );
 
     let result = tokio::try_join!(
         tokio::spawn(async move {
@@ -88,7 +94,7 @@ async fn main() -> Result<(), Error> {
 async fn listen_for_issue_requests(provider: Arc<PolkaBtcProvider>, vault_id: AccountId32) {
     let vault_id = &vault_id;
     provider
-        .on_request_issue(
+        .on_event::<RequestIssueEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
                 if event.vault_id == vault_id.clone() {
                     info!("Received issue request #{}", event.issue_id);
@@ -104,19 +110,25 @@ async fn listen_for_redeem_requests(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<BitcoinCore>,
     vault_id: AccountId32,
-    num_confirmations: u16
+    num_confirmations: u16,
 ) -> Result<(), runtime::Error> {
     let vault_id = &vault_id;
     let provider = &provider;
     let btc_rpc = &btc_rpc;
     provider
-        .on_request_redeem(
+        .on_event::<RequestRedeemEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
                 if event.vault_id != vault_id.clone() {
                     return;
                 }
                 info!("Received redeem request #{}", event.redeem_id);
-                match handle_redeem_request(&event, btc_rpc.clone(), provider.clone(), num_confirmations).await
+                match handle_redeem_request(
+                    &event,
+                    btc_rpc.clone(),
+                    provider.clone(),
+                    num_confirmations,
+                )
+                .await
                 {
                     Ok(_) => info!("Completed redeem request #{}", event.redeem_id),
                     Err(e) => error!(
@@ -132,7 +144,7 @@ async fn listen_for_redeem_requests(
 }
 
 async fn handle_redeem_request(
-    event: &PolkaBtcRequestRedeemEvent,
+    event: &RequestRedeemEvent<PolkaBtcRuntime>,
     btc_rpc: Arc<BitcoinCore>,
     arc_provider: Arc<PolkaBtcProvider>,
     num_confirmations: u16,

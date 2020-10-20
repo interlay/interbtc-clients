@@ -12,7 +12,8 @@ use std::future::Future;
 use std::sync::Arc;
 use substrate_subxt::Error as XtError;
 use substrate_subxt::{
-    system::System, Client, ClientBuilder, EventSubscription, EventsDecoder, PairSigner, Signer,
+    system::System, Client, ClientBuilder, Event, EventSubscription, EventsDecoder, PairSigner,
+    Signer,
 };
 use tokio::sync::RwLock;
 
@@ -38,9 +39,6 @@ pub type PolkaBtcStatusUpdate = StatusUpdate<
     <PolkaBtcRuntime as System>::BlockNumber,
     <PolkaBtcRuntime as Core>::DOT,
 >;
-
-pub type PolkaBtcStatusUpdateSuggestedEvent = StatusUpdateSuggestedEvent<PolkaBtcRuntime>;
-pub type PolkaBtcRequestRedeemEvent = RequestRedeemEvent<PolkaBtcRuntime>;
 
 #[derive(Clone)]
 pub struct PolkaBtcProvider {
@@ -158,126 +156,32 @@ impl PolkaBtcProvider {
         Ok(())
     }
 
-    /// Subscription service that listens for status updates.
-    ///
-    /// # Arguments
-    /// * `on_proposal` - callback for suggested status updates
-    /// * `on_error` - callback for errors
-    pub async fn on_status_update_suggested<F, R, E>(
-        &self,
-        on_proposal: F,
-        on_error: E,
-    ) -> Result<(), Error>
+    pub async fn on_event<T, F, R, E>(&self, mut on_event: F, on_error: E) -> Result<(), Error>
     where
-        F: Fn(PolkaBtcStatusUpdateSuggestedEvent) -> R,
-        R: Future<Output = ()>,
-        E: Fn(XtError),
-    {
-        let sub = self.ext_client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.with_staked_relayers();
-
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
-        sub.filter_event::<StatusUpdateSuggestedEvent<_>>();
-        while let Some(result) = sub.next().await {
-            let decoded = result.and_then(|raw_event| {
-                StatusUpdateSuggestedEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])
-                    .map_err(|e| e.into())
-            });
-
-            match decoded {
-                Ok(e) => on_proposal(e).await,
-                Err(err) => on_error(err),
-            };
-        }
-
-        Ok(())
-    }
-
-    pub async fn on_request_issue<F, R, E>(&self, mut on_event: F, on_error: E) -> Result<(), Error>
-    where
-        F: FnMut(RequestIssueEvent<PolkaBtcRuntime>) -> R,
-        R: Future<Output = ()>,
-        E: Fn(XtError),
-    {
-        let sub = self.ext_client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.with_issue();
-
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
-        sub.filter_event::<RequestIssueEvent<_>>();
-        while let Some(result) = sub.next().await {
-            let decoded = result.and_then(|raw_event| {
-                RequestIssueEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])
-                    .map_err(|e| e.into())
-            });
-
-            match decoded {
-                Ok(e) => on_event(e).await,
-                Err(err) => on_error(err),
-            };
-        }
-
-        Ok(())
-    }
-
-    pub async fn on_request_redeem<F, R, E>(
-        &self,
-        mut on_event: F,
-        on_error: E,
-    ) -> Result<(), Error>
-    where
-        F: FnMut(PolkaBtcRequestRedeemEvent) -> R,
-        R: Future<Output = ()>,
-        E: Fn(XtError),
-    {
-        let sub = self.ext_client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.with_redeem();
-
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
-        sub.filter_event::<RequestRedeemEvent<_>>();
-        while let Some(result) = sub.next().await {
-            let decoded = result.and_then(|raw_event| {
-                RequestRedeemEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])
-                    .map_err(|e| e.into())
-            });
-
-            match decoded {
-                Ok(e) => on_event(e).await,
-                Err(err) => on_error(err),
-            };
-        }
-
-        Ok(())
-    }
-
-    /// Subscription service that should listen forever, only returns
-    /// if the initial subscription cannot be established.
-    ///
-    /// # Arguments
-    /// * `on_block` - callback for newly stored blocks
-    /// * `on_error` - callback for errors
-    pub async fn on_store_block<F, R, E>(&self, on_block: F, on_error: E) -> Result<(), Error>
-    where
-        F: Fn(u32, H256Le) -> R,
+        T: Event<PolkaBtcRuntime>,
+        F: FnMut(T) -> R,
         R: Future<Output = ()>,
         E: Fn(XtError),
     {
         let sub = self.ext_client.subscribe_events().await?;
         let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
         decoder.with_btc_relay();
+        decoder.with_exchange_rate_oracle();
+        decoder.with_issue();
+        decoder.with_redeem();
+        decoder.with_security();
+        decoder.with_staked_relayers();
+        decoder.with_timestamp();
+        decoder.with_vault_registry();
 
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
-        sub.filter_event::<StoreMainChainHeaderEvent<_>>();
+        sub.filter_event::<T>();
         while let Some(result) = sub.next().await {
-            let decoded = result.and_then(|raw_event| {
-                StoreMainChainHeaderEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])
-                    .map_err(|e| e.into())
-            });
+            let decoded = result
+                .and_then(|raw_event| T::decode(&mut &raw_event.data[..]).map_err(|e| e.into()));
 
             match decoded {
-                Ok(e) => on_block(e.block_height, e.block_header_hash).await,
+                Ok(e) => on_event(e).await,
                 Err(err) => on_error(err),
             };
         }
