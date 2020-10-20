@@ -1,8 +1,9 @@
 use super::Error;
 use crate::utils;
-use bitcoin::ConversionError as BitcoinConversionError;
-use bitcoin::Error as BitcoinError;
-use bitcoin::{BitcoinCore, BitcoinCoreApi, BlockHash, Hash};
+use bitcoin::{
+    BitcoinCore, BitcoinCoreApi, BlockHash, ConversionError as BitcoinConversionError,
+    Error as BitcoinError, Hash,
+};
 use log::{error, info};
 use runtime::{
     Error as RuntimeError, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcStatusUpdateSuggestedEvent,
@@ -144,7 +145,7 @@ fn convert_block_hash(hash: Option<H256Le>) -> Result<BlockHash, Error> {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use bitcoin::{GetRawTransactionResult, Txid};
+    use bitcoin::{GetRawTransactionResult, TransactionMetadata, Txid};
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode, MINIMUM_STAKE};
     use sp_keyring::AccountKeyring;
@@ -250,7 +251,9 @@ mod tests {
                 address: String,
                 sat: u64,
                 redeem_id: &[u8; 32],
-            ) -> Result<Txid, BitcoinError>;
+                op_timeout: Duration,
+                num_confirmations: u16,
+            ) -> Result<TransactionMetadata, BitcoinError>;
         }
     }
 

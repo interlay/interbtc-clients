@@ -10,8 +10,9 @@ pub use error::{Error, XtError};
 use pallets::*;
 pub use rpc::{
     AccountId, BtcRelayPallet, ExchangeRateOraclePallet, IssuePallet, PolkaBtcProvider,
-    PolkaBtcStatusUpdate, PolkaBtcStatusUpdateSuggestedEvent, PolkaBtcVault, RedeemPallet,
-    SecurityPallet, StakedRelayerPallet, TimestampPallet, VaultRegistryPallet,
+    PolkaBtcRequestRedeemEvent, PolkaBtcStatusUpdate, PolkaBtcStatusUpdateSuggestedEvent,
+    PolkaBtcVault, RedeemPallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
+    VaultRegistryPallet,
 };
 pub use security::{ErrorCode, StatusCode};
 use sp_core::{H160, H256};

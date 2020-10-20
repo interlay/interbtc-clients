@@ -1,10 +1,10 @@
 use clap::Clap;
 use log::{error, info};
+use runtime::substrate_subxt::PairSigner;
 use runtime::{Error, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
-use runtime::substrate_subxt::PairSigner;
 use tokio::time::delay_for;
 
 /// Simple oracle liveness service to automatically update the
