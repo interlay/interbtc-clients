@@ -12,7 +12,7 @@ pub use bitcoincore_rpc::{
         util::{address::Payload, psbt::serialize::Serialize},
         Address, Amount, Network, Transaction, TxOut, Txid,
     },
-    bitcoincore_rpc_json::{GetRawTransactionResult, GetTransactionResult},
+    bitcoincore_rpc_json::{GetRawTransactionResult, GetTransactionResult, WalletTxInfo},
     json,
     jsonrpc::Error as JsonRpcError,
     Auth, Client, Error as BitcoinError, RpcApi,
@@ -98,13 +98,16 @@ impl BitcoinCore {
 
         let (block_height, block_hash) = (|| async {
             Ok(match self.rpc.get_transaction(&txid, None) {
-                Ok(x)
-                    if x.info.confirmations >= num_confirmations as i32
-                        && x.info.blockhash.is_some()
-                        && x.info.blockheight.is_some() =>
-                {
-                    Ok((x.info.blockheight.unwrap(), x.info.blockhash.unwrap()))
-                }
+                Ok(GetTransactionResult {
+                    info:
+                        WalletTxInfo {
+                            confirmations,
+                            blockhash: Some(hash),
+                            blockheight: Some(height),
+                            ..
+                        },
+                    ..
+                }) if confirmations >= num_confirmations as i32 => Ok((height, hash)),
                 Ok(_) => Err(Error::ConfirmationError),
                 Err(e) => Err(e.into()),
             }?)

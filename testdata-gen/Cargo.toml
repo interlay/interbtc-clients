@@ -13,7 +13,6 @@ frame-system = "2.0.0"
 sp-keyring = "2.0.0"
 sp-core = "2.0.0"
 primitive-types = { default-features = false, version = "0.7.2", features = ["codec"]}
-substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branch = "master" }
 runtime = { path = "../runtime" }
 relayer-core = { git = "https://gitlab.com/interlay/relayer-core", branch = "main" }
 thiserror = "1.0"

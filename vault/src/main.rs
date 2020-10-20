@@ -6,12 +6,12 @@ use clap::Clap;
 use error::Error;
 use log::{error, info};
 use runtime::{
-    H256Le, PolkaBtcProvider, PolkaBtcRequestRedeemEvent, PolkaBtcRuntime, RedeemPallet,
+    substrate_subxt::PairSigner, H256Le, PolkaBtcProvider, PolkaBtcRequestRedeemEvent,
+    PolkaBtcRuntime, RedeemPallet,
 };
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
-use substrate_subxt::PairSigner;
 
 // keep trying for 24 hours
 const MAX_RETRYING_TIME: Duration = Duration::from_secs(24 * 60 * 60);
@@ -123,15 +123,6 @@ async fn handle_redeem_request(
 
     Ok(())
 }
-
-// async fn retry(f: F) -> T
-// where F:Fn() -> T {
-//     (|| async {
-//         f();
-//     })
-//     .retry(get_retry_policy())
-//     .await?
-// }
 
 fn get_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff {

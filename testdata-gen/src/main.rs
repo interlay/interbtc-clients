@@ -11,12 +11,12 @@ mod vault;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use error::Error;
 use runtime::{
-    ExchangeRateOraclePallet, H256Le, PolkaBtcProvider, PolkaBtcRuntime, TimestampPallet,
+    substrate_subxt::PairSigner, ExchangeRateOraclePallet, H256Le, PolkaBtcProvider,
+    PolkaBtcRuntime, TimestampPallet,
 };
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
 use std::{sync::Arc, time::Duration};
-use substrate_subxt::PairSigner;
 
 /// Generates testdata to be used on a development environment of the BTC-Parachain
 #[tokio::main]

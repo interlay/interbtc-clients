@@ -1,6 +1,5 @@
 use bitcoin::Error as BitcoinError;
-use runtime::Error as RuntimeError;
-use substrate_subxt::Error as XtError;
+use runtime::{substrate_subxt::Error as XtError, Error as RuntimeError};
 use thiserror::Error;
 
 #[derive(Error, Debug)]

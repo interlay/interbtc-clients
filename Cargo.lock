@@ -7910,7 +7910,6 @@ dependencies = [
  "runtime",
  "sp-core",
  "sp-keyring",
- "substrate-subxt",
  "thiserror",
  "tokio 0.2.22",
 ]
@@ -8690,7 +8689,6 @@ dependencies = [
  "log 0.4.11",
  "runtime",
  "sp-keyring",
- "substrate-subxt",
  "thiserror",
  "tokio 0.2.22",
 ]
