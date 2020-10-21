@@ -37,6 +37,7 @@ docker-publish-staked-relayer:
   only:
     - main
     - dev
+    - kaniko # debug
 
 docker-publish-oracle:
   stage: build
@@ -53,3 +54,4 @@ docker-publish-oracle:
   only:
     - main
     - dev
+    - kaniko # debug
