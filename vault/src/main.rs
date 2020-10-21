@@ -6,9 +6,9 @@ use clap::Clap;
 use error::Error;
 use log::{error, info};
 use runtime::{
-    pallets::{issue::RequestIssueEvent, redeem::RequestRedeemEvent},
+    pallets::{issue::RequestIssueEvent, redeem::RequestRedeemEvent, replace::RequestReplaceEvent},
     substrate_subxt::PairSigner,
-    H256Le, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet,
+    H256Le, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, ReplacePallet,
 };
 use sp_core::crypto::AccountId32;
 use sp_keyring::AccountKeyring;
@@ -69,6 +69,7 @@ async fn main() -> Result<(), Error> {
         vault_id.clone(),
         num_confirmations,
     );
+    let request_replace_listener = listen_for_replace_requests(arc_provider.clone());
 
     let result = tokio::try_join!(
         tokio::spawn(async move {
@@ -76,6 +77,9 @@ async fn main() -> Result<(), Error> {
         }),
         tokio::spawn(async move {
             redeem_listener.await.unwrap();
+        }),
+        tokio::spawn(async move {
+            request_replace_listener.await.unwrap();
         }),
     );
     match result {
@@ -181,6 +185,35 @@ async fn handle_redeem_request(
     .await?;
 
     Ok(())
+}
+
+async fn listen_for_replace_requests(
+    provider: Arc<PolkaBtcProvider>,
+) -> Result<(), runtime::Error> {
+    let provider = &provider;
+    provider
+        .on_event::<RequestReplaceEvent<PolkaBtcRuntime>, _, _, _>(
+            |event| async move {
+                info!(
+                    "Received replace request #{} from {}",
+                    event.replace_id, event.old_vault_id
+                );
+
+                match provider
+                    .accept_replace(event.replace_id, event.amount)
+                    .await
+                {
+                    Ok(_) => info!("Accepted replace request #{}", event.replace_id),
+                    Err(e) => error!(
+                        "Failed to accept replace request #{}: {}",
+                        event.replace_id,
+                        e.to_string()
+                    ),
+                }
+            },
+            |error| error!("Error reading replace event: {}", error.to_string()),
+        )
+        .await
 }
 
 fn get_retry_policy() -> ExponentialBackoff {

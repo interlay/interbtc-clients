@@ -49,7 +49,7 @@ pub struct CancelReplaceCall<T: Replace> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct RequestReplaceEvent<T: Replace> {
-    pub vault_id: T::AccountId,
+    pub old_vault_id: T::AccountId,
     pub amount: T::PolkaBTC,
     pub replace_id: T::H256,
 }
