@@ -22,6 +22,7 @@ use crate::exchange_rate_oracle::*;
 use crate::issue::*;
 use crate::pallets::Core;
 use crate::redeem::*;
+use crate::replace::*;
 use crate::security::*;
 use crate::staked_relayers::*;
 use crate::timestamp::*;
@@ -186,6 +187,156 @@ impl PolkaBtcProvider {
             };
         }
 
+        Ok(())
+    }
+}
+
+#[async_trait]
+pub trait ReplacePallet {
+    /// Request the replacement of a new vault ownership
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - sender of the transaction
+    /// * `amount` - amount of PolkaBTC
+    /// * `griefing_collateral` - amount of DOT
+    async fn request_replace(&self, amount: u128, griefing_collateral: u128)
+        -> Result<H256, Error>;
+
+    /// Withdraw a request of vault replacement
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - sender of the transaction: the old vault
+    /// * `replace_id` - the unique identifier of the replace request
+    async fn withdraw_replace(&self, replace_id: H256) -> Result<(), Error>;
+
+    /// Accept request of vault replacement
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - the initiator of the transaction: the new vault
+    /// * `replace_id` - the unique identifier for the specific request
+    /// * `collateral` - the collateral for replacement
+    async fn accept_replace(&self, replace_id: H256, collateral: u128) -> Result<(), Error>;
+
+    /// Auction forces vault replacement
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - sender of the transaction: the new vault
+    /// * `old_vault` - the old vault of the replacement request
+    /// * `btc_amount` - the btc amount to be transferred over from old to new
+    /// * `collateral` - the collateral to be transferred over from old to new
+    async fn auction_replace(
+        &self,
+        old_vault: AccountId,
+        btc_amount: u128,
+        collateral: u128,
+    ) -> Result<(), Error>;
+
+    /// Execute vault replacement
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - sender of the transaction: the new vault
+    /// * `replace_id` - the ID of the replacement request
+    /// * `tx_id` - the backing chain transaction id
+    /// * `tx_block_height` - the blocked height of the backing transaction
+    /// * 'merkle_proof' - the merkle root of the block
+    /// * `raw_tx` - the transaction id in bytes
+    async fn execute_replace(
+        &self,
+        replace_id: H256,
+        tx_id: H256Le,
+        tx_block_height: u32,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>,
+    ) -> Result<(), Error>;
+
+    /// Cancel vault replacement
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - sender of the transaction: the new vault
+    /// * `replace_id` - the ID of the replacement request
+    async fn cancel_replace(&self, replace_id: H256) -> Result<(), Error>;
+}
+#[async_trait]
+impl ReplacePallet for PolkaBtcProvider {
+    async fn request_replace(
+        &self,
+        amount: u128,
+        griefing_collateral: u128,
+    ) -> Result<H256, Error> {
+        let result = self
+            .ext_client
+            .request_replace_and_watch(&*self.signer.write().await, amount, griefing_collateral)
+            .await?;
+
+        if let Some(event) = result.request_replace()? {
+            Ok(event.replace_id)
+        } else {
+            Err(Error::RequestReplaceIDNotFound)
+        }
+    }
+
+    async fn withdraw_replace(&self, replace_id: H256) -> Result<(), Error> {
+        self.ext_client
+            .withdraw_replace_and_watch(&*self.signer.write().await, replace_id)
+            .await?;
+        Ok(())
+    }
+
+    async fn accept_replace(&self, replace_id: H256, collateral: u128) -> Result<(), Error> {
+        self.ext_client
+            .accept_replace_and_watch(&*self.signer.write().await, replace_id, collateral)
+            .await?;
+        Ok(())
+    }
+
+    async fn auction_replace(
+        &self,
+        old_vault: AccountId,
+        btc_amount: u128,
+        collateral: u128,
+    ) -> Result<(), Error> {
+        self.ext_client
+            .auction_replace_and_watch(
+                &*self.signer.write().await,
+                old_vault,
+                btc_amount,
+                collateral,
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn execute_replace(
+        &self,
+        replace_id: H256,
+        tx_id: H256Le,
+        tx_block_height: u32,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>,
+    ) -> Result<(), Error> {
+        self.ext_client
+            .execute_replace_and_watch(
+                &*self.signer.write().await,
+                replace_id,
+                tx_id,
+                tx_block_height,
+                merkle_proof,
+                raw_tx,
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn cancel_replace(&self, replace_id: H256) -> Result<(), Error> {
+        self.ext_client
+            .cancel_replace_and_watch(&*self.signer.write().await, replace_id)
+            .await?;
         Ok(())
     }
 }
