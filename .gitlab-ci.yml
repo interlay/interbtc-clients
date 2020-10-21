@@ -43,6 +43,7 @@ docker-publish-staked-relayer:
     - docker push $CI_REGISTRY_IMAGE:staked-relayer-latest
   only:
     - main
+    - dev
 
 docker-publish-oracle:
   stage: build
@@ -63,3 +64,4 @@ docker-publish-oracle:
     - docker push $CI_REGISTRY_IMAGE:oracle-latest
   only:
     - main
+    - dev
