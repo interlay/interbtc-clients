@@ -2,8 +2,8 @@ image: "registry.gitlab.com/interlay/btc-parachain:ci-nightly-2020-10-01"
 
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/.cargo
-  DOCKER_HOST: tcp://docker:2375
-  DOCKER_TLS_CERTDIR: ""
+  DOCKER_HOST: tcp://docker:2376
+  DOCKER_TLS_CERTDIR: "/certs"
 
 stages:
   - test
@@ -51,7 +51,6 @@ docker-publish-oracle:
   services:
     - docker:19.03.12-dind
   before_script:
-    - apk add git
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
     - docker pull $CI_REGISTRY_IMAGE:oracle-latest || true
