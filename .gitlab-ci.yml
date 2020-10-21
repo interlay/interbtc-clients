@@ -2,8 +2,6 @@ image: "registry.gitlab.com/interlay/btc-parachain:ci-nightly-2020-10-01"
 
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/.cargo
-  DOCKER_HOST: tcp://docker:2376
-  DOCKER_TLS_CERTDIR: "/certs"
 
 stages:
   - test
@@ -26,41 +24,32 @@ test-crates:
 
 docker-publish-staked-relayer:
   stage: build
-  image: docker:19.03.12
-  services:
-    - docker:19.03.12-dind
-  before_script:
-    - apk add git
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
   script:
-    - docker pull $CI_REGISTRY_IMAGE:staked-relayer-latest || true
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
     - |
-      docker build --cache-from $CI_REGISTRY_IMAGE:staked-relayer-latest \
-      --tag $CI_REGISTRY_IMAGE:staked-relayer-$CI_COMMIT_SHA \
-      --tag $CI_REGISTRY_IMAGE:staked-relayer-latest \
-      --file staked-relayer/Dockerfile .
-    - docker push $CI_REGISTRY_IMAGE:staked-relayer-$CI_COMMIT_SHA
-    - docker push $CI_REGISTRY_IMAGE:staked-relayer-latest
+      /kaniko/executor --context $CI_PROJECT_DIR \
+      --dockerfile $CI_PROJECT_DIR/staked-relayer/Dockerfile \
+      --destination $CI_REGISTRY_IMAGE:staked-relayer-$CI_COMMIT_SHA
+      --destination $CI_REGISTRY_IMAGE:staked-relayer-latest
   only:
     - main
     - dev
 
 docker-publish-oracle:
   stage: build
-  image: docker:19.03.12
-  services:
-    - docker:19.03.12-dind
-  before_script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
   script:
-    - docker pull $CI_REGISTRY_IMAGE:oracle-latest || true
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
     - |
-      docker build --cache-from $CI_REGISTRY_IMAGE:oracle-latest \
-      --tag $CI_REGISTRY_IMAGE:oracle-$CI_COMMIT_SHA \
-      --tag $CI_REGISTRY_IMAGE:oracle-latest \
-      --file oracle/Dockerfile .
-    - docker push $CI_REGISTRY_IMAGE:oracle-$CI_COMMIT_SHA
-    - docker push $CI_REGISTRY_IMAGE:oracle-latest
+      /kaniko/executor --context $CI_PROJECT_DIR \
+        --dockerfile $CI_PROJECT_DIR/oracle/Dockerfile \
+        --destination $CI_REGISTRY_IMAGE:oracle-$CI_COMMIT_SHA \
+        --destination $CI_REGISTRY_IMAGE:oracle-latest
   only:
     - main
     - dev
