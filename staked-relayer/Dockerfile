@@ -1,24 +1,12 @@
 # ===== FIRST STAGE ======
 
-FROM phusion/baseimage:0.11 as builder
-ENV DEBIAN_FRONTEND=noninteractive
+FROM registry.gitlab.com/interlay/docker-rust:nightly-2020-10-01 as builder
 ARG PROFILE=release
 WORKDIR /app
 
 COPY . /app
 
-RUN apt-get update && \
-	apt-get dist-upgrade -y -o Dpkg::Options::="--force-confold" && \
-	apt-get install -y cmake pkg-config libssl-dev git clang
-
-ARG TOOLCHAIN=nightly-2020-10-01
-
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
-	export PATH="$PATH:$HOME/.cargo/bin" && \
-	rustup toolchain install ${TOOLCHAIN} && \
-	rustup target add wasm32-unknown-unknown --toolchain ${TOOLCHAIN} && \
-	rustup default stable && \
-	cargo build "--$PROFILE" --package staked-relayer
+RUN cargo build "--$PROFILE" --package staked-relayer
 
 # ===== SECOND STAGE ======
 
