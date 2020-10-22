@@ -19,7 +19,7 @@ pub use bitcoincore_rpc::{
 };
 pub use error::{ConversionError, Error};
 use sp_core::H160;
-use std::{collections::HashMap, convert::TryInto, env::var, str::FromStr, time::Duration};
+use std::{collections::HashMap, env::var, str::FromStr, time::Duration};
 use tokio::time::delay_for;
 
 pub struct TransactionMetadata {
@@ -314,17 +314,20 @@ fn add_redeem_id(tx: &mut Transaction, redeem_id: &[u8; 32]) {
 
 pub fn get_hash_from_string(btc_address: &str) -> Result<H160, ConversionError> {
     let addr = Address::from_str(btc_address)?;
-    let hash = match addr.payload {
-        Payload::PubkeyHash(hash) => hash.as_hash().into_inner(),
-        Payload::ScriptHash(hash) => hash.as_hash().into_inner(),
+    match addr.payload {
+        Payload::PubkeyHash(hash) => Ok(H160::from(hash.as_hash().into_inner())),
+        Payload::ScriptHash(hash) => Ok(H160::from(hash.as_hash().into_inner())),
         Payload::WitnessProgram {
             version: _,
             program,
-        } => program
-            .try_into()
-            .map_err(|_| ConversionError::WitnessProgramError)?,
-    };
-    Ok(H160::from(hash))
+        } => {
+            if program.len() == 20 {
+                Ok(H160::from_slice(program.as_slice()))
+            } else {
+                Err(ConversionError::WitnessProgramError)
+            }
+        }
+    }
 }
 
 pub fn get_address_from_hex(btc_address: &str) -> Result<H160, ConversionError> {
