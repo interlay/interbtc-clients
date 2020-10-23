@@ -17,12 +17,11 @@ clap = "3.0.0-beta.1"
 sp-keyring = "2.0.0"
 sp-core = "2.0.0"
 async-trait = "0.1.40"
-warp = "0.2"
 serde = "1.0.116"
-serde_json = { version = "1.0.57", features = ["raw_value"] }
 relayer-core = { git = "https://gitlab.com/interlay/relayer-core", branch = "main" }
 runtime = { path = "../runtime" }
 bitcoin = { path = "../bitcoin" }
+jsonrpc-http-server = "15.1.0"
 
 [dev-dependencies]
 mockall = "0.8.1"
