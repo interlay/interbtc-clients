@@ -1,18 +1,12 @@
+use super::{Core, CoreEventsDecoder};
 pub use module_bitcoin::types::H256Le;
-use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};
+use parity_scale_codec::{Decode, Encode};
 pub use sp_core::{H160, H256};
-use sp_runtime::traits::Member;
 use std::fmt::Debug;
-use substrate_subxt::system::{System, SystemEventsDecoder};
 use substrate_subxt_proc_macro::{module, Call, Event};
 
 #[module]
-pub trait Replace: System {
-    type DOT: Codec + EncodeLike + Member + Default;
-    type H256: Codec + EncodeLike + Member + Default;
-    type H256Le: Codec + EncodeLike + Member + Default;
-    type PolkaBTC: Codec + EncodeLike + Member + Default;
-}
+pub trait Replace: Core { }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RequestReplaceCall<T: Replace> {
@@ -62,9 +56,11 @@ pub struct WithdrawReplaceEvent<T: Replace> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct AcceptReplaceEvent<T: Replace> {
+    pub old_vault_id: T::AccountId,
     pub new_vault_id: T::AccountId,
     pub replace_id: T::H256,
     pub collateral: T::DOT,
+    pub btc_amount: T::PolkaBTC,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]

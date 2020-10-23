@@ -166,14 +166,9 @@ impl PolkaBtcProvider {
     {
         let sub = self.ext_client.subscribe_events().await?;
         let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.with_btc_relay();
-        decoder.with_exchange_rate_oracle();
-        decoder.with_issue();
-        decoder.with_redeem();
-        decoder.with_security();
-        decoder.with_staked_relayers();
-        decoder.with_timestamp();
-        decoder.with_vault_registry();
+        // We would need with_core to be able to decode all types, but since 
+        // it does not exist, instead use a random module that includes it:
+        decoder.with_vault_registry(); 
 
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
         sub.filter_event::<T>();
