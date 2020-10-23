@@ -1,22 +1,20 @@
 mod error;
+mod issue;
+mod redeem;
+mod replace;
+mod util;
 
-use backoff::{future::FutureOperation as _, ExponentialBackoff};
-use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use bitcoin::BitcoinCore;
 use clap::Clap;
 use error::Error;
+use issue::*;
 use log::{error, info};
-use runtime::{
-    pallets::{issue::RequestIssueEvent, redeem::RequestRedeemEvent, replace::RequestReplaceEvent},
-    substrate_subxt::PairSigner,
-    H256Le, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, ReplacePallet,
-};
-use sp_core::crypto::AccountId32;
+use redeem::*;
+use replace::*;
+
+use runtime::{substrate_subxt::PairSigner, PolkaBtcProvider, PolkaBtcRuntime};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
-use std::time::Duration;
-
-// keep trying for 24 hours
-const MAX_RETRYING_TIME: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// The Vault client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
@@ -63,23 +61,32 @@ async fn main() -> Result<(), Error> {
     };
 
     let issue_listener = listen_for_issue_requests(arc_provider.clone(), vault_id.clone());
+    let request_replace_listener = listen_for_replace_requests(arc_provider.clone());
     let redeem_listener = listen_for_redeem_requests(
         arc_provider.clone(),
         btc_rpc.clone(),
         vault_id.clone(),
         num_confirmations,
     );
-    let request_replace_listener = listen_for_replace_requests(arc_provider.clone());
+    let accept_replace_listener = listen_for_accept_replace(
+        arc_provider.clone(),
+        btc_rpc.clone(),
+        vault_id.clone(),
+        num_confirmations,
+    );
 
     let result = tokio::try_join!(
         tokio::spawn(async move {
-            issue_listener.await;
+            issue_listener.await.unwrap();
         }),
         tokio::spawn(async move {
             redeem_listener.await.unwrap();
         }),
         tokio::spawn(async move {
             request_replace_listener.await.unwrap();
+        }),
+        tokio::spawn(async move {
+            accept_replace_listener.await.unwrap();
         }),
     );
     match result {
@@ -93,132 +100,4 @@ async fn main() -> Result<(), Error> {
     };
 
     Ok(())
-}
-
-async fn listen_for_issue_requests(provider: Arc<PolkaBtcProvider>, vault_id: AccountId32) {
-    let vault_id = &vault_id;
-    provider
-        .on_event::<RequestIssueEvent<PolkaBtcRuntime>, _, _, _>(
-            |event| async move {
-                if event.vault_id == vault_id.clone() {
-                    info!("Received issue request #{}", event.issue_id);
-                }
-            },
-            |error| error!("Error reading issue event: {}", error.to_string()),
-        )
-        .await
-        .unwrap();
-}
-
-async fn listen_for_redeem_requests(
-    provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<BitcoinCore>,
-    vault_id: AccountId32,
-    num_confirmations: u16,
-) -> Result<(), runtime::Error> {
-    let vault_id = &vault_id;
-    let provider = &provider;
-    let btc_rpc = &btc_rpc;
-    provider
-        .on_event::<RequestRedeemEvent<PolkaBtcRuntime>, _, _, _>(
-            |event| async move {
-                if event.vault_id != vault_id.clone() {
-                    return;
-                }
-                info!("Received redeem request #{}", event.redeem_id);
-                match handle_redeem_request(
-                    &event,
-                    btc_rpc.clone(),
-                    provider.clone(),
-                    num_confirmations,
-                )
-                .await
-                {
-                    Ok(_) => info!("Completed redeem request #{}", event.redeem_id),
-                    Err(e) => error!(
-                        "Failed to process redeem request #{}: {}",
-                        event.redeem_id,
-                        e.to_string()
-                    ),
-                }
-            },
-            |error| error!("Error reading redeem event: {}", error.to_string()),
-        )
-        .await
-}
-
-async fn handle_redeem_request(
-    event: &RequestRedeemEvent<PolkaBtcRuntime>,
-    btc_rpc: Arc<BitcoinCore>,
-    arc_provider: Arc<PolkaBtcProvider>,
-    num_confirmations: u16,
-) -> Result<(), Error> {
-    let address = bitcoin::hash_to_p2wpkh(event.btc_address, bitcoin::Network::Regtest)
-        .map_err(|e| -> bitcoin::Error { e.into() })?;
-
-    // Step 1: make bitcoin transfer. Note: do not retry this call;
-    // the call could fail to get the metadata even if the transaction
-    // itself was successful
-    let tx_metadata = btc_rpc
-        .send_to_address(
-            address.clone(),
-            event.amount_polka_btc as u64,
-            &event.redeem_id.to_fixed_bytes(),
-            MAX_RETRYING_TIME,
-            num_confirmations,
-        )
-        .await?;
-
-    // step 2: execute redeem to get the dots
-    (|| async {
-        Ok(arc_provider
-            .execute_redeem(
-                event.redeem_id,
-                H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
-                tx_metadata.block_height,
-                tx_metadata.proof.clone(),
-                tx_metadata.raw_tx.clone(),
-            )
-            .await?)
-    })
-    .retry(get_retry_policy())
-    .await?;
-
-    Ok(())
-}
-
-async fn listen_for_replace_requests(
-    provider: Arc<PolkaBtcProvider>,
-) -> Result<(), runtime::Error> {
-    let provider = &provider;
-    provider
-        .on_event::<RequestReplaceEvent<PolkaBtcRuntime>, _, _, _>(
-            |event| async move {
-                info!(
-                    "Received replace request #{} from {}",
-                    event.replace_id, event.old_vault_id
-                );
-
-                match provider
-                    .accept_replace(event.replace_id, event.amount)
-                    .await
-                {
-                    Ok(_) => info!("Accepted replace request #{}", event.replace_id),
-                    Err(e) => error!(
-                        "Failed to accept replace request #{}: {}",
-                        event.replace_id,
-                        e.to_string()
-                    ),
-                }
-            },
-            |error| error!("Error reading replace event: {}", error.to_string()),
-        )
-        .await
-}
-
-fn get_retry_policy() -> ExponentialBackoff {
-    ExponentialBackoff {
-        max_elapsed_time: Some(MAX_RETRYING_TIME),
-        ..Default::default()
-    }
 }
