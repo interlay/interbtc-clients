@@ -42,8 +42,20 @@ spec:
             - --http-addr
             - "[::0]:{{ .Values.service.port }}"
           ports:
-            - name: json-rpc
+            - name: http-rpc
               containerPort: {{ .Values.service.port }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http-rpc
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http-rpc
+            initialDelaySeconds: 10
+            periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

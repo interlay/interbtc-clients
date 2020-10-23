@@ -11,6 +11,6 @@ spec:
       {{ if eq .Values.service.type "NodePort" -}}
       nodePort: {{ .Values.service.nodePort }}
       {{- end }}
-      name: json-rpc
+      name: http-rpc
   selector:
     {{- include "staked-relayer.selectorLabels" . | nindent 4 }}

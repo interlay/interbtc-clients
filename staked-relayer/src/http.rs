@@ -8,7 +8,7 @@ use jsonrpc_http_server::{DomainsValidation, ServerBuilder};
 use parity_scale_codec::{Decode, Encode};
 use runtime::ErrorCode as PolkaBtcErrorCode;
 use runtime::StatusCode as PolkaBtcStatusCode;
-use runtime::{H256Le, PolkaBtcProvider, StakedRelayerPallet};
+use runtime::{H256Le, PolkaBtcProvider, SecurityPallet, StakedRelayerPallet};
 use serde::{Deserialize, Deserializer};
 use sp_core::crypto::Ss58Codec;
 use std::net::SocketAddr;
@@ -38,6 +38,11 @@ where
     String::deserialize(deserializer).and_then(|string| {
         Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string()))
     })
+}
+
+fn _system_health(api: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
+    block_on(api.get_parachain_status())?;
+    Ok(())
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -104,6 +109,10 @@ pub async fn start(api: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String)
     let mut io = IoHandler::default();
     {
         let api = api.clone();
+        io.add_method("system_health", move |_| handle_resp(_system_health(&api)));
+    }
+    {
+        let api = api.clone();
         io.add_method("get_address", move |_| handle_resp(_get_address(&api)));
     }
     {
@@ -132,6 +141,8 @@ pub async fn start(api: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String)
     }
 
     let server = ServerBuilder::new(io)
+        .health_api(("/health", "system_health"))
+        .rest_api(jsonrpc_http_server::RestApi::Unsecure)
         .cors(DomainsValidation::AllowOnly(vec![origin.into()]))
         .start_http(&addr)
         .expect("Unable to start RPC server");
