@@ -31,6 +31,6 @@ cargo run --release -- --dev
 Run the staked relayer client:
 
 ```
-source .env
+source ../.env
 cargo run
 ```
