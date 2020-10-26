@@ -1,7 +1,9 @@
 use bitcoin::Error as BitcoinError;
+use jsonrpsee::common::Error as JsonRpcError;
+use parity_scale_codec::Error as CodecError;
 use runtime::{substrate_subxt::Error as XtError, Error as RuntimeError};
+use std::net::AddrParseError;
 use thiserror::Error;
-
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("BitcoinError: {0}")]
@@ -10,4 +12,10 @@ pub enum Error {
     RuntimeError(#[from] RuntimeError),
     #[error("SubXtError: {0}")]
     SubXtError(#[from] XtError),
+    #[error("JsonRpcError: {0}")]
+    JsonRpcError(#[from] JsonRpcError),
+    #[error("CodecError: {0}")]
+    CodecError(#[from] CodecError),
+    #[error("AddrParseError: {0}")]
+    AddrParseError(#[from] AddrParseError),
 }

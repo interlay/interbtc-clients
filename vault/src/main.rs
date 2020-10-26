@@ -1,3 +1,4 @@
+mod api;
 mod error;
 mod issue;
 mod redeem;
@@ -28,6 +29,14 @@ struct Opts {
     /// Keyring for vault.
     #[clap(long, default_value = "bob")]
     keyring: AccountKeyring,
+
+    /// Address to listen on for JSON-RPC requests.
+    #[clap(long, default_value = "[::1]:3030")]
+    http_addr: String,
+
+    /// Comma separated list of allowed origins.
+    #[clap(long, default_value = "*")]
+    rpc_cors_domain: String,
 
     #[clap(long)]
     dev: bool,
@@ -61,7 +70,8 @@ async fn main() -> Result<(), Error> {
     };
 
     let issue_listener = listen_for_issue_requests(arc_provider.clone(), vault_id.clone());
-    let request_replace_listener = listen_for_replace_requests(arc_provider.clone());
+    let request_replace_listener =
+        listen_for_replace_requests(arc_provider.clone(), vault_id.clone());
     let redeem_listener = listen_for_redeem_requests(
         arc_provider.clone(),
         btc_rpc.clone(),
@@ -75,7 +85,16 @@ async fn main() -> Result<(), Error> {
         num_confirmations,
     );
 
+    let api_listener = api::start(
+        arc_provider.clone(),
+        opts.http_addr.parse()?,
+        opts.rpc_cors_domain,
+    );
+
     let result = tokio::try_join!(
+        tokio::spawn(async move {
+            api_listener.await;
+        }),
         tokio::spawn(async move {
             issue_listener.await.unwrap();
         }),

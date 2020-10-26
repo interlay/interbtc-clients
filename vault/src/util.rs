@@ -11,7 +11,7 @@ use std::time::Duration;
 // keep trying for 24 hours
 const MAX_RETRYING_TIME: Duration = Duration::from_secs(24 * 60 * 60);
 
-/// First makes bitcoin transfer, then calls tries to call on_payment until it 
+/// First makes bitcoin transfer, then calls tries to call on_payment until it
 /// succeeds
 ///
 /// # Arguments

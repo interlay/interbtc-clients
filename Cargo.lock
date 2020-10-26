@@ -95,6 +95,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8fd72866655d1904d6b0997d0b07ba561047d070fbe29de039031c641b61217"
 
 [[package]]
+name = "ahash"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6789e291be47ace86a60303502173d84af8327e3627ecf334356ee0f87a164c"
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -194,6 +200,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-attributes"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "efd3d156917d94862e779f356c5acae312b08fd3121e792c857d7928c8088423"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "async-channel"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -266,6 +282,7 @@ version = "1.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9fa76751505e8df1c7a77762f60486f60c71bbd9b8557f4da6ad47d083732ed"
 dependencies = [
+ "async-attributes",
  "async-global-executor",
  "async-io",
  "async-mutex",
@@ -315,6 +332,19 @@ dependencies = [
  "rustls 0.18.1",
  "webpki",
  "webpki-roots 0.19.0",
+]
+
+[[package]]
+name = "async-tls"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d85a97c4a0ecce878efd3f945f119c78a646d8975340bca0398f9bb05c30cc52"
+dependencies = [
+ "futures-core",
+ "futures-io",
+ "rustls 0.18.1",
+ "webpki",
+ "webpki-roots 0.20.0",
 ]
 
 [[package]]
@@ -2296,6 +2326,9 @@ name = "hashbrown"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
+dependencies = [
+ "ahash 0.4.6",
+]
 
 [[package]]
 name = "headers"
@@ -2865,7 +2898,8 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.1.0"
-source = "git+https://github.com/gregdhill/jsonrpsee?branch=0.1.0#e9ba10029aebaffc37932ae2b35a65783c58169a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5cc8a1da5a54b417cfb7edb9f932024d833dc333de50c21c0e1b28d0e8b4f853"
 dependencies = [
  "async-std",
  "async-tls 0.6.0",
@@ -2877,7 +2911,7 @@ dependencies = [
  "globset",
  "hashbrown 0.7.2",
  "hyper 0.13.8",
- "jsonrpsee-proc-macros",
+ "jsonrpsee-proc-macros 0.1.0",
  "lazy_static",
  "log 0.4.11",
  "parking_lot 0.10.2",
@@ -2895,9 +2929,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee"
+version = "2.0.0"
+dependencies = [
+ "async-std",
+ "async-tls 0.10.0",
+ "bs58",
+ "bytes 0.5.6",
+ "fnv",
+ "futures 0.3.6",
+ "globset",
+ "hashbrown 0.9.1",
+ "hyper 0.13.8",
+ "jsonrpsee-proc-macros 1.0.0",
+ "lazy_static",
+ "log 0.4.11",
+ "parking_lot 0.11.0",
+ "pin-project",
+ "rand 0.7.3",
+ "serde",
+ "serde_json",
+ "smallvec 1.4.2",
+ "soketto 0.4.2",
+ "thiserror",
+ "tokio 0.2.22",
+ "unicase 2.6.0",
+ "url 2.1.1",
+ "webpki",
+]
+
+[[package]]
+name = "jsonrpsee-proc-macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1ed1b5f6937dd2c6c79a9ac6e0e3f41bbc64edb5d443840bdc73e606009ed70"
+dependencies = [
+ "Inflector",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "jsonrpsee-proc-macros"
 version = "1.0.0"
-source = "git+https://github.com/gregdhill/jsonrpsee?branch=0.1.0#e9ba10029aebaffc37932ae2b35a65783c58169a"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -5481,7 +5556,7 @@ dependencies = [
  "bitcoin 0.1.1",
  "btc-parachain",
  "frame-support",
- "jsonrpsee",
+ "jsonrpsee 0.1.0",
  "parity-scale-codec",
  "security",
  "serde_json",
@@ -7766,7 +7841,7 @@ dependencies = [
  "frame-support",
  "futures 0.3.6",
  "hex 0.4.2",
- "jsonrpsee",
+ "jsonrpsee 0.1.0",
  "log 0.4.11",
  "num-traits",
  "pallet-im-online",
@@ -7800,7 +7875,7 @@ dependencies = [
  "async-std",
  "futures 0.1.30",
  "futures 0.3.6",
- "jsonrpsee",
+ "jsonrpsee 0.1.0",
  "log 0.4.11",
  "sc-network",
  "sc-service",
@@ -8687,8 +8762,13 @@ dependencies = [
  "bitcoin 0.1.0",
  "clap 3.0.0-beta.2",
  "env_logger",
+ "hex 0.4.2",
+ "jsonrpsee 2.0.0",
  "log 0.4.11",
+ "parity-scale-codec",
  "runtime",
+ "serde",
+ "serde_json",
  "sp-core",
  "sp-keyring",
  "thiserror",
@@ -9153,6 +9233,15 @@ name = "webpki-roots"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8eff4b7516a57307f9349c64bf34caa34b940b66fed4b2fb3136cb7386e5739"
+dependencies = [
+ "webpki",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f20dea7535251981a9670857150d571846545088359b28e4951d350bdaf179f"
 dependencies = [
  "webpki",
 ]
