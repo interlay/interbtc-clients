@@ -1,20 +1,13 @@
-use crate::security::{Security, SecurityEventsDecoder};
+use super::{Core, CoreEventsDecoder};
 use core::marker::PhantomData;
 pub use module_vault_registry::Vault;
-use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};
-pub use sp_core::H160;
-use sp_runtime::traits::Member;
+use parity_scale_codec::{Decode, Encode};
+use sp_core::H160;
 use std::fmt::Debug;
-use substrate_subxt::system::{System, SystemEventsDecoder};
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
 #[module]
-pub trait VaultRegistry: System + Security {
-    type Balance: Codec + EncodeLike + Member + Default;
-    type DOT: Codec + EncodeLike + Member + Default;
-    type PolkaBTC: Codec + EncodeLike + Member + Default;
-    type BTCBalance: Codec + EncodeLike + Member + Default;
-}
+pub trait VaultRegistry: Core {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RegisterVaultCall<T: VaultRegistry> {

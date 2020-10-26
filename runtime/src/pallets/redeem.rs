@@ -1,22 +1,11 @@
+use super::{Core, CoreEventsDecoder};
 use core::marker::PhantomData;
-pub use module_bitcoin::types::H256Le;
-use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};
-pub use sp_core::{H160, H256};
-use sp_runtime::traits::Member;
+use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
-use substrate_subxt::system::{System, SystemEventsDecoder};
 use substrate_subxt_proc_macro::{module, Call, Event};
 
 #[module]
-pub trait Redeem: System {
-    type Balance: Codec + EncodeLike + Member + Default;
-    type BTCBalance: Codec + EncodeLike + Member + Default;
-    type DOT: Codec + EncodeLike + Member + Default;
-    type PolkaBTC: Codec + EncodeLike + Member + Default;
-    type H160: Codec + EncodeLike + Member + Default;
-    type H256: Codec + EncodeLike + Member + Default;
-    type H256Le: Codec + EncodeLike + Member + Default;
-}
+pub trait Redeem: Core {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RequestRedeemCall<T: Redeem> {

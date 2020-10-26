@@ -1,19 +1,14 @@
-use crate::security::{Security, SecurityEventsDecoder};
+use super::{Core, CoreEventsDecoder};
 use core::marker::PhantomData;
 pub use module_staked_relayers::types::StatusUpdate;
 pub use module_staked_relayers::Error as StakedRelayersError;
-use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};
-use sp_runtime::traits::Member;
+use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
 use substrate_subxt::balances::{Balances, BalancesEventsDecoder};
-use substrate_subxt::system::{System, SystemEventsDecoder};
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
 #[module]
-pub trait StakedRelayers: System + Security + Balances {
-    type DOT: Codec + EncodeLike + Member + Default;
-    type H256Le: Codec + EncodeLike + Member + Default;
-}
+pub trait StakedRelayers: Core + Balances {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RegisterStakedRelayerCall<T: StakedRelayers> {

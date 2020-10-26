@@ -5495,7 +5495,6 @@ dependencies = [
  "tempdir",
  "thiserror",
  "tokio 0.2.22",
- "tokio-test",
  "vault-registry",
 ]
 
@@ -7761,7 +7760,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.13.0"
-source = "git+https://github.com/paritytech/substrate-subxt?branch=master#fc2da6b9c7f3af43cd0ff4603c081055412ff975"
+source = "git+https://github.com/paritytech/substrate-subxt?branch=master#7655caac0f1cdf7ade026cafe255defaf1966885"
 dependencies = [
  "frame-metadata",
  "frame-support",
@@ -7813,7 +7812,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.13.0"
-source = "git+https://github.com/paritytech/substrate-subxt?branch=master#fc2da6b9c7f3af43cd0ff4603c081055412ff975"
+source = "git+https://github.com/paritytech/substrate-subxt?branch=master#7655caac0f1cdf7ade026cafe255defaf1966885"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -8245,17 +8244,6 @@ dependencies = [
  "mio",
  "tokio-io",
  "tokio-reactor",
-]
-
-[[package]]
-name = "tokio-test"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed0049c119b6d505c4447f5c64873636c7af6c75ab0d45fd9f618d82acb8016d"
-dependencies = [
- "bytes 0.5.6",
- "futures-core",
- "tokio 0.2.22",
 ]
 
 [[package]]

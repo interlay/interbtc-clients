@@ -5,6 +5,7 @@ use jsonrpsee::{
 };
 use parity_scale_codec::Decode;
 use sp_core::sr25519::Pair as KeyPair;
+use sp_core::{H160, H256};
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::future::Future;
@@ -18,7 +19,7 @@ use tokio::sync::RwLock;
 use crate::btc_relay::*;
 use crate::exchange_rate_oracle::*;
 use crate::issue::*;
-// use crate::redeem::*;
+use crate::pallets::Core;
 use crate::redeem::*;
 use crate::security::*;
 use crate::staked_relayers::*;
@@ -29,16 +30,13 @@ use crate::PolkaBtcRuntime;
 
 pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
 
-pub type PolkaBtcVault = Vault<
-    AccountId,
-    <PolkaBtcRuntime as System>::BlockNumber,
-    <PolkaBtcRuntime as VaultRegistry>::PolkaBTC,
->;
+pub type PolkaBtcVault =
+    Vault<AccountId, <PolkaBtcRuntime as System>::BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC>;
 
 pub type PolkaBtcStatusUpdate = StatusUpdate<
     AccountId,
     <PolkaBtcRuntime as System>::BlockNumber,
-    <PolkaBtcRuntime as StakedRelayers>::DOT,
+    <PolkaBtcRuntime as Core>::DOT,
 >;
 
 pub type PolkaBtcStatusUpdateSuggestedEvent = StatusUpdateSuggestedEvent<PolkaBtcRuntime>;
