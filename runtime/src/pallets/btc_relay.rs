@@ -1,21 +1,17 @@
-use crate::security::Security;
-use crate::security::SecurityEventsDecoder;
+use super::{Core, CoreEventsDecoder};
 use core::marker::PhantomData;
-pub use module_bitcoin::types::{H256Le, RawBlockHeader, RichBlockHeader};
-use parity_scale_codec::{Codec, Decode, Encode, EncodeLike};
-use sp_runtime::traits::Member;
+pub use module_bitcoin::{
+    formatter::Formattable,
+    types::{Address, BlockBuilder, H256Le, RawBlockHeader, RichBlockHeader},
+};
+use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
-use substrate_subxt::system::{System, SystemEventsDecoder};
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
 pub type BitcoinBlockHeight = u32;
 
 #[module]
-pub trait BTCRelay: System + Security {
-    type H256Le: Codec + EncodeLike + Member + Default;
-    type RichBlockHeader: Codec + EncodeLike + Member + Default;
-    type H160: Codec + EncodeLike + Member + Default;
-}
+pub trait BTCRelay: Core {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct InitializeCall<T: BTCRelay> {

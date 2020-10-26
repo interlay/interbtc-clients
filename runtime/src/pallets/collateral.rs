@@ -1,16 +1,10 @@
-use crate::security::Security;
-use crate::security::SecurityEventsDecoder;
-use parity_scale_codec::{Codec, Decode, EncodeLike};
-use sp_runtime::traits::Member;
+use super::{Core, CoreEventsDecoder};
+use parity_scale_codec::Decode;
 use std::fmt::Debug;
-use substrate_subxt::system::{System, SystemEventsDecoder};
 use substrate_subxt_proc_macro::{module, Event};
 
 #[module]
-pub trait Collateral: System + Security {
-    type DOT: Codec + EncodeLike + Member + Default;
-    type Balance: Codec + EncodeLike + Member + Default;
-}
+pub trait Collateral: Core {}
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct LockCollateralEvent<T: Collateral> {

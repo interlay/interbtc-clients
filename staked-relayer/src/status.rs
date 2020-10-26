@@ -69,7 +69,7 @@ pub async fn listen_for_status_updates(
                     error!("Error: {}", err.to_string());
                 }
             },
-            |err| error!("Error: {}", err.to_string()),
+            |err| error!("Error (Status): {}", err.to_string()),
         )
         .await
 }
@@ -128,7 +128,7 @@ pub async fn listen_for_blocks_stored(
                     error!("Error: {}", err.to_string());
                 }
             },
-            |err| error!("Error: {}", err.to_string()),
+            |err| error!("Error (Blocks): {}", err.to_string()),
         )
         .await
 }

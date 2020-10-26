@@ -1,4 +1,7 @@
-use super::{BtcRelayPallet, PolkaBtcProvider, PolkaBtcRuntime, SecurityPallet, StatusCode};
+use super::{
+    BtcRelayPallet, ExchangeRateOraclePallet, IssuePallet, PolkaBtcProvider, PolkaBtcRuntime,
+    SecurityPallet, StatusCode, VaultRegistryPallet,
+};
 use module_bitcoin::{
     formatter::Formattable,
     types::{Address, BlockBuilder, RawBlockHeader},
@@ -63,26 +66,48 @@ async fn test_register_vault() {
 }
 
 #[tokio::test]
-async fn test_initialize_btc_relay() {
+async fn test_btc_relay() {
     let provider = test_client_with(AccountKeyring::Alice).await;
 
     let address = Address::from(*H160::zero().as_fixed_bytes());
+    let mut height = 0;
 
-    let init_block = BlockBuilder::new()
+    let block = BlockBuilder::new()
         .with_version(2)
         .with_coinbase(&address, 50, 3)
         .with_timestamp(1588813835)
         .mine(U256::from(2).pow(254.into()));
 
-    let init_block_hash = init_block.header.hash();
-    let raw_init_block_header = RawBlockHeader::from_bytes(&init_block.header.format())
+    let mut block_hash = block.header.hash();
+    let block_header = RawBlockHeader::from_bytes(&block.header.format())
         .expect("could not serialize block header");
 
     provider
-        .initialize_btc_relay(raw_init_block_header, 1000)
+        .initialize_btc_relay(block_header, height)
         .await
         .unwrap();
 
-    assert_eq!(provider.get_best_block().await.unwrap(), init_block_hash);
-    assert_eq!(provider.get_best_block_height().await.unwrap(), 1000);
+    assert_eq!(provider.get_best_block().await.unwrap(), block_hash);
+    assert_eq!(provider.get_best_block_height().await.unwrap(), height);
+
+    for _ in 0..4 {
+        height += 1;
+        println!("Processing height: {}", height);
+
+        let block = BlockBuilder::new()
+            .with_previous_hash(block_hash)
+            .with_version(2)
+            .with_coinbase(&address, 50, height - 1)
+            .with_timestamp(1588813835)
+            .mine(U256::from(2).pow(254.into()));
+
+        block_hash = block.header.hash();
+        let block_header = RawBlockHeader::from_bytes(&block.header.format())
+            .expect("could not serialize block header");
+
+        provider.store_block_header(block_header).await.unwrap();
+
+        assert_eq!(provider.get_best_block().await.unwrap(), block_hash);
+        assert_eq!(provider.get_best_block_height().await.unwrap(), height);
+    }
 }

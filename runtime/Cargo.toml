@@ -47,7 +47,6 @@ package = "vault-registry"
 # path = "../../btc-parachain/crates/vault-registry"
 
 [dev-dependencies]
-tokio-test = "0.2.1"
 substrate-subxt-client = "0.4.0"
 tempdir = "0.3.7"
 sp-keyring = "2.0.0"

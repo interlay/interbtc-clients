@@ -5,7 +5,9 @@ mod rpc;
 #[cfg(test)]
 mod tests;
 
-pub use btc_relay::{BitcoinBlockHeight, H256Le, RawBlockHeader, RichBlockHeader};
+pub use btc_relay::{
+    Address, BitcoinBlockHeight, BlockBuilder, Formattable, H256Le, RawBlockHeader, RichBlockHeader,
+};
 pub use error::{Error, XtError};
 use pallets::*;
 pub use rpc::{
@@ -50,66 +52,45 @@ impl system::System for PolkaBtcRuntime {
     type AccountData = balances::AccountData<Balance>;
 }
 
-impl balances::Balances for PolkaBtcRuntime {
+impl pallets::Core for PolkaBtcRuntime {
     type Balance = Balance;
-}
-
-impl btc_relay::BTCRelay for PolkaBtcRuntime {
+    type DOT = Balance;
+    type PolkaBTC = Balance;
+    type BTCBalance = Balance;
     type H256Le = H256Le;
+    type u128 = u128;
     type RichBlockHeader = RichBlockHeader;
     type H160 = H160;
-}
-
-impl security::Security for PolkaBtcRuntime {
+    type H256 = H256;
     type ErrorCode = ErrorCode;
     type ErrorCodes = BTreeSet<ErrorCode>;
     type StatusCode = StatusCode;
 }
 
-impl staked_relayers::StakedRelayers for PolkaBtcRuntime {
-    type DOT = Balance;
-    type H256Le = H256Le;
-}
-
-impl collateral::Collateral for PolkaBtcRuntime {
-    type DOT = Balance;
+impl balances::Balances for PolkaBtcRuntime {
     type Balance = Balance;
 }
 
-impl vault_registry::VaultRegistry for PolkaBtcRuntime {
-    type Balance = Balance;
-    type DOT = Balance;
-    type PolkaBTC = Balance;
-    type BTCBalance = Balance;
-}
+impl btc_relay::BTCRelay for PolkaBtcRuntime {}
+
+impl security::Security for PolkaBtcRuntime {}
+
+impl staked_relayers::StakedRelayers for PolkaBtcRuntime {}
+
+impl collateral::Collateral for PolkaBtcRuntime {}
+
+impl vault_registry::VaultRegistry for PolkaBtcRuntime {}
 
 impl timestamp::Timestamp for PolkaBtcRuntime {
     type Moment = u64;
 }
 
-impl exchange_rate_oracle::ExchangeRateOracle for PolkaBtcRuntime {
-    type u128 = u128;
-}
+impl exchange_rate_oracle::ExchangeRateOracle for PolkaBtcRuntime {}
 
 impl balances_dot::DOT for PolkaBtcRuntime {
     type Balance = Balance;
 }
 
-impl issue::Issue for PolkaBtcRuntime {
-    type Balance = Balance;
-    type BTCBalance = Balance;
-    type DOT = Balance;
-    type PolkaBTC = Balance;
-    type H160 = H160;
-    type H256 = H256;
-}
+impl issue::Issue for PolkaBtcRuntime {}
 
-impl redeem::Redeem for PolkaBtcRuntime {
-    type Balance = Balance;
-    type BTCBalance = Balance;
-    type DOT = Balance;
-    type PolkaBTC = Balance;
-    type H160 = H160;
-    type H256 = H256;
-    type H256Le = H256Le;
-}
+impl redeem::Redeem for PolkaBtcRuntime {}
