@@ -45,6 +45,8 @@ pub fn bitcoin_rpc_from_env() -> Result<Client, Error> {
 pub trait BitcoinCoreApi {
     async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, Error>;
 
+    fn get_block_count(&self) -> Result<u64, Error>;
+
     fn get_block_transactions(
         &self,
         hash: &BlockHash,
@@ -157,6 +159,11 @@ impl BitcoinCoreApi for BitcoinCore {
                 }
             }
         }
+    }
+
+    /// Get the tip of the main chain as reported by Bitcoin core.
+    fn get_block_count(&self) -> Result<u64, Error> {
+        Ok(self.rpc.get_block_count()?)
     }
 
     /// Get all transactions in a block identified by the
@@ -380,6 +387,11 @@ pub fn extract_btc_addresses(tx: GetRawTransactionResult) -> Vec<H160> {
             None
         })
         .collect::<Vec<H160>>()
+}
+
+pub fn extract_op_returns(_tx: GetRawTransactionResult) -> Vec<Vec<u8>> {
+    // TODO: filter transactions for op_return outputs
+    vec![]
 }
 
 #[cfg(test)]
