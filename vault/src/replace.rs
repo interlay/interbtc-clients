@@ -107,18 +107,25 @@ pub async fn handle_accepted_replace_request(
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn listen_for_replace_requests(
     provider: Arc<PolkaBtcProvider>,
+    vault_id: AccountId32,
 ) -> Result<(), runtime::Error> {
     let provider = &provider;
+    let vault_id = &vault_id;
     provider
         .on_event::<RequestReplaceEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
+                if event.old_vault_id == vault_id.clone() {
+                    // don't respond to requests we placed ourselves
+                    return;
+                }
+
                 info!(
                     "Received replace request #{} from {}",
                     event.replace_id, event.old_vault_id
                 );
 
                 match provider
-                    .accept_replace(event.replace_id, event.amount)
+                    .accept_replace(event.replace_id, event.amount * 2) // todo: determine safe collateral
                     .await
                 {
                     Ok(_) => info!("Accepted replace request #{}", event.replace_id),
