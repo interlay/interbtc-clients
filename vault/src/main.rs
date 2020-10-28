@@ -31,7 +31,7 @@ struct Opts {
     keyring: AccountKeyring,
 
     /// Address to listen on for JSON-RPC requests.
-    #[clap(long, default_value = "[::1]:3030")]
+    #[clap(long, default_value = "[::1]:3031")]
     http_addr: String,
 
     /// Comma separated list of allowed origins.

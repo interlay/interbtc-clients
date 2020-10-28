@@ -37,7 +37,7 @@ pub async fn listen_for_accept_replace(
                 if event.old_vault_id != vault_id.clone() {
                     return;
                 }
-                info!("Received replace request #{}", event.replace_id);
+                info!("Replace request #{} was accepted", event.replace_id);
 
                 let result = handle_accepted_replace_request(
                     &event,
@@ -61,6 +61,16 @@ pub async fn listen_for_accept_replace(
         .await
 }
 
+/// Performs the required actions when our replace request was accepted:
+/// it makes the bitcoin payment to the new vault and then executes the 
+/// replace.
+///
+/// # Arguments
+///
+/// * `event` - the event we are acting upon
+/// * `btc_rpc` - the bitcoin RPC handle
+/// * `provider` - the parachain RPC handle
+/// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn handle_accepted_replace_request(
     event: &AcceptReplaceEvent<PolkaBtcRuntime>,
     btc_rpc: Arc<BitcoinCore>,
