@@ -45,8 +45,6 @@ fn handle_resp<T: Encode>(
     }
 }
 
-
-
 #[derive(Encode, Decode, Debug)]
 struct ReplaceRequest {
     amount: u128,

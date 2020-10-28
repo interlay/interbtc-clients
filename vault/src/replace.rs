@@ -8,7 +8,7 @@ use runtime::{
         replace::{AcceptReplaceEvent, RequestReplaceEvent},
         vault_registry::Vault,
     },
-    PolkaBtcProvider, PolkaBtcRuntime, ReplacePallet,
+    PolkaBtcProvider, PolkaBtcRuntime, ReplacePallet, VaultRegistryPallet
 };
 use sp_core::crypto::AccountId32;
 use std::sync::Arc;
@@ -61,7 +61,6 @@ pub async fn listen_for_accept_replace(
         .await
 }
 
-/// Helper function the
 pub async fn handle_accepted_replace_request(
     event: &AcceptReplaceEvent<PolkaBtcRuntime>,
     btc_rpc: Arc<BitcoinCore>,
@@ -124,9 +123,7 @@ pub async fn listen_for_replace_requests(
                     event.replace_id, event.old_vault_id
                 );
 
-                match provider
-                    .accept_replace(event.replace_id, event.amount * 2) // todo: determine safe collateral
-                    .await
+                match handle_replace_request(provider.clone(), &event).await
                 {
                     Ok(_) => info!("Accepted replace request #{}", event.replace_id),
                     Err(e) => error!(
@@ -139,4 +136,22 @@ pub async fn listen_for_replace_requests(
             |error| error!("Error reading replace event: {}", error.to_string()),
         )
         .await
+}
+
+/// Attempts to accept a replace request. Does not retry RPC calls upon
+/// failure, since nothing is at stake at this point
+pub async fn handle_replace_request(
+    provider: Arc<PolkaBtcProvider>,
+    event: &RequestReplaceEvent<PolkaBtcRuntime>,
+) -> Result<(), Error> {
+    let required_collateral = provider
+        .get_required_collateral_for_polkabtc(event.amount)
+        .await?;
+
+    // If this fails, we probably don't have enough dots to place the required collateral.
+    provider
+        .accept_replace(event.replace_id, required_collateral) // todo: determine safe collateral
+        .await?;
+
+    Ok(())
 }

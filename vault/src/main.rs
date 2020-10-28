@@ -13,7 +13,9 @@ use log::{error, info};
 use redeem::*;
 use replace::*;
 
-use runtime::{substrate_subxt::PairSigner, PolkaBtcProvider, PolkaBtcRuntime};
+use runtime::{
+    substrate_subxt::PairSigner, PolkaBtcProvider, PolkaBtcRuntime,
+};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 
