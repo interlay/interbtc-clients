@@ -8,7 +8,7 @@ use runtime::{
         replace::{AcceptReplaceEvent, RequestReplaceEvent},
         vault_registry::Vault,
     },
-    PolkaBtcProvider, PolkaBtcRuntime, ReplacePallet, VaultRegistryPallet
+    PolkaBtcProvider, PolkaBtcRuntime, ReplacePallet, VaultRegistryPallet,
 };
 use sp_core::crypto::AccountId32;
 use std::sync::Arc;
@@ -123,8 +123,7 @@ pub async fn listen_for_replace_requests(
                     event.replace_id, event.old_vault_id
                 );
 
-                match handle_replace_request(provider.clone(), &event).await
-                {
+                match handle_replace_request(provider.clone(), &event).await {
                     Ok(_) => info!("Accepted replace request #{}", event.replace_id),
                     Err(e) => error!(
                         "Failed to accept replace request #{}: {}",

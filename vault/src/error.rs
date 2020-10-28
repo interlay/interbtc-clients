@@ -1,5 +1,5 @@
 use bitcoin::Error as BitcoinError;
-use jsonrpsee::common::Error as JsonRpcError;
+use jsonrpc_http_server::jsonrpc_core::Error as JsonRpcError;
 use parity_scale_codec::Error as CodecError;
 use runtime::{substrate_subxt::Error as XtError, Error as RuntimeError};
 use std::net::AddrParseError;

@@ -15,8 +15,9 @@ sp-core = "2.0.0"
 runtime = { path = "../runtime" }
 bitcoin = { path = "../bitcoin" }
 backoff = { version = "0.2.1", features = ["tokio"] }
-jsonrpsee = { path = "../../jsonrpsee", branch = "v2", features = ["http"] }
 serde = "1.0.116"
 serde_json = { version = "1.0.57", features = ["raw_value"] }
 hex = "0.4.2"
 parity-scale-codec = "1.3.1"
+jsonrpc-http-server = "15.1.0"
+futures = "0.3.5"
