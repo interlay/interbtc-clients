@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event};
 
 #[module]
-pub trait Replace: Core { }
+pub trait Replace: Core {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RequestReplaceCall<T: Replace> {

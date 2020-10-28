@@ -167,9 +167,9 @@ impl PolkaBtcProvider {
     {
         let sub = self.ext_client.subscribe_events().await?;
         let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        // We would need with_core to be able to decode all types, but since 
+        // We would need with_core to be able to decode all types, but since
         // it does not exist, instead use a random module that includes it:
-        decoder.with_vault_registry(); 
+        decoder.with_vault_registry();
 
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
         sub.filter_event::<T>();
@@ -860,6 +860,10 @@ pub trait VaultRegistryPallet {
 
     async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), Error>;
 
+    async fn lock_additional_collateral(&self, amount: u128) -> Result<(), Error>;
+
+    async fn withdraw_collateral(&self, amount: u128) -> Result<(), Error>;
+
     async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, Error>;
 }
 
@@ -891,6 +895,35 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), Error> {
         self.ext_client
             .register_vault_and_watch(&*self.signer.write().await, collateral, btc_address)
+            .await?;
+        Ok(())
+    }
+
+    /// Locks additional collateral as a security against stealing the
+    /// Bitcoin locked with it.
+    ///
+    /// # Arguments
+    /// * `amount` - the amount of extra collateral to lock
+    async fn lock_additional_collateral(&self, amount: u128) -> Result<(), Error> {
+        self.ext_client
+            .lock_additional_collateral_and_watch(&*self.signer.write().await, amount)
+            .await?;
+        Ok(())
+    }
+
+    /// Withdraws `amount` of the collateral from the amount locked by
+    /// the vault corresponding to the origin account
+    /// The collateral left after withdrawal must be more
+    /// (free or used in backing issued PolkaBTC) than MinimumCollateralVault
+    /// and above the SecureCollateralThreshold. Collateral that is currently
+    /// being used to back issued PolkaBTC remains locked until the Vault
+    /// is used for a redeem request (full release can take multiple redeem requests).
+    ///
+    /// # Arguments
+    /// * `amount` - the amount of collateral to withdraw
+    async fn withdraw_collateral(&self, amount: u128) -> Result<(), Error> {
+        self.ext_client
+            .withdraw_collateral_and_watch(&*self.signer.write().await, amount)
             .await?;
         Ok(())
     }

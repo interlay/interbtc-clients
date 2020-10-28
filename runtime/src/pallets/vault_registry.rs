@@ -21,6 +21,31 @@ pub struct RegisterVaultEvent<T: VaultRegistry> {
     pub collateral: T::DOT,
 }
 
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct LockAdditionalCollateralCall<T: VaultRegistry> {
+    pub amount: T::DOT,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct LockAdditionalCollateralEvent<T: VaultRegistry> {
+    pub vault_id: T::AccountId,
+    pub new_collateral: T::DOT,
+    pub total_collateral: T::DOT,
+    pub free_collateral: T::DOT,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct WithdrawCollateralCall<T: VaultRegistry> {
+    pub amount: T::DOT,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct WithdrawCollateralEvent<T: VaultRegistry> {
+    pub vault_id: T::AccountId,
+    pub withdrawn_collateral: T::DOT,
+    pub total_collateral: T::DOT,
+}
+
 // TODO: liquidate event
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
