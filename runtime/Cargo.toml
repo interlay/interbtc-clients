@@ -46,6 +46,13 @@ version = "2.0.0"
 package = "vault-registry"
 # path = "../../btc-parachain/crates/vault-registry"
 
+[dependencies.module-vault-registry-rpc-runtime-api]
+# git = "https://gitlab.com/interlay/btc-parachain"
+branch = "dev"
+version = "2.0.0"
+package = "module-vault-registry-rpc-runtime-api"
+path = "../../btc-parachain/crates/vault-registry/rpc/runtime-api"
+
 [dev-dependencies]
 substrate-subxt-client = "0.4.0"
 tempdir = "0.3.7"
