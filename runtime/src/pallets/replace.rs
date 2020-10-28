@@ -13,21 +13,25 @@ pub struct RequestReplaceCall<T: Replace> {
     pub btc_amount: T::PolkaBTC,
     pub griefing_collateral: T::DOT,
 }
+
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WithdrawReplaceCall<T: Replace> {
     pub replace_id: T::H256,
 }
+
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct AcceptReplaceCall<T: Replace> {
     pub replace_id: T::H256,
     pub collateral: T::DOT,
 }
+
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct AuctionReplaceCall<T: Replace> {
     pub old_vault: T::AccountId,
     pub btc_amount: T::PolkaBTC,
     pub collateral: T::DOT,
 }
+
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct ExecuteReplaceCall<T: Replace> {
     pub replace_id: T::H256,
@@ -36,10 +40,12 @@ pub struct ExecuteReplaceCall<T: Replace> {
     pub merkle_proof: Vec<u8>,
     pub raw_tx: Vec<u8>,
 }
+
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct CancelReplaceCall<T: Replace> {
     pub replace_id: T::H256,
 }
+
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct RequestReplaceEvent<T: Replace> {
