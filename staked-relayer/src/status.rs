@@ -6,10 +6,13 @@ use bitcoin::{
 };
 use log::{error, info};
 use runtime::{
-    Error as RuntimeError, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcStatusUpdateSuggestedEvent,
+    pallets::{btc_relay::StoreMainChainHeaderEvent, staked_relayers::StatusUpdateSuggestedEvent},
+    Error as RuntimeError, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
     StakedRelayerPallet, StatusCode,
 };
 use std::sync::Arc;
+
+type PolkaBtcStatusUpdateSuggestedEvent = StatusUpdateSuggestedEvent<PolkaBtcRuntime>;
 
 pub struct StatusUpdateMonitor<B: BitcoinCoreApi, P: StakedRelayerPallet> {
     btc_rpc: Arc<B>,
@@ -62,7 +65,7 @@ pub async fn listen_for_status_updates(
 ) -> Result<(), RuntimeError> {
     let monitor = &StatusUpdateMonitor::new(btc_rpc, polka_rpc.clone());
     polka_rpc
-        .on_status_update_suggested(
+        .on_event::<PolkaBtcStatusUpdateSuggestedEvent, _, _, _>(
             |event| async move {
                 info!("Status update {} suggested", event.status_update_id);
                 if let Err(err) = monitor.on_status_update_suggested(event).await {
@@ -122,9 +125,12 @@ pub async fn listen_for_blocks_stored(
 ) -> Result<(), RuntimeError> {
     let monitor = &RelayMonitor::new(btc_rpc, polka_rpc.clone(), status_update_deposit);
     polka_rpc
-        .on_store_block(
-            |height, hash| async move {
-                if let Err(err) = monitor.on_store_block(height, hash).await {
+        .on_event::<StoreMainChainHeaderEvent<PolkaBtcRuntime>, _, _, _>(
+            |event| async move {
+                if let Err(err) = monitor
+                    .on_store_block(event.block_height, event.block_header_hash)
+                    .await
+                {
                     error!("Error: {}", err.to_string());
                 }
             },

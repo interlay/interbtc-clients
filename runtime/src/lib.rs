@@ -1,5 +1,5 @@
 mod error;
-mod pallets;
+pub mod pallets;
 mod rpc;
 
 #[cfg(test)]
@@ -12,9 +12,8 @@ pub use error::{Error, XtError};
 use pallets::*;
 pub use rpc::{
     AccountId, BtcRelayPallet, ExchangeRateOraclePallet, IssuePallet, PolkaBtcProvider,
-    PolkaBtcRequestRedeemEvent, PolkaBtcStatusUpdate, PolkaBtcStatusUpdateSuggestedEvent,
-    PolkaBtcVault, RedeemPallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
-    VaultRegistryPallet,
+    PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, ReplacePallet, SecurityPallet,
+    StakedRelayerPallet, TimestampPallet, VaultRegistryPallet,
 };
 pub use security::{ErrorCode, StatusCode};
 use sp_core::{H160, H256};
@@ -94,3 +93,5 @@ impl balances_dot::DOT for PolkaBtcRuntime {
 impl issue::Issue for PolkaBtcRuntime {}
 
 impl redeem::Redeem for PolkaBtcRuntime {}
+
+impl replace::Replace for PolkaBtcRuntime {}

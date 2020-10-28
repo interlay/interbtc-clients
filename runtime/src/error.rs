@@ -14,6 +14,8 @@ pub enum Error {
     RequestIssueIDNotFound,
     #[error("Could not get redeem id")]
     RequestRedeemIDNotFound,
+    #[error("Could not get replace id")]
+    RequestReplaceIDNotFound,
 
     #[error("Error serializing: {0}")]
     Serialize(#[from] TryFromSliceError),

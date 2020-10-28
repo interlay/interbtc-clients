@@ -12,7 +12,8 @@ use std::future::Future;
 use std::sync::Arc;
 use substrate_subxt::Error as XtError;
 use substrate_subxt::{
-    system::System, Client, ClientBuilder, EventSubscription, EventsDecoder, PairSigner, Signer,
+    system::System, Client, ClientBuilder, Event, EventSubscription, EventsDecoder, PairSigner,
+    Signer,
 };
 use tokio::sync::RwLock;
 
@@ -21,6 +22,7 @@ use crate::exchange_rate_oracle::*;
 use crate::issue::*;
 use crate::pallets::Core;
 use crate::redeem::*;
+use crate::replace::*;
 use crate::security::*;
 use crate::staked_relayers::*;
 use crate::timestamp::*;
@@ -38,9 +40,6 @@ pub type PolkaBtcStatusUpdate = StatusUpdate<
     <PolkaBtcRuntime as System>::BlockNumber,
     <PolkaBtcRuntime as Core>::DOT,
 >;
-
-pub type PolkaBtcStatusUpdateSuggestedEvent = StatusUpdateSuggestedEvent<PolkaBtcRuntime>;
-pub type PolkaBtcRequestRedeemEvent = RequestRedeemEvent<PolkaBtcRuntime>;
 
 #[derive(Clone)]
 pub struct PolkaBtcProvider {
@@ -158,59 +157,24 @@ impl PolkaBtcProvider {
         Ok(())
     }
 
-    /// Subscription service that listens for status updates.
-    ///
-    /// # Arguments
-    /// * `on_proposal` - callback for suggested status updates
-    /// * `on_error` - callback for errors
-    pub async fn on_status_update_suggested<F, R, E>(
-        &self,
-        on_proposal: F,
-        on_error: E,
-    ) -> Result<(), Error>
+    pub async fn on_event<T, F, R, E>(&self, mut on_event: F, on_error: E) -> Result<(), Error>
     where
-        F: Fn(PolkaBtcStatusUpdateSuggestedEvent) -> R,
+        T: Event<PolkaBtcRuntime>,
+        F: FnMut(T) -> R,
         R: Future<Output = ()>,
         E: Fn(XtError),
     {
         let sub = self.ext_client.subscribe_events().await?;
         let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.with_staked_relayers();
+        // We would need with_core to be able to decode all types, but since 
+        // it does not exist, instead use a random module that includes it:
+        decoder.with_vault_registry(); 
 
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
-        sub.filter_event::<StatusUpdateSuggestedEvent<_>>();
+        sub.filter_event::<T>();
         while let Some(result) = sub.next().await {
-            let decoded = result.and_then(|raw_event| {
-                StatusUpdateSuggestedEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])
-                    .map_err(|e| e.into())
-            });
-
-            match decoded {
-                Ok(e) => on_proposal(e).await,
-                Err(err) => on_error(err),
-            };
-        }
-
-        Ok(())
-    }
-
-    pub async fn on_request_issue<F, R, E>(&self, mut on_event: F, on_error: E) -> Result<(), Error>
-    where
-        F: FnMut(RequestIssueEvent<PolkaBtcRuntime>) -> R,
-        R: Future<Output = ()>,
-        E: Fn(XtError),
-    {
-        let sub = self.ext_client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.with_issue();
-
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
-        sub.filter_event::<RequestIssueEvent<_>>();
-        while let Some(result) = sub.next().await {
-            let decoded = result.and_then(|raw_event| {
-                RequestIssueEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])
-                    .map_err(|e| e.into())
-            });
+            let decoded = result
+                .and_then(|raw_event| T::decode(&mut &raw_event.data[..]).map_err(|e| e.into()));
 
             match decoded {
                 Ok(e) => on_event(e).await,
@@ -220,68 +184,154 @@ impl PolkaBtcProvider {
 
         Ok(())
     }
+}
 
-    pub async fn on_request_redeem<F, R, E>(
+#[async_trait]
+pub trait ReplacePallet {
+    /// Request the replacement of a new vault ownership
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - sender of the transaction
+    /// * `amount` - amount of PolkaBTC
+    /// * `griefing_collateral` - amount of DOT
+    async fn request_replace(&self, amount: u128, griefing_collateral: u128)
+        -> Result<H256, Error>;
+
+    /// Withdraw a request of vault replacement
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - sender of the transaction: the old vault
+    /// * `replace_id` - the unique identifier of the replace request
+    async fn withdraw_replace(&self, replace_id: H256) -> Result<(), Error>;
+
+    /// Accept request of vault replacement
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - the initiator of the transaction: the new vault
+    /// * `replace_id` - the unique identifier for the specific request
+    /// * `collateral` - the collateral for replacement
+    async fn accept_replace(&self, replace_id: H256, collateral: u128) -> Result<(), Error>;
+
+    /// Auction forces vault replacement
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - sender of the transaction: the new vault
+    /// * `old_vault` - the old vault of the replacement request
+    /// * `btc_amount` - the btc amount to be transferred over from old to new
+    /// * `collateral` - the collateral to be transferred over from old to new
+    async fn auction_replace(
         &self,
-        mut on_event: F,
-        on_error: E,
-    ) -> Result<(), Error>
-    where
-        F: FnMut(PolkaBtcRequestRedeemEvent) -> R,
-        R: Future<Output = ()>,
-        E: Fn(XtError),
-    {
-        let sub = self.ext_client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.with_redeem();
+        old_vault: AccountId,
+        btc_amount: u128,
+        collateral: u128,
+    ) -> Result<(), Error>;
 
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
-        sub.filter_event::<RequestRedeemEvent<_>>();
-        while let Some(result) = sub.next().await {
-            let decoded = result.and_then(|raw_event| {
-                RequestRedeemEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])
-                    .map_err(|e| e.into())
-            });
+    /// Execute vault replacement
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - sender of the transaction: the new vault
+    /// * `replace_id` - the ID of the replacement request
+    /// * `tx_id` - the backing chain transaction id
+    /// * `tx_block_height` - the blocked height of the backing transaction
+    /// * 'merkle_proof' - the merkle root of the block
+    /// * `raw_tx` - the transaction id in bytes
+    async fn execute_replace(
+        &self,
+        replace_id: H256,
+        tx_id: H256Le,
+        tx_block_height: u32,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>,
+    ) -> Result<(), Error>;
 
-            match decoded {
-                Ok(e) => on_event(e).await,
-                Err(err) => on_error(err),
-            };
+    /// Cancel vault replacement
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - sender of the transaction: the new vault
+    /// * `replace_id` - the ID of the replacement request
+    async fn cancel_replace(&self, replace_id: H256) -> Result<(), Error>;
+}
+#[async_trait]
+impl ReplacePallet for PolkaBtcProvider {
+    async fn request_replace(
+        &self,
+        amount: u128,
+        griefing_collateral: u128,
+    ) -> Result<H256, Error> {
+        let result = self
+            .ext_client
+            .request_replace_and_watch(&*self.signer.write().await, amount, griefing_collateral)
+            .await?;
+
+        if let Some(event) = result.request_replace()? {
+            Ok(event.replace_id)
+        } else {
+            Err(Error::RequestReplaceIDNotFound)
         }
+    }
 
+    async fn withdraw_replace(&self, replace_id: H256) -> Result<(), Error> {
+        self.ext_client
+            .withdraw_replace_and_watch(&*self.signer.write().await, replace_id)
+            .await?;
         Ok(())
     }
 
-    /// Subscription service that should listen forever, only returns
-    /// if the initial subscription cannot be established.
-    ///
-    /// # Arguments
-    /// * `on_block` - callback for newly stored blocks
-    /// * `on_error` - callback for errors
-    pub async fn on_store_block<F, R, E>(&self, on_block: F, on_error: E) -> Result<(), Error>
-    where
-        F: Fn(u32, H256Le) -> R,
-        R: Future<Output = ()>,
-        E: Fn(XtError),
-    {
-        let sub = self.ext_client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.with_btc_relay();
+    async fn accept_replace(&self, replace_id: H256, collateral: u128) -> Result<(), Error> {
+        self.ext_client
+            .accept_replace_and_watch(&*self.signer.write().await, replace_id, collateral)
+            .await?;
+        Ok(())
+    }
 
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
-        sub.filter_event::<StoreMainChainHeaderEvent<_>>();
-        while let Some(result) = sub.next().await {
-            let decoded = result.and_then(|raw_event| {
-                StoreMainChainHeaderEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])
-                    .map_err(|e| e.into())
-            });
+    async fn auction_replace(
+        &self,
+        old_vault: AccountId,
+        btc_amount: u128,
+        collateral: u128,
+    ) -> Result<(), Error> {
+        self.ext_client
+            .auction_replace_and_watch(
+                &*self.signer.write().await,
+                old_vault,
+                btc_amount,
+                collateral,
+            )
+            .await?;
+        Ok(())
+    }
 
-            match decoded {
-                Ok(e) => on_block(e.block_height, e.block_header_hash).await,
-                Err(err) => on_error(err),
-            };
-        }
+    async fn execute_replace(
+        &self,
+        replace_id: H256,
+        tx_id: H256Le,
+        tx_block_height: u32,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>,
+    ) -> Result<(), Error> {
+        self.ext_client
+            .execute_replace_and_watch(
+                &*self.signer.write().await,
+                replace_id,
+                tx_id,
+                tx_block_height,
+                merkle_proof,
+                raw_tx,
+            )
+            .await?;
+        Ok(())
+    }
 
+    async fn cancel_replace(&self, replace_id: H256) -> Result<(), Error> {
+        self.ext_client
+            .cancel_replace_and_watch(&*self.signer.write().await, replace_id)
+            .await?;
         Ok(())
     }
 }
