@@ -39,13 +39,13 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
 }
 
 #[derive(Encode, Decode, Debug)]
-struct ReplaceRequestParams {
+struct ReplaceRequestJsonRpcRequest {
     amount: u128,
     griefing_collateral: u128,
 }
 
 fn _request_replace(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
-    let req = parse_params::<ReplaceRequestParams>(params)?;
+    let req = parse_params::<ReplaceRequestJsonRpcRequest>(params)?;
     info!(
         "Requesting replace for amount = {} with griefing_collateral = {}",
         req.amount, req.griefing_collateral
@@ -55,13 +55,13 @@ fn _request_replace(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), E
 }
 
 #[derive(Encode, Decode, Debug)]
-struct RegisterVaultParams {
+struct RegisterVaultJsonRpcRequest {
     collateral: u128,
     btc_address: H160,
 }
 
 fn _register_vault(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
-    let req = parse_params::<RegisterVaultParams>(params)?;
+    let req = parse_params::<RegisterVaultJsonRpcRequest>(params)?;
     info!(
         "Registering vault with bitcoind address {} and collateral = {}",
         req.btc_address, req.collateral
@@ -71,24 +71,24 @@ fn _register_vault(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Er
 }
 
 #[derive(Encode, Decode, Debug)]
-struct ChangeCollateralParam {
+struct ChangeCollateralJsonRpcRequest {
     amount: u128,
 }
 
 fn _lock_additional_collateral(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
-    let req = parse_params::<ChangeCollateralParam>(params)?;
+    let req = parse_params::<ChangeCollateralJsonRpcRequest>(params)?;
     info!("Locking additional collateral; amount {}", req.amount);
     Ok(block_on(api.lock_additional_collateral(req.amount))?)
 }
 
 fn _withdraw_collateral(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
-    let req = parse_params::<ChangeCollateralParam>(params)?;
+    let req = parse_params::<ChangeCollateralJsonRpcRequest>(params)?;
     info!("Withdrawing collateral; amount {}", req.amount);
     Ok(block_on(api.withdraw_collateral(req.amount))?)
 }
 
 #[derive(Encode, Decode, Debug)]
-struct SetBtcAddressParam {
+struct SetBtcAddressJsonRpcRequest {
     address: H160,
 }
 
@@ -97,12 +97,12 @@ fn _set_btc_address(_api: &Arc<PolkaBtcProvider>, _params: Params) -> Result<(),
 }
 
 #[derive(Encode, Decode, Debug)]
-struct WithdrawReplaceParam {
+struct WithdrawReplaceJsonRpcRequest {
     replace_id: H256,
 }
 
 fn _withdraw_replace(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
-    let req = parse_params::<WithdrawReplaceParam>(params)?;
+    let req = parse_params::<WithdrawReplaceJsonRpcRequest>(params)?;
     info!("Withdrawing replace request {}", req.replace_id);
     Ok(block_on(api.withdraw_replace(req.replace_id))?)
 }
