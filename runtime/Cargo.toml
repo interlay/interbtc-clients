@@ -21,37 +21,37 @@ substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branc
 [dependencies.module-bitcoin]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "0.1.1"
+version = "0.2.1"
 package = "bitcoin"
 # path = "../../btc-parachain/crates/bitcoin"
 
 [dependencies.module-security]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "2.0.0"
+version = "0.2.1"
 package = "security"
 # path = "../../btc-parachain/crates/security"
 
 [dependencies.module-staked-relayers]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "2.0.0"
+version = "0.2.1"
 package = "staked-relayers"
 # path = "../../btc-parachain/crates/staked-relayers"
 
 [dependencies.module-vault-registry]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "2.0.0"
+version = "0.2.1"
 package = "vault-registry"
 # path = "../../btc-parachain/crates/vault-registry"
 
 [dependencies.module-vault-registry-rpc-runtime-api]
-# git = "https://gitlab.com/interlay/btc-parachain"
+git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "2.0.0"
+version = "0.2.1"
 package = "module-vault-registry-rpc-runtime-api"
-path = "../../btc-parachain/crates/vault-registry/rpc/runtime-api"
+# path = "../../btc-parachain/crates/vault-registry/rpc/runtime-api"
 
 [dev-dependencies]
 substrate-subxt-client = "0.4.0"
