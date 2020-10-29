@@ -9,7 +9,7 @@ use log::info;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{PolkaBtcProvider, ReplacePallet, VaultRegistryPallet};
 use serde::{Deserialize, Deserializer};
-use sp_core::H160;
+use sp_core::{H160, H256};
 use std::{net::SocketAddr, sync::Arc};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -96,8 +96,15 @@ fn _set_btc_address(_api: &Arc<PolkaBtcProvider>, _params: Params) -> Result<(),
     unimplemented!();
 }
 
-fn _withdraw_replace(_api: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
-    unimplemented!();
+#[derive(Encode, Decode, Debug)]
+struct WithdrawReplaceParam {
+    replace_id: H256,
+}
+
+fn _withdraw_replace(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+    let req = parse_params::<WithdrawReplaceParam>(params)?;
+    info!("Withdrawing replace request {}", req.replace_id);
+    Ok(block_on(api.withdraw_replace(req.replace_id))?)
 }
 
 pub async fn start(api: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String) {
@@ -134,8 +141,8 @@ pub async fn start(api: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String)
     }
     {
         let api = api.clone();
-        io.add_method("withdraw_replace", move |_| {
-            handle_resp(_withdraw_replace(&api))
+        io.add_method("withdraw_replace", move |params| {
+            handle_resp(_withdraw_replace(&api, params))
         });
     }
 
