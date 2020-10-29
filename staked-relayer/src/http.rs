@@ -46,23 +46,23 @@ fn _system_health(api: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
 }
 
 #[derive(Encode, Decode, Debug)]
-struct GetAddressResponse {
+struct GetAddressJsonRpcResponse {
     address: String,
 }
 
-fn _get_address(api: &Arc<PolkaBtcProvider>) -> Result<GetAddressResponse, Error> {
-    Ok(GetAddressResponse {
+fn _get_address(api: &Arc<PolkaBtcProvider>) -> Result<GetAddressJsonRpcResponse, Error> {
+    Ok(GetAddressJsonRpcResponse {
         address: block_on(api.get_address()).to_ss58check(),
     })
 }
 
 #[derive(Encode, Decode, Debug)]
-struct RegisterStakedRelayerRequest {
+struct RegisterStakedRelayerJsonRpcRequest {
     stake: u128,
 }
 
 fn _register_staked_relayer(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
-    let req: RegisterStakedRelayerRequest = parse_params(params.clone())?;
+    let req: RegisterStakedRelayerJsonRpcRequest = parse_params(params.clone())?;
     Ok(block_on(api.register_staked_relayer(req.stake))?)
 }
 
@@ -71,7 +71,7 @@ fn _deregister_staked_relayer(api: &Arc<PolkaBtcProvider>) -> Result<(), Error> 
 }
 
 #[derive(Encode, Decode, Debug)]
-struct SuggestStatusUpdateRequest {
+struct SuggestStatusUpdateJsonRpcRequest {
     deposit: u128,
     status_code: PolkaBtcStatusCode,
     add_error: Option<PolkaBtcErrorCode>,
@@ -81,7 +81,7 @@ struct SuggestStatusUpdateRequest {
 }
 
 fn _suggest_status_update(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
-    let req: SuggestStatusUpdateRequest = parse_params(params.clone())?;
+    let req: SuggestStatusUpdateJsonRpcRequest = parse_params(params.clone())?;
     Ok(block_on(api.suggest_status_update(
         req.deposit,
         req.status_code,
@@ -93,13 +93,13 @@ fn _suggest_status_update(api: &Arc<PolkaBtcProvider>, params: Params) -> Result
 }
 
 #[derive(Encode, Decode, Debug)]
-struct VoteOnStatusUpdateRequest {
+struct VoteOnStatusUpdateJsonRpcRequest {
     pub status_update_id: u64,
     pub approve: bool,
 }
 
 fn _vote_on_status_update(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
-    let req: VoteOnStatusUpdateRequest = parse_params(params.clone())?;
+    let req: VoteOnStatusUpdateJsonRpcRequest = parse_params(params.clone())?;
     Ok(block_on(
         api.vote_on_status_update(req.status_update_id, req.approve),
     )?)
