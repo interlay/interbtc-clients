@@ -108,7 +108,7 @@ async fn main() -> Result<(), Error> {
         .get_all_vaults()
         .await?
         .into_iter()
-        .map(|vault| (vault.btc_address, vault));
+        .map(|vault| (vault.wallet.get_btc_address(), vault));
 
     // collect (btc_address, vault) into HashMap
     let vaults = Arc::new(Vaults::from(vaults.into_iter().collect()));

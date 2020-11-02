@@ -62,7 +62,7 @@ pub async fn listen_for_accept_replace(
 }
 
 /// Performs the required actions when our replace request was accepted:
-/// it makes the bitcoin payment to the new vault and then executes the 
+/// it makes the bitcoin payment to the new vault and then executes the
 /// replace.
 ///
 /// # Arguments
@@ -80,7 +80,7 @@ pub async fn handle_accepted_replace_request(
     let provider = &provider;
 
     // retrieve vault's btc address
-    let Vault { btc_address, .. } =
+    let Vault { wallet, .. } =
         (|| async { Ok(provider.get_vault(event.new_vault_id.clone()).await?) })
             .retry(get_retry_policy())
             .await?;
@@ -98,7 +98,7 @@ pub async fn handle_accepted_replace_request(
     execute_payment(
         btc_rpc.clone(),
         num_confirmations,
-        btc_address,
+        wallet.get_btc_address(),
         event.btc_amount,
         event.replace_id,
         execute_replace,

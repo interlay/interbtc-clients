@@ -1,7 +1,4 @@
-use super::{
-    BtcRelayPallet, ExchangeRateOraclePallet, IssuePallet, PolkaBtcProvider, PolkaBtcRuntime,
-    SecurityPallet, StatusCode, VaultRegistryPallet,
-};
+use super::{BtcRelayPallet, PolkaBtcProvider, PolkaBtcRuntime, SecurityPallet, StatusCode};
 use module_bitcoin::{
     formatter::Formattable,
     types::{Address, BlockBuilder, RawBlockHeader},
@@ -57,12 +54,13 @@ async fn test_parachain_status() {
 async fn test_register_vault() {
     let provider = test_client_with(AccountKeyring::Alice).await;
 
-    provider.register_vault(100, H160::zero()).await.unwrap();
+    let address = H160::random();
+    provider.register_vault(100, address).await.unwrap();
     let vault = provider
         .get_vault(AccountKeyring::Alice.to_account_id())
         .await
         .unwrap();
-    assert_eq!(vault.btc_address, H160::zero());
+    assert_eq!(vault.wallet.get_btc_address(), address);
 }
 
 #[tokio::test]
