@@ -5581,6 +5581,7 @@ dependencies = [
  "module-vault-registry-rpc-runtime-api",
  "parity-scale-codec",
  "security",
+ "serde",
  "serde_json",
  "sp-core",
  "sp-keyring",

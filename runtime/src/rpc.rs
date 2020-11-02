@@ -5,6 +5,7 @@ use jsonrpsee::{
 };
 use module_vault_registry_rpc_runtime_api::BalanceWrapper;
 use parity_scale_codec::Decode;
+use serde::{Deserialize, Deserializer};
 use sp_core::sr25519::Pair as KeyPair;
 use sp_core::{H160, H256};
 use std::collections::BTreeSet;
@@ -638,6 +639,13 @@ pub trait IssuePallet {
 
     /// Cancel an ongoing issue request
     async fn cancel_issue(&self, issue_id: H256) -> Result<(), Error>;
+
+    async fn get_vault_issue_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, IssueRequest)>, Error>;
+
+    async fn get_issue_period(&self) -> Result<u32, Error>;
 }
 
 #[async_trait]
@@ -692,6 +700,46 @@ impl IssuePallet for PolkaBtcProvider {
             .await?;
         Ok(())
     }
+
+    async fn get_vault_issue_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, IssueRequest)>, Error> {
+        let result: Vec<(H256, IssueRequest)> = self
+            .rpc_client
+            .request(
+                "issue_getVaultIssueRequests",
+                Params::Array(vec![to_json_value(account_id)?]),
+            )
+            .await?;
+
+        Ok(result)
+    }
+    async fn get_issue_period(&self) -> Result<u32, Error> {
+        Ok(self.ext_client.issue_period(None).await?)
+    }
+}
+#[derive(Eq, PartialEq, Decode, Default, Debug, serde::Deserialize)]
+pub struct IssueRequest {
+    pub vault: AccountId,
+    pub opentime: u64,
+    #[serde(bound(deserialize = "u128: std::str::FromStr"))]
+    #[serde(deserialize_with = "deserialize_from_string")]
+    pub griefing_collateral: u128,
+    #[serde(bound(deserialize = "u128: std::str::FromStr"))]
+    #[serde(deserialize_with = "deserialize_from_string")]
+    pub amount: u128,
+    pub requester: AccountId,
+    pub btc_address: H160,
+    pub completed: bool,
+}
+
+fn deserialize_from_string<'de, D: Deserializer<'de>, T: std::str::FromStr>(
+    deserializer: D,
+) -> Result<T, D::Error> {
+    let s = String::deserialize(deserializer)?;
+    s.parse::<T>()
+        .map_err(|_| serde::de::Error::custom("Parse from string failed"))
 }
 
 #[async_trait]
@@ -952,5 +1000,16 @@ impl VaultRegistryPallet for PolkaBtcProvider {
             .unwrap();
 
         Ok(result.amount)
+    }
+}
+
+impl PolkaBtcProvider {
+    /// Gets the current height of the parachain
+    pub async fn get_current_chain_height(&self) -> Result<u64, Error> {
+        let query_result = self.ext_client.block(Option::<H256>::None).await?;
+        match query_result {
+            Some(x) => Ok(x.block.header.number.into()),
+            None => Err(Error::BlockNotFound),
+        }
     }
 }

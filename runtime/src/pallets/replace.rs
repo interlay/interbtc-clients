@@ -46,7 +46,6 @@ pub struct CancelReplaceCall<T: Replace> {
     pub replace_id: T::H256,
 }
 
-
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct RequestReplaceEvent<T: Replace> {
     pub old_vault_id: T::AccountId,
