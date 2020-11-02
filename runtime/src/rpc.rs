@@ -51,6 +51,9 @@ pub type PolkaBtcRedeemRequest = RedeemRequest<
     <PolkaBtcRuntime as Core>::DOT,
 >;
 
+pub type PolkaBtcReplaceRequest =
+    ReplaceRequest<AccountId, <PolkaBtcRuntime as System>::BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC, <PolkaBtcRuntime as Core>::DOT>;
+
 pub type PolkaBtcStatusUpdate = StatusUpdate<
     AccountId,
     <PolkaBtcRuntime as System>::BlockNumber,
@@ -307,6 +310,16 @@ pub trait ReplacePallet {
     /// * `&self` - sender of the transaction: the new vault
     /// * `replace_id` - the ID of the replacement request
     async fn cancel_replace(&self, replace_id: H256) -> Result<(), Error>;
+
+    /// Get all replace requests to a particular vault
+    async fn get_new_vault_replace_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error>;
+
+    /// Get the time difference in number of blocks between when a replace
+    /// request is created and required completion time by a vault
+    async fn get_replace_period(&self) -> Result<u32, Error>;
 }
 
 #[async_trait]
@@ -385,6 +398,26 @@ impl ReplacePallet for PolkaBtcProvider {
             .cancel_replace_and_watch(&*self.signer.write().await, replace_id)
             .await?;
         Ok(())
+    }
+
+    /// Get all replace requests to a particular vault
+    async fn get_new_vault_replace_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error> {
+        let result: Vec<(H256, PolkaBtcReplaceRequest)> = self
+            .rpc_client
+            .request(
+                "replace_getNewVaultReplaceRequests",
+                Params::Array(vec![to_json_value(account_id)?]),
+            )
+            .await?;
+
+        Ok(result)
+    }
+
+    async fn get_replace_period(&self) -> Result<u32, Error> {
+        Ok(self.ext_client.replace_period(None).await?)
     }
 }
 
@@ -765,6 +798,7 @@ impl IssuePallet for PolkaBtcProvider {
 
         Ok(result)
     }
+
     async fn get_issue_period(&self) -> Result<u32, Error> {
         Ok(self.ext_client.issue_period(None).await?)
     }

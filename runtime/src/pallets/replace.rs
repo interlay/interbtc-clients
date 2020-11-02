@@ -1,9 +1,11 @@
 use super::{Core, CoreEventsDecoder};
+use core::marker::PhantomData;
 pub use module_bitcoin::types::H256Le;
 use parity_scale_codec::{Decode, Encode};
 pub use sp_core::{H160, H256};
 use std::fmt::Debug;
-use substrate_subxt_proc_macro::{module, Call, Event};
+use substrate_subxt_proc_macro::{module, Call, Event, Store};
+pub use module_replace::ReplaceRequest;
 
 #[module]
 pub trait Replace: Core {}
@@ -90,4 +92,10 @@ pub struct CancelReplaceEvent<T: Replace> {
     pub new_vault_id: T::AccountId,
     pub old_vault_id: T::AccountId,
     pub replace_id: T::H256,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct ReplacePeriodStore<T: Replace> {
+    #[store(returns = u32)]
+    pub _runtime: PhantomData<T>,
 }
