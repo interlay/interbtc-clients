@@ -153,7 +153,7 @@ pub async fn listen_for_vaults_registered(
         .on_register(
             |vault| async {
                 info!("Vault registered: {}", vault.id);
-                vaults.write(vault.btc_address, vault).await;
+                vaults.write(vault.wallet.get_btc_address(), vault).await;
             },
             |err| error!("Error (Vault): {}", err.to_string()),
         )

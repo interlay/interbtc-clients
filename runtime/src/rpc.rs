@@ -864,6 +864,8 @@ pub trait VaultRegistryPallet {
 
     async fn withdraw_collateral(&self, amount: u128) -> Result<(), Error>;
 
+    async fn update_btc_address(&self, address: H160) -> Result<(), Error>;
+
     async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, Error>;
 }
 
@@ -924,6 +926,17 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     async fn withdraw_collateral(&self, amount: u128) -> Result<(), Error> {
         self.ext_client
             .withdraw_collateral_and_watch(&*self.signer.write().await, amount)
+            .await?;
+        Ok(())
+    }
+
+    /// Update the default BTC address for the vault corresponding to the signer.
+    ///
+    /// # Arguments
+    /// * `address` - the new address of the vault
+    async fn update_btc_address(&self, address: H160) -> Result<(), Error> {
+        self.ext_client
+            .update_btc_address_and_watch(&*self.signer.write().await, address)
             .await?;
         Ok(())
     }

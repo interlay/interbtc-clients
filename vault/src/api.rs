@@ -88,12 +88,14 @@ fn _withdraw_collateral(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(
 }
 
 #[derive(Encode, Decode, Debug)]
-struct SetBtcAddressJsonRpcRequest {
+struct UpdateBtcAddressJsonRpcRequest {
     address: H160,
 }
 
-fn _set_btc_address(_api: &Arc<PolkaBtcProvider>, _params: Params) -> Result<(), Error> {
-    unimplemented!();
+fn _update_btc_address(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+    let req = parse_params::<UpdateBtcAddressJsonRpcRequest>(params)?;
+    info!("Updating btc address; {}", req.address);
+    Ok(block_on(api.update_btc_address(req.address))?)
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -135,8 +137,8 @@ pub async fn start(api: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String)
     }
     {
         let api = api.clone();
-        io.add_method("set_btc_address", move |params| {
-            handle_resp(_set_btc_address(&api, params))
+        io.add_method("update_btc_address", move |params| {
+            handle_resp(_update_btc_address(&api, params))
         });
     }
     {
