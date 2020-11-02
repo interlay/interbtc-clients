@@ -5577,6 +5577,7 @@ dependencies = [
  "bitcoin 0.2.2",
  "btc-parachain",
  "frame-support",
+ "issue",
  "jsonrpsee",
  "module-vault-registry-rpc-runtime-api",
  "parity-scale-codec",

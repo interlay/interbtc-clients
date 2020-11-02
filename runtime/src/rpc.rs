@@ -5,7 +5,6 @@ use jsonrpsee::{
 };
 use module_vault_registry_rpc_runtime_api::BalanceWrapper;
 use parity_scale_codec::Decode;
-use serde::{Deserialize, Deserializer};
 use sp_core::sr25519::Pair as KeyPair;
 use sp_core::{H160, H256};
 use std::collections::BTreeSet;
@@ -36,6 +35,10 @@ pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
 
 pub type PolkaBtcVault =
     Vault<AccountId, <PolkaBtcRuntime as System>::BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC>;
+
+pub type PolkaBtcIssueRequest =
+    IssueRequest<AccountId, <PolkaBtcRuntime as System>::BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC, <PolkaBtcRuntime as Core>::DOT>;
+
 
 pub type PolkaBtcStatusUpdate = StatusUpdate<
     AccountId,
@@ -188,10 +191,10 @@ impl PolkaBtcProvider {
     }
 
     /// Gets the current height of the parachain
-    pub async fn get_current_chain_height(&self) -> Result<u64, Error> {
+    pub async fn get_current_chain_height(&self) -> Result<u32, Error> {
         let query_result = self.ext_client.block(Option::<H256>::None).await?;
         match query_result {
-            Some(x) => Ok(x.block.header.number.into()),
+            Some(x) => Ok(x.block.header.number),
             None => Err(Error::BlockNotFound),
         }
     }
@@ -652,7 +655,7 @@ pub trait IssuePallet {
     async fn get_vault_issue_requests(
         &self,
         account_id: AccountId,
-    ) -> Result<Vec<(H256, IssueRequest)>, Error>;
+    ) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, Error>;
 
     async fn get_issue_period(&self) -> Result<u32, Error>;
 }
@@ -713,8 +716,8 @@ impl IssuePallet for PolkaBtcProvider {
     async fn get_vault_issue_requests(
         &self,
         account_id: AccountId,
-    ) -> Result<Vec<(H256, IssueRequest)>, Error> {
-        let result: Vec<(H256, IssueRequest)> = self
+    ) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, Error> {
+        let result: Vec<(H256, PolkaBtcIssueRequest)> = self
             .rpc_client
             .request(
                 "issue_getVaultIssueRequests",
@@ -729,30 +732,7 @@ impl IssuePallet for PolkaBtcProvider {
     }
 }
 
-// Due to a known bug in serde we need to specify how u128 is serialized.
-// See https://github.com/paritytech/substrate/issues/4641
-#[derive(Eq, PartialEq, Decode, Default, Debug, serde::Deserialize)]
-pub struct IssueRequest {
-    pub vault: AccountId,
-    pub opentime: u64,
-    #[serde(bound(deserialize = "u128: std::str::FromStr"))]
-    #[serde(deserialize_with = "deserialize_from_string")]
-    pub griefing_collateral: u128,
-    #[serde(bound(deserialize = "u128: std::str::FromStr"))]
-    #[serde(deserialize_with = "deserialize_from_string")]
-    pub amount: u128,
-    pub requester: AccountId,
-    pub btc_address: H160,
-    pub completed: bool,
-}
 
-fn deserialize_from_string<'de, D: Deserializer<'de>, T: std::str::FromStr>(
-    deserializer: D,
-) -> Result<T, D::Error> {
-    let s = String::deserialize(deserializer)?;
-    s.parse::<T>()
-        .map_err(|_| serde::de::Error::custom("Parse from string failed"))
-}
 
 #[async_trait]
 pub trait RedeemPallet {
