@@ -186,6 +186,15 @@ impl PolkaBtcProvider {
 
         Ok(())
     }
+
+    /// Gets the current height of the parachain
+    pub async fn get_current_chain_height(&self) -> Result<u64, Error> {
+        let query_result = self.ext_client.block(Option::<H256>::None).await?;
+        match query_result {
+            Some(x) => Ok(x.block.header.number.into()),
+            None => Err(Error::BlockNotFound),
+        }
+    }
 }
 
 #[async_trait]
@@ -719,6 +728,9 @@ impl IssuePallet for PolkaBtcProvider {
         Ok(self.ext_client.issue_period(None).await?)
     }
 }
+
+// Due to a known bug in serde we need to specify how u128 is serialized.
+// See https://github.com/paritytech/substrate/issues/4641
 #[derive(Eq, PartialEq, Decode, Default, Debug, serde::Deserialize)]
 pub struct IssueRequest {
     pub vault: AccountId,
@@ -1003,13 +1015,3 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     }
 }
 
-impl PolkaBtcProvider {
-    /// Gets the current height of the parachain
-    pub async fn get_current_chain_height(&self) -> Result<u64, Error> {
-        let query_result = self.ext_client.block(Option::<H256>::None).await?;
-        match query_result {
-            Some(x) => Ok(x.block.header.number.into()),
-            None => Err(Error::BlockNotFound),
-        }
-    }
-}

@@ -8,12 +8,23 @@ use std::sync::Arc;
 use tokio::time;
 use tokio::time::Instant;
 
+// TODO: re-use constant from the parachain
 const SECONDS_PER_BLOCK: u64 = 6;
+
+// number of seconds after the issue deadline before the issue is
+// actually canceled. When set too low, chances are we try to cancel
+// before required block has been added
+const MARGIN_SECONDS:u64 = 5*60;
+
+// number of seconds to wait after failing to read the open issue list
+// before retrying
+const QUERY_RETRY_INTERVAL:u64 = 15*60;
 
 struct ActiveIssue {
     deadline: Instant,
     id: H256,
 }
+
 pub enum IssueEvent {
     IssueReceived,
     IssueExecuted(H256),
@@ -66,7 +77,7 @@ impl CancelationScheduler {
             // determine how long we will sleep
             let task_wait = if !active_issues_is_up_to_date {
                 // failed to query open issues; try again in 15 minutes
-                time::delay_for(time::Duration::from_secs(15 * 60)).fuse()
+                time::delay_for(time::Duration::from_secs(QUERY_RETRY_INTERVAL)).fuse()
             } else {
                 match active_issues.first() {
                     Some(issue) => {
@@ -151,7 +162,7 @@ impl CancelationScheduler {
         let issue_period = self.get_issue_period().await?;
 
         // try to cancel 5 minutes after deadline, to acount for timing inaccuracies
-        let margin_period = (5 * 60) / SECONDS_PER_BLOCK;
+        let margin_period = MARGIN_SECONDS / SECONDS_PER_BLOCK;
 
         let ret = open_issues
             .iter()
@@ -160,7 +171,7 @@ impl CancelationScheduler {
 
                 let deadline = if chain_height < deadline_block {
                     let remaining_blocks = 2;
-                    time::Instant::now() + (time::Duration::from_secs(6) * remaining_blocks)
+                    time::Instant::now() + (time::Duration::from_secs(SECONDS_PER_BLOCK) * remaining_blocks)
                 } else {
                     // deadline has already passed, should cancel ASAP
                     // this branch can occur when e.g. the vault has been restarted
