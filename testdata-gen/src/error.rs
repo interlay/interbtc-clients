@@ -4,6 +4,9 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("Invalid request id")]
+    InvalidRequestId,
+
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
     #[error("RuntimeError: {0}")]

@@ -1,13 +1,13 @@
 #![allow(dead_code)]
-#[path = "param.rs"]
-mod param;
 
 use crate::Error;
 use bitcoin::get_hash_from_string;
-use module_bitcoin::formatter::Formattable;
-use module_bitcoin::types::*;
+use runtime::pallets::btc_relay::*;
 use runtime::{BtcRelayPallet, PolkaBtcProvider};
-use sp_core::{H160, H256, U256};
+use sp_core::{H256, U256};
+
+const ALICE_BTC_ADDRESS: &str = "tb1qmwv7aqktv5l44x65qmsk6u4z9wh66nazv9rgv3";
+const CONFIRMATIONS: u32 = 6;
 
 pub struct BtcSimulator {
     prov: PolkaBtcProvider,
@@ -31,7 +31,7 @@ impl BtcSimulator {
 
     /// Initialize BTC Relay with a generated Bitcoin block
     pub async fn initialize(&mut self) -> Result<(), Error> {
-        let alice_address = get_hash_from_string(param::ALICE_BTC_ADDRESS)?;
+        let alice_address = get_hash_from_string(ALICE_BTC_ADDRESS)?;
         let address = Address::from(*alice_address.as_fixed_bytes());
         // initialize BTC Relay with one block
         let init_block = BlockBuilder::new()
@@ -111,7 +111,7 @@ impl BtcSimulator {
 
         // Mine six new blocks to get over required confirmations
         let mut timestamp = 1588814835;
-        for _ in 0..param::CONFIRMATIONS {
+        for _ in 0..CONFIRMATIONS {
             self.height += 1;
             timestamp += 1000;
             let conf_block = BlockBuilder::new()

@@ -1,20 +1,19 @@
 #![allow(dead_code)]
-#[path = "param.rs"]
-mod param;
 
-use module_bitcoin::types::H256Le;
+use runtime::pallets::btc_relay::H256Le;
 use runtime::{Error, IssuePallet, PolkaBtcProvider};
 use sp_core::crypto::AccountId32;
 use sp_core::H256;
 
 /// Request issue of PolkaBTC
 pub async fn request_issue(
-    issue_prov: PolkaBtcProvider,
+    issue_prov: &PolkaBtcProvider,
     amount: u128,
+    griefing_collateral: u128,
     vault_id: AccountId32,
 ) -> Result<H256, Error> {
     let issue_id = issue_prov
-        .request_issue(amount, vault_id.clone(), param::GRIEFING_COLLATERAL)
+        .request_issue(amount, vault_id.clone(), griefing_collateral)
         .await?;
 
     println!(
@@ -29,7 +28,7 @@ pub async fn request_issue(
 
 /// Execute issue of PolkaBTC
 pub async fn execute_issue(
-    issue_prov: PolkaBtcProvider,
+    issue_prov: &PolkaBtcProvider,
     issue_id: &H256,
     tx_id: &H256Le,
     tx_block_height: &u32,
@@ -46,6 +45,5 @@ pub async fn execute_issue(
         )
         .await?;
     println!("Executed issue ID {:?}", issue_id);
-
     Ok(())
 }

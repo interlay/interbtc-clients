@@ -1,8 +1,9 @@
 use super::{Core, CoreEventsDecoder};
 use core::marker::PhantomData;
+pub use module_redeem::RedeemRequest;
 use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
-use substrate_subxt_proc_macro::{module, Call, Event};
+use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
 #[module]
 pub trait Redeem: Core {}
@@ -51,4 +52,11 @@ pub struct CancelRedeemCall<T: Redeem> {
 pub struct CancelRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct RedeemRequestStore<T: Redeem> {
+    #[store(returns = RedeemRequest<T::AccountId, T::BlockNumber, T::PolkaBTC, T::DOT>)]
+    pub _runtime: PhantomData<T>,
+    pub redeem_id: T::H256,
 }

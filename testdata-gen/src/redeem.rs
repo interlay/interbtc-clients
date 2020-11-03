@@ -1,17 +1,15 @@
 #![allow(dead_code)]
-#[path = "param.rs"]
-mod param;
 
 use crate::Error;
 use bitcoin::get_hash_from_string;
-use module_bitcoin::types::H256Le;
+use runtime::pallets::btc_relay::H256Le;
 use runtime::{PolkaBtcProvider, RedeemPallet};
 use sp_core::crypto::AccountId32;
 use sp_core::H256;
 
 /// Request redeem of PolkaBTC
 pub async fn request_redeem(
-    redeem_prov: PolkaBtcProvider,
+    redeem_prov: &PolkaBtcProvider,
     amount_polka_btc: u128,
     btc_address: &str,
     vault_id: AccountId32,

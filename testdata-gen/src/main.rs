@@ -1,155 +1,212 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
-#![allow(unused_imports)]
 mod btc_relay;
 mod error;
 mod issue;
-mod param;
 mod redeem;
 mod vault;
 
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use clap::Clap;
 use error::Error;
 use runtime::{
     substrate_subxt::PairSigner, ExchangeRateOraclePallet, H256Le, PolkaBtcProvider,
-    PolkaBtcRuntime, TimestampPallet,
+    PolkaBtcRuntime, RedeemPallet, TimestampPallet,
 };
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
-use std::{sync::Arc, time::Duration};
+use std::convert::TryInto;
+use std::str::FromStr;
+use std::time::Duration;
+
+/// Toolkit for generating testdata on the local BTC-Parachain.
+#[derive(Clap)]
+#[clap(version = "0.1", author = "Interlay <contact@interlay.io>")]
+struct Opts {
+    /// Parachain URL, can be over WebSockets or HTTP.
+    #[clap(long, default_value = "ws://127.0.0.1:9944")]
+    polka_btc_url: String,
+
+    /// Keyring used to sign transactions.
+    #[clap(long, default_value = "alice")]
+    keyring: AccountKeyring,
+
+    #[clap(subcommand)]
+    subcmd: SubCommand,
+}
+
+#[derive(Clap)]
+enum SubCommand {
+    /// Set the DOT to BTC exchange rate.
+    SetExchangeRate(ExchangeRateOracleInfo),
+    /// Get the current DOT to BTC exchange rate.
+    GetExchangeRate,
+    /// Get the time as reported by the chain.
+    GetCurrentTime,
+    /// Register a new vault using the global keyring.
+    RegisterVault(VaultRegistryInfo),
+    /// Request issuance of PolkaBTC and transfer to vault.
+    RequestIssue(IssueRequestInfo),
+    /// Request that PolkaBTC be burned to redeem BTC.
+    RequestRedeem(RedeemRequestInfo),
+    /// Send BTC to user, must be called by vault.
+    ExecuteRedeem(RedeemExecuteInfo),
+}
+
+#[derive(Clap)]
+struct ExchangeRateOracleInfo {
+    /// Exchange rate from BTC to DOT.
+    #[clap(long, default_value = "1")]
+    exchange_rate: u128,
+}
+
+#[derive(Clap)]
+struct VaultRegistryInfo {
+    /// Bitcoin address for vault to receive funds.
+    #[clap(long)]
+    btc_address: String,
+
+    /// Collateral to secure position.
+    #[clap(long, default_value = "0")]
+    collateral: u128,
+}
+
+#[derive(Clap)]
+struct IssueRequestInfo {
+    /// Amount of PolkaBTC to issue.
+    #[clap(long, default_value = "100000")]
+    issue_amount: u128,
+
+    /// Griefing collateral for request.
+    #[clap(long, default_value = "100")]
+    griefing_collateral: u128,
+
+    /// Vault keyring to derive `vault_id`.
+    #[clap(long, default_value = "bob")]
+    vault: AccountKeyring,
+}
+
+#[derive(Clap)]
+struct RedeemRequestInfo {
+    /// Amount of PolkaBTC to redeem.
+    #[clap(long, default_value = "500")]
+    redeem_amount: u128,
+
+    /// Bitcoin address for vault to send funds.
+    #[clap(long)]
+    btc_address: String,
+
+    /// Vault keyring to derive `vault_id`.
+    #[clap(long, default_value = "bob")]
+    vault: AccountKeyring,
+}
+
+#[derive(Clap)]
+struct RedeemExecuteInfo {
+    /// Redeem id for the redeem request.
+    #[clap(long)]
+    redeem_id: String,
+}
 
 /// Generates testdata to be used on a development environment of the BTC-Parachain
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    // setup BTC Parachain connection
-    let alice = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Alice.pair());
-    let bob = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Bob.pair());
-    let alice_prov = PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), alice).await?;
-    let bob_prov = PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), bob).await?;
-    let charlie = PairSigner::<PolkaBtcRuntime, _>::new(AccountKeyring::Charlie.pair());
-    let charlie_prov =
-        PolkaBtcProvider::from_url(param::POLKA_BTC_URL.to_string(), charlie).await?;
+    let opts: Opts = Opts::parse();
 
-    // EXCHANGE RATE
-    let oracle_prov = bob_prov.clone();
+    let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
+    let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
 
-    // set exchange rate to 0.00038 at granularity 5
-    let btc_to_dot_rate: u128 = 1;
-    oracle_prov.set_exchange_rate_info(btc_to_dot_rate).await?;
+    let btc_rpc = BitcoinCore::new(bitcoin::bitcoin_rpc_from_env()?);
 
-    // get exchange rate
-    let (rate, time, delay) = oracle_prov.get_exchange_rate_info().await?;
-    println!(
-        "Exchange Rate BTC/DOT: {:?}, Last Update: {}, Delay: {}",
-        rate, time, delay
-    );
+    match opts.subcmd {
+        SubCommand::SetExchangeRate(info) => {
+            provider.set_exchange_rate_info(info.exchange_rate).await?;
+        }
+        SubCommand::GetExchangeRate => {
+            let (rate, time, delay) = provider.get_exchange_rate_info().await?;
+            println!(
+                "Exchange Rate BTC/DOT: {:?}, Last Update: {}, Delay: {}",
+                rate, time, delay
+            );
+        }
+        SubCommand::GetCurrentTime => {
+            println!("{}", provider.get_time_now().await?);
+        }
+        SubCommand::RegisterVault(info) => {
+            vault::register_vault(provider, &info.btc_address, info.collateral).await?;
+        }
+        SubCommand::RequestIssue(info) => {
+            let vault_id = info.vault.to_account_id();
+            let vault = provider.get_vault(vault_id.clone()).await?;
+            // TODO: configure network
+            let vault_btc_address =
+                bitcoin::hash_to_p2wpkh(vault.wallet.get_btc_address(), bitcoin::Network::Regtest)?;
 
-    let current_time = oracle_prov.get_time_now().await?;
-    println!("Current Time: {}", current_time);
+            let issue_id = issue::request_issue(
+                &provider,
+                info.issue_amount,
+                info.griefing_collateral,
+                vault_id,
+            )
+            .await?;
 
-    // INIT BTC RELAY
-    // let mut btc_simulator = btc_relay::BtcSimulator::new(alice_prov.clone(), 1);
-    // &btc_simulator.initialize().await?;
-    let btc_rpc = &Arc::new(BitcoinCore::new(bitcoin::bitcoin_rpc_from_env()?));
+            let tx_metadata = btc_rpc
+                .send_to_address(
+                    vault_btc_address,
+                    info.issue_amount.try_into().unwrap(),
+                    &issue_id.to_fixed_bytes(),
+                    Duration::from_secs(15 * 60),
+                    1,
+                )
+                .await?;
 
-    // ISSUE
-    // register Bob as a vault
-    // vault::register_vault(
-    //     bob_prov.clone(),
-    //     param::BOB_BTC_ADDRESS,
-    //     param::BOB_VAULT_COLLATERAL,
-    // )
-    // .await?;
+            issue::execute_issue(
+                &provider,
+                &issue_id,
+                &H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
+                &tx_metadata.block_height,
+                &tx_metadata.proof,
+                &tx_metadata.raw_tx,
+            )
+            .await?;
+        }
+        SubCommand::RequestRedeem(info) => {
+            let redeem_id = redeem::request_redeem(
+                &provider,
+                info.redeem_amount,
+                &info.btc_address,
+                info.vault.to_account_id(),
+            )
+            .await?;
+            println!("{}", redeem_id);
+        }
+        SubCommand::ExecuteRedeem(info) => {
+            let redeem_id = H256::from_str(&info.redeem_id).map_err(|_| Error::InvalidRequestId)?;
+            let redeem_request = provider.get_redeem_request(redeem_id).await?;
 
-    // register Charlie as a vault
-    // vault::register_vault(
-    //     charlie_prov.clone(),
-    //     param::CHARLIE_BTC_ADDRESS,
-    //     param::CHARLIE_VAULT_COLLATERAL,
-    // )
-    // .await;
+            // TODO: configure network
+            let btc_address =
+                bitcoin::hash_to_p2wpkh(redeem_request.btc_address, bitcoin::Network::Regtest)?;
 
-    println!("Requesting issue...");
-    // Alice issues with Bob
-    let issue_id = issue::request_issue(
-        alice_prov.clone(),
-        param::ALICE_ISSUE_AMOUNT,
-        AccountKeyring::Bob.to_account_id(),
-    )
-    .await?;
-    println!("btc payment..");
+            let tx_metadata = btc_rpc
+                .send_to_address(
+                    btc_address,
+                    redeem_request.amount_btc.try_into().unwrap(),
+                    &redeem_id.to_fixed_bytes(),
+                    Duration::from_secs(15 * 60),
+                    1,
+                )
+                .await?;
 
-    let tx_metadata = btc_rpc
-        .send_to_address(
-            "bcrt1qywc4rq6sd778a0zud325xlk5yzmd2w3ed9larg".to_string(),
-            param::ALICE_ISSUE_AMOUNT as u64,
-            &issue_id.to_fixed_bytes(),
-            Duration::from_secs(15 * 60),
-            1,
-        )
-        .await
-        .unwrap();
-    //     // Alice makes the BTC payment and the BTC tx is included in BTC-Relay
-    // let (tx_id, tx_block_height, merkle_proof, raw_tx) = &btc_simulator
-    //     .generate_transaction_and_include(
-    //         param::BOB_BTC_ADDRESS,
-    //         param::ALICE_ISSUE_AMOUNT,
-    //         issue_id,
-    //     )
-    //     .await?;
-
-    // println!("BTC H256Le transaction id: {:?}", tx_id.to_string());
-    println!("executing issue..");
-    // Alice completes the issue request
-    loop {
-        match issue::execute_issue(
-            alice_prov.clone(),
-            &issue_id,
-            &H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
-            &tx_metadata.block_height,
-            &tx_metadata.proof,
-            &tx_metadata.raw_tx,
-        )
-        .await
-        {
-            Ok(_) => break,
-            Err(e) => {
-                println!("Error: {}", e.to_string());
-                tokio::time::delay_for(tokio::time::Duration::from_millis(5_000)).await;
-            }
-        };
+            redeem::execute_redeem(
+                provider,
+                &redeem_id,
+                &H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
+                &tx_metadata.block_height,
+                &tx_metadata.proof,
+                &tx_metadata.raw_tx,
+            )
+            .await?;
+        }
     }
-    println!("request_redeem..");
-
-    // REDEEM
-    // Alice redeems PolkaBTC
-    let redeem_id = redeem::request_redeem(
-        alice_prov.clone(),
-        param::ALICE_REDEEM_AMOUNT_1,
-        param::ALICE_BTC_ADDRESS,
-        AccountKeyring::Bob.to_account_id(),
-    )
-    .await?;
-
-    // // Bob (vault) makes the BTC payment and the BTC tx is included in BTC-Relay
-    // let (tx_id, tx_block_height, merkle_proof, raw_tx) = &btc_simulator
-    //     .generate_transaction_and_include(
-    //         param::ALICE_BTC_ADDRESS,
-    //         param::ALICE_REDEEM_AMOUNT_1,
-    //         redeem_id,
-    //     )
-    //     .await?;
-
-    // // Bob (vault) completes the redeem request
-    // redeem::execute_redeem(
-    //     bob_prov.clone(),
-    //     &redeem_id,
-    //     tx_id,
-    //     tx_block_height,
-    //     merkle_proof,
-    //     raw_tx,
-    // )
-    // .await?;
 
     Ok(())
 }
