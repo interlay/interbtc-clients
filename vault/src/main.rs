@@ -3,17 +3,18 @@ mod error;
 mod issue;
 mod redeem;
 mod replace;
+mod scheduler;
 mod util;
 
 use bitcoin::BitcoinCore;
 use clap::Clap;
 use error::Error;
+use futures::channel::mpsc;
 use issue::*;
-use log::{error, info};
 use redeem::*;
 use replace::*;
-
 use runtime::{substrate_subxt::PairSigner, PolkaBtcProvider, PolkaBtcRuntime};
+use scheduler::{CancelationScheduler, IssueEvent};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 
@@ -54,22 +55,20 @@ async fn main() -> Result<(), Error> {
     let num_confirmations = if opts.dev { 1 } else { 6 };
     let vault_id = opts.keyring.to_account_id();
 
-    // log vault registration result, but keep going upon error, since it might just be
-    // that this vault already registered. Note that we can't match this specific error
-    // due to inner error type path being private
-    match arc_provider
-        .register_vault(
-            5_000_000_000_000,
-            bitcoin::get_hash_from_string("bcrt1qywc4rq6sd778a0zud325xlk5yzmd2w3ed9larg")
-                .map_err(|x| -> bitcoin::Error { x.into() })?,
-        )
-        .await
-    {
-        Ok(_) => info!("registered vault ok"),
-        Err(e) => error!("Failed to register vault {:?} --- {}", e, e.to_string()),
-    };
+    let (issue_event_tx, issue_event_rx) = mpsc::channel::<IssueEvent>(16);
 
-    let issue_listener = listen_for_issue_requests(arc_provider.clone(), vault_id.clone());
+    let mut cancelation_scheduler =
+        CancelationScheduler::new(arc_provider.clone(), vault_id.clone());
+    let issue_request_listener = listen_for_issue_requests(
+        arc_provider.clone(),
+        vault_id.clone(),
+        issue_event_tx.clone(),
+    );
+    let issue_execute_listener = listen_for_issue_executes(
+        arc_provider.clone(),
+        vault_id.clone(),
+        issue_event_tx.clone(),
+    );
     let request_replace_listener =
         listen_for_replace_requests(arc_provider.clone(), vault_id.clone());
     let redeem_listener = listen_for_redeem_requests(
@@ -96,7 +95,13 @@ async fn main() -> Result<(), Error> {
             api_listener.await;
         }),
         tokio::spawn(async move {
-            issue_listener.await.unwrap();
+            issue_request_listener.await.unwrap();
+        }),
+        tokio::spawn(async move {
+            issue_execute_listener.await.unwrap();
+        }),
+        tokio::spawn(async move {
+            cancelation_scheduler.issue_canceler(issue_event_rx).await;
         }),
         tokio::spawn(async move {
             redeem_listener.await.unwrap();
