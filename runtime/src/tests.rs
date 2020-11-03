@@ -43,6 +43,14 @@ async fn test_client_with(key: AccountKeyring) -> PolkaBtcProvider {
 }
 
 #[tokio::test]
+async fn test_get_free_dot_balance() {
+    let provider = test_client_with(AccountKeyring::Alice).await;
+
+    let balance = provider.get_free_dot_balance().await.unwrap();
+    assert_eq!(balance, 1 << 60);
+}
+
+#[tokio::test]
 async fn test_parachain_status() {
     let provider = test_client_with(AccountKeyring::Alice).await;
 

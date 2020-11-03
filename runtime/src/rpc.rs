@@ -18,6 +18,7 @@ use substrate_subxt::{
 };
 use tokio::sync::RwLock;
 
+use crate::balances_dot::AccountStoreExt;
 use crate::btc_relay::*;
 use crate::exchange_rate_oracle::*;
 use crate::issue::*;
@@ -88,6 +89,24 @@ impl PolkaBtcProvider {
     /// Get the address of the configured signer.
     pub async fn get_account_id(&self) -> &AccountId {
         &self.account_id
+    }
+
+    pub async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
+        Ok(self
+            .ext_client
+            .account(self.account_id.clone(), None)
+            .await?
+            .free)
+    }
+
+    pub async fn get_reserved_dot_balance(
+        &self,
+    ) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
+        Ok(self
+            .ext_client
+            .account(self.account_id.clone(), None)
+            .await?
+            .reserved)
     }
 
     /// Fetch a specific vault by ID.
