@@ -12,8 +12,9 @@ pub use error::{Error, XtError};
 use pallets::*;
 pub use rpc::{
     AccountId, BtcRelayPallet, DotBalancesPallet, ExchangeRateOraclePallet, IssuePallet,
-    PolkaBtcProvider, PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, ReplacePallet,
-    SecurityPallet, StakedRelayerPallet, TimestampPallet, VaultRegistryPallet,
+    PolkaBtcIssueRequest, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest,
+    PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, ReplacePallet, SecurityPallet,
+    StakedRelayerPallet, TimestampPallet, VaultRegistryPallet,
 };
 pub use security::{ErrorCode, StatusCode};
 use sp_core::{H160, H256};

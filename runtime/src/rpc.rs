@@ -51,8 +51,12 @@ pub type PolkaBtcRedeemRequest = RedeemRequest<
     <PolkaBtcRuntime as Core>::DOT,
 >;
 
-pub type PolkaBtcReplaceRequest =
-    ReplaceRequest<AccountId, <PolkaBtcRuntime as System>::BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC, <PolkaBtcRuntime as Core>::DOT>;
+pub type PolkaBtcReplaceRequest = ReplaceRequest<
+    AccountId,
+    <PolkaBtcRuntime as System>::BlockNumber,
+    <PolkaBtcRuntime as Core>::PolkaBTC,
+    <PolkaBtcRuntime as Core>::DOT,
+>;
 
 pub type PolkaBtcStatusUpdate = StatusUpdate<
     AccountId,

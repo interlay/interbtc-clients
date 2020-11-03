@@ -133,11 +133,7 @@ fn _withdraw_replace(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), 
     Ok(result?)
 }
 
-pub async fn start(
-    api: Arc<PolkaBtcProvider>,
-    addr: SocketAddr,
-    origin: String,
-) {
+pub async fn start(api: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String) {
     let mut io = IoHandler::default();
     {
         let api = api.clone();

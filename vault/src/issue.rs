@@ -1,4 +1,4 @@
-use crate::scheduler::IssueEvent;
+use crate::scheduler::ProcessEvent;
 use futures::channel::mpsc::Sender;
 use futures::SinkExt;
 use log::{error, info};
@@ -16,10 +16,11 @@ use std::sync::Arc;
 ///
 /// * `provider` - the parachain RPC handle
 /// * `vault_id` - the id of this vault
+/// * `event_channel` - the channel over which to signal events
 pub async fn listen_for_issue_requests(
     provider: Arc<PolkaBtcProvider>,
     vault_id: AccountId32,
-    event_channel: Sender<IssueEvent>,
+    event_channel: Sender<ProcessEvent>,
 ) -> Result<(), runtime::Error> {
     let vault_id = &vault_id;
     let event_channel = &event_channel;
@@ -30,7 +31,7 @@ pub async fn listen_for_issue_requests(
                     info!("Received event: request issue #{}", event.issue_id);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
-                    let _ = event_channel.clone().send(IssueEvent::IssueReceived).await;
+                    let _ = event_channel.clone().send(ProcessEvent::Opened).await;
                 }
             },
             |error| error!("Error reading issue event: {}", error.to_string()),
@@ -45,10 +46,11 @@ pub async fn listen_for_issue_requests(
 ///
 /// * `provider` - the parachain RPC handle
 /// * `vault_id` - the id of this vault
+/// * `event_channel` - the channel over which to signal events
 pub async fn listen_for_issue_executes(
     provider: Arc<PolkaBtcProvider>,
     vault_id: AccountId32,
-    event_channel: Sender<IssueEvent>,
+    event_channel: Sender<ProcessEvent>,
 ) -> Result<(), runtime::Error> {
     let vault_id = &vault_id;
     let event_channel = &event_channel;
@@ -61,7 +63,7 @@ pub async fn listen_for_issue_executes(
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel
                         .clone()
-                        .send(IssueEvent::IssueExecuted(event.issue_id))
+                        .send(ProcessEvent::Executed(event.issue_id))
                         .await;
                 }
             },

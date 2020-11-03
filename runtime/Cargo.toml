@@ -61,19 +61,11 @@ branch = "dev"
 version = "0.2.3"
 package = "redeem"
 
-[dependencies.module-issue]
-# git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
-version = "0.2.1"
-package = "issue"
-path = "../../btc-parachain/crates/issue"
-
 [dependencies.module-replace]
-# git = "https://gitlab.com/interlay/btc-parachain"
+git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "0.2.1"
+version = "0.2.3"
 package = "replace"
-path = "../../btc-parachain/crates/replace"
 
 [dev-dependencies]
 substrate-subxt-client = "0.4.0"

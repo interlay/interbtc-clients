@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 mod api;
 mod error;
 mod issue;
@@ -14,7 +16,7 @@ use issue::*;
 use redeem::*;
 use replace::*;
 use runtime::{substrate_subxt::PairSigner, PolkaBtcProvider, PolkaBtcRuntime};
-use scheduler::{CancelationScheduler, IssueEvent};
+use scheduler::{CancelationScheduler, ProcessEvent};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
@@ -62,9 +64,9 @@ async fn main() -> Result<(), Error> {
     let vault_id = opts.keyring.to_account_id();
     let collateral_timeout_ms = opts.collateral_timeout_ms;
 
-    let (issue_event_tx, issue_event_rx) = mpsc::channel::<IssueEvent>(16);
-
-    let mut cancelation_scheduler =
+    // Issue handling
+    let (issue_event_tx, issue_event_rx) = mpsc::channel::<ProcessEvent>(16);
+    let mut issue_cancelation_scheduler =
         CancelationScheduler::new(arc_provider.clone(), vault_id.clone());
     let issue_request_listener = listen_for_issue_requests(
         arc_provider.clone(),
@@ -76,15 +78,27 @@ async fn main() -> Result<(), Error> {
         vault_id.clone(),
         issue_event_tx.clone(),
     );
-    let request_replace_listener =
-        listen_for_replace_requests(arc_provider.clone(), vault_id.clone());
-    let redeem_listener = listen_for_redeem_requests(
+
+    // replace handling
+    let (replace_event_tx, replace_event_rx) = mpsc::channel::<ProcessEvent>(16);
+    let mut replace_cancelation_scheduler =
+        CancelationScheduler::new(arc_provider.clone(), vault_id.clone());
+    let request_replace_listener = listen_for_replace_requests(
+        arc_provider.clone(),
+        vault_id.clone(),
+        replace_event_tx.clone(),
+    );
+    let accept_replace_listener = listen_for_accept_replace(
         arc_provider.clone(),
         btc_rpc.clone(),
         vault_id.clone(),
         num_confirmations,
     );
-    let accept_replace_listener = listen_for_accept_replace(
+    let execute_replace_listener =
+        listen_for_execute_replace(arc_provider.clone(), vault_id.clone(), replace_event_tx);
+
+    // redeem handling
+    let redeem_listener = listen_for_redeem_requests(
         arc_provider.clone(),
         btc_rpc.clone(),
         vault_id.clone(),
@@ -108,16 +122,23 @@ async fn main() -> Result<(), Error> {
             issue_execute_listener.await.unwrap();
         }),
         tokio::spawn(async move {
-            cancelation_scheduler.issue_canceler(issue_event_rx).await;
+            issue_cancelation_scheduler
+                .handle_cancelation::<scheduler::IssueCanceler>(issue_event_rx)
+                .await;
         }),
+        // redeem handling
         tokio::spawn(async move {
             redeem_listener.await.unwrap();
         }),
+        // replace handling
         tokio::spawn(async move {
             request_replace_listener.await.unwrap();
         }),
         tokio::spawn(async move {
             accept_replace_listener.await.unwrap();
+        }),
+        tokio::spawn(async move {
+            execute_replace_listener.await.unwrap();
         }),
         tokio::spawn(async move {
             // we could automatically check vault collateralization rates on events
@@ -127,6 +148,11 @@ async fn main() -> Result<(), Error> {
                 monitor_collateral_of_vaults(&auction_provider).await
             })
             .await;
+        }),
+        tokio::spawn(async move {
+            replace_cancelation_scheduler
+                .handle_cancelation::<scheduler::ReplaceCanceler>(replace_event_rx)
+                .await;
         }),
     );
     match result {
