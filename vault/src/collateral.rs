@@ -49,6 +49,13 @@ pub async fn lock_required_collateral(
         maximum_collateral
     };
 
+    trace!(
+        "Current collateral = {}; required = {}; max = {}",
+        actual_collateral,
+        required_collateral,
+        maximum_collateral
+    );
+
     // if we should add more collateral
     if actual_collateral < target_collateral {
         let amount_to_increase = target_collateral - actual_collateral;

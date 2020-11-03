@@ -1090,8 +1090,7 @@ impl VaultRegistryPallet for PolkaBtcProvider {
                 "vaultRegistry_getRequiredCollateralForVault",
                 Params::Array(vec![to_json_value(vault_id)?]),
             )
-            .await
-            .unwrap();
+            .await?;
 
         Ok(result.amount)
     }
