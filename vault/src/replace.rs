@@ -2,13 +2,14 @@ use crate::error::Error;
 use crate::util::*;
 use backoff::future::FutureOperation as _;
 use bitcoin::BitcoinCore;
-use log::{error, info};
+use log::{error, info, trace};
 use runtime::{
     pallets::{
         replace::{AcceptReplaceEvent, RequestReplaceEvent},
         vault_registry::Vault,
     },
-    PolkaBtcProvider, PolkaBtcRuntime, ReplacePallet, VaultRegistryPallet,
+    DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet,
+    VaultRegistryPallet,
 };
 use sp_core::crypto::AccountId32;
 use std::sync::Arc;
@@ -163,4 +164,135 @@ pub async fn handle_replace_request(
         .await?;
 
     Ok(())
+}
+
+/// Monitor the collateralization rate of all vaults and request auctions.
+///
+/// # Arguments
+///
+/// * `provider` - the parachain RPC handle
+pub async fn monitor_collateral_of_vaults(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
+    for vault in provider.get_all_vaults().await? {
+        trace!("Checking collateral of {}", vault.id);
+        if vault.id == provider.get_account_id().clone() {
+            continue;
+        } else if provider
+            .is_vault_below_auction_threshold(vault.id.clone())
+            .await
+            .unwrap_or(false)
+        {
+            match handle_auction_replace(&provider, &vault).await {
+                Ok(_) => info!("Auction replace for vault {} submitted", vault.id),
+                Err(e) => error!("Failed to auction vault {}: {}", vault.id, e.to_string()),
+            };
+        }
+    }
+    Ok(())
+}
+
+async fn handle_auction_replace<P: DotBalancesPallet + ReplacePallet + VaultRegistryPallet>(
+    provider: &Arc<P>,
+    vault: &PolkaBtcVault,
+) -> Result<(), Error> {
+    let btc_amount = vault.issued_tokens;
+    let collateral = provider
+        .get_required_collateral_for_polkabtc(btc_amount)
+        .await?;
+
+    // don't auction vault if we can't afford to replace it
+    if collateral > provider.get_free_dot_balance().await? {
+        return Err(Error::InsufficientFunds);
+    }
+
+    info!(
+        "Vault {} is below auction threshold; replacing {} BTC with {} DOT",
+        vault.id, btc_amount, collateral
+    );
+
+    // TODO: retry auctioning?
+    provider
+        .auction_replace(vault.id.clone(), btc_amount, collateral)
+        .await?;
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use runtime::{
+        pallets::Core, AccountId, Error as RuntimeError, H256Le, PolkaBtcRuntime, PolkaBtcVault,
+    };
+    use sp_core::{H160, H256};
+
+    macro_rules! assert_err {
+        ($result:expr, $err:pat) => {{
+            match $result {
+                Err($err) => (),
+                Ok(v) => panic!("assertion failed: Ok({:?})", v),
+                _ => panic!("expected: Err($err)"),
+            }
+        }};
+    }
+
+    mockall::mock! {
+        Provider {}
+
+        #[async_trait]
+        pub trait VaultRegistryPallet {
+            async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
+            async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, RuntimeError>;
+            async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), RuntimeError>;
+            async fn lock_additional_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
+            async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
+            async fn update_btc_address(&self, address: H160) -> Result<(), RuntimeError>;
+            async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
+            async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, RuntimeError>;
+        }
+
+        #[async_trait]
+        pub trait ReplacePallet {
+            async fn request_replace(&self, amount: u128, griefing_collateral: u128)
+                -> Result<H256, RuntimeError>;
+            async fn withdraw_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
+            async fn accept_replace(&self, replace_id: H256, collateral: u128) -> Result<(), RuntimeError>;
+            async fn auction_replace(
+                &self,
+                old_vault: AccountId,
+                btc_amount: u128,
+                collateral: u128,
+            ) -> Result<(), RuntimeError>;
+            async fn execute_replace(
+                &self,
+                replace_id: H256,
+                tx_id: H256Le,
+                tx_block_height: u32,
+                merkle_proof: Vec<u8>,
+                raw_tx: Vec<u8>,
+            ) -> Result<(), RuntimeError>;
+            async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
+        }
+
+        #[async_trait]
+        pub trait DotBalancesPallet {
+            async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
+            async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_auction_replace_with_insufficient_collateral() {
+        let mut provider = MockProvider::default();
+        provider
+            .expect_get_required_collateral_for_polkabtc()
+            .returning(|_| Ok(100));
+        provider.expect_get_free_dot_balance().returning(|| Ok(50));
+
+        let vault = PolkaBtcVault::default();
+        assert_err!(
+            handle_auction_replace(&Arc::new(provider), &vault).await,
+            Error::InsufficientFunds
+        );
+    }
 }

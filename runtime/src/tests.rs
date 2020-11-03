@@ -1,4 +1,7 @@
-use super::{BtcRelayPallet, PolkaBtcProvider, PolkaBtcRuntime, SecurityPallet, StatusCode};
+use super::{
+    BtcRelayPallet, DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, SecurityPallet,
+    StatusCode,
+};
 use module_bitcoin::{
     formatter::Formattable,
     types::{Address, BlockBuilder, RawBlockHeader},

@@ -37,9 +37,12 @@ pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
 pub type PolkaBtcVault =
     Vault<AccountId, <PolkaBtcRuntime as System>::BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC>;
 
-pub type PolkaBtcIssueRequest =
-    IssueRequest<AccountId, <PolkaBtcRuntime as System>::BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC, <PolkaBtcRuntime as Core>::DOT>;
-
+pub type PolkaBtcIssueRequest = IssueRequest<
+    AccountId,
+    <PolkaBtcRuntime as System>::BlockNumber,
+    <PolkaBtcRuntime as Core>::PolkaBTC,
+    <PolkaBtcRuntime as Core>::DOT,
+>;
 
 pub type PolkaBtcStatusUpdate = StatusUpdate<
     AccountId,
@@ -91,26 +94,8 @@ impl PolkaBtcProvider {
     }
 
     /// Get the address of the configured signer.
-    pub async fn get_account_id(&self) -> &AccountId {
+    pub fn get_account_id(&self) -> &AccountId {
         &self.account_id
-    }
-
-    pub async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
-        Ok(self
-            .ext_client
-            .account(self.account_id.clone(), None)
-            .await?
-            .free)
-    }
-
-    pub async fn get_reserved_dot_balance(
-        &self,
-    ) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
-        Ok(self
-            .ext_client
-            .account(self.account_id.clone(), None)
-            .await?
-            .reserved)
     }
 
     /// Fetch a specific vault by ID.
@@ -220,6 +205,32 @@ impl PolkaBtcProvider {
 }
 
 #[async_trait]
+pub trait DotBalancesPallet {
+    async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
+
+    async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
+}
+
+#[async_trait]
+impl DotBalancesPallet for PolkaBtcProvider {
+    async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
+        Ok(self
+            .ext_client
+            .account(self.account_id.clone(), None)
+            .await?
+            .free)
+    }
+
+    async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
+        Ok(self
+            .ext_client
+            .account(self.account_id.clone(), None)
+            .await?
+            .reserved)
+    }
+}
+
+#[async_trait]
 pub trait ReplacePallet {
     /// Request the replacement of a new vault ownership
     ///
@@ -267,7 +278,7 @@ pub trait ReplacePallet {
     ///
     /// # Arguments
     ///
-    /// * `&self` - sender of the transaction: the new vault
+    /// * `&self` - sender of the transaction: the old vault
     /// * `replace_id` - the ID of the replacement request
     /// * `tx_id` - the backing chain transaction id
     /// * `tx_block_height` - the blocked height of the backing transaction
@@ -290,6 +301,7 @@ pub trait ReplacePallet {
     /// * `replace_id` - the ID of the replacement request
     async fn cancel_replace(&self, replace_id: H256) -> Result<(), Error>;
 }
+
 #[async_trait]
 impl ReplacePallet for PolkaBtcProvider {
     async fn request_replace(
@@ -751,8 +763,6 @@ impl IssuePallet for PolkaBtcProvider {
     }
 }
 
-
-
 #[async_trait]
 pub trait RedeemPallet {
     /// Request a new redeem
@@ -926,6 +936,8 @@ pub trait VaultRegistryPallet {
     async fn update_btc_address(&self, address: H160) -> Result<(), Error>;
 
     async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, Error>;
+
+    async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, Error>;
 }
 
 #[async_trait]
@@ -1000,6 +1012,10 @@ impl VaultRegistryPallet for PolkaBtcProvider {
         Ok(())
     }
 
+    /// Custom RPC that calculates the exact collateral required to cover the BTC amount.
+    ///
+    /// # Arguments
+    /// * `amount_btc` - amount of btc to cover
     async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, Error> {
         let result: BalanceWrapper<_> = self
             .rpc_client
@@ -1007,10 +1023,22 @@ impl VaultRegistryPallet for PolkaBtcProvider {
                 "vaultRegistry_getRequiredCollateralForPolkabtc",
                 Params::Array(vec![to_json_value(BalanceWrapper { amount: amount_btc })?]),
             )
-            .await
-            .unwrap();
+            .await?;
 
         Ok(result.amount)
     }
-}
 
+    /// Custom RPC that tests whether a vault is below the auction threshold.
+    ///
+    /// # Arguments
+    /// * `vault_id` - vault account to check
+    async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, Error> {
+        Ok(self
+            .rpc_client
+            .request(
+                "vaultRegistry_isVaultBelowAuctionThreshold",
+                Params::Array(vec![to_json_value(vault_id)?]),
+            )
+            .await?)
+    }
+}

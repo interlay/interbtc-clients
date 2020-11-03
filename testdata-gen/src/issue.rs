@@ -19,7 +19,7 @@ pub async fn request_issue(
 
     println!(
         "Requested {:?} to issue {:?} PolkaBTC from {:?}",
-        issue_prov.get_account_id().await,
+        issue_prov.get_account_id(),
         amount,
         vault_id
     );
