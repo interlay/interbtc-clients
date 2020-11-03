@@ -1,9 +1,6 @@
-#[path = "param.rs"]
-mod param;
-
 use crate::Error;
 use bitcoin::get_hash_from_string;
-use runtime::{PolkaBtcProvider, VaultRegistryPallet};
+use runtime::PolkaBtcProvider;
 
 /// Register a vault with a Bitcoin address
 pub async fn register_vault(

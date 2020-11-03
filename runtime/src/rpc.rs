@@ -44,6 +44,13 @@ pub type PolkaBtcIssueRequest = IssueRequest<
     <PolkaBtcRuntime as Core>::DOT,
 >;
 
+pub type PolkaBtcRedeemRequest = RedeemRequest<
+    AccountId,
+    <PolkaBtcRuntime as System>::BlockNumber,
+    <PolkaBtcRuntime as Core>::PolkaBTC,
+    <PolkaBtcRuntime as Core>::DOT,
+>;
+
 pub type PolkaBtcStatusUpdate = StatusUpdate<
     AccountId,
     <PolkaBtcRuntime as System>::BlockNumber,
@@ -765,6 +772,8 @@ impl IssuePallet for PolkaBtcProvider {
 
 #[async_trait]
 pub trait RedeemPallet {
+    async fn get_redeem_request(&self, redeem_id: H256) -> Result<PolkaBtcRedeemRequest, Error>;
+
     /// Request a new redeem
     async fn request_redeem(
         &self,
@@ -789,6 +798,10 @@ pub trait RedeemPallet {
 
 #[async_trait]
 impl RedeemPallet for PolkaBtcProvider {
+    async fn get_redeem_request(&self, redeem_id: H256) -> Result<PolkaBtcRedeemRequest, Error> {
+        Ok(self.ext_client.redeem_request(redeem_id, None).await?)
+    }
+
     async fn request_redeem(
         &self,
         amount_polka_btc: u128,
