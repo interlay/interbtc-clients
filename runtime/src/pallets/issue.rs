@@ -3,7 +3,8 @@ use core::marker::PhantomData;
 pub use module_bitcoin::types::H256Le;
 use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
-use substrate_subxt_proc_macro::{module, Call, Event};
+use substrate_subxt_proc_macro::{module, Call, Event, Store};
+pub use module_issue::IssueRequest;
 
 #[module]
 pub trait Issue: Core {}
@@ -51,4 +52,10 @@ pub struct CancelIssueCall<T: Issue> {
 pub struct CancelIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct IssuePeriodStore<T: Issue> {
+    #[store(returns = u32)]
+    pub _runtime: PhantomData<T>,
 }

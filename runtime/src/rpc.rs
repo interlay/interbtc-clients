@@ -37,6 +37,10 @@ pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
 pub type PolkaBtcVault =
     Vault<AccountId, <PolkaBtcRuntime as System>::BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC>;
 
+pub type PolkaBtcIssueRequest =
+    IssueRequest<AccountId, <PolkaBtcRuntime as System>::BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC, <PolkaBtcRuntime as Core>::DOT>;
+
+
 pub type PolkaBtcStatusUpdate = StatusUpdate<
     AccountId,
     <PolkaBtcRuntime as System>::BlockNumber,
@@ -203,6 +207,15 @@ impl PolkaBtcProvider {
         }
 
         Ok(())
+    }
+
+    /// Gets the current height of the parachain
+    pub async fn get_current_chain_height(&self) -> Result<u32, Error> {
+        let query_result = self.ext_client.block(Option::<H256>::None).await?;
+        match query_result {
+            Some(x) => Ok(x.block.header.number),
+            None => Err(Error::BlockNotFound),
+        }
     }
 }
 
@@ -657,6 +670,13 @@ pub trait IssuePallet {
 
     /// Cancel an ongoing issue request
     async fn cancel_issue(&self, issue_id: H256) -> Result<(), Error>;
+
+    async fn get_vault_issue_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, Error>;
+
+    async fn get_issue_period(&self) -> Result<u32, Error>;
 }
 
 #[async_trait]
@@ -711,7 +731,27 @@ impl IssuePallet for PolkaBtcProvider {
             .await?;
         Ok(())
     }
+
+    async fn get_vault_issue_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, Error> {
+        let result: Vec<(H256, PolkaBtcIssueRequest)> = self
+            .rpc_client
+            .request(
+                "issue_getVaultIssueRequests",
+                Params::Array(vec![to_json_value(account_id)?]),
+            )
+            .await?;
+
+        Ok(result)
+    }
+    async fn get_issue_period(&self) -> Result<u32, Error> {
+        Ok(self.ext_client.issue_period(None).await?)
+    }
 }
+
+
 
 #[async_trait]
 pub trait RedeemPallet {
@@ -973,3 +1013,4 @@ impl VaultRegistryPallet for PolkaBtcProvider {
         Ok(result.amount)
     }
 }
+
