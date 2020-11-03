@@ -52,7 +52,7 @@ package = "module-vault-registry-rpc-runtime-api"
 [dependencies.module-issue]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "0.2.1"
+version = "0.2.3"
 package = "issue"
 # path = "../../btc-parachain/crates/issue"
 
