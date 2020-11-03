@@ -86,7 +86,7 @@ impl PolkaBtcProvider {
     }
 
     /// Get the address of the configured signer.
-    pub async fn get_address(&self) -> &AccountId {
+    pub async fn get_account_id(&self) -> &AccountId {
         &self.account_id
     }
 

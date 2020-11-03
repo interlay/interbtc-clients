@@ -9,6 +9,7 @@ use log::info;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{PolkaBtcProvider, ReplacePallet, VaultRegistryPallet};
 use serde::{Deserialize, Deserializer};
+use sp_core::crypto::Ss58Codec;
 use sp_core::{H160, H256};
 use std::{net::SocketAddr, sync::Arc};
 
@@ -36,6 +37,17 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
         Ok(data) => Ok(format!("0x{}", hex::encode(data.encode())).into()),
         Err(_) => Err(JsonRpcError::internal_error()),
     }
+}
+
+#[derive(Encode, Decode, Debug)]
+struct AccountIdJsonRpcResponse {
+    account_id: String,
+}
+
+fn _account_id(api: &Arc<PolkaBtcProvider>) -> Result<AccountIdJsonRpcResponse, Error> {
+    Ok(AccountIdJsonRpcResponse {
+        account_id: block_on(api.get_account_id()).to_ss58check(),
+    })
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -111,6 +123,10 @@ fn _withdraw_replace(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), 
 
 pub async fn start(api: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String) {
     let mut io = IoHandler::default();
+    {
+        let api = api.clone();
+        io.add_method("account_id", move |_| handle_resp(_account_id(&api)));
+    }
     {
         let api = api.clone();
         io.add_method("request_replace", move |params| {

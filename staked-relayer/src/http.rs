@@ -46,13 +46,13 @@ fn _system_health(api: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
 }
 
 #[derive(Encode, Decode, Debug)]
-struct GetAddressJsonRpcResponse {
-    address: String,
+struct AccountIdJsonRpcResponse {
+    account_id: String,
 }
 
-fn _get_address(api: &Arc<PolkaBtcProvider>) -> Result<GetAddressJsonRpcResponse, Error> {
-    Ok(GetAddressJsonRpcResponse {
-        address: block_on(api.get_address()).to_ss58check(),
+fn _account_id(api: &Arc<PolkaBtcProvider>) -> Result<AccountIdJsonRpcResponse, Error> {
+    Ok(AccountIdJsonRpcResponse {
+        account_id: block_on(api.get_account_id()).to_ss58check(),
     })
 }
 
@@ -113,7 +113,7 @@ pub async fn start(api: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String)
     }
     {
         let api = api.clone();
-        io.add_method("get_address", move |_| handle_resp(_get_address(&api)));
+        io.add_method("account_id", move |_| handle_resp(_account_id(&api)));
     }
     {
         let api = api.clone();
