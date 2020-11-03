@@ -1,6 +1,7 @@
 #![recursion_limit = "256"]
 
 mod api;
+mod collateral;
 mod error;
 mod issue;
 mod redeem;
@@ -10,9 +11,11 @@ mod util;
 
 use bitcoin::BitcoinCore;
 use clap::Clap;
+use collateral::*;
 use error::Error;
 use futures::channel::mpsc;
 use issue::*;
+use log::*;
 use redeem::*;
 use replace::*;
 use runtime::{substrate_subxt::PairSigner, PolkaBtcProvider, PolkaBtcRuntime};
@@ -64,6 +67,19 @@ async fn main() -> Result<(), Error> {
     let vault_id = opts.keyring.to_account_id();
     let collateral_timeout_ms = opts.collateral_timeout_ms;
 
+    // lock more collateral if required; this might be required if the vault
+    // restarted. TODO: don't hardcode the amount
+    if let Err(e) =
+        lock_required_collateral(arc_provider.clone(), vault_id.clone(), 100_000_000 as u128).await
+    {
+        error!("Failed to lock the required additional collateral: {}", e);
+    }
+    let collateral_maintainer = maintain_collateralization_rate(
+        arc_provider.clone(),
+        vault_id.clone(),
+        100_000_000 as u128,
+    );
+
     // Issue handling
     let (issue_event_tx, issue_event_rx) = mpsc::channel::<ProcessEvent>(16);
     let mut issue_cancelation_scheduler =
@@ -114,6 +130,9 @@ async fn main() -> Result<(), Error> {
     let result = tokio::try_join!(
         tokio::spawn(async move {
             api_listener.await;
+        }),
+        tokio::spawn(async move {
+            collateral_maintainer.await.unwrap();
         }),
         tokio::spawn(async move {
             issue_request_listener.await.unwrap();
