@@ -52,7 +52,7 @@ struct AccountIdJsonRpcResponse {
 
 fn _account_id(api: &Arc<PolkaBtcProvider>) -> Result<AccountIdJsonRpcResponse, Error> {
     Ok(AccountIdJsonRpcResponse {
-        account_id: block_on(api.get_account_id()).to_ss58check(),
+        account_id: api.get_account_id().to_ss58check(),
     })
 }
 

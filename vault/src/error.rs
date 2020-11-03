@@ -6,6 +6,9 @@ use std::net::AddrParseError;
 use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("Insufficient funds available")]
+    InsufficientFunds,
+
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
     #[error("RuntimeError: {0}")]

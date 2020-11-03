@@ -1,12 +1,13 @@
 use crate::error::Error;
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
-use log::info;
+use log::{error, info};
 use runtime::H256Le;
 use sp_core::{H160, H256};
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::time::delay_for;
 
 // keep trying for 24 hours
 const MAX_RETRYING_TIME: Duration = Duration::from_secs(24 * 60 * 60);
@@ -77,5 +78,18 @@ pub fn get_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff {
         max_elapsed_time: Some(MAX_RETRYING_TIME),
         ..Default::default()
+    }
+}
+
+pub async fn check_every<'a, F>(duration: Duration, check: impl Fn() -> F)
+where
+    F: Future<Output = Result<(), Error>> + 'a,
+{
+    loop {
+        match check().await {
+            Err(e) => error!("Error: {}", e.to_string()),
+            _ => (),
+        };
+        delay_for(duration).await
     }
 }

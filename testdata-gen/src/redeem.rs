@@ -23,7 +23,7 @@ pub async fn request_redeem(
 
     println!(
         "Requested {:?} to redeem {:?} PolkaBTC from {:?}",
-        redeem_prov.get_account_id().await,
+        redeem_prov.get_account_id(),
         amount_polka_btc,
         vault_id
     );
