@@ -163,8 +163,8 @@ pub async fn listen_for_replace_requests(
 
 /// Attempts to accept a replace request. Does not retry RPC calls upon
 /// failure, since nothing is at stake at this point
-pub async fn handle_replace_request(
-    provider: Arc<PolkaBtcProvider>,
+pub async fn handle_replace_request<P: DotBalancesPallet + ReplacePallet + VaultRegistryPallet>(
+    provider: Arc<P>,
     event: &RequestReplaceEvent<PolkaBtcRuntime>,
 ) -> Result<(), Error> {
     let required_collateral = provider
@@ -347,6 +347,25 @@ mod tests {
         let vault = PolkaBtcVault::default();
         assert_err!(
             handle_auction_replace(&Arc::new(provider), &vault).await,
+            Error::InsufficientFunds
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_replace_request_with_insufficient_balance() {
+        let mut provider = MockProvider::default();
+        provider
+            .expect_get_required_collateral_for_polkabtc()
+            .returning(|_| Ok(100));
+        provider.expect_get_free_dot_balance().returning(|| Ok(50));
+
+        let event = RequestReplaceEvent {
+            amount: Default::default(),
+            old_vault_id: Default::default(),
+            replace_id: Default::default(),
+        };
+        assert_err!(
+            handle_replace_request(Arc::new(provider), &event).await,
             Error::InsufficientFunds
         );
     }
