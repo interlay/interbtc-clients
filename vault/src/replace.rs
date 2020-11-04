@@ -171,12 +171,15 @@ pub async fn handle_replace_request(
         .get_required_collateral_for_polkabtc(event.amount)
         .await?;
 
-    // If this fails, we probably don't have enough dots to place the required collateral.
-    provider
-        .accept_replace(event.replace_id, required_collateral) // todo: determine safe collateral
-        .await?;
+    let free_balance = provider.get_free_dot_balance().await?;
 
-    Ok(())
+    if free_balance < required_collateral {
+        Err(Error::InsufficientFunds)
+    } else {
+        Ok(provider
+            .accept_replace(event.replace_id, required_collateral)
+            .await?)
+    }
 }
 
 /// Monitor the collateralization rate of all vaults and request auctions.
