@@ -988,6 +988,8 @@ pub trait VaultRegistryPallet {
 
     async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, Error>;
 
+    async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, Error>;
+
     async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, Error>;
 }
 
@@ -1073,6 +1075,20 @@ impl VaultRegistryPallet for PolkaBtcProvider {
             .request(
                 "vaultRegistry_getRequiredCollateralForPolkabtc",
                 Params::Array(vec![to_json_value(BalanceWrapper { amount: amount_btc })?]),
+            )
+            .await?;
+
+        Ok(result.amount)
+    }
+
+    /// Get the amount of collateral required for the given vault to be at the
+    /// current SecureCollateralThreshold with the current exchange rate
+    async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, Error> {
+        let result: BalanceWrapper<_> = self
+            .rpc_client
+            .request(
+                "vaultRegistry_getRequiredCollateralForVault",
+                Params::Array(vec![to_json_value(vault_id)?]),
             )
             .await?;
 

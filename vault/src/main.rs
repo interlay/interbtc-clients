@@ -1,6 +1,7 @@
 #![recursion_limit = "256"]
 
 mod api;
+mod collateral;
 mod error;
 mod issue;
 mod redeem;
@@ -10,12 +11,17 @@ mod util;
 
 use bitcoin::BitcoinCore;
 use clap::Clap;
+use collateral::*;
 use error::Error;
 use futures::channel::mpsc;
 use issue::*;
+use log::*;
 use redeem::*;
 use replace::*;
-use runtime::{substrate_subxt::PairSigner, PolkaBtcProvider, PolkaBtcRuntime};
+use runtime::{
+    pallets::vault_registry::VaultStatus, substrate_subxt::PairSigner, PolkaBtcProvider,
+    PolkaBtcRuntime,
+};
 use scheduler::{CancelationScheduler, ProcessEvent};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
@@ -63,6 +69,35 @@ async fn main() -> Result<(), Error> {
     let num_confirmations = if opts.dev { 1 } else { 6 };
     let vault_id = opts.keyring.to_account_id();
     let collateral_timeout_ms = opts.collateral_timeout_ms;
+
+    // check if the vault is registered
+    match arc_provider.get_vault(vault_id.clone()).await {
+        Ok(x) => {
+            // if the vault is not registered, `get_vault` returns a default
+            // value. So check if the returned value is the one that we are
+            // interested in, and is active
+            if x.id == vault_id.clone() && x.status == VaultStatus::Active {
+                // vault is registered; now lock more collateral if required;
+                // this might be required if the vault restarted.
+                if let Err(e) = lock_required_collateral(
+                    arc_provider.clone(),
+                    vault_id.clone(),
+                    100_000_000 as u128,
+                )
+                .await
+                {
+                    error!("Failed to lock required additional collateral: {}", e);
+                }
+            }
+        }
+        Err(e) => error!("Failed to get vault status: {}", e),
+    };
+
+    let collateral_maintainer = maintain_collateralization_rate(
+        arc_provider.clone(),
+        vault_id.clone(),
+        100_000_000 as u128,
+    );
 
     // Issue handling
     let (issue_event_tx, issue_event_rx) = mpsc::channel::<ProcessEvent>(16);
@@ -114,6 +149,9 @@ async fn main() -> Result<(), Error> {
     let result = tokio::try_join!(
         tokio::spawn(async move {
             api_listener.await;
+        }),
+        tokio::spawn(async move {
+            collateral_maintainer.await.unwrap();
         }),
         tokio::spawn(async move {
             issue_request_listener.await.unwrap();
