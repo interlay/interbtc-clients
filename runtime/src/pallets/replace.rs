@@ -99,3 +99,10 @@ pub struct ReplacePeriodStore<T: Replace> {
     #[store(returns = u32)]
     pub _runtime: PhantomData<T>,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct ReplaceRequestsStore<T: Replace> {
+    #[store(returns = ReplaceRequest<T::AccountId, T::BlockNumber, T::PolkaBTC, T::DOT>)]
+    pub _runtime: PhantomData<T>,
+    pub replace_id: T::H256,
+}

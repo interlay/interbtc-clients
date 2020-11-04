@@ -2,20 +2,19 @@ mod btc_relay;
 mod error;
 mod issue;
 mod redeem;
+mod replace;
 mod vault;
 
-use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use bitcoin::BitcoinCore;
 use clap::Clap;
 use error::Error;
 use runtime::{
-    substrate_subxt::PairSigner, ExchangeRateOraclePallet, H256Le, PolkaBtcProvider,
-    PolkaBtcRuntime, RedeemPallet, TimestampPallet,
+    substrate_subxt::PairSigner, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime,
+    RedeemPallet, TimestampPallet,
 };
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
-use std::convert::TryInto;
 use std::str::FromStr;
-use std::time::Duration;
 
 /// Toolkit for generating testdata on the local BTC-Parachain.
 #[derive(Clap)]
@@ -36,41 +35,47 @@ struct Opts {
 #[derive(Clap)]
 enum SubCommand {
     /// Set the DOT to BTC exchange rate.
-    SetExchangeRate(ExchangeRateOracleInfo),
+    SetExchangeRate(SetExchangeRateInfo),
     /// Get the current DOT to BTC exchange rate.
     GetExchangeRate,
     /// Get the time as reported by the chain.
     GetCurrentTime,
     /// Register a new vault using the global keyring.
-    RegisterVault(VaultRegistryInfo),
+    RegisterVault(RegisterVaultInfo),
     /// Request issuance of PolkaBTC and transfer to vault.
-    RequestIssue(IssueRequestInfo),
+    RequestIssue(RequestIssueInfo),
     /// Request that PolkaBTC be burned to redeem BTC.
-    RequestRedeem(RedeemRequestInfo),
+    RequestRedeem(RequestRedeemInfo),
     /// Send BTC to user, must be called by vault.
-    ExecuteRedeem(RedeemExecuteInfo),
+    ExecuteRedeem(ExecuteRedeemInfo),
+    /// Request another vault to takeover.
+    RequestReplace(RequestReplaceInfo),
+    /// Accept replace request of another vault.
+    AcceptReplace(AcceptReplaceInfo),
+    /// Accept replace request of another vault.
+    ExecuteReplace(ExecuteReplaceInfo),
 }
 
 #[derive(Clap)]
-struct ExchangeRateOracleInfo {
+struct SetExchangeRateInfo {
     /// Exchange rate from BTC to DOT.
     #[clap(long, default_value = "1")]
     exchange_rate: u128,
 }
 
 #[derive(Clap)]
-struct VaultRegistryInfo {
+struct RegisterVaultInfo {
     /// Bitcoin address for vault to receive funds.
     #[clap(long)]
     btc_address: String,
 
     /// Collateral to secure position.
-    #[clap(long, default_value = "0")]
+    #[clap(long, default_value = "100000")]
     collateral: u128,
 }
 
 #[derive(Clap)]
-struct IssueRequestInfo {
+struct RequestIssueInfo {
     /// Amount of PolkaBTC to issue.
     #[clap(long, default_value = "100000")]
     issue_amount: u128,
@@ -85,7 +90,7 @@ struct IssueRequestInfo {
 }
 
 #[derive(Clap)]
-struct RedeemRequestInfo {
+struct RequestRedeemInfo {
     /// Amount of PolkaBTC to redeem.
     #[clap(long, default_value = "500")]
     redeem_amount: u128,
@@ -100,15 +105,45 @@ struct RedeemRequestInfo {
 }
 
 #[derive(Clap)]
-struct RedeemExecuteInfo {
+struct ExecuteRedeemInfo {
     /// Redeem id for the redeem request.
     #[clap(long)]
     redeem_id: String,
 }
 
+#[derive(Clap)]
+struct RequestReplaceInfo {
+    /// Amount of PolkaBTC to issue.
+    #[clap(long, default_value = "100000")]
+    replace_amount: u128,
+
+    /// Griefing collateral for request.
+    #[clap(long, default_value = "100")]
+    griefing_collateral: u128,
+}
+
+#[derive(Clap)]
+struct AcceptReplaceInfo {
+    /// Replace id for the replace request.
+    #[clap(long)]
+    replace_id: String,
+
+    /// Collateral used to back replace.
+    #[clap(long, default_value = "10000")]
+    collateral: u128,
+}
+
+#[derive(Clap)]
+struct ExecuteReplaceInfo {
+    /// Replace id for the replace request.
+    #[clap(long)]
+    replace_id: String,
+}
+
 /// Generates testdata to be used on a development environment of the BTC-Parachain
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    env_logger::init();
     let opts: Opts = Opts::parse();
 
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
@@ -136,6 +171,7 @@ async fn main() -> Result<(), Error> {
         SubCommand::RequestIssue(info) => {
             let vault_id = info.vault.to_account_id();
             let vault = provider.get_vault(vault_id.clone()).await?;
+
             // TODO: configure network
             let vault_btc_address =
                 bitcoin::hash_to_p2wpkh(vault.wallet.get_btc_address(), bitcoin::Network::Regtest)?;
@@ -148,23 +184,12 @@ async fn main() -> Result<(), Error> {
             )
             .await?;
 
-            let tx_metadata = btc_rpc
-                .send_to_address(
-                    vault_btc_address,
-                    info.issue_amount.try_into().unwrap(),
-                    &issue_id.to_fixed_bytes(),
-                    Duration::from_secs(15 * 60),
-                    1,
-                )
-                .await?;
-
             issue::execute_issue(
                 &provider,
-                &issue_id,
-                &H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
-                &tx_metadata.block_height,
-                &tx_metadata.proof,
-                &tx_metadata.raw_tx,
+                &btc_rpc,
+                issue_id,
+                info.issue_amount,
+                vault_btc_address,
             )
             .await?;
         }
@@ -186,25 +211,30 @@ async fn main() -> Result<(), Error> {
             let btc_address =
                 bitcoin::hash_to_p2wpkh(redeem_request.btc_address, bitcoin::Network::Regtest)?;
 
-            let tx_metadata = btc_rpc
-                .send_to_address(
-                    btc_address,
-                    redeem_request.amount_btc.try_into().unwrap(),
-                    &redeem_id.to_fixed_bytes(),
-                    Duration::from_secs(15 * 60),
-                    1,
-                )
-                .await?;
-
             redeem::execute_redeem(
-                provider,
-                &redeem_id,
-                &H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
-                &tx_metadata.block_height,
-                &tx_metadata.proof,
-                &tx_metadata.raw_tx,
+                &provider,
+                &btc_rpc,
+                redeem_id,
+                redeem_request.amount_btc,
+                btc_address,
             )
             .await?;
+        }
+        SubCommand::RequestReplace(info) => {
+            let replace_id =
+                replace::request_replace(&provider, info.replace_amount, info.griefing_collateral)
+                    .await?;
+            println!("{}", hex::encode(replace_id.as_bytes()));
+        }
+        SubCommand::AcceptReplace(info) => {
+            let replace_id =
+                H256::from_str(&info.replace_id).map_err(|_| Error::InvalidRequestId)?;
+            replace::accept_replace(&provider, replace_id, info.collateral).await?;
+        }
+        SubCommand::ExecuteReplace(info) => {
+            let replace_id =
+                H256::from_str(&info.replace_id).map_err(|_| Error::InvalidRequestId)?;
+            replace::execute_replace(&provider, &btc_rpc, replace_id).await?;
         }
     }
 

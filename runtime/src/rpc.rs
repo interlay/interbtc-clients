@@ -324,6 +324,9 @@ pub trait ReplacePallet {
     /// Get the time difference in number of blocks between when a replace
     /// request is created and required completion time by a vault
     async fn get_replace_period(&self) -> Result<u32, Error>;
+
+    /// Get a replace request from storage
+    async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, Error>;
 }
 
 #[async_trait]
@@ -422,6 +425,10 @@ impl ReplacePallet for PolkaBtcProvider {
 
     async fn get_replace_period(&self) -> Result<u32, Error> {
         Ok(self.ext_client.replace_period(None).await?)
+    }
+
+    async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, Error> {
+        Ok(self.ext_client.replace_requests(replace_id, None).await?)
     }
 }
 
@@ -837,7 +844,7 @@ pub trait RedeemPallet {
 #[async_trait]
 impl RedeemPallet for PolkaBtcProvider {
     async fn get_redeem_request(&self, redeem_id: H256) -> Result<PolkaBtcRedeemRequest, Error> {
-        Ok(self.ext_client.redeem_request(redeem_id, None).await?)
+        Ok(self.ext_client.redeem_requests(redeem_id, None).await?)
     }
 
     async fn request_redeem(

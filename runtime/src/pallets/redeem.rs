@@ -55,7 +55,7 @@ pub struct CancelRedeemEvent<T: Redeem> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct RedeemRequestStore<T: Redeem> {
+pub struct RedeemRequestsStore<T: Redeem> {
     #[store(returns = RedeemRequest<T::AccountId, T::BlockNumber, T::PolkaBTC, T::DOT>)]
     pub _runtime: PhantomData<T>,
     pub redeem_id: T::H256,
