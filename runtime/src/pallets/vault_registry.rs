@@ -1,6 +1,6 @@
 use super::{Core, CoreEventsDecoder};
 use core::marker::PhantomData;
-pub use module_vault_registry::Vault;
+pub use module_vault_registry::{Vault, VaultStatus};
 use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
