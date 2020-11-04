@@ -117,10 +117,12 @@ pub async fn handle_accepted_replace_request(
 /// * `provider` - the parachain RPC handle
 /// * `vault_id` - the id of this vault
 /// * `event_channel` - the channel over which to signal events
+/// * `accept_replace_requests` - if true, we attempt to accept replace requests
 pub async fn listen_for_replace_requests(
     provider: Arc<PolkaBtcProvider>,
     vault_id: AccountId32,
     event_channel: Sender<ProcessEvent>,
+    accept_replace_requests: bool,
 ) -> Result<(), runtime::Error> {
     let provider = &provider;
     let vault_id = &vault_id;
@@ -138,18 +140,20 @@ pub async fn listen_for_replace_requests(
                     event.replace_id, event.old_vault_id
                 );
 
-                match handle_replace_request(provider.clone(), &event).await {
-                    Ok(_) => {
-                        info!("Accepted replace request #{}", event.replace_id);
-                        // try to send the event, but ignore the returned result since
-                        // the only way it can fail is if the channel is closed
-                        let _ = event_channel.clone().send(ProcessEvent::Opened).await;
+                if accept_replace_requests {
+                    match handle_replace_request(provider.clone(), &event).await {
+                        Ok(_) => {
+                            info!("Accepted replace request #{}", event.replace_id);
+                            // try to send the event, but ignore the returned result since
+                            // the only way it can fail is if the channel is closed
+                            let _ = event_channel.clone().send(ProcessEvent::Opened).await;
+                        }
+                        Err(e) => error!(
+                            "Failed to accept replace request #{}: {}",
+                            event.replace_id,
+                            e.to_string()
+                        ),
                     }
-                    Err(e) => error!(
-                        "Failed to accept replace request #{}: {}",
-                        event.replace_id,
-                        e.to_string()
-                    ),
                 }
             },
             |error| error!("Error reading replace event: {}", error.to_string()),

@@ -48,8 +48,25 @@ struct Opts {
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
 
+    /// Only wait for one bitcoin confirmation.
     #[clap(long)]
     dev: bool,
+
+    /// Opt out of auctioning under-collateralized vaults.
+    #[clap(long)]
+    no_auto_auction: bool,
+
+    /// Opt out of participation in replace requests.
+    #[clap(long)]
+    no_auto_replace: bool,
+
+    /// Don't check the collateralization rate at startup.
+    #[clap(long)]
+    no_startup_collateral_increase: bool,
+
+    /// Maximum total collateral to keep the vault securely collateralized.
+    #[clap(long, default_value = "1000000")]
+    max_collateral: u128,
 
     /// Timeout in milliseconds to repeat collateralization checks.
     #[clap(long, default_value = "5000")]
@@ -70,33 +87,35 @@ async fn main() -> Result<(), Error> {
     let vault_id = opts.keyring.to_account_id();
     let collateral_timeout_ms = opts.collateral_timeout_ms;
 
-    // check if the vault is registered
-    match arc_provider.get_vault(vault_id.clone()).await {
-        Ok(x) => {
-            // if the vault is not registered, `get_vault` returns a default
-            // value. So check if the returned value is the one that we are
-            // interested in, and is active
-            if x.id == vault_id.clone() && x.status == VaultStatus::Active {
-                // vault is registered; now lock more collateral if required;
-                // this might be required if the vault restarted.
-                if let Err(e) = lock_required_collateral(
-                    arc_provider.clone(),
-                    vault_id.clone(),
-                    100_000_000 as u128,
-                )
-                .await
-                {
-                    error!("Failed to lock required additional collateral: {}", e);
+    if !opts.no_startup_collateral_increase {
+        // check if the vault is registered
+        match arc_provider.get_vault(vault_id.clone()).await {
+            Ok(x) => {
+                // if the vault is not registered, `get_vault` returns a default
+                // value. So check if the returned value is the one that we are
+                // interested in, and is active
+                if x.id == vault_id.clone() && x.status == VaultStatus::Active {
+                    // vault is registered; now lock more collateral if required;
+                    // this might be required if the vault restarted.
+                    if let Err(e) = lock_required_collateral(
+                        arc_provider.clone(),
+                        vault_id.clone(),
+                        opts.max_collateral,
+                    )
+                    .await
+                    {
+                        error!("Failed to lock required additional collateral: {}", e);
+                    }
                 }
             }
-        }
-        Err(e) => error!("Failed to get vault status: {}", e),
-    };
+            Err(e) => error!("Failed to get vault status: {}", e),
+        };
+    }
 
     let collateral_maintainer = maintain_collateralization_rate(
         arc_provider.clone(),
         vault_id.clone(),
-        100_000_000 as u128,
+        opts.max_collateral,
     );
 
     // Issue handling
@@ -122,6 +141,7 @@ async fn main() -> Result<(), Error> {
         arc_provider.clone(),
         vault_id.clone(),
         replace_event_tx.clone(),
+        !opts.no_auto_replace,
     );
     let accept_replace_listener = listen_for_accept_replace(
         arc_provider.clone(),
@@ -145,6 +165,8 @@ async fn main() -> Result<(), Error> {
         opts.http_addr.parse()?,
         opts.rpc_cors_domain,
     );
+
+    let no_auto_auction = opts.no_auto_auction;
 
     let result = tokio::try_join!(
         tokio::spawn(async move {
@@ -179,13 +201,15 @@ async fn main() -> Result<(), Error> {
             execute_replace_listener.await.unwrap();
         }),
         tokio::spawn(async move {
-            // we could automatically check vault collateralization rates on events
-            // that affect this (e.g. `SetExchangeRate`, `WithdrawCollateral`) but
-            // polling is easier for now
-            util::check_every(Duration::from_secs(collateral_timeout_ms), || async {
-                monitor_collateral_of_vaults(&auction_provider).await
-            })
-            .await;
+            if !no_auto_auction {
+                // we could automatically check vault collateralization rates on events
+                // that affect this (e.g. `SetExchangeRate`, `WithdrawCollateral`) but
+                // polling is easier for now
+                util::check_every(Duration::from_secs(collateral_timeout_ms), || async {
+                    monitor_collateral_of_vaults(&auction_provider).await
+                })
+                .await;
+            }
         }),
         tokio::spawn(async move {
             replace_cancelation_scheduler
