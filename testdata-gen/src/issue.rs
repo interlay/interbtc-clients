@@ -1,9 +1,14 @@
 #![allow(dead_code)]
 
+use crate::Error;
+use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use log::info;
 use runtime::pallets::btc_relay::H256Le;
-use runtime::{Error, IssuePallet, PolkaBtcProvider};
+use runtime::{IssuePallet, PolkaBtcProvider};
 use sp_core::crypto::AccountId32;
 use sp_core::H256;
+use std::convert::TryInto;
+use std::time::Duration;
 
 /// Request issue of PolkaBTC
 pub async fn request_issue(
@@ -16,7 +21,7 @@ pub async fn request_issue(
         .request_issue(amount, vault_id.clone(), griefing_collateral)
         .await?;
 
-    println!(
+    info!(
         "Requested {:?} to issue {:?} PolkaBTC from {:?}",
         issue_prov.get_account_id(),
         amount,
@@ -29,21 +34,31 @@ pub async fn request_issue(
 /// Execute issue of PolkaBTC
 pub async fn execute_issue(
     issue_prov: &PolkaBtcProvider,
-    issue_id: &H256,
-    tx_id: &H256Le,
-    tx_block_height: &u32,
-    merkle_proof: &Vec<u8>,
-    raw_tx: &Vec<u8>,
+    btc_rpc: &BitcoinCore,
+    issue_id: H256,
+    issue_amount: u128,
+    vault_btc_address: String,
 ) -> Result<(), Error> {
-    issue_prov
-        .execute_issue(
-            *issue_id,
-            *tx_id,
-            *tx_block_height,
-            merkle_proof.clone(),
-            raw_tx.clone(),
+    let tx_metadata = btc_rpc
+        .send_to_address(
+            vault_btc_address,
+            issue_amount.try_into().unwrap(),
+            &issue_id.to_fixed_bytes(),
+            Duration::from_secs(15 * 60),
+            1,
         )
         .await?;
-    println!("Executed issue ID {:?}", issue_id);
+
+    issue_prov
+        .execute_issue(
+            issue_id,
+            H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
+            tx_metadata.block_height,
+            tx_metadata.proof,
+            tx_metadata.raw_tx,
+        )
+        .await?;
+
+    info!("Executed issue ID {:?}", issue_id);
     Ok(())
 }
