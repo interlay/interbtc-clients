@@ -24,8 +24,8 @@ const MAX_RETRYING_TIME: Duration = Duration::from_secs(24 * 60 * 60);
 /// * `event_id` the nonce to incorporate with op_return into the transaction
 /// * `on_payment` callback that is called after bitcoin transfer succeeds
 ///                until it succeeds
-pub async fn execute_payment<F, R>(
-    btc_rpc: Arc<BitcoinCore>,
+pub async fn execute_payment<B: BitcoinCoreApi, F, R>(
+    btc_rpc: Arc<B>,
     num_confirmations: u16,
     btc_address: H160,
     amount_polka_btc: u128,
@@ -91,5 +91,166 @@ where
             _ => (),
         };
         delay_for(duration).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use bitcoin::{
+        BlockHash, Error as BitcoinError, GetRawTransactionResult, TransactionMetadata, Txid,
+    };
+    use runtime::{
+        pallets::Core, AccountId, Error as RuntimeError, H256Le, PolkaBtcRuntime, PolkaBtcVault,
+    };
+    use sp_core::{H160, H256};
+
+    macro_rules! assert_ok {
+        ( $x:expr $(,)? ) => {
+            let is = $x;
+            match is {
+                Ok(_) => (),
+                _ => assert!(false, "Expected Ok(_). Got {:#?}", is),
+            }
+        };
+        ( $x:expr, $y:expr $(,)? ) => {
+            assert_eq!($x, Ok($y));
+        };
+    }
+
+    macro_rules! assert_err {
+        ($result:expr, $err:pat) => {{
+            match $result {
+                Err($err) => (),
+                Ok(v) => panic!("assertion failed: Ok({:?})", v),
+                _ => panic!("expected: Err($err)"),
+            }
+        }};
+    }
+
+    mockall::mock! {
+        Provider {}
+
+        #[async_trait]
+        pub trait BitcoinCoreApi {
+            async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, BitcoinError>;
+            fn get_block_count(&self) -> Result<u64, BitcoinError>;
+            fn get_block_transactions(
+                &self,
+                hash: &BlockHash,
+            ) -> Result<Vec<Option<GetRawTransactionResult>>, BitcoinError>;
+            fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+            fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+            fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
+            fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
+            async fn send_to_address(
+                &self,
+                address: String,
+                sat: u64,
+                redeem_id: &[u8; 32],
+                op_timeout: Duration,
+                num_confirmations: u16,
+            ) -> Result<TransactionMetadata, BitcoinError>;
+        }
+    }
+
+    fn dummy_transaction_metadata() -> TransactionMetadata {
+        TransactionMetadata {
+            block_hash: Default::default(),
+            block_height: Default::default(),
+            proof: Default::default(),
+            raw_tx: Default::default(),
+            txid: Default::default(),
+        }
+    }
+    #[tokio::test]
+    async fn test_execute_payment_succeeds() {
+        let mut provider = MockProvider::default();
+        provider
+            .expect_send_to_address()
+            .times(1) // checks that this function is not retried
+            .returning(|_, _, _, _, _| Ok(dummy_transaction_metadata()));
+
+        let on_payment_called = std::cell::Cell::new(false);
+        let on_payment = |_, _, _, _| async {
+            on_payment_called.set(true);
+            Ok(())
+        };
+        assert_ok!(
+            execute_payment(
+                Arc::new(provider),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                on_payment,
+            )
+            .await
+        );
+        // Check that the callback was called
+        assert!(on_payment_called.get());
+    }
+
+    #[tokio::test]
+    async fn test_execute_payment_no_bitcoin_retry() {
+        let mut provider = MockProvider::default();
+        provider
+            .expect_send_to_address()
+            .times(1) // checks that this function is not retried
+            .returning(|_, _, _, _, _| Err(BitcoinError::ConfirmationError));
+
+        let on_payment_called = std::cell::Cell::new(false);
+        let on_payment = |_, _, _, _| async {
+            on_payment_called.set(true);
+            Ok(())
+        };
+        assert_err!(
+            execute_payment(
+                Arc::new(provider),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                on_payment,
+            )
+            .await,
+            Error::BitcoinError(BitcoinError::ConfirmationError)
+        );
+        // Check that the callback was not called
+        assert!(!on_payment_called.get());
+    }
+
+    #[tokio::test]
+    async fn test_execute_payment_callback_retry() {
+        let mut provider = MockProvider::default();
+        provider
+            .expect_send_to_address()
+            .times(1) // checks that this function is not retried
+            .returning(|_, _, _, _, _| Ok(dummy_transaction_metadata()));
+
+        let callback_count = std::cell::Cell::new(0u32);
+        let on_payment = |_, _, _, _| async {
+            callback_count.set(callback_count.get() + 1);
+            if callback_count.get() == 2 {
+                Ok(())
+            } else {
+                Err(Error::InsufficientFunds)
+            }
+        };
+        assert_ok!(
+            execute_payment(
+                Arc::new(provider),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                on_payment,
+            )
+            .await,
+        );
+
+        // Check that the callback was called exactly twice
+        assert!(callback_count.get() == 2);
     }
 }
