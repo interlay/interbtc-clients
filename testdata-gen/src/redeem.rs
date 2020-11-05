@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::Error;
+use crate::{utils, Error};
 use bitcoin::get_hash_from_string;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
@@ -50,6 +50,8 @@ pub async fn execute_redeem(
             1,
         )
         .await?;
+
+    utils::wait_for_block_in_relay(redeem_prov, tx_metadata.block_hash).await;
 
     redeem_prov
         .execute_redeem(
