@@ -3,11 +3,12 @@ use async_trait::async_trait;
 use futures::channel::mpsc::Receiver;
 use futures::*;
 use log::*;
-use runtime::{IssuePallet, PolkaBtcProvider, ReplacePallet};
+use runtime::{IssuePallet, ReplacePallet, UtilFuncs};
 use sp_core::{crypto::AccountId32, H256};
+use std::marker::{Send, Sync};
 use std::sync::Arc;
 use tokio::time;
-use tokio::time::Instant;
+use tokio::time::{Duration, Instant};
 
 // TODO: re-use constant from the parachain
 const SECONDS_PER_BLOCK: u32 = 6;
@@ -31,8 +32,8 @@ pub enum ProcessEvent {
     Executed(H256),
 }
 
-pub struct CancelationScheduler {
-    provider: Arc<PolkaBtcProvider>,
+pub struct CancelationScheduler<P: IssuePallet + ReplacePallet + UtilFuncs> {
+    provider: Arc<P>,
     vault_id: AccountId32,
     period: Option<u32>,
 }
@@ -43,19 +44,24 @@ pub struct UnconvertedOpenTime {
 }
 
 #[async_trait]
-pub trait Canceler {
+pub trait Canceler<P> {
     /// Gets a list of open replace/issue processes
     async fn get_open_processes(
-        provider: Arc<PolkaBtcProvider>,
+        provider: Arc<P>,
         vault_id: AccountId32,
-    ) -> Result<Vec<UnconvertedOpenTime>, Error>;
+    ) -> Result<Vec<UnconvertedOpenTime>, Error>
+    where
+        P: 'async_trait;
 
     /// Gets the timeout period in number of blocks
-    async fn get_period(provider: Arc<PolkaBtcProvider>) -> Result<u32, Error>;
+    async fn get_period(provider: Arc<P>) -> Result<u32, Error>
+    where
+        P: 'async_trait;
 
     /// Cancels the issue/replace
-    async fn cancel_process(provider: Arc<PolkaBtcProvider>, process_id: H256)
-        -> Result<(), Error>;
+    async fn cancel_process(provider: Arc<P>, process_id: H256) -> Result<(), Error>
+    where
+        P: 'async_trait;
 
     /// Gets either "replace" or "issue"; used for logging
     fn type_name() -> String;
@@ -63,11 +69,14 @@ pub trait Canceler {
 
 pub struct IssueCanceler;
 #[async_trait]
-impl Canceler for IssueCanceler {
+impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceler<P> for IssueCanceler {
     async fn get_open_processes(
-        provider: Arc<PolkaBtcProvider>,
+        provider: Arc<P>,
         vault_id: AccountId32,
-    ) -> Result<Vec<UnconvertedOpenTime>, Error> {
+    ) -> Result<Vec<UnconvertedOpenTime>, Error>
+    where
+        P: 'async_trait,
+    {
         let ret = provider
             .get_vault_issue_requests(vault_id)
             .await?
@@ -79,13 +88,16 @@ impl Canceler for IssueCanceler {
             .collect();
         Ok(ret)
     }
-    async fn get_period(provider: Arc<PolkaBtcProvider>) -> Result<u32, Error> {
+    async fn get_period(provider: Arc<P>) -> Result<u32, Error>
+    where
+        P: 'async_trait,
+    {
         Ok(provider.get_issue_period().await?)
     }
-    async fn cancel_process(
-        provider: Arc<PolkaBtcProvider>,
-        process_id: H256,
-    ) -> Result<(), Error> {
+    async fn cancel_process(provider: Arc<P>, process_id: H256) -> Result<(), Error>
+    where
+        P: 'async_trait,
+    {
         Ok(provider.cancel_issue(process_id).await?)
     }
     fn type_name() -> String {
@@ -95,11 +107,14 @@ impl Canceler for IssueCanceler {
 
 pub struct ReplaceCanceler;
 #[async_trait]
-impl Canceler for ReplaceCanceler {
+impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceler<P> for ReplaceCanceler {
     async fn get_open_processes(
-        provider: Arc<PolkaBtcProvider>,
+        provider: Arc<P>,
         vault_id: AccountId32,
-    ) -> Result<Vec<UnconvertedOpenTime>, Error> {
+    ) -> Result<Vec<UnconvertedOpenTime>, Error>
+    where
+        P: 'async_trait,
+    {
         let ret = provider
             .get_new_vault_replace_requests(vault_id)
             .await?
@@ -111,13 +126,16 @@ impl Canceler for ReplaceCanceler {
             .collect();
         Ok(ret)
     }
-    async fn get_period(provider: Arc<PolkaBtcProvider>) -> Result<u32, Error> {
+    async fn get_period(provider: Arc<P>) -> Result<u32, Error>
+    where
+        P: 'async_trait,
+    {
         Ok(provider.get_replace_period().await?)
     }
-    async fn cancel_process(
-        provider: Arc<PolkaBtcProvider>,
-        process_id: H256,
-    ) -> Result<(), Error> {
+    async fn cancel_process(provider: Arc<P>, process_id: H256) -> Result<(), Error>
+    where
+        P: 'async_trait,
+    {
         Ok(provider.cancel_replace(process_id).await?)
     }
     fn type_name() -> String {
@@ -125,8 +143,8 @@ impl Canceler for ReplaceCanceler {
     }
 }
 
-impl CancelationScheduler {
-    pub fn new(provider: Arc<PolkaBtcProvider>, vault_id: AccountId32) -> CancelationScheduler {
+impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
+    pub fn new(provider: Arc<P>, vault_id: AccountId32) -> CancelationScheduler<P> {
         CancelationScheduler {
             provider,
             vault_id,
@@ -142,7 +160,7 @@ impl CancelationScheduler {
     /// # Arguments
     ///
     /// *`event_listener`: channel that signals issue events _for this vault_.
-    pub async fn handle_cancelation<T: Canceler>(
+    pub async fn handle_cancelation<T: Canceler<P>>(
         &mut self,
         mut event_listener: Receiver<ProcessEvent>,
     ) {
@@ -156,8 +174,6 @@ impl CancelationScheduler {
                 match self.get_open_processes::<T>().await {
                     Ok(x) => {
                         active_processes = x;
-                        active_processes
-                            .sort_by(|a, b| a.deadline.partial_cmp(&b.deadline).unwrap());
                         active_processes_is_up_to_date = true;
                     }
                     Err(e) => {
@@ -239,7 +255,23 @@ impl CancelationScheduler {
     }
 
     /// Gets a list of issue that have been requested from this vault
-    async fn get_open_processes<T: Canceler>(&mut self) -> Result<Vec<ActiveProcess>, Error> {
+    async fn get_open_processes<T: Canceler<P>>(&mut self) -> Result<Vec<ActiveProcess>, Error> {
+        let ret = self
+            .get_open_process_delays::<T>()
+            .await?
+            .into_iter()
+            .map(|(id, delay)| ActiveProcess {
+                id,
+                deadline: Instant::now() + delay,
+            })
+            .collect();
+        Ok(ret)
+    }
+
+    /// Gets a list of issue that have been requested from this vault
+    async fn get_open_process_delays<T: Canceler<P>>(
+        &mut self,
+    ) -> Result<Vec<(H256, Duration)>, Error> {
         let open_processes =
             T::get_open_processes(self.provider.clone(), self.vault_id.clone()).await?;
 
@@ -254,30 +286,39 @@ impl CancelationScheduler {
         // try to cancel 5 minutes after deadline, to acount for timing inaccuracies
         let margin_period = MARGIN_SECONDS / SECONDS_PER_BLOCK;
 
-        let ret = open_processes
+        let mut ret = open_processes
             .iter()
             .map(|UnconvertedOpenTime { id, opentime }| {
+                // invalid opentime. Return an error so we will retry the operation later
+                if *opentime > chain_height {
+                    return Err(Error::InvalidOpenTime);
+                }
+
                 let deadline_block = opentime + period + margin_period;
 
-                let deadline = if chain_height < deadline_block {
+                let waiting_time = if chain_height < deadline_block {
                     let remaining_blocks = deadline_block - chain_height;
-                    time::Instant::now()
-                        + (time::Duration::from_secs(SECONDS_PER_BLOCK.into()) * remaining_blocks)
+
+                    time::Duration::from_secs(SECONDS_PER_BLOCK.into()) * remaining_blocks
                 } else {
                     // deadline has already passed, should cancel ASAP
                     // this branch can occur when e.g. the vault has been restarted
-                    time::Instant::now()
+                    Duration::from_secs(0)
                 };
 
-                ActiveProcess { id: *id, deadline }
+                Ok((*id, waiting_time))
             })
-            .collect();
+            .collect::<Result<Vec<(H256, Duration)>, Error>>()?;
+
+        // sort by ascending duration
+        ret.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
         Ok(ret)
     }
 
     /// Cached function to get the issue/replace period, in number of blocks until
     /// it is allowed to be canceled
-    async fn get_cached_period<T: Canceler>(&mut self) -> Result<u32, Error> {
+    async fn get_cached_period<T: Canceler<P>>(&mut self) -> Result<u32, Error> {
         match self.period {
             Some(x) => Ok(x),
             None => {
@@ -286,5 +327,201 @@ impl CancelationScheduler {
                 Ok(ret)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use bitcoin::{
+        BlockHash, Error as BitcoinError, GetRawTransactionResult, TransactionMetadata, Txid,
+    };
+    use runtime::{
+        pallets::Core, AccountId, Error as RuntimeError, H256Le, PolkaBtcIssueRequest,
+        PolkaBtcReplaceRequest, PolkaBtcRuntime, PolkaBtcVault,
+    };
+    use sp_core::{H160, H256};
+
+    macro_rules! assert_ok {
+        ( $x:expr $(,)? ) => {
+            let is = $x;
+            match is {
+                Ok(_) => (),
+                _ => assert!(false, "Expected Ok(_). Got {:#?}", is),
+            }
+        };
+        ( $x:expr, $y:expr $(,)? ) => {
+            assert_eq!($x, Ok($y));
+        };
+    }
+
+    macro_rules! assert_err {
+        ($result:expr, $err:pat) => {{
+            match $result {
+                Err($err) => (),
+                Ok(v) => panic!("assertion failed: Ok({:?})", v),
+                _ => panic!("expected: Err($err)"),
+            }
+        }};
+    }
+
+    mockall::mock! {
+        Provider {}
+
+        #[async_trait]
+        pub trait IssuePallet {
+            async fn request_issue(
+                &self,
+                amount: u128,
+                vault_id: AccountId,
+                griefing_collateral: u128,
+            ) -> Result<H256, RuntimeError>;
+            async fn execute_issue(
+                &self,
+                issue_id: H256,
+                tx_id: H256Le,
+                tx_block_height: u32,
+                merkle_proof: Vec<u8>,
+                raw_tx: Vec<u8>,
+            ) -> Result<(), RuntimeError>;
+            async fn cancel_issue(&self, issue_id: H256) -> Result<(), RuntimeError>;
+            async fn get_vault_issue_requests(
+                &self,
+                account_id: AccountId,
+            ) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, RuntimeError>;
+            async fn get_issue_period(&self) -> Result<u32, RuntimeError>;
+        }
+        #[async_trait]
+        pub trait ReplacePallet {
+            async fn request_replace(&self, amount: u128, griefing_collateral: u128)
+                -> Result<H256, RuntimeError>;
+            async fn withdraw_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
+            async fn accept_replace(&self, replace_id: H256, collateral: u128) -> Result<(), RuntimeError>;
+            async fn auction_replace(
+                &self,
+                old_vault: AccountId,
+                btc_amount: u128,
+                collateral: u128,
+            ) -> Result<(), RuntimeError>;
+            async fn execute_replace(
+                &self,
+                replace_id: H256,
+                tx_id: H256Le,
+                tx_block_height: u32,
+                merkle_proof: Vec<u8>,
+                raw_tx: Vec<u8>,
+            ) -> Result<(), RuntimeError>;
+            async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
+            async fn get_new_vault_replace_requests(
+                &self,
+                account_id: AccountId,
+            ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
+            async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
+        }
+        #[async_trait]
+        pub trait UtilFuncs {
+            async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_open_process_delays_succeeds() {
+        // open_time = 95, current_block = 100, period = 10: remaining = 5 + margin
+        // open_time = 10,  current_block = 100, period = 10: remaining = 0
+        // open_time = 85,  current_block = 100, period = 10: remaining = -5 + margin
+        let mut provider = MockProvider::default();
+        provider
+            .expect_get_vault_issue_requests()
+            .times(1)
+            .returning(|_| {
+                Ok(vec![
+                    (
+                        H256::from_slice(&[1; 32]),
+                        PolkaBtcIssueRequest {
+                            opentime: 95,
+                            ..Default::default()
+                        },
+                    ),
+                    (
+                        H256::from_slice(&[2; 32]),
+                        PolkaBtcIssueRequest {
+                            opentime: 10,
+                            ..Default::default()
+                        },
+                    ),
+                    (
+                        H256::from_slice(&[3; 32]),
+                        PolkaBtcIssueRequest {
+                            opentime: 85,
+                            ..Default::default()
+                        },
+                    ),
+                ])
+            });
+        provider
+            .expect_get_current_chain_height()
+            .times(1)
+            .returning(|| Ok(100));
+        provider
+            .expect_get_issue_period()
+            .times(1)
+            .returning(|| Ok(10));
+
+        let mut canceler = CancelationScheduler::new(Arc::new(provider), Default::default());
+
+        let seconds_to_wait_1 = 5 * SECONDS_PER_BLOCK as u64 + MARGIN_SECONDS as u64;
+        let seconds_to_wait_2 = 0;
+        let seconds_to_wait_3 = MARGIN_SECONDS as u64 - 5 * SECONDS_PER_BLOCK as u64;
+
+        // checks that the delay is calculated correctly, and that the vec is sorted
+        assert_eq!(
+            canceler
+                .get_open_process_delays::<IssueCanceler>()
+                .await
+                .unwrap(),
+            vec![
+                (
+                    H256::from_slice(&[2; 32]),
+                    time::Duration::from_secs(seconds_to_wait_2)
+                ),
+                (
+                    H256::from_slice(&[3; 32]),
+                    time::Duration::from_secs(seconds_to_wait_3)
+                ),
+                (
+                    H256::from_slice(&[1; 32]),
+                    time::Duration::from_secs(seconds_to_wait_1)
+                )
+            ]
+        );
+    }
+    #[tokio::test]
+    async fn test_get_open_process_delays_fails() {
+        // if current_block is 5 and the issue was open at 10, something went wrong...
+        let mut provider = MockProvider::default();
+        provider
+            .expect_get_vault_issue_requests()
+            .times(1)
+            .returning(|_| {
+                Ok(vec![(
+                    H256::from_slice(&[1; 32]),
+                    PolkaBtcIssueRequest {
+                        opentime: 10,
+                        ..Default::default()
+                    },
+                )])
+            });
+        provider
+            .expect_get_current_chain_height()
+            .times(1)
+            .returning(|| Ok(5));
+        provider.expect_get_issue_period().returning(|| Ok(10));
+
+        let mut canceler = CancelationScheduler::new(Arc::new(provider), Default::default());
+        assert_err!(
+            canceler.get_open_process_delays::<IssueCanceler>().await,
+            Error::InvalidOpenTime
+        );
     }
 }

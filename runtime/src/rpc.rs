@@ -207,9 +207,17 @@ impl PolkaBtcProvider {
 
         Ok(())
     }
+}
 
+#[async_trait]
+pub trait UtilFuncs {
     /// Gets the current height of the parachain
-    pub async fn get_current_chain_height(&self) -> Result<u32, Error> {
+    async fn get_current_chain_height(&self) -> Result<u32, Error>;
+}
+
+#[async_trait]
+impl UtilFuncs for PolkaBtcProvider {
+    async fn get_current_chain_height(&self) -> Result<u32, Error> {
         let query_result = self.ext_client.block(Option::<H256>::None).await?;
         match query_result {
             Some(x) => Ok(x.block.header.number),

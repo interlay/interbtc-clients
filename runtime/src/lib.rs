@@ -14,7 +14,7 @@ pub use rpc::{
     AccountId, BtcRelayPallet, DotBalancesPallet, ExchangeRateOraclePallet, IssuePallet,
     PolkaBtcIssueRequest, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest,
     PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, ReplacePallet, SecurityPallet,
-    StakedRelayerPallet, TimestampPallet, VaultRegistryPallet,
+    StakedRelayerPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
 };
 pub use security::{ErrorCode, StatusCode};
 use sp_core::{H160, H256};

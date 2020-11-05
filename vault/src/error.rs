@@ -8,6 +8,8 @@ use thiserror::Error;
 pub enum Error {
     #[error("Insufficient funds available")]
     InsufficientFunds,
+    #[error("Open time inconsistent with chain height")]
+    InvalidOpenTime,
 
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
