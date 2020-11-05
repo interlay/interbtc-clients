@@ -38,7 +38,11 @@ impl Issuing<Error> for Client {
     }
 
     fn submit_block_header(&self, header: Vec<u8>) -> Result<(), CoreError<Error>> {
-        block_on(self.rpc.store_block_header(encode_raw_header(header)?)).map_err(|e| {
+        let raw_block_header = encode_raw_header(header)?;
+        if self.is_block_stored(raw_block_header.hash().to_bytes_le().to_vec())? {
+            return Ok(());
+        }
+        block_on(self.rpc.store_block_header(raw_block_header)).map_err(|e| {
             error!("Failed to submit block: {}", e);
             CoreError::Issuing(Error::PolkaBtcError(e))
         })

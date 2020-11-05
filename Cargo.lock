@@ -8093,7 +8093,10 @@ version = "0.1.0"
 dependencies = [
  "bitcoin 0.1.0",
  "clap 3.0.0-beta.2",
+ "env_logger",
  "frame-system",
+ "hex 0.4.2",
+ "log 0.4.11",
  "parity-scale-codec",
  "primitive-types",
  "relayer-core",

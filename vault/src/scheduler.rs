@@ -260,7 +260,7 @@ impl CancelationScheduler {
                 let deadline_block = opentime + period + margin_period;
 
                 let deadline = if chain_height < deadline_block {
-                    let remaining_blocks = 2;
+                    let remaining_blocks = deadline_block - chain_height;
                     time::Instant::now()
                         + (time::Duration::from_secs(SECONDS_PER_BLOCK.into()) * remaining_blocks)
                 } else {
