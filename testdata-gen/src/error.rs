@@ -6,6 +6,8 @@ use thiserror::Error;
 pub enum Error {
     #[error("Invalid request id")]
     InvalidRequestId,
+    #[error("Unknown Bitcoin network")]
+    UnknownBitcoinNetwork,
 
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),

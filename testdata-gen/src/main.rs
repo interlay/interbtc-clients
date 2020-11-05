@@ -5,14 +5,14 @@ mod redeem;
 mod replace;
 mod vault;
 
-use bitcoin::BitcoinCore;
+use bitcoin::{BitcoinCore, ConversionError};
 use clap::Clap;
 use error::Error;
 use runtime::{
     substrate_subxt::PairSigner, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime,
     RedeemPallet, TimestampPallet,
 };
-use sp_core::H256;
+use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
 use std::str::FromStr;
 
@@ -56,6 +56,34 @@ enum SubCommand {
     ExecuteReplace(ExecuteReplaceInfo),
 }
 
+enum BitcoinNetwork {
+    Mainnet,
+    Testnet,
+    Regtest,
+}
+
+impl FromStr for BitcoinNetwork {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Error> {
+        match s {
+            "mainnet" => Ok(Self::Mainnet),
+            "testnet" => Ok(Self::Testnet),
+            "regtest" => Ok(Self::Regtest),
+            _ => Err(Error::UnknownBitcoinNetwork),
+        }
+    }
+}
+
+impl BitcoinNetwork {
+    fn hash_to_addr(&self, hash: H160) -> Result<String, ConversionError> {
+        match *self {
+            BitcoinNetwork::Mainnet => bitcoin::hash_to_p2wpkh(hash, bitcoin::Network::Bitcoin),
+            BitcoinNetwork::Testnet => bitcoin::hash_to_p2wpkh(hash, bitcoin::Network::Testnet),
+            BitcoinNetwork::Regtest => bitcoin::hash_to_p2wpkh(hash, bitcoin::Network::Regtest),
+        }
+    }
+}
+
 #[derive(Clap)]
 struct SetExchangeRateInfo {
     /// Exchange rate from BTC to DOT.
@@ -87,6 +115,10 @@ struct RequestIssueInfo {
     /// Vault keyring to derive `vault_id`.
     #[clap(long, default_value = "bob")]
     vault: AccountKeyring,
+
+    /// Bitcoin network type for address encoding.
+    #[clap(long, default_value = "regtest")]
+    bitcoin_network: BitcoinNetwork,
 }
 
 #[derive(Clap)]
@@ -109,6 +141,10 @@ struct ExecuteRedeemInfo {
     /// Redeem id for the redeem request.
     #[clap(long)]
     redeem_id: String,
+
+    /// Bitcoin network type for address encoding.
+    #[clap(long, default_value = "regtest")]
+    bitcoin_network: BitcoinNetwork,
 }
 
 #[derive(Clap)]
@@ -172,9 +208,9 @@ async fn main() -> Result<(), Error> {
             let vault_id = info.vault.to_account_id();
             let vault = provider.get_vault(vault_id.clone()).await?;
 
-            // TODO: configure network
-            let vault_btc_address =
-                bitcoin::hash_to_p2wpkh(vault.wallet.get_btc_address(), bitcoin::Network::Regtest)?;
+            let vault_btc_address = info
+                .bitcoin_network
+                .hash_to_addr(vault.wallet.get_btc_address())?;
 
             let issue_id = issue::request_issue(
                 &provider,
@@ -207,9 +243,9 @@ async fn main() -> Result<(), Error> {
             let redeem_id = H256::from_str(&info.redeem_id).map_err(|_| Error::InvalidRequestId)?;
             let redeem_request = provider.get_redeem_request(redeem_id).await?;
 
-            // TODO: configure network
-            let btc_address =
-                bitcoin::hash_to_p2wpkh(redeem_request.btc_address, bitcoin::Network::Regtest)?;
+            let btc_address = info
+                .bitcoin_network
+                .hash_to_addr(redeem_request.btc_address)?;
 
             redeem::execute_redeem(
                 &provider,
