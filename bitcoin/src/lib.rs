@@ -275,6 +275,10 @@ impl BitcoinCoreApi for BitcoinCore {
             .rpc
             .send_raw_transaction(signed_raw_tx.transaction().unwrap().serialize().to_hex())?;
 
+        #[cfg(feature = "regtest")]
+        self.rpc
+            .generate_to_address(1, &self.rpc.get_new_address(None, None)?)?;
+
         Ok(self
             .wait_for_transaction_metadata(txid, op_timeout, num_confirmations)
             .await?)

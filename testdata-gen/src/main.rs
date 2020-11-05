@@ -237,7 +237,7 @@ async fn main() -> Result<(), Error> {
                 info.vault.to_account_id(),
             )
             .await?;
-            println!("{}", redeem_id);
+            println!("{}", hex::encode(redeem_id.as_bytes()));
         }
         SubCommand::ExecuteRedeem(info) => {
             let redeem_id = H256::from_str(&info.redeem_id).map_err(|_| Error::InvalidRequestId)?;
