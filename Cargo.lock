@@ -2947,7 +2947,8 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.1.0"
-source = "git+https://github.com/gregdhill/jsonrpsee?branch=0.1.0#e9ba10029aebaffc37932ae2b35a65783c58169a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5cc8a1da5a54b417cfb7edb9f932024d833dc333de50c21c0e1b28d0e8b4f853"
 dependencies = [
  "async-std",
  "async-tls 0.6.0",
@@ -2978,8 +2979,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-proc-macros"
-version = "1.0.0"
-source = "git+https://github.com/gregdhill/jsonrpsee?branch=0.1.0#e9ba10029aebaffc37932ae2b35a65783c58169a"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1ed1b5f6937dd2c6c79a9ac6e0e3f41bbc64edb5d443840bdc73e606009ed70"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -7950,7 +7952,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.13.0"
-source = "git+https://github.com/paritytech/substrate-subxt?branch=master#7655caac0f1cdf7ade026cafe255defaf1966885"
+source = "git+https://github.com/gregdhill/substrate-subxt?rev=9d0b60c#9d0b60c0c3b4e6c24f0167b310a1c9b8c52f8e6c"
 dependencies = [
  "frame-metadata",
  "frame-support",
@@ -8002,7 +8004,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.13.0"
-source = "git+https://github.com/paritytech/substrate-subxt?branch=master#7655caac0f1cdf7ade026cafe255defaf1966885"
+source = "git+https://github.com/gregdhill/substrate-subxt?rev=9d0b60c#9d0b60c0c3b4e6c24f0167b310a1c9b8c52f8e6c"
 dependencies = [
  "heck",
  "proc-macro-crate",
