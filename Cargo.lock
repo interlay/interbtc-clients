@@ -5602,6 +5602,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "relayer-core"
+version = "0.1.0"
+source = "git+https://gitlab.com/interlay/relayer-core?branch=master#4302bc5fc9dc77090985b8453c5f37affbbd6fde"
+dependencies = [
+ "bitcoincore-rpc",
+ "hex 0.4.2",
+ "log 0.4.11",
+ "thiserror",
+]
+
+[[package]]
 name = "remove_dir_all"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7745,7 +7756,7 @@ dependencies = [
  "log 0.4.11",
  "mockall",
  "parity-scale-codec",
- "relayer-core",
+ "relayer-core 0.1.0 (git+https://gitlab.com/interlay/relayer-core)",
  "runtime",
  "serde",
  "sp-core",
@@ -8099,7 +8110,7 @@ dependencies = [
  "log 0.4.11",
  "parity-scale-codec",
  "primitive-types",
- "relayer-core",
+ "relayer-core 0.1.0 (git+https://gitlab.com/interlay/relayer-core?branch=main)",
  "runtime",
  "sp-core",
  "sp-keyring",

@@ -43,9 +43,9 @@ docker-publish-staked-relayer:
       /kaniko/executor --context $CI_PROJECT_DIR \
       --dockerfile $CI_PROJECT_DIR/staked-relayer/Dockerfile \
       --destination $CI_REGISTRY_IMAGE:staked-relayer-$CI_COMMIT_SHA \
-      --destination $CI_REGISTRY_IMAGE:staked-relayer-latest
+      --destination $CI_REGISTRY_IMAGE:staked-relayer-$CI_COMMIT_BRANCH
   only:
-    - main
+    - master
     - dev
     - kaniko # debug
 
@@ -60,9 +60,9 @@ docker-publish-oracle:
       /kaniko/executor --context $CI_PROJECT_DIR \
         --dockerfile $CI_PROJECT_DIR/oracle/Dockerfile \
         --destination $CI_REGISTRY_IMAGE:oracle-$CI_COMMIT_SHA \
-        --destination $CI_REGISTRY_IMAGE:oracle-latest
+        --destination $CI_REGISTRY_IMAGE:oracle-$CI_COMMIT_BRANCH
   only:
-    - main
+    - master
     - dev
     - kaniko # debug
 
@@ -77,8 +77,8 @@ docker-publish-vault:
       /kaniko/executor --context $CI_PROJECT_DIR \
         --dockerfile $CI_PROJECT_DIR/vault/Dockerfile \
         --destination $CI_REGISTRY_IMAGE:vault-$CI_COMMIT_SHA \
-        --destination $CI_REGISTRY_IMAGE:vault-latest
+        --destination $CI_REGISTRY_IMAGE:vault-$CI_COMMIT_BRANCH
   only:
-    - main
+    - master
     - dev
     - kaniko # debug
