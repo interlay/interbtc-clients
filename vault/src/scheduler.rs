@@ -163,6 +163,8 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceler<P> for ReplaceCancel
 
 #[async_trait]
 trait EventSelector {
+    /// Sleep until either the timeout has occured or an event has been received, and return
+    /// which event woke us up
     async fn select_event(
         self,
         timeout: TimeoutType,
@@ -173,8 +175,6 @@ trait EventSelector {
 struct ProductionEventSelector;
 #[async_trait]
 impl EventSelector for ProductionEventSelector {
-    /// Sleep until either the timeout has occured or an event has been received, and return
-    /// which event woke us up
     async fn select_event(
         self,
         timeout: TimeoutType,
@@ -315,7 +315,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
             }
         }
     }
-    
+
     /// Gets a list of issue that have been requested from this vault
     async fn get_open_processes<T: Canceler<P>>(&mut self) -> Result<Vec<ActiveProcess>, Error> {
         let ret = self
@@ -337,7 +337,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
         let open_processes =
             T::get_open_processes(self.provider.clone(), self.vault_id.clone()).await?;
 
-        if open_processes.len() == 0 {
+        if open_processes.is_empty() {
             return Ok(vec![]);
         }
 
@@ -398,8 +398,7 @@ mod tests {
     use async_trait::async_trait;
     use futures::channel::mpsc;
     use runtime::{
-        AccountId, Error as RuntimeError, H256Le, PolkaBtcIssueRequest,
-        PolkaBtcReplaceRequest, 
+        AccountId, Error as RuntimeError, H256Le, PolkaBtcIssueRequest, PolkaBtcReplaceRequest,
     };
     use sp_core::H256;
 
@@ -660,8 +659,7 @@ mod tests {
     async fn test_wait_for_event_remove_from_list() {
         // checks that we don't query for new issues, and that when the issue gets executed, it
         // is removed from the list
-
-        let mut provider = MockProvider::default();
+        let provider = MockProvider::default();
 
         let (_, mut event_listener) = mpsc::channel::<ProcessEvent>(16);
         let mut active_processes: Vec<ActiveProcess> = vec![

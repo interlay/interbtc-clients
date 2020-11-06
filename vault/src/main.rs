@@ -184,7 +184,8 @@ async fn main() -> Result<(), Error> {
         tokio::spawn(async move {
             issue_cancelation_scheduler
                 .handle_cancelation::<scheduler::IssueCanceler>(issue_event_rx)
-                .await;
+                .await
+                .unwrap();
         }),
         // redeem handling
         tokio::spawn(async move {
@@ -214,7 +215,8 @@ async fn main() -> Result<(), Error> {
         tokio::spawn(async move {
             replace_cancelation_scheduler
                 .handle_cancelation::<scheduler::ReplaceCanceler>(replace_event_rx)
-                .await;
+                .await
+                .unwrap();
         }),
     );
     match result {
