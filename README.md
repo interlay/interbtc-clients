@@ -6,7 +6,7 @@
   <h2 align="center">PolkaBTC Clients</h2>
 
   <p align="center">
-    Vault & Staked Relayers
+    Oracle, Vault & Staked Relayer
   </p>
 </p>
 
@@ -63,7 +63,17 @@ cargo run -p oracle
 The [Staked Relayer](./staked-relayer/README.md) client is responsible for submitting Bitcoin block headers to PolkaBTC and reporting on various error states.
 
 ```bash
+source .env
 cargo run -p staked-relayer -- --http-addr '[::0]:3030'
+```
+
+### Testdata
+
+To interact with PolkaBTC directly, use the [testdata-gen](./testdata-gen/README.md) client.
+
+```bash
+source .env
+cargo run -p testdata-gen --keyring bob set-exchange-rate --exchange-rate 1
 ```
 
 ### Vault
@@ -71,6 +81,7 @@ cargo run -p staked-relayer -- --http-addr '[::0]:3030'
 The [Vault](./vault/README.md) client is used to intermediate assets between Bitcoin and PolkaBTC.
 
 ```bash
+source .env
 cargo run -p vault
 ```
 
