@@ -19,8 +19,8 @@ use log::*;
 use redeem::*;
 use replace::*;
 use runtime::{
-    pallets::vault_registry::VaultStatus, substrate_subxt::PairSigner, PolkaBtcProvider,
-    PolkaBtcRuntime,
+    pallets::vault_registry::VaultStatus, substrate_subxt::PairSigner, Error as RuntimeError,
+    PolkaBtcProvider, PolkaBtcRuntime, VaultRegistryPallet,
 };
 use scheduler::{CancelationScheduler, ProcessEvent};
 use sp_keyring::AccountKeyring;
@@ -91,10 +91,7 @@ async fn main() -> Result<(), Error> {
         // check if the vault is registered
         match arc_provider.get_vault(vault_id.clone()).await {
             Ok(x) => {
-                // if the vault is not registered, `get_vault` returns a default
-                // value. So check if the returned value is the one that we are
-                // interested in, and is active
-                if x.id == vault_id.clone() && x.status == VaultStatus::Active {
+                if x.status == VaultStatus::Active {
                     // vault is registered; now lock more collateral if required;
                     // this might be required if the vault restarted.
                     if let Err(e) = lock_required_collateral(
@@ -108,6 +105,7 @@ async fn main() -> Result<(), Error> {
                     }
                 }
             }
+            Err(RuntimeError::VaultNotFound) => {} // If we aren't registered yet, do nothing
             Err(e) => error!("Failed to get vault status: {}", e),
         };
     }

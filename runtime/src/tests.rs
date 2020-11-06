@@ -1,6 +1,6 @@
 use super::{
     BtcRelayPallet, DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, SecurityPallet,
-    StatusCode,
+    StatusCode, VaultRegistryPallet
 };
 use module_bitcoin::{
     formatter::Formattable,

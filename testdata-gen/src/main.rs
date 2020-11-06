@@ -11,7 +11,7 @@ use clap::Clap;
 use error::Error;
 use runtime::{
     substrate_subxt::PairSigner, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime,
-    RedeemPallet, TimestampPallet,
+    RedeemPallet, TimestampPallet, VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
