@@ -69,6 +69,10 @@ struct Opts {
     /// Staked relayer keyring.
     #[clap(long, default_value = "alice")]
     keyring: AccountKeyring,
+
+    /// Connection settings for Bitcoin Core.
+    #[clap(flatten)]
+    bitcoin: bitcoin::cli::BitcoinOpts,
 }
 
 #[tokio::main]
@@ -81,7 +85,7 @@ async fn main() -> Result<(), Error> {
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
     let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
 
-    let btc_client = BtcClient::new::<RelayError>(bitcoin::bitcoin_rpc_from_env()?);
+    let btc_client = BtcClient::new::<RelayError>(opts.bitcoin.new_client()?);
 
     let current_height = btc_client.get_block_count()?;
 
@@ -91,7 +95,7 @@ async fn main() -> Result<(), Error> {
     } else {
         current_height + 1
     };
-    let btc_rpc = Arc::new(bitcoin::BitcoinCore::new(bitcoin::bitcoin_rpc_from_env()?));
+    let btc_rpc = Arc::new(bitcoin::BitcoinCore::new(opts.bitcoin.new_client()?));
 
     let mut runner = Runner::new(
         PolkaClient::new(provider.clone()),

@@ -1,3 +1,6 @@
+#[cfg(feature = "cli")]
+pub mod cli;
+
 mod error;
 
 use async_trait::async_trait;
@@ -19,7 +22,7 @@ pub use bitcoincore_rpc::{
 };
 pub use error::{ConversionError, Error};
 use sp_core::H160;
-use std::{collections::HashMap, env::var, str::FromStr, time::Duration};
+use std::{collections::HashMap, str::FromStr, time::Duration};
 use tokio::time::delay_for;
 
 pub struct TransactionMetadata {
@@ -28,17 +31,6 @@ pub struct TransactionMetadata {
     pub raw_tx: Vec<u8>,
     pub block_height: u32,
     pub block_hash: BlockHash,
-}
-
-pub fn read_env(s: &str) -> Result<String, Error> {
-    var(s).map_err(|e| Error::ReadVar(s.to_string(), e))
-}
-
-pub fn bitcoin_rpc_from_env() -> Result<Client, Error> {
-    let url = read_env("BITCOIN_RPC_URL")?;
-    let user = read_env("BITCOIN_RPC_USER")?;
-    let pass = read_env("BITCOIN_RPC_PASS")?;
-    Ok(Client::new(url, Auth::UserPass(user, pass))?)
 }
 
 #[async_trait]

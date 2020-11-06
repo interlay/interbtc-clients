@@ -9,11 +9,11 @@ log = "0.4.0"
 env_logger = "0.7.1"
 tokio = { version = "0.2.22", features = ["full"] }
 thiserror = "1.0"
-clap = "3.0.0-beta.1"
+clap = "3.0.0-beta.2"
 sp-keyring = "2.0.0"
 sp-core = "2.0.0"
 runtime = { path = "../runtime" }
-bitcoin = { path = "../bitcoin" }
+bitcoin = { path = "../bitcoin", features = ["cli"] }
 backoff = { version = "0.2.1", features = ["tokio"] }
 serde = "1.0.116"
 serde_json = { version = "1.0.57", features = ["raw_value"] }
