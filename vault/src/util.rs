@@ -1,6 +1,6 @@
 use crate::error::Error;
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
-use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use bitcoin::BitcoinCoreApi;
 use log::{error, info};
 use runtime::H256Le;
 use sp_core::{H160, H256};
@@ -86,10 +86,9 @@ where
     F: Future<Output = Result<(), Error>> + 'a,
 {
     loop {
-        match check().await {
-            Err(e) => error!("Error: {}", e.to_string()),
-            _ => (),
-        };
+        if let Err(e) = check().await {
+            error!("Error: {}", e.to_string())
+        }
         delay_for(duration).await
     }
 }
@@ -101,10 +100,6 @@ mod tests {
     use bitcoin::{
         BlockHash, Error as BitcoinError, GetRawTransactionResult, TransactionMetadata, Txid,
     };
-    use runtime::{
-        pallets::Core, AccountId, Error as RuntimeError, H256Le, PolkaBtcRuntime, PolkaBtcVault,
-    };
-    use sp_core::{H160, H256};
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {

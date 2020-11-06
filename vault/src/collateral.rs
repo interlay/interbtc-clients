@@ -89,9 +89,9 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use runtime::{
-        pallets::Core, AccountId, Error as RuntimeError, H256Le, PolkaBtcRuntime, PolkaBtcVault,
+        pallets::Core, AccountId, Error as RuntimeError, PolkaBtcRuntime, PolkaBtcVault,
     };
-    use sp_core::{H160, H256};
+    use sp_core::H160;
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {
