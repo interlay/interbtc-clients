@@ -5,7 +5,8 @@ use futures::stream::iter;
 use futures::stream::StreamExt;
 use log::{error, info};
 use runtime::{
-    AccountId, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcVault, StakedRelayerPallet,
+    AccountId, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcVault,
+    StakedRelayerPallet, VaultRegistryPallet
 };
 use sp_core::H160;
 use std::collections::HashMap;

@@ -18,6 +18,8 @@ pub enum Error {
     RequestReplaceIDNotFound,
     #[error("Could not get block")]
     BlockNotFound,
+    #[error("Could not get vault")]
+    VaultNotFound,
 
     #[error("Error serializing: {0}")]
     Serialize(#[from] TryFromSliceError),

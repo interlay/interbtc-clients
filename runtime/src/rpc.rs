@@ -112,14 +112,6 @@ impl PolkaBtcProvider {
         &self.account_id
     }
 
-    /// Fetch a specific vault by ID.
-    ///
-    /// # Arguments
-    /// * `vault_id` - account ID of the vault
-    pub async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, Error> {
-        Ok(self.ext_client.vaults(vault_id, None).await?)
-    }
-
     /// Fetch all active vaults.
     pub async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, Error> {
         let mut vaults = Vec::new();
@@ -1006,8 +998,16 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     ///
     /// # Arguments
     /// * `vault_id` - account ID of the vault
+    ///
+    /// # Errors
+    /// * `VaultNotFound` - if the rpc returned a default value rather than the vault we want
     async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, Error> {
-        Ok(self.ext_client.vaults(vault_id, None).await?)
+        let vault: PolkaBtcVault = self.ext_client.vaults(vault_id.clone(), None).await?;
+        if vault.id == vault_id {
+            Ok(vault)
+        } else {
+            Err(Error::VaultNotFound)
+        }
     }
 
     /// Fetch all active vaults.
