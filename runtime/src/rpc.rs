@@ -4,7 +4,6 @@ use jsonrpsee::{
     Client as RpcClient,
 };
 use module_vault_registry_rpc_runtime_api::BalanceWrapper;
-use parity_scale_codec::Decode;
 use sp_core::sr25519::Pair as KeyPair;
 use sp_core::{H160, H256};
 use std::collections::BTreeSet;
@@ -138,40 +137,8 @@ impl PolkaBtcProvider {
     /// if the initial subscription cannot be established.
     ///
     /// # Arguments
-    /// * `on_vault` - callback for newly registered vaults
+    /// * `on_event` - callback for event
     /// * `on_error` - callback for errors
-    pub async fn on_register<F, R, E>(&self, mut on_vault: F, on_error: E) -> Result<(), Error>
-    where
-        F: FnMut(PolkaBtcVault) -> R,
-        R: Future<Output = ()>,
-        E: Fn(XtError),
-    {
-        let sub = self.ext_client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        decoder.with_vault_registry();
-
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
-        sub.filter_event::<RegisterVaultEvent<_>>();
-        while let Some(result) = sub.next().await {
-            let decoded = result.and_then(|raw_event| {
-                RegisterVaultEvent::<PolkaBtcRuntime>::decode(&mut &raw_event.data[..])
-                    .map_err(|e| e.into())
-            });
-
-            match decoded {
-                Ok(e) => {
-                    match self.ext_client.vaults(e.account_id, None).await {
-                        Ok(account) => on_vault(account).await,
-                        Err(err) => on_error(err),
-                    };
-                }
-                Err(err) => on_error(err),
-            };
-        }
-
-        Ok(())
-    }
-
     pub async fn on_event<T, F, R, E>(&self, mut on_event: F, on_error: E) -> Result<(), Error>
     where
         T: Event<PolkaBtcRuntime>,

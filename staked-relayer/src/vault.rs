@@ -5,8 +5,8 @@ use futures::stream::iter;
 use futures::stream::StreamExt;
 use log::{error, info};
 use runtime::{
-    AccountId, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcVault,
-    StakedRelayerPallet, VaultRegistryPallet
+    pallets::vault_registry::RegisterVaultEvent, AccountId, Error as RuntimeError, H256Le,
+    PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, StakedRelayerPallet, VaultRegistryPallet,
 };
 use sp_core::H160;
 use std::collections::HashMap;
@@ -151,10 +151,15 @@ pub async fn listen_for_vaults_registered(
     vaults: Arc<Vaults>,
 ) -> Result<(), RuntimeError> {
     polka_rpc
-        .on_register(
-            |vault| async {
-                info!("Vault registered: {}", vault.id);
-                vaults.write(vault.wallet.get_btc_address(), vault).await;
+        .on_event::<RegisterVaultEvent<PolkaBtcRuntime>, _, _, _>(
+            |event| async {
+                match polka_rpc.get_vault(event.account_id).await {
+                    Ok(vault) => {
+                        info!("Vault registered: {}", vault.id);
+                        vaults.write(vault.wallet.get_btc_address(), vault).await;
+                    }
+                    Err(err) => error!("Error getting vault: {}", err.to_string()),
+                };
             },
             |err| error!("Error (Vault): {}", err.to_string()),
         )
