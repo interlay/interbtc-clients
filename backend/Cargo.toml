@@ -7,9 +7,9 @@ edition = "2018"
 [dependencies]
 log = "0.4.0"
 env_logger = "0.7.1"
-clap = "3.0.0-beta.1"
+clap = "3.0.0-beta.2"
 tokio = { version = "0.2.22", features = ["full"] }
 chrono = "0.4"
-bitcoin = { path = "../bitcoin" }
+bitcoin = { path = "../bitcoin", features = ["cli"] }
 thiserror = "1.0"
 warp = "0.2.5"

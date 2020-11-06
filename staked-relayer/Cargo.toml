@@ -13,14 +13,14 @@ tokio = { version = "0.2.22", features = ["full"] }
 hex = "0.4.2"
 thiserror = "1.0"
 futures = "0.3.5"
-clap = "3.0.0-beta.1"
+clap = "3.0.0-beta.2"
 sp-keyring = "2.0.0"
 sp-core = "2.0.0"
 async-trait = "0.1.40"
 serde = "1.0.116"
 relayer-core = { git = "https://gitlab.com/interlay/relayer-core", branch = "main" }
 runtime = { path = "../runtime" }
-bitcoin = { path = "../bitcoin" }
+bitcoin = { path = "../bitcoin", features = ["cli"] }
 jsonrpc-http-server = "15.1.0"
 
 [dev-dependencies]

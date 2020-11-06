@@ -20,6 +20,10 @@ struct Opts {
     /// Delay for checking for new Bitcoin blocks (in seconds).
     #[clap(long, default_value = "60")]
     block_delay: u64,
+
+    /// Connection settings for Bitcoin Core.
+    #[clap(flatten)]
+    bitcoin: bitcoin::cli::BitcoinOpts,
 }
 
 async fn scan(
@@ -47,7 +51,7 @@ async fn scan(
 async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
-    let btc_client = bitcoin::bitcoin_rpc_from_env()?;
+    let btc_client = opts.bitcoin.new_client()?;
     let btc_rpc = bitcoin::BitcoinCore::new(btc_client);
 
     let btc_height = if let Some(height) = opts.start_height {

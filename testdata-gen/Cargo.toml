@@ -14,8 +14,8 @@ primitive-types = { default-features = false, version = "0.7.2", features = ["co
 runtime = { path = "../runtime" }
 relayer-core = { git = "https://gitlab.com/interlay/relayer-core", branch = "main" }
 thiserror = "1.0"
-bitcoin = { path = "../bitcoin" }
-clap = "3.0.0-beta.1"
+bitcoin = { path = "../bitcoin", features = ["cli"] }
+clap = "3.0.0-beta.2"
 log = "0.4.0"
 env_logger = "0.7.1"
 hex = "0.4.2"

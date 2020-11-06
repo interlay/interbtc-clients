@@ -12,6 +12,8 @@ sp-core = "2.0.0-rc6"
 async-trait = "0.1.40"
 tokio = { version = "0.2.22", features = ["full"] }
 backoff = { version = "0.2.1", features = ["tokio"] }
+clap = { version = "3.0.0-beta.2", optional = true }
 
 [features]
 regtest = []
+cli = ["clap"]

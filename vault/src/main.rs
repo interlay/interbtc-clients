@@ -71,13 +71,17 @@ struct Opts {
     /// Timeout in milliseconds to repeat collateralization checks.
     #[clap(long, default_value = "5000")]
     collateral_timeout_ms: u64,
+
+    /// Connection settings for Bitcoin Core.
+    #[clap(flatten)]
+    bitcoin: bitcoin::cli::BitcoinOpts,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
-    let btc_rpc = Arc::new(BitcoinCore::new(bitcoin::bitcoin_rpc_from_env()?));
+    let btc_rpc = Arc::new(BitcoinCore::new(opts.bitcoin.new_client()?));
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
     let arc_provider = Arc::new(provider.clone());
