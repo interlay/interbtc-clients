@@ -10,6 +10,8 @@ pub enum Error {
     InsufficientFunds,
     #[error("Open time inconsistent with chain height")]
     InvalidOpenTime,
+    #[error("Channel unexpectedly closed")]
+    ChannelClosed,
 
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),

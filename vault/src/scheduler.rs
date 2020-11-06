@@ -22,6 +22,7 @@ const MARGIN_SECONDS: u32 = 5 * 60;
 // before retrying
 const QUERY_RETRY_INTERVAL: u32 = 15 * 60;
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 struct ActiveProcess {
     deadline: Instant,
     id: H256,
@@ -41,6 +42,23 @@ pub struct CancelationScheduler<P: IssuePallet + ReplacePallet + UtilFuncs> {
 pub struct UnconvertedOpenTime {
     id: H256,
     opentime: u32,
+}
+
+enum TimeoutType {
+    RetryOpenProcesses,
+    WaitForFirstDeadline(ActiveProcess),
+    WaitForever,
+}
+
+enum EventType {
+    Timeout(TimeoutType),
+    ProcessEvent(ProcessEvent),
+}
+
+#[derive(PartialEq, Debug)]
+enum ListState {
+    Valid,
+    Invalid,
 }
 
 #[async_trait]
@@ -143,6 +161,52 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceler<P> for ReplaceCancel
     }
 }
 
+#[async_trait]
+trait EventSelector {
+    async fn select_event(
+        self,
+        timeout: TimeoutType,
+        event_listener: &mut Receiver<ProcessEvent>,
+    ) -> Result<EventType, Error>;
+}
+
+struct ProductionEventSelector;
+#[async_trait]
+impl EventSelector for ProductionEventSelector {
+    /// Sleep until either the timeout has occured or an event has been received, and return
+    /// which event woke us up
+    async fn select_event(
+        self,
+        timeout: TimeoutType,
+        event_listener: &mut Receiver<ProcessEvent>,
+    ) -> Result<EventType, Error> {
+        let task_wait = match timeout {
+            TimeoutType::RetryOpenProcesses => {
+                time::delay_for(time::Duration::from_secs(QUERY_RETRY_INTERVAL.into()))
+            }
+            TimeoutType::WaitForFirstDeadline(process) => time::delay_until(process.deadline),
+            TimeoutType::WaitForever => {
+                time::delay_for(time::Duration::from_millis(u32::MAX.into()))
+            }
+        };
+
+        // fuse and pin the tasks, required for select! macro
+        let task_wait = task_wait.fuse();
+        let task_read = event_listener.next().fuse();
+        pin_mut!(task_wait, task_read);
+
+        select! {
+            _ = task_wait => {
+                Ok(EventType::Timeout(timeout))
+            }
+            e = task_read => match e {
+                Some(event) => Ok(EventType::ProcessEvent(event)),
+                _ => Err(Error::ChannelClosed)
+            }
+        }
+    }
+}
+
 impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
     pub fn new(provider: Arc<P>, vault_id: AccountId32) -> CancelationScheduler<P> {
         CancelationScheduler {
@@ -163,97 +227,95 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
     pub async fn handle_cancelation<T: Canceler<P>>(
         &mut self,
         mut event_listener: Receiver<ProcessEvent>,
-    ) {
-        let mut active_processes_is_up_to_date = false;
+    ) -> Result<(), Error> {
+        let mut list_state = ListState::Invalid;
         let mut active_processes: Vec<ActiveProcess> = vec![];
 
         loop {
-            // try to get an up-to-date list of issues if we don't have it yet
-            if !active_processes_is_up_to_date {
-                active_processes.clear();
-                match self.get_open_processes::<T>().await {
-                    Ok(x) => {
-                        active_processes = x;
-                        active_processes_is_up_to_date = true;
-                    }
-                    Err(e) => {
-                        error!("Failed to query open {}s: {}", T::type_name(), e);
-                        active_processes.clear();
-                    }
-                }
-            }
+            list_state = self
+                .wait_for_event::<T, _>(
+                    &mut event_listener,
+                    &mut active_processes,
+                    list_state,
+                    ProductionEventSelector,
+                )
+                .await?;
+        }
+    }
 
-            // determine how long we will sleep
-            let task_wait = if !active_processes_is_up_to_date {
-                // failed to get the list; try again in 15 minutes
-                time::delay_for(time::Duration::from_secs(QUERY_RETRY_INTERVAL.into())).fuse()
-            } else {
-                match active_processes.first() {
-                    Some(issue) => {
-                        // sleep until the first event
-                        debug!(
-                            "delaying until first {}: {:?}",
-                            T::type_name(),
-                            issue.deadline - time::Instant::now()
-                        );
-                        time::delay_until(issue.deadline).fuse()
-                    }
-                    None => {
-                        // there are no open issues; we sleep until we get an event
-                        debug!("No open {}s", T::type_name());
-                        time::delay_for(time::Duration::from_millis(u32::MAX.into())).fuse()
-                    }
+    /// Handles one timeout or event_listener event. This method is split from handle_cancelation for
+    /// testing purposes
+    async fn wait_for_event<T: Canceler<P>, U: EventSelector>(
+        &mut self,
+        event_listener: &mut Receiver<ProcessEvent>,
+        active_processes: &mut Vec<ActiveProcess>,
+        mut list_state: ListState,
+        selector: U,
+    ) -> Result<ListState, Error> {
+        // try to get an up-to-date list of issues if we don't have it yet
+        if let ListState::Invalid = list_state {
+            match self.get_open_processes::<T>().await {
+                Ok(x) => {
+                    *active_processes = x;
+                    list_state = ListState::Valid;
                 }
-            };
-
-            let task_read = event_listener.next().fuse();
-            // pin the tasks; required for the select! macro
-            pin_mut!(task_wait, task_read);
-            // wait for both tasks, see which one fires first
-            select! {
-                _ = task_wait => {
-                    // timeout occured, so try to cancel the issue
-                    if active_processes.len() > 0
-                        && T::cancel_process(self.provider.clone(), active_processes[0].id)
-                            .await
-                            .is_ok()
-                    {
-                        info!("Canceled {}", T::type_name());
-                        active_processes.remove(0);
-                    } else {
-                        error!("No {} canceled!", T::type_name());
-                        // We didn't remove an issue: force re-read of open
-                        // issues at beginning of loop
-                        active_processes_is_up_to_date = false;
-                        // small delay to prevent spamming rpc calls on persistent failures
-                        // Wrapped in a function to prevent "recursion limit reached" compiler
-                        // error
-                        self.rate_limit().await;
-                    }
-                }
-                e = task_read => match e {
-                    Some(ProcessEvent::Executed(id)) => {
-                        debug!("Received event: executed {}", T::type_name());
-                        active_processes.retain(|x| x.id != id);
-                    },
-                    Some(ProcessEvent::Opened) => {
-                        debug!("Received event: opened {}", T::type_name());
-                        // will query active processes at start of loop
-                        active_processes_is_up_to_date = false;
-                    }
-                    _ => {
-                        error!("Failed to read {} event", T::type_name());
-                    }
+                Err(e) => {
+                    active_processes.clear();
+                    error!("Failed to query open {}s: {}", T::type_name(), e);
                 }
             }
         }
-    }
-    /// small helper function that delays for 30 seconds; used to prevent
-    /// the "recursion limit reached" compiler error above
-    pub async fn rate_limit(&self) {
-        time::delay_for(time::Duration::from_secs(30)).await
-    }
 
+        // determine the timeout at which we would take some action
+        let timeout = if let ListState::Invalid = list_state {
+            // failed to get the list; try again in 15 minutes
+            TimeoutType::RetryOpenProcesses
+        } else {
+            match active_processes.first() {
+                Some(process) => {
+                    debug!(
+                        "delaying until deadline of {} #{}: {:?}",
+                        process.id,
+                        T::type_name(),
+                        process.deadline - time::Instant::now()
+                    );
+                    TimeoutType::WaitForFirstDeadline(*process)
+                }
+                None => {
+                    debug!("No open {}s", T::type_name());
+                    TimeoutType::WaitForever // no open issues; wait for new issue
+                }
+            }
+        };
+
+        match selector.select_event(timeout, event_listener).await? {
+            EventType::Timeout(TimeoutType::WaitForFirstDeadline(process)) => {
+                match T::cancel_process(self.provider.clone(), process.id).await {
+                    Ok(_) => {
+                        info!("Canceled {} #{}", T::type_name(), process.id);
+                        active_processes.retain(|x| x.id != process.id);
+                        Ok(ListState::Valid)
+                    }
+                    Err(e) => {
+                        // failed to cancel; get up-to-date process list in next iteration
+                        error!("Failed to cancel {}: {}", T::type_name(), e);
+                        Ok(ListState::Invalid)
+                    }
+                }
+            }
+            EventType::Timeout(_) => Ok(ListState::Invalid),
+            EventType::ProcessEvent(ProcessEvent::Executed(id)) => {
+                debug!("Received event: executed {} #{}", T::type_name(), id);
+                active_processes.retain(|x| x.id != id);
+                Ok(ListState::Valid)
+            }
+            EventType::ProcessEvent(ProcessEvent::Opened) => {
+                debug!("Received event: opened {}", T::type_name());
+                Ok(ListState::Invalid)
+            }
+        }
+    }
+    
     /// Gets a list of issue that have been requested from this vault
     async fn get_open_processes<T: Canceler<P>>(&mut self) -> Result<Vec<ActiveProcess>, Error> {
         let ret = self
@@ -334,27 +396,12 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use bitcoin::{
-        BlockHash, Error as BitcoinError, GetRawTransactionResult, TransactionMetadata, Txid,
-    };
+    use futures::channel::mpsc;
     use runtime::{
-        pallets::Core, AccountId, Error as RuntimeError, H256Le, PolkaBtcIssueRequest,
-        PolkaBtcReplaceRequest, PolkaBtcRuntime, PolkaBtcVault,
+        AccountId, Error as RuntimeError, H256Le, PolkaBtcIssueRequest,
+        PolkaBtcReplaceRequest, 
     };
-    use sp_core::{H160, H256};
-
-    macro_rules! assert_ok {
-        ( $x:expr $(,)? ) => {
-            let is = $x;
-            match is {
-                Ok(_) => (),
-                _ => assert!(false, "Expected Ok(_). Got {:#?}", is),
-            }
-        };
-        ( $x:expr, $y:expr $(,)? ) => {
-            assert_eq!($x, Ok($y));
-        };
-    }
+    use sp_core::H256;
 
     macro_rules! assert_err {
         ($result:expr, $err:pat) => {{
@@ -364,6 +411,31 @@ mod tests {
                 _ => panic!("expected: Err($err)"),
             }
         }};
+    }
+
+    struct TestEventSelector<F>
+    where
+        F: Fn(TimeoutType, &mut Receiver<ProcessEvent>) -> Result<EventType, Error>,
+    {
+        on_event: F,
+    }
+    #[async_trait]
+    impl<F> EventSelector for TestEventSelector<F>
+    where
+        F: Fn(TimeoutType, &mut Receiver<ProcessEvent>) -> Result<EventType, Error>
+            + std::marker::Send,
+    {
+        /// Sleep until either the timeout has occured or an event has been received, and return
+        /// which event woke us up
+        async fn select_event(
+            self,
+            timeout: TimeoutType,
+            event_listener: &mut Receiver<ProcessEvent>,
+        ) -> Result<EventType, Error> {
+            (self.on_event)(timeout, event_listener)
+
+            // Err(Error::ChannelClosed)
+        }
     }
 
     mockall::mock! {
@@ -418,6 +490,7 @@ mod tests {
                 account_id: AccountId,
             ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
+            async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, RuntimeError>;
         }
         #[async_trait]
         pub trait UtilFuncs {
@@ -497,7 +570,7 @@ mod tests {
         );
     }
     #[tokio::test]
-    async fn test_get_open_process_delays_fails() {
+    async fn test_get_open_process_delays_with_invalid_opentime_fails() {
         // if current_block is 5 and the issue was open at 10, something went wrong...
         let mut provider = MockProvider::default();
         provider
@@ -522,6 +595,245 @@ mod tests {
         assert_err!(
             canceler.get_open_process_delays::<IssueCanceler>().await,
             Error::InvalidOpenTime
+        );
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_event_succeeds() {
+        // check that we actually cancel the issue when it expires
+        let mut provider = MockProvider::default();
+        provider
+            .expect_get_vault_issue_requests()
+            .times(1)
+            .returning(|_| {
+                Ok(vec![(
+                    H256::from_slice(&[1; 32]),
+                    PolkaBtcIssueRequest {
+                        opentime: 10,
+                        ..Default::default()
+                    },
+                )])
+            });
+        provider
+            .expect_get_current_chain_height()
+            .times(1)
+            .returning(|| Ok(15));
+        provider.expect_get_issue_period().returning(|| Ok(10));
+
+        // check that it cancels the issue
+        provider
+            .expect_cancel_issue()
+            .times(1)
+            .returning(|_| Ok(()));
+
+        let (_, mut event_listener) = mpsc::channel::<ProcessEvent>(16);
+        let mut active_processes: Vec<ActiveProcess> = vec![];
+        let mut cancelation_scheduler =
+            CancelationScheduler::new(Arc::new(provider), AccountId32::default());
+
+        // simulate that the issue expires
+        let selector = TestEventSelector {
+            on_event: |timeout, _| match timeout {
+                TimeoutType::WaitForFirstDeadline(_) => Ok(EventType::Timeout(timeout)),
+                _ => panic!("Invalid timeout type"),
+            },
+        };
+
+        assert_eq!(
+            cancelation_scheduler
+                .wait_for_event::<IssueCanceler, _>(
+                    &mut event_listener,
+                    &mut active_processes,
+                    ListState::Invalid,
+                    selector
+                )
+                .await
+                .unwrap(),
+            ListState::Valid
+        );
+
+        // issue should have been removed from the list after it has been canceled
+        assert!(active_processes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_event_remove_from_list() {
+        // checks that we don't query for new issues, and that when the issue gets executed, it
+        // is removed from the list
+
+        let mut provider = MockProvider::default();
+
+        let (_, mut event_listener) = mpsc::channel::<ProcessEvent>(16);
+        let mut active_processes: Vec<ActiveProcess> = vec![
+            ActiveProcess {
+                id: H256::from_slice(&[1; 32]),
+                deadline: Instant::now(),
+            },
+            ActiveProcess {
+                id: H256::from_slice(&[2; 32]),
+                deadline: Instant::now(),
+            },
+            ActiveProcess {
+                id: H256::from_slice(&[3; 32]),
+                deadline: Instant::now(),
+            },
+        ];
+
+        let mut cancelation_scheduler =
+            CancelationScheduler::new(Arc::new(provider), AccountId32::default());
+        // simulate that we have a timeout
+        let selector = TestEventSelector {
+            on_event: |timeout, _| match timeout {
+                TimeoutType::WaitForFirstDeadline(_) => Ok(EventType::ProcessEvent(
+                    ProcessEvent::Executed(H256::from_slice(&[2; 32])),
+                )),
+                _ => panic!("Invalid timeout type"),
+            },
+        };
+
+        // simulate that the issue gets executed
+        assert_eq!(
+            cancelation_scheduler
+                .wait_for_event::<IssueCanceler, _>(
+                    &mut event_listener,
+                    &mut active_processes,
+                    ListState::Valid,
+                    selector
+                )
+                .await
+                .unwrap(),
+            ListState::Valid
+        );
+
+        // check that the process with id 2 was removed
+        assert_eq!(
+            active_processes
+                .into_iter()
+                .map(|x| x.id)
+                .collect::<Vec<H256>>(),
+            vec![H256::from_slice(&[1; 32]), H256::from_slice(&[3; 32])]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_event_get_new_list() {
+        // checks that we query for new issues, and that when the issue gets executed, it
+        // is removed from the list
+        let mut provider = MockProvider::default();
+        provider
+            .expect_get_vault_issue_requests()
+            .times(1)
+            .returning(|_| {
+                Ok(vec![(
+                    H256::from_slice(&[1; 32]),
+                    PolkaBtcIssueRequest {
+                        opentime: 10,
+                        ..Default::default()
+                    },
+                )])
+            });
+        provider
+            .expect_get_current_chain_height()
+            .times(1)
+            .returning(|| Ok(15));
+        provider.expect_get_issue_period().returning(|| Ok(10));
+
+        let (_, mut event_listener) = mpsc::channel::<ProcessEvent>(16);
+        let mut active_processes: Vec<ActiveProcess> = vec![];
+        let mut cancelation_scheduler =
+            CancelationScheduler::new(Arc::new(provider), AccountId32::default());
+
+        // simulate that the issue gets executed
+        let selector = TestEventSelector {
+            on_event: |timeout, _| match timeout {
+                TimeoutType::WaitForFirstDeadline(_) => Ok(EventType::ProcessEvent(
+                    ProcessEvent::Executed(H256::from_slice(&[1; 32])),
+                )),
+                _ => panic!("Invalid timeout type"),
+            },
+        };
+        assert_eq!(
+            cancelation_scheduler
+                .wait_for_event::<IssueCanceler, _>(
+                    &mut event_listener,
+                    &mut active_processes,
+                    ListState::Invalid,
+                    selector
+                )
+                .await
+                .unwrap(),
+            ListState::Valid
+        );
+
+        // issue should have been removed from the list
+        assert!(active_processes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_event_timeout() {
+        // check that if we fail to get the issuelist, we return Invalid, but not Err
+        let mut provider = MockProvider::default();
+        provider
+            .expect_get_vault_issue_requests()
+            .times(1)
+            .returning(|_| Err(RuntimeError::BlockNotFound));
+
+        let (_, mut event_listener) = mpsc::channel::<ProcessEvent>(16);
+        let mut active_processes: Vec<ActiveProcess> = vec![];
+        let mut cancelation_scheduler =
+            CancelationScheduler::new(Arc::new(provider), AccountId32::default());
+
+        // simulate that we have a timeout
+        let selector = TestEventSelector {
+            on_event: |timeout, _| match timeout {
+                TimeoutType::RetryOpenProcesses => Ok(EventType::Timeout(timeout)),
+                _ => panic!("Invalid timeout type"),
+            },
+        };
+
+        // state should remain invalid
+        assert_eq!(
+            cancelation_scheduler
+                .wait_for_event::<IssueCanceler, _>(
+                    &mut event_listener,
+                    &mut active_processes,
+                    ListState::Invalid,
+                    selector
+                )
+                .await
+                .unwrap(),
+            ListState::Invalid
+        );
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_event_shutdown() {
+        // check that if the selector fails, the error is propagated
+        let provider = MockProvider::default();
+
+        let (_, mut event_listener) = mpsc::channel::<ProcessEvent>(16);
+        let mut active_processes: Vec<ActiveProcess> = vec![];
+        let mut cancelation_scheduler =
+            CancelationScheduler::new(Arc::new(provider), AccountId32::default());
+
+        // simulate that we have a timeout
+        let selector = TestEventSelector {
+            on_event: |timeout, _| match timeout {
+                TimeoutType::WaitForever => Err(Error::ChannelClosed),
+                _ => panic!("Invalid timeout type"),
+            },
+        };
+
+        assert_err!(
+            cancelation_scheduler
+                .wait_for_event::<IssueCanceler, _>(
+                    &mut event_listener,
+                    &mut active_processes,
+                    ListState::Valid,
+                    selector
+                )
+                .await,
+            Error::ChannelClosed
         );
     }
 }
