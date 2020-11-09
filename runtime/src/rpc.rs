@@ -30,6 +30,7 @@ use crate::timestamp::*;
 use crate::vault_registry::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
+use futures::{stream::StreamExt, SinkExt};
 
 pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
 
@@ -133,12 +134,16 @@ impl PolkaBtcProvider {
         Ok(())
     }
 
-    /// Subscription service that should listen forever, only returns
-    /// if the initial subscription cannot be established.
+    /// Subscription service that should listen forever, only returns if the initial subscription
+    /// cannot be established. This function uses two concurrent tasks: one for the event listener,
+    /// and one that calls the given callback. This allows the callback to take a long time to
+    /// complete without breaking the rpc communication, which could otherwise happen. Still, since 
+    /// the queue of callbacks is processed sequentially, some care should be taken that the queue 
+    /// does not overflow. 
     ///
     /// # Arguments
-    /// * `on_event` - callback for event
-    /// * `on_error` - callback for errors
+    /// * `on_event` - callback for events, is allowed to sometimes take a longer time
+    /// * `on_error` - callback for errors, is not allowed to take too long
     pub async fn on_event<T, F, R, E>(&self, mut on_event: F, on_error: E) -> Result<(), Error>
     where
         T: Event<PolkaBtcRuntime>,
@@ -154,15 +159,44 @@ impl PolkaBtcProvider {
 
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
         sub.filter_event::<T>();
-        while let Some(result) = sub.next().await {
-            let decoded = result
-                .and_then(|raw_event| T::decode(&mut &raw_event.data[..]).map_err(|e| e.into()));
 
-            match decoded {
-                Ok(e) => on_event(e).await,
-                Err(err) => on_error(err),
-            };
-        }
+        // TODO: possible future optimization: let caller determine buffer size 
+        let (tx, mut rx) = futures::channel::mpsc::channel::<T>(32);
+
+        // two tasks: one for event listening and one for callback calling
+        futures::future::try_join(
+            async move {
+                let tx = &tx;
+                while let Some(result) = sub.next().await {
+                    let decoded = result
+                        .and_then(|raw_event| T::decode(&mut &raw_event.data[..]).map_err(|e| e.into()));
+
+                    match decoded {
+                        Ok(event) => {
+                            // send the event to the other task
+                            if let Err(_) = tx.clone().send(event).await {
+                                break;
+                            }
+                        },
+                        Err(err) => {on_error(err);},
+                    };
+                }
+                Result::<(), _>::Err(Error::ChannelClosed)
+            },
+            async move {
+                loop {
+                    // block until we receive an event from the other task
+                    match rx.next().await {
+                        Some(event) => {
+                            on_event(event).await;
+                        }
+                        None => {
+                            return Result::<(), _>::Err(Error::ChannelClosed);
+                        }
+                    }
+                }
+            }
+        ).await?;
 
         Ok(())
     }

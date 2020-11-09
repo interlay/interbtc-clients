@@ -5700,6 +5700,7 @@ dependencies = [
  "bitcoin 0.2.3",
  "btc-parachain",
  "frame-support",
+ "futures 0.3.7",
  "issue",
  "jsonrpsee",
  "module-vault-registry-rpc-runtime-api",
