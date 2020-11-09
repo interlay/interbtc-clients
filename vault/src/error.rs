@@ -4,6 +4,8 @@ use parity_scale_codec::Error as CodecError;
 use runtime::{substrate_subxt::Error as XtError, Error as RuntimeError};
 use std::net::AddrParseError;
 use thiserror::Error;
+use tokio::task::JoinError;
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Insufficient funds available")]
@@ -13,6 +15,8 @@ pub enum Error {
     #[error("Channel unexpectedly closed")]
     ChannelClosed,
 
+    #[error("JoinError: {0}")]
+    JoinError(#[from] JoinError),
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
     #[error("RuntimeError: {0}")]
