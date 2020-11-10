@@ -158,11 +158,13 @@ mod tests {
     async fn test_lock_required_collateral_with_high_max_succeeds() {
         // required = 100, actual = 25, max = 200: should add 75
         let mut provider = MockProvider::default();
-        provider.expect_get_vault().returning(|x| Ok(PolkaBtcVault {
-            id: x,
-            status: VaultStatus::Active,
-            ..Default::default()
-        }));
+        provider.expect_get_vault().returning(|x| {
+            Ok(PolkaBtcVault {
+                id: x,
+                status: VaultStatus::Active,
+                ..Default::default()
+            })
+        });
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
@@ -183,11 +185,13 @@ mod tests {
     async fn test_lock_required_collateral_with_low_max_fails() {
         // required = 100, actual = 25, max = 75: should add 50, but return err
         let mut provider = MockProvider::default();
-        provider.expect_get_vault().returning(|x| Ok(PolkaBtcVault {
-            id: x,
-            status: VaultStatus::Active,
-            ..Default::default()
-        }));
+        provider.expect_get_vault().returning(|x| {
+            Ok(PolkaBtcVault {
+                id: x,
+                status: VaultStatus::Active,
+                ..Default::default()
+            })
+        });
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
@@ -212,11 +216,13 @@ mod tests {
         // required = 100, actual = 100, max = 200:
         // check that lock_additional_collateral is not called
         let mut provider = MockProvider::default();
-        provider.expect_get_vault().returning(|x| Ok(PolkaBtcVault {
-            id: x,
-            status: VaultStatus::Active,
-            ..Default::default()
-        }));
+        provider.expect_get_vault().returning(|x| {
+            Ok(PolkaBtcVault {
+                id: x,
+                status: VaultStatus::Active,
+                ..Default::default()
+            })
+        });
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
@@ -233,11 +239,13 @@ mod tests {
         // required = 100, actual = 25, max = 25:
         // check that lock_additional_collateral is not called
         let mut provider = MockProvider::default();
-        provider.expect_get_vault().returning(|x| Ok(PolkaBtcVault {
-            id: x,
-            status: VaultStatus::Active,
-            ..Default::default()
-        }));
+        provider.expect_get_vault().returning(|x| {
+            Ok(PolkaBtcVault {
+                id: x,
+                status: VaultStatus::Active,
+                ..Default::default()
+            })
+        });
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
@@ -255,11 +263,13 @@ mod tests {
     #[tokio::test]
     async fn test_lock_required_collateral_with_unregistered_vault_fails() {
         let mut provider = MockProvider::default();
-        provider.expect_get_vault().returning(|x| Ok(PolkaBtcVault {
-            id: x,
-            status: VaultStatus::CommittedTheft,
-            ..Default::default()
-        }));
+        provider.expect_get_vault().returning(|x| {
+            Ok(PolkaBtcVault {
+                id: x,
+                status: VaultStatus::CommittedTheft,
+                ..Default::default()
+            })
+        });
 
         let vault_id = AccountId32::default();
         assert_err!(
