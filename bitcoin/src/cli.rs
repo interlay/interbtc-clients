@@ -18,10 +18,7 @@ impl BitcoinOpts {
     pub fn new_client(&self) -> Result<Client, Error> {
         Ok(Client::new(
             self.bitcoin_rpc_url.clone(),
-            Auth::UserPass(
-                self.bitcoin_rpc_user.clone(),
-                self.bitcoin_rpc_pass.clone(),
-            ),
+            Auth::UserPass(self.bitcoin_rpc_user.clone(), self.bitcoin_rpc_pass.clone()),
         )?)
     }
 }
