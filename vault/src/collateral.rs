@@ -1,8 +1,8 @@
 use crate::error::Error;
 use log::*;
 use runtime::{
-    pallets::exchange_rate_oracle::SetExchangeRateEvent, DotBalancesPallet, PolkaBtcProvider,
-    PolkaBtcRuntime, VaultRegistryPallet,
+    pallets::exchange_rate_oracle::SetExchangeRateEvent, pallets::vault_registry::VaultStatus,
+    DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, VaultRegistryPallet,
 };
 use sp_core::crypto::AccountId32;
 use std::sync::Arc;
@@ -19,11 +19,18 @@ pub async fn maintain_collateralization_rate(
             |_| async move {
                 info!("Received SetExchangeRateEvent");
                 // todo: implement retrying
-                if let Err(e) =
-                    lock_required_collateral(provider.clone(), vault_id.clone(), maximum_collateral)
-                        .await
+
+                match lock_required_collateral(
+                    provider.clone(),
+                    vault_id.clone(),
+                    maximum_collateral,
+                )
+                .await
                 {
-                    error!("Failed to maintain collateral level: {}", e);
+                    // vault not being registered is ok, no need to log it
+                    Err(Error::RuntimeError(runtime::Error::VaultNotFound)) => {}
+                    Err(e) => error!("Failed to maintain collateral level: {}", e),
+                    _ => {} // success
                 }
             },
             |error| error!("Error reading SetExchangeRate event: {}", error.to_string()),
@@ -36,6 +43,8 @@ pub async fn maintain_collateralization_rate(
 /// increase up to maximum_collateral.
 /// If actual_collateral < max_collateral < required_collateral, it will lock upto
 /// max_collateral, but it will return InsufficientFunds afterwards.
+/// If the vault is not registered and active, it does not attempt to increase the
+/// collateral.
 ///
 /// # Arguments
 ///
@@ -47,6 +56,12 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet
     vault_id: AccountId32,
     maximum_collateral: u128,
 ) -> Result<(), Error> {
+    // check that the vault is registered and active
+    let vault = provider.get_vault(vault_id.clone()).await?;
+    if vault.status != VaultStatus::Active {
+        return Err(Error::RuntimeError(runtime::Error::VaultNotFound));
+    }
+
     let required_collateral = provider
         .get_required_collateral_for_vault(vault_id.clone())
         .await?;
@@ -143,6 +158,11 @@ mod tests {
     async fn test_lock_required_collateral_with_high_max_succeeds() {
         // required = 100, actual = 25, max = 200: should add 75
         let mut provider = MockProvider::default();
+        provider.expect_get_vault().returning(|x| Ok(PolkaBtcVault {
+            id: x,
+            status: VaultStatus::Active,
+            ..Default::default()
+        }));
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
@@ -163,6 +183,11 @@ mod tests {
     async fn test_lock_required_collateral_with_low_max_fails() {
         // required = 100, actual = 25, max = 75: should add 50, but return err
         let mut provider = MockProvider::default();
+        provider.expect_get_vault().returning(|x| Ok(PolkaBtcVault {
+            id: x,
+            status: VaultStatus::Active,
+            ..Default::default()
+        }));
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
@@ -187,6 +212,11 @@ mod tests {
         // required = 100, actual = 100, max = 200:
         // check that lock_additional_collateral is not called
         let mut provider = MockProvider::default();
+        provider.expect_get_vault().returning(|x| Ok(PolkaBtcVault {
+            id: x,
+            status: VaultStatus::Active,
+            ..Default::default()
+        }));
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
@@ -203,6 +233,11 @@ mod tests {
         // required = 100, actual = 25, max = 25:
         // check that lock_additional_collateral is not called
         let mut provider = MockProvider::default();
+        provider.expect_get_vault().returning(|x| Ok(PolkaBtcVault {
+            id: x,
+            status: VaultStatus::Active,
+            ..Default::default()
+        }));
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
@@ -214,6 +249,22 @@ mod tests {
         assert_err!(
             lock_required_collateral(Arc::new(provider), vault_id, 25).await,
             Error::InsufficientFunds
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lock_required_collateral_with_unregistered_vault_fails() {
+        let mut provider = MockProvider::default();
+        provider.expect_get_vault().returning(|x| Ok(PolkaBtcVault {
+            id: x,
+            status: VaultStatus::CommittedTheft,
+            ..Default::default()
+        }));
+
+        let vault_id = AccountId32::default();
+        assert_err!(
+            lock_required_collateral(Arc::new(provider), vault_id, 75).await,
+            Error::RuntimeError(runtime::Error::VaultNotFound)
         );
     }
 }
