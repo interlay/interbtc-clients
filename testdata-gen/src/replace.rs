@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::Error;
+use crate::{utils, Error};
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
 use runtime::pallets::btc_relay::H256Le;
@@ -59,6 +59,8 @@ pub async fn execute_replace(
             1,
         )
         .await?;
+
+    utils::wait_for_block_in_relay(replace_prov, tx_metadata.block_hash).await;
 
     replace_prov
         .execute_replace(
