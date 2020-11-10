@@ -114,8 +114,9 @@ struct UpdateBtcAddressJsonRpcRequest {
 
 fn _update_btc_address(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
     let req = parse_params::<UpdateBtcAddressJsonRpcRequest>(params)?;
-    info!("Updating btc address; {}", req.address);
-    Ok(block_on(api.update_btc_address(req.address))?)
+    let result = block_on(api.update_btc_address(req.address));
+    info!("Updating btc address to {}: {:?}", req.address, result);
+    Ok(result.map(|_| ())?)
 }
 
 #[derive(Encode, Decode, Debug)]

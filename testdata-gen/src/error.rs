@@ -9,6 +9,8 @@ pub enum Error {
     #[error("Unknown Bitcoin network")]
     UnknownBitcoinNetwork,
 
+    #[error("Http error: {0}")]
+    HttpError(#[from] reqwest::Error),
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
     #[error("RuntimeError: {0}")]

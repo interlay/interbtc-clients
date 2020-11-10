@@ -1,3 +1,4 @@
+mod api;
 mod btc_relay;
 mod error;
 mod issue;
@@ -9,6 +10,7 @@ mod vault;
 use bitcoin::{BitcoinCore, ConversionError};
 use clap::Clap;
 use error::Error;
+use parity_scale_codec::{Decode, Encode};
 use runtime::{
     substrate_subxt::PairSigner, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime,
     RedeemPallet, TimestampPallet, VaultRegistryPallet,
@@ -16,6 +18,15 @@ use runtime::{
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
 use std::str::FromStr;
+
+#[derive(Debug, Encode, Decode)]
+struct H160FromStr(H160);
+impl std::str::FromStr for H160FromStr {
+    type Err = ConversionError;
+    fn from_str(btc_address: &str) -> Result<Self, Self::Err> {
+        Ok(H160FromStr(bitcoin::get_hash_from_string(btc_address)?))
+    }
+}
 
 /// Toolkit for generating testdata on the local BTC-Parachain.
 #[derive(Clap)]
@@ -59,6 +70,27 @@ enum SubCommand {
     AcceptReplace(AcceptReplaceInfo),
     /// Accept replace request of another vault.
     ExecuteReplace(ExecuteReplaceInfo),
+    /// Send a API request.
+    ApiCall(ApiCall),
+}
+
+#[derive(Clap)]
+struct ApiCall {
+    /// API URL.
+    #[clap(long, default_value = "http://127.0.0.1:3031")]
+    url: String,
+
+    #[clap(subcommand)]
+    subcmd: ApiSubCommand,
+}
+#[derive(Clap)]
+enum ApiSubCommand {
+    RequestReplace(RequestReplaceJsonRpcRequest),
+    RegisterVault(RegisterVaultJsonRpcRequest),
+    LockAdditionalCollateral(LockAdditionalCollateralJsonRpcRequest),
+    WithdrawCollateral(WithdrawCollateralJsonRpcRequest),
+    UpdateBtcAddress(UpdateBtcAddressJsonRpcRequest),
+    WithdrawReplace(WithdrawReplaceJsonRpcRequest),
 }
 
 enum BitcoinNetwork {
@@ -181,6 +213,56 @@ struct ExecuteReplaceInfo {
     replace_id: String,
 }
 
+#[derive(Clap, Encode, Decode, Debug)]
+struct RequestReplaceJsonRpcRequest {
+    /// Amount to replace.
+    #[clap(long, default_value = "10000")]
+    amount: u128,
+
+    /// Griefing collateral for request.
+    #[clap(long, default_value = "10000")]
+    griefing_collateral: u128,
+}
+
+#[derive(Clap, Encode, Decode, Debug)]
+struct RegisterVaultJsonRpcRequest {
+    /// Collateral to secure position.
+    #[clap(long, default_value = "100000")]
+    collateral: u128,
+
+    /// Bitcoin address for vault to receive funds.
+    #[clap(long)]
+    btc_address: H160FromStr,
+}
+
+#[derive(Clap, Encode, Decode, Debug)]
+struct LockAdditionalCollateralJsonRpcRequest {
+    /// Amount to lock.
+    #[clap(long, default_value = "10000")]
+    amount: u128,
+}
+
+#[derive(Clap, Encode, Decode, Debug)]
+struct WithdrawCollateralJsonRpcRequest {
+    /// Amount to withdraw.
+    #[clap(long, default_value = "10000")]
+    amount: u128,
+}
+
+#[derive(Clap, Encode, Decode, Debug)]
+struct UpdateBtcAddressJsonRpcRequest {
+    /// New bitcoin address to set.
+    #[clap(long)]
+    address: H160FromStr,
+}
+
+#[derive(Clap, Encode, Decode, Debug)]
+struct WithdrawReplaceJsonRpcRequest {
+    /// ID of the replace request to withdraw.
+    #[clap(long)]
+    replace_id: H256,
+}
+
 /// Generates testdata to be used on a development environment of the BTC-Parachain
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -276,6 +358,29 @@ async fn main() -> Result<(), Error> {
             let replace_id =
                 H256::from_str(&info.replace_id).map_err(|_| Error::InvalidRequestId)?;
             replace::execute_replace(&provider, &btc_rpc, replace_id).await?;
+        }
+        SubCommand::ApiCall(api_call) => {
+            let url = api_call.url;
+            match api_call.subcmd {
+                ApiSubCommand::RegisterVault(info) => {
+                    api::call(url, "register_vault", info).await?;
+                }
+                ApiSubCommand::LockAdditionalCollateral(info) => {
+                    api::call(url, "lock_additional_collateral", info).await?;
+                }
+                ApiSubCommand::WithdrawCollateral(info) => {
+                    api::call(url, "withdraw_collateral", info).await?;
+                }
+                ApiSubCommand::RequestReplace(info) => {
+                    api::call(url, "request_replace", info).await?;
+                }
+                ApiSubCommand::UpdateBtcAddress(info) => {
+                    api::call(url, "update_btc_address", info).await?;
+                }
+                ApiSubCommand::WithdrawReplace(info) => {
+                    api::call(url, "withdraw_replace", info).await?;
+                }
+            }
         }
     }
 
