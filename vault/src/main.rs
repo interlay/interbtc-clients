@@ -18,10 +18,7 @@ use issue::*;
 use log::*;
 use redeem::*;
 use replace::*;
-use runtime::{
-    pallets::vault_registry::VaultStatus, substrate_subxt::PairSigner, Error as RuntimeError,
-    PolkaBtcProvider, PolkaBtcRuntime, VaultRegistryPallet,
-};
+use runtime::{substrate_subxt::PairSigner, PolkaBtcProvider, PolkaBtcRuntime};
 use scheduler::{CancelationScheduler, ProcessEvent};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
@@ -93,24 +90,12 @@ async fn main() -> Result<(), Error> {
 
     if !opts.no_startup_collateral_increase {
         // check if the vault is registered
-        match arc_provider.get_vault(vault_id.clone()).await {
-            Ok(x) => {
-                if x.status == VaultStatus::Active {
-                    // vault is registered; now lock more collateral if required;
-                    // this might be required if the vault restarted.
-                    if let Err(e) = lock_required_collateral(
-                        arc_provider.clone(),
-                        vault_id.clone(),
-                        opts.max_collateral,
-                    )
-                    .await
-                    {
-                        error!("Failed to lock required additional collateral: {}", e);
-                    }
-                }
-            }
-            Err(RuntimeError::VaultNotFound) => {} // If we aren't registered yet, do nothing
-            Err(e) => error!("Failed to get vault status: {}", e),
+        match lock_required_collateral(arc_provider.clone(), vault_id.clone(), opts.max_collateral)
+            .await
+        {
+            Err(Error::RuntimeError(runtime::Error::VaultNotFound)) => {} // not registered
+            Err(e) => error!("Failed to lock required additional collateral: {}", e),
+            _ => {} // collateral level now OK
         };
     }
 
