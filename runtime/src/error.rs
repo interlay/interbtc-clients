@@ -21,6 +21,8 @@ pub enum Error {
     #[error("Could not get vault")]
     VaultNotFound,
 
+    #[error("Channel unexpectedly closed")]
+    ChannelClosed,
     #[error("Error serializing: {0}")]
     Serialize(#[from] TryFromSliceError),
     #[error("Error converting: {0}")]
