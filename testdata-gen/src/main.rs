@@ -7,7 +7,7 @@ mod replace;
 mod utils;
 mod vault;
 
-use bitcoin::{BitcoinCore, ConversionError};
+use bitcoin::{BitcoinCore, BitcoinCoreApi, ConversionError};
 use clap::Clap;
 use error::Error;
 use parity_scale_codec::{Decode, Encode};
@@ -17,7 +17,10 @@ use runtime::{
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
+use std::array::TryFromSliceError;
+use std::convert::TryInto;
 use std::str::FromStr;
+use std::time::Duration;
 
 #[derive(Debug, Encode, Decode)]
 struct H160FromStr(H160);
@@ -60,6 +63,8 @@ enum SubCommand {
     RegisterVault(RegisterVaultInfo),
     /// Request issuance of PolkaBTC and transfer to vault.
     RequestIssue(RequestIssueInfo),
+    /// Send BTC to an address.
+    SendBitcoin(SendBitcoinInfo),
     /// Request that PolkaBTC be burned to redeem BTC.
     RequestRedeem(RequestRedeemInfo),
     /// Send BTC to user, must be called by vault.
@@ -156,6 +161,21 @@ struct RequestIssueInfo {
     /// Bitcoin network type for address encoding.
     #[clap(long, default_value = "regtest")]
     bitcoin_network: BitcoinNetwork,
+}
+
+#[derive(Clap)]
+struct SendBitcoinInfo {
+    /// Recipient Bitcoin address.
+    #[clap(long)]
+    btc_address: String,
+
+    /// Amount of BTC to transfer.
+    #[clap(long, default_value = "0")]
+    satoshis: u64,
+
+    /// Hex encoded OP_RETURN data for request.
+    #[clap(long)]
+    op_return: String,
 }
 
 #[derive(Clap)]
@@ -263,6 +283,11 @@ struct WithdrawReplaceJsonRpcRequest {
     replace_id: H256,
 }
 
+fn data_to_request_id(data: &[u8]) -> Result<[u8; 32], TryFromSliceError> {
+    data.try_into()
+}
+
+
 /// Generates testdata to be used on a development environment of the BTC-Parachain
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -315,6 +340,20 @@ async fn main() -> Result<(), Error> {
                 vault_btc_address,
             )
             .await?;
+        }
+        SubCommand::SendBitcoin(info) => {
+            let data = &hex::decode(info.op_return)?;
+
+            let tx_metadata = btc_rpc
+                .send_to_address(
+                    info.btc_address,
+                    info.satoshis,
+                    &data_to_request_id(data)?,
+                    Duration::from_secs(15 * 60),
+                    1,
+                )
+                .await?;
+            println!("{}", tx_metadata.txid);
         }
         SubCommand::RequestRedeem(info) => {
             let redeem_id = redeem::request_redeem(

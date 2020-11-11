@@ -1,5 +1,7 @@
 use bitcoin::{ConversionError, Error as BitcoinError};
+use hex::FromHexError;
 use runtime::Error as RuntimeError;
+use std::array::TryFromSliceError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -17,4 +19,8 @@ pub enum Error {
     RuntimeError(#[from] RuntimeError),
     #[error("AddressConversionError: {0}")]
     AddressConversionError(#[from] ConversionError),
+    #[error("FromHexError: {0}")]
+    FromHexError(#[from] FromHexError),
+    #[error("TryFromSliceError: {0}")]
+    TryFromSliceError(#[from] TryFromSliceError),
 }
