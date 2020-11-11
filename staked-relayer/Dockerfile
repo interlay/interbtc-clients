@@ -1,6 +1,6 @@
 # ===== FIRST STAGE ======
 
-FROM registry.gitlab.com/interlay/containers/rust-base:nightly-2020-11-09 as builder
+FROM registry.gitlab.com/interlay/containers/rust-base:nightly-2020-10-01 as builder
 ARG PROFILE=release
 WORKDIR /app
 
