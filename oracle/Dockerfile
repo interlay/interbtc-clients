@@ -12,6 +12,7 @@ RUN cargo build "--$PROFILE" --package oracle
 # ===== SECOND STAGE ======
 
 FROM bitnami/minideb:buster
+ARG PROFILE=release
 
 COPY --from=builder /app/target/$PROFILE/oracle /usr/local/bin
 
