@@ -21,6 +21,7 @@ env_logger = "0.7.1"
 hex = "0.4.2"
 serde = { version = "1.0.101", features = ["derive"] }
 reqwest = {version = "0.10.8", features = ["json"] }
+jsonrpc-core = "15.1.0"
 
 [features]
 default = ["bitcoin/regtest"]

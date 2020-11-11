@@ -12,8 +12,9 @@ use clap::Clap;
 use error::Error;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    substrate_subxt::PairSigner, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime,
-    RedeemPallet, TimestampPallet, VaultRegistryPallet,
+    substrate_subxt::PairSigner, ErrorCode as PolkaBtcErrorCode, ExchangeRateOraclePallet, H256Le,
+    PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, StatusCode as PolkaBtcStatusCode,
+    TimestampPallet, VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
@@ -28,6 +29,44 @@ impl std::str::FromStr for H160FromStr {
     type Err = ConversionError;
     fn from_str(btc_address: &str) -> Result<Self, Self::Err> {
         Ok(H160FromStr(bitcoin::get_hash_from_string(btc_address)?))
+    }
+}
+#[derive(Debug, Encode, Decode)]
+struct PolkaBtcStatusCodeFromStr(PolkaBtcStatusCode);
+impl std::str::FromStr for PolkaBtcStatusCodeFromStr {
+    type Err = String;
+    fn from_str(code: &str) -> Result<Self, Self::Err> {
+        match code {
+            "running" => Ok(PolkaBtcStatusCodeFromStr(PolkaBtcStatusCode::Running)),
+            "shutdown" => Ok(PolkaBtcStatusCodeFromStr(PolkaBtcStatusCode::Shutdown)),
+            "error" => Ok(PolkaBtcStatusCodeFromStr(PolkaBtcStatusCode::Error)),
+            _ => Err("Could not parse input as StatusCode".to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Encode, Decode)]
+struct H256LeFromStr(H256Le);
+impl std::str::FromStr for H256LeFromStr {
+    type Err = String;
+    fn from_str(code: &str) -> Result<Self, Self::Err> {
+        Ok(H256LeFromStr(H256Le::from_hex_le(code)))
+    }
+}
+
+#[derive(Debug, Encode, Decode)]
+struct PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode);
+impl std::str::FromStr for PolkaBtcErrorCodeFromStr {
+    type Err = String;
+    fn from_str(code: &str) -> Result<Self, Self::Err> {
+        match code {
+            "none" => Ok(PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode::None)),
+            "no-data-btc-relay" => Ok(PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode::NoDataBTCRelay)),
+            "invalid-btc-relay" => Ok(PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode::InvalidBTCRelay)),
+            "oracle-offline" => Ok(PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode::OracleOffline)),
+            "liquidation" => Ok(PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode::Liquidation)),
+            _ => Err("Could not parse input as ErrorCode".to_string()),
+        }
     }
 }
 
@@ -88,14 +127,44 @@ struct ApiCall {
     #[clap(subcommand)]
     subcmd: ApiSubCommand,
 }
+
 #[derive(Clap)]
 enum ApiSubCommand {
+    Vault(VaultApiCommand),
+
+    Relayer(RelayerApiCommand),
+}
+
+#[derive(Clap)]
+struct VaultApiCommand {
+    #[clap(subcommand)]
+    subcmd: VaultApiSubCommand,
+}
+
+#[derive(Clap)]
+struct RelayerApiCommand {
+    #[clap(subcommand)]
+    subcmd: RelayerApiSubCommand,
+}
+
+#[derive(Clap)]
+enum VaultApiSubCommand {
     RequestReplace(RequestReplaceJsonRpcRequest),
     RegisterVault(RegisterVaultJsonRpcRequest),
     LockAdditionalCollateral(LockAdditionalCollateralJsonRpcRequest),
     WithdrawCollateral(WithdrawCollateralJsonRpcRequest),
     UpdateBtcAddress(UpdateBtcAddressJsonRpcRequest),
     WithdrawReplace(WithdrawReplaceJsonRpcRequest),
+}
+
+#[derive(Clap)]
+enum RelayerApiSubCommand {
+    SuggestStatusUpdate(SuggestStatusUpdateJsonRpcRequest),
+    VoteOnStatusUpdate(VoteOnStatusUpdateJsonRpcRequest),
+    Register(RegisterStakedRelayerJsonRpcRequest),
+    Deregister,
+    SystemHealth,
+    AccountId,
 }
 
 enum BitcoinNetwork {
@@ -283,10 +352,55 @@ struct WithdrawReplaceJsonRpcRequest {
     replace_id: H256,
 }
 
+#[derive(Clap, Encode, Decode, Debug)]
+struct SuggestStatusUpdateJsonRpcRequest {
+    /// Deposit.
+    #[clap(long)]
+    deposit: u128,
+
+    /// Status code: running, shutdown or error.
+    #[clap(long)]
+    status_code: PolkaBtcStatusCodeFromStr,
+
+    /// Error code: none, no-data-btc-relay, invalid-btc-relay, oracle-offline or liquidation.
+    #[clap(long)]
+    add_error: Option<PolkaBtcErrorCodeFromStr>,
+
+    /// Error code: none, no-data-btc-relay, invalid-btc-relay, oracle-offline or liquidation.
+    #[clap(long)]
+    remove_error: Option<PolkaBtcErrorCodeFromStr>,
+
+    /// Hash of the block.
+    #[clap(long)]
+    block_hash: Option<H256LeFromStr>,
+
+    /// Message.
+    #[clap(long)]
+    message: String,
+}
+
+#[derive(Clap, Encode, Decode, Debug)]
+struct RegisterStakedRelayerJsonRpcRequest {
+    /// Amount to stake.
+    #[clap(long)]
+    stake: u128,
+}
+
+#[derive(Clap, Encode, Decode, Debug)]
+struct VoteOnStatusUpdateJsonRpcRequest {
+    /// Id of the status update.
+    #[clap(long)]
+    pub status_update_id: u64,
+
+    /// Whether or not to approve the status update.
+    #[clap(long, parse(try_from_str))]
+    pub approve: bool,
+}
+
+
 fn data_to_request_id(data: &[u8]) -> Result<[u8; 32], TryFromSliceError> {
     data.try_into()
 }
-
 
 /// Generates testdata to be used on a development environment of the BTC-Parachain
 #[tokio::main]
@@ -401,24 +515,47 @@ async fn main() -> Result<(), Error> {
         SubCommand::ApiCall(api_call) => {
             let url = api_call.url;
             match api_call.subcmd {
-                ApiSubCommand::RegisterVault(info) => {
-                    api::call(url, "register_vault", info).await?;
-                }
-                ApiSubCommand::LockAdditionalCollateral(info) => {
-                    api::call(url, "lock_additional_collateral", info).await?;
-                }
-                ApiSubCommand::WithdrawCollateral(info) => {
-                    api::call(url, "withdraw_collateral", info).await?;
-                }
-                ApiSubCommand::RequestReplace(info) => {
-                    api::call(url, "request_replace", info).await?;
-                }
-                ApiSubCommand::UpdateBtcAddress(info) => {
-                    api::call(url, "update_btc_address", info).await?;
-                }
-                ApiSubCommand::WithdrawReplace(info) => {
-                    api::call(url, "withdraw_replace", info).await?;
-                }
+                ApiSubCommand::Vault(vault_cmd) => match vault_cmd.subcmd {
+                    VaultApiSubCommand::RegisterVault(info) => {
+                        api::call::<_, ()>(url, "register_vault", info).await?;
+                    }
+                    VaultApiSubCommand::LockAdditionalCollateral(info) => {
+                        api::call::<_, ()>(url, "lock_additional_collateral", info).await?;
+                    }
+                    VaultApiSubCommand::WithdrawCollateral(info) => {
+                        api::call::<_, ()>(url, "withdraw_collateral", info).await?;
+                    }
+                    VaultApiSubCommand::RequestReplace(info) => {
+                        api::call::<_, ()>(url, "request_replace", info).await?;
+                    }
+                    VaultApiSubCommand::UpdateBtcAddress(info) => {
+                        api::call::<_, ()>(url, "update_btc_address", info).await?;
+                    }
+                    VaultApiSubCommand::WithdrawReplace(info) => {
+                        api::call::<_, ()>(url, "withdraw_replace", info).await?;
+                    }
+                },
+                ApiSubCommand::Relayer(relayed_cmd) => match relayed_cmd.subcmd {
+                    RelayerApiSubCommand::SuggestStatusUpdate(info) => {
+                        api::call::<_, ()>(url, "suggest_status_update", info).await?;
+                    }
+                    RelayerApiSubCommand::VoteOnStatusUpdate(info) => {
+                        api::call::<_, ()>(url, "vote_on_status_update", info).await?;
+                    }
+                    RelayerApiSubCommand::Register(info) => {
+                        api::call::<_, ()>(url, "register_staked_relayer", info).await?;
+                    }
+                    RelayerApiSubCommand::Deregister => {
+                        api::call::<_, ()>(url, "deregister_staked_relayer", ()).await?;
+                    }
+                    RelayerApiSubCommand::SystemHealth => {
+                        api::call::<_, ()>(url, "system_health", ()).await?;
+                    }
+                    RelayerApiSubCommand::AccountId => {
+                        let ret = api::call::<_, String>(url, "account_id", ()).await?;
+                        println!("{}", ret);
+                    }
+                },
             }
         }
     }
