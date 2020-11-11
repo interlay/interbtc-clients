@@ -206,7 +206,7 @@ struct SetExchangeRateInfo {
 struct RegisterVaultInfo {
     /// Bitcoin address for vault to receive funds.
     #[clap(long)]
-    btc_address: String,
+    btc_address: H160FromStr,
 
     /// Collateral to secure position.
     #[clap(long, default_value = "100000")]
@@ -255,7 +255,7 @@ struct RequestRedeemInfo {
 
     /// Bitcoin address for vault to send funds.
     #[clap(long)]
-    btc_address: String,
+    btc_address: H160FromStr,
 
     /// Vault keyring to derive `vault_id`.
     #[clap(long, default_value = "bob")]
@@ -428,7 +428,7 @@ async fn main() -> Result<(), Error> {
             println!("{}", provider.get_time_now().await?);
         }
         SubCommand::RegisterVault(info) => {
-            vault::register_vault(provider, &info.btc_address, info.collateral).await?;
+            vault::register_vault(provider, info.btc_address.0, info.collateral).await?;
         }
         SubCommand::RequestIssue(info) => {
             let vault_id = info.vault.to_account_id();
@@ -473,7 +473,7 @@ async fn main() -> Result<(), Error> {
             let redeem_id = redeem::request_redeem(
                 &provider,
                 info.redeem_amount,
-                &info.btc_address,
+                info.btc_address.0,
                 info.vault.to_account_id(),
             )
             .await?;
