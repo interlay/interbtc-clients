@@ -1,13 +1,12 @@
 #![allow(dead_code)]
 
 use crate::{utils, Error};
-use bitcoin::get_hash_from_string;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
 use runtime::pallets::btc_relay::H256Le;
 use runtime::{PolkaBtcProvider, RedeemPallet};
 use sp_core::crypto::AccountId32;
-use sp_core::H256;
+use sp_core::{H160, H256};
 use std::convert::TryInto;
 use std::time::Duration;
 
@@ -15,12 +14,11 @@ use std::time::Duration;
 pub async fn request_redeem(
     redeem_prov: &PolkaBtcProvider,
     amount_polka_btc: u128,
-    btc_address: &str,
+    btc_address: H160,
     vault_id: AccountId32,
 ) -> Result<H256, Error> {
-    let address = get_hash_from_string(btc_address)?;
     let redeem_id = redeem_prov
-        .request_redeem(amount_polka_btc, address, vault_id.clone())
+        .request_redeem(amount_polka_btc, btc_address, vault_id.clone())
         .await?;
 
     info!(
