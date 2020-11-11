@@ -120,10 +120,6 @@ enum SubCommand {
 
 #[derive(Clap)]
 struct ApiCall {
-    /// API URL.
-    #[clap(long, default_value = "http://127.0.0.1:3031")]
-    url: String,
-
     #[clap(subcommand)]
     subcmd: ApiSubCommand,
 }
@@ -137,12 +133,20 @@ enum ApiSubCommand {
 
 #[derive(Clap)]
 struct VaultApiCommand {
+    /// API URL.
+    #[clap(long, default_value = "http://127.0.0.1:3031")]
+    url: String,
+
     #[clap(subcommand)]
     subcmd: VaultApiSubCommand,
 }
 
 #[derive(Clap)]
 struct RelayerApiCommand {
+    /// API URL.
+    #[clap(long, default_value = "http://127.0.0.1:3030")]
+    url: String,
+
     #[clap(subcommand)]
     subcmd: RelayerApiSubCommand,
 }
@@ -512,52 +516,49 @@ async fn main() -> Result<(), Error> {
                 H256::from_str(&info.replace_id).map_err(|_| Error::InvalidRequestId)?;
             replace::execute_replace(&provider, &btc_rpc, replace_id).await?;
         }
-        SubCommand::ApiCall(api_call) => {
-            let url = api_call.url;
-            match api_call.subcmd {
-                ApiSubCommand::Vault(vault_cmd) => match vault_cmd.subcmd {
-                    VaultApiSubCommand::RegisterVault(info) => {
-                        api::call::<_, ()>(url, "register_vault", info).await?;
-                    }
-                    VaultApiSubCommand::LockAdditionalCollateral(info) => {
-                        api::call::<_, ()>(url, "lock_additional_collateral", info).await?;
-                    }
-                    VaultApiSubCommand::WithdrawCollateral(info) => {
-                        api::call::<_, ()>(url, "withdraw_collateral", info).await?;
-                    }
-                    VaultApiSubCommand::RequestReplace(info) => {
-                        api::call::<_, ()>(url, "request_replace", info).await?;
-                    }
-                    VaultApiSubCommand::UpdateBtcAddress(info) => {
-                        api::call::<_, ()>(url, "update_btc_address", info).await?;
-                    }
-                    VaultApiSubCommand::WithdrawReplace(info) => {
-                        api::call::<_, ()>(url, "withdraw_replace", info).await?;
-                    }
-                },
-                ApiSubCommand::Relayer(relayed_cmd) => match relayed_cmd.subcmd {
-                    RelayerApiSubCommand::SuggestStatusUpdate(info) => {
-                        api::call::<_, ()>(url, "suggest_status_update", info).await?;
-                    }
-                    RelayerApiSubCommand::VoteOnStatusUpdate(info) => {
-                        api::call::<_, ()>(url, "vote_on_status_update", info).await?;
-                    }
-                    RelayerApiSubCommand::Register(info) => {
-                        api::call::<_, ()>(url, "register_staked_relayer", info).await?;
-                    }
-                    RelayerApiSubCommand::Deregister => {
-                        api::call::<_, ()>(url, "deregister_staked_relayer", ()).await?;
-                    }
-                    RelayerApiSubCommand::SystemHealth => {
-                        api::call::<_, ()>(url, "system_health", ()).await?;
-                    }
-                    RelayerApiSubCommand::AccountId => {
-                        let ret = api::call::<_, String>(url, "account_id", ()).await?;
-                        println!("{}", ret);
-                    }
-                },
-            }
-        }
+        SubCommand::ApiCall(api_call) => match api_call.subcmd {
+            ApiSubCommand::Vault(cmd) => match cmd.subcmd {
+                VaultApiSubCommand::RegisterVault(info) => {
+                    api::call::<_, ()>(cmd.url, "register_vault", info).await?;
+                }
+                VaultApiSubCommand::LockAdditionalCollateral(info) => {
+                    api::call::<_, ()>(cmd.url, "lock_additional_collateral", info).await?;
+                }
+                VaultApiSubCommand::WithdrawCollateral(info) => {
+                    api::call::<_, ()>(cmd.url, "withdraw_collateral", info).await?;
+                }
+                VaultApiSubCommand::RequestReplace(info) => {
+                    api::call::<_, ()>(cmd.url, "request_replace", info).await?;
+                }
+                VaultApiSubCommand::UpdateBtcAddress(info) => {
+                    api::call::<_, ()>(cmd.url, "update_btc_address", info).await?;
+                }
+                VaultApiSubCommand::WithdrawReplace(info) => {
+                    api::call::<_, ()>(cmd.url, "withdraw_replace", info).await?;
+                }
+            },
+            ApiSubCommand::Relayer(cmd) => match cmd.subcmd {
+                RelayerApiSubCommand::SuggestStatusUpdate(info) => {
+                    api::call::<_, ()>(cmd.url, "suggest_status_update", info).await?;
+                }
+                RelayerApiSubCommand::VoteOnStatusUpdate(info) => {
+                    api::call::<_, ()>(cmd.url, "vote_on_status_update", info).await?;
+                }
+                RelayerApiSubCommand::Register(info) => {
+                    api::call::<_, ()>(cmd.url, "register_staked_relayer", info).await?;
+                }
+                RelayerApiSubCommand::Deregister => {
+                    api::call::<_, ()>(cmd.url, "deregister_staked_relayer", ()).await?;
+                }
+                RelayerApiSubCommand::SystemHealth => {
+                    api::call::<_, ()>(cmd.url, "system_health", ()).await?;
+                }
+                RelayerApiSubCommand::AccountId => {
+                    let ret = api::call::<_, String>(cmd.url, "account_id", ()).await?;
+                    println!("{}", ret);
+                }
+            },
+        },
     }
 
     Ok(())
