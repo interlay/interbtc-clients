@@ -3,6 +3,7 @@ use jsonrpsee::{
     common::{to_value as to_json_value, Params},
     Client as RpcClient,
 };
+use module_exchange_rate_oracle::BtcTxFeesPerByte;
 use module_vault_registry_rpc_runtime_api::BalanceWrapper;
 use sp_core::sr25519::Pair as KeyPair;
 use sp_core::{H160, H256};
@@ -455,6 +456,10 @@ pub trait ExchangeRateOraclePallet {
     async fn get_exchange_rate_info(&self) -> Result<(u64, u64, u64), Error>;
 
     async fn set_exchange_rate_info(&self, btc_to_dot_rate: u128) -> Result<(), Error>;
+
+    async fn set_btc_tx_fees_per_byte(&self, fast: u32, half: u32, hour: u32) -> Result<(), Error>;
+
+    async fn get_btc_tx_fees_per_byte(&self) -> Result<BtcTxFeesPerByte, Error>;
 }
 
 #[async_trait]
@@ -481,6 +486,26 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
             .set_exchange_rate_and_watch(&*self.signer.write().await, btc_to_dot_rate)
             .await?;
         Ok(())
+    }
+
+    /// Sets the estimated Satoshis per bytes required to get a Bitcoin transaction included in
+    /// in the next x blocks
+    ///
+    /// # Arguments
+    /// * `fast` - The estimated Satoshis per bytes to get included in the next block (~10 min)
+    /// * `half` - The estimated Satoshis per bytes to get included in the next 3 blocks (~half hour)
+    /// * `hour` - The estimated Satoshis per bytes to get included in the next 6 blocks (~hour)
+    async fn set_btc_tx_fees_per_byte(&self, fast: u32, half: u32, hour: u32) -> Result<(), Error> {
+        self.ext_client
+            .set_btc_tx_fees_per_byte_and_watch(&*self.signer.write().await, fast, half, hour)
+            .await?;
+        Ok(())
+    }
+
+    /// Gets the estimated Satoshis per bytes required to get a Bitcoin transaction included in
+    /// in the next x blocks
+    async fn get_btc_tx_fees_per_byte(&self) -> Result<BtcTxFeesPerByte, Error> {
+        Ok(self.ext_client.satoshi_per_bytes(None).await?)
     }
 }
 
