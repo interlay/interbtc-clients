@@ -1,9 +1,10 @@
+pub use module_exchange_rate_oracle::BtcTxFeesPerByte;
+
 use async_trait::async_trait;
 use jsonrpsee::{
     common::{to_value as to_json_value, Params},
     Client as RpcClient,
 };
-use module_exchange_rate_oracle::BtcTxFeesPerByte;
 use module_vault_registry_rpc_runtime_api::BalanceWrapper;
 use sp_core::sr25519::Pair as KeyPair;
 use sp_core::{H160, H256};

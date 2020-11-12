@@ -96,6 +96,10 @@ enum SubCommand {
     SetExchangeRate(SetExchangeRateInfo),
     /// Get the current DOT to BTC exchange rate.
     GetExchangeRate,
+    /// Set the current estimated bitcoin transaction fees.
+    SetBtcTxFees(SetBtcTxFeesInfo),
+    /// Get the current estimated bitcoin transaction fees.
+    GetBtcTxFees,
     /// Get the time as reported by the chain.
     GetCurrentTime,
     /// Register a new vault using the global keyring.
@@ -206,6 +210,20 @@ struct SetExchangeRateInfo {
     exchange_rate: u128,
 }
 
+#[derive(Clap)]
+struct SetBtcTxFeesInfo {
+    /// The estimated Satoshis per bytes to get included in the next block (~10 min)
+    #[clap(long, default_value = "100")]
+    fast: u32,
+
+    /// The estimated Satoshis per bytes to get included in the next 3 blocks (~half hour)
+    #[clap(long, default_value = "200")]
+    half: u32,
+
+    /// The estimated Satoshis per bytes to get included in the next 6 blocks (~hour)
+    #[clap(long, default_value = "300")]
+    hour: u32,
+}
 #[derive(Clap)]
 struct RegisterVaultInfo {
     /// Bitcoin address for vault to receive funds.
@@ -401,7 +419,6 @@ struct VoteOnStatusUpdateJsonRpcRequest {
     pub approve: bool,
 }
 
-
 fn data_to_request_id(data: &[u8]) -> Result<[u8; 32], TryFromSliceError> {
     data.try_into()
 }
@@ -426,6 +443,18 @@ async fn main() -> Result<(), Error> {
             println!(
                 "Exchange Rate BTC/DOT: {:?}, Last Update: {}, Delay: {}",
                 rate, time, delay
+            );
+        }
+        SubCommand::SetBtcTxFees(info) => {
+            provider
+                .set_btc_tx_fees_per_byte(info.fast, info.half, info.hour)
+                .await?;
+        }
+        SubCommand::GetBtcTxFees => {
+            let fees = provider.get_btc_tx_fees_per_byte().await?;
+            println!(
+                "Fees per byte: fast={} half={} hour={}",
+                fees.fast, fees.half, fees.hour
             );
         }
         SubCommand::GetCurrentTime => {

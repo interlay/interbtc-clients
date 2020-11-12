@@ -55,7 +55,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use runtime::PolkaBtcStatusUpdate;
-    use runtime::{AccountId, Error, ErrorCode, H256Le, StatusCode};
+    use runtime::{AccountId, BtcTxFeesPerByte, Error, ErrorCode, H256Le, StatusCode};
+
     use std::collections::BTreeSet;
     use std::iter::FromIterator;
 
@@ -72,6 +73,10 @@ mod tests {
             async fn get_exchange_rate_info(&self) -> Result<(u64, u64, u64), Error>;
 
             async fn set_exchange_rate_info(&self, btc_to_dot_rate: u128) -> Result<(), Error>;
+
+            async fn set_btc_tx_fees_per_byte(&self, fast: u32, half: u32, hour: u32) -> Result<(), Error>;
+
+            async fn get_btc_tx_fees_per_byte(&self) -> Result<BtcTxFeesPerByte, Error>;
         }
 
         #[async_trait]
