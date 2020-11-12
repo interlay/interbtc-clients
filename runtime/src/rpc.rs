@@ -947,6 +947,8 @@ pub trait BtcRelayPallet {
     ) -> Result<(), Error>;
 
     async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error>;
+
+    async fn get_bitcoin_confirmations(&self) -> Result<u32, Error>;
 }
 
 #[async_trait]
@@ -1007,6 +1009,11 @@ impl BtcRelayPallet for PolkaBtcProvider {
             .store_block_header_and_watch(&*self.signer.write().await, header)
             .await?;
         Ok(())
+    }
+
+    /// Get the global security parameter k for stable Bitcoin transactions
+    async fn get_bitcoin_confirmations(&self) -> Result<u32, Error> {
+        Ok(self.ext_client.stable_bitcoin_confirmations(None).await?)
     }
 }
 

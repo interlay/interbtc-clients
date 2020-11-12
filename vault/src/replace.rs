@@ -30,7 +30,7 @@ pub async fn listen_for_accept_replace(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<BitcoinCore>,
     vault_id: AccountId32,
-    num_confirmations: u16,
+    num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     let vault_id = &vault_id;
     let provider = &provider;
@@ -79,7 +79,7 @@ pub async fn handle_accepted_replace_request(
     event: &AcceptReplaceEvent<PolkaBtcRuntime>,
     btc_rpc: Arc<BitcoinCore>,
     provider: Arc<PolkaBtcProvider>,
-    num_confirmations: u16,
+    num_confirmations: u32,
 ) -> Result<(), Error> {
     let provider = &provider;
 

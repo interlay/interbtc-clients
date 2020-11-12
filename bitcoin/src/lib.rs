@@ -58,7 +58,7 @@ pub trait BitcoinCoreApi {
         sat: u64,
         redeem_id: &[u8; 32],
         op_timeout: Duration,
-        num_confirmations: u16,
+        num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 }
 
@@ -83,7 +83,7 @@ impl BitcoinCore {
         &self,
         txid: Txid,
         op_timeout: Duration,
-        num_confirmations: u16,
+        num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
         let get_retry_policy = || ExponentialBackoff {
             max_elapsed_time: Some(op_timeout),
@@ -101,7 +101,9 @@ impl BitcoinCore {
                             ..
                         },
                     ..
-                }) if confirmations >= num_confirmations as i32 => Ok((height, hash)),
+                }) if confirmations >= 0 && confirmations as u32 >= num_confirmations => {
+                    Ok((height, hash))
+                }
                 Ok(_) => Err(Error::ConfirmationError),
                 Err(e) => Err(e.into()),
             }?)
@@ -234,7 +236,7 @@ impl BitcoinCoreApi for BitcoinCore {
         sat: u64,
         redeem_id: &[u8; 32],
         op_timeout: Duration,
-        num_confirmations: u16,
+        num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
         let mut recipients = HashMap::<String, Amount>::new();
         recipients.insert(address.clone(), Amount::from_sat(sat));

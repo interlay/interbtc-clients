@@ -26,7 +26,7 @@ const MAX_RETRYING_TIME: Duration = Duration::from_secs(24 * 60 * 60);
 ///                until it succeeds
 pub async fn execute_payment<B: BitcoinCoreApi, F, R>(
     btc_rpc: Arc<B>,
-    num_confirmations: u16,
+    num_confirmations: u32,
     btc_address: H160,
     amount_polka_btc: u128,
     event_id: H256,
@@ -145,7 +145,7 @@ mod tests {
                 sat: u64,
                 redeem_id: &[u8; 32],
                 op_timeout: Duration,
-                num_confirmations: u16,
+                num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
         }
     }

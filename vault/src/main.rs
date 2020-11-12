@@ -18,7 +18,7 @@ use issue::*;
 use log::*;
 use redeem::*;
 use replace::*;
-use runtime::{substrate_subxt::PairSigner, PolkaBtcProvider, PolkaBtcRuntime};
+use runtime::{substrate_subxt::PairSigner, BtcRelayPallet, PolkaBtcProvider, PolkaBtcRuntime};
 use scheduler::{CancelationScheduler, ProcessEvent};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
@@ -44,10 +44,6 @@ struct Opts {
     /// Comma separated list of allowed origins.
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
-
-    /// Only wait for one bitcoin confirmation.
-    #[clap(long)]
-    dev: bool,
 
     /// Opt out of auctioning under-collateralized vaults.
     #[clap(long)]
@@ -84,9 +80,11 @@ async fn main() -> Result<(), Error> {
     let arc_provider = Arc::new(provider.clone());
     let auction_provider = arc_provider.clone();
 
-    let num_confirmations = if opts.dev { 1 } else { 6 };
     let vault_id = opts.keyring.to_account_id();
     let collateral_timeout_ms = opts.collateral_timeout_ms;
+
+    let num_confirmations = arc_provider.clone().get_bitcoin_confirmations().await?;
+    info!("Using {} bitcoin confirmations", num_confirmations);
 
     if !opts.no_startup_collateral_increase {
         // check if the vault is registered

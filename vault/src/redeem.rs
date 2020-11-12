@@ -20,7 +20,7 @@ pub async fn listen_for_redeem_requests(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<BitcoinCore>,
     vault_id: AccountId32,
-    num_confirmations: u16,
+    num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     let vault_id = &vault_id;
     let provider = &provider;
