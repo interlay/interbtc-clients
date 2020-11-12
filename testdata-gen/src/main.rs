@@ -401,7 +401,6 @@ struct VoteOnStatusUpdateJsonRpcRequest {
     pub approve: bool,
 }
 
-
 fn data_to_request_id(data: &[u8]) -> Result<[u8; 32], TryFromSliceError> {
     data.try_into()
 }

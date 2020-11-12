@@ -62,3 +62,9 @@ pub struct StoreMainChainHeaderEvent<T: BTCRelay> {
     pub block_height: BitcoinBlockHeight,
     pub block_header_hash: T::H256Le,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct StableBitcoinConfirmationsStore<T: BTCRelay> {
+    #[store(returns = u32)]
+    pub _runtime: PhantomData<T>,
+}
