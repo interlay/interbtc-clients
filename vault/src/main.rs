@@ -65,6 +65,11 @@ struct Opts {
     #[clap(long, default_value = "5000")]
     collateral_timeout_ms: u64,
 
+    /// How many bitcoin confirmations to wait for. If not specified, the
+    /// parachain settings will be used (recommended).
+    #[clap(long)]
+    btc_confirmations: Option<u32>,
+
     /// Connection settings for Bitcoin Core.
     #[clap(flatten)]
     bitcoin: bitcoin::cli::BitcoinOpts,
@@ -83,7 +88,10 @@ async fn main() -> Result<(), Error> {
     let vault_id = opts.keyring.to_account_id();
     let collateral_timeout_ms = opts.collateral_timeout_ms;
 
-    let num_confirmations = arc_provider.clone().get_bitcoin_confirmations().await?;
+    let num_confirmations = match opts.btc_confirmations {
+        Some(x) => x,
+        None => arc_provider.clone().get_bitcoin_confirmations().await?,
+    };
     info!("Using {} bitcoin confirmations", num_confirmations);
 
     if !opts.no_startup_collateral_increase {

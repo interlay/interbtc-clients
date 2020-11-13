@@ -43,22 +43,30 @@ pub async fn listen_for_accept_replace(
                 }
                 info!("Replace request #{} was accepted", event.replace_id);
 
-                let result = handle_accepted_replace_request(
-                    &event,
-                    btc_rpc.clone(),
-                    provider.clone(),
-                    num_confirmations,
-                )
-                .await;
+                // within this event callback, we captured the arguments of listen_for_redeem_requests
+                // by reference. Since spawn requires static lifetimes, we will need to capture the
+                // arguments by value rather than by reference, so clone these:
+                let provider = provider.clone();
+                let btc_rpc = btc_rpc.clone();
+                // Spawn a new task so that we handle these events concurrently
+                tokio::spawn(async move {
+                    let result = handle_accepted_replace_request(
+                        &event,
+                        btc_rpc.clone(),
+                        provider.clone(),
+                        num_confirmations,
+                    )
+                    .await;
 
-                match result {
-                    Ok(_) => info!("Successfully Executed replace #{}", event.replace_id),
-                    Err(e) => error!(
-                        "Failed to process replace request #{}: {}",
-                        event.replace_id,
-                        e.to_string()
-                    ),
-                }
+                    match result {
+                        Ok(_) => info!("Successfully Executed replace #{}", event.replace_id),
+                        Err(e) => error!(
+                            "Failed to process replace request #{}: {}",
+                            event.replace_id,
+                            e.to_string()
+                        ),
+                    }
+                });
             },
             |error| error!("Error reading redeem event: {}", error.to_string()),
         )
