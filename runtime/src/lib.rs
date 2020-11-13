@@ -53,13 +53,14 @@ impl system::System for PolkaBtcRuntime {
 }
 
 impl pallets::Core for PolkaBtcRuntime {
+    type u64 = u64;
+    type u128 = u128;
     type Balance = Balance;
     type DOT = Balance;
     type PolkaBTC = Balance;
     type BTCBalance = Balance;
-    type H256Le = H256Le;
-    type u128 = u128;
     type RichBlockHeader = RichBlockHeader;
+    type H256Le = H256Le;
     type H160 = H160;
     type H256 = H256;
     type ErrorCode = ErrorCode;
