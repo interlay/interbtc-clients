@@ -11,10 +11,10 @@ pub use btc_relay::{
 pub use error::{Error, XtError};
 use pallets::*;
 pub use rpc::{
-    AccountId, BtcRelayPallet, DotBalancesPallet, ExchangeRateOraclePallet, IssuePallet,
-    PolkaBtcIssueRequest, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest,
-    PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, ReplacePallet, SecurityPallet,
-    StakedRelayerPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
+    AccountId, BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet, ExchangeRateOraclePallet,
+    IssuePallet, PolkaBtcIssueRequest, PolkaBtcProvider, PolkaBtcRedeemRequest,
+    PolkaBtcReplaceRequest, PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, ReplacePallet,
+    SecurityPallet, StakedRelayerPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
 };
 pub use security::{ErrorCode, StatusCode};
 use sp_core::{H160, H256};
@@ -53,13 +53,14 @@ impl system::System for PolkaBtcRuntime {
 }
 
 impl pallets::Core for PolkaBtcRuntime {
+    type u64 = u64;
+    type u128 = u128;
     type Balance = Balance;
     type DOT = Balance;
     type PolkaBTC = Balance;
     type BTCBalance = Balance;
-    type H256Le = H256Le;
-    type u128 = u128;
     type RichBlockHeader = RichBlockHeader;
+    type H256Le = H256Le;
     type H160 = H160;
     type H256 = H256;
     type ErrorCode = ErrorCode;

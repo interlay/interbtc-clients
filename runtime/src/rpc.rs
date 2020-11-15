@@ -1,3 +1,5 @@
+pub use module_exchange_rate_oracle::BtcTxFeesPerByte;
+
 use async_trait::async_trait;
 use jsonrpsee::{
     common::{to_value as to_json_value, Params},
@@ -30,6 +32,7 @@ use crate::timestamp::*;
 use crate::vault_registry::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
+use futures::{stream::StreamExt, SinkExt};
 
 pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
 
@@ -133,12 +136,16 @@ impl PolkaBtcProvider {
         Ok(())
     }
 
-    /// Subscription service that should listen forever, only returns
-    /// if the initial subscription cannot be established.
+    /// Subscription service that should listen forever, only returns if the initial subscription
+    /// cannot be established. This function uses two concurrent tasks: one for the event listener,
+    /// and one that calls the given callback. This allows the callback to take a long time to
+    /// complete without breaking the rpc communication, which could otherwise happen. Still, since
+    /// the queue of callbacks is processed sequentially, some care should be taken that the queue
+    /// does not overflow.
     ///
     /// # Arguments
-    /// * `on_event` - callback for event
-    /// * `on_error` - callback for errors
+    /// * `on_event` - callback for events, is allowed to sometimes take a longer time
+    /// * `on_error` - callback for errors, is not allowed to take too long
     pub async fn on_event<T, F, R, E>(&self, mut on_event: F, on_error: E) -> Result<(), Error>
     where
         T: Event<PolkaBtcRuntime>,
@@ -154,15 +161,48 @@ impl PolkaBtcProvider {
 
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
         sub.filter_event::<T>();
-        while let Some(result) = sub.next().await {
-            let decoded = result
-                .and_then(|raw_event| T::decode(&mut &raw_event.data[..]).map_err(|e| e.into()));
 
-            match decoded {
-                Ok(e) => on_event(e).await,
-                Err(err) => on_error(err),
-            };
-        }
+        // TODO: possible future optimization: let caller determine buffer size
+        let (tx, mut rx) = futures::channel::mpsc::channel::<T>(32);
+
+        // two tasks: one for event listening and one for callback calling
+        futures::future::try_join(
+            async move {
+                let tx = &tx;
+                while let Some(result) = sub.next().await {
+                    let decoded = result.and_then(|raw_event| {
+                        T::decode(&mut &raw_event.data[..]).map_err(|e| e.into())
+                    });
+
+                    match decoded {
+                        Ok(event) => {
+                            // send the event to the other task
+                            if let Err(_) = tx.clone().send(event).await {
+                                break;
+                            }
+                        }
+                        Err(err) => {
+                            on_error(err);
+                        }
+                    };
+                }
+                Result::<(), _>::Err(Error::ChannelClosed)
+            },
+            async move {
+                loop {
+                    // block until we receive an event from the other task
+                    match rx.next().await {
+                        Some(event) => {
+                            on_event(event).await;
+                        }
+                        None => {
+                            return Result::<(), _>::Err(Error::ChannelClosed);
+                        }
+                    }
+                }
+            },
+        )
+        .await?;
 
         Ok(())
     }
@@ -417,6 +457,10 @@ pub trait ExchangeRateOraclePallet {
     async fn get_exchange_rate_info(&self) -> Result<(u64, u64, u64), Error>;
 
     async fn set_exchange_rate_info(&self, btc_to_dot_rate: u128) -> Result<(), Error>;
+
+    async fn set_btc_tx_fees_per_byte(&self, fast: u32, half: u32, hour: u32) -> Result<(), Error>;
+
+    async fn get_btc_tx_fees_per_byte(&self) -> Result<BtcTxFeesPerByte, Error>;
 }
 
 #[async_trait]
@@ -443,6 +487,26 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
             .set_exchange_rate_and_watch(&*self.signer.write().await, btc_to_dot_rate)
             .await?;
         Ok(())
+    }
+
+    /// Sets the estimated Satoshis per bytes required to get a Bitcoin transaction included in
+    /// in the next x blocks
+    ///
+    /// # Arguments
+    /// * `fast` - The estimated Satoshis per bytes to get included in the next block (~10 min)
+    /// * `half` - The estimated Satoshis per bytes to get included in the next 3 blocks (~half hour)
+    /// * `hour` - The estimated Satoshis per bytes to get included in the next 6 blocks (~hour)
+    async fn set_btc_tx_fees_per_byte(&self, fast: u32, half: u32, hour: u32) -> Result<(), Error> {
+        self.ext_client
+            .set_btc_tx_fees_per_byte_and_watch(&*self.signer.write().await, fast, half, hour)
+            .await?;
+        Ok(())
+    }
+
+    /// Gets the estimated Satoshis per bytes required to get a Bitcoin transaction included in
+    /// in the next x blocks
+    async fn get_btc_tx_fees_per_byte(&self) -> Result<BtcTxFeesPerByte, Error> {
+        Ok(self.ext_client.satoshi_per_bytes(None).await?)
     }
 }
 
@@ -883,6 +947,8 @@ pub trait BtcRelayPallet {
     ) -> Result<(), Error>;
 
     async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error>;
+
+    async fn get_bitcoin_confirmations(&self) -> Result<u32, Error>;
 }
 
 #[async_trait]
@@ -943,6 +1009,11 @@ impl BtcRelayPallet for PolkaBtcProvider {
             .store_block_header_and_watch(&*self.signer.write().await, header)
             .await?;
         Ok(())
+    }
+
+    /// Get the global security parameter k for stable Bitcoin transactions
+    async fn get_bitcoin_confirmations(&self) -> Result<u32, Error> {
+        Ok(self.ext_client.stable_bitcoin_confirmations(None).await?)
     }
 }
 

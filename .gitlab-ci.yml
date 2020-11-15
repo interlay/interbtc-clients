@@ -1,4 +1,4 @@
-image: "registry.gitlab.com/interlay/docker-rust:nightly-2020-10-01@sha256:46466ebb2d3a1cb481d0ede8d1bb099616117a3cef1eb5106d89e813b62b02ad"
+image: "registry.gitlab.com/interlay/containers/rust-base:nightly-2020-10-01"
 
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/.cargo
@@ -42,8 +42,8 @@ docker-publish-staked-relayer:
     - |
       /kaniko/executor --context $CI_PROJECT_DIR \
       --dockerfile $CI_PROJECT_DIR/staked-relayer/Dockerfile \
-      --destination $CI_REGISTRY_IMAGE:staked-relayer-$CI_COMMIT_SHA \
-      --destination $CI_REGISTRY_IMAGE:staked-relayer-$CI_COMMIT_BRANCH
+      --destination $CI_REGISTRY_IMAGE/staked-relayer:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
+      --destination $CI_REGISTRY_IMAGE/staked-relayer:$CI_COMMIT_BRANCH
   only:
     - master
     - dev
@@ -59,8 +59,8 @@ docker-publish-oracle:
     - |
       /kaniko/executor --context $CI_PROJECT_DIR \
         --dockerfile $CI_PROJECT_DIR/oracle/Dockerfile \
-        --destination $CI_REGISTRY_IMAGE:oracle-$CI_COMMIT_SHA \
-        --destination $CI_REGISTRY_IMAGE:oracle-$CI_COMMIT_BRANCH
+        --destination $CI_REGISTRY_IMAGE/oracle:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
+        --destination $CI_REGISTRY_IMAGE/oracle:$CI_COMMIT_BRANCH
   only:
     - master
     - dev
@@ -76,8 +76,8 @@ docker-publish-vault:
     - |
       /kaniko/executor --context $CI_PROJECT_DIR \
         --dockerfile $CI_PROJECT_DIR/vault/Dockerfile \
-        --destination $CI_REGISTRY_IMAGE:vault-$CI_COMMIT_SHA \
-        --destination $CI_REGISTRY_IMAGE:vault-$CI_COMMIT_BRANCH
+        --destination $CI_REGISTRY_IMAGE/vault:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
+        --destination $CI_REGISTRY_IMAGE/vault:$CI_COMMIT_BRANCH
   only:
     - master
     - dev

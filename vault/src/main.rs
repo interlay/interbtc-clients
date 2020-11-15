@@ -18,10 +18,7 @@ use issue::*;
 use log::*;
 use redeem::*;
 use replace::*;
-use runtime::{
-    pallets::vault_registry::VaultStatus, substrate_subxt::PairSigner, Error as RuntimeError,
-    PolkaBtcProvider, PolkaBtcRuntime, VaultRegistryPallet,
-};
+use runtime::{substrate_subxt::PairSigner, BtcRelayPallet, PolkaBtcProvider, PolkaBtcRuntime};
 use scheduler::{CancelationScheduler, ProcessEvent};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
@@ -48,10 +45,6 @@ struct Opts {
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
 
-    /// Only wait for one bitcoin confirmation.
-    #[clap(long)]
-    dev: bool,
-
     /// Opt out of auctioning under-collateralized vaults.
     #[clap(long)]
     no_auto_auction: bool,
@@ -72,6 +65,11 @@ struct Opts {
     #[clap(long, default_value = "5000")]
     collateral_timeout_ms: u64,
 
+    /// How many bitcoin confirmations to wait for. If not specified, the
+    /// parachain settings will be used (recommended).
+    #[clap(long)]
+    btc_confirmations: Option<u32>,
+
     /// Connection settings for Bitcoin Core.
     #[clap(flatten)]
     bitcoin: bitcoin::cli::BitcoinOpts,
@@ -87,30 +85,23 @@ async fn main() -> Result<(), Error> {
     let arc_provider = Arc::new(provider.clone());
     let auction_provider = arc_provider.clone();
 
-    let num_confirmations = if opts.dev { 1 } else { 6 };
     let vault_id = opts.keyring.to_account_id();
     let collateral_timeout_ms = opts.collateral_timeout_ms;
 
+    let num_confirmations = match opts.btc_confirmations {
+        Some(x) => x,
+        None => arc_provider.clone().get_bitcoin_confirmations().await?,
+    };
+    info!("Using {} bitcoin confirmations", num_confirmations);
+
     if !opts.no_startup_collateral_increase {
         // check if the vault is registered
-        match arc_provider.get_vault(vault_id.clone()).await {
-            Ok(x) => {
-                if x.status == VaultStatus::Active {
-                    // vault is registered; now lock more collateral if required;
-                    // this might be required if the vault restarted.
-                    if let Err(e) = lock_required_collateral(
-                        arc_provider.clone(),
-                        vault_id.clone(),
-                        opts.max_collateral,
-                    )
-                    .await
-                    {
-                        error!("Failed to lock required additional collateral: {}", e);
-                    }
-                }
-            }
-            Err(RuntimeError::VaultNotFound) => {} // If we aren't registered yet, do nothing
-            Err(e) => error!("Failed to get vault status: {}", e),
+        match lock_required_collateral(arc_provider.clone(), vault_id.clone(), opts.max_collateral)
+            .await
+        {
+            Err(Error::RuntimeError(runtime::Error::VaultNotFound)) => {} // not registered
+            Err(e) => error!("Failed to lock required additional collateral: {}", e),
+            _ => {} // collateral level now OK
         };
     }
 
