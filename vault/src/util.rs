@@ -22,6 +22,7 @@ const MAX_RETRYING_TIME: Duration = Duration::from_secs(24 * 60 * 60);
 /// * `btc_address` the destination address
 /// * `amount_polka_btc` amount of btc to send
 /// * `event_id` the nonce to incorporate with op_return into the transaction
+/// * `network` network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `on_payment` callback that is called after bitcoin transfer succeeds
 ///                until it succeeds
 pub async fn execute_payment<B: BitcoinCoreApi, F, R>(
@@ -30,13 +31,14 @@ pub async fn execute_payment<B: BitcoinCoreApi, F, R>(
     btc_address: H160,
     amount_polka_btc: u128,
     event_id: H256,
+    network: bitcoin::Network,
     on_payment: F,
 ) -> Result<(), Error>
 where
     F: Fn(H256Le, u32, Vec<u8>, Vec<u8>) -> R,
     R: Future<Output = Result<(), Error>>,
 {
-    let address = bitcoin::hash_to_p2wpkh(btc_address, bitcoin::Network::Regtest)
+    let address = bitcoin::hash_to_p2wpkh(btc_address, network)
         .map_err(|e| -> bitcoin::Error { e.into() })?;
 
     info!("Sending bitcoin to {}", btc_address);
@@ -98,7 +100,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        BlockHash, Error as BitcoinError, GetRawTransactionResult, TransactionMetadata, Txid,
+        BlockHash, Error as BitcoinError, GetRawTransactionResult, TransactionMetadata, Txid, Network
     };
 
     macro_rules! assert_ok {
@@ -180,6 +182,7 @@ mod tests {
                 Default::default(),
                 Default::default(),
                 Default::default(),
+                Network::Regtest,
                 on_payment,
             )
             .await
@@ -208,6 +211,7 @@ mod tests {
                 Default::default(),
                 Default::default(),
                 Default::default(),
+                Network::Regtest,
                 on_payment,
             )
             .await,
@@ -241,6 +245,7 @@ mod tests {
                 Default::default(),
                 Default::default(),
                 Default::default(),
+                Network::Regtest,
                 on_payment,
             )
             .await,

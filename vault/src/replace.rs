@@ -25,11 +25,13 @@ use std::sync::Arc;
 /// * `provider` - the parachain RPC handle
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `vault_id` - the id of this vault
+/// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn listen_for_accept_replace(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<BitcoinCore>,
     vault_id: AccountId32,
+    network: bitcoin::Network,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     let vault_id = &vault_id;
@@ -54,6 +56,7 @@ pub async fn listen_for_accept_replace(
                         &event,
                         btc_rpc.clone(),
                         provider.clone(),
+                        network,
                         num_confirmations,
                     )
                     .await;
@@ -82,11 +85,13 @@ pub async fn listen_for_accept_replace(
 /// * `event` - the event we are acting upon
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `provider` - the parachain RPC handle
+/// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn handle_accepted_replace_request(
     event: &AcceptReplaceEvent<PolkaBtcRuntime>,
     btc_rpc: Arc<BitcoinCore>,
     provider: Arc<PolkaBtcProvider>,
+    network: bitcoin::Network,
     num_confirmations: u32,
 ) -> Result<(), Error> {
     let provider = &provider;
@@ -113,6 +118,7 @@ pub async fn handle_accepted_replace_request(
         wallet.get_btc_address(),
         event.btc_amount,
         event.replace_id,
+        network,
         execute_replace,
     )
     .await

@@ -12,6 +12,9 @@ pub enum Error {
     InvalidOpenTime,
     #[error("Channel unexpectedly closed")]
     ChannelClosed,
+    #[error("Invalid Bitcoin network")]
+    InvalidBitcoinNetwork,
+
 
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),

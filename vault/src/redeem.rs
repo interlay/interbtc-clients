@@ -15,11 +15,13 @@ use std::sync::Arc;
 /// * `provider` - the parachain RPC handle
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `vault_id` - the id of this vault
+/// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn listen_for_redeem_requests(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<BitcoinCore>,
     vault_id: AccountId32,
+    network: bitcoin::Network,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     provider
@@ -60,6 +62,7 @@ pub async fn listen_for_redeem_requests(
                         event.btc_address,
                         event.amount_polka_btc,
                         event.redeem_id,
+                        network,
                         on_payment,
                     )
                     .await;
