@@ -52,6 +52,8 @@ pub trait BitcoinCoreApi {
 
     fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
 
+    fn get_new_address(&self) -> Result<H160, Error>;
+
     async fn send_to_address(
         &self,
         address: String,
@@ -220,6 +222,12 @@ impl BitcoinCoreApi for BitcoinCore {
     fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error> {
         // TODO: match exact error
         Ok(self.rpc.get_block(&block_hash).is_ok())
+    }
+
+    /// Gets a new address from the wallet
+    fn get_new_address(&self) -> Result<H160, Error> {
+        let address = self.rpc.get_new_address(None, None)?;
+        Ok(get_hash_from_string(&address.to_string())?)
     }
 
     /// Send an amount of Bitcoin to an address and wait until it has a confirmation.
