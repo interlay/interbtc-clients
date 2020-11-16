@@ -151,7 +151,7 @@ fn convert_block_hash(hash: Option<H256Le>) -> Result<BlockHash, Error> {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use bitcoin::{GetRawTransactionResult, TransactionMetadata, Txid};
+    use bitcoin::{Block, GetBlockResult, GetRawTransactionResult, TransactionMetadata, Txid};
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode, MINIMUM_STAKE};
     use sp_core::H160;
@@ -256,6 +256,19 @@ mod tests {
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
 
             fn get_new_address(&self) -> Result<H160, BitcoinError>;
+
+            fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
+
+            fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
+
+            fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
+
+            async fn wait_for_transaction_metadata(
+                &self,
+                txid: Txid,
+                op_timeout: Duration,
+                num_confirmations: u32,
+            ) -> Result<TransactionMetadata, BitcoinError>;
 
             async fn send_to_address(
                 &self,

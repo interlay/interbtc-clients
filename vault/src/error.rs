@@ -15,7 +15,6 @@ pub enum Error {
     #[error("Invalid Bitcoin network")]
     InvalidBitcoinNetwork,
 
-
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
     #[error("RuntimeError: {0}")]
