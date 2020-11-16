@@ -26,6 +26,21 @@ use scheduler::{CancelationScheduler, ProcessEvent};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
+use core::str::FromStr;
+
+struct BitcoinNetwork(bitcoin::Network);
+
+impl FromStr for BitcoinNetwork {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Error> {
+        match s {
+            "mainnet" => Ok(BitcoinNetwork(bitcoin::Network::Bitcoin)),
+            "testnet" => Ok(BitcoinNetwork(bitcoin::Network::Testnet)),
+            "regtest" => Ok(BitcoinNetwork(bitcoin::Network::Regtest)),
+            _ => Err(Error::InvalidBitcoinNetwork),
+        }
+    }
+}
 
 /// The Vault client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
@@ -80,6 +95,10 @@ struct Opts {
     /// Connection settings for Bitcoin Core.
     #[clap(flatten)]
     bitcoin: bitcoin::cli::BitcoinOpts,
+
+    /// Bitcoin network type for address encoding.
+    #[clap(long, default_value = "regtest")]
+    network: BitcoinNetwork,
 }
 
 #[tokio::main]
@@ -159,6 +178,7 @@ async fn main() -> Result<(), Error> {
         arc_provider.clone(),
         btc_rpc.clone(),
         vault_id.clone(),
+        opts.network.0,
         num_confirmations,
     );
     let execute_replace_listener =
@@ -169,6 +189,7 @@ async fn main() -> Result<(), Error> {
         arc_provider.clone(),
         btc_rpc.clone(),
         vault_id.clone(),
+        opts.network.0,
         num_confirmations,
     );
 
