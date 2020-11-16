@@ -371,9 +371,9 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
 name = "backend"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
- "bitcoin 0.1.0",
+ "bitcoin 0.2.0",
  "chrono",
  "clap 3.0.0-beta.2",
  "env_logger",
@@ -504,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "bitcoin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "backoff",
@@ -4437,7 +4437,7 @@ dependencies = [
 
 [[package]]
 name = "oracle"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "clap 3.0.0-beta.2",
@@ -5828,7 +5828,7 @@ dependencies = [
 
 [[package]]
 name = "runtime"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "bitcoin 0.2.3",
@@ -7905,10 +7905,10 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "staked-relayer"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
- "bitcoin 0.1.0",
+ "bitcoin 0.2.0",
  "clap 3.0.0-beta.2",
  "env_logger",
  "frame-system",
@@ -8264,7 +8264,7 @@ dependencies = [
 name = "testdata-gen"
 version = "0.1.0"
 dependencies = [
- "bitcoin 0.1.0",
+ "bitcoin 0.2.0",
  "clap 3.0.0-beta.2",
  "env_logger",
  "frame-system",
@@ -9050,11 +9050,11 @@ checksum = "05e42f7c18b8f902290b009cde6d651262f956c98bc51bca4cd1d511c9cd85c7"
 
 [[package]]
 name = "vault"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "backoff",
- "bitcoin 0.1.0",
+ "bitcoin 0.2.0",
  "clap 3.0.0-beta.2",
  "env_logger",
  "futures 0.3.7",

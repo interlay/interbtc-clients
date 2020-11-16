@@ -248,6 +248,8 @@ mod tests {
 
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
 
+            fn get_new_address(&self) -> Result<H160, BitcoinError>;
+
             async fn send_to_address(
                 &self,
                 address: String,

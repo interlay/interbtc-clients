@@ -139,6 +139,7 @@ mod tests {
             fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
+            fn get_new_address(&self) -> Result<H160, BitcoinError>;
             async fn send_to_address(
                 &self,
                 address: String,

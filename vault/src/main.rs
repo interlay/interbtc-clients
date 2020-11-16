@@ -9,7 +9,7 @@ mod replace;
 mod scheduler;
 mod util;
 
-use bitcoin::BitcoinCore;
+use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use collateral::*;
 use error::Error;
@@ -18,7 +18,10 @@ use issue::*;
 use log::*;
 use redeem::*;
 use replace::*;
-use runtime::{substrate_subxt::PairSigner, BtcRelayPallet, PolkaBtcProvider, PolkaBtcRuntime};
+use runtime::{
+    substrate_subxt::PairSigner, BtcRelayPallet, Error as RuntimeError, PolkaBtcProvider,
+    PolkaBtcRuntime, VaultRegistryPallet,
+};
 use scheduler::{CancelationScheduler, ProcessEvent};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
@@ -44,6 +47,10 @@ struct Opts {
     /// Comma separated list of allowed origins.
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
+
+    /// Automatically register the vault with the given amount of collateral and a newly generated address.
+    #[clap(long)]
+    auto_register_with_collateral: Option<u128>,
 
     /// Opt out of auctioning under-collateralized vaults.
     #[clap(long)]
@@ -93,6 +100,18 @@ async fn main() -> Result<(), Error> {
         None => arc_provider.clone().get_bitcoin_confirmations().await?,
     };
     info!("Using {} bitcoin confirmations", num_confirmations);
+
+    if let Some(collateral) = opts.auto_register_with_collateral {
+        match provider.get_vault(vault_id.clone()).await {
+            Ok(_) => info!("Not registering vault -- already registered"),
+            Err(RuntimeError::VaultNotFound) => {
+                let btc_address = btc_rpc.get_new_address()?;
+                provider.register_vault(collateral, btc_address).await?;
+                info!("Automatically registered vault");
+            }
+            Err(err) => return Err(err.into()),
+        }
+    }
 
     if !opts.no_startup_collateral_increase {
         // check if the vault is registered

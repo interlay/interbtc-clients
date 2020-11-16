@@ -41,3 +41,10 @@ Run the vault client:
 source .env
 cargo run
 ```
+
+For all command line options, see:
+
+```
+source .env
+cargo run -- --help
+```

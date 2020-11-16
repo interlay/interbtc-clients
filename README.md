@@ -55,7 +55,7 @@ PolkaBTC requires a price oracle to calculate collateralization rates, for local
 to automatically update the exchange rate at a pre-determined time interval.
 
 ```bash
-cargo run -p oracle
+cargo run --bin oracle
 ```
 
 ### Staked Relayer
@@ -64,7 +64,7 @@ The [Staked Relayer](./staked-relayer/README.md) client is responsible for submi
 
 ```bash
 source .env
-cargo run -p staked-relayer -- --http-addr '[::0]:3030'
+cargo run --bin staked-relayer -- --http-addr '[::0]:3030'
 ```
 
 ### Testdata
@@ -73,7 +73,7 @@ To interact with PolkaBTC directly, use the [testdata-gen](./testdata-gen/README
 
 ```bash
 source .env
-cargo run -p testdata-gen --keyring bob set-exchange-rate --exchange-rate 1
+cargo run --bin testdata-gen --keyring bob set-exchange-rate --exchange-rate 1
 ```
 
 ### Vault
@@ -82,7 +82,7 @@ The [Vault](./vault/README.md) client is used to intermediate assets between Bit
 
 ```bash
 source .env
-cargo run -p vault
+cargo run --bin vault
 ```
 
 <p align="center">
