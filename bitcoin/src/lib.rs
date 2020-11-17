@@ -3,6 +3,7 @@ pub mod cli;
 
 mod error;
 
+use rand::{self, Rng};
 use async_trait::async_trait;
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
 pub use bitcoincore_rpc::{
@@ -274,6 +275,9 @@ impl BitcoinCoreApi for BitcoinCore {
     ) -> Result<TransactionMetadata, Error> {
         let mut recipients = HashMap::<String, Amount>::new();
         recipients.insert(address.clone(), Amount::from_sat(sat));
+
+        let delay = rand::thread_rng().gen_range(1000, 10000);
+        delay_for(Duration::from_millis(delay)).await;
 
         let raw_tx = self
             .rpc
