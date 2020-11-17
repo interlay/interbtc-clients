@@ -327,9 +327,9 @@ pub fn transactions<T: BitcoinCoreApi>(
     btc_rpc: Arc<T>,
     btc_start_height: u32,
 ) -> Result<TransactionIterator<T>, Error> {
-    let starting_hash = btc_rpc.clone().get_best_block_hash()?;
-    let block = btc_rpc.clone().get_block(&starting_hash)?;
-    let info = btc_rpc.clone().get_block_info(&starting_hash)?;
+    let starting_hash = btc_rpc.get_best_block_hash()?;
+    let block = btc_rpc.get_block(&starting_hash)?;
+    let info = btc_rpc.get_block_info(&starting_hash)?;
 
     // return the iterator
     let num_blocks = if info.height < btc_start_height as usize {
@@ -373,7 +373,7 @@ impl TransactionExt for Transaction {
             let hash = match payload {
                 Payload::PubkeyHash(h) => H160::from_slice(h.as_hash().into_inner().as_ref()),
                 Payload::ScriptHash(h) => H160::from_slice(h.as_hash().into_inner().as_ref()),
-                Payload::WitnessProgram { version, program } => {
+                Payload::WitnessProgram { version: _, program } => {
                     let program = program.as_slice();
                     // make sure the length is as we expect, otherwise H160::from_slice may panic
                     if program.len() != 20 {
@@ -423,7 +423,7 @@ impl<T: BitcoinCoreApi> Iterator for TransactionIterator<T> {
                     self.block = x;
                 }
                 Err(x) => {
-                    return Some(Err(x.into()));
+                    return Some(Err(x));
                 }
             }
         }

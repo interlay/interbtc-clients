@@ -1,11 +1,10 @@
 use crate::util::*;
-use crate::Error;
 use bitcoin::BitcoinCore;
 use log::{error, info};
 use runtime::{
-    pallets::redeem::RequestRedeemEvent, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet,
+    pallets::redeem::RequestRedeemEvent, PolkaBtcProvider, PolkaBtcRuntime,
 };
-use sp_core::{crypto::AccountId32, H160, H256};
+use sp_core::crypto::AccountId32;
 use std::sync::Arc;
 
 /// Listen for RequestRedeemEvent directed at this vault; upon reception, transfer

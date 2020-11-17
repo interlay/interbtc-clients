@@ -107,7 +107,7 @@ impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultsMonitor<P, B> {
         let tx_id = tx.txid;
 
         // TODO: spawn_blocking?
-        let (raw_tx, proof) = self.get_raw_tx_and_proof(tx_id.clone(), &block_hash)?;
+        let (raw_tx, proof) = self.get_raw_tx_and_proof(tx_id, &block_hash)?;
 
         let addresses = bitcoin::extract_btc_addresses(tx);
         let vault_ids = filter_matching_vaults(addresses, &self.vaults).await;

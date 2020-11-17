@@ -1,7 +1,7 @@
 use crate::error::Error;
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::Network;
-use bitcoin::{BitcoinCore, BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
+use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use log::{error, info};
 use runtime::{
     pallets::{redeem::RequestRedeemEvent, replace::AcceptReplaceEvent},

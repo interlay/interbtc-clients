@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 fn parse_params<T: Decode>(params: Params) -> Result<T, Error> {
     let raw: [RawBytes; 1] = params.parse()?;
-    let req = Decode::decode(&mut &raw[0].0[..]).map_err(|err| Error::CodecError(err))?;
+    let req = Decode::decode(&mut &raw[0].0[..]).map_err(Error::CodecError)?;
     Ok(req)
 }
 
@@ -62,7 +62,7 @@ struct RegisterStakedRelayerJsonRpcRequest {
 }
 
 fn _register_staked_relayer(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
-    let req: RegisterStakedRelayerJsonRpcRequest = parse_params(params.clone())?;
+    let req: RegisterStakedRelayerJsonRpcRequest = parse_params(params)?;
     Ok(block_on(api.register_staked_relayer(req.stake))?)
 }
 
@@ -81,7 +81,7 @@ struct SuggestStatusUpdateJsonRpcRequest {
 }
 
 fn _suggest_status_update(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
-    let req: SuggestStatusUpdateJsonRpcRequest = parse_params(params.clone())?;
+    let req: SuggestStatusUpdateJsonRpcRequest = parse_params(params)?;
     Ok(block_on(api.suggest_status_update(
         req.deposit,
         req.status_code,
@@ -99,7 +99,7 @@ struct VoteOnStatusUpdateJsonRpcRequest {
 }
 
 fn _vote_on_status_update(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
-    let req: VoteOnStatusUpdateJsonRpcRequest = parse_params(params.clone())?;
+    let req: VoteOnStatusUpdateJsonRpcRequest = parse_params(params)?;
     Ok(block_on(
         api.vote_on_status_update(req.status_update_id, req.approve),
     )?)
