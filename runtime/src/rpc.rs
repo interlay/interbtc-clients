@@ -212,6 +212,8 @@ impl PolkaBtcProvider {
 pub trait UtilFuncs {
     /// Gets the current height of the parachain
     async fn get_current_chain_height(&self) -> Result<u32, Error>;
+
+    async fn get_blockchain_height_at(&self, parachain_height: u32) -> Result<u32, Error>;
 }
 
 #[async_trait]
@@ -222,6 +224,14 @@ impl UtilFuncs for PolkaBtcProvider {
             Some(x) => Ok(x.block.header.number),
             None => Err(Error::BlockNotFound),
         }
+    }
+
+    async fn get_blockchain_height_at(&self, parachain_height: u32) -> Result<u32, Error> {
+        let hash = self
+            .ext_client
+            .block_hash(Some(parachain_height.into()))
+            .await?;
+        Ok(self.ext_client.best_block_height(hash).await?)
     }
 }
 
@@ -870,6 +880,12 @@ pub trait RedeemPallet {
 
     /// Cancel an ongoing redeem request
     async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), Error>;
+
+    /// Get all open redeem requests requested of the given vault
+    async fn get_vault_redeem_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, PolkaBtcRedeemRequest)>, Error>;
 }
 
 #[async_trait]
@@ -927,6 +943,21 @@ impl RedeemPallet for PolkaBtcProvider {
             .cancel_redeem_and_watch(&*self.signer.write().await, redeem_id, reimburse)
             .await?;
         Ok(())
+    }
+
+    async fn get_vault_redeem_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, PolkaBtcRedeemRequest)>, Error> {
+        let result: Vec<(H256, PolkaBtcRedeemRequest)> = self
+            .rpc_client
+            .request(
+                "redeem_getVaultRedeemRequests",
+                Params::Array(vec![to_json_value(account_id)?]),
+            )
+            .await?;
+
+        Ok(result)
     }
 }
 

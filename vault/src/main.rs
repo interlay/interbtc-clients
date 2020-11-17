@@ -12,6 +12,7 @@ mod util;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use collateral::*;
+use core::str::FromStr;
 use error::Error;
 use futures::channel::mpsc;
 use issue::*;
@@ -26,7 +27,6 @@ use scheduler::{CancelationScheduler, ProcessEvent};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
-use core::str::FromStr;
 
 struct BitcoinNetwork(bitcoin::Network);
 
@@ -131,6 +131,15 @@ async fn main() -> Result<(), Error> {
             Err(err) => return Err(err.into()),
         }
     }
+
+    util::execute_open_requests(
+        arc_provider.clone(),
+        btc_rpc.clone(),
+        vault_id.clone(),
+        num_confirmations,
+        opts.network.0,
+    )
+    .await?;
 
     if !opts.no_startup_collateral_increase {
         // check if the vault is registered

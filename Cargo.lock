@@ -511,6 +511,8 @@ dependencies = [
  "bitcoincore-rpc",
  "clap 3.0.0-beta.2",
  "hex 0.4.2",
+ "mockall",
+ "rand 0.7.3",
  "sp-core",
  "thiserror",
  "tokio 0.2.22",

@@ -494,6 +494,7 @@ mod tests {
         #[async_trait]
         pub trait UtilFuncs {
             async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
+            async fn get_blockchain_height_at(&self, parachain_height: u32) -> Result<u32, RuntimeError>;
         }
     }
 
