@@ -177,7 +177,7 @@ impl PolkaBtcProvider {
                     match decoded {
                         Ok(event) => {
                             // send the event to the other task
-                            if let Err(_) = tx.clone().send(event).await {
+                            if tx.clone().send(event).await.is_err() {
                                 break;
                             }
                         }
@@ -483,7 +483,7 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
         let get_delay = self.ext_client.max_delay(None);
 
         match tokio::try_join!(get_rate, get_time, get_delay) {
-            Ok((rate, time, delay)) => Ok((rate.try_into()?, time.into(), delay.into())),
+            Ok((rate, time, delay)) => Ok((rate.try_into()?, time, delay)),
             Err(_) => Err(Error::ExchangeRateInfo),
         }
     }
