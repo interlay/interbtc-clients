@@ -15,9 +15,13 @@ pub struct BitcoinOpts {
 }
 
 impl BitcoinOpts {
-    pub fn new_client(&self) -> Result<Client, Error> {
+    pub fn new_client(&self, wallet: Option<&str>) -> Result<Client, Error> {
+        let url = match wallet {
+            Some(x) => format!("{}/wallet/{}", self.bitcoin_rpc_url.clone(), x),
+            None => self.bitcoin_rpc_url.clone(),
+        };
         Ok(Client::new(
-            self.bitcoin_rpc_url.clone(),
+            url,
             Auth::UserPass(self.bitcoin_rpc_user.clone(), self.bitcoin_rpc_pass.clone()),
         )?)
     }

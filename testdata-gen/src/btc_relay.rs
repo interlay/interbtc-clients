@@ -44,8 +44,7 @@ impl BtcSimulator {
         let raw_init_block_header = RawBlockHeader::from_bytes(&init_block.header.format())
             .expect("could not serialize block header");
 
-        self
-            .prov
+        self.prov
             .initialize_btc_relay(raw_init_block_header, self.height)
             .await?;
         println!(

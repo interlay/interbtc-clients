@@ -3,7 +3,6 @@ pub mod cli;
 
 mod error;
 
-use rand::{self, Rng};
 use async_trait::async_trait;
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
 pub use bitcoincore_rpc::{
@@ -22,6 +21,7 @@ pub use bitcoincore_rpc::{
     Auth, Client, Error as BitcoinError, RpcApi,
 };
 pub use error::{ConversionError, Error};
+use rand::{self, Rng};
 use sp_core::{H160, H256};
 use std::sync::Arc;
 use std::{collections::HashMap, str::FromStr, time::Duration};
@@ -373,7 +373,10 @@ impl TransactionExt for Transaction {
             let hash = match payload {
                 Payload::PubkeyHash(h) => H160::from_slice(h.as_hash().into_inner().as_ref()),
                 Payload::ScriptHash(h) => H160::from_slice(h.as_hash().into_inner().as_ref()),
-                Payload::WitnessProgram { version: _, program } => {
+                Payload::WitnessProgram {
+                    version: _,
+                    program,
+                } => {
                     let program = program.as_slice();
                     // make sure the length is as we expect, otherwise H160::from_slice may panic
                     if program.len() != 20 {
@@ -582,7 +585,7 @@ mod tests {
             fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error>;
 
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
-            
+
             fn get_new_address(&self) -> Result<H160, Error>;
 
             fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
