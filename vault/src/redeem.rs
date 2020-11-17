@@ -1,9 +1,7 @@
 use crate::util::*;
 use bitcoin::BitcoinCore;
 use log::{error, info};
-use runtime::{
-    pallets::redeem::RequestRedeemEvent, PolkaBtcProvider, PolkaBtcRuntime,
-};
+use runtime::{pallets::redeem::RequestRedeemEvent, PolkaBtcProvider, PolkaBtcRuntime};
 use sp_core::crypto::AccountId32;
 use std::sync::Arc;
 

@@ -105,7 +105,10 @@ struct Opts {
 async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
-    let btc_rpc = Arc::new(BitcoinCore::new(opts.bitcoin.new_client()?));
+    let btc_rpc = Arc::new(BitcoinCore::new(
+        opts.bitcoin
+            .new_client(Some(&format!("{}", opts.keyring)))?,
+    ));
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
     let arc_provider = Arc::new(provider.clone());
