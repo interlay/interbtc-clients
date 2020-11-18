@@ -13,15 +13,17 @@ pub use bitcoincore_rpc::{
         hash_types::BlockHash,
         hashes::{hex::ToHex, Hash},
         util::{address::Payload, psbt::serialize::Serialize},
-        Address, Amount, Network, Transaction, TxOut, Txid,
+        Address, Amount, Block, BlockHeader, Network, Transaction, TxOut, Txid,
     },
     bitcoincore_rpc_json::{GetRawTransactionResult, GetTransactionResult, WalletTxInfo},
-    json,
+    json::{self, GetBlockResult},
     jsonrpc::Error as JsonRpcError,
     Auth, Client, Error as BitcoinError, RpcApi,
 };
 pub use error::{ConversionError, Error};
-use sp_core::H160;
+use rand::{self, Rng};
+use sp_core::{H160, H256};
+use std::sync::Arc;
 use std::{collections::HashMap, str::FromStr, time::Duration};
 use tokio::time::delay_for;
 
@@ -52,6 +54,21 @@ pub trait BitcoinCoreApi {
 
     fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
 
+    fn get_new_address(&self) -> Result<H160, Error>;
+
+    fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
+
+    fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
+
+    fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
+
+    async fn wait_for_transaction_metadata(
+        &self,
+        txid: Txid,
+        op_timeout: Duration,
+        num_confirmations: u32,
+    ) -> Result<TransactionMetadata, Error>;
+
     async fn send_to_address(
         &self,
         address: String,
@@ -69,63 +86,6 @@ pub struct BitcoinCore {
 impl BitcoinCore {
     pub fn new(rpc: Client) -> Self {
         Self { rpc }
-    }
-
-    /// Waits for the required number of confirmations, and collects data about the
-    /// transaction
-    ///
-    /// # Arguments
-    /// * `txid` - transaction ID
-    /// * `op_timeout` - wait period before re-checking
-    /// * `op_timeout` - how long operations will be retried
-    /// * `num_confirmations` - how many confirmations we need to wait for
-    async fn wait_for_transaction_metadata(
-        &self,
-        txid: Txid,
-        op_timeout: Duration,
-        num_confirmations: u32,
-    ) -> Result<TransactionMetadata, Error> {
-        let get_retry_policy = || ExponentialBackoff {
-            max_elapsed_time: Some(op_timeout),
-            ..Default::default()
-        };
-
-        let (block_height, block_hash) = (|| async {
-            Ok(match self.rpc.get_transaction(&txid, None) {
-                Ok(GetTransactionResult {
-                    info:
-                        WalletTxInfo {
-                            confirmations,
-                            blockhash: Some(hash),
-                            blockheight: Some(height),
-                            ..
-                        },
-                    ..
-                }) if confirmations >= 0 && confirmations as u32 >= num_confirmations => {
-                    Ok((height, hash))
-                }
-                Ok(_) => Err(Error::ConfirmationError),
-                Err(e) => Err(e.into()),
-            }?)
-        })
-        .retry(get_retry_policy())
-        .await?;
-
-        let proof = (|| async { Ok(self.get_proof_for(txid, &block_hash)?) })
-            .retry(get_retry_policy())
-            .await?;
-
-        let raw_tx = (|| async { Ok(self.get_raw_tx_for(&txid, &block_hash)?) })
-            .retry(get_retry_policy())
-            .await?;
-
-        Ok(TransactionMetadata {
-            txid,
-            block_hash,
-            block_height,
-            proof,
-            raw_tx,
-        })
     }
 }
 
@@ -222,6 +182,81 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(self.rpc.get_block(&block_hash).is_ok())
     }
 
+    /// Gets a new address from the wallet
+    fn get_new_address(&self) -> Result<H160, Error> {
+        let address = self.rpc.get_new_address(None, None)?;
+        Ok(get_hash_from_string(&address.to_string())?)
+    }
+
+    fn get_best_block_hash(&self) -> Result<BlockHash, Error> {
+        Ok(self.rpc.get_best_block_hash()?)
+    }
+
+    fn get_block(&self, hash: &BlockHash) -> Result<Block, Error> {
+        Ok(self.rpc.get_block(hash)?)
+    }
+
+    fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error> {
+        Ok(self.rpc.get_block_info(hash)?)
+    }
+
+    /// Waits for the required number of confirmations, and collects data about the
+    /// transaction
+    ///
+    /// # Arguments
+    /// * `txid` - transaction ID
+    /// * `op_timeout` - wait period before re-checking
+    /// * `op_timeout` - how long operations will be retried
+    /// * `num_confirmations` - how many confirmations we need to wait for
+    async fn wait_for_transaction_metadata(
+        &self,
+        txid: Txid,
+        op_timeout: Duration,
+        num_confirmations: u32,
+    ) -> Result<TransactionMetadata, Error> {
+        let get_retry_policy = || ExponentialBackoff {
+            max_elapsed_time: Some(op_timeout),
+            ..Default::default()
+        };
+
+        let (block_height, block_hash) = (|| async {
+            Ok(match self.rpc.get_transaction(&txid, None) {
+                Ok(GetTransactionResult {
+                    info:
+                        WalletTxInfo {
+                            confirmations,
+                            blockhash: Some(hash),
+                            blockheight: Some(height),
+                            ..
+                        },
+                    ..
+                }) if confirmations >= 0 && confirmations as u32 >= num_confirmations => {
+                    Ok((height, hash))
+                }
+                Ok(_) => Err(Error::ConfirmationError),
+                Err(e) => Err(e.into()),
+            }?)
+        })
+        .retry(get_retry_policy())
+        .await?;
+
+        let proof = (|| async { Ok(self.get_proof_for(txid, &block_hash)?) })
+            .retry(get_retry_policy())
+            .await?;
+
+        let raw_tx = (|| async { Ok(self.get_raw_tx_for(&txid, &block_hash)?) })
+            .retry(get_retry_policy())
+            .await?;
+
+        Ok(TransactionMetadata {
+            txid,
+            block_hash,
+            block_height,
+            proof,
+            raw_tx,
+        })
+    }
+
     /// Send an amount of Bitcoin to an address and wait until it has a confirmation.
     ///
     /// # Arguments
@@ -240,6 +275,9 @@ impl BitcoinCoreApi for BitcoinCore {
     ) -> Result<TransactionMetadata, Error> {
         let mut recipients = HashMap::<String, Amount>::new();
         recipients.insert(address.clone(), Amount::from_sat(sat));
+
+        let delay = rand::thread_rng().gen_range(1000, 10000);
+        delay_for(Duration::from_millis(delay)).await;
 
         let raw_tx = self
             .rpc
@@ -276,6 +314,126 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(self
             .wait_for_transaction_metadata(txid, op_timeout, num_confirmations)
             .await?)
+    }
+}
+
+/// Returns an iterator over bitcoin transactions that yields all transactions starting at the
+/// most recent block, and stopping at `btc_start_height`
+///
+/// # Arguments
+///
+/// * `btc_start_height` - the oldest block to be yielded in the iterator
+pub fn transactions<T: BitcoinCoreApi>(
+    btc_rpc: Arc<T>,
+    btc_start_height: u32,
+) -> Result<TransactionIterator<T>, Error> {
+    let starting_hash = btc_rpc.get_best_block_hash()?;
+    let block = btc_rpc.get_block(&starting_hash)?;
+    let info = btc_rpc.get_block_info(&starting_hash)?;
+
+    // return the iterator
+    let num_blocks = if info.height < btc_start_height as usize {
+        0
+    } else {
+        info.height - btc_start_height as usize + 1
+    };
+
+    Ok(TransactionIterator {
+        block,
+        blocks_remaining: num_blocks,
+        txdata_idx: 0,
+        rpc: btc_rpc,
+    })
+}
+
+/// Extension trait for transaction, adding methods to help to match the Transaction to Replace/Redeem requests
+pub trait TransactionExt {
+    fn get_op_return(&self) -> Option<H256>;
+    fn get_payment_amount_to(&self, to: H160) -> Option<u64>;
+}
+impl TransactionExt for Transaction {
+    /// Extract the hash from the OP_RETURN uxto, if present
+    fn get_op_return(&self) -> Option<H256> {
+        // we only consider the first three items because the parachain only checks the first 3 positions
+        self.output.iter().take(3).find_map(|x| {
+            // match a slice that starts with op_return (0x6a), then has 32 as
+            // the length indicator, and then has 32 bytes (the H256)
+            match x.script_pubkey.to_bytes().as_slice() {
+                [0x6a, 32, rest @ ..] if rest.len() == 32 => Some(H256::from_slice(rest)),
+                _ => None,
+            }
+        })
+    }
+
+    /// Get the amount of btc that self sent to `destination`, if any
+    fn get_payment_amount_to(&self, destination: H160) -> Option<u64> {
+        // we only consider the first three items because the parachain only checks the first 3 positions
+        self.output.iter().take(3).find_map(|uxto| {
+            let payload = Payload::from_script(&uxto.script_pubkey)?;
+            let hash = match payload {
+                Payload::PubkeyHash(h) => H160::from_slice(h.as_hash().into_inner().as_ref()),
+                Payload::ScriptHash(h) => H160::from_slice(h.as_hash().into_inner().as_ref()),
+                Payload::WitnessProgram {
+                    version: _,
+                    program,
+                } => {
+                    let program = program.as_slice();
+                    // make sure the length is as we expect, otherwise H160::from_slice may panic
+                    if program.len() != 20 {
+                        return None;
+                    }
+                    H160::from_slice(program)
+                }
+            };
+            if hash == destination {
+                Some(uxto.value)
+            } else {
+                None
+            }
+        })
+    }
+}
+
+/// Iterator over transactions in the bitcoin chain, from new-to-old. The number of
+/// returned elements is limited by blocks_remaining.
+pub struct TransactionIterator<T: BitcoinCoreApi> {
+    block: Block,
+    blocks_remaining: usize,
+    txdata_idx: usize,
+    rpc: Arc<T>,
+}
+impl<T: BitcoinCoreApi> Iterator for TransactionIterator<T> {
+    type Item = Result<Transaction, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // we already iterated over the set range
+        if self.blocks_remaining == 0 {
+            return None;
+        }
+
+        // if there are no transactions remaining in this block that we haven't reported yet,
+        // we continue to the next block. By using `while` instead of `if` we can be 100% sure
+        // the vec indexing can not panic in unexpected block inputs
+        while self.txdata_idx >= self.block.txdata.len() {
+            // we go to next block
+            self.blocks_remaining -= 1;
+            if self.blocks_remaining == 0 {
+                return None; // no more blocks to be found
+            }
+            match self.rpc.get_block(&self.block.header.prev_blockhash) {
+                Ok(x) => {
+                    self.txdata_idx = 0;
+                    self.block = x;
+                }
+                Err(x) => {
+                    return Some(Err(x));
+                }
+            }
+        }
+
+        let ret = self.block.txdata[self.txdata_idx].clone();
+        self.txdata_idx += 1;
+        Some(Ok(ret))
     }
 }
 
@@ -397,9 +555,62 @@ mod tests {
     use super::*;
 
     use bitcoincore_rpc::{
-        bitcoin::{Txid, Wtxid},
+        bitcoin::{hash_types::TxMerkleNode, Txid, Wtxid},
         bitcoincore_rpc_json::{GetRawTransactionResultVin, GetRawTransactionResultVinScriptSig},
     };
+    use mockall::Sequence;
+
+    mockall::mock! {
+        Bitcoin {}
+
+        #[async_trait]
+        trait BitcoinCoreApi {
+            async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, Error>;
+
+            fn get_block_count(&self) -> Result<u64, Error>;
+
+            fn get_block_transactions(
+                &self,
+                hash: &BlockHash,
+            ) -> Result<Vec<Option<GetRawTransactionResult>>, Error>;
+
+            fn get_raw_tx_for(
+                &self,
+                txid: &Txid,
+                block_hash: &BlockHash,
+            ) -> Result<Vec<u8>, Error>;
+
+            fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+
+            fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error>;
+
+            fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
+
+            fn get_new_address(&self) -> Result<H160, Error>;
+
+            fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
+
+            fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
+
+            fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
+
+            async fn wait_for_transaction_metadata(
+                &self,
+                txid: Txid,
+                op_timeout: Duration,
+                num_confirmations: u32,
+            ) -> Result<TransactionMetadata, Error>;
+
+            async fn send_to_address(
+                &self,
+                address: String,
+                sat: u64,
+                redeem_id: &[u8; 32],
+                op_timeout: Duration,
+                num_confirmations: u32,
+            ) -> Result<TransactionMetadata, Error>;
+        }
+    }
 
     #[test]
     fn test_hash_to_p2wpkh() {
@@ -446,5 +657,181 @@ mod tests {
             }),
             vec![addr]
         );
+    }
+
+    fn dummy_block_info(height: usize) -> GetBlockResult {
+        GetBlockResult {
+            height,
+            hash: Default::default(),
+            confirmations: Default::default(),
+            size: Default::default(),
+            strippedsize: Default::default(),
+            weight: Default::default(),
+            version: Default::default(),
+            version_hex: Default::default(),
+            merkleroot: Default::default(),
+            tx: Default::default(),
+            time: Default::default(),
+            mediantime: Default::default(),
+            nonce: Default::default(),
+            bits: Default::default(),
+            difficulty: Default::default(),
+            chainwork: Default::default(),
+            n_tx: Default::default(),
+            previousblockhash: Default::default(),
+            nextblockhash: Default::default(),
+        }
+    }
+
+    fn dummy_hash(value: u8) -> BlockHash {
+        BlockHash::from_slice(&[value; 32]).unwrap()
+    }
+
+    fn dummy_block(transactions: Vec<i32>, next_hash: BlockHash) -> Block {
+        Block {
+            txdata: transactions
+                .into_iter()
+                .map(|x| Transaction {
+                    version: x,
+                    lock_time: 1,
+                    input: vec![],
+                    output: vec![],
+                })
+                .collect(),
+            header: BlockHeader {
+                version: 1,
+                bits: 0,
+                nonce: 0,
+                time: 0,
+                prev_blockhash: next_hash,
+                merkle_root: TxMerkleNode::default(),
+            },
+        }
+    }
+
+    #[test]
+    fn test_transaction_iterator_succeeds() {
+        // we abuse version number within the transaction to check whether the sequence is correct
+
+        let mut bitcoin = MockBitcoin::default();
+        bitcoin
+            .expect_get_best_block_hash()
+            .returning(|| Ok(dummy_hash(1)));
+        bitcoin
+            .expect_get_block()
+            .withf(|&x| x == dummy_hash(1))
+            .times(1)
+            .returning(|_| Ok(dummy_block(vec![1, 2], dummy_hash(2))));
+        bitcoin
+            .expect_get_block()
+            .withf(|&x| x == dummy_hash(2))
+            .times(1)
+            .returning(|_| Ok(dummy_block(vec![3, 4, 5], dummy_hash(3))));
+
+        // block info: the head of the btc we give a height of 22
+        bitcoin
+            .expect_get_block_info()
+            .times(1)
+            .returning(|_| Ok(dummy_block_info(21)));
+
+        let btc_rpc = Arc::new(bitcoin);
+        let mut iter = transactions(btc_rpc, 20).unwrap();
+
+        assert_eq!(iter.next().unwrap().unwrap().version, 1);
+        assert_eq!(iter.next().unwrap().unwrap().version, 2);
+        assert_eq!(iter.next().unwrap().unwrap().version, 3);
+        assert_eq!(iter.next().unwrap().unwrap().version, 4);
+        assert_eq!(iter.next().unwrap().unwrap().version, 5);
+        assert!(iter.next().is_none());
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn test_transaction_iterator_skips_over_empty_blocks() {
+        let mut bitcoin = MockBitcoin::default();
+        bitcoin
+            .expect_get_best_block_hash()
+            .returning(|| Ok(dummy_hash(1)));
+        bitcoin
+            .expect_get_block()
+            .withf(|&x| x == dummy_hash(1))
+            .times(1)
+            .returning(|_| Ok(dummy_block(vec![1, 2], dummy_hash(2))));
+        bitcoin
+            .expect_get_block()
+            .withf(|&x| x == dummy_hash(2))
+            .times(1)
+            .returning(|_| Ok(dummy_block(vec![], dummy_hash(3))));
+        bitcoin
+            .expect_get_block()
+            .withf(|&x| x == dummy_hash(3))
+            .times(1)
+            .returning(|_| Ok(dummy_block(vec![3, 4], dummy_hash(4))));
+        bitcoin
+            .expect_get_block()
+            .withf(|&x| x == dummy_hash(4))
+            .times(1)
+            .returning(|_| Ok(dummy_block(vec![], dummy_hash(5))));
+
+        bitcoin
+            .expect_get_block_info()
+            .times(1)
+            .returning(|_| Ok(dummy_block_info(23)));
+
+        let btc_rpc = Arc::new(bitcoin);
+        let mut iter = transactions(btc_rpc, 20).unwrap();
+
+        assert_eq!(iter.next().unwrap().unwrap().version, 1);
+        assert_eq!(iter.next().unwrap().unwrap().version, 2);
+        assert_eq!(iter.next().unwrap().unwrap().version, 3);
+        assert_eq!(iter.next().unwrap().unwrap().version, 4);
+        assert!(iter.next().is_none());
+        assert!(iter.next().is_none());
+    }
+    #[test]
+    fn test_transaction_iterator_can_have_invalid_height() {
+        let mut bitcoin = MockBitcoin::default();
+        bitcoin
+            .expect_get_best_block_hash()
+            .returning(|| Ok(dummy_hash(1)));
+        bitcoin
+            .expect_get_block()
+            .withf(|&x| x == dummy_hash(1))
+            .times(1)
+            .returning(|_| Ok(dummy_block(vec![1, 2], dummy_hash(2))));
+        bitcoin
+            .expect_get_block_info()
+            .times(1)
+            .returning(|_| Ok(dummy_block_info(20)));
+
+        let btc_rpc = Arc::new(bitcoin);
+
+        let mut iter = transactions(btc_rpc, 21).unwrap();
+
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn test_transaction_iterator_can_have_start_equal_to_height() {
+        let mut bitcoin = MockBitcoin::default();
+        bitcoin
+            .expect_get_best_block_hash()
+            .returning(|| Ok(dummy_hash(1)));
+        bitcoin
+            .expect_get_block()
+            .withf(|&x| x == dummy_hash(1))
+            .times(1)
+            .returning(|_| Ok(dummy_block(vec![1], dummy_hash(2))));
+        bitcoin
+            .expect_get_block_info()
+            .times(1)
+            .returning(|_| Ok(dummy_block_info(20)));
+
+        let btc_rpc = Arc::new(bitcoin);
+
+        let mut iter = transactions(btc_rpc, 20).unwrap();
+
+        assert_eq!(iter.next().unwrap().unwrap().version, 1);
+        assert!(iter.next().is_none());
     }
 }

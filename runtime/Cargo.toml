@@ -16,8 +16,8 @@ serde = "1.0.116"
 tokio = { version = "0.2.22", features = ["full"] }
 jsonrpsee = "0.1.0"
 futures = "0.3.5"
-substrate-subxt-proc-macro = { git = "https://github.com/gregdhill/substrate-subxt", rev = "9d0b60c" }
-substrate-subxt = { git = "https://github.com/gregdhill/substrate-subxt", rev = "9d0b60c" }
+substrate-subxt-proc-macro = { git = "https://github.com/paritytech/substrate-subxt", rev = "27c377a" }
+substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", rev = "27c377a" }
 
 [dependencies.module-bitcoin]
 git = "https://gitlab.com/interlay/btc-parachain"

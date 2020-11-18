@@ -25,11 +25,13 @@ use std::sync::Arc;
 /// * `provider` - the parachain RPC handle
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `vault_id` - the id of this vault
+/// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn listen_for_accept_replace(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<BitcoinCore>,
     vault_id: AccountId32,
+    network: bitcoin::Network,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     let vault_id = &vault_id;
@@ -54,6 +56,7 @@ pub async fn listen_for_accept_replace(
                         &event,
                         btc_rpc.clone(),
                         provider.clone(),
+                        network,
                         num_confirmations,
                     )
                     .await;
@@ -82,40 +85,29 @@ pub async fn listen_for_accept_replace(
 /// * `event` - the event we are acting upon
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `provider` - the parachain RPC handle
+/// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn handle_accepted_replace_request(
     event: &AcceptReplaceEvent<PolkaBtcRuntime>,
     btc_rpc: Arc<BitcoinCore>,
     provider: Arc<PolkaBtcProvider>,
+    network: bitcoin::Network,
     num_confirmations: u32,
 ) -> Result<(), Error> {
-    let provider = &provider;
-
     // retrieve vault's btc address
-    let Vault { wallet, .. } =
-        (|| async { Ok(provider.get_vault(event.new_vault_id.clone()).await?) })
-            .retry(get_retry_policy())
-            .await?;
-
-    // prepare the action that is to be run after transfering bitcoin
-    let replace_id = &event.replace_id;
-    let execute_replace = |tx_id, tx_block_height, merkle_proof, raw_tx| async move {
+    let Vault { wallet, .. } = (|| async {
         Ok(provider
             .clone()
-            .execute_replace(*replace_id, tx_id, tx_block_height, merkle_proof, raw_tx)
+            .get_vault(event.new_vault_id.clone())
             .await?)
-    };
+    })
+    .retry(get_retry_policy())
+    .await?;
 
-    // first makes bitcoin payment, then calls execute_replace
-    execute_payment(
-        btc_rpc.clone(),
-        num_confirmations,
-        wallet.get_btc_address(),
-        event.btc_amount,
-        event.replace_id,
-        execute_replace,
-    )
-    .await
+    let request = Request::from_replace_request_event(&event, wallet.get_btc_address());
+    request
+        .pay_and_execute(provider, btc_rpc, num_confirmations, network)
+        .await
 }
 
 /// Listen for RequestReplaceEvent, and attempt to accept it

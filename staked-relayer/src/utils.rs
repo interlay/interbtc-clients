@@ -12,10 +12,9 @@ where
 {
     loop {
         delay_for(duration).await;
-        match check().await {
-            Err(e) => error!("Error: {}", e.to_string()),
-            _ => (),
-        };
+        if let Err(e) = check().await {
+            error!("Error: {}", e.to_string());
+        }
     }
 }
 

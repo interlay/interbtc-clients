@@ -9,20 +9,38 @@ mod replace;
 mod scheduler;
 mod util;
 
-use bitcoin::BitcoinCore;
+use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use collateral::*;
+use core::str::FromStr;
 use error::Error;
 use futures::channel::mpsc;
 use issue::*;
 use log::*;
 use redeem::*;
 use replace::*;
-use runtime::{substrate_subxt::PairSigner, BtcRelayPallet, PolkaBtcProvider, PolkaBtcRuntime};
+use runtime::{
+    substrate_subxt::PairSigner, BtcRelayPallet, Error as RuntimeError, PolkaBtcProvider,
+    PolkaBtcRuntime, VaultRegistryPallet,
+};
 use scheduler::{CancelationScheduler, ProcessEvent};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
+
+struct BitcoinNetwork(bitcoin::Network);
+
+impl FromStr for BitcoinNetwork {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Error> {
+        match s {
+            "mainnet" => Ok(BitcoinNetwork(bitcoin::Network::Bitcoin)),
+            "testnet" => Ok(BitcoinNetwork(bitcoin::Network::Testnet)),
+            "regtest" => Ok(BitcoinNetwork(bitcoin::Network::Regtest)),
+            _ => Err(Error::InvalidBitcoinNetwork),
+        }
+    }
+}
 
 /// The Vault client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
@@ -44,6 +62,10 @@ struct Opts {
     /// Comma separated list of allowed origins.
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
+
+    /// Automatically register the vault with the given amount of collateral and a newly generated address.
+    #[clap(long)]
+    auto_register_with_collateral: Option<u128>,
 
     /// Opt out of auctioning under-collateralized vaults.
     #[clap(long)]
@@ -73,13 +95,20 @@ struct Opts {
     /// Connection settings for Bitcoin Core.
     #[clap(flatten)]
     bitcoin: bitcoin::cli::BitcoinOpts,
+
+    /// Bitcoin network type for address encoding.
+    #[clap(long, default_value = "regtest")]
+    network: BitcoinNetwork,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
-    let btc_rpc = Arc::new(BitcoinCore::new(opts.bitcoin.new_client()?));
+    let btc_rpc = Arc::new(BitcoinCore::new(
+        opts.bitcoin
+            .new_client(Some(&format!("{}", opts.keyring)))?,
+    ));
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
     let arc_provider = Arc::new(provider.clone());
@@ -93,6 +122,27 @@ async fn main() -> Result<(), Error> {
         None => arc_provider.clone().get_bitcoin_confirmations().await?,
     };
     info!("Using {} bitcoin confirmations", num_confirmations);
+
+    if let Some(collateral) = opts.auto_register_with_collateral {
+        match provider.get_vault(vault_id.clone()).await {
+            Ok(_) => info!("Not registering vault -- already registered"),
+            Err(RuntimeError::VaultNotFound) => {
+                let btc_address = btc_rpc.get_new_address()?;
+                provider.register_vault(collateral, btc_address).await?;
+                info!("Automatically registered vault");
+            }
+            Err(err) => return Err(err.into()),
+        }
+    }
+
+    util::execute_open_requests(
+        arc_provider.clone(),
+        btc_rpc.clone(),
+        vault_id.clone(),
+        num_confirmations,
+        opts.network.0,
+    )
+    .await?;
 
     if !opts.no_startup_collateral_increase {
         // check if the vault is registered
@@ -140,6 +190,7 @@ async fn main() -> Result<(), Error> {
         arc_provider.clone(),
         btc_rpc.clone(),
         vault_id.clone(),
+        opts.network.0,
         num_confirmations,
     );
     let execute_replace_listener =
@@ -150,6 +201,7 @@ async fn main() -> Result<(), Error> {
         arc_provider.clone(),
         btc_rpc.clone(),
         vault_id.clone(),
+        opts.network.0,
         num_confirmations,
     );
 

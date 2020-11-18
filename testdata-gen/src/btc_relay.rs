@@ -44,8 +44,7 @@ impl BtcSimulator {
         let raw_init_block_header = RawBlockHeader::from_bytes(&init_block.header.format())
             .expect("could not serialize block header");
 
-        &self
-            .prov
+        self.prov
             .initialize_btc_relay(raw_init_block_header, self.height)
             .await?;
         println!(
@@ -80,7 +79,7 @@ impl BtcSimulator {
                     .with_previous_hash(self.prev_block.as_ref().unwrap().transactions[0].hash())
                     .build(),
             )
-            .add_output(TransactionOutput::p2pkh(value.into(), &address))
+            .add_output(TransactionOutput::p2pkh(value, &address))
             .add_output(TransactionOutput::op_return(0, return_data.as_bytes()))
             .build();
 
@@ -97,7 +96,7 @@ impl BtcSimulator {
 
         let tx_id = transaction.tx_id();
         let tx_block_height = self.height;
-        let proof = block.merkle_proof(&vec![tx_id]);
+        let proof = block.merkle_proof(&[tx_id]);
         let bytes_proof = proof.format();
         let raw_tx = transaction.format_with(true);
 

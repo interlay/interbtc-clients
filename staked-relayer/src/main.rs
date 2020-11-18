@@ -85,7 +85,7 @@ async fn main() -> Result<(), Error> {
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
     let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
 
-    let btc_client = BtcClient::new::<RelayError>(opts.bitcoin.new_client()?);
+    let btc_client = BtcClient::new::<RelayError>(opts.bitcoin.new_client(None)?);
 
     let current_height = btc_client.get_block_count()?;
 
@@ -95,7 +95,7 @@ async fn main() -> Result<(), Error> {
     } else {
         current_height + 1
     };
-    let btc_rpc = Arc::new(bitcoin::BitcoinCore::new(opts.bitcoin.new_client()?));
+    let btc_rpc = Arc::new(bitcoin::BitcoinCore::new(opts.bitcoin.new_client(None)?));
 
     let mut runner = Runner::new(
         PolkaClient::new(provider.clone()),

@@ -107,7 +107,7 @@ impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultsMonitor<P, B> {
         let tx_id = tx.txid;
 
         // TODO: spawn_blocking?
-        let (raw_tx, proof) = self.get_raw_tx_and_proof(tx_id.clone(), &block_hash)?;
+        let (raw_tx, proof) = self.get_raw_tx_and_proof(tx_id, &block_hash)?;
 
         let addresses = bitcoin::extract_btc_addresses(tx);
         let vault_ids = filter_matching_vaults(addresses, &self.vaults).await;
@@ -177,7 +177,7 @@ async fn filter_matching_vaults(addresses: Vec<H160>, vaults: &Vaults) -> Vec<Ac
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use bitcoin::{Error as BitcoinError, TransactionMetadata};
+    use bitcoin::{Block, Error as BitcoinError, GetBlockResult, TransactionMetadata};
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
     use sp_keyring::AccountKeyring;
@@ -247,6 +247,21 @@ mod tests {
             fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
 
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
+
+            fn get_new_address(&self) -> Result<H160, BitcoinError>;
+
+            fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
+
+            fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
+
+            fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
+
+            async fn wait_for_transaction_metadata(
+                &self,
+                txid: Txid,
+                op_timeout: Duration,
+                num_confirmations: u32,
+            ) -> Result<TransactionMetadata, BitcoinError>;
 
             async fn send_to_address(
                 &self,

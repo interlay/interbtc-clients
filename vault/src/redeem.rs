@@ -1,9 +1,7 @@
 use crate::util::*;
 use bitcoin::BitcoinCore;
 use log::{error, info};
-use runtime::{
-    pallets::redeem::RequestRedeemEvent, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet,
-};
+use runtime::{pallets::redeem::RequestRedeemEvent, PolkaBtcProvider, PolkaBtcRuntime};
 use sp_core::crypto::AccountId32;
 use std::sync::Arc;
 
@@ -15,11 +13,13 @@ use std::sync::Arc;
 /// * `provider` - the parachain RPC handle
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `vault_id` - the id of this vault
+/// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn listen_for_redeem_requests(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<BitcoinCore>,
     vault_id: AccountId32,
+    network: bitcoin::Network,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     provider
@@ -37,32 +37,11 @@ pub async fn listen_for_redeem_requests(
                 let btc_rpc = btc_rpc.clone();
                 // Spawn a new task so that we handle these events concurrently
                 tokio::spawn(async move {
-                    let provider = &provider;
-
                     // prepare the action that will be executed after the bitcoin transfer
-                    let redeem_id = &event.redeem_id;
-                    let on_payment = |tx_id, tx_block_height, merkle_proof, raw_tx| async move {
-                        Ok(provider
-                            .clone()
-                            .execute_redeem(
-                                *redeem_id,
-                                tx_id,
-                                tx_block_height,
-                                merkle_proof,
-                                raw_tx,
-                            )
-                            .await?)
-                    };
-
-                    let result = execute_payment(
-                        btc_rpc.clone(),
-                        num_confirmations,
-                        event.btc_address,
-                        event.amount_polka_btc,
-                        event.redeem_id,
-                        on_payment,
-                    )
-                    .await;
+                    let request = Request::from_redeem_request_event(&event);
+                    let result = request
+                        .pay_and_execute(provider, btc_rpc, num_confirmations, network)
+                        .await;
 
                     match result {
                         Ok(_) => info!("Completed redeem request #{}", event.redeem_id),
