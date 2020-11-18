@@ -29,6 +29,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::delay_for;
 
+#[derive(Debug, Copy, Clone)]
 struct BitcoinNetwork(bitcoin::Network);
 
 impl FromStr for BitcoinNetwork {
@@ -45,7 +46,7 @@ impl FromStr for BitcoinNetwork {
 
 /// The Vault client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
-#[derive(Clap)]
+#[derive(Clap, Debug, Clone)]
 #[clap(version = "0.1", author = "Interlay <contact@interlay.io>")]
 struct Opts {
     /// Parachain URL, can be over WebSockets or HTTP.
@@ -106,6 +107,9 @@ struct Opts {
 async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
+
+    info!("Command line arguments: {:?}", opts.clone());
+
     let btc_rpc = Arc::new(BitcoinCore::new(
         opts.bitcoin
             .new_client(Some(&format!("{}", opts.keyring)))?,
@@ -117,7 +121,6 @@ async fn main() -> Result<(), Error> {
     let vault_id = opts.keyring.to_account_id();
     let collateral_timeout_ms = opts.collateral_timeout_ms;
 
-    info!("Using keyring {}", opts.keyring);
 
     let num_confirmations = match opts.btc_confirmations {
         Some(x) => x,
