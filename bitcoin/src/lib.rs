@@ -16,7 +16,7 @@ pub use bitcoincore_rpc::{
         Address, Amount, Block, BlockHeader, Network, Transaction, TxOut, Txid,
     },
     bitcoincore_rpc_json::{GetRawTransactionResult, GetTransactionResult, WalletTxInfo},
-    json::{self, GetBlockResult, AddressType},
+    json::{self, AddressType, GetBlockResult},
     jsonrpc::Error as JsonRpcError,
     Auth, Client, Error as BitcoinError, RpcApi,
 };
@@ -308,8 +308,10 @@ impl BitcoinCoreApi for BitcoinCore {
             .send_raw_transaction(signed_raw_tx.transaction().unwrap().serialize().to_hex())?;
 
         #[cfg(feature = "regtest")]
-        self.rpc
-            .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
+        self.rpc.generate_to_address(
+            1,
+            &self.rpc.get_new_address(None, Some(AddressType::Bech32))?,
+        )?;
 
         Ok(self
             .wait_for_transaction_metadata(txid, op_timeout, num_confirmations)
