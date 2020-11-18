@@ -27,7 +27,9 @@ use scheduler::{CancelationScheduler, ProcessEvent};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::time::delay_for;
 
+#[derive(Debug, Copy, Clone)]
 struct BitcoinNetwork(bitcoin::Network);
 
 impl FromStr for BitcoinNetwork {
@@ -44,7 +46,7 @@ impl FromStr for BitcoinNetwork {
 
 /// The Vault client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
-#[derive(Clap)]
+#[derive(Clap, Debug, Clone)]
 #[clap(version = "0.1", author = "Interlay <contact@interlay.io>")]
 struct Opts {
     /// Parachain URL, can be over WebSockets or HTTP.
@@ -105,6 +107,9 @@ struct Opts {
 async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
+
+    info!("Command line arguments: {:?}", opts.clone());
+
     let btc_rpc = Arc::new(BitcoinCore::new(
         opts.bitcoin
             .new_client(Some(&format!("{}", opts.keyring)))?,
@@ -113,9 +118,9 @@ async fn main() -> Result<(), Error> {
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
     let arc_provider = Arc::new(provider.clone());
     let auction_provider = arc_provider.clone();
-
     let vault_id = opts.keyring.to_account_id();
     let collateral_timeout_ms = opts.collateral_timeout_ms;
+
 
     let num_confirmations = match opts.btc_confirmations {
         Some(x) => x,
@@ -135,14 +140,22 @@ async fn main() -> Result<(), Error> {
         }
     }
 
-    util::execute_open_requests(
+    let open_request_executor = util::execute_open_requests(
         arc_provider.clone(),
         btc_rpc.clone(),
         vault_id.clone(),
         num_confirmations,
         opts.network.0,
-    )
-    .await?;
+    );
+    tokio::spawn(async move {
+        info!("Waiting before processing open replace/redeem requests..");
+        delay_for(Duration::from_secs(15 * 60)).await;
+        info!("Checking for open replace/redeem requests..");
+        match open_request_executor.await {
+            Ok(_) => info!("Done processing open replace/redeem requests"),
+            Err(e) => error!("Failed to process open replace/redeem requests: {}", e),
+        }
+    });
 
     if !opts.no_startup_collateral_increase {
         // check if the vault is registered
@@ -160,6 +173,10 @@ async fn main() -> Result<(), Error> {
         vault_id.clone(),
         opts.max_collateral,
     );
+
+    info!("Waiting before listening to events..");
+    delay_for(Duration::from_secs(10)).await;
+    info!("Starting to listen for events..");
 
     // Issue handling
     let (issue_event_tx, issue_event_rx) = mpsc::channel::<ProcessEvent>(16);
