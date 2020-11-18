@@ -16,7 +16,7 @@ pub use bitcoincore_rpc::{
         Address, Amount, Block, BlockHeader, Network, Transaction, TxOut, Txid,
     },
     bitcoincore_rpc_json::{GetRawTransactionResult, GetTransactionResult, WalletTxInfo},
-    json::{self, GetBlockResult},
+    json::{self, GetBlockResult, AddressType},
     jsonrpc::Error as JsonRpcError,
     Auth, Client, Error as BitcoinError, RpcApi,
 };
@@ -184,7 +184,7 @@ impl BitcoinCoreApi for BitcoinCore {
 
     /// Gets a new address from the wallet
     fn get_new_address(&self) -> Result<H160, Error> {
-        let address = self.rpc.get_new_address(None, None)?;
+        let address = self.rpc.get_new_address(None, Some(AddressType::Bech32))?;
         Ok(get_hash_from_string(&address.to_string())?)
     }
 
@@ -309,7 +309,7 @@ impl BitcoinCoreApi for BitcoinCore {
 
         #[cfg(feature = "regtest")]
         self.rpc
-            .generate_to_address(1, &self.rpc.get_new_address(None, None)?)?;
+            .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
 
         Ok(self
             .wait_for_transaction_metadata(txid, op_timeout, num_confirmations)
