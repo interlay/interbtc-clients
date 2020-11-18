@@ -2,7 +2,7 @@ use crate::Error;
 use bitcoincore_rpc::{Auth, Client};
 use clap::Clap;
 
-#[derive(Clap)]
+#[derive(Clap, Debug, Clone)]
 pub struct BitcoinOpts {
     #[clap(long, env = "BITCOIN_RPC_URL")]
     bitcoin_rpc_url: String,
