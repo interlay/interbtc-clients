@@ -62,7 +62,10 @@ pub async fn listen_for_accept_replace(
                     .await;
 
                     match result {
-                        Ok(_) => info!("Successfully Executed replace #{} with amount {}", event.replace_id, event.btc_amount),
+                        Ok(_) => info!(
+                            "Successfully Executed replace #{} with amount {}",
+                            event.replace_id, event.btc_amount
+                        ),
                         Err(e) => error!(
                             "Failed to process replace request #{}: {}",
                             event.replace_id,

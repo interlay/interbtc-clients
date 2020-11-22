@@ -28,7 +28,10 @@ pub async fn listen_for_issue_requests(
         .on_event::<RequestIssueEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
                 if event.vault_id == vault_id.clone() {
-                    info!("Received event: request issue #{} for amount {}", event.issue_id, event.amount);
+                    info!(
+                        "Received event: request issue #{} for amount {}",
+                        event.issue_id, event.amount
+                    );
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel.clone().send(ProcessEvent::Opened).await;
