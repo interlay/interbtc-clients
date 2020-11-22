@@ -492,7 +492,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pay_and_execute_no_bitcoin_retry() {
-        let mut provider = MockProvider::default();
+        let provider = MockProvider::default();
         let mut btc_rpc = MockBitcoin::default();
         btc_rpc
             .expect_send_to_address()
