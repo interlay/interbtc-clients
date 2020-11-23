@@ -43,7 +43,7 @@ pub async fn listen_for_accept_replace(
                 if event.old_vault_id != vault_id.clone() {
                     return;
                 }
-                info!("Replace request #{} was accepted", event.replace_id);
+                info!("Received accept replace event: {:?}", event);
 
                 // within this event callback, we captured the arguments of listen_for_redeem_requests
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
