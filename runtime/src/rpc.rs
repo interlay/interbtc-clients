@@ -22,6 +22,7 @@ use tokio::sync::RwLock;
 use crate::balances_dot::AccountStoreExt;
 use crate::btc_relay::*;
 use crate::exchange_rate_oracle::*;
+use crate::frame_system::*;
 use crate::issue::*;
 use crate::pallets::Core;
 use crate::redeem::*;
@@ -65,6 +66,14 @@ pub type PolkaBtcStatusUpdate = StatusUpdate<
     <PolkaBtcRuntime as System>::BlockNumber,
     <PolkaBtcRuntime as Core>::DOT,
 >;
+
+pub mod historic_event_types {
+    pub type Event = btc_parachain_runtime::Event;
+    pub type IssueEvent = btc_parachain_runtime::RawIssueEvent<super::AccountId, u128>;
+    pub type RedeemEvent = btc_parachain_runtime::RawRedeemEvent<super::AccountId, u128>;
+    pub type ReplaceEvent =
+        btc_parachain_runtime::RawReplaceEvent<super::AccountId, u128, u128, u32>;
+}
 
 #[derive(Clone)]
 pub struct PolkaBtcProvider {
@@ -133,6 +142,25 @@ impl PolkaBtcProvider {
         self.ext_client
             .register_vault_and_watch(&*self.signer.write().await, collateral, btc_address)
             .await?;
+        Ok(())
+    }
+
+    /// Calls `callback` with each of the past events stored in the chain
+    ///
+    /// # Arguments
+    /// * `callback` - the callback to be called with the event
+    pub async fn on_past_events<T>(&self, mut callback: T) -> Result<(), Error>
+    where
+        T: FnMut(btc_parachain_runtime::Event) -> (),
+    {
+        let height = self.get_current_chain_height().await?;
+        for i in 1..height {
+            let hash = self.ext_client.block_hash(Some(i.into())).await?;
+            let events = self.ext_client.events(hash).await?;
+            for event in events.into_iter() {
+                callback(event.event);
+            }
+        }
         Ok(())
     }
 

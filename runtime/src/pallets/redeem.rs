@@ -2,6 +2,7 @@ use super::{Core, CoreEventsDecoder};
 use core::marker::PhantomData;
 pub use module_redeem::RedeemRequest;
 use parity_scale_codec::{Decode, Encode};
+use serde::Serialize;
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
@@ -15,7 +16,7 @@ pub struct RequestRedeemCall<T: Redeem> {
     pub vault_id: T::AccountId,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
 pub struct RequestRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,
@@ -34,7 +35,7 @@ pub struct ExecuteRedeemCall<T: Redeem> {
     pub _runtime: PhantomData<T>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
 pub struct ExecuteRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,
@@ -48,7 +49,7 @@ pub struct CancelRedeemCall<T: Redeem> {
     pub _runtime: PhantomData<T>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
 pub struct CancelRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,

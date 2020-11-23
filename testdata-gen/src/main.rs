@@ -4,6 +4,7 @@ mod error;
 mod issue;
 mod redeem;
 mod replace;
+mod stats;
 mod utils;
 mod vault;
 
@@ -120,6 +121,10 @@ enum SubCommand {
     ExecuteReplace(ExecuteReplaceInfo),
     /// Send a API request.
     ApiCall(ApiCall),
+    /// Get issue & redeem statistics.
+    GetChainStats,
+    /// Print all historic events.
+    DumpEvents(DumpOpts),
 }
 
 #[derive(Clap)]
@@ -214,6 +219,13 @@ impl BitcoinNetwork {
             BitcoinNetwork::Regtest => bitcoin::hash_to_p2wpkh(hash, bitcoin::Network::Regtest),
         }
     }
+}
+
+#[derive(Clap)]
+struct DumpOpts {
+    /// Print all raw events, rather than the JSON output of a select subset.
+    #[clap(long)]
+    raw: bool,
 }
 
 #[derive(Clap)]
@@ -557,6 +569,16 @@ async fn main() -> Result<(), Error> {
             let replace_id =
                 H256::from_str(&info.replace_id).map_err(|_| Error::InvalidRequestId)?;
             replace::execute_replace(&provider, &btc_rpc, replace_id).await?;
+        }
+        SubCommand::GetChainStats => {
+            stats::report_chain_stats(&provider).await?;
+        }
+        SubCommand::DumpEvents(opts) => {
+            if opts.raw {
+                stats::dump_raw_events(&provider).await?;
+            } else {
+                stats::dump_json(&provider).await?;
+            }
         }
         SubCommand::ApiCall(api_call) => match api_call.subcmd {
             ApiSubCommand::Vault(cmd) => match cmd.subcmd {
