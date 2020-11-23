@@ -101,7 +101,8 @@ impl<B: BitcoinCoreApi, P: StakedRelayerPallet> RelayMonitor<B, P> {
         // TODO: check if user submitted
         match self.btc_rpc.get_block_hash_for(height) {
             Ok(_) => info!("Block exists"),
-            Err(_) => {
+            Err(e) => {
+                error!("Got error on get_block_hash_for({}): {}", height, e);
                 self.polka_rpc
                     .suggest_status_update(
                         self.status_update_deposit,
