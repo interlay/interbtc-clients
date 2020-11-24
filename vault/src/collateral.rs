@@ -77,9 +77,9 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet
 
     // cases 1-3: already have enough collateral
     if actual_collateral >= required_collateral {
-        return Ok(())
+        return Ok(());
     }
-    
+
     trace!(
         "Current collateral = {}; required = {}; max = {}",
         actual_collateral,
@@ -371,9 +371,7 @@ mod tests {
             .returning(|| Ok(100));
 
         let vault_id = AccountId32::default();
-        assert_ok!(
-            lock_required_collateral(Arc::new(provider), vault_id, 200).await
-        );
+        assert_ok!(lock_required_collateral(Arc::new(provider), vault_id, 200).await);
     }
 
     #[tokio::test]

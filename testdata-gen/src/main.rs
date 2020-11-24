@@ -122,7 +122,7 @@ enum SubCommand {
     /// Send a API request.
     ApiCall(ApiCall),
     /// Get issue & redeem statistics.
-    GetChainStats,
+    GetChainStats(ChainStatOpts),
     /// Print all historic events.
     DumpEvents(DumpOpts),
 }
@@ -226,8 +226,23 @@ struct DumpOpts {
     /// Print all raw events, rather than the JSON output of a select subset.
     #[clap(long)]
     raw: bool,
+
+    /// Path of the output directory. Will be created if it does not exist.
+    /// If any logs exist in this folder, they will be overwritten.
+    #[clap(long, default_value = "event-logs", conflicts_with = "raw")]
+    output_folder: String,
 }
 
+#[derive(Clap)]
+struct ChainStatOpts {
+    /// The height of the chain to start from. If left unspecified, it starts from the genesis.
+    #[clap(long)]
+    start: Option<u32>,
+
+    /// The height of the chain to end at. If left unspecified, it continues at the current chain height.
+    #[clap(long)]
+    end: Option<u32>,
+}
 #[derive(Clap)]
 struct SetExchangeRateInfo {
     /// Exchange rate from BTC to DOT.
@@ -570,14 +585,14 @@ async fn main() -> Result<(), Error> {
                 H256::from_str(&info.replace_id).map_err(|_| Error::InvalidRequestId)?;
             replace::execute_replace(&provider, &btc_rpc, replace_id).await?;
         }
-        SubCommand::GetChainStats => {
-            stats::report_chain_stats(&provider).await?;
+        SubCommand::GetChainStats(opts) => {
+            stats::report_chain_stats(&provider, opts.start, opts.end).await?;
         }
         SubCommand::DumpEvents(opts) => {
             if opts.raw {
                 stats::dump_raw_events(&provider).await?;
             } else {
-                stats::dump_json(&provider).await?;
+                stats::dump_json(&provider, &opts.output_folder).await?;
             }
         }
         SubCommand::ApiCall(api_call) => match api_call.subcmd {

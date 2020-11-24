@@ -148,17 +148,32 @@ impl PolkaBtcProvider {
     /// Calls `callback` with each of the past events stored in the chain
     ///
     /// # Arguments
+    /// * `start` - the height to start iterating at. If None, it starts from the genesis.
+    /// * `end` - the height to stop iterating at. If None, it ends at the current chain height.
     /// * `callback` - the callback to be called with the event
-    pub async fn on_past_events<T>(&self, mut callback: T) -> Result<(), Error>
+    pub async fn on_past_events<T>(
+        &self,
+        start: Option<u32>,
+        end: Option<u32>,
+        mut callback: T,
+    ) -> Result<(), Error>
     where
-        T: FnMut(btc_parachain_runtime::Event) -> (),
+        T: FnMut(
+            btc_parachain_runtime::Event,
+        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
     {
-        let height = self.get_current_chain_height().await?;
-        for i in 1..height {
+        let start = start.unwrap_or(1);
+        let end = match end {
+            Some(x) => u32::min(x, self.get_current_chain_height().await?),
+            None => self.get_current_chain_height().await?,
+        };
+        for i in start..end {
             let hash = self.ext_client.block_hash(Some(i.into())).await?;
             let events = self.ext_client.events(hash).await?;
             for event in events.into_iter() {
-                callback(event.event);
+                if let Err(e) = callback(event.event) {
+                    return Err(Error::CallbackError(e));
+                }
             }
         }
         Ok(())
