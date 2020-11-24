@@ -130,8 +130,9 @@ struct ApiCall {
 
 #[derive(Clap)]
 enum ApiSubCommand {
+    /// Send an API message to the vault
     Vault(VaultApiCommand),
-
+    /// Send an API message to the staked relayer
     Relayer(RelayerApiCommand),
 }
 
@@ -157,21 +158,33 @@ struct RelayerApiCommand {
 
 #[derive(Clap)]
 enum VaultApiSubCommand {
+    /// Tell the vault to place a replace request.
     RequestReplace(RequestReplaceJsonRpcRequest),
-    RegisterVault(RegisterVaultJsonRpcRequest),
-    LockAdditionalCollateral(LockAdditionalCollateralJsonRpcRequest),
-    WithdrawCollateral(WithdrawCollateralJsonRpcRequest),
-    UpdateBtcAddress(UpdateBtcAddressJsonRpcRequest),
+    /// Tell the vault to withdraw a replace request.
     WithdrawReplace(WithdrawReplaceJsonRpcRequest),
+    /// Tell the vault to register itself.
+    RegisterVault(RegisterVaultJsonRpcRequest),
+    /// Tell the vault to lock additional collateral.
+    LockAdditionalCollateral(LockAdditionalCollateralJsonRpcRequest),
+    /// Tell the vault to withdraw collateral.
+    WithdrawCollateral(WithdrawCollateralJsonRpcRequest),
+    /// Tell the vault to update its BTC address.
+    UpdateBtcAddress(UpdateBtcAddressJsonRpcRequest),
 }
 
 #[derive(Clap)]
 enum RelayerApiSubCommand {
+    /// Tell the relayer to issue a status update suggestion.
     SuggestStatusUpdate(SuggestStatusUpdateJsonRpcRequest),
+    /// Tell the relayer to vote on a status update suggestion.
     VoteOnStatusUpdate(VoteOnStatusUpdateJsonRpcRequest),
+    /// Tell the relayer to register itself.
     Register(RegisterStakedRelayerJsonRpcRequest),
+    /// Tell the relayer to deregister itself.
     Deregister,
+    /// Get the status of the parachain.
     SystemHealth,
+    /// Get the account id of the relayer.
     AccountId,
 }
 
