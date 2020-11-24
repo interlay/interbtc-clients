@@ -28,7 +28,10 @@ pub async fn listen_for_redeem_requests(
                 if event.vault_id != vault_id.clone() {
                     return;
                 }
-                info!("Received redeem request #{} for amount {}", event.redeem_id, event.amount_polka_btc);
+                info!(
+                    "Received redeem request #{} for amount {}",
+                    event.redeem_id, event.amount_polka_btc
+                );
 
                 // within this event callback, we captured the arguments of listen_for_redeem_requests
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
@@ -44,7 +47,10 @@ pub async fn listen_for_redeem_requests(
                         .await;
 
                     match result {
-                        Ok(_) => info!("Completed redeem request #{} with amount {}", event.redeem_id, event.amount_polka_btc),
+                        Ok(_) => info!(
+                            "Completed redeem request #{} with amount {}",
+                            event.redeem_id, event.amount_polka_btc
+                        ),
                         Err(e) => error!(
                             "Failed to process redeem request #{}: {}",
                             event.redeem_id,

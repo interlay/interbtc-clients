@@ -137,15 +137,38 @@ impl PolkaBtcProvider {
     }
 
     /// Subscription service that should listen forever, only returns if the initial subscription
+    /// cannot be established. Calls `on_error` when an error event has been received, or when an
+    /// event has been received that failed to be decoded into a raw event.
+    ///
+    /// # Arguments
+    /// * `on_error` - callback for decoding errors, is not allowed to take too long
+    pub async fn on_event_error<E: Fn(XtError)>(&self, on_error: E) -> Result<(), Error> {
+        let sub = self.ext_client.subscribe_events().await?;
+        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
+        // We would need with_core to be able to decode all types, but since
+        // it does not exist, instead use a random module that includes it:
+        decoder.with_vault_registry();
+
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
+        loop {
+            match sub.next().await {
+                Some(Err(err)) => on_error(err), // report error
+                Some(Ok(_)) => {}                // do nothing
+                None => break Ok(()),            // end of stream
+            }
+        }
+    }
+    /// Subscription service that should listen forever, only returns if the initial subscription
     /// cannot be established. This function uses two concurrent tasks: one for the event listener,
     /// and one that calls the given callback. This allows the callback to take a long time to
     /// complete without breaking the rpc communication, which could otherwise happen. Still, since
     /// the queue of callbacks is processed sequentially, some care should be taken that the queue
-    /// does not overflow.
+    /// does not overflow. `on_error` is called when the event has successfully been decoded into a
+    /// raw_event, but failed to decode into an event of type `T`
     ///
     /// # Arguments
     /// * `on_event` - callback for events, is allowed to sometimes take a longer time
-    /// * `on_error` - callback for errors, is not allowed to take too long
+    /// * `on_error` - callback for decoding error, is not allowed to take too long
     pub async fn on_event<T, F, R, E>(&self, mut on_event: F, on_error: E) -> Result<(), Error>
     where
         T: Event<PolkaBtcRuntime>,
@@ -170,21 +193,20 @@ impl PolkaBtcProvider {
             async move {
                 let tx = &tx;
                 while let Some(result) = sub.next().await {
-                    let decoded = result.and_then(|raw_event| {
-                        T::decode(&mut &raw_event.data[..]).map_err(|e| e.into())
-                    });
-
-                    match decoded {
-                        Ok(event) => {
-                            // send the event to the other task
-                            if tx.clone().send(event).await.is_err() {
-                                break;
+                    if let Ok(raw_event) = result {
+                        let decoded = T::decode(&mut &raw_event.data[..]);
+                        match decoded {
+                            Ok(event) => {
+                                // send the event to the other task
+                                if tx.clone().send(event).await.is_err() {
+                                    break;
+                                }
                             }
-                        }
-                        Err(err) => {
-                            on_error(err);
-                        }
-                    };
+                            Err(err) => {
+                                on_error(err.into());
+                            }
+                        };
+                    }
                 }
                 Result::<(), _>::Err(Error::ChannelClosed)
             },

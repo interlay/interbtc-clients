@@ -121,7 +121,6 @@ async fn main() -> Result<(), Error> {
     let vault_id = opts.keyring.to_account_id();
     let collateral_timeout_ms = opts.collateral_timeout_ms;
 
-
     let num_confirmations = match opts.btc_confirmations {
         Some(x) => x,
         None => arc_provider.clone().get_bitcoin_confirmations().await?,
@@ -233,6 +232,12 @@ async fn main() -> Result<(), Error> {
     let result = tokio::try_join!(
         tokio::spawn(async move {
             api_listener.await;
+        }),
+        tokio::spawn(async move {
+            arc_provider
+                .on_event_error(|e| error!("Received error event: {}", e))
+                .await
+                .unwrap();
         }),
         tokio::spawn(async move {
             collateral_maintainer.await.unwrap();
