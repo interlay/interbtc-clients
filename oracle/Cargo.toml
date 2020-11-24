@@ -12,3 +12,7 @@ sp-keyring = "2.0.0"
 tokio = { version = "0.2.22", features = ["full"] }
 runtime = { path = "../runtime" }
 chrono = "0.4"
+thiserror = "1.0"
+coingecko = "0.1.0"
+isahc =  "0.9.12"
+num-traits =  "0.2"
