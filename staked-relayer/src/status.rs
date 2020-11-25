@@ -4,7 +4,7 @@ use bitcoin::{
     BitcoinCore, BitcoinCoreApi, BlockHash, ConversionError as BitcoinConversionError,
     Error as BitcoinError, Hash,
 };
-use log::{error, info};
+use log::{error, info, warn};
 use runtime::{
     pallets::{btc_relay::StoreMainChainHeaderEvent, staked_relayers::StatusUpdateSuggestedEvent},
     Error as RuntimeError, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
@@ -83,6 +83,23 @@ pub struct RelayMonitor<B: BitcoinCoreApi, P: StakedRelayerPallet> {
     status_update_deposit: u128,
 }
 
+async fn report_no_data_btc_relay<P: StakedRelayerPallet>(
+    rpc: &Arc<P>,
+    deposit: u128,
+    block_hash: H256Le,
+) -> Result<(), Error> {
+    Ok(rpc
+        .suggest_status_update(
+            deposit,
+            StatusCode::Error,
+            Some(ErrorCode::NoDataBTCRelay),
+            None,
+            Some(block_hash),
+            String::new(),
+        )
+        .await?)
+}
+
 impl<B: BitcoinCoreApi, P: StakedRelayerPallet> RelayMonitor<B, P> {
     pub fn new(btc_rpc: Arc<B>, polka_rpc: Arc<P>, status_update_deposit: u128) -> Self {
         Self {
@@ -92,29 +109,41 @@ impl<B: BitcoinCoreApi, P: StakedRelayerPallet> RelayMonitor<B, P> {
         }
     }
 
-    pub async fn on_store_block(&self, height: u32, hash: H256Le) -> Result<(), Error> {
+    pub async fn on_store_block(
+        &self,
+        height: u32,
+        parachain_block_hash: H256Le,
+    ) -> Result<(), Error> {
         if !utils::is_registered(&self.polka_rpc).await {
             return Ok(());
         }
-        info!("Block submission: {}", hash);
+        info!("Block submission: {}", parachain_block_hash);
 
         // TODO: check if user submitted
         match self.btc_rpc.get_block_hash_for(height) {
-            Ok(_) => info!("Block exists"),
-            Err(e) => {
-                error!("Got error on get_block_hash_for({}): {}", height, e);
-                self.polka_rpc
-                    .suggest_status_update(
+            Ok(bitcoin_block_hash) => {
+                if bitcoin_block_hash.into_inner() != parachain_block_hash.to_bytes_le() {
+                    warn!("Block does not match at height {}", height);
+                    report_no_data_btc_relay(
+                        &self.polka_rpc,
                         self.status_update_deposit,
-                        StatusCode::Error,
-                        Some(ErrorCode::NoDataBTCRelay),
-                        None,
-                        Some(hash),
-                        String::new(),
+                        parachain_block_hash,
                     )
                     .await?;
+                }
             }
+            Err(BitcoinError::InvalidBitcoinHeight) => {
+                warn!("Block does not exist at height {}", height);
+                report_no_data_btc_relay(
+                    &self.polka_rpc,
+                    self.status_update_deposit,
+                    parachain_block_hash,
+                )
+                .await?;
+            }
+            Err(e) => error!("Got error on get_block_hash_for({}): {}", height, e),
         }
+
         Ok(())
     }
 }
@@ -311,7 +340,7 @@ mod tests {
         let mut bitcoin = MockBitcoin::default();
         bitcoin
             .expect_get_block_hash_for()
-            .returning(|_| Err(BitcoinConversionError::BlockHashError.into()));
+            .returning(|_| Err(BitcoinError::InvalidBitcoinHeight.into()));
         let mut parachain = MockProvider::default();
         parachain
             .expect_suggest_status_update()

@@ -20,12 +20,15 @@ pub use bitcoincore_rpc::{
     jsonrpc::Error as JsonRpcError,
     Auth, Client, Error as BitcoinError, RpcApi,
 };
-pub use error::{ConversionError, Error};
+pub use error::{BitcoinRpcError, ConversionError, Error};
 use rand::{self, Rng};
 use sp_core::{H160, H256};
 use std::sync::Arc;
 use std::{collections::HashMap, str::FromStr, time::Duration};
 use tokio::time::delay_for;
+
+#[macro_use]
+extern crate num_derive;
 
 pub struct TransactionMetadata {
     pub txid: Txid,
@@ -104,10 +107,11 @@ impl BitcoinCoreApi for BitcoinCore {
                 Err(e) => {
                     delay_for(delay).await;
                     if let BitcoinError::JsonRpc(JsonRpcError::Rpc(rpc_error)) = &e {
-                        // https://github.com/bitcoin/bitcoin/blob/be3af4f31089726267ce2dbdd6c9c153bb5aeae1/src/rpc/protocol.h#L43
-                        if rpc_error.code == -8 {
-                            continue;
-                        }
+                        match BitcoinRpcError::from(rpc_error.clone()) {
+                            // block does not exist yet
+                            BitcoinRpcError::RpcInvalidParameter => continue,
+                            _ => (),
+                        };
                     }
                     return Err(e.into());
                 }
@@ -170,7 +174,20 @@ impl BitcoinCoreApi for BitcoinCore {
     /// # Arguments
     /// * `height` - block height
     fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error> {
-        Ok(self.rpc.get_block_hash(height.into())?)
+        match self.rpc.get_block_hash(height.into()) {
+            Ok(block_hash) => Ok(block_hash),
+            Err(e) => Err(
+                if let BitcoinError::JsonRpc(JsonRpcError::Rpc(rpc_error)) = &e {
+                    match BitcoinRpcError::from(rpc_error.clone()) {
+                        // block does not exist yet
+                        BitcoinRpcError::RpcInvalidParameter => Error::InvalidBitcoinHeight,
+                        _ => e.into(),
+                    }
+                } else {
+                    e.into()
+                },
+            ),
+        }
     }
 
     /// Checks if the local full node has seen the specified block hash.
