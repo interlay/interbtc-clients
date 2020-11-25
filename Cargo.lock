@@ -512,6 +512,9 @@ dependencies = [
  "clap 3.0.0-beta.2",
  "hex 0.4.2",
  "mockall",
+ "num",
+ "num-derive",
+ "num-traits",
  "rand 0.7.3",
  "sp-core",
  "thiserror",
@@ -521,7 +524,7 @@ dependencies = [
 [[package]]
 name = "bitcoin"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "bitcoin_hashes 0.7.6",
  "frame-support",
@@ -726,7 +729,7 @@ dependencies = [
 [[package]]
 name = "btc-parachain"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "btc-parachain-runtime",
  "frame-benchmarking",
@@ -767,8 +770,8 @@ dependencies = [
 
 [[package]]
 name = "btc-parachain-runtime"
-version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+version = "0.2.4"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "btc-relay",
  "collateral",
@@ -819,7 +822,7 @@ dependencies = [
 [[package]]
 name = "btc-relay"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "bitcoin 0.2.3",
  "frame-benchmarking",
@@ -1050,7 +1053,7 @@ dependencies = [
 [[package]]
 name = "collateral"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -1612,7 +1615,7 @@ checksum = "f7531096570974c3a9dcf9e4b8e1cede1ec26cf5046219fb3b9d897503b9be59"
 [[package]]
 name = "exchange-rate-oracle"
 version = "0.2.4"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "collateral",
  "frame-benchmarking",
@@ -2799,7 +2802,7 @@ checksum = "47be2f14c678be2fdcab04ab1171db51b2762ce6f0a8ee87c8dd4a04ed216135"
 [[package]]
 name = "issue"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "bitcoin 0.2.3",
  "btc-relay",
@@ -3002,7 +3005,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.1.0"
-source = "git+https://github.com/interlay/jsonrpsee?rev=a0357e82e0c5c976cdeecc763b5bc36da6e75a91#a0357e82e0c5c976cdeecc763b5bc36da6e75a91"
+source = "git+https://github.com/interlay/jsonrpsee?rev=95d98e18a5459ae82477a14f426243621a927f0f#95d98e18a5459ae82477a14f426243621a927f0f"
 dependencies = [
  "async-std",
  "async-tls 0.6.0",
@@ -3034,7 +3037,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "1.0.0"
-source = "git+https://github.com/interlay/jsonrpsee?rev=a0357e82e0c5c976cdeecc763b5bc36da6e75a91#a0357e82e0c5c976cdeecc763b5bc36da6e75a91"
+source = "git+https://github.com/interlay/jsonrpsee?rev=95d98e18a5459ae82477a14f426243621a927f0f#95d98e18a5459ae82477a14f426243621a927f0f"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -3962,7 +3965,7 @@ dependencies = [
 [[package]]
 name = "module-exchange-rate-oracle-rpc"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -3978,7 +3981,7 @@ dependencies = [
 [[package]]
 name = "module-exchange-rate-oracle-rpc-runtime-api"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -3988,7 +3991,7 @@ dependencies = [
 [[package]]
 name = "module-issue-rpc"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -4004,7 +4007,7 @@ dependencies = [
 [[package]]
 name = "module-issue-rpc-runtime-api"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4015,7 +4018,7 @@ dependencies = [
 [[package]]
 name = "module-redeem-rpc"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -4031,7 +4034,7 @@ dependencies = [
 [[package]]
 name = "module-redeem-rpc-runtime-api"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4042,7 +4045,7 @@ dependencies = [
 [[package]]
 name = "module-replace-rpc"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -4058,7 +4061,7 @@ dependencies = [
 [[package]]
 name = "module-replace-rpc-runtime-api"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4069,7 +4072,7 @@ dependencies = [
 [[package]]
 name = "module-staked-relayers-rpc"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -4085,7 +4088,7 @@ dependencies = [
 [[package]]
 name = "module-staked-relayers-rpc-runtime-api"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4096,7 +4099,7 @@ dependencies = [
 [[package]]
 name = "module-vault-registry-rpc"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -4112,7 +4115,7 @@ dependencies = [
 [[package]]
 name = "module-vault-registry-rpc-runtime-api"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4287,6 +4290,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61807f77802ff30975e01f4f071c8ba10c022052f98b3294119f3e615d13e5be"
 
 [[package]]
+name = "num"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8536030f9fea7127f841b45bb6243b27255787fb4eb83958aa1ef9d2fdc0c36"
+dependencies = [
+ "num-bigint",
+ "num-complex",
+ "num-integer",
+ "num-iter",
+ "num-rational",
+ "num-traits",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4308,12 +4325,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-derive"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "876a53fff98e03a936a674b29568b0e605f06b29372c2489ff4de23f1949743d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2cc698a63b549a70bc047073d2949cce27cd1c7b0a4a862d08a8031bc2801db"
 dependencies = [
  "autocfg 1.0.1",
+ "num-traits",
+]
+
+[[package]]
+name = "num-iter"
+version = "0.1.42"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2021c8337a54d21aca0d59a92577a029af9431cb59b909b03252b9c164fad59"
+dependencies = [
+ "autocfg 1.0.1",
+ "num-integer",
  "num-traits",
 ]
 
@@ -5579,7 +5618,7 @@ dependencies = [
 [[package]]
 name = "redeem"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "bitcoin 0.2.3",
  "btc-relay",
@@ -5725,7 +5764,7 @@ dependencies = [
 [[package]]
 name = "replace"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "bitcoin 0.2.3",
  "btc-relay",
@@ -5833,8 +5872,10 @@ dependencies = [
  "async-trait",
  "bitcoin 0.2.3",
  "btc-parachain",
+ "btc-parachain-runtime",
  "exchange-rate-oracle",
  "frame-support",
+ "frame-system",
  "futures 0.3.7",
  "issue",
  "jsonrpsee",
@@ -6887,7 +6928,7 @@ dependencies = [
 [[package]]
 name = "security"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -7930,7 +7971,7 @@ dependencies = [
 [[package]]
 name = "staked-relayers"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "bitcoin 0.2.3",
  "btc-relay",
@@ -8277,6 +8318,7 @@ dependencies = [
  "reqwest",
  "runtime",
  "serde",
+ "serde_json",
  "sp-core",
  "sp-keyring",
  "thiserror",
@@ -8812,7 +8854,7 @@ checksum = "efd1f82c56340fdf16f2a953d7bda4f8fdffba13d93b00844c25572110b26079"
 [[package]]
 name = "treasury"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -9050,7 +9092,7 @@ checksum = "05e42f7c18b8f902290b009cde6d651262f956c98bc51bca4cd1d511c9cd85c7"
 
 [[package]]
 name = "vault"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "async-trait",
  "backoff",
@@ -9075,14 +9117,16 @@ dependencies = [
 [[package]]
 name = "vault-registry"
 version = "0.2.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#4e31fe37b6786f350cfd513087b5267f2510d9d7"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#5d7c9fef971794d80fef704cf36d6e0835428893"
 dependencies = [
  "collateral",
  "exchange-rate-oracle",
+ "fixed-hash",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "pallet-randomness-collective-flip",
  "pallet-timestamp",
  "parity-scale-codec",
  "primitive-types",

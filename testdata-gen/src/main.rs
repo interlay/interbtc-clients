@@ -4,6 +4,7 @@ mod error;
 mod issue;
 mod redeem;
 mod replace;
+mod stats;
 mod utils;
 mod vault;
 
@@ -120,6 +121,10 @@ enum SubCommand {
     ExecuteReplace(ExecuteReplaceInfo),
     /// Send a API request.
     ApiCall(ApiCall),
+    /// Get issue & redeem statistics.
+    GetChainStats(ChainStatOpts),
+    /// Print all historic events.
+    DumpEvents(DumpOpts),
 }
 
 #[derive(Clap)]
@@ -130,8 +135,9 @@ struct ApiCall {
 
 #[derive(Clap)]
 enum ApiSubCommand {
+    /// Send an API message to the vault
     Vault(VaultApiCommand),
-
+    /// Send an API message to the staked relayer
     Relayer(RelayerApiCommand),
 }
 
@@ -157,21 +163,33 @@ struct RelayerApiCommand {
 
 #[derive(Clap)]
 enum VaultApiSubCommand {
+    /// Tell the vault to place a replace request.
     RequestReplace(RequestReplaceJsonRpcRequest),
-    RegisterVault(RegisterVaultJsonRpcRequest),
-    LockAdditionalCollateral(LockAdditionalCollateralJsonRpcRequest),
-    WithdrawCollateral(WithdrawCollateralJsonRpcRequest),
-    UpdateBtcAddress(UpdateBtcAddressJsonRpcRequest),
+    /// Tell the vault to withdraw a replace request.
     WithdrawReplace(WithdrawReplaceJsonRpcRequest),
+    /// Tell the vault to register itself.
+    RegisterVault(RegisterVaultJsonRpcRequest),
+    /// Tell the vault to lock additional collateral.
+    LockAdditionalCollateral(LockAdditionalCollateralJsonRpcRequest),
+    /// Tell the vault to withdraw collateral.
+    WithdrawCollateral(WithdrawCollateralJsonRpcRequest),
+    /// Tell the vault to update its BTC address.
+    UpdateBtcAddress(UpdateBtcAddressJsonRpcRequest),
 }
 
 #[derive(Clap)]
 enum RelayerApiSubCommand {
+    /// Tell the relayer to issue a status update suggestion.
     SuggestStatusUpdate(SuggestStatusUpdateJsonRpcRequest),
+    /// Tell the relayer to vote on a status update suggestion.
     VoteOnStatusUpdate(VoteOnStatusUpdateJsonRpcRequest),
+    /// Tell the relayer to register itself.
     Register(RegisterStakedRelayerJsonRpcRequest),
+    /// Tell the relayer to deregister itself.
     Deregister,
+    /// Get the status of the parachain.
     SystemHealth,
+    /// Get the account id of the relayer.
     AccountId,
 }
 
@@ -203,6 +221,28 @@ impl BitcoinNetwork {
     }
 }
 
+#[derive(Clap)]
+struct DumpOpts {
+    /// Print all raw events, rather than the JSON output of a select subset.
+    #[clap(long)]
+    raw: bool,
+
+    /// Path of the output directory. Will be created if it does not exist.
+    /// If any logs exist in this folder, they will be overwritten.
+    #[clap(long, default_value = "event-logs", conflicts_with = "raw")]
+    output_folder: String,
+}
+
+#[derive(Clap)]
+struct ChainStatOpts {
+    /// The height of the chain to start from. If left unspecified, it starts from the genesis.
+    #[clap(long)]
+    start: Option<u32>,
+
+    /// The height of the chain to end at. If left unspecified, it continues at the current chain height.
+    #[clap(long)]
+    end: Option<u32>,
+}
 #[derive(Clap)]
 struct SetExchangeRateInfo {
     /// Exchange rate from BTC to DOT.
@@ -544,6 +584,16 @@ async fn main() -> Result<(), Error> {
             let replace_id =
                 H256::from_str(&info.replace_id).map_err(|_| Error::InvalidRequestId)?;
             replace::execute_replace(&provider, &btc_rpc, replace_id).await?;
+        }
+        SubCommand::GetChainStats(opts) => {
+            stats::report_chain_stats(&provider, opts.start, opts.end).await?;
+        }
+        SubCommand::DumpEvents(opts) => {
+            if opts.raw {
+                stats::dump_raw_events(&provider).await?;
+            } else {
+                stats::dump_json(&provider, &opts.output_folder).await?;
+            }
         }
         SubCommand::ApiCall(api_call) => match api_call.subcmd {
             ApiSubCommand::Vault(cmd) => match cmd.subcmd {

@@ -3,6 +3,7 @@ use core::marker::PhantomData;
 pub use module_bitcoin::types::H256Le;
 pub use module_issue::IssueRequest;
 use parity_scale_codec::{Decode, Encode};
+use serde::Serialize;
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
@@ -16,7 +17,7 @@ pub struct RequestIssueCall<T: Issue> {
     pub griefing_collateral: T::DOT,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
 pub struct RequestIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,
@@ -35,7 +36,7 @@ pub struct ExecuteIssueCall<T: Issue> {
     pub _runtime: PhantomData<T>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
 pub struct ExecuteIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,
@@ -48,7 +49,7 @@ pub struct CancelIssueCall<T: Issue> {
     pub _runtime: PhantomData<T>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
 pub struct CancelIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,

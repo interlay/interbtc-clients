@@ -21,13 +21,15 @@ use redeem::*;
 use replace::*;
 use runtime::{
     substrate_subxt::PairSigner, BtcRelayPallet, Error as RuntimeError, PolkaBtcProvider,
-    PolkaBtcRuntime, VaultRegistryPallet,
+    PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
 };
 use scheduler::{CancelationScheduler, ProcessEvent};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::delay_for;
+
+const CHAIN_HEIGHT_POLLING_INTERVAL: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Copy, Clone)]
 struct BitcoinNetwork(bitcoin::Network);
@@ -121,7 +123,6 @@ async fn main() -> Result<(), Error> {
     let vault_id = opts.keyring.to_account_id();
     let collateral_timeout_ms = opts.collateral_timeout_ms;
 
-
     let num_confirmations = match opts.btc_confirmations {
         Some(x) => x,
         None => arc_provider.clone().get_bitcoin_confirmations().await?,
@@ -174,8 +175,13 @@ async fn main() -> Result<(), Error> {
         opts.max_collateral,
     );
 
-    info!("Waiting before listening to events..");
-    delay_for(Duration::from_secs(10)).await;
+    // wait for a new block to arrive, to prevent processing an event that potentially
+    // has been processed already prior to restarting
+    info!("Waiting for new block..");
+    let startup_height = arc_provider.get_current_chain_height().await?;
+    while startup_height == arc_provider.get_current_chain_height().await? {
+        delay_for(CHAIN_HEIGHT_POLLING_INTERVAL).await;
+    }
     info!("Starting to listen for events..");
 
     // Issue handling
@@ -233,6 +239,12 @@ async fn main() -> Result<(), Error> {
     let result = tokio::try_join!(
         tokio::spawn(async move {
             api_listener.await;
+        }),
+        tokio::spawn(async move {
+            arc_provider
+                .on_event_error(|e| error!("Received error event: {}", e))
+                .await
+                .unwrap();
         }),
         tokio::spawn(async move {
             collateral_maintainer.await.unwrap();

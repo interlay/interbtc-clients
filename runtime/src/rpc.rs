@@ -22,6 +22,7 @@ use tokio::sync::RwLock;
 use crate::balances_dot::AccountStoreExt;
 use crate::btc_relay::*;
 use crate::exchange_rate_oracle::*;
+use crate::frame_system::*;
 use crate::issue::*;
 use crate::pallets::Core;
 use crate::redeem::*;
@@ -65,6 +66,14 @@ pub type PolkaBtcStatusUpdate = StatusUpdate<
     <PolkaBtcRuntime as System>::BlockNumber,
     <PolkaBtcRuntime as Core>::DOT,
 >;
+
+pub mod historic_event_types {
+    pub type Event = btc_parachain_runtime::Event;
+    pub type IssueEvent = btc_parachain_runtime::RawIssueEvent<super::AccountId, u128>;
+    pub type RedeemEvent = btc_parachain_runtime::RawRedeemEvent<super::AccountId, u128>;
+    pub type ReplaceEvent =
+        btc_parachain_runtime::RawReplaceEvent<super::AccountId, u128, u128, u32>;
+}
 
 #[derive(Clone)]
 pub struct PolkaBtcProvider {
@@ -136,16 +145,73 @@ impl PolkaBtcProvider {
         Ok(())
     }
 
+    /// Calls `callback` with each of the past events stored in the chain
+    ///
+    /// # Arguments
+    /// * `start` - the height to start iterating at. If None, it starts from the genesis.
+    /// * `end` - the height to stop iterating at. If None, it ends at the current chain height.
+    /// * `callback` - the callback to be called with the event
+    pub async fn on_past_events<T>(
+        &self,
+        start: Option<u32>,
+        end: Option<u32>,
+        mut callback: T,
+    ) -> Result<(), Error>
+    where
+        T: FnMut(
+            btc_parachain_runtime::Event,
+        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
+    {
+        let start = start.unwrap_or(1);
+        let end = match end {
+            Some(x) => u32::min(x, self.get_current_chain_height().await?),
+            None => self.get_current_chain_height().await?,
+        };
+        for i in start..end {
+            let hash = self.ext_client.block_hash(Some(i.into())).await?;
+            let events = self.ext_client.events(hash).await?;
+            for event in events.into_iter() {
+                if let Err(e) = callback(event.event) {
+                    return Err(Error::CallbackError(e));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Subscription service that should listen forever, only returns if the initial subscription
+    /// cannot be established. Calls `on_error` when an error event has been received, or when an
+    /// event has been received that failed to be decoded into a raw event.
+    ///
+    /// # Arguments
+    /// * `on_error` - callback for decoding errors, is not allowed to take too long
+    pub async fn on_event_error<E: Fn(XtError)>(&self, on_error: E) -> Result<(), Error> {
+        let sub = self.ext_client.subscribe_events().await?;
+        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
+        // We would need with_core to be able to decode all types, but since
+        // it does not exist, instead use a random module that includes it:
+        decoder.with_vault_registry();
+
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
+        loop {
+            match sub.next().await {
+                Some(Err(err)) => on_error(err), // report error
+                Some(Ok(_)) => {}                // do nothing
+                None => break Ok(()),            // end of stream
+            }
+        }
+    }
     /// Subscription service that should listen forever, only returns if the initial subscription
     /// cannot be established. This function uses two concurrent tasks: one for the event listener,
     /// and one that calls the given callback. This allows the callback to take a long time to
     /// complete without breaking the rpc communication, which could otherwise happen. Still, since
     /// the queue of callbacks is processed sequentially, some care should be taken that the queue
-    /// does not overflow.
+    /// does not overflow. `on_error` is called when the event has successfully been decoded into a
+    /// raw_event, but failed to decode into an event of type `T`
     ///
     /// # Arguments
     /// * `on_event` - callback for events, is allowed to sometimes take a longer time
-    /// * `on_error` - callback for errors, is not allowed to take too long
+    /// * `on_error` - callback for decoding error, is not allowed to take too long
     pub async fn on_event<T, F, R, E>(&self, mut on_event: F, on_error: E) -> Result<(), Error>
     where
         T: Event<PolkaBtcRuntime>,
@@ -170,21 +236,20 @@ impl PolkaBtcProvider {
             async move {
                 let tx = &tx;
                 while let Some(result) = sub.next().await {
-                    let decoded = result.and_then(|raw_event| {
-                        T::decode(&mut &raw_event.data[..]).map_err(|e| e.into())
-                    });
-
-                    match decoded {
-                        Ok(event) => {
-                            // send the event to the other task
-                            if tx.clone().send(event).await.is_err() {
-                                break;
+                    if let Ok(raw_event) = result {
+                        let decoded = T::decode(&mut &raw_event.data[..]);
+                        match decoded {
+                            Ok(event) => {
+                                // send the event to the other task
+                                if tx.clone().send(event).await.is_err() {
+                                    break;
+                                }
                             }
-                        }
-                        Err(err) => {
-                            on_error(err);
-                        }
-                    };
+                            Err(err) => {
+                                on_error(err.into());
+                            }
+                        };
+                    }
                 }
                 Result::<(), _>::Err(Error::ChannelClosed)
             },

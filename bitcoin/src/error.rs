@@ -1,5 +1,6 @@
 use crate::BitcoinError;
 use bitcoincore_rpc::bitcoin::util::address::Error as AddressError;
+use bitcoincore_rpc::jsonrpc::error::RpcError;
 use hex::FromHexError;
 use thiserror::Error;
 
@@ -11,6 +12,8 @@ pub enum Error {
     ConversionError(#[from] ConversionError),
     #[error("Could not confirm transaction")]
     ConfirmationError,
+    #[error("Could not find block at height")]
+    InvalidBitcoinHeight,
 }
 
 #[derive(Error, Debug)]
@@ -23,4 +26,77 @@ pub enum ConversionError {
     WitnessProgramError,
     #[error("Could not convert block hash")]
     BlockHashError,
+}
+
+// https://github.com/bitcoin/bitcoin/blob/be3af4f31089726267ce2dbdd6c9c153bb5aeae1/src/rpc/protocol.h#L43
+#[derive(Debug, FromPrimitive)]
+pub enum BitcoinRpcError {
+    /// Standard JSON-RPC 2.0 errors
+    RpcInvalidRequest = -32600,
+    RpcMethodNotFound = -32601,
+    RpcInvalidParams = -32602,
+    RpcInternalError = -32603,
+    RpcParseError = -32700,
+
+    /// General application defined errors
+    RpcMiscError = -1,
+    RpcTypeError = -3,
+    RpcInvalidAddressOrKey = -5,
+    RpcOutOfMemory = -7,
+    RpcInvalidParameter = -8,
+    RpcDatabaseError = -20,
+    RpcDeserializationErrr = -22,
+    RpcVerifyError = -25,
+    RpcVerifyRejected = -26,
+    RpcVerifyAlreadyInChain = -27,
+    RpcInWarmup = -28,
+    RpcMethodDeprecated = -32,
+
+    /// Aliases for backward compatibility
+    // RpcTransactionError           = RpcVerifyError,
+    // RpcTransactionRejected        = RpcVerifyRejected,
+    // RpcTransactionAlreadyInChain  = RpcVerifyAlreadyInChain,
+
+    /// P2P client errors
+    RpcClientNotConnected = -9,
+    RpcClientInInitialDownload = -10,
+    RpcClientNodeAlreadyAdded = -23,
+    RpcClientNodeNotAdded = -24,
+    RpcClientNodeNotConnected = -29,
+    RpcClientInvalidIpOrSubnet = -30,
+    RpcClientP2PDisabled = -31,
+
+    /// Chain errors
+    RpcClientMempoolDisabled = -33,
+
+    /// Wallet errors
+    RpcWalletError = -4,
+    RpcWalletInsufficientFunds = -6,
+    RpcWalletInvalidLabelName = -11,
+    RpcWalletKeypoolRanOut = -12,
+    RpcWalletUnlockNeeded = -13,
+    RpcWalletPassphraseIncorrect = -14,
+    RpcWalletWrongEncState = -15,
+    RpcWalletEncryptionFailed = -16,
+    RpcWalletAlreadyUnlocked = -17,
+    RpcWalletNotFound = -18,
+    RpcWalletNotSpecified = -19,
+
+    /// Backwards compatible aliases
+    // RpcWalletInvalidAccountName = RpcWalletInvalidLabelName,
+
+    /// Unused reserved codes.
+    RpcForbiddenBySafeMode = -2,
+
+    /// Unknown error code (not in spec).
+    RpcUnknownError = 0,
+}
+
+impl From<RpcError> for BitcoinRpcError {
+    fn from(err: RpcError) -> Self {
+        match num::FromPrimitive::from_i32(err.code) {
+            Some(err) => err,
+            None => Self::RpcUnknownError,
+        }
+    }
 }
