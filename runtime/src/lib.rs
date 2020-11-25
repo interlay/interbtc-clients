@@ -11,10 +11,11 @@ pub use btc_relay::{
 pub use error::{Error, XtError};
 use pallets::*;
 pub use rpc::{
-    AccountId, BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet, ExchangeRateOraclePallet,
-    IssuePallet, PolkaBtcIssueRequest, PolkaBtcProvider, PolkaBtcRedeemRequest,
-    PolkaBtcReplaceRequest, PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, ReplacePallet,
-    SecurityPallet, StakedRelayerPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
+    historic_event_types, AccountId, BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet,
+    ExchangeRateOraclePallet, IssuePallet, PolkaBtcIssueRequest, PolkaBtcProvider,
+    PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcStatusUpdate, PolkaBtcVault,
+    RedeemPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet, UtilFuncs,
+    VaultRegistryPallet,
 };
 pub use security::{ErrorCode, StatusCode};
 use sp_core::{H160, H256};
@@ -93,6 +94,8 @@ impl balances_dot::DOT for PolkaBtcRuntime {
 }
 
 impl issue::Issue for PolkaBtcRuntime {}
+
+impl frame_system::System for PolkaBtcRuntime {}
 
 impl redeem::Redeem for PolkaBtcRuntime {}
 

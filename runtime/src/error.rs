@@ -20,6 +20,8 @@ pub enum Error {
     BlockNotFound,
     #[error("Could not get vault")]
     VaultNotFound,
+    #[error("Callback error: {0}")]
+    CallbackError(Box<dyn std::error::Error + Send + Sync>),
 
     #[error("Channel unexpectedly closed")]
     ChannelClosed,

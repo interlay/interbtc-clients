@@ -3,7 +3,9 @@ use hex::FromHexError;
 use jsonrpc_core::error::Error as JsonRpcError;
 use parity_scale_codec::Error as CodecError;
 use runtime::Error as RuntimeError;
+use serde_json::Error as SerdeJsonError;
 use std::array::TryFromSliceError;
+use std::io::Error as IoError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -13,6 +15,10 @@ pub enum Error {
     #[error("Unknown Bitcoin network")]
     UnknownBitcoinNetwork,
 
+    #[error("IoError: {0}")]
+    IoError(#[from] IoError),
+    #[error("SerdeJsonError: {0}")]
+    SerdeJsonError(#[from] SerdeJsonError),
     #[error("CodecError: {0}")]
     CodecError(#[from] CodecError),
     #[error("Json RPC error: {0}")]
