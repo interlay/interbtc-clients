@@ -3005,7 +3005,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.1.0"
-source = "git+https://github.com/interlay/jsonrpsee?rev=95d98e18a5459ae82477a14f426243621a927f0f#95d98e18a5459ae82477a14f426243621a927f0f"
+source = "git+https://github.com/interlay/jsonrpsee?rev=5b35d10b5ae45a1776a8dcf761ecbe8d6e288646#5b35d10b5ae45a1776a8dcf761ecbe8d6e288646"
 dependencies = [
  "async-std",
  "async-tls 0.6.0",
@@ -3037,7 +3037,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "1.0.0"
-source = "git+https://github.com/interlay/jsonrpsee?rev=95d98e18a5459ae82477a14f426243621a927f0f#95d98e18a5459ae82477a14f426243621a927f0f"
+source = "git+https://github.com/interlay/jsonrpsee?rev=5b35d10b5ae45a1776a8dcf761ecbe8d6e288646#5b35d10b5ae45a1776a8dcf761ecbe8d6e288646"
 dependencies = [
  "Inflector",
  "proc-macro2",
