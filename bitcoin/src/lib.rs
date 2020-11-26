@@ -65,6 +65,8 @@ pub trait BitcoinCoreApi {
 
     fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
 
+    fn get_mempool_transactions(&self) -> Result<Vec<Transaction>, Error>;
+
     async fn wait_for_transaction_metadata(
         &self,
         txid: Txid,
@@ -217,6 +219,22 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(self.rpc.get_block_info(hash)?)
     }
 
+    /// Get the transactions that are currently in the mempool
+    fn get_mempool_transactions(&self) -> Result<Vec<Transaction>, Error> {
+        // get txids from the mempool
+        let txids = self.rpc.get_raw_mempool()?;
+        // map txid to the actual Transaction structs
+        txids
+            .into_iter()
+            .map(|txid| {
+                Ok(self
+                    .rpc
+                    .get_raw_transaction_info(&txid, None)?
+                    .transaction()?)
+            })
+            .collect::<Result<Vec<_>, Error>>()
+    }
+
     /// Waits for the required number of confirmations, and collects data about the
     /// transaction
     ///
@@ -336,35 +354,6 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 }
 
-/// Returns an iterator over bitcoin transactions that yields all transactions starting at the
-/// most recent block, and stopping at `btc_start_height`
-///
-/// # Arguments
-///
-/// * `btc_start_height` - the oldest block to be yielded in the iterator
-pub fn transactions<T: BitcoinCoreApi>(
-    btc_rpc: Arc<T>,
-    btc_start_height: u32,
-) -> Result<TransactionIterator<T>, Error> {
-    let starting_hash = btc_rpc.get_best_block_hash()?;
-    let block = btc_rpc.get_block(&starting_hash)?;
-    let info = btc_rpc.get_block_info(&starting_hash)?;
-
-    // return the iterator
-    let num_blocks = if info.height < btc_start_height as usize {
-        0
-    } else {
-        info.height - btc_start_height as usize + 1
-    };
-
-    Ok(TransactionIterator {
-        block,
-        blocks_remaining: num_blocks,
-        txdata_idx: 0,
-        rpc: btc_rpc,
-    })
-}
-
 /// Extension trait for transaction, adding methods to help to match the Transaction to Replace/Redeem requests
 pub trait TransactionExt {
     fn get_op_return(&self) -> Option<H256>;
@@ -416,33 +405,66 @@ impl TransactionExt for Transaction {
 /// Iterator over transactions in the bitcoin chain, from new-to-old. The number of
 /// returned elements is limited by blocks_remaining.
 pub struct TransactionIterator<T: BitcoinCoreApi> {
-    block: Block,
+    next_block_hash: BlockHash,
+    transactions: Vec<Transaction>,
     blocks_remaining: usize,
     txdata_idx: usize,
     rpc: Arc<T>,
 }
+
+impl<T: BitcoinCoreApi> TransactionIterator<T> {
+    /// Returns an iterator over bitcoin transactions that yields all transactions starting with
+    /// any transactions still in the mempool, continueing with the most recent block, and
+    /// stopping at `btc_start_height`
+    ///
+    /// # Arguments
+    ///
+    /// * `btc_start_height` - the oldest block to be yielded in the iterator
+    pub fn new(btc_rpc: Arc<T>, btc_start_height: u32) -> Result<TransactionIterator<T>, Error> {
+        let starting_hash = btc_rpc.get_best_block_hash()?;
+        let info = btc_rpc.get_block_info(&starting_hash)?;
+
+        // the number of blocks we will have to fetch
+        let num_blocks = if info.height < btc_start_height as usize {
+            0
+        } else {
+            info.height - btc_start_height as usize + 1
+        };
+
+        // return the iterator
+        Ok(TransactionIterator {
+            next_block_hash: starting_hash,
+            transactions: btc_rpc.get_mempool_transactions()?,
+            blocks_remaining: num_blocks,
+            txdata_idx: 0,
+            rpc: btc_rpc,
+        })
+    }
+}
+
 impl<T: BitcoinCoreApi> Iterator for TransactionIterator<T> {
     type Item = Result<Transaction, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         // we already iterated over the set range
-        if self.blocks_remaining == 0 {
+        if self.blocks_remaining == 0 && self.txdata_idx > self.transactions.len() {
             return None;
         }
 
         // if there are no transactions remaining in this block that we haven't reported yet,
         // we continue to the next block. By using `while` instead of `if` we can be 100% sure
         // the vec indexing can not panic in unexpected block inputs
-        while self.txdata_idx >= self.block.txdata.len() {
-            // we go to next block
-            self.blocks_remaining -= 1;
+        while self.txdata_idx >= self.transactions.len() {
             if self.blocks_remaining == 0 {
                 return None; // no more blocks to be found
             }
-            match self.rpc.get_block(&self.block.header.prev_blockhash) {
+            // we go to next block
+            self.blocks_remaining -= 1;
+            match self.rpc.get_block(&self.next_block_hash) {
                 Ok(x) => {
                     self.txdata_idx = 0;
-                    self.block = x;
+                    self.transactions = x.txdata;
+                    self.next_block_hash = x.header.prev_blockhash;
                 }
                 Err(x) => {
                     return Some(Err(x));
@@ -450,7 +472,7 @@ impl<T: BitcoinCoreApi> Iterator for TransactionIterator<T> {
             }
         }
 
-        let ret = self.block.txdata[self.txdata_idx].clone();
+        let ret = self.transactions[self.txdata_idx].clone();
         self.txdata_idx += 1;
         Some(Ok(ret))
     }
@@ -577,7 +599,6 @@ mod tests {
         bitcoin::{hash_types::TxMerkleNode, Txid, Wtxid},
         bitcoincore_rpc_json::{GetRawTransactionResultVin, GetRawTransactionResultVinScriptSig},
     };
-    use mockall::Sequence;
 
     mockall::mock! {
         Bitcoin {}
@@ -612,6 +633,8 @@ mod tests {
             fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
 
             fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
+
+            fn get_mempool_transactions(&self) -> Result<Vec<Transaction>, Error>;
 
             async fn wait_for_transaction_metadata(
                 &self,
@@ -706,17 +729,18 @@ mod tests {
         BlockHash::from_slice(&[value; 32]).unwrap()
     }
 
+    fn dummy_tx(value: i32) -> Transaction {
+        Transaction {
+            version: value,
+            lock_time: 1,
+            input: vec![],
+            output: vec![],
+        }
+    }
+
     fn dummy_block(transactions: Vec<i32>, next_hash: BlockHash) -> Block {
         Block {
-            txdata: transactions
-                .into_iter()
-                .map(|x| Transaction {
-                    version: x,
-                    lock_time: 1,
-                    input: vec![],
-                    output: vec![],
-                })
-                .collect(),
+            txdata: transactions.into_iter().map(dummy_tx).collect(),
             header: BlockHeader {
                 version: 1,
                 bits: 0,
@@ -733,6 +757,10 @@ mod tests {
         // we abuse version number within the transaction to check whether the sequence is correct
 
         let mut bitcoin = MockBitcoin::default();
+        bitcoin
+            .expect_get_mempool_transactions()
+            .times(1)
+            .returning(|| Ok(vec![dummy_tx(0)]));
         bitcoin
             .expect_get_best_block_hash()
             .returning(|| Ok(dummy_hash(1)));
@@ -754,8 +782,9 @@ mod tests {
             .returning(|_| Ok(dummy_block_info(21)));
 
         let btc_rpc = Arc::new(bitcoin);
-        let mut iter = transactions(btc_rpc, 20).unwrap();
+        let mut iter = TransactionIterator::new(btc_rpc, 20).unwrap();
 
+        assert_eq!(iter.next().unwrap().unwrap().version, 0);
         assert_eq!(iter.next().unwrap().unwrap().version, 1);
         assert_eq!(iter.next().unwrap().unwrap().version, 2);
         assert_eq!(iter.next().unwrap().unwrap().version, 3);
@@ -768,6 +797,10 @@ mod tests {
     #[test]
     fn test_transaction_iterator_skips_over_empty_blocks() {
         let mut bitcoin = MockBitcoin::default();
+        bitcoin
+            .expect_get_mempool_transactions()
+            .times(1)
+            .returning(|| Ok(vec![]));
         bitcoin
             .expect_get_best_block_hash()
             .returning(|| Ok(dummy_hash(1)));
@@ -798,7 +831,7 @@ mod tests {
             .returning(|_| Ok(dummy_block_info(23)));
 
         let btc_rpc = Arc::new(bitcoin);
-        let mut iter = transactions(btc_rpc, 20).unwrap();
+        let mut iter = TransactionIterator::new(btc_rpc, 20).unwrap();
 
         assert_eq!(iter.next().unwrap().unwrap().version, 1);
         assert_eq!(iter.next().unwrap().unwrap().version, 2);
@@ -811,13 +844,12 @@ mod tests {
     fn test_transaction_iterator_can_have_invalid_height() {
         let mut bitcoin = MockBitcoin::default();
         bitcoin
+            .expect_get_mempool_transactions()
+            .times(1)
+            .returning(|| Ok(vec![]));
+        bitcoin
             .expect_get_best_block_hash()
             .returning(|| Ok(dummy_hash(1)));
-        bitcoin
-            .expect_get_block()
-            .withf(|&x| x == dummy_hash(1))
-            .times(1)
-            .returning(|_| Ok(dummy_block(vec![1, 2], dummy_hash(2))));
         bitcoin
             .expect_get_block_info()
             .times(1)
@@ -825,14 +857,42 @@ mod tests {
 
         let btc_rpc = Arc::new(bitcoin);
 
-        let mut iter = transactions(btc_rpc, 21).unwrap();
+        let mut iter = TransactionIterator::new(btc_rpc, 21).unwrap();
 
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn test_transaction_iterator_always_iterates_over_mempool() {
+        let mut bitcoin = MockBitcoin::default();
+        bitcoin
+            .expect_get_mempool_transactions()
+            .times(1)
+            .returning(|| Ok(vec![dummy_tx(1), dummy_tx(2)]));
+        bitcoin
+            .expect_get_best_block_hash()
+            .returning(|| Ok(dummy_hash(1)));
+        bitcoin
+            .expect_get_block_info()
+            .times(1)
+            .returning(|_| Ok(dummy_block_info(20)));
+
+        let btc_rpc = Arc::new(bitcoin);
+
+        let mut iter = TransactionIterator::new(btc_rpc, 21).unwrap();
+
+        assert_eq!(iter.next().unwrap().unwrap().version, 1);
+        assert_eq!(iter.next().unwrap().unwrap().version, 2);
         assert!(iter.next().is_none());
     }
 
     #[test]
     fn test_transaction_iterator_can_have_start_equal_to_height() {
         let mut bitcoin = MockBitcoin::default();
+        bitcoin
+            .expect_get_mempool_transactions()
+            .times(1)
+            .returning(|| Ok(vec![]));
         bitcoin
             .expect_get_best_block_hash()
             .returning(|| Ok(dummy_hash(1)));
@@ -848,7 +908,7 @@ mod tests {
 
         let btc_rpc = Arc::new(bitcoin);
 
-        let mut iter = transactions(btc_rpc, 20).unwrap();
+        let mut iter = TransactionIterator::new(btc_rpc, 20).unwrap();
 
         assert_eq!(iter.next().unwrap().unwrap().version, 1);
         assert!(iter.next().is_none());

@@ -149,8 +149,6 @@ async fn main() -> Result<(), Error> {
         opts.network.0,
     );
     tokio::spawn(async move {
-        info!("Waiting before processing open replace/redeem requests..");
-        delay_for(Duration::from_secs(15 * 60)).await;
         info!("Checking for open replace/redeem requests..");
         match open_request_executor.await {
             Ok(_) => info!("Done processing open replace/redeem requests"),

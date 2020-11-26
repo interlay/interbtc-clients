@@ -177,7 +177,7 @@ async fn filter_matching_vaults(addresses: Vec<H160>, vaults: &Vaults) -> Vec<Ac
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use bitcoin::{Block, Error as BitcoinError, GetBlockResult, TransactionMetadata};
+    use bitcoin::{Block, Error as BitcoinError, GetBlockResult, Transaction, TransactionMetadata};
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
     use sp_keyring::AccountKeyring;
@@ -255,6 +255,8 @@ mod tests {
             fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
 
             fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
+
+            fn get_mempool_transactions(&self) -> Result<Vec<Transaction>, BitcoinError>;
 
             async fn wait_for_transaction_metadata(
                 &self,

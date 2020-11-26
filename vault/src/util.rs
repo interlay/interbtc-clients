@@ -1,7 +1,9 @@
 use crate::error::Error;
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::Network;
-use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
+use bitcoin::{
+    BitcoinCoreApi, Transaction, TransactionExt, TransactionIterator, TransactionMetadata,
+};
 use log::{error, info};
 use runtime::{
     pallets::{redeem::RequestRedeemEvent, replace::AcceptReplaceEvent},
@@ -191,7 +193,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     };
 
     // iterate through transactions..
-    for x in bitcoin::transactions(btc_rpc.clone(), btc_start_height)? {
+    for x in TransactionIterator::new(btc_rpc.clone(), btc_start_height)? {
         let tx = x?;
 
         // get the request this transaction corresponds to, if any
@@ -304,7 +306,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::{
         Block, BlockHash, Error as BitcoinError, GetBlockResult, GetRawTransactionResult, Network,
-        TransactionMetadata, Txid,
+        Transaction, TransactionMetadata, Txid,
     };
     use runtime::{AccountId, Error as RuntimeError};
 
@@ -406,6 +408,7 @@ mod tests {
             fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
             fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
             fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
+            fn get_mempool_transactions(&self) -> Result<Vec<Transaction>, BitcoinError>;
             async fn wait_for_transaction_metadata(
                 &self,
                 txid: Txid,
