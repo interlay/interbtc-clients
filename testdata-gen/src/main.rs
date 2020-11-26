@@ -472,7 +472,7 @@ async fn main() -> Result<(), Error> {
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
 
-    let btc_rpc = BitcoinCore::new(opts.bitcoin.new_client(None)?);
+    let btc_rpc = BitcoinCore::new(opts.bitcoin.new_client(Some(&format!("{}", opts.keyring)))?);
 
     match opts.subcmd {
         SubCommand::SetExchangeRate(info) => {
