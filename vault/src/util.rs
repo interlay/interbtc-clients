@@ -191,7 +191,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     };
 
     // iterate through transactions..
-    for x in bitcoin::transactions(btc_rpc.clone(), btc_start_height)? {
+    for x in bitcoin::get_transactions(btc_rpc.clone(), btc_start_height)? {
         let tx = x?;
 
         // get the request this transaction corresponds to, if any
@@ -304,7 +304,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::{
         Block, BlockHash, Error as BitcoinError, GetBlockResult, GetRawTransactionResult, Network,
-        TransactionMetadata, Txid,
+        Transaction, TransactionMetadata, Txid,
     };
     use runtime::{AccountId, Error as RuntimeError};
 
@@ -406,6 +406,9 @@ mod tests {
             fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
             fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
             fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
+            fn get_mempool_transactions<'a>(
+                self: Arc<Self>,
+            ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + 'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(
                 &self,
                 txid: Txid,

@@ -181,7 +181,9 @@ fn convert_block_hash(hash: Option<H256Le>) -> Result<BlockHash, Error> {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use bitcoin::{Block, GetBlockResult, GetRawTransactionResult, TransactionMetadata, Txid};
+    use bitcoin::{
+        Block, GetBlockResult, GetRawTransactionResult, Transaction, TransactionMetadata, Txid,
+    };
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode, MINIMUM_STAKE};
     use sp_core::H160;
@@ -292,6 +294,10 @@ mod tests {
             fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
 
             fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
+
+            fn get_mempool_transactions<'a>(
+                self: Arc<Self>,
+            ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + 'a>, BitcoinError>;
 
             async fn wait_for_transaction_metadata(
                 &self,
