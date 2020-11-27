@@ -1,4 +1,5 @@
 use crate::Error;
+use log::*;
 use runtime::historic_event_types::*;
 use runtime::{
     pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
@@ -14,7 +15,7 @@ use std::{
 
 pub async fn dump_raw_events(provider: &PolkaBtcProvider) -> Result<(), Error> {
     provider
-        .on_past_events(None, None, |event| {
+        .on_past_events(None, None, |event, _| {
             println!("{:?}", event);
             Ok(())
         })
@@ -73,45 +74,49 @@ pub async fn dump_json(provider: &PolkaBtcProvider, output_folder_name: &str) ->
     let mut redeem_executions = LogWriter::new(output_folder, "redeem-executions.json")?;
 
     provider
-        .on_past_events(None, None, |event| Ok(match event {
-            Event::issue(x) => match x {
-                IssueEvent::RequestIssue(issue_id, requester, amount, vault_id, btc_address) => {
-                    issue_requests.write(RequestIssueEvent::<PolkaBtcRuntime> {
-                        issue_id, requester, amount, vault_id, btc_address 
-                    })?;
-                }
-                IssueEvent::CancelIssue(issue_id, requester) => {
-                    issue_cancellations.write(CancelIssueEvent::<PolkaBtcRuntime> {
-                        issue_id, requester,
-                    })?;
-                }
-                IssueEvent::ExecuteIssue(issue_id, requester, vault_id) => {
-                    issue_executions.write(ExecuteIssueEvent::<PolkaBtcRuntime> {
-                        issue_id, requester, vault_id,
-                    })?;
-                }
-            },
-            Event::redeem(x) => match x {
-                RedeemEvent::RequestRedeem(
-                    redeem_id, redeemer, amount_polka_btc, vault_id, btc_address,
-                ) => {
-                    redeem_requests.write(RequestRedeemEvent::<PolkaBtcRuntime> {
+        .on_past_events(None, None, |event, num_blocks_remaining| {
+            info!("{} blocks remaining..", num_blocks_remaining);
+            match event {
+                Event::issue(x) => match x {
+                    IssueEvent::RequestIssue(issue_id, requester, amount, vault_id, btc_address) => {
+                        issue_requests.write(RequestIssueEvent::<PolkaBtcRuntime> {
+                            issue_id, requester, amount, vault_id, btc_address 
+                        })?;
+                    }
+                    IssueEvent::CancelIssue(issue_id, requester) => {
+                        issue_cancellations.write(CancelIssueEvent::<PolkaBtcRuntime> {
+                            issue_id, requester,
+                        })?;
+                    }
+                    IssueEvent::ExecuteIssue(issue_id, requester, vault_id) => {
+                        issue_executions.write(ExecuteIssueEvent::<PolkaBtcRuntime> {
+                            issue_id, requester, vault_id,
+                        })?;
+                    }
+                },
+                Event::redeem(x) => match x {
+                    RedeemEvent::RequestRedeem(
                         redeem_id, redeemer, amount_polka_btc, vault_id, btc_address,
-                    })?;
-                }
-                RedeemEvent::CancelRedeem(redeem_id, redeemer) => {
-                    redeem_cancellations.write(CancelRedeemEvent::<PolkaBtcRuntime> {
-                        redeem_id, redeemer,
-                    })?;
-                }
-                RedeemEvent::ExecuteRedeem(redeem_id, redeemer, vault_id) => {
-                    redeem_executions.write(ExecuteRedeemEvent::<PolkaBtcRuntime> {
-                        redeem_id, redeemer, vault_id,
-                    })?;
-                }
-            },
-            _ => {}
-        })).await?;
+                    ) => {
+                        redeem_requests.write(RequestRedeemEvent::<PolkaBtcRuntime> {
+                            redeem_id, redeemer, amount_polka_btc, vault_id, btc_address,
+                        })?;
+                    }
+                    RedeemEvent::CancelRedeem(redeem_id, redeemer) => {
+                        redeem_cancellations.write(CancelRedeemEvent::<PolkaBtcRuntime> {
+                            redeem_id, redeemer,
+                        })?;
+                    }
+                    RedeemEvent::ExecuteRedeem(redeem_id, redeemer, vault_id) => {
+                        redeem_executions.write(ExecuteRedeemEvent::<PolkaBtcRuntime> {
+                            redeem_id, redeemer, vault_id,
+                        })?;
+                    }
+                },
+                _ => {}
+            }
+            Ok(())
+        }).await?;
 
     println!("Wrote json files to {}", output_folder_name);
 
@@ -131,7 +136,8 @@ pub async fn report_chain_stats(
     let mut redeem_executes = vec![];
 
     provider
-        .on_past_events(start, end, |event| {
+        .on_past_events(start, end, |event, num_blocks_remaining| {
+            info!("{} blocks remaining..", num_blocks_remaining);
             match event {
                 Event::issue(IssueEvent::RequestIssue(id, _, amount, _, _)) => {
                     issue_requests.push((id, amount));

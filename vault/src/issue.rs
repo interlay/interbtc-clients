@@ -1,4 +1,4 @@
-use crate::scheduler::ProcessEvent;
+use crate::cancelation::ProcessEvent;
 use futures::channel::mpsc::Sender;
 use futures::SinkExt;
 use log::{error, info};

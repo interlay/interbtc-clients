@@ -1,11 +1,17 @@
 use crate::BitcoinError;
-use bitcoincore_rpc::bitcoin::util::address::Error as AddressError;
-use bitcoincore_rpc::jsonrpc::error::RpcError;
+use bitcoincore_rpc::{
+    bitcoin::{
+        consensus::encode::Error as BitcoinEncodeError, util::address::Error as AddressError,
+    },
+    jsonrpc::error::RpcError,
+};
 use hex::FromHexError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("BitcoinEncodeError: {0}")]
+    BitcoinEncodeError(#[from] BitcoinEncodeError),
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
     #[error("ConversionError: {0}")]

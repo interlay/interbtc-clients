@@ -9,10 +9,7 @@ use runtime::{
     RedeemPallet, ReplacePallet, UtilFuncs,
 };
 use sp_core::{crypto::AccountId32, H160, H256};
-use std::sync::Arc;
-use std::time::Duration;
-use std::{collections::HashMap, future::Future};
-use tokio::time::delay_for;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 // keep trying for 24 hours
 const MAX_RETRYING_TIME: Duration = Duration::from_secs(24 * 60 * 60);
@@ -191,7 +188,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     };
 
     // iterate through transactions..
-    for x in bitcoin::transactions(btc_rpc.clone(), btc_start_height)? {
+    for x in bitcoin::get_transactions(btc_rpc.clone(), btc_start_height)? {
         let tx = x?;
 
         // get the request this transaction corresponds to, if any
@@ -286,25 +283,13 @@ pub fn get_retry_policy() -> ExponentialBackoff {
     }
 }
 
-pub async fn check_every<'a, F>(duration: Duration, check: impl Fn() -> F)
-where
-    F: Future<Output = Result<(), Error>> + 'a,
-{
-    loop {
-        if let Err(e) = check().await {
-            error!("Error: {}", e.to_string())
-        }
-        delay_for(duration).await
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
         Block, BlockHash, Error as BitcoinError, GetBlockResult, GetRawTransactionResult, Network,
-        TransactionMetadata, Txid,
+        Transaction, TransactionMetadata, Txid,
     };
     use runtime::{AccountId, Error as RuntimeError};
 
@@ -406,6 +391,9 @@ mod tests {
             fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
             fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
             fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
+            fn get_mempool_transactions<'a>(
+                self: Arc<Self>,
+            ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + 'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(
                 &self,
                 txid: Txid,

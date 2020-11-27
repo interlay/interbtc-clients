@@ -150,7 +150,8 @@ impl PolkaBtcProvider {
     /// # Arguments
     /// * `start` - the height to start iterating at. If None, it starts from the genesis.
     /// * `end` - the height to stop iterating at. If None, it ends at the current chain height.
-    /// * `callback` - the callback to be called with the event
+    /// * `callback` - the callback to be called with the event. The callback will be called with
+    ///                the event and the numbering of remaining blocks to process
     pub async fn on_past_events<T>(
         &self,
         start: Option<u32>,
@@ -160,6 +161,7 @@ impl PolkaBtcProvider {
     where
         T: FnMut(
             btc_parachain_runtime::Event,
+            u32,
         ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
     {
         let start = start.unwrap_or(1);
@@ -171,7 +173,7 @@ impl PolkaBtcProvider {
             let hash = self.ext_client.block_hash(Some(i.into())).await?;
             let events = self.ext_client.events(hash).await?;
             for event in events.into_iter() {
-                if let Err(e) = callback(event.event) {
+                if let Err(e) = callback(event.event, end - i) {
                     return Err(Error::CallbackError(e));
                 }
             }
