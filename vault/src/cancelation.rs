@@ -99,6 +99,7 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceler<P> for IssueCanceler
             .get_vault_issue_requests(vault_id)
             .await?
             .iter()
+            .filter(|(_, issue)| !issue.completed)
             .map(|(id, issue)| UnconvertedOpenTime {
                 id: *id,
                 opentime: issue.opentime,
@@ -137,6 +138,7 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceler<P> for ReplaceCancel
             .get_new_vault_replace_requests(vault_id)
             .await?
             .iter()
+            .filter(|(_, replace)| !replace.completed)
             .map(|(id, replace)| UnconvertedOpenTime {
                 id: *id,
                 opentime: replace.open_time,
