@@ -1,19 +1,21 @@
 #![recursion_limit = "256"]
 
 mod api;
+mod cancelation;
 mod collateral;
 mod error;
+mod execution;
 mod issue;
 mod redeem;
 mod replace;
-mod scheduler;
-mod util;
 
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use cancelation::{CancelationScheduler, IssueCanceler, ProcessEvent, ReplaceCanceler};
 use clap::Clap;
 use collateral::*;
 use core::str::FromStr;
 use error::Error;
+use execution::execute_open_requests;
 use futures::channel::mpsc;
 use issue::*;
 use log::*;
@@ -23,7 +25,6 @@ use runtime::{
     substrate_subxt::PairSigner, BtcRelayPallet, Error as RuntimeError, PolkaBtcProvider,
     PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
 };
-use scheduler::{CancelationScheduler, ProcessEvent};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
@@ -141,7 +142,7 @@ async fn main() -> Result<(), Error> {
         }
     }
 
-    let open_request_executor = util::execute_open_requests(
+    let open_request_executor = execute_open_requests(
         arc_provider.clone(),
         btc_rpc.clone(),
         vault_id.clone(),
@@ -255,7 +256,7 @@ async fn main() -> Result<(), Error> {
         }),
         tokio::spawn(async move {
             issue_cancelation_scheduler
-                .handle_cancelation::<scheduler::IssueCanceler>(issue_event_rx)
+                .handle_cancelation::<IssueCanceler>(issue_event_rx)
                 .await
                 .unwrap();
         }),
@@ -278,15 +279,20 @@ async fn main() -> Result<(), Error> {
                 // we could automatically check vault collateralization rates on events
                 // that affect this (e.g. `SetExchangeRate`, `WithdrawCollateral`) but
                 // polling is easier for now
-                util::check_every(Duration::from_secs(collateral_timeout_ms), || async {
-                    monitor_collateral_of_vaults(&auction_provider).await
-                })
-                .await;
+                loop {
+                    if let Err(e) = monitor_collateral_of_vaults(&auction_provider).await {
+                        error!(
+                            "Error while monitoring collateral of vaults: {}",
+                            e.to_string()
+                        );
+                    }
+                    delay_for(Duration::from_secs(collateral_timeout_ms)).await
+                }
             }
         }),
         tokio::spawn(async move {
             replace_cancelation_scheduler
-                .handle_cancelation::<scheduler::ReplaceCanceler>(replace_event_rx)
+                .handle_cancelation::<ReplaceCanceler>(replace_event_rx)
                 .await
                 .unwrap();
         }),

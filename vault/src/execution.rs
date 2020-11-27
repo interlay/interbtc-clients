@@ -9,10 +9,7 @@ use runtime::{
     RedeemPallet, ReplacePallet, UtilFuncs,
 };
 use sp_core::{crypto::AccountId32, H160, H256};
-use std::sync::Arc;
-use std::time::Duration;
-use std::{collections::HashMap, future::Future};
-use tokio::time::delay_for;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 // keep trying for 24 hours
 const MAX_RETRYING_TIME: Duration = Duration::from_secs(24 * 60 * 60);
@@ -283,18 +280,6 @@ pub fn get_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff {
         max_elapsed_time: Some(MAX_RETRYING_TIME),
         ..Default::default()
-    }
-}
-
-pub async fn check_every<'a, F>(duration: Duration, check: impl Fn() -> F)
-where
-    F: Future<Output = Result<(), Error>> + 'a,
-{
-    loop {
-        if let Err(e) = check().await {
-            error!("Error: {}", e.to_string())
-        }
-        delay_for(duration).await
     }
 }
 
