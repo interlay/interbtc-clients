@@ -8,6 +8,7 @@ mod execution;
 mod issue;
 mod redeem;
 mod replace;
+mod constants;
 
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use cancelation::{CancelationScheduler, IssueCanceler, ProcessEvent, ReplaceCanceler};
@@ -21,6 +22,7 @@ use issue::*;
 use log::*;
 use redeem::*;
 use replace::*;
+use crate::constants::*;
 use runtime::{
     substrate_subxt::PairSigner, BtcRelayPallet, Error as RuntimeError, PolkaBtcProvider,
     PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
@@ -29,8 +31,6 @@ use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::delay_for;
-
-const CHAIN_HEIGHT_POLLING_INTERVAL: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Copy, Clone)]
 struct BitcoinNetwork(bitcoin::Network);
