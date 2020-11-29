@@ -164,11 +164,13 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
         .get_vault_redeem_requests(vault_id.clone())
         .await?
         .into_iter()
+        .filter(|(_, request)| !request.completed)
         .map(|(hash, request)| Request::from_redeem_request(hash, request));
     let open_replaces = provider
         .get_new_vault_replace_requests(vault_id.clone())
         .await?
         .into_iter()
+        .filter(|(_, request)| !request.completed)
         .map(|(hash, request)| Request::from_replace_request(hash, request));
 
     // Place all redeems&replaces into a hashmap, indexed by their redeemid/replaceid
