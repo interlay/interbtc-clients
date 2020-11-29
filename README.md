@@ -73,7 +73,7 @@ To interact with PolkaBTC directly, use the [testdata-gen](./testdata-gen/README
 
 ```bash
 source .env
-cargo run --bin testdata-gen --keyring bob set-exchange-rate --exchange-rate 1
+cargo run --bin testdata-gen -- --keyring bob set-exchange-rate --exchange-rate 1
 ```
 
 ### Vault
