@@ -1,11 +1,34 @@
+mod error;
+
 use clap::Clap;
+use coingecko::{Client, SimplePriceReq};
+use error::Error;
 use log::{error, info};
+use num_traits::cast::ToPrimitive;
 use runtime::substrate_subxt::PairSigner;
-use runtime::{Error, ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime};
+use runtime::{ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime};
 use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::delay_for;
+
+const ERR_RETRY_WAIT: Duration = Duration::from_secs(10);
+
+async fn get_exchange_rate_from_coingecko() -> Result<u128, Error> {
+    // https://www.coingecko.com/api/documentations/v3
+    let resp = Client::new(isahc::HttpClient::new().unwrap())
+        .simple_price(SimplePriceReq::new("bitcoin".into(), "dot".into()))
+        .await?;
+
+    Ok(resp
+        .get("bitcoin")
+        .ok_or(Error::InvalidExchangeRate)?
+        .get("dot")
+        .ok_or(Error::InvalidExchangeRate)?
+        .to_u64()
+        .ok_or(Error::InvalidExchangeRate)?
+        .into())
+}
 
 /// Simple oracle liveness service to automatically update the
 /// exchange rate periodically.
@@ -29,6 +52,10 @@ struct Opts {
     /// Keyring for authorized oracle.
     #[clap(long, default_value = "bob")]
     keyring: AccountKeyring,
+
+    /// Fetch the exchange rate from CoinGecko.
+    #[clap(long, conflicts_with("exchange-rate"))]
+    coingecko: bool,
 }
 
 #[tokio::main]
@@ -40,10 +67,27 @@ async fn main() -> Result<(), Error> {
     let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
 
     let timeout = Duration::from_millis(opts.timeout_ms);
+    let mut exchange_rate = opts.exchange_rate;
 
     loop {
-        info!("Setting exchange rate at {}", chrono::offset::Local::now());
-        match provider.set_exchange_rate_info(opts.exchange_rate).await {
+        if opts.coingecko {
+            exchange_rate = match get_exchange_rate_from_coingecko().await {
+                Ok(exchange_rate) => exchange_rate,
+                Err(e) => {
+                    error!("Could not get exchange rate: {}", e.to_string());
+                    delay_for(ERR_RETRY_WAIT).await;
+                    continue;
+                }
+            }
+        }
+
+        info!(
+            "Setting exchange rate: {} ({})",
+            exchange_rate,
+            chrono::offset::Local::now()
+        );
+
+        match provider.set_exchange_rate_info(exchange_rate).await {
             Err(e) => error!("Error: {}", e.to_string()),
             _ => (),
         };
