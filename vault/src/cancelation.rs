@@ -18,7 +18,9 @@ struct ActiveProcess {
 }
 
 pub enum ProcessEvent {
+    /// new issue requested / replace accepted
     Opened,
+    /// issue / replace successfully executed
     Executed(H256),
 }
 
@@ -50,8 +52,12 @@ enum ListState {
     Invalid,
 }
 
+/// Trait to abstract over issue & replace cancelation
 #[async_trait]
 pub trait Canceler<P> {
+    /// either "replace" or "issue"; used for logging
+    const TYPE_NAME: &'static str;
+
     /// Gets a list of open replace/issue processes
     async fn get_open_processes(
         provider: Arc<P>,
@@ -69,14 +75,13 @@ pub trait Canceler<P> {
     async fn cancel_process(provider: Arc<P>, process_id: H256) -> Result<(), Error>
     where
         P: 'async_trait;
-
-    /// Gets either "replace" or "issue"; used for logging
-    fn type_name() -> String;
 }
 
 pub struct IssueCanceler;
 #[async_trait]
 impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceler<P> for IssueCanceler {
+    const TYPE_NAME: &'static str = "issue";
+
     async fn get_open_processes(
         provider: Arc<P>,
         vault_id: AccountId32,
@@ -96,26 +101,27 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceler<P> for IssueCanceler
             .collect();
         Ok(ret)
     }
+
     async fn get_period(provider: Arc<P>) -> Result<u32, Error>
     where
         P: 'async_trait,
     {
         Ok(provider.get_issue_period().await?)
     }
+
     async fn cancel_process(provider: Arc<P>, process_id: H256) -> Result<(), Error>
     where
         P: 'async_trait,
     {
         Ok(provider.cancel_issue(process_id).await?)
     }
-    fn type_name() -> String {
-        "issue".to_string()
-    }
 }
 
 pub struct ReplaceCanceler;
 #[async_trait]
 impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceler<P> for ReplaceCanceler {
+    const TYPE_NAME: &'static str = "replace";
+    
     async fn get_open_processes(
         provider: Arc<P>,
         vault_id: AccountId32,
@@ -135,23 +141,23 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceler<P> for ReplaceCancel
             .collect();
         Ok(ret)
     }
+
     async fn get_period(provider: Arc<P>) -> Result<u32, Error>
     where
         P: 'async_trait,
     {
         Ok(provider.get_replace_period().await?)
     }
+    
     async fn cancel_process(provider: Arc<P>, process_id: H256) -> Result<(), Error>
     where
         P: 'async_trait,
     {
         Ok(provider.cancel_replace(process_id).await?)
     }
-    fn type_name() -> String {
-        "replace".to_string()
-    }
 }
 
+/// Trait to allow us to mock the `select_events` function
 #[async_trait]
 trait EventSelector {
     /// Sleep until either the timeout has occured or an event has been received, and return
@@ -198,6 +204,7 @@ impl EventSelector for ProductionEventSelector {
     }
 }
 
+/// The actual cancelation scheduling and handling
 impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
     pub fn new(provider: Arc<P>, vault_id: AccountId32) -> CancelationScheduler<P> {
         CancelationScheduler {
@@ -214,7 +221,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
     ///
     /// # Arguments
     ///
-    /// *`event_listener`: channel that signals issue events _for this vault_.
+    /// *`event_listener`: channel that signals relevant events _for this vault_.
     pub async fn handle_cancelation<T: Canceler<P>>(
         &mut self,
         mut event_listener: Receiver<ProcessEvent>,
@@ -252,7 +259,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
                 }
                 Err(e) => {
                     active_processes.clear();
-                    error!("Failed to query open {}s: {}", T::type_name(), e);
+                    error!("Failed to query open {}s: {}", T::TYPE_NAME, e);
                 }
             }
         }
@@ -267,13 +274,13 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
                     debug!(
                         "delaying until deadline of {} #{}: {:?}",
                         process.id,
-                        T::type_name(),
+                        T::TYPE_NAME,
                         process.deadline - time::Instant::now()
                     );
                     TimeoutType::WaitForFirstDeadline(*process)
                 }
                 None => {
-                    debug!("No open {}s", T::type_name());
+                    debug!("No open {}s", T::TYPE_NAME);
                     TimeoutType::WaitForever // no open issues; wait for new issue
                 }
             }
@@ -283,25 +290,25 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
             EventType::Timeout(TimeoutType::WaitForFirstDeadline(process)) => {
                 match T::cancel_process(self.provider.clone(), process.id).await {
                     Ok(_) => {
-                        info!("Canceled {} #{}", T::type_name(), process.id);
+                        info!("Canceled {} #{}", T::TYPE_NAME, process.id);
                         active_processes.retain(|x| x.id != process.id);
                         Ok(ListState::Valid)
                     }
                     Err(e) => {
                         // failed to cancel; get up-to-date process list in next iteration
-                        error!("Failed to cancel {}: {}", T::type_name(), e);
+                        error!("Failed to cancel {}: {}", T::TYPE_NAME, e);
                         Ok(ListState::Invalid)
                     }
                 }
             }
             EventType::Timeout(_) => Ok(ListState::Invalid),
             EventType::ProcessEvent(ProcessEvent::Executed(id)) => {
-                debug!("Received event: executed {} #{}", T::type_name(), id);
+                debug!("Received event: executed {} #{}", T::TYPE_NAME, id);
                 active_processes.retain(|x| x.id != id);
                 Ok(ListState::Valid)
             }
             EventType::ProcessEvent(ProcessEvent::Opened) => {
-                debug!("Received event: opened {}", T::type_name());
+                debug!("Received event: opened {}", T::TYPE_NAME);
                 Ok(ListState::Invalid)
             }
         }
