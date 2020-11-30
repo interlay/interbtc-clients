@@ -1,16 +1,17 @@
 #![recursion_limit = "256"]
 
 mod api;
-mod cancelation;
+mod cancellation;
 mod collateral;
 mod error;
 mod execution;
 mod issue;
 mod redeem;
 mod replace;
+mod constants;
 
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
-use cancelation::{CancelationScheduler, IssueCanceler, ProcessEvent, ReplaceCanceler};
+use cancellation::{CancellationScheduler, IssueCanceller, ProcessEvent, ReplaceCanceller};
 use clap::Clap;
 use collateral::*;
 use core::str::FromStr;
@@ -21,6 +22,7 @@ use issue::*;
 use log::*;
 use redeem::*;
 use replace::*;
+use crate::constants::*;
 use runtime::{
     substrate_subxt::PairSigner, BtcRelayPallet, Error as RuntimeError, PolkaBtcProvider,
     PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
@@ -29,8 +31,6 @@ use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::delay_for;
-
-const CHAIN_HEIGHT_POLLING_INTERVAL: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Copy, Clone)]
 struct BitcoinNetwork(bitcoin::Network);
@@ -185,8 +185,8 @@ async fn main() -> Result<(), Error> {
 
     // Issue handling
     let (issue_event_tx, issue_event_rx) = mpsc::channel::<ProcessEvent>(16);
-    let mut issue_cancelation_scheduler =
-        CancelationScheduler::new(arc_provider.clone(), vault_id.clone());
+    let mut issue_cancellation_scheduler =
+        CancellationScheduler::new(arc_provider.clone(), vault_id.clone());
     let issue_request_listener = listen_for_issue_requests(
         arc_provider.clone(),
         vault_id.clone(),
@@ -200,8 +200,8 @@ async fn main() -> Result<(), Error> {
 
     // replace handling
     let (replace_event_tx, replace_event_rx) = mpsc::channel::<ProcessEvent>(16);
-    let mut replace_cancelation_scheduler =
-        CancelationScheduler::new(arc_provider.clone(), vault_id.clone());
+    let mut replace_cancellation_scheduler =
+        CancellationScheduler::new(arc_provider.clone(), vault_id.clone());
     let request_replace_listener = listen_for_replace_requests(
         arc_provider.clone(),
         vault_id.clone(),
@@ -255,8 +255,8 @@ async fn main() -> Result<(), Error> {
             issue_execute_listener.await.unwrap();
         }),
         tokio::spawn(async move {
-            issue_cancelation_scheduler
-                .handle_cancelation::<IssueCanceler>(issue_event_rx)
+            issue_cancellation_scheduler
+                .handle_cancellation::<IssueCanceller>(issue_event_rx)
                 .await
                 .unwrap();
         }),
@@ -291,8 +291,8 @@ async fn main() -> Result<(), Error> {
             }
         }),
         tokio::spawn(async move {
-            replace_cancelation_scheduler
-                .handle_cancelation::<ReplaceCanceler>(replace_event_rx)
+            replace_cancellation_scheduler
+                .handle_cancellation::<ReplaceCanceller>(replace_event_rx)
                 .await
                 .unwrap();
         }),

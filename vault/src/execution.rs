@@ -1,8 +1,9 @@
 use crate::error::Error;
-use backoff::{future::FutureOperation as _, ExponentialBackoff};
+use crate::constants::*;
+use backoff::future::FutureOperation as _;
 use bitcoin::Network;
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
-use log::{error, info};
+use log::*;
 use runtime::{
     pallets::{redeem::RequestRedeemEvent, replace::AcceptReplaceEvent},
     H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcRuntime,
@@ -10,9 +11,6 @@ use runtime::{
 };
 use sp_core::{crypto::AccountId32, H160, H256};
 use std::{collections::HashMap, sync::Arc, time::Duration};
-
-// keep trying for 24 hours
-const MAX_RETRYING_TIME: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[derive(Debug, Clone)]
 pub struct Request {
@@ -107,7 +105,7 @@ impl Request {
                 address,
                 self.amount as u64,
                 &self.hash.to_fixed_bytes(),
-                MAX_RETRYING_TIME,
+                BITCOIN_MAX_RETRYING_TIME,
                 num_confirmations,
             )
             .await?;
@@ -142,7 +140,12 @@ impl Request {
             .await
             .map_err(|x| x.into())
         })
-        .retry(get_retry_policy())
+        .retry_notify(get_retry_policy(), |e, dur:Duration| {
+            warn!(
+                "{:?} execution of request {} failed: {} - next retry in {:.3} s",
+                self.request_type, self.hash, e, dur.as_secs_f64()
+            )
+        })
         .await?;
 
         Ok(())
@@ -211,7 +214,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
                 // Payment has been made, but it might not have been confirmed enough times yet
                 let tx_metadata = btc_rpc
                     .clone()
-                    .wait_for_transaction_metadata(tx.txid(), MAX_RETRYING_TIME, num_confirmations)
+                    .wait_for_transaction_metadata(tx.txid(), BITCOIN_MAX_RETRYING_TIME, num_confirmations)
                     .await;
 
                 match tx_metadata {
@@ -274,14 +277,6 @@ fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -
         Some(request.clone())
     } else {
         None
-    }
-}
-
-/// gets our default retrying policy
-pub fn get_retry_policy() -> ExponentialBackoff {
-    ExponentialBackoff {
-        max_elapsed_time: Some(MAX_RETRYING_TIME),
-        ..Default::default()
     }
 }
 

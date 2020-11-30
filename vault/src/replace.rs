@@ -1,11 +1,12 @@
-use crate::cancelation::ProcessEvent;
+use crate::cancellation::ProcessEvent;
 use crate::error::Error;
-use crate::execution::*;
+use crate::execution::Request;
+use crate::constants::get_retry_policy;
 use backoff::future::FutureOperation as _;
 use bitcoin::BitcoinCore;
 use futures::channel::mpsc::Sender;
 use futures::SinkExt;
-use log::{error, info, trace};
+use log::*;
 use runtime::{
     pallets::{
         replace::{AcceptReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent},
@@ -16,6 +17,7 @@ use runtime::{
 };
 use sp_core::crypto::AccountId32;
 use std::sync::Arc;
+use std::time::Duration;
 
 /// Listen for AcceptReplaceEvent directed at this vault and continue the replacement
 /// procedure by transfering bitcoin and calling execute_replace
@@ -104,7 +106,9 @@ pub async fn handle_accepted_replace_request(
             .get_vault(event.new_vault_id.clone())
             .await?)
     })
-    .retry(get_retry_policy())
+    .retry_notify(get_retry_policy(), |e, dur:Duration| {
+        warn!("get_vault failed: {} - next retry in {:.3} s", e, dur.as_secs_f64())
+    })
     .await?;
 
     let request = Request::from_replace_request_event(&event, wallet.get_btc_address());
