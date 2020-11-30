@@ -1,10 +1,15 @@
+use crate::BlockHash;
 use crate::{BitcoinCoreApi, Error};
 use bitcoincore_rpc::{
     bitcoin::{Block, Transaction},
     json::GetBlockResult,
 };
+use futures::prelude::*;
 use std::iter;
 use std::sync::Arc;
+use std::time::Duration;
+
+const BLOCK_WAIT_TIMEOUT: u64 = 6;
 
 /// Iterate over transactions, starting with transactions in the mempool, and continuing
 /// with transactions from the best in-chain block, and stopping after the block at
@@ -78,6 +83,44 @@ pub fn get_blocks<T: BitcoinCoreApi>(
                 }
                 Err(e) => Some(Err(e)),
             }
+        }
+    })
+}
+
+/// Stream blocks continuously `from_height` awaiting the production of
+/// new blocks as reported by Bitcoin core.
+///
+/// # Arguments:
+///
+/// * `rpc` - bitcoin rpc
+/// * `from_height` - height of the first block of the stream
+pub fn stream_blocks<T: BitcoinCoreApi>(
+    rpc: Arc<T>,
+    from_height: u32,
+) -> impl Stream<Item = Result<(BlockHash, u32), Error>> {
+    struct StreamState<T> {
+        rpc: Arc<T>,
+        next_height: u32,
+    }
+
+    let state = StreamState {
+        rpc: rpc.clone(),
+        next_height: from_height,
+    };
+
+    stream::unfold(state, |mut state| async move {
+        // FIXME: if Bitcoin Core forks, this may skip a block
+        let height = state.next_height;
+        match state
+            .rpc
+            .wait_for_block(height, Duration::from_secs(BLOCK_WAIT_TIMEOUT))
+            .await
+        {
+            Ok(block_hash) => {
+                state.next_height += 1;
+                Some((Ok((block_hash, height)), state))
+            }
+            Err(e) => Some((Err(e), state)),
         }
     })
 }

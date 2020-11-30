@@ -12,12 +12,14 @@ use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 use substrate_subxt::Error as XtError;
 use substrate_subxt::{
     system::System, Client, ClientBuilder, Event, EventSubscription, EventsDecoder, PairSigner,
     Signer,
 };
 use tokio::sync::RwLock;
+use tokio::time::delay_for;
 
 use crate::balances_dot::AccountStoreExt;
 use crate::btc_relay::*;
@@ -1028,6 +1030,8 @@ impl RedeemPallet for PolkaBtcProvider {
     }
 }
 
+const BLOCK_WAIT_TIMEOUT: u64 = 6;
+
 #[async_trait]
 pub trait BtcRelayPallet {
     async fn get_best_block(&self) -> Result<H256Le, Error>;
@@ -1047,6 +1051,12 @@ pub trait BtcRelayPallet {
     async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error>;
 
     async fn get_bitcoin_confirmations(&self) -> Result<u32, Error>;
+
+    async fn wait_for_block_in_relay(
+        &self,
+        block_hash: H256Le,
+        num_confirmations: u32,
+    ) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -1112,6 +1122,31 @@ impl BtcRelayPallet for PolkaBtcProvider {
     /// Get the global security parameter k for stable Bitcoin transactions
     async fn get_bitcoin_confirmations(&self) -> Result<u32, Error> {
         Ok(self.ext_client.stable_bitcoin_confirmations(None).await?)
+    }
+
+    /// Wait until Bitcoin block is submitted to the relay
+    async fn wait_for_block_in_relay(
+        &self,
+        block_hash: H256Le,
+        num_confirmations: u32,
+    ) -> Result<(), Error> {
+        loop {
+            let rich_block_header = match self.get_block_header(block_hash).await {
+                // rpc returns zero-initialized storage items if not set, therefore
+                // a block header only exists if the height is non-zero
+                Ok(block_header) if block_header.block_height > 0 => block_header,
+                _ => {
+                    delay_for(Duration::from_secs(BLOCK_WAIT_TIMEOUT)).await;
+                    continue;
+                }
+            };
+
+            if rich_block_header.block_height + num_confirmations
+                <= self.get_best_block_height().await?
+            {
+                return Ok(());
+            }
+        }
     }
 }
 

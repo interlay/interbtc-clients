@@ -3,26 +3,26 @@
 mod api;
 mod cancellation;
 mod collateral;
+mod constants;
 mod error;
 mod execution;
 mod issue;
 mod redeem;
 mod replace;
-mod constants;
 
+use crate::constants::*;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use cancellation::{CancellationScheduler, IssueCanceller, ProcessEvent, ReplaceCanceller};
 use clap::Clap;
 use collateral::*;
 use core::str::FromStr;
 use error::Error;
-use execution::execute_open_requests;
+use execution::{execute_open_issue_requests, execute_open_requests};
 use futures::channel::mpsc;
 use issue::*;
 use log::*;
 use redeem::*;
 use replace::*;
-use crate::constants::*;
 use runtime::{
     substrate_subxt::PairSigner, BtcRelayPallet, Error as RuntimeError, PolkaBtcProvider,
     PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
@@ -184,6 +184,7 @@ async fn main() -> Result<(), Error> {
     info!("Starting to listen for events..");
 
     // Issue handling
+    let issue_set = Arc::new(IssueIds::new());
     let (issue_event_tx, issue_event_rx) = mpsc::channel::<ProcessEvent>(16);
     let mut issue_cancellation_scheduler =
         CancellationScheduler::new(arc_provider.clone(), vault_id.clone());
@@ -191,11 +192,20 @@ async fn main() -> Result<(), Error> {
         arc_provider.clone(),
         vault_id.clone(),
         issue_event_tx.clone(),
+        issue_set.clone(),
     );
     let issue_execute_listener = listen_for_issue_executes(
         arc_provider.clone(),
         vault_id.clone(),
         issue_event_tx.clone(),
+        issue_set.clone(),
+    );
+    let issue_cancel_listener = listen_for_issue_cancels(arc_provider.clone(), issue_set.clone());
+    let issue_executor = execute_open_issue_requests(
+        arc_provider.clone(),
+        btc_rpc.clone(),
+        issue_set.clone(),
+        num_confirmations,
     );
 
     // replace handling
@@ -260,6 +270,12 @@ async fn main() -> Result<(), Error> {
                 .await
                 .unwrap();
         }),
+        tokio::spawn(async move {
+            issue_cancel_listener.await.unwrap();
+        }),
+        tokio::spawn(async move {
+            issue_executor.await.unwrap();
+        }),
         // redeem handling
         tokio::spawn(async move {
             redeem_listener.await.unwrap();
@@ -298,8 +314,8 @@ async fn main() -> Result<(), Error> {
         }),
     );
     match result {
-        Ok(res) => {
-            println!("{:?}", res);
+        Ok(_) => {
+            println!("Done");
         }
         Err(err) => {
             println!("Error: {}", err);
