@@ -508,7 +508,7 @@ version = "0.2.0"
 dependencies = [
  "async-trait",
  "backoff",
- "bitcoincore-rpc",
+ "bitcoincore-rpc 0.11.0 (git+https://github.com/gregdhill/rust-bitcoincore-rpc?rev=cf83a0a)",
  "clap 3.0.0-beta.2",
  "hex 0.4.2",
  "mockall",
@@ -566,11 +566,34 @@ dependencies = [
 [[package]]
 name = "bitcoincore-rpc"
 version = "0.11.0"
-source = "git+https://github.com/gregdhill/rust-bitcoincore-rpc#cf83a0a9c40775a6dc5e4a17d7e89b45da03929b"
+source = "git+https://github.com/gregdhill/rust-bitcoincore-rpc?rev=cf83a0a#cf83a0a9c40775a6dc5e4a17d7e89b45da03929b"
 dependencies = [
- "bitcoincore-rpc-json",
+ "bitcoincore-rpc-json 0.12.0 (git+https://github.com/gregdhill/rust-bitcoincore-rpc?rev=cf83a0a)",
  "jsonrpc",
  "log 0.4.11",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "bitcoincore-rpc"
+version = "0.11.0"
+source = "git+https://github.com/gregdhill/rust-bitcoincore-rpc#cf83a0a9c40775a6dc5e4a17d7e89b45da03929b"
+dependencies = [
+ "bitcoincore-rpc-json 0.12.0 (git+https://github.com/gregdhill/rust-bitcoincore-rpc)",
+ "jsonrpc",
+ "log 0.4.11",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "bitcoincore-rpc-json"
+version = "0.12.0"
+source = "git+https://github.com/gregdhill/rust-bitcoincore-rpc?rev=cf83a0a#cf83a0a9c40775a6dc5e4a17d7e89b45da03929b"
+dependencies = [
+ "bitcoin 0.26.0",
+ "hex 0.3.2",
  "serde",
  "serde_json",
 ]
@@ -5735,7 +5758,7 @@ name = "relayer-core"
 version = "0.1.0"
 source = "git+https://gitlab.com/interlay/relayer-core?branch=main#4302bc5fc9dc77090985b8453c5f37affbbd6fde"
 dependencies = [
- "bitcoincore-rpc",
+ "bitcoincore-rpc 0.11.0 (git+https://github.com/gregdhill/rust-bitcoincore-rpc)",
  "hex 0.4.2",
  "log 0.4.11",
  "thiserror",
@@ -5743,10 +5766,10 @@ dependencies = [
 
 [[package]]
 name = "relayer-core"
-version = "0.1.0"
-source = "git+https://gitlab.com/interlay/relayer-core?branch=master#4302bc5fc9dc77090985b8453c5f37affbbd6fde"
+version = "0.2.1"
+source = "git+https://gitlab.com/interlay/relayer-core?rev=6e84ca46#6e84ca4697e260a562ba9d6dd2f2a22ed4ddd0f5"
 dependencies = [
- "bitcoincore-rpc",
+ "bitcoincore-rpc 0.11.0 (git+https://github.com/gregdhill/rust-bitcoincore-rpc?rev=cf83a0a)",
  "hex 0.4.2",
  "log 0.4.11",
  "thiserror",
@@ -7959,7 +7982,7 @@ dependencies = [
  "log 0.4.11",
  "mockall",
  "parity-scale-codec",
- "relayer-core 0.1.0 (git+https://gitlab.com/interlay/relayer-core)",
+ "relayer-core 0.2.1",
  "runtime",
  "serde",
  "sp-core",
@@ -8314,7 +8337,7 @@ dependencies = [
  "log 0.4.11",
  "parity-scale-codec",
  "primitive-types",
- "relayer-core 0.1.0 (git+https://gitlab.com/interlay/relayer-core?branch=main)",
+ "relayer-core 0.1.0",
  "reqwest",
  "runtime",
  "serde",
