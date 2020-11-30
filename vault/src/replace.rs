@@ -1,4 +1,4 @@
-use crate::cancelation::ProcessEvent;
+use crate::cancellation::ProcessEvent;
 use crate::error::Error;
 use crate::execution::Request;
 use crate::constants::get_retry_policy;

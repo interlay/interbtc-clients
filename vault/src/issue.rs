@@ -1,4 +1,4 @@
-use crate::cancelation::ProcessEvent;
+use crate::cancellation::ProcessEvent;
 use futures::channel::mpsc::Sender;
 use futures::SinkExt;
 use log::{error, info};
@@ -9,7 +9,7 @@ use runtime::{
 use sp_core::crypto::AccountId32;
 use std::sync::Arc;
 
-/// Listen for RequestIssueEvent directed at this vault. Schedules a cancelation of
+/// Listen for RequestIssueEvent directed at this vault. Schedules a cancellation of
 /// the received issue
 ///
 /// # Arguments

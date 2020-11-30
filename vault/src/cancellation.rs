@@ -24,7 +24,7 @@ pub enum ProcessEvent {
     Executed(H256),
 }
 
-pub struct CancelationScheduler<P: IssuePallet + ReplacePallet + UtilFuncs> {
+pub struct CancellationScheduler<P: IssuePallet + ReplacePallet + UtilFuncs> {
     provider: Arc<P>,
     vault_id: AccountId32,
     period: Option<u32>,
@@ -52,9 +52,9 @@ enum ListState {
     Invalid,
 }
 
-/// Trait to abstract over issue & replace cancelation
+/// Trait to abstract over issue & replace cancellation
 #[async_trait]
-pub trait Canceler<P> {
+pub trait Canceller<P> {
     /// either "replace" or "issue"; used for logging
     const TYPE_NAME: &'static str;
 
@@ -77,9 +77,9 @@ pub trait Canceler<P> {
         P: 'async_trait;
 }
 
-pub struct IssueCanceler;
+pub struct IssueCanceller;
 #[async_trait]
-impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceler<P> for IssueCanceler {
+impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for IssueCanceller {
     const TYPE_NAME: &'static str = "issue";
 
     async fn get_open_processes(
@@ -117,9 +117,9 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceler<P> for IssueCanceler
     }
 }
 
-pub struct ReplaceCanceler;
+pub struct ReplaceCanceller;
 #[async_trait]
-impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceler<P> for ReplaceCanceler {
+impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for ReplaceCanceller {
     const TYPE_NAME: &'static str = "replace";
     
     async fn get_open_processes(
@@ -204,10 +204,10 @@ impl EventSelector for ProductionEventSelector {
     }
 }
 
-/// The actual cancelation scheduling and handling
-impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
-    pub fn new(provider: Arc<P>, vault_id: AccountId32) -> CancelationScheduler<P> {
-        CancelationScheduler {
+/// The actual cancellation scheduling and handling
+impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
+    pub fn new(provider: Arc<P>, vault_id: AccountId32) -> CancellationScheduler<P> {
+        CancellationScheduler {
             provider,
             vault_id,
             period: None,
@@ -217,12 +217,12 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
     /// Listens for issueing events (i.e. issue received/executed). When
     /// the issue period has expired without the issue having been executed,
     /// this function will atempt to call cancel_event to get the collateral back.
-    /// On start, queries open issues and schedules cancelation for these as well.
+    /// On start, queries open issues and schedules cancellation for these as well.
     ///
     /// # Arguments
     ///
     /// *`event_listener`: channel that signals relevant events _for this vault_.
-    pub async fn handle_cancelation<T: Canceler<P>>(
+    pub async fn handle_cancellation<T: Canceller<P>>(
         &mut self,
         mut event_listener: Receiver<ProcessEvent>,
     ) -> Result<(), Error> {
@@ -241,9 +241,9 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
         }
     }
 
-    /// Handles one timeout or event_listener event. This method is split from handle_cancelation for
+    /// Handles one timeout or event_listener event. This method is split from handle_cancellation for
     /// testing purposes
-    async fn wait_for_event<T: Canceler<P>, U: EventSelector>(
+    async fn wait_for_event<T: Canceller<P>, U: EventSelector>(
         &mut self,
         event_listener: &mut Receiver<ProcessEvent>,
         active_processes: &mut Vec<ActiveProcess>,
@@ -315,7 +315,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
     }
 
     /// Gets a list of issue that have been requested from this vault
-    async fn get_open_processes<T: Canceler<P>>(&mut self) -> Result<Vec<ActiveProcess>, Error> {
+    async fn get_open_processes<T: Canceller<P>>(&mut self) -> Result<Vec<ActiveProcess>, Error> {
         let ret = self
             .get_open_process_delays::<T>()
             .await?
@@ -329,7 +329,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
     }
 
     /// Gets a list of issue that have been requested from this vault
-    async fn get_open_process_delays<T: Canceler<P>>(
+    async fn get_open_process_delays<T: Canceller<P>>(
         &mut self,
     ) -> Result<Vec<(H256, Duration)>, Error> {
         let open_processes =
@@ -378,7 +378,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancelationScheduler<P> {
 
     /// Cached function to get the issue/replace period, in number of blocks until
     /// it is allowed to be canceled
-    async fn get_cached_period<T: Canceler<P>>(&mut self) -> Result<u32, Error> {
+    async fn get_cached_period<T: Canceller<P>>(&mut self) -> Result<u32, Error> {
         match self.period {
             Some(x) => Ok(x),
             None => {
@@ -539,7 +539,7 @@ mod tests {
             .times(1)
             .returning(|| Ok(10));
 
-        let mut canceler = CancelationScheduler::new(Arc::new(provider), Default::default());
+        let mut canceller = CancellationScheduler::new(Arc::new(provider), Default::default());
 
         let seconds_to_wait_1 = 5 * SECONDS_PER_BLOCK as u64 + CANCEL_MARGIN_SECONDS as u64;
         let seconds_to_wait_2 = 0;
@@ -547,8 +547,8 @@ mod tests {
 
         // checks that the delay is calculated correctly, and that the vec is sorted
         assert_eq!(
-            canceler
-                .get_open_process_delays::<IssueCanceler>()
+            canceller
+                .get_open_process_delays::<IssueCanceller>()
                 .await
                 .unwrap(),
             vec![
@@ -589,9 +589,9 @@ mod tests {
             .returning(|| Ok(5));
         provider.expect_get_issue_period().returning(|| Ok(10));
 
-        let mut canceler = CancelationScheduler::new(Arc::new(provider), Default::default());
+        let mut canceller = CancellationScheduler::new(Arc::new(provider), Default::default());
         assert_err!(
-            canceler.get_open_process_delays::<IssueCanceler>().await,
+            canceller.get_open_process_delays::<IssueCanceller>().await,
             Error::InvalidOpenTime
         );
     }
@@ -626,8 +626,8 @@ mod tests {
 
         let (_, mut event_listener) = mpsc::channel::<ProcessEvent>(16);
         let mut active_processes: Vec<ActiveProcess> = vec![];
-        let mut cancelation_scheduler =
-            CancelationScheduler::new(Arc::new(provider), AccountId32::default());
+        let mut cancellation_scheduler =
+            CancellationScheduler::new(Arc::new(provider), AccountId32::default());
 
         // simulate that the issue expires
         let selector = TestEventSelector {
@@ -638,8 +638,8 @@ mod tests {
         };
 
         assert_eq!(
-            cancelation_scheduler
-                .wait_for_event::<IssueCanceler, _>(
+            cancellation_scheduler
+                .wait_for_event::<IssueCanceller, _>(
                     &mut event_listener,
                     &mut active_processes,
                     ListState::Invalid,
@@ -676,8 +676,8 @@ mod tests {
             },
         ];
 
-        let mut cancelation_scheduler =
-            CancelationScheduler::new(Arc::new(provider), AccountId32::default());
+        let mut cancellation_scheduler =
+            CancellationScheduler::new(Arc::new(provider), AccountId32::default());
         // simulate that we have a timeout
         let selector = TestEventSelector {
             on_event: |timeout, _| match timeout {
@@ -690,8 +690,8 @@ mod tests {
 
         // simulate that the issue gets executed
         assert_eq!(
-            cancelation_scheduler
-                .wait_for_event::<IssueCanceler, _>(
+            cancellation_scheduler
+                .wait_for_event::<IssueCanceller, _>(
                     &mut event_listener,
                     &mut active_processes,
                     ListState::Valid,
@@ -737,8 +737,8 @@ mod tests {
 
         let (_, mut event_listener) = mpsc::channel::<ProcessEvent>(16);
         let mut active_processes: Vec<ActiveProcess> = vec![];
-        let mut cancelation_scheduler =
-            CancelationScheduler::new(Arc::new(provider), AccountId32::default());
+        let mut cancellation_scheduler =
+            CancellationScheduler::new(Arc::new(provider), AccountId32::default());
 
         // simulate that the issue gets executed
         let selector = TestEventSelector {
@@ -750,8 +750,8 @@ mod tests {
             },
         };
         assert_eq!(
-            cancelation_scheduler
-                .wait_for_event::<IssueCanceler, _>(
+            cancellation_scheduler
+                .wait_for_event::<IssueCanceller, _>(
                     &mut event_listener,
                     &mut active_processes,
                     ListState::Invalid,
@@ -777,8 +777,8 @@ mod tests {
 
         let (_, mut event_listener) = mpsc::channel::<ProcessEvent>(16);
         let mut active_processes: Vec<ActiveProcess> = vec![];
-        let mut cancelation_scheduler =
-            CancelationScheduler::new(Arc::new(provider), AccountId32::default());
+        let mut cancellation_scheduler =
+            CancellationScheduler::new(Arc::new(provider), AccountId32::default());
 
         // simulate that we have a timeout
         let selector = TestEventSelector {
@@ -790,8 +790,8 @@ mod tests {
 
         // state should remain invalid
         assert_eq!(
-            cancelation_scheduler
-                .wait_for_event::<IssueCanceler, _>(
+            cancellation_scheduler
+                .wait_for_event::<IssueCanceller, _>(
                     &mut event_listener,
                     &mut active_processes,
                     ListState::Invalid,
@@ -810,8 +810,8 @@ mod tests {
 
         let (_, mut event_listener) = mpsc::channel::<ProcessEvent>(16);
         let mut active_processes: Vec<ActiveProcess> = vec![];
-        let mut cancelation_scheduler =
-            CancelationScheduler::new(Arc::new(provider), AccountId32::default());
+        let mut cancellation_scheduler =
+            CancellationScheduler::new(Arc::new(provider), AccountId32::default());
 
         // simulate that we have a timeout
         let selector = TestEventSelector {
@@ -822,8 +822,8 @@ mod tests {
         };
 
         assert_err!(
-            cancelation_scheduler
-                .wait_for_event::<IssueCanceler, _>(
+            cancellation_scheduler
+                .wait_for_event::<IssueCanceller, _>(
                     &mut event_listener,
                     &mut active_processes,
                     ListState::Valid,

@@ -2,7 +2,8 @@ use backoff::ExponentialBackoff;
 use std::time::Duration;
 
 /// Interval at which new blocks are expected to be added in the parachain
-pub const SECONDS_PER_BLOCK: u32 = 6;
+pub const SECONDS_PER_BLOCK: u32 = 6; // TODO: re-use constant from the parachain
+
 
 /// number of seconds after the issue/replace deadline before the issue/replace is
 /// actually canceled. When set too low, chances are we try to cancel before 
