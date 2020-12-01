@@ -1050,6 +1050,8 @@ pub trait BtcRelayPallet {
 
     async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error>;
 
+    async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error>;
+
     async fn get_bitcoin_confirmations(&self) -> Result<u32, Error>;
 
     async fn wait_for_block_in_relay(
@@ -1115,6 +1117,17 @@ impl BtcRelayPallet for PolkaBtcProvider {
     async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error> {
         self.ext_client
             .store_block_header_and_watch(&*self.signer.write().await, header)
+            .await?;
+        Ok(())
+    }
+
+    /// Stores multiple block headers in the BTC-Relay.
+    ///
+    /// # Arguments
+    /// * `headers` - raw block headers
+    async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error> {
+        self.ext_client
+            .store_block_headers_and_watch(&*self.signer.write().await, headers)
             .await?;
         Ok(())
     }

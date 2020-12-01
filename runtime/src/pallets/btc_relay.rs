@@ -23,6 +23,12 @@ pub struct StoreBlockHeaderCall<T: BTCRelay> {
     pub raw_block_header: RawBlockHeader,
 }
 
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct StoreBlockHeadersCall<T: BTCRelay> {
+    pub _runtime: PhantomData<T>,
+    pub raw_block_headers: Vec<RawBlockHeader>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct BestBlockStore<T: BTCRelay> {
     #[store(returns = T::H256Le)]

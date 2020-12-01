@@ -49,9 +49,8 @@ struct Opts {
     #[clap(long)]
     relay_start_height: Option<u32>,
 
-    /// Max batch size for combined block header submission,
-    /// currently unsupported.
-    #[clap(long, default_value = "1", possible_value = "1")]
+    /// Max batch size for combined block header submission.
+    #[clap(long, default_value = "16")]
     max_batch_size: u32,
 
     /// Timeout in milliseconds to repeat oracle liveness check.
