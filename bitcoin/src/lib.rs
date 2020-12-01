@@ -23,7 +23,7 @@ pub use bitcoincore_rpc::{
     Auth, Client, Error as BitcoinError, RpcApi,
 };
 pub use error::{BitcoinRpcError, ConversionError, Error};
-pub use iter::get_transactions;
+pub use iter::{get_transactions, stream_blocks};
 use rand::{self, Rng};
 use sp_core::{H160, H256};
 use std::sync::Arc;
@@ -376,6 +376,7 @@ pub trait TransactionExt {
     fn get_op_return(&self) -> Option<H256>;
     fn get_payment_amount_to(&self, to: H160) -> Option<u64>;
 }
+
 impl TransactionExt for Transaction {
     /// Extract the hash from the OP_RETURN uxto, if present
     fn get_op_return(&self) -> Option<H256> {
@@ -527,9 +528,19 @@ pub fn extract_btc_addresses(tx: GetRawTransactionResult) -> Vec<H160> {
         .collect::<Vec<H160>>()
 }
 
-pub fn extract_op_returns(_tx: GetRawTransactionResult) -> Vec<Vec<u8>> {
-    // TODO: filter transactions for op_return outputs
-    vec![]
+// TODO: merge with `get_op_return`
+pub fn extract_op_returns(tx: GetRawTransactionResult) -> Vec<Vec<u8>> {
+    tx.vout
+        .into_iter()
+        .filter_map(|vout| {
+            let script = vout.script_pub_key.script().unwrap();
+            if script.is_op_return() {
+                Some(script.to_bytes()[2..].to_vec())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<Vec<u8>>>()
 }
 
 #[cfg(test)]

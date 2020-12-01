@@ -510,6 +510,7 @@ dependencies = [
  "backoff",
  "bitcoincore-rpc",
  "clap 3.0.0-beta.2",
+ "futures 0.3.7",
  "hex 0.4.2",
  "mockall",
  "num",

@@ -14,6 +14,8 @@ pub enum Error {
     ChannelClosed,
     #[error("Invalid Bitcoin network")]
     InvalidBitcoinNetwork,
+    #[error("Expected blocks but got none")]
+    NoIncomingBlocks,
 
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),

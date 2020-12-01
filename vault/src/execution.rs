@@ -1,5 +1,6 @@
-use crate::error::Error;
 use crate::constants::*;
+use crate::error::Error;
+use crate::issue::{process_issue_requests, IssueIds};
 use backoff::future::FutureOperation as _;
 use bitcoin::Network;
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
@@ -140,10 +141,13 @@ impl Request {
             .await
             .map_err(|x| x.into())
         })
-        .retry_notify(get_retry_policy(), |e, dur:Duration| {
+        .retry_notify(get_retry_policy(), |e, dur: Duration| {
             warn!(
                 "{:?} execution of request {} failed: {} - next retry in {:.3} s",
-                self.request_type, self.hash, e, dur.as_secs_f64()
+                self.request_type,
+                self.hash,
+                e,
+                dur.as_secs_f64()
             )
         })
         .await?;
@@ -214,7 +218,11 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
                 // Payment has been made, but it might not have been confirmed enough times yet
                 let tx_metadata = btc_rpc
                     .clone()
-                    .wait_for_transaction_metadata(tx.txid(), BITCOIN_MAX_RETRYING_TIME, num_confirmations)
+                    .wait_for_transaction_metadata(
+                        tx.txid(),
+                        BITCOIN_MAX_RETRYING_TIME,
+                        num_confirmations,
+                    )
                     .await;
 
                 match tx_metadata {
@@ -264,6 +272,22 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
         });
     }
 
+    Ok(())
+}
+
+/// Execute open issue requests, retry if stream ends early.
+pub async fn execute_open_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
+    provider: Arc<PolkaBtcProvider>,
+    btc_rpc: Arc<B>,
+    issue_set: Arc<IssueIds>,
+    num_confirmations: u32,
+) -> Result<(), Error> {
+    (|| async {
+        process_issue_requests(&provider, &btc_rpc, &issue_set, num_confirmations).await?;
+        Ok(())
+    })
+    .retry(get_retry_policy())
+    .await?;
     Ok(())
 }
 
