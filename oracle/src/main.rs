@@ -1,13 +1,12 @@
 mod error;
 
 use clap::Clap;
-use coingecko::{Client, SimplePriceReq};
 use error::Error;
 use log::{error, info};
-use num_traits::cast::ToPrimitive;
 use runtime::substrate_subxt::PairSigner;
 use runtime::{ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime};
 use sp_keyring::AccountKeyring;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::delay_for;
@@ -16,18 +15,17 @@ const ERR_RETRY_WAIT: Duration = Duration::from_secs(10);
 
 async fn get_exchange_rate_from_coingecko() -> Result<u128, Error> {
     // https://www.coingecko.com/api/documentations/v3
-    let resp = Client::new(isahc::HttpClient::new().unwrap())
-        .simple_price(SimplePriceReq::new("bitcoin".into(), "dot".into()))
-        .await?;
+    let resp =
+        reqwest::get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=dot")
+            .await?
+            .json::<HashMap<String, HashMap<String, u128>>>()
+            .await?;
 
-    Ok(resp
+    Ok(*resp
         .get("bitcoin")
         .ok_or(Error::InvalidExchangeRate)?
         .get("dot")
-        .ok_or(Error::InvalidExchangeRate)?
-        .to_u64()
-        .ok_or(Error::InvalidExchangeRate)?
-        .into())
+        .ok_or(Error::InvalidExchangeRate)?)
 }
 
 /// Simple oracle liveness service to automatically update the
