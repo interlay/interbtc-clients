@@ -1,10 +1,10 @@
-use crate::BlockHash;
 use crate::{BitcoinCoreApi, Error};
 use bitcoincore_rpc::{
-    bitcoin::{Block, Transaction},
+    bitcoin::{Block, BlockHash, Transaction},
     json::GetBlockResult,
 };
 use futures::prelude::*;
+use futures::stream::StreamExt;
 use std::iter;
 use std::sync::Arc;
 use std::time::Duration;
@@ -87,6 +87,31 @@ pub fn get_blocks<T: BitcoinCoreApi>(
     })
 }
 
+/// Stream all transactions in blocks produced by Bitcoin Core.
+///
+/// # Arguments:
+///
+/// * `rpc` - bitcoin rpc
+/// * `from_height` - height of the first block of the stream
+pub fn stream_in_chain_transactions<T: BitcoinCoreApi>(
+    rpc: Arc<T>,
+    from_height: u32,
+) -> impl Stream<Item = Result<(BlockHash, Transaction), Error>> + Unpin {
+    Box::pin(stream_blocks(rpc, from_height).flat_map(|result| {
+        futures::stream::iter(result.map_or_else(
+            |err| vec![Err(err)],
+            |block| {
+                let block_hash = block.block_hash();
+                block
+                    .txdata
+                    .into_iter()
+                    .map(|tx| Ok((block_hash, tx)))
+                    .collect()
+            },
+        ))
+    }))
+}
+
 /// Stream blocks continuously `from_height` awaiting the production of
 /// new blocks as reported by Bitcoin core.
 ///
@@ -97,7 +122,7 @@ pub fn get_blocks<T: BitcoinCoreApi>(
 pub fn stream_blocks<T: BitcoinCoreApi>(
     rpc: Arc<T>,
     from_height: u32,
-) -> impl Stream<Item = Result<(BlockHash, u32), Error>> {
+) -> impl Stream<Item = Result<Block, Error>> + Unpin {
     struct StreamState<T> {
         rpc: Arc<T>,
         next_height: u32,
@@ -108,7 +133,7 @@ pub fn stream_blocks<T: BitcoinCoreApi>(
         next_height: from_height,
     };
 
-    stream::unfold(state, |mut state| async move {
+    Box::pin(stream::unfold(state, |mut state| async move {
         // FIXME: if Bitcoin Core forks, this may skip a block
         let height = state.next_height;
         match state
@@ -116,13 +141,16 @@ pub fn stream_blocks<T: BitcoinCoreApi>(
             .wait_for_block(height, Duration::from_secs(BLOCK_WAIT_TIMEOUT))
             .await
         {
-            Ok(block_hash) => {
-                state.next_height += 1;
-                Some((Ok((block_hash, height)), state))
-            }
+            Ok(block_hash) => match state.rpc.get_block(&block_hash) {
+                Ok(block) => {
+                    state.next_height += 1;
+                    Some((Ok(block), state))
+                }
+                Err(e) => Some((Err(e), state)),
+            },
             Err(e) => Some((Err(e), state)),
         }
-    })
+    }))
 }
 
 /// small helper function for getting the block info of the best block. This simplifies
