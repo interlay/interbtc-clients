@@ -16,6 +16,8 @@ ARG PROFILE=release
 
 COPY --from=builder /app/target/$PROFILE/testdata-gen /usr/local/bin
 
+RUN install_packages libssl1.1 ca-certificates
+
 # Checks
 RUN ldd /usr/local/bin/testdata-gen && \
 	/usr/local/bin/testdata-gen --version

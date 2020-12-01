@@ -16,6 +16,8 @@ ARG PROFILE=release
 
 COPY --from=builder /app/target/$PROFILE/oracle /usr/local/bin
 
+RUN install_packages libssl1.1 ca-certificates
+
 # Checks
 RUN ldd /usr/local/bin/oracle && \
 	/usr/local/bin/oracle --version
