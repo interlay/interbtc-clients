@@ -1,7 +1,8 @@
 use crate::BitcoinError;
 use bitcoincore_rpc::{
     bitcoin::{
-        consensus::encode::Error as BitcoinEncodeError, util::address::Error as AddressError,
+        consensus::encode::Error as BitcoinEncodeError, hashes::Error as HashesError,
+        util::address::Error as AddressError,
     },
     jsonrpc::error::RpcError,
 };
@@ -20,6 +21,8 @@ pub enum Error {
     ConfirmationError,
     #[error("Could not find block at height")]
     InvalidBitcoinHeight,
+    #[error("Could not decode address")]
+    InvalidAddress,
 }
 
 #[derive(Error, Debug)]
@@ -28,8 +31,12 @@ pub enum ConversionError {
     FromHexError(#[from] FromHexError),
     #[error("AddressError: {0}")]
     AddressError(#[from] AddressError),
-    #[error("Witness program error")]
-    WitnessProgramError,
+    #[error("HashesError: {0}")]
+    HashesError(#[from] HashesError),
+    #[error("Invalid format")]
+    InvalidFormat,
+    #[error("Invalid payload")]
+    InvalidPayload,
     #[error("Could not convert block hash")]
     BlockHashError,
 }

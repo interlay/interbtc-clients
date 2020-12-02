@@ -5,9 +5,9 @@ use jsonrpsee::{
     common::{to_value as to_json_value, Params},
     Client as RpcClient,
 };
-use module_vault_registry_rpc_runtime_api::BalanceWrapper;
+use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
 use sp_core::sr25519::Pair as KeyPair;
-use sp_core::{H160, H256};
+use sp_core::H256;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::future::Future;
@@ -133,18 +133,6 @@ impl PolkaBtcProvider {
             vaults.push(account);
         }
         Ok(vaults)
-    }
-
-    /// Submit extrinsic to register a vault.
-    ///
-    /// # Arguments
-    /// * `collateral` - deposit
-    /// * `btc_address` - Bitcoin address hash
-    pub async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), Error> {
-        self.ext_client
-            .register_vault_and_watch(&*self.signer.write().await, collateral, btc_address)
-            .await?;
-        Ok(())
     }
 
     /// Calls `callback` with each of the past events stored in the chain
@@ -933,7 +921,7 @@ pub trait RedeemPallet {
     async fn request_redeem(
         &self,
         amount_polka_btc: u128,
-        btc_address: H160,
+        btc_address: BtcAddress,
         vault_id: <PolkaBtcRuntime as System>::AccountId,
     ) -> Result<H256, Error>;
 
@@ -966,7 +954,7 @@ impl RedeemPallet for PolkaBtcProvider {
     async fn request_redeem(
         &self,
         amount_polka_btc: u128,
-        btc_address: H160,
+        btc_address: BtcAddress,
         vault_id: <PolkaBtcRuntime as System>::AccountId,
     ) -> Result<H256, Error> {
         let result = self
@@ -1169,13 +1157,13 @@ pub trait VaultRegistryPallet {
 
     async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, Error>;
 
-    async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), Error>;
+    async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), Error>;
 
     async fn lock_additional_collateral(&self, amount: u128) -> Result<(), Error>;
 
     async fn withdraw_collateral(&self, amount: u128) -> Result<(), Error>;
 
-    async fn update_btc_address(&self, address: H160) -> Result<(), Error>;
+    async fn update_btc_address(&self, address: BtcAddress) -> Result<(), Error>;
 
     async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, Error>;
 
@@ -1217,7 +1205,7 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     /// # Arguments
     /// * `collateral` - deposit
     /// * `btc_address` - Bitcoin address hash
-    async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), Error> {
+    async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), Error> {
         self.ext_client
             .register_vault_and_watch(&*self.signer.write().await, collateral, btc_address)
             .await?;
@@ -1257,7 +1245,7 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     ///
     /// # Arguments
     /// * `address` - the new address of the vault
-    async fn update_btc_address(&self, address: H160) -> Result<(), Error> {
+    async fn update_btc_address(&self, address: BtcAddress) -> Result<(), Error> {
         self.ext_client
             .update_btc_address_and_watch(&*self.signer.write().await, address)
             .await?;

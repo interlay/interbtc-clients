@@ -11,7 +11,7 @@ pub mod staked_relayers;
 pub mod timestamp;
 pub mod vault_registry;
 
-pub use btc_relay::{BitcoinBlockHeight, H256Le, RawBlockHeader, RichBlockHeader};
+pub use btc_relay::{BitcoinBlockHeight, BtcAddress, H256Le, RawBlockHeader, RichBlockHeader};
 pub use security::{ErrorCode, StatusCode};
 
 use parity_scale_codec::{Codec, EncodeLike};
@@ -34,6 +34,7 @@ pub trait Core: System {
     type H256Le: Codec + EncodeLike + Member + Default;
     type H256: Codec + EncodeLike + Member + Default;
     type H160: Codec + EncodeLike + Member + Default;
+    type BtcAddress: Codec + EncodeLike + Member + Default;
 
     type ErrorCodes: Codec + EncodeLike + Member + Default;
     type ErrorCode: Codec + EncodeLike + Member + Default;

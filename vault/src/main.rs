@@ -239,6 +239,7 @@ async fn main() -> Result<(), Error> {
 
     let api_listener = api::start(
         arc_provider.clone(),
+        btc_rpc.clone(),
         opts.http_addr.parse()?,
         opts.rpc_cors_domain,
     );
