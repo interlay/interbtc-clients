@@ -30,7 +30,6 @@ pub struct RequestIssueEvent<T: Issue> {
 pub struct ExecuteIssueCall<T: Issue> {
     pub issue_id: T::H256,
     pub tx_id: H256Le,
-    pub tx_block_height: u32,
     pub merkle_proof: Vec<u8>,
     pub raw_tx: Vec<u8>,
     pub _runtime: PhantomData<T>,

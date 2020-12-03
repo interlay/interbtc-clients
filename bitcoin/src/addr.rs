@@ -35,7 +35,7 @@ impl PartialAddress for polkabtc_bitcoin::Address {
                 program,
             } => {
                 if program.len() == 20 {
-                    Ok(Self::P2WPKH(0, H160::from_slice(program.as_slice())))
+                    Ok(Self::P2WPKHv0(H160::from_slice(program.as_slice())))
                 } else {
                     Err(ConversionError::InvalidPayload)
                 }
@@ -52,9 +52,7 @@ impl PartialAddress for polkabtc_bitcoin::Address {
         let script = match self {
             Self::P2PKH(hash) => Script::new_p2pkh(&PubkeyHash::from_slice(hash.as_bytes())?),
             Self::P2SH(hash) => Script::new_p2sh(&ScriptHash::from_slice(hash.as_bytes())?),
-            Self::P2WPKH(_, hash) => {
-                Script::new_v0_wpkh(&WPubkeyHash::from_slice(hash.as_bytes())?)
-            }
+            Self::P2WPKHv0(hash) => Script::new_v0_wpkh(&WPubkeyHash::from_slice(hash.as_bytes())?),
         };
 
         let payload = Payload::from_script(&script).ok_or(ConversionError::InvalidPayload)?;

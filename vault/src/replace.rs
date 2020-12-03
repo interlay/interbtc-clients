@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 /// Listen for AcceptReplaceEvent directed at this vault and continue the replacement
-/// procedure by transfering bitcoin and calling execute_replace
+/// procedure by transferring bitcoin and calling execute_replace
 ///
 /// # Arguments
 ///
@@ -245,7 +245,7 @@ async fn handle_auction_replace<P: DotBalancesPallet + ReplacePallet + VaultRegi
 }
 
 /// Listen for ExecuteReplaceEvent directed at this vault and continue the replacement
-/// procedure by transfering bitcoin and calling execute_replace
+/// procedure by transferring bitcoin and calling execute_replace
 ///
 /// # Arguments
 ///
@@ -328,7 +328,6 @@ mod tests {
                 &self,
                 replace_id: H256,
                 tx_id: H256Le,
-                tx_block_height: u32,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;

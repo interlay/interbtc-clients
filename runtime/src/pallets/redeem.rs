@@ -29,7 +29,6 @@ pub struct RequestRedeemEvent<T: Redeem> {
 pub struct ExecuteRedeemCall<T: Redeem> {
     pub redeem_id: T::H256,
     pub tx_id: T::H256Le,
-    pub tx_block_height: u32,
     pub merkle_proof: Vec<u8>,
     pub raw_tx: Vec<u8>,
     pub _runtime: PhantomData<T>,

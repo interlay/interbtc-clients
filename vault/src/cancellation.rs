@@ -121,7 +121,7 @@ pub struct ReplaceCanceller;
 #[async_trait]
 impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for ReplaceCanceller {
     const TYPE_NAME: &'static str = "replace";
-    
+
     async fn get_open_processes(
         provider: Arc<P>,
         vault_id: AccountId32,
@@ -148,7 +148,7 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for ReplaceCance
     {
         Ok(provider.get_replace_period().await?)
     }
-    
+
     async fn cancel_process(provider: Arc<P>, process_id: H256) -> Result<(), Error>
     where
         P: 'async_trait,
@@ -178,9 +178,7 @@ impl EventSelector for ProductionEventSelector {
         event_listener: &mut Receiver<ProcessEvent>,
     ) -> Result<EventType, Error> {
         let task_wait = match timeout {
-            TimeoutType::RetryOpenProcesses => {
-                time::delay_for(REQUEST_RETRY_INTERVAL)
-            }
+            TimeoutType::RetryOpenProcesses => time::delay_for(REQUEST_RETRY_INTERVAL),
             TimeoutType::WaitForFirstDeadline(process) => time::delay_until(process.deadline),
             TimeoutType::WaitForever => {
                 time::delay_for(time::Duration::from_millis(u32::MAX.into()))
@@ -450,7 +448,6 @@ mod tests {
                 &self,
                 issue_id: H256,
                 tx_id: H256Le,
-                tx_block_height: u32,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -477,7 +474,6 @@ mod tests {
                 &self,
                 replace_id: H256,
                 tx_id: H256Le,
-                tx_block_height: u32,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;

@@ -82,7 +82,6 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
                 .execute_issue(
                     issue_id,
                     H256Le::from_bytes_le(&txid.as_hash()),
-                    btc_rpc.get_block_info(&block_hash)?.height as u32,
                     proof,
                     raw_tx,
                 )
