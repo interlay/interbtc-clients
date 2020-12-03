@@ -113,10 +113,14 @@ async fn main() -> Result<(), Error> {
 
     info!("Command line arguments: {:?}", opts.clone());
 
-    let btc_rpc = Arc::new(BitcoinCore::new(
-        opts.bitcoin
-            .new_client(Some(&format!("{}", opts.keyring)))?,
-    ));
+    let wallet = format!("{}", opts.keyring);
+    let btc_rpc = Arc::new(BitcoinCore::new(opts.bitcoin.new_client(Some(&wallet))?));
+
+    // TODO: only create wallet on register?
+    if let Err(e) = btc_rpc.create_wallet(&wallet) {
+        warn!("Failed to create / load wallet: {}", e);
+    }
+
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
     let arc_provider = Arc::new(provider.clone());

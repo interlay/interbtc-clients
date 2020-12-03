@@ -219,6 +219,8 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
+
+            fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
         }
     }
 

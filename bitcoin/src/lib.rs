@@ -92,6 +92,8 @@ pub trait BitcoinCoreApi {
         op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
+
+    fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
 }
 
 pub struct BitcoinCore {
@@ -372,6 +374,24 @@ impl BitcoinCoreApi for BitcoinCore {
             .wait_for_transaction_metadata(txid, op_timeout, num_confirmations)
             .await?)
     }
+
+    /// Create or load a wallet on Bitcoin Core.
+    ///
+    /// # Arguments
+    /// * `wallet` - name of the wallet
+    fn create_wallet(&self, wallet: &str) -> Result<(), Error> {
+        // NOTE: bitcoincore-rpc does not expose listwalletdir
+        if self.rpc.list_wallets()?.contains(&wallet.to_string()) {
+            // wallet already loaded
+            return Ok(());
+        } else if let Ok(_) = self.rpc.load_wallet(wallet) {
+            // wallet successfully loaded
+            return Ok(());
+        }
+        // wallet does not exist, create
+        self.rpc.create_wallet(wallet, None, None, None, None)?;
+        Ok(())
+    }
 }
 
 /// Extension trait for transaction, adding methods to help to match the Transaction to Replace/Redeem requests
@@ -529,6 +549,8 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
+
+            fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
         }
     }
 
