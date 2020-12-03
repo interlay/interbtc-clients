@@ -137,7 +137,6 @@ impl Request {
                 &*provider,
                 self.hash,
                 H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
-                tx_metadata.block_height,
                 tx_metadata.proof.clone(),
                 tx_metadata.raw_tx.clone(),
             )
@@ -360,7 +359,6 @@ mod tests {
                 &self,
                 redeem_id: H256,
                 tx_id: H256Le,
-                tx_block_height: u32,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -386,7 +384,6 @@ mod tests {
                 &self,
                 replace_id: H256,
                 tx_id: H256Le,
-                tx_block_height: u32,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -460,7 +457,7 @@ mod tests {
         provider
             .expect_execute_redeem()
             .times(1)
-            .returning(|_, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _| Ok(()));
 
         let request = Request {
             amount: 100,
@@ -489,7 +486,7 @@ mod tests {
         provider
             .expect_execute_replace()
             .times(1)
-            .returning(|_, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _| Ok(()));
 
         let request = Request {
             amount: 100,

@@ -55,7 +55,6 @@ pub async fn execute_redeem(
         .execute_redeem(
             redeem_id,
             H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
-            tx_metadata.block_height,
             tx_metadata.proof,
             tx_metadata.raw_tx,
         )

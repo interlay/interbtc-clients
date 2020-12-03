@@ -369,14 +369,12 @@ pub trait ReplacePallet {
     /// * `&self` - sender of the transaction: the old vault
     /// * `replace_id` - the ID of the replacement request
     /// * `tx_id` - the backing chain transaction id
-    /// * `tx_block_height` - the blocked height of the backing transaction
     /// * 'merkle_proof' - the merkle root of the block
     /// * `raw_tx` - the transaction id in bytes
     async fn execute_replace(
         &self,
         replace_id: H256,
         tx_id: H256Le,
-        tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error>;
@@ -457,7 +455,6 @@ impl ReplacePallet for PolkaBtcProvider {
         &self,
         replace_id: H256,
         tx_id: H256Le,
-        tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error> {
@@ -466,7 +463,6 @@ impl ReplacePallet for PolkaBtcProvider {
                 &*self.signer.write().await,
                 replace_id,
                 tx_id,
-                tx_block_height,
                 merkle_proof,
                 raw_tx,
             )
@@ -824,7 +820,6 @@ pub trait IssuePallet {
         &self,
         issue_id: H256,
         tx_id: H256Le,
-        tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error>;
@@ -869,7 +864,6 @@ impl IssuePallet for PolkaBtcProvider {
         &self,
         issue_id: H256,
         tx_id: H256Le,
-        tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error> {
@@ -878,7 +872,6 @@ impl IssuePallet for PolkaBtcProvider {
                 &*self.signer.write().await,
                 issue_id,
                 tx_id,
-                tx_block_height,
                 merkle_proof,
                 raw_tx,
             )
@@ -930,7 +923,6 @@ pub trait RedeemPallet {
         &self,
         redeem_id: H256,
         tx_id: H256Le,
-        tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error>;
@@ -978,7 +970,6 @@ impl RedeemPallet for PolkaBtcProvider {
         &self,
         redeem_id: H256,
         tx_id: H256Le,
-        tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error> {
@@ -987,7 +978,6 @@ impl RedeemPallet for PolkaBtcProvider {
                 &*self.signer.write().await,
                 redeem_id,
                 tx_id,
-                tx_block_height,
                 merkle_proof,
                 raw_tx,
             )
