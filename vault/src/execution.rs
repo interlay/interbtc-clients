@@ -436,6 +436,7 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
+            fn create_wallet(&self, wallet: &str) -> Result<(), BitcoinError>;
         }
     }
 
