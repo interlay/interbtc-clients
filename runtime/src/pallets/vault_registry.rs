@@ -11,7 +11,7 @@ pub trait VaultRegistry: Core {}
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RegisterVaultCall<T: VaultRegistry> {
     pub collateral: T::DOT,
-    pub btc_address: T::H160,
+    pub btc_address: T::BtcAddress,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
@@ -66,11 +66,11 @@ pub struct IncreaseToBeIssuedTokensEvent<T: VaultRegistry> {
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct UpdateBtcAddressCall<T: VaultRegistry> {
-    pub btc_address: T::H160,
+    pub btc_address: T::BtcAddress,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct UpdateBtcAddressEvent<T: VaultRegistry> {
     pub vault_id: T::AccountId,
-    pub btc_address: T::H160,
+    pub btc_address: T::BtcAddress,
 }

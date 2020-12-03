@@ -19,9 +19,18 @@ num-traits = "0.2"
 num-derive = "0.3"
 futures = "0.3.5"
 
+[dependencies.polkabtc-bitcoin]
+git = "https://gitlab.com/interlay/btc-parachain"
+branch = "dev"
+version = "0.3.0"
+package = "bitcoin"
+optional = true
+
 [dev-dependencies]
 mockall = "0.8.1"
 
 [features]
+default = ["polkabtc"]
 regtest = []
 cli = ["clap"]
+polkabtc = ["polkabtc-bitcoin"]

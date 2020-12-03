@@ -1,7 +1,7 @@
 use crate::cancellation::ProcessEvent;
+use crate::constants::get_retry_policy;
 use crate::error::Error;
 use crate::execution::Request;
-use crate::constants::get_retry_policy;
 use backoff::future::FutureOperation as _;
 use bitcoin::BitcoinCore;
 use futures::channel::mpsc::Sender;
@@ -106,8 +106,12 @@ pub async fn handle_accepted_replace_request(
             .get_vault(event.new_vault_id.clone())
             .await?)
     })
-    .retry_notify(get_retry_policy(), |e, dur:Duration| {
-        warn!("get_vault failed: {} - next retry in {:.3} s", e, dur.as_secs_f64())
+    .retry_notify(get_retry_policy(), |e, dur: Duration| {
+        warn!(
+            "get_vault failed: {} - next retry in {:.3} s",
+            e,
+            dur.as_secs_f64()
+        )
     })
     .await?;
 
@@ -277,10 +281,10 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use runtime::{
-        pallets::Core, AccountId, Error as RuntimeError, H256Le, PolkaBtcReplaceRequest,
-        PolkaBtcRuntime, PolkaBtcVault,
+        pallets::Core, AccountId, BtcAddress, Error as RuntimeError, H256Le,
+        PolkaBtcReplaceRequest, PolkaBtcRuntime, PolkaBtcVault,
     };
-    use sp_core::{H160, H256};
+    use sp_core::H256;
 
     macro_rules! assert_err {
         ($result:expr, $err:pat) => {{
@@ -299,10 +303,10 @@ mod tests {
         pub trait VaultRegistryPallet {
             async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
             async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, RuntimeError>;
-            async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), RuntimeError>;
+            async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
             async fn lock_additional_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
-            async fn update_btc_address(&self, address: H160) -> Result<(), RuntimeError>;
+            async fn update_btc_address(&self, address: BtcAddress) -> Result<(), RuntimeError>;
             async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
             async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, RuntimeError>;

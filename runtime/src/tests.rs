@@ -2,9 +2,10 @@ use super::{
     BtcRelayPallet, DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, SecurityPallet,
     StatusCode, VaultRegistryPallet,
 };
+use crate::BtcAddress;
 use module_bitcoin::{
     formatter::Formattable,
-    types::{Address, BlockBuilder, RawBlockHeader},
+    types::{BlockBuilder, RawBlockHeader},
 };
 use sp_core::{H160, U256};
 use sp_keyring::AccountKeyring;
@@ -65,7 +66,7 @@ async fn test_parachain_status() {
 async fn test_register_vault() {
     let provider = test_client_with(AccountKeyring::Alice).await;
 
-    let address = H160::random();
+    let address = BtcAddress::P2PKH(H160::random());
     provider.register_vault(100, address).await.unwrap();
     let vault = provider
         .get_vault(AccountKeyring::Alice.to_account_id())
@@ -78,7 +79,7 @@ async fn test_register_vault() {
 async fn test_btc_relay() {
     let provider = test_client_with(AccountKeyring::Alice).await;
 
-    let address = Address::from(*H160::zero().as_fixed_bytes());
+    let address = BtcAddress::P2PKH(H160::zero());
     let mut height = 0;
 
     let block = BlockBuilder::new()

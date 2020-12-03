@@ -164,7 +164,7 @@ mod tests {
 
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
 
-            fn get_new_address(&self) -> Result<H160, Error>;
+            fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, Error>;
 
             fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
 
@@ -183,7 +183,7 @@ mod tests {
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
 
-            async fn send_to_address(
+            async fn send_to_address<A: PartialAddress + 'static>(
                 &self,
                 address: String,
                 sat: u64,

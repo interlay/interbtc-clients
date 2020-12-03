@@ -12,7 +12,7 @@ pub trait Redeem: Core {}
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RequestRedeemCall<T: Redeem> {
     pub amount_polka_btc: T::PolkaBTC,
-    pub btc_address: T::H160,
+    pub btc_address: T::BtcAddress,
     pub vault_id: T::AccountId,
 }
 
@@ -22,7 +22,7 @@ pub struct RequestRedeemEvent<T: Redeem> {
     pub redeemer: T::AccountId,
     pub amount_polka_btc: T::PolkaBTC,
     pub vault_id: T::AccountId,
-    pub btc_address: T::H160,
+    pub btc_address: T::BtcAddress,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]

@@ -182,11 +182,11 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, GetBlockResult, GetRawTransactionResult, Transaction, TransactionMetadata, Txid,
+        Block, GetBlockResult, GetRawTransactionResult, PartialAddress, Transaction,
+        TransactionMetadata, Txid,
     };
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode, MINIMUM_STAKE};
-    use sp_core::H160;
     use sp_keyring::AccountKeyring;
     use std::time::Duration;
 
@@ -287,7 +287,7 @@ mod tests {
 
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
 
-            fn get_new_address(&self) -> Result<H160, BitcoinError>;
+            fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, BitcoinError>;
 
             fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
 
@@ -306,7 +306,7 @@ mod tests {
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
 
-            async fn send_to_address(
+            async fn send_to_address<A: PartialAddress + 'static>(
                 &self,
                 address: String,
                 sat: u64,

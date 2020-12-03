@@ -1,9 +1,11 @@
 #[cfg(feature = "cli")]
 pub mod cli;
 
+mod addr;
 mod error;
 mod iter;
 
+pub use addr::PartialAddress;
 use async_trait::async_trait;
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
 pub use bitcoincore_rpc::{
@@ -14,7 +16,8 @@ pub use bitcoincore_rpc::{
         hash_types::BlockHash,
         hashes::{hex::ToHex, Hash},
         util::{address::Payload, psbt::serialize::Serialize},
-        Address, Amount, Block, BlockHeader, Network, Transaction, TxOut, Txid,
+        Address, Amount, Block, BlockHeader, Network, PubkeyHash, Script, ScriptHash, Transaction,
+        TxOut, Txid, WPubkeyHash,
     },
     bitcoincore_rpc_json::{GetRawTransactionResult, GetTransactionResult, WalletTxInfo},
     json::{self, AddressType, GetBlockResult},
@@ -25,9 +28,9 @@ pub use bitcoincore_rpc::{
 pub use error::{BitcoinRpcError, ConversionError, Error};
 pub use iter::{get_transactions, stream_blocks};
 use rand::{self, Rng};
-use sp_core::{H160, H256};
+use sp_core::H256;
 use std::sync::Arc;
-use std::{collections::HashMap, str::FromStr, time::Duration};
+use std::{collections::HashMap, time::Duration};
 use tokio::time::delay_for;
 
 #[macro_use]
@@ -62,7 +65,7 @@ pub trait BitcoinCoreApi {
 
     fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
 
-    fn get_new_address(&self) -> Result<H160, Error>;
+    fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, Error>;
 
     fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
 
@@ -81,7 +84,7 @@ pub trait BitcoinCoreApi {
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
-    async fn send_to_address(
+    async fn send_to_address<A: PartialAddress + 'static>(
         &self,
         address: String,
         sat: u64,
@@ -218,9 +221,9 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     /// Gets a new address from the wallet
-    fn get_new_address(&self) -> Result<H160, Error> {
+    fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, Error> {
         let address = self.rpc.get_new_address(None, Some(AddressType::Bech32))?;
-        Ok(get_hash_from_string(&address.to_string())?)
+        Ok(A::decode_str(&address.to_string())?)
     }
 
     fn get_best_block_hash(&self) -> Result<BlockHash, Error> {
@@ -317,7 +320,7 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `redeem_id` - the redeemid for which this transfer is being made
     /// * `op_timeout` - how long operations will be retried
     /// * `num_confirmations` - how many confirmations we need to wait for
-    async fn send_to_address(
+    async fn send_to_address<A: PartialAddress + 'static>(
         &self,
         address: String,
         sat: u64,
@@ -346,7 +349,7 @@ impl BitcoinCoreApi for BitcoinCore {
 
         let mut tx = raw_tx.transaction().unwrap();
 
-        fix_transaction_output_order(&mut tx, address)?;
+        fix_transaction_output_order(&mut tx, A::decode_str(&address)?)?;
 
         // include the redeem is in the transaction
         add_redeem_id(&mut tx, redeem_id);
@@ -374,7 +377,7 @@ impl BitcoinCoreApi for BitcoinCore {
 /// Extension trait for transaction, adding methods to help to match the Transaction to Replace/Redeem requests
 pub trait TransactionExt {
     fn get_op_return(&self) -> Option<H256>;
-    fn get_payment_amount_to(&self, to: H160) -> Option<u64>;
+    fn get_payment_amount_to<A: PartialAddress + PartialEq>(&self, dest: A) -> Option<u64>;
 }
 
 impl TransactionExt for Transaction {
@@ -391,27 +394,13 @@ impl TransactionExt for Transaction {
         })
     }
 
-    /// Get the amount of btc that self sent to `destination`, if any
-    fn get_payment_amount_to(&self, destination: H160) -> Option<u64> {
+    /// Get the amount of btc that self sent to `dest`, if any
+    fn get_payment_amount_to<A: PartialAddress + PartialEq>(&self, dest: A) -> Option<u64> {
         // we only consider the first three items because the parachain only checks the first 3 positions
         self.output.iter().take(3).find_map(|uxto| {
             let payload = Payload::from_script(&uxto.script_pubkey)?;
-            let hash = match payload {
-                Payload::PubkeyHash(h) => H160::from_slice(h.as_hash().into_inner().as_ref()),
-                Payload::ScriptHash(h) => H160::from_slice(h.as_hash().into_inner().as_ref()),
-                Payload::WitnessProgram {
-                    version: _,
-                    program,
-                } => {
-                    let program = program.as_slice();
-                    // make sure the length is as we expect, otherwise H160::from_slice may panic
-                    if program.len() != 20 {
-                        return None;
-                    }
-                    H160::from_slice(program)
-                }
-            };
-            if hash == destination {
+            let address = A::from_payload(payload).ok()?;
+            if address == dest {
                 Some(uxto.value)
             } else {
                 None
@@ -423,17 +412,20 @@ impl TransactionExt for Transaction {
 /// Ensures we follow the spec: the payment to the recipient needs to be the
 /// first uxto. Funding the transaction sometimes places the return-to-self
 /// uxto first, so this function performs a swap of uxtos if necessary
-fn fix_transaction_output_order(
+fn fix_transaction_output_order<A: PartialAddress>(
     tx: &mut Transaction,
-    recipient_address: String,
+    recipient_address: A,
 ) -> Result<(), Error> {
-    let address_hash = get_hash_from_string(recipient_address.as_str())?;
-    let recipient_raw = address_hash.as_bytes();
-    let output0_addr = &tx.output[0].script_pubkey.as_bytes()[2..];
-
-    if recipient_raw != output0_addr {
+    // TODO: remove, we no longer check ordering on first three outputs
+    let output0_address = A::from_payload(
+        Payload::from_script(&tx.output[0].script_pubkey).ok_or(Error::InvalidAddress)?,
+    )?;
+    if recipient_address != output0_address {
         // most likely the return-to-self output was put first
-        if tx.output.len() > 1 && recipient_raw == &tx.output[1].script_pubkey.as_bytes()[2..] {
+        let output1_address = A::from_payload(
+            Payload::from_script(&tx.output[1].script_pubkey).ok_or(Error::InvalidAddress)?,
+        )?;
+        if tx.output.len() > 1 && recipient_address == output1_address {
             tx.output.swap(0, 1);
         } else {
             // if this executes we have a bug in the code
@@ -458,74 +450,21 @@ fn add_redeem_id(tx: &mut Transaction, redeem_id: &[u8; 32]) {
     );
 }
 
-pub fn get_hash_from_string(btc_address: &str) -> Result<H160, ConversionError> {
-    let addr = Address::from_str(btc_address)?;
-    match addr.payload {
-        Payload::PubkeyHash(hash) => Ok(H160::from(hash.as_hash().into_inner())),
-        Payload::ScriptHash(hash) => Ok(H160::from(hash.as_hash().into_inner())),
-        Payload::WitnessProgram {
-            version: _,
-            program,
-        } => {
-            if program.len() == 20 {
-                Ok(H160::from_slice(program.as_slice()))
-            } else {
-                Err(ConversionError::WitnessProgramError)
-            }
-        }
-    }
-}
-
-pub fn get_address_from_hex(btc_address: &str) -> Result<H160, ConversionError> {
-    let decoded = hex::decode(btc_address)?;
-    Ok(H160::from_slice(decoded.as_slice()))
-}
-
-pub fn hash_to_p2wpkh(btc_address: H160, network: Network) -> Result<String, ConversionError> {
-    let witness_script = Builder::new()
-        .push_opcode(0.into())
-        .push_slice(btc_address.as_bytes())
-        .into_script();
-
-    let payload =
-        Payload::from_script(&witness_script).ok_or(ConversionError::WitnessProgramError)?;
-    let address = Address { network, payload };
-
-    Ok(address.to_string())
-}
-
-fn bytes_to_h160<B: AsRef<[u8]>>(bytes: B) -> H160 {
-    let slice = bytes.as_ref();
-    let mut result = [0u8; 20];
-    result.copy_from_slice(slice);
-    result.into()
-}
-
-pub fn is_p2sh2wpkh(data: Vec<u8>) -> bool {
-    data.len() == 23 && data[0] == opcodes::OP_PUSHBYTES_22.into_u8()
-}
-
-pub fn extract_btc_addresses(tx: GetRawTransactionResult) -> Vec<H160> {
+pub fn extract_btc_addresses<A: PartialAddress>(tx: GetRawTransactionResult) -> Vec<A> {
     tx.vin
         .into_iter()
         .filter_map(|vin| {
             if let Some(script_sig) = &vin.script_sig {
                 // this always returns ok so should be safe to unwrap
                 let script = script_sig.script().unwrap();
-                let bytes = script.to_bytes();
-                if script.is_p2sh() {
-                    return Some(bytes_to_h160(bytes[2..22].to_vec()));
-                } else if script.is_p2pkh() {
-                    return Some(bytes_to_h160(bytes[3..23].to_vec()));
-                } else if script.is_v0_p2wpkh() {
-                    return Some(bytes_to_h160(bytes[2..22].to_vec()));
-                } else if is_p2sh2wpkh(bytes.to_vec()) {
-                    return Some(bytes_to_h160(bytes[3..23].to_vec()));
-                }
+
+                return Payload::from_script(&script).map_or(None, |payload| {
+                    PartialAddress::from_payload(payload).map_or(None, |addr| Some(addr))
+                });
             }
             None
         })
-        .collect::<Vec<H160>>()
+        .collect::<Vec<A>>()
 }
 
 // TODO: merge with `get_op_return`
@@ -578,7 +517,7 @@ mod tests {
 
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
 
-            fn get_new_address(&self) -> Result<H160, Error>;
+            fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, Error>;
 
             fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
 
@@ -597,7 +536,7 @@ mod tests {
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
 
-            async fn send_to_address(
+            async fn send_to_address<A: PartialAddress + 'static>(
                 &self,
                 address: String,
                 sat: u64,
@@ -609,20 +548,16 @@ mod tests {
     }
 
     #[test]
-    fn test_hash_to_p2wpkh() {
-        let addr = "bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f";
-        let addr_hash = get_hash_from_string(addr).unwrap();
-        let rebuilt_addr = hash_to_p2wpkh(addr_hash, Network::Regtest).unwrap();
-        assert_eq!(addr, rebuilt_addr);
-    }
-
-    #[test]
     fn test_tx_has_inputs() {
-        let mut addr = H160::zero();
-        addr.assign_from_slice(&hex::decode("4ef45ff516f84c62b09ad4f605f92abc103f916b").unwrap());
+        let addr = Payload::ScriptHash(
+            ScriptHash::from_slice(
+                &hex::decode("4ef45ff516f84c62b09ad4f605f92abc103f916b").unwrap(),
+            )
+            .unwrap(),
+        );
 
         assert_eq!(
-            extract_btc_addresses(GetRawTransactionResult {
+            extract_btc_addresses::<Payload>(GetRawTransactionResult {
                 in_active_chain: None,
                 hex: vec![],
                 txid: Txid::default(),

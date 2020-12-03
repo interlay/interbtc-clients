@@ -1,5 +1,4 @@
 mod api;
-mod btc_relay;
 mod error;
 mod issue;
 mod redeem;
@@ -8,16 +7,16 @@ mod stats;
 mod utils;
 mod vault;
 
-use bitcoin::{BitcoinCore, BitcoinCoreApi, ConversionError};
+use bitcoin::{BitcoinCore, BitcoinCoreApi, ConversionError, PartialAddress};
 use clap::Clap;
 use error::Error;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    substrate_subxt::PairSigner, ErrorCode as PolkaBtcErrorCode, ExchangeRateOraclePallet, H256Le,
-    PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, StatusCode as PolkaBtcStatusCode,
-    TimestampPallet, VaultRegistryPallet,
+    substrate_subxt::PairSigner, BtcAddress, ErrorCode as PolkaBtcErrorCode,
+    ExchangeRateOraclePallet, H256Le, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet,
+    StatusCode as PolkaBtcStatusCode, TimestampPallet, VaultRegistryPallet,
 };
-use sp_core::{H160, H256};
+use sp_core::H256;
 use sp_keyring::AccountKeyring;
 use std::array::TryFromSliceError;
 use std::convert::TryInto;
@@ -25,11 +24,11 @@ use std::str::FromStr;
 use std::time::Duration;
 
 #[derive(Debug, Encode, Decode)]
-struct H160FromStr(H160);
-impl std::str::FromStr for H160FromStr {
+struct BtcAddressFromStr(BtcAddress);
+impl std::str::FromStr for BtcAddressFromStr {
     type Err = ConversionError;
     fn from_str(btc_address: &str) -> Result<Self, Self::Err> {
-        Ok(H160FromStr(bitcoin::get_hash_from_string(btc_address)?))
+        Ok(BtcAddressFromStr(PartialAddress::decode_str(btc_address)?))
     }
 }
 #[derive(Debug, Encode, Decode)]
@@ -212,11 +211,11 @@ impl FromStr for BitcoinNetwork {
 }
 
 impl BitcoinNetwork {
-    fn hash_to_addr(&self, hash: H160) -> Result<String, ConversionError> {
+    fn serialize_address(&self, address: BtcAddress) -> Result<String, ConversionError> {
         match *self {
-            BitcoinNetwork::Mainnet => bitcoin::hash_to_p2wpkh(hash, bitcoin::Network::Bitcoin),
-            BitcoinNetwork::Testnet => bitcoin::hash_to_p2wpkh(hash, bitcoin::Network::Testnet),
-            BitcoinNetwork::Regtest => bitcoin::hash_to_p2wpkh(hash, bitcoin::Network::Regtest),
+            BitcoinNetwork::Mainnet => address.encode_str(bitcoin::Network::Bitcoin),
+            BitcoinNetwork::Testnet => address.encode_str(bitcoin::Network::Testnet),
+            BitcoinNetwork::Regtest => address.encode_str(bitcoin::Network::Regtest),
         }
     }
 }
@@ -268,7 +267,7 @@ struct SetBtcTxFeesInfo {
 struct RegisterVaultInfo {
     /// Bitcoin address for vault to receive funds.
     #[clap(long)]
-    btc_address: H160FromStr,
+    btc_address: BtcAddressFromStr,
 
     /// Collateral to secure position.
     #[clap(long, default_value = "100000")]
@@ -317,7 +316,7 @@ struct RequestRedeemInfo {
 
     /// Bitcoin address for vault to send funds.
     #[clap(long)]
-    btc_address: H160FromStr,
+    btc_address: BtcAddressFromStr,
 
     /// Vault keyring to derive `vault_id`.
     #[clap(long, default_value = "bob")]
@@ -383,7 +382,7 @@ struct RegisterVaultJsonRpcRequest {
 
     /// Bitcoin address for vault to receive funds.
     #[clap(long)]
-    btc_address: H160FromStr,
+    btc_address: BtcAddressFromStr,
 }
 
 #[derive(Clap, Encode, Decode, Debug)]
@@ -404,7 +403,7 @@ struct WithdrawCollateralJsonRpcRequest {
 struct UpdateBtcAddressJsonRpcRequest {
     /// New bitcoin address to set.
     #[clap(long)]
-    address: H160FromStr,
+    address: BtcAddressFromStr,
 }
 
 #[derive(Clap, Encode, Decode, Debug)]
@@ -512,7 +511,7 @@ async fn main() -> Result<(), Error> {
 
             let vault_btc_address = info
                 .bitcoin_network
-                .hash_to_addr(vault.wallet.get_btc_address())?;
+                .serialize_address(vault.wallet.get_btc_address())?;
 
             let issue_id = issue::request_issue(
                 &provider,
@@ -535,7 +534,7 @@ async fn main() -> Result<(), Error> {
             let data = &hex::decode(info.op_return)?;
 
             let tx_metadata = btc_rpc
-                .send_to_address(
+                .send_to_address::<BtcAddress>(
                     info.btc_address,
                     info.satoshis,
                     &data_to_request_id(data)?,
@@ -561,7 +560,7 @@ async fn main() -> Result<(), Error> {
 
             let btc_address = info
                 .bitcoin_network
-                .hash_to_addr(redeem_request.btc_address)?;
+                .serialize_address(redeem_request.btc_address)?;
 
             redeem::execute_redeem(
                 &provider,

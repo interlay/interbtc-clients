@@ -5,30 +5,30 @@ use futures::stream::iter;
 use futures::stream::StreamExt;
 use log::{error, info};
 use runtime::{
-    pallets::vault_registry::RegisterVaultEvent, AccountId, Error as RuntimeError, H256Le,
-    PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, StakedRelayerPallet, VaultRegistryPallet,
+    pallets::vault_registry::RegisterVaultEvent, AccountId, BtcAddress, Error as RuntimeError,
+    H256Le, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, StakedRelayerPallet,
+    VaultRegistryPallet,
 };
-use sp_core::H160;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
 #[derive(Default)]
-pub struct Vaults(RwLock<HashMap<H160, PolkaBtcVault>>);
+pub struct Vaults(RwLock<HashMap<BtcAddress, PolkaBtcVault>>);
 
 impl Vaults {
-    pub fn from(vaults: HashMap<H160, PolkaBtcVault>) -> Self {
+    pub fn from(vaults: HashMap<BtcAddress, PolkaBtcVault>) -> Self {
         Self(RwLock::new(vaults))
     }
 
-    pub async fn write(&self, key: H160, value: PolkaBtcVault) {
+    pub async fn write(&self, key: BtcAddress, value: PolkaBtcVault) {
         self.0.write().await.insert(key, value);
     }
 
-    pub async fn contains_key(&self, addr: H160) -> Option<AccountId> {
+    pub async fn contains_key(&self, key: BtcAddress) -> Option<AccountId> {
         let vaults = self.0.read().await;
-        if let Some(vault) = vaults.get(&addr.clone()) {
+        if let Some(vault) = vaults.get(&key.clone()) {
             return Some(vault.id.clone());
         }
         None
@@ -166,7 +166,7 @@ pub async fn listen_for_vaults_registered(
         .await
 }
 
-async fn filter_matching_vaults(addresses: Vec<H160>, vaults: &Vaults) -> Vec<AccountId> {
+async fn filter_matching_vaults(addresses: Vec<BtcAddress>, vaults: &Vaults) -> Vec<AccountId> {
     iter(addresses)
         .filter_map(|addr| vaults.contains_key(addr))
         .collect::<Vec<AccountId>>()
@@ -177,9 +177,13 @@ async fn filter_matching_vaults(addresses: Vec<H160>, vaults: &Vaults) -> Vec<Ac
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use bitcoin::{Block, Error as BitcoinError, GetBlockResult, Transaction, TransactionMetadata};
+    use bitcoin::{
+        Block, Error as BitcoinError, GetBlockResult, PartialAddress, Transaction,
+        TransactionMetadata,
+    };
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
+    use sp_core::H160;
     use sp_keyring::AccountKeyring;
 
     mockall::mock! {
@@ -248,7 +252,7 @@ mod tests {
 
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
 
-            fn get_new_address(&self) -> Result<H160, BitcoinError>;
+            fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, BitcoinError>;
 
             fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
 
@@ -267,7 +271,7 @@ mod tests {
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
 
-            async fn send_to_address(
+            async fn send_to_address<A: PartialAddress + 'static>(
                 &self,
                 address: String,
                 sat: u64,
@@ -283,18 +287,20 @@ mod tests {
         let mut vault = PolkaBtcVault::default();
         vault.id = AccountKeyring::Bob.to_account_id();
         let vaults = Vaults::from(
-            vec![(H160::from_slice(&[0; 20]), vault)]
+            vec![(BtcAddress::P2PKH(H160::from_slice(&[0; 20])), vault)]
                 .into_iter()
                 .collect(),
         );
 
         assert_eq!(
-            filter_matching_vaults(vec![H160::from_slice(&[0; 20])], &vaults).await,
+            filter_matching_vaults(vec![BtcAddress::P2PKH(H160::from_slice(&[0; 20]))], &vaults)
+                .await,
             vec![AccountKeyring::Bob.to_account_id()],
         );
 
         assert_eq!(
-            filter_matching_vaults(vec![H160::from_slice(&[1; 20])], &vaults).await,
+            filter_matching_vaults(vec![BtcAddress::P2PKH(H160::from_slice(&[1; 20]))], &vaults)
+                .await,
             vec![],
         );
     }

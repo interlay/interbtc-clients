@@ -23,7 +23,7 @@ pub struct RequestIssueEvent<T: Issue> {
     pub requester: T::AccountId,
     pub amount: T::PolkaBTC,
     pub vault_id: T::AccountId,
-    pub btc_address: T::H160,
+    pub btc_address: T::BtcAddress,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]

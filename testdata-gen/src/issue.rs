@@ -4,7 +4,7 @@ use crate::{utils, Error};
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
 use runtime::pallets::btc_relay::H256Le;
-use runtime::{IssuePallet, PolkaBtcProvider};
+use runtime::{BtcAddress, IssuePallet, PolkaBtcProvider};
 use sp_core::crypto::AccountId32;
 use sp_core::H256;
 use std::convert::TryInto;
@@ -40,7 +40,7 @@ pub async fn execute_issue(
     vault_btc_address: String,
 ) -> Result<(), Error> {
     let tx_metadata = btc_rpc
-        .send_to_address(
+        .send_to_address::<BtcAddress>(
             vault_btc_address,
             issue_amount.try_into().unwrap(),
             &issue_id.to_fixed_bytes(),
