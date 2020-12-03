@@ -38,7 +38,7 @@ async fn scan(
         let block_hash = btc_rpc.wait_for_block(btc_height, block_delay).await?;
         for maybe_tx in btc_rpc.get_block_transactions(&block_hash)? {
             if let Some(tx) = maybe_tx {
-                let _results = bitcoin::extract_op_returns(tx);
+                // let _results = bitcoin::extract_op_returns(tx);
                 // TODO: store key-value (op_return:tx_id) in db
                 // e.g. https://github.com/rust-rocksdb/rust-rocksdb
             }

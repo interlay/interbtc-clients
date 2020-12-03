@@ -26,7 +26,7 @@ pub use bitcoincore_rpc::{
     Auth, Client, Error as BitcoinError, RpcApi,
 };
 pub use error::{BitcoinRpcError, ConversionError, Error};
-pub use iter::{get_transactions, stream_blocks};
+pub use iter::{get_transactions, stream_blocks, stream_in_chain_transactions};
 use rand::{self, Rng};
 use sp_core::H256;
 use std::sync::Arc;
@@ -465,21 +465,6 @@ pub fn extract_btc_addresses<A: PartialAddress>(tx: GetRawTransactionResult) -> 
             None
         })
         .collect::<Vec<A>>()
-}
-
-// TODO: merge with `get_op_return`
-pub fn extract_op_returns(tx: GetRawTransactionResult) -> Vec<Vec<u8>> {
-    tx.vout
-        .into_iter()
-        .filter_map(|vout| {
-            let script = vout.script_pub_key.script().unwrap();
-            if script.is_op_return() {
-                Some(script.to_bytes()[2..].to_vec())
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<Vec<u8>>>()
 }
 
 #[cfg(test)]

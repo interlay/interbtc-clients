@@ -1,8 +1,8 @@
 use crate::cancellation::ProcessEvent;
 use crate::Error;
-use bitcoin::{BitcoinCoreApi, BlockHash};
+use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::channel::mpsc::Sender;
-use futures::{pin_mut, SinkExt, StreamExt};
+use futures::{SinkExt, StreamExt};
 use log::{error, info};
 use runtime::{
     pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
@@ -30,17 +30,17 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     issue_set: &Arc<IssueIds>,
     num_confirmations: u32,
 ) -> Result<(), Error> {
-    let stream = bitcoin::stream_blocks(btc_rpc.clone(), btc_rpc.get_block_count()? as u32);
-    pin_mut!(stream);
+    let mut stream =
+        bitcoin::stream_in_chain_transactions(btc_rpc.clone(), btc_rpc.get_block_count()? as u32);
 
-    while let Some(Ok((block_hash, block_height))) = stream.next().await {
-        if let Err(e) = process_block_issue_requests(
+    while let Some(Ok((block_hash, transaction))) = stream.next().await {
+        if let Err(e) = process_transaction_and_execute_issue(
             provider,
             btc_rpc,
             issue_set,
             num_confirmations,
             block_hash,
-            block_height,
+            transaction,
         )
         .await
         {
@@ -51,61 +51,46 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     Err(Error::NoIncomingBlocks)
 }
 
-/// extract all op_return outputs and check corresponding issue ids
-async fn process_block_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
+/// extract op_return output and check corresponding issue ids
+async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: &Arc<PolkaBtcProvider>,
     btc_rpc: &Arc<B>,
     issue_set: &Arc<IssueIds>,
     num_confirmations: u32,
     block_hash: BlockHash,
-    block_height: u32,
+    transaction: Transaction,
 ) -> Result<(), Error> {
-    // fetch all transactions in block
-    for maybe_tx in btc_rpc.get_block_transactions(&block_hash)? {
-        // TODO: use iterator
-        if let Some(tx) = maybe_tx {
-            for op_return in bitcoin::extract_op_returns(tx.clone()) {
-                if op_return.len() != 32 {
-                    continue;
-                }
+    if let Some(op_return) = transaction.get_op_return() {
+        if let Some(issue_id) = issue_set.0.lock().await.take(&op_return) {
+            info!("Executing issue with id {}", issue_id);
 
-                // remove now since we don't retry
-                if let Some(issue_id) = issue_set
-                    .0
-                    .lock()
-                    .await
-                    .take(&H256::from_slice(&op_return[..32]))
-                {
-                    info!("Executing issue with id {}", issue_id);
+            // make sure block is included in relay
+            provider
+                .wait_for_block_in_relay(
+                    H256Le::from_bytes_le(&block_hash.to_vec()),
+                    num_confirmations,
+                )
+                .await?;
 
-                    // make sure block is included in relay
-                    provider
-                        .wait_for_block_in_relay(
-                            H256Le::from_bytes_le(&block_hash.to_vec()),
-                            num_confirmations,
-                        )
-                        .await?;
+            // found tx, submit proof
+            let txid = transaction.txid();
+            let raw_tx = btc_rpc.get_raw_tx_for(&txid, &block_hash)?;
+            let proof = btc_rpc.get_proof_for(txid.clone(), &block_hash)?;
 
-                    // found tx, submit proof
-                    let txid = tx.txid;
-                    let raw_tx = btc_rpc.get_raw_tx_for(&txid, &block_hash)?;
-                    let proof = btc_rpc.get_proof_for(txid.clone(), &block_hash)?;
-
-                    // this will error if someone else executes the issue first
-                    provider
-                        .execute_issue(
-                            issue_id,
-                            H256Le::from_bytes_le(&txid.as_hash()),
-                            block_height,
-                            proof,
-                            raw_tx,
-                        )
-                        .await?;
-                }
-            }
+            // this will error if someone else executes the issue first
+            provider
+                .execute_issue(
+                    issue_id,
+                    H256Le::from_bytes_le(&txid.as_hash()),
+                    btc_rpc.get_block_info(&block_hash)?.height as u32,
+                    proof,
+                    raw_tx,
+                )
+                .await?;
         }
     }
 
+    // no op_return or issue-id
     Ok(())
 }
 

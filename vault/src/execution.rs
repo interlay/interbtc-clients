@@ -1,7 +1,7 @@
 use crate::constants::*;
 use crate::error::Error;
 use crate::issue::{process_issue_requests, IssueIds};
-use backoff::future::FutureOperation as _;
+use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::Network;
 use bitcoin::{BitcoinCoreApi, PartialAddress, Transaction, TransactionExt, TransactionMetadata};
 use log::*;
@@ -289,7 +289,10 @@ pub async fn execute_open_issue_requests<B: BitcoinCoreApi + Send + Sync + 'stat
         process_issue_requests(&provider, &btc_rpc, &issue_set, num_confirmations).await?;
         Ok(())
     })
-    .retry(get_retry_policy())
+    .retry(ExponentialBackoff {
+        max_elapsed_time: None,
+        ..get_retry_policy()
+    })
     .await?;
     Ok(())
 }
