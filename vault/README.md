@@ -83,8 +83,18 @@ OPTIONS:
         --http-addr <http-addr>
             Address to listen on for JSON-RPC requests [default: [::0]:3031]
 
+        --key-file <key-file>
+            Path to the json file containing key pairs in a map. Valid content of this file is e.g.
+            `{ "MyUser1": "<credentials>", "MyUser2": "<credentials>" }`. Credentials should be a
+            `0x`-prefixed 64-digit hex string, or a BIP-39 key phrase of 12, 15, 18, 21 or 24 words.
+            See `sp_core::from_string_with_seed` for more details
+
+        --key-name <key-name>
+            The name of the account from the key-file to use
+
         --keyring <keyring>
-            Keyring for vault [default: bob; valid values: alice, bob, charlie, dave, eve, ferdie]
+            Keyring for vault, mutually exclusive with key-file [default: bob; valid values: alice,
+            bob, charlie, dave, eve, ferdie]
 
         --max-collateral <max-collateral>
             Maximum total collateral to keep the vault securely collateralized [default: 1000000]
