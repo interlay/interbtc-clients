@@ -103,7 +103,7 @@ struct Opts {
     /// Valid content of this file is e.g.
     /// `{ "MyUser1": "<credentials>", "MyUser2": "<credentials>" }`.
     /// Credentials should be a `0x`-prefixed 64-digit hex string, or
-    /// a BIP-39 key phrase of 12, 15, 18, 21 or 24 words. See 
+    /// a BIP-39 key phrase of 12, 15, 18, 21 or 24 words. See
     /// `sp_core::from_string_with_seed` for more details.
     #[clap(long, conflicts_with = "keyring", requires = "key-name")]
     key_file: Option<String>,
@@ -153,7 +153,6 @@ async fn main() -> Result<(), Error> {
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
     let arc_provider = Arc::new(provider.clone());
-    let auction_provider = arc_provider.clone();
     let collateral_timeout_ms = opts.collateral_timeout_ms;
 
     let num_confirmations = match opts.btc_confirmations {
@@ -276,8 +275,10 @@ async fn main() -> Result<(), Error> {
         opts.rpc_cors_domain,
     );
 
+    // misc copies of variables to move into spawn closures
     let no_auto_auction = opts.no_auto_auction;
     let no_issue_execution = opts.no_issue_execution;
+    let auction_provider = arc_provider.clone();
 
     let result = tokio::try_join!(
         tokio::spawn(async move {

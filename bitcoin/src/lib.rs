@@ -340,9 +340,7 @@ impl BitcoinCoreApi for BitcoinCore {
             .rpc
             .create_raw_transaction_hex(&[], &recipients, None, None)?;
 
-        let raw_tx = self
-            .rpc
-            .fund_raw_transaction(raw_tx, None, None)?;
+        let raw_tx = self.rpc.fund_raw_transaction(raw_tx, None, None)?;
 
         let mut tx = raw_tx.transaction().unwrap();
 
