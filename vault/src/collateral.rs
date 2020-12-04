@@ -9,11 +9,9 @@ use std::sync::Arc;
 
 pub async fn maintain_collateralization_rate(
     provider: Arc<PolkaBtcProvider>,
-    vault_id: AccountId32,
     maximum_collateral: u128,
 ) -> Result<(), runtime::Error> {
     let provider = &provider;
-    let vault_id = &vault_id;
     provider
         .on_event::<SetExchangeRateEvent<PolkaBtcRuntime>, _, _, _>(
             |_| async move {
@@ -22,7 +20,7 @@ pub async fn maintain_collateralization_rate(
 
                 match lock_required_collateral(
                     provider.clone(),
-                    vault_id.clone(),
+                    provider.get_account_id().clone(),
                     maximum_collateral,
                 )
                 .await

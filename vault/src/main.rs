@@ -176,7 +176,6 @@ async fn main() -> Result<(), Error> {
     let open_request_executor = execute_open_requests(
         arc_provider.clone(),
         btc_rpc.clone(),
-        vault_id.clone(),
         num_confirmations,
         opts.network.0,
     );
@@ -201,7 +200,6 @@ async fn main() -> Result<(), Error> {
 
     let collateral_maintainer = maintain_collateralization_rate(
         arc_provider.clone(),
-        vault_id.clone(),
         opts.max_collateral,
     );
 
@@ -221,13 +219,11 @@ async fn main() -> Result<(), Error> {
         CancellationScheduler::new(arc_provider.clone(), vault_id.clone());
     let issue_request_listener = listen_for_issue_requests(
         arc_provider.clone(),
-        vault_id.clone(),
         issue_event_tx.clone(),
         issue_set.clone(),
     );
     let issue_execute_listener = listen_for_issue_executes(
         arc_provider.clone(),
-        vault_id.clone(),
         issue_event_tx.clone(),
         issue_set.clone(),
     );
@@ -245,25 +241,22 @@ async fn main() -> Result<(), Error> {
         CancellationScheduler::new(arc_provider.clone(), vault_id.clone());
     let request_replace_listener = listen_for_replace_requests(
         arc_provider.clone(),
-        vault_id.clone(),
         replace_event_tx.clone(),
         !opts.no_auto_replace,
     );
     let accept_replace_listener = listen_for_accept_replace(
         arc_provider.clone(),
         btc_rpc.clone(),
-        vault_id.clone(),
         opts.network.0,
         num_confirmations,
     );
     let execute_replace_listener =
-        listen_for_execute_replace(arc_provider.clone(), vault_id.clone(), replace_event_tx);
+        listen_for_execute_replace(arc_provider.clone(), replace_event_tx);
 
     // redeem handling
     let redeem_listener = listen_for_redeem_requests(
         arc_provider.clone(),
         btc_rpc.clone(),
-        vault_id.clone(),
         opts.network.0,
         num_confirmations,
     );

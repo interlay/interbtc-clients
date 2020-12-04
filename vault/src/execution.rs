@@ -163,10 +163,10 @@ impl Request {
 pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<B>,
-    vault_id: AccountId32,
     num_confirmations: u32,
     network: Network,
 ) -> Result<(), Error> {
+    let vault_id = provider.get_account_id().clone();
     // get all open redeem/replaces and map them to the shared Request type
     let open_redeems = provider
         .clone()
@@ -176,7 +176,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
         .filter(|(_, request)| !request.completed)
         .map(|(hash, request)| Request::from_redeem_request(hash, request));
     let open_replaces = provider
-        .get_new_vault_replace_requests(vault_id.clone())
+        .get_new_vault_replace_requests(vault_id)
         .await?
         .into_iter()
         .filter(|(_, request)| !request.completed)

@@ -99,23 +99,20 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
 /// # Arguments
 ///
 /// * `provider` - the parachain RPC handle
-/// * `vault_id` - the id of this vault
 /// * `event_channel` - the channel over which to signal events
 /// * `issue_set` - all issue ids observed since vault started
 pub async fn listen_for_issue_requests(
     provider: Arc<PolkaBtcProvider>,
-    vault_id: AccountId32,
     event_channel: Sender<ProcessEvent>,
     issue_set: Arc<IssueIds>,
 ) -> Result<(), runtime::Error> {
-    let vault_id = &vault_id;
     let event_channel = &event_channel;
     let issue_set = &issue_set;
     let provider = &provider;
     provider
         .on_event::<RequestIssueEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
-                if event.vault_id == vault_id.clone() {
+                if &event.vault_id == provider.get_account_id() {
                     info!("Received request issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
@@ -135,22 +132,20 @@ pub async fn listen_for_issue_requests(
 /// # Arguments
 ///
 /// * `provider` - the parachain RPC handle
-/// * `vault_id` - the id of this vault
 /// * `event_channel` - the channel over which to signal events
 /// * `issue_set` - all issue ids observed since vault started
 pub async fn listen_for_issue_executes(
     provider: Arc<PolkaBtcProvider>,
-    vault_id: AccountId32,
     event_channel: Sender<ProcessEvent>,
     issue_set: Arc<IssueIds>,
 ) -> Result<(), runtime::Error> {
-    let vault_id = &vault_id;
     let event_channel = &event_channel;
     let issue_set = &issue_set;
+    let provider = &provider;
     provider
         .on_event::<ExecuteIssueEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
-                if event.vault_id == vault_id.clone() {
+                if &event.vault_id == provider.get_account_id() {
                     info!("Received execute issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
@@ -171,7 +166,6 @@ pub async fn listen_for_issue_executes(
 /// # Arguments
 ///
 /// * `provider` - the parachain RPC handle
-/// * `vault_id` - the id of this vault
 /// * `issue_set` - all issue ids observed since vault started
 pub async fn listen_for_issue_cancels(
     provider: Arc<PolkaBtcProvider>,
