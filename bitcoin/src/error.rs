@@ -21,8 +21,6 @@ pub enum Error {
     ConfirmationError,
     #[error("Could not find block at height")]
     InvalidBitcoinHeight,
-    #[error("Could not decode address")]
-    InvalidAddress,
 }
 
 #[derive(Error, Debug)]

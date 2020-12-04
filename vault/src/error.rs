@@ -20,9 +20,11 @@ pub enum Error {
     InvalidBitcoinNetwork,
     #[error("Expected blocks but got none")]
     NoIncomingBlocks,
+    #[error("Failed to load or create bitcoin wallet: {0}")]
+    WalletInitializationFailure(BitcoinError),
+
     #[error("Failed to load credentials from file: {0}")]
     KeyLoadingFailure(#[from] KeyLoadingError),
-
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
     #[error("RuntimeError: {0}")]

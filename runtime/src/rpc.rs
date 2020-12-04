@@ -220,7 +220,6 @@ impl PolkaBtcProvider {
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
         sub.filter_event::<T>();
 
-        // TODO: possible future optimization: let caller determine buffer size
         let (tx, mut rx) = futures::channel::mpsc::channel::<T>(32);
 
         // two tasks: one for event listening and one for callback calling
@@ -1056,7 +1055,6 @@ impl BtcRelayPallet for PolkaBtcProvider {
     /// # Arguments
     /// * `height` - chain height
     async fn get_block_hash(&self, height: u32) -> Result<H256Le, Error> {
-        // TODO: adjust chain index
         Ok(self.ext_client.chains_hashes(0, height, None).await?)
     }
 
