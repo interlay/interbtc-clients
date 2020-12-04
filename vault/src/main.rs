@@ -145,10 +145,10 @@ async fn main() -> Result<(), Error> {
 
     let btc_rpc = Arc::new(BitcoinCore::new(opts.bitcoin.new_client(Some(&wallet))?));
 
-    // TODO: only create wallet on register?
-    if let Err(e) = btc_rpc.create_wallet(&wallet) {
-        warn!("Failed to create / load wallet: {}", e);
-    }
+    // load wallet. Exit on failure, since without wallet we can't do a lot
+    btc_rpc
+        .create_wallet(&wallet)
+        .map_err(|e| Error::WalletInitializationFailure(e))?;
 
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
