@@ -60,6 +60,7 @@ FLAGS:
     -h, --help                              Prints help information
         --no-auto-auction                   Opt out of auctioning under-collateralized vaults
         --no-auto-replace                   Opt out of participation in replace requests
+        --no-issue-execution                Don't try to execute issues
         --no-startup-collateral-increase    Don't check the collateralization rate at startup
     -V, --version                           Prints version information
 

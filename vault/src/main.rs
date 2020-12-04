@@ -87,6 +87,10 @@ struct Opts {
     #[clap(long)]
     no_startup_collateral_increase: bool,
 
+    /// Don't try to execute issues.
+    #[clap(long)]
+    no_issue_execution: bool,
+
     /// Maximum total collateral to keep the vault securely collateralized.
     #[clap(long, default_value = "1000000")]
     max_collateral: u128,
@@ -273,6 +277,7 @@ async fn main() -> Result<(), Error> {
     );
 
     let no_auto_auction = opts.no_auto_auction;
+    let no_issue_execution = opts.no_issue_execution;
 
     let result = tokio::try_join!(
         tokio::spawn(async move {
@@ -303,7 +308,9 @@ async fn main() -> Result<(), Error> {
             issue_cancel_listener.await.unwrap();
         }),
         tokio::spawn(async move {
-            issue_executor.await.unwrap();
+            if !no_issue_execution {
+                issue_executor.await.unwrap();
+            }
         }),
         // redeem handling
         tokio::spawn(async move {
