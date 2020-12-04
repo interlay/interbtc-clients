@@ -344,8 +344,6 @@ impl BitcoinCoreApi for BitcoinCore {
 
         let mut tx = raw_tx.transaction().unwrap();
 
-        fix_transaction_output_order(&mut tx, A::decode_str(&address)?)?;
-
         // include the redeem is in the transaction
         add_redeem_id(&mut tx, redeem_id);
 
@@ -420,32 +418,6 @@ impl TransactionExt for Transaction {
             }
         })
     }
-}
-
-/// Ensures we follow the spec: the payment to the recipient needs to be the
-/// first uxto. Funding the transaction sometimes places the return-to-self
-/// uxto first, so this function performs a swap of uxtos if necessary
-fn fix_transaction_output_order<A: PartialAddress>(
-    tx: &mut Transaction,
-    recipient_address: A,
-) -> Result<(), Error> {
-    // TODO: remove, we no longer check ordering on first three outputs
-    let output0_address = A::from_payload(
-        Payload::from_script(&tx.output[0].script_pubkey).ok_or(Error::InvalidAddress)?,
-    )?;
-    if recipient_address != output0_address {
-        // most likely the return-to-self output was put first
-        let output1_address = A::from_payload(
-            Payload::from_script(&tx.output[1].script_pubkey).ok_or(Error::InvalidAddress)?,
-        )?;
-        if tx.output.len() > 1 && recipient_address == output1_address {
-            tx.output.swap(0, 1);
-        } else {
-            // if this executes we have a bug in the code
-            panic!("Could not find recipient address in bitcoin transaction");
-        }
-    }
-    Ok(())
 }
 
 /// Adds op_return with the given id at index 1, occording to the redeem spec
