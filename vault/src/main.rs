@@ -10,26 +10,29 @@ mod issue;
 mod redeem;
 mod replace;
 
-use crate::constants::*;
+use crate::{
+    cancellation::{CancellationScheduler, IssueCanceller, ProcessEvent, ReplaceCanceller},
+    collateral::*,
+    constants::*,
+    error::{Error, KeyLoadingError},
+    execution::{execute_open_issue_requests, execute_open_requests},
+    issue::*,
+    redeem::*,
+    replace::*,
+};
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
-use cancellation::{CancellationScheduler, IssueCanceller, ProcessEvent, ReplaceCanceller};
 use clap::Clap;
-use collateral::*;
 use core::str::FromStr;
-use error::Error;
-use execution::{execute_open_issue_requests, execute_open_requests};
 use futures::channel::mpsc;
-use issue::*;
 use log::*;
-use redeem::*;
-use replace::*;
 use runtime::{
     substrate_subxt::PairSigner, BtcRelayPallet, Error as RuntimeError, PolkaBtcProvider,
     PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
 };
+use sp_core::sr25519::Pair;
+use sp_core::Pair as _;
 use sp_keyring::AccountKeyring;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::time::delay_for;
 
 #[derive(Debug, Copy, Clone)]
@@ -56,9 +59,9 @@ struct Opts {
     #[clap(long, default_value = "ws://127.0.0.1:9944")]
     polka_btc_url: String,
 
-    /// Keyring for vault.
-    #[clap(long, default_value = "bob")]
-    keyring: AccountKeyring,
+    /// Keyring for vault, mutually exclusive with key-file.
+    #[clap(long)]
+    keyring: Option<AccountKeyring>,
 
     /// Address to listen on for JSON-RPC requests.
     #[clap(long, default_value = "[::0]:3031")]
@@ -92,6 +95,19 @@ struct Opts {
     #[clap(long, default_value = "5000")]
     collateral_timeout_ms: u64,
 
+    /// Path to the json file containing key pairs in a map.
+    /// Valid content of this file is e.g.
+    /// `{ "MyUser1": "<credentials>", "MyUser2": "<credentials>" }`.
+    /// Credentials should be a `0x`-prefixed 64-digit hex string, or
+    /// a BIP-39 key phrase of 12, 15, 18, 21 or 24 words. See 
+    /// `sp_core::from_string_with_seed` for more details.
+    #[clap(long, conflicts_with = "keyring", requires = "key-name")]
+    key_file: Option<String>,
+
+    /// The name of the account from the key-file to use.
+    #[clap(long, conflicts_with = "keyring", requires = "key-file")]
+    key_name: Option<String>,
+
     /// How many bitcoin confirmations to wait for. If not specified, the
     /// parachain settings will be used (recommended).
     #[clap(long)]
@@ -113,7 +129,16 @@ async fn main() -> Result<(), Error> {
 
     info!("Command line arguments: {:?}", opts.clone());
 
-    let wallet = format!("{}", opts.keyring);
+    // load parachain credentials
+    let (pair, wallet) = match (opts.key_file, opts.key_name, opts.keyring) {
+        (Some(file_path), Some(key_name), None) => {
+            (get_credentials_from_file(&file_path, &key_name)?, key_name)
+        }
+        (None, None, Some(keyring)) => (keyring.pair(), format!("{}", keyring)),
+        _ => panic!("Invalid arguments"), // should never occur, due to clap constraints
+    };
+    let vault_id = sp_core::crypto::AccountId32::from(pair.public());
+
     let btc_rpc = Arc::new(BitcoinCore::new(opts.bitcoin.new_client(Some(&wallet))?));
 
     // TODO: only create wallet on register?
@@ -121,11 +146,10 @@ async fn main() -> Result<(), Error> {
         warn!("Failed to create / load wallet: {}", e);
     }
 
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
+    let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
     let arc_provider = Arc::new(provider.clone());
     let auction_provider = arc_provider.clone();
-    let vault_id = opts.keyring.to_account_id();
     let collateral_timeout_ms = opts.collateral_timeout_ms;
 
     let num_confirmations = match opts.btc_confirmations {
@@ -329,4 +353,20 @@ async fn main() -> Result<(), Error> {
     };
 
     Ok(())
+}
+
+/// Loads the credentials for the given user from the keyfile
+///
+/// # Arguments
+///
+/// * `file_path` - path to the json file containing the credentials
+/// * `key_name` - name of the key to get
+fn get_credentials_from_file(file_path: &str, key_name: &str) -> Result<Pair, KeyLoadingError> {
+    let file = std::fs::File::open(file_path)?;
+    let reader = std::io::BufReader::new(file);
+    let map: HashMap<String, String> = serde_json::from_reader(reader)?;
+    let pair_str = map.get(key_name).ok_or(KeyLoadingError::KeyNotFound)?;
+    let pair =
+        Pair::from_string(pair_str, None).map_err(|e| KeyLoadingError::SecretStringError(e))?;
+    Ok(pair)
 }
