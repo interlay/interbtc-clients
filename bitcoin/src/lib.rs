@@ -218,8 +218,15 @@ impl BitcoinCoreApi for BitcoinCore {
     /// # Arguments
     /// * `block_hash` - hash of the block to verify
     fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error> {
-        // TODO: match exact error
-        Ok(self.rpc.get_block(&block_hash).is_ok())
+        match self.rpc.get_block(&block_hash) {
+            Ok(_) => Ok(true),
+            Err(BitcoinError::JsonRpc(JsonRpcError::Rpc(RpcError { code, .. })))
+                if code == BitcoinRpcError::RpcInvalidAddressOrKey as i32 =>
+            {
+                Ok(false) // block not found
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     /// Gets a new address from the wallet

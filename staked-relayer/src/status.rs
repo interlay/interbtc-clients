@@ -36,7 +36,6 @@ impl<B: BitcoinCoreApi, P: StakedRelayerPallet> StatusUpdateMonitor<B, P> {
         // we can only automate NO_DATA checks, all other suggestible
         // status updates can only be voted upon manually
         if let Some(ErrorCode::NoDataBTCRelay) = event.add_error {
-            // TODO: check status_code?
             match self
                 .btc_rpc
                 .is_block_known(convert_block_hash(event.block_hash)?)
