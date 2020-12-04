@@ -31,8 +31,6 @@ impl<B: BitcoinCoreApi, P: StakedRelayerPallet> StatusUpdateMonitor<B, P> {
         if !utils::is_registered(&self.polka_rpc).await {
             return Ok(());
         }
-        // TODO: ignore self submitted
-
         // we can only automate NO_DATA checks, all other suggestible
         // status updates can only be voted upon manually
         if let Some(ErrorCode::NoDataBTCRelay) = event.add_error {
@@ -63,9 +61,15 @@ pub async fn listen_for_status_updates(
     polka_rpc: Arc<PolkaBtcProvider>,
 ) -> Result<(), RuntimeError> {
     let monitor = &StatusUpdateMonitor::new(btc_rpc, polka_rpc.clone());
+
+    let polka_rpc = &polka_rpc;
     polka_rpc
         .on_event::<PolkaBtcStatusUpdateSuggestedEvent, _, _, _>(
             |event| async move {
+                if event.account_id == *polka_rpc.get_account_id() {
+                    return; // ignore events we caused ourselves
+                }
+
                 info!("Status update {} suggested", event.status_update_id);
                 if let Err(err) = monitor.on_status_update_suggested(event).await {
                     error!("Error: {}", err.to_string());
