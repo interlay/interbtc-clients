@@ -198,10 +198,8 @@ async fn main() -> Result<(), Error> {
         };
     }
 
-    let collateral_maintainer = maintain_collateralization_rate(
-        arc_provider.clone(),
-        opts.max_collateral,
-    );
+    let collateral_maintainer =
+        maintain_collateralization_rate(arc_provider.clone(), opts.max_collateral);
 
     // wait for a new block to arrive, to prevent processing an event that potentially
     // has been processed already prior to restarting

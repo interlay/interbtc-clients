@@ -176,7 +176,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
         .filter(|(_, request)| !request.completed)
         .map(|(hash, request)| Request::from_redeem_request(hash, request));
     let open_replaces = provider
-        .get_new_vault_replace_requests(vault_id)
+        .get_old_vault_replace_requests(vault_id)
         .await?
         .into_iter()
         .filter(|(_, request)| !request.completed)
