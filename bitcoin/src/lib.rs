@@ -19,7 +19,9 @@ pub use bitcoincore_rpc::{
         Address, Amount, Block, BlockHeader, Network, PubkeyHash, Script, ScriptHash, Transaction,
         TxOut, Txid, WPubkeyHash,
     },
-    bitcoincore_rpc_json::{GetRawTransactionResult, GetTransactionResult, WalletTxInfo},
+    bitcoincore_rpc_json::{
+        CreateRawTransactionInput, GetRawTransactionResult, GetTransactionResult, WalletTxInfo,
+    },
     json::{self, AddressType, GetBlockResult},
     jsonrpc::error::RpcError,
     jsonrpc::Error as JsonRpcError,
@@ -29,8 +31,7 @@ pub use error::{BitcoinRpcError, ConversionError, Error};
 pub use iter::{get_transactions, stream_blocks, stream_in_chain_transactions};
 use rand::{self, Rng};
 use sp_core::H256;
-use std::sync::Arc;
-use std::{collections::HashMap, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
 
 #[macro_use]
@@ -111,6 +112,29 @@ pub struct BitcoinCore {
 impl BitcoinCore {
     pub fn new(rpc: Client) -> Self {
         Self { rpc }
+    }
+
+    /// Version of rust_bitcoincore_rpc::create_raw_transaction_hex that accepts an op_return
+    fn create_raw_transaction_hex_with_op_return(
+        &self,
+        address: String,
+        amount: Amount,
+        request_id: &[u8; 32],
+    ) -> Result<String, Error> {
+        let mut outputs = serde_json::Map::<String, serde_json::Value>::new();
+        // add the payment output
+        outputs.insert(address, serde_json::Value::from(amount.as_btc()));
+
+        // add the op_return data - bitcoind will add op_return and the length automatically
+        outputs.insert(
+            "data".to_string(),
+            serde_json::Value::from(request_id.to_hex()),
+        );
+        let args = [
+            serde_json::to_value::<&[json::CreateRawTransactionInput]>(&[])?,
+            serde_json::to_value(outputs)?,
+        ];
+        Ok(self.rpc.call("createrawtransaction", &args)?)
     }
 
     #[cfg(feature = "regtest-manual-mining")]
@@ -352,30 +376,38 @@ impl BitcoinCoreApi for BitcoinCore {
         sat: u64,
         redeem_id: &[u8; 32],
     ) -> Result<Txid, Error> {
-        let mut recipients = HashMap::<String, Amount>::new();
-        recipients.insert(address.clone(), Amount::from_sat(sat));
-
+        // todo: remove this delay
         let delay = rand::thread_rng().gen_range(1000, 10000);
         delay_for(Duration::from_millis(delay)).await;
 
-        let raw_tx = self
-            .rpc
-            .create_raw_transaction_hex(&[], &recipients, None, None)?;
+        // create raw transaction that includes the op_return. If we were to add the op_return
+        // after funding, the fees might be insufficient. An alternative to our own version of
+        // this function would be to call create_raw_transaction (without the _hex suffix), and
+        // to add the op_return afterwards. However, this function fails if no inputs are
+        // specified, as is the case for us prior to calling fund_raw_transaction.
+        let raw_tx = self.create_raw_transaction_hex_with_op_return(
+            address,
+            Amount::from_sat(sat),
+            redeem_id,
+        )?;
 
-        let raw_tx = self.rpc.fund_raw_transaction(raw_tx, None, None)?;
+        // fund the transaction: adds required inputs, and possibly a return-to-self output
+        let funded_raw_tx = self.rpc.fund_raw_transaction(raw_tx, None, None)?;
 
-        let mut tx = raw_tx.transaction().unwrap();
-
-        // include the redeem is in the transaction
-        add_redeem_id(&mut tx, redeem_id);
-
-        let signed_raw_tx =
+        // sign the transaction TODO: error checking
+        let signed_funded_raw_tx =
             self.rpc
-                .sign_raw_transaction_with_wallet(tx.serialize().to_hex(), None, None)?;
+                .sign_raw_transaction_with_wallet(&funded_raw_tx.transaction()?, None, None)?;
 
+        // Make sure signing is successful
+        if let Some(_) = signed_funded_raw_tx.errors {
+            return Err(Error::TransactionSigningError);
+        }
+
+        // place the transaction into the mempool
         let txid = self
             .rpc
-            .send_raw_transaction(signed_raw_tx.transaction().unwrap().serialize().to_hex())?;
+            .send_raw_transaction(&signed_funded_raw_tx.transaction()?)?;
 
         Ok(txid)
     }
@@ -462,21 +494,6 @@ impl TransactionExt for Transaction {
             }
         })
     }
-}
-
-/// Adds op_return with the given id at index 1, occording to the redeem spec
-fn add_redeem_id(tx: &mut Transaction, redeem_id: &[u8; 32]) {
-    // Index 1: Data UTXO: OP_RETURN containing identifier
-    tx.output.insert(
-        1,
-        TxOut {
-            value: 0,
-            script_pubkey: Builder::new()
-                .push_opcode(opcodes::OP_RETURN)
-                .push_slice(redeem_id)
-                .into_script(),
-        },
-    );
 }
 
 pub fn extract_btc_addresses<A: PartialAddress>(tx: GetRawTransactionResult) -> Vec<A> {
