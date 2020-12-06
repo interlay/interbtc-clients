@@ -25,4 +25,4 @@ reqwest = {version = "0.10.8", features = ["json"] }
 jsonrpc-core = "15.1.0"
 
 [features]
-default = ["bitcoin/regtest"]
+default = ["bitcoin/regtest-mine-on-tx"]

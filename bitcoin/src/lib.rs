@@ -38,6 +38,7 @@ extern crate num_derive;
 
 const NOT_IN_MEMPOOL_ERROR_CODE: i32 = BitcoinRpcError::RpcInvalidAddressOrKey as i32;
 
+#[derive(Debug, Clone)]
 pub struct TransactionMetadata {
     pub txid: Txid,
     pub proof: Vec<u8>,
@@ -84,6 +85,13 @@ pub trait BitcoinCoreApi {
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
+    async fn send_transaction<A: PartialAddress + 'static>(
+        &self,
+        address: String,
+        sat: u64,
+        redeem_id: &[u8; 32],
+    ) -> Result<Txid, Error>;
+
     async fn send_to_address<A: PartialAddress + 'static>(
         &self,
         address: String,
@@ -103,6 +111,15 @@ pub struct BitcoinCore {
 impl BitcoinCore {
     pub fn new(rpc: Client) -> Self {
         Self { rpc }
+    }
+
+    #[cfg(feature = "regtest-manual-mining")]
+    pub fn mine_block(&self) -> Result<(), Error> {
+        self.rpc.generate_to_address(
+            1,
+            &self.rpc.get_new_address(None, Some(AddressType::Bech32))?,
+        )?;
+        Ok(())
     }
 }
 
@@ -321,22 +338,20 @@ impl BitcoinCoreApi for BitcoinCore {
         })
     }
 
-    /// Send an amount of Bitcoin to an address and wait until it has a confirmation.
+    /// Send an amount of Bitcoin to an address, but only submit the transaction
+    /// to the mempool; this method does not wait until the block is included in
+    /// the blockchain.
     ///
     /// # Arguments
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
     /// * `redeem_id` - the redeemid for which this transfer is being made
-    /// * `op_timeout` - how long operations will be retried
-    /// * `num_confirmations` - how many confirmations we need to wait for
-    async fn send_to_address<A: PartialAddress + 'static>(
+    async fn send_transaction<A: PartialAddress + 'static>(
         &self,
         address: String,
         sat: u64,
         redeem_id: &[u8; 32],
-        op_timeout: Duration,
-        num_confirmations: u32,
-    ) -> Result<TransactionMetadata, Error> {
+    ) -> Result<Txid, Error> {
         let mut recipients = HashMap::<String, Amount>::new();
         recipients.insert(address.clone(), Amount::from_sat(sat));
 
@@ -362,7 +377,29 @@ impl BitcoinCoreApi for BitcoinCore {
             .rpc
             .send_raw_transaction(signed_raw_tx.transaction().unwrap().serialize().to_hex())?;
 
-        #[cfg(feature = "regtest")]
+        Ok(txid)
+    }
+
+    /// Send an amount of Bitcoin to an address and wait until it is included
+    /// in the blockchain with the requested number of confirmations.
+    ///
+    /// # Arguments
+    /// * `address` - Bitcoin address to fund
+    /// * `sat` - number of Satoshis to transfer
+    /// * `redeem_id` - the redeemid for which this transfer is being made
+    /// * `op_timeout` - how long operations will be retried
+    /// * `num_confirmations` - how many confirmations we need to wait for
+    async fn send_to_address<A: PartialAddress + 'static>(
+        &self,
+        address: String,
+        sat: u64,
+        redeem_id: &[u8; 32],
+        op_timeout: Duration,
+        num_confirmations: u32,
+    ) -> Result<TransactionMetadata, Error> {
+        let txid = self.send_transaction::<A>(address, sat, redeem_id).await?;
+
+        #[cfg(feature = "regtest-mine-on-tx")]
         self.rpc.generate_to_address(
             1,
             &self.rpc.get_new_address(None, Some(AddressType::Bech32))?,
@@ -512,6 +549,13 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
+
+            async fn send_transaction<A: PartialAddress + 'static>(
+                &self,
+                address: String,
+                sat: u64,
+                redeem_id: &[u8; 32],
+            ) -> Result<Txid, Error>;
 
             async fn send_to_address<A: PartialAddress + 'static>(
                 &self,
