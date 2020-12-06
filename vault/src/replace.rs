@@ -328,6 +328,10 @@ mod tests {
                 &self,
                 account_id: AccountId,
             ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
+            async fn get_old_vault_replace_requests(
+                &self,
+                account_id: AccountId,
+            ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
             async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, RuntimeError>;
         }

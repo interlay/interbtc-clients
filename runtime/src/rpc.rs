@@ -395,8 +395,14 @@ pub trait ReplacePallet {
     /// * `replace_id` - the ID of the replacement request
     async fn cancel_replace(&self, replace_id: H256) -> Result<(), Error>;
 
-    /// Get all replace requests to a particular vault
+    /// Get all replace requests accepted by the given vault
     async fn get_new_vault_replace_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error>;
+
+    /// Get all replace requests made by the given vault
+    async fn get_old_vault_replace_requests(
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error>;
@@ -485,7 +491,7 @@ impl ReplacePallet for PolkaBtcProvider {
         Ok(())
     }
 
-    /// Get all replace requests to a particular vault
+    /// Get all replace requests accepted by the given vault
     async fn get_new_vault_replace_requests(
         &self,
         account_id: AccountId,
@@ -494,6 +500,22 @@ impl ReplacePallet for PolkaBtcProvider {
             .rpc_client
             .request(
                 "replace_getNewVaultReplaceRequests",
+                Params::Array(vec![to_json_value(account_id)?]),
+            )
+            .await?;
+
+        Ok(result)
+    }
+
+    /// Get all replace requests made by the given vault
+    async fn get_old_vault_replace_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error> {
+        let result: Vec<(H256, PolkaBtcReplaceRequest)> = self
+            .rpc_client
+            .request(
+                "replace_getOldVaultReplaceRequests",
                 Params::Array(vec![to_json_value(account_id)?]),
             )
             .await?;
