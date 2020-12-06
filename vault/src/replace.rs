@@ -15,7 +15,6 @@ use runtime::{
     DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet,
     VaultRegistryPallet,
 };
-use sp_core::crypto::AccountId32;
 use std::sync::Arc;
 use std::time::Duration;
 

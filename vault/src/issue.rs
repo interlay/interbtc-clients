@@ -8,7 +8,7 @@ use runtime::{
     pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
     BtcRelayPallet, H256Le, IssuePallet, PolkaBtcProvider, PolkaBtcRuntime,
 };
-use sp_core::{crypto::AccountId32, H256};
+use sp_core::H256;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::Mutex;
