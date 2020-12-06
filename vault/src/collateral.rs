@@ -162,6 +162,7 @@ mod tests {
         pub trait DotBalancesPallet {
             async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
             async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
+            async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), RuntimeError>;
         }
     }
 

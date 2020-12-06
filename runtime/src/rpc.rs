@@ -21,7 +21,7 @@ use substrate_subxt::{
 use tokio::sync::RwLock;
 use tokio::time::delay_for;
 
-use crate::balances_dot::AccountStoreExt;
+use crate::balances_dot::*;
 use crate::btc_relay::*;
 use crate::exchange_rate_oracle::*;
 use crate::frame_system::*;
@@ -296,6 +296,8 @@ pub trait DotBalancesPallet {
     async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
 
     async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
+
+    async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -314,6 +316,13 @@ impl DotBalancesPallet for PolkaBtcProvider {
             .account(self.account_id.clone(), None)
             .await?
             .reserved)
+    }
+
+    async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), Error> {
+        self.ext_client
+            .transfer_and_watch(&*self.signer.write().await, &destination, amount)
+            .await?;
+        Ok(())
     }
 }
 
