@@ -321,6 +321,11 @@ impl BitcoinCoreApi for BitcoinCore {
     ) -> Result<TransactionMetadata, Error> {
         let get_retry_policy = || ExponentialBackoff {
             max_elapsed_time: Some(op_timeout),
+            max_interval: Duration::from_secs(5 * 60), // wait at most 5 minutes before retrying
+            initial_interval: Duration::from_secs(1),
+            current_interval: Duration::from_secs(1),
+            multiplier: 2.0,            // delay doubles every time
+            randomization_factor: 0.25, // random value between 25% below and 25% above the ideal delay
             ..Default::default()
         };
 
