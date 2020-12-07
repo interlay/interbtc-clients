@@ -470,6 +470,7 @@ impl BitcoinCoreApi for BitcoinCore {
 pub trait TransactionExt {
     fn get_op_return(&self) -> Option<H256>;
     fn get_payment_amount_to<A: PartialAddress + PartialEq>(&self, dest: A) -> Option<u64>;
+    fn extract_btc_addresses<A: PartialAddress>(&self) -> Vec<A>;
 }
 
 impl TransactionExt for Transaction {
@@ -499,139 +500,16 @@ impl TransactionExt for Transaction {
             }
         })
     }
-}
 
-pub fn extract_btc_addresses<A: PartialAddress>(tx: GetRawTransactionResult) -> Vec<A> {
-    tx.vin
-        .into_iter()
-        .filter_map(|vin| {
-            if let Some(script_sig) = &vin.script_sig {
-                // this always returns ok so should be safe to unwrap
-                let script = script_sig.script().unwrap();
-
-                return Payload::from_script(&script).map_or(None, |payload| {
+    /// return the addresses that are used as inputs in this transaction
+    fn extract_btc_addresses<A: PartialAddress>(&self) -> Vec<A> {
+        self.input
+            .iter()
+            .filter_map(|vin| {
+                Payload::from_script(&vin.script_sig).map_or(None, |payload| {
                     PartialAddress::from_payload(payload).map_or(None, |addr| Some(addr))
-                });
-            }
-            None
-        })
-        .collect::<Vec<A>>()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use bitcoincore_rpc::{
-        bitcoin::{Txid, Wtxid},
-        bitcoincore_rpc_json::{GetRawTransactionResultVin, GetRawTransactionResultVinScriptSig},
-    };
-
-    mockall::mock! {
-        Bitcoin {}
-
-        #[async_trait]
-        trait BitcoinCoreApi {
-            async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, Error>;
-
-            fn get_block_count(&self) -> Result<u64, Error>;
-
-            fn get_block_transactions(
-                &self,
-                hash: &BlockHash,
-            ) -> Result<Vec<Option<GetRawTransactionResult>>, Error>;
-
-            fn get_raw_tx_for(
-                &self,
-                txid: &Txid,
-                block_hash: &BlockHash,
-            ) -> Result<Vec<u8>, Error>;
-
-            fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
-
-            fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error>;
-
-            fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
-
-            fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, Error>;
-
-            fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
-
-            fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
-
-            fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
-
-            fn get_mempool_transactions<'a>(
-                self: Arc<Self>,
-            ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + 'a>, Error>;
-
-            async fn wait_for_transaction_metadata(
-                &self,
-                txid: Txid,
-                op_timeout: Duration,
-                num_confirmations: u32,
-            ) -> Result<TransactionMetadata, Error>;
-
-            async fn send_transaction<A: PartialAddress + 'static>(
-                &self,
-                address: String,
-                sat: u64,
-                request_id: &[u8; 32],
-            ) -> Result<Txid, Error>;
-
-            async fn send_to_address<A: PartialAddress + 'static>(
-                &self,
-                address: String,
-                sat: u64,
-                request_id: &[u8; 32],
-                op_timeout: Duration,
-                num_confirmations: u32,
-            ) -> Result<TransactionMetadata, Error>;
-
-            fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
-        }
-    }
-
-    #[test]
-    fn test_tx_has_inputs() {
-        let addr = Payload::ScriptHash(
-            ScriptHash::from_slice(
-                &hex::decode("4ef45ff516f84c62b09ad4f605f92abc103f916b").unwrap(),
-            )
-            .unwrap(),
-        );
-
-        assert_eq!(
-            extract_btc_addresses::<Payload>(GetRawTransactionResult {
-                in_active_chain: None,
-                hex: vec![],
-                txid: Txid::default(),
-                hash: Wtxid::default(),
-                size: 0,
-                vsize: 0,
-                version: 0,
-                locktime: 0,
-                vin: vec![GetRawTransactionResultVin {
-                    sequence: 0,
-                    coinbase: None,
-                    txid: None,
-                    vout: None,
-                    script_sig: Some(GetRawTransactionResultVinScriptSig {
-                        asm: "".to_string(),
-                        hex: vec![
-                            169, 20, 78, 244, 95, 245, 22, 248, 76, 98, 176, 154, 212, 246, 5, 249,
-                            42, 188, 16, 63, 145, 107, 135
-                        ],
-                    }),
-                    txinwitness: None,
-                }],
-                vout: vec![],
-                blockhash: None,
-                confirmations: None,
-                time: None,
-                blocktime: None,
-            }),
-            vec![addr]
-        );
+                })
+            })
+            .collect::<Vec<A>>()
     }
 }

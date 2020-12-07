@@ -22,6 +22,7 @@ relayer-core = { git = "https://gitlab.com/interlay/relayer-core", rev = "6e84ca
 runtime = { path = "../runtime" }
 bitcoin = { path = "../bitcoin", features = ["cli"] }
 jsonrpc-http-server = "15.1.0"
+backoff = { version = "0.2.1", features = ["tokio"] }
 
 [dev-dependencies]
 mockall = "0.8.1"

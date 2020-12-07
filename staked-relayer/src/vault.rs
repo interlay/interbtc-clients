@@ -1,9 +1,10 @@
+use crate::error::{get_retry_policy, Error};
 use crate::utils;
-use crate::Error;
-use bitcoin::{BitcoinCoreApi, BlockHash, GetRawTransactionResult, Txid};
+use backoff::backoff::Backoff;
+use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _, Txid};
 use futures::stream::iter;
 use futures::stream::StreamExt;
-use log::{error, info};
+use log::*;
 use runtime::{
     pallets::vault_registry::{RegisterVaultEvent, UpdateBtcAddressEvent},
     AccountId, BtcAddress, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
@@ -103,17 +104,12 @@ impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultTheftMonitor<P, B> {
         Ok(())
     }
 
-    async fn check_transaction(
-        &self,
-        tx: GetRawTransactionResult,
-        block_hash: BlockHash,
-    ) -> Result<(), Error> {
-        let tx_id = tx.txid;
+    async fn check_transaction(&self, tx: Transaction, block_hash: BlockHash) -> Result<(), Error> {
+        let tx_id = tx.txid();
 
-        // TODO: spawn_blocking?
         let (raw_tx, proof) = self.get_raw_tx_and_proof(tx_id, &block_hash)?;
 
-        let addresses = bitcoin::extract_btc_addresses(tx);
+        let addresses = tx.extract_btc_addresses();
         let vault_ids = filter_matching_vaults(addresses, &self.vaults).await;
 
         for vault_id in vault_ids {
@@ -124,27 +120,35 @@ impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultTheftMonitor<P, B> {
         Ok(())
     }
 
-    async fn scan_next_height(&mut self) -> Result<(), Error> {
+    pub async fn scan(&mut self) -> Result<(), Error> {
         utils::wait_until_registered(&self.polka_rpc, self.delay).await;
 
-        info!("Scanning height {}", self.btc_height);
-        let block_hash = self
-            .btc_rpc
-            .wait_for_block(self.btc_height, self.delay)
-            .await?;
-        for maybe_tx in self.btc_rpc.get_block_transactions(&block_hash)? {
-            if let Some(tx) = maybe_tx {
-                self.check_transaction(tx, block_hash).await?
-            }
-        }
-        self.btc_height += 1;
-        Ok(())
-    }
+        let mut backoff = get_retry_policy();
 
-    pub async fn scan(&mut self) {
+        let mut stream = bitcoin::stream_in_chain_transactions(
+            self.btc_rpc.clone(),
+            self.btc_rpc.get_block_count()? as u32,
+        );
+
         loop {
-            if let Err(err) = self.scan_next_height().await {
-                error!("Something went wrong: {}", err.to_string());
+            match stream.next().await.unwrap() {
+                Ok((block_hash, tx)) => match self.check_transaction(tx, block_hash).await {
+                    Ok(_) => {
+                        backoff.reset();
+                        continue; // don't execute the delay below
+                    }
+                    Err(e) => error!("Failed to check transaction: {}", e),
+                },
+                Err(e) => {
+                    warn!("Failed to fetch transaction: {}", e);
+                }
+            }
+            // error occurred. Sleep before retrying
+            match backoff.next_backoff() {
+                Some(wait) => {
+                    tokio::time::delay_for(wait).await;
+                }
+                None => return Err(Error::TransactionFetchingError),
             }
         }
     }
@@ -201,8 +205,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, Error as BitcoinError, GetBlockResult, PartialAddress, Transaction,
-        TransactionMetadata,
+        Block, Error as BitcoinError, GetBlockResult, GetRawTransactionResult, PartialAddress,
+        Transaction, TransactionMetadata,
     };
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
