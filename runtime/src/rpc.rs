@@ -841,7 +841,7 @@ pub trait IssuePallet {
     async fn request_issue(
         &self,
         amount: u128,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        vault_id: AccountId,
         griefing_collateral: u128,
     ) -> Result<H256, Error>;
 
@@ -870,7 +870,7 @@ impl IssuePallet for PolkaBtcProvider {
     async fn request_issue(
         &self,
         amount: u128,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        vault_id: AccountId,
         griefing_collateral: u128,
     ) -> Result<H256, Error> {
         let result = self
@@ -945,7 +945,7 @@ pub trait RedeemPallet {
         &self,
         amount_polka_btc: u128,
         btc_address: BtcAddress,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        vault_id: AccountId,
     ) -> Result<H256, Error>;
 
     /// Execute a redeem request by providing a Bitcoin transaction inclusion proof
@@ -977,7 +977,7 @@ impl RedeemPallet for PolkaBtcProvider {
         &self,
         amount_polka_btc: u128,
         btc_address: BtcAddress,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        vault_id: AccountId,
     ) -> Result<H256, Error> {
         let result = self
             .ext_client

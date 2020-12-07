@@ -353,7 +353,7 @@ mod tests {
                 &self,
                 amount_polka_btc: u128,
                 btc_address: BtcAddress,
-                vault_id: AccountId32,
+                vault_id: AccountId,
             ) -> Result<H256, RuntimeError>;
             async fn execute_redeem(
                 &self,
