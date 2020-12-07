@@ -90,14 +90,14 @@ pub trait BitcoinCoreApi {
         &self,
         address: String,
         sat: u64,
-        redeem_id: &[u8; 32],
+        request_id: &[u8; 32],
     ) -> Result<Txid, Error>;
 
     async fn send_to_address<A: PartialAddress + 'static>(
         &self,
         address: String,
         sat: u64,
-        redeem_id: &[u8; 32],
+        request_id: &[u8; 32],
         op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
@@ -374,12 +374,12 @@ impl BitcoinCoreApi for BitcoinCore {
     /// # Arguments
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
-    /// * `redeem_id` - the redeemid for which this transfer is being made
+    /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
     async fn send_transaction<A: PartialAddress + 'static>(
         &self,
         address: String,
         sat: u64,
-        redeem_id: &[u8; 32],
+        request_id: &[u8; 32],
     ) -> Result<Txid, Error> {
         // todo: remove this delay
         let delay = rand::thread_rng().gen_range(1000, 10000);
@@ -393,7 +393,7 @@ impl BitcoinCoreApi for BitcoinCore {
         let raw_tx = self.create_raw_transaction_hex_with_op_return(
             address,
             Amount::from_sat(sat),
-            redeem_id,
+            request_id,
         )?;
 
         // fund the transaction: adds required inputs, and possibly a return-to-self output
@@ -423,18 +423,18 @@ impl BitcoinCoreApi for BitcoinCore {
     /// # Arguments
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
-    /// * `redeem_id` - the redeemid for which this transfer is being made
+    /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
     /// * `op_timeout` - how long operations will be retried
     /// * `num_confirmations` - how many confirmations we need to wait for
     async fn send_to_address<A: PartialAddress + 'static>(
         &self,
         address: String,
         sat: u64,
-        redeem_id: &[u8; 32],
+        request_id: &[u8; 32],
         op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
-        let txid = self.send_transaction::<A>(address, sat, redeem_id).await?;
+        let txid = self.send_transaction::<A>(address, sat, request_id).await?;
 
         #[cfg(feature = "regtest-mine-on-tx")]
         self.rpc.generate_to_address(
@@ -576,14 +576,14 @@ mod tests {
                 &self,
                 address: String,
                 sat: u64,
-                redeem_id: &[u8; 32],
+                request_id: &[u8; 32],
             ) -> Result<Txid, Error>;
 
             async fn send_to_address<A: PartialAddress + 'static>(
                 &self,
                 address: String,
                 sat: u64,
-                redeem_id: &[u8; 32],
+                request_id: &[u8; 32],
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;

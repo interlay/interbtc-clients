@@ -43,7 +43,7 @@ OPTIONS:
         --key-name <key-name>
             The name of the account from the key-file to use
         --keyring <keyring>
-            Keyring to use, mutually exclusive with key-file [alid values: alice, bob, charlie, 
+            Keyring to use, mutually exclusive with key-file [valid values: alice, bob, charlie,
             dave, eve, ferdie]
         --polka-btc-url <polka-btc-url>
             Parachain URL, can be over WebSockets or HTTP [default: ws://127.0.0.1:9944]

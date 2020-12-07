@@ -70,7 +70,7 @@ OPTIONS:
             The name of the account from the key-file to use
 
         --keyring <keyring>
-            Keyring to use, mutually exclusive with key-file [alid values: alice, bob, charlie, 
+            Keyring to use, mutually exclusive with key-file [valid values: alice, bob, charlie,
             dave, eve, ferdie]
 
         --max-batch-size <max-batch-size>
