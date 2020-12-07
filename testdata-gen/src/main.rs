@@ -78,7 +78,7 @@ struct Opts {
     #[clap(long, default_value = "ws://127.0.0.1:9944")]
     polka_btc_url: String,
 
-    /// keyring / key-file options.
+    /// keyring / keyfile options.
     #[clap(flatten)]
     account_info: runtime::cli::ProviderUserOpts,
 

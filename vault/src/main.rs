@@ -101,7 +101,7 @@ struct Opts {
     #[clap(long)]
     btc_confirmations: Option<u32>,
 
-    /// keyring / key-file options.
+    /// keyring / keyfile options.
     #[clap(flatten)]
     account_info: runtime::cli::ProviderUserOpts,
 

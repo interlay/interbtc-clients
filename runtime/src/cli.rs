@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 #[derive(Clap, Debug, Clone)]
 pub struct ProviderUserOpts {
-    /// Keyring to use, mutually exclusive with key-file.
+    /// Keyring to use, mutually exclusive with keyfile.
     #[clap(long)]
     keyring: Option<AccountKeyring>,
 
@@ -18,12 +18,12 @@ pub struct ProviderUserOpts {
     /// Credentials should be a `0x`-prefixed 64-digit hex string, or
     /// a BIP-39 key phrase of 12, 15, 18, 21 or 24 words. See
     /// `sp_core::from_string_with_seed` for more details.
-    #[clap(long, conflicts_with = "keyring", requires = "key-name")]
-    key_file: Option<String>,
+    #[clap(long, conflicts_with = "keyring", requires = "keyname")]
+    keyfile: Option<String>,
 
-    /// The name of the account from the key-file to use.
-    #[clap(long, conflicts_with = "keyring", requires = "key-file")]
-    key_name: Option<String>,
+    /// The name of the account from the keyfile to use.
+    #[clap(long, conflicts_with = "keyring", requires = "keyfile")]
+    keyname: Option<String>,
 }
 
 impl ProviderUserOpts {
@@ -31,13 +31,13 @@ impl ProviderUserOpts {
     pub fn get_key_pair(&self) -> Result<(Pair, String), Error> {
         // load parachain credentials
         let (pair, user_name) = match (
-            self.key_file.as_ref(),
-            self.key_name.as_ref(),
+            self.keyfile.as_ref(),
+            self.keyname.as_ref(),
             &self.keyring,
         ) {
-            (Some(file_path), Some(key_name), None) => (
-                get_credentials_from_file(&file_path, &key_name)?,
-                key_name.to_string(),
+            (Some(file_path), Some(keyname), None) => (
+                get_credentials_from_file(&file_path, &keyname)?,
+                keyname.to_string(),
             ),
             (None, None, Some(keyring)) => (keyring.pair(), format!("{}", keyring)),
             _ => panic!("Invalid arguments"), // should never occur, due to clap constraints
@@ -51,12 +51,12 @@ impl ProviderUserOpts {
 /// # Arguments
 ///
 /// * `file_path` - path to the json file containing the credentials
-/// * `key_name` - name of the key to get
-fn get_credentials_from_file(file_path: &str, key_name: &str) -> Result<Pair, KeyLoadingError> {
+/// * `keyname` - name of the key to get
+fn get_credentials_from_file(file_path: &str, keyname: &str) -> Result<Pair, KeyLoadingError> {
     let file = std::fs::File::open(file_path)?;
     let reader = std::io::BufReader::new(file);
     let map: HashMap<String, String> = serde_json::from_reader(reader)?;
-    let pair_str = map.get(key_name).ok_or(KeyLoadingError::KeyNotFound)?;
+    let pair_str = map.get(keyname).ok_or(KeyLoadingError::KeyNotFound)?;
     let pair =
         Pair::from_string(pair_str, None).map_err(|e| KeyLoadingError::SecretStringError(e))?;
     Ok(pair)

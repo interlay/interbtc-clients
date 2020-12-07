@@ -84,17 +84,17 @@ OPTIONS:
         --http-addr <http-addr>
             Address to listen on for JSON-RPC requests [default: [::0]:3031]
 
-        --key-file <key-file>
+        --keyfile <keyfile>
             Path to the json file containing key pairs in a map. Valid content of this file is e.g.
             `{ "MyUser1": "<credentials>", "MyUser2": "<credentials>" }`. Credentials should be a
             `0x`-prefixed 64-digit hex string, or a BIP-39 key phrase of 12, 15, 18, 21 or 24 words.
             See `sp_core::from_string_with_seed` for more details
 
-        --key-name <key-name>
-            The name of the account from the key-file to use
+        --keyname <keyname>
+            The name of the account from the keyfile to use
 
         --keyring <keyring>
-            Keyring to use, mutually exclusive with key-file [valid values: alice, bob, charlie,
+            Keyring to use, mutually exclusive with keyfile [valid values: alice, bob, charlie,
             dave, eve, ferdie]
 
         --max-collateral <max-collateral>

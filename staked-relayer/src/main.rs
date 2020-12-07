@@ -64,7 +64,7 @@ struct Opts {
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
 
-    /// keyring / key-file options.
+    /// keyring / keyfile options.
     #[clap(flatten)]
     account_info: runtime::cli::ProviderUserOpts,
 
