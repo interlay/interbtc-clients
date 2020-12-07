@@ -140,7 +140,7 @@ async fn main() -> Result<(), Error> {
         tokio::spawn(async move { vaults_listener.await.unwrap() }),
         // runs vault theft checks
         tokio::spawn(async move {
-            vaults_monitor.scan().await;
+            vaults_monitor.scan().await.unwrap();
         }),
         // runs oracle liveness check
         tokio::spawn(async move {

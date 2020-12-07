@@ -470,6 +470,7 @@ impl BitcoinCoreApi for BitcoinCore {
 pub trait TransactionExt {
     fn get_op_return(&self) -> Option<H256>;
     fn get_payment_amount_to<A: PartialAddress + PartialEq>(&self, dest: A) -> Option<u64>;
+    fn extract_btc_addresses<A: PartialAddress>(&self) -> Vec<A>;
 }
 
 impl TransactionExt for Transaction {
@@ -499,23 +500,18 @@ impl TransactionExt for Transaction {
             }
         })
     }
-}
 
-pub fn extract_btc_addresses<A: PartialAddress>(tx: GetRawTransactionResult) -> Vec<A> {
-    tx.vin
-        .into_iter()
-        .filter_map(|vin| {
-            if let Some(script_sig) = &vin.script_sig {
-                // this always returns ok so should be safe to unwrap
-                let script = script_sig.script().unwrap();
-
-                return Payload::from_script(&script).map_or(None, |payload| {
+    /// return the addresses that are used as inputs in this transaction
+    fn extract_btc_addresses<A: PartialAddress>(&self) -> Vec<A> {
+        self.input
+            .iter()
+            .filter_map(|vin| {
+                Payload::from_script(&vin.script_sig).map_or(None, |payload| {
                     PartialAddress::from_payload(payload).map_or(None, |addr| Some(addr))
-                });
-            }
-            None
-        })
-        .collect::<Vec<A>>()
+                })
+            })
+            .collect::<Vec<A>>()
+    }
 }
 
 #[cfg(test)]
