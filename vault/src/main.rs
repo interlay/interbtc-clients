@@ -84,6 +84,10 @@ struct Opts {
     #[clap(long)]
     no_issue_execution: bool,
 
+    /// Don't run the RPC API.
+    #[clap(long)]
+    no_api: bool,
+
     /// Maximum total collateral to keep the vault securely collateralized.
     #[clap(long, default_value = "1000000")]
     max_collateral: u128,
@@ -248,11 +252,15 @@ async fn main() -> Result<(), Error> {
     // misc copies of variables to move into spawn closures
     let no_auto_auction = opts.no_auto_auction;
     let no_issue_execution = opts.no_issue_execution;
+    let no_api = opts.no_api;
     let auction_provider = arc_provider.clone();
 
+    // starts all the tasks
     let result = tokio::try_join!(
         tokio::spawn(async move {
-            api_listener.await;
+            if !no_api {
+                api_listener.await;
+            }
         }),
         tokio::spawn(async move {
             arc_provider

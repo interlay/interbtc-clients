@@ -58,6 +58,7 @@ USAGE:
 
 FLAGS:
     -h, --help                              Prints help information
+        --no-api                            Don't run the RPC API
         --no-auto-auction                   Opt out of auctioning under-collateralized vaults
         --no-auto-replace                   Opt out of participation in replace requests
         --no-issue-execution                Don't try to execute issues
