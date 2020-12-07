@@ -4,8 +4,7 @@ use crate::{utils, Error};
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
 use runtime::pallets::btc_relay::H256Le;
-use runtime::{BtcAddress, PolkaBtcProvider, RedeemPallet};
-use sp_core::crypto::AccountId32;
+use runtime::{BtcAddress, PolkaBtcProvider, RedeemPallet, AccountId};
 use sp_core::H256;
 use std::convert::TryInto;
 use std::time::Duration;
@@ -15,7 +14,7 @@ pub async fn request_redeem(
     redeem_prov: &PolkaBtcProvider,
     amount_polka_btc: u128,
     btc_address: BtcAddress,
-    vault_id: AccountId32,
+    vault_id: AccountId,
 ) -> Result<H256, Error> {
     let redeem_id = redeem_prov
         .request_redeem(amount_polka_btc, btc_address, vault_id.clone())

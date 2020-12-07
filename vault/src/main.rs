@@ -14,7 +14,7 @@ use crate::{
     cancellation::{CancellationScheduler, IssueCanceller, ProcessEvent, ReplaceCanceller},
     collateral::*,
     constants::*,
-    error::{Error, KeyLoadingError},
+    error::Error,
     execution::{execute_open_issue_requests, execute_open_requests},
     issue::*,
     redeem::*,
@@ -29,10 +29,7 @@ use runtime::{
     substrate_subxt::PairSigner, BtcRelayPallet, Error as RuntimeError, PolkaBtcProvider,
     PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
 };
-use sp_core::sr25519::Pair;
-use sp_core::Pair as _;
-use sp_keyring::AccountKeyring;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
 
 #[derive(Debug, Copy, Clone)]
@@ -58,10 +55,6 @@ struct Opts {
     /// Parachain URL, can be over WebSockets or HTTP.
     #[clap(long, default_value = "ws://127.0.0.1:9944")]
     polka_btc_url: String,
-
-    /// Keyring for vault, mutually exclusive with key-file.
-    #[clap(long)]
-    keyring: Option<AccountKeyring>,
 
     /// Address to listen on for JSON-RPC requests.
     #[clap(long, default_value = "[::0]:3031")]
@@ -91,6 +84,10 @@ struct Opts {
     #[clap(long)]
     no_issue_execution: bool,
 
+    /// Don't run the RPC API.
+    #[clap(long)]
+    no_api: bool,
+
     /// Maximum total collateral to keep the vault securely collateralized.
     #[clap(long, default_value = "1000000")]
     max_collateral: u128,
@@ -99,23 +96,14 @@ struct Opts {
     #[clap(long, default_value = "5000")]
     collateral_timeout_ms: u64,
 
-    /// Path to the json file containing key pairs in a map.
-    /// Valid content of this file is e.g.
-    /// `{ "MyUser1": "<credentials>", "MyUser2": "<credentials>" }`.
-    /// Credentials should be a `0x`-prefixed 64-digit hex string, or
-    /// a BIP-39 key phrase of 12, 15, 18, 21 or 24 words. See
-    /// `sp_core::from_string_with_seed` for more details.
-    #[clap(long, conflicts_with = "keyring", requires = "key-name")]
-    key_file: Option<String>,
-
-    /// The name of the account from the key-file to use.
-    #[clap(long, conflicts_with = "keyring", requires = "key-file")]
-    key_name: Option<String>,
-
     /// How many bitcoin confirmations to wait for. If not specified, the
     /// parachain settings will be used (recommended).
     #[clap(long)]
     btc_confirmations: Option<u32>,
+
+    /// keyring / keyfile options.
+    #[clap(flatten)]
+    account_info: runtime::cli::ProviderUserOpts,
 
     /// Connection settings for Bitcoin Core.
     #[clap(flatten)]
@@ -134,14 +122,7 @@ async fn main() -> Result<(), Error> {
     info!("Command line arguments: {:?}", opts.clone());
 
     // load parachain credentials
-    let (pair, wallet) = match (opts.key_file, opts.key_name, opts.keyring) {
-        (Some(file_path), Some(key_name), None) => {
-            (get_credentials_from_file(&file_path, &key_name)?, key_name)
-        }
-        (None, None, Some(keyring)) => (keyring.pair(), format!("{}", keyring)),
-        _ => panic!("Invalid arguments"), // should never occur, due to clap constraints
-    };
-    let vault_id = sp_core::crypto::AccountId32::from(pair.public());
+    let (pair, wallet) = opts.account_info.get_key_pair()?;
 
     let btc_rpc = Arc::new(BitcoinCore::new(opts.bitcoin.new_client(Some(&wallet))?));
 
@@ -153,6 +134,8 @@ async fn main() -> Result<(), Error> {
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
     let arc_provider = Arc::new(provider.clone());
+    let vault_id = provider.get_account_id().clone();
+
     let collateral_timeout_ms = opts.collateral_timeout_ms;
 
     let num_confirmations = match opts.btc_confirmations {
@@ -176,7 +159,6 @@ async fn main() -> Result<(), Error> {
     let open_request_executor = execute_open_requests(
         arc_provider.clone(),
         btc_rpc.clone(),
-        vault_id.clone(),
         num_confirmations,
         opts.network.0,
     );
@@ -199,11 +181,8 @@ async fn main() -> Result<(), Error> {
         };
     }
 
-    let collateral_maintainer = maintain_collateralization_rate(
-        arc_provider.clone(),
-        vault_id.clone(),
-        opts.max_collateral,
-    );
+    let collateral_maintainer =
+        maintain_collateralization_rate(arc_provider.clone(), opts.max_collateral);
 
     // wait for a new block to arrive, to prevent processing an event that potentially
     // has been processed already prior to restarting
@@ -221,13 +200,11 @@ async fn main() -> Result<(), Error> {
         CancellationScheduler::new(arc_provider.clone(), vault_id.clone());
     let issue_request_listener = listen_for_issue_requests(
         arc_provider.clone(),
-        vault_id.clone(),
         issue_event_tx.clone(),
         issue_set.clone(),
     );
     let issue_execute_listener = listen_for_issue_executes(
         arc_provider.clone(),
-        vault_id.clone(),
         issue_event_tx.clone(),
         issue_set.clone(),
     );
@@ -245,25 +222,22 @@ async fn main() -> Result<(), Error> {
         CancellationScheduler::new(arc_provider.clone(), vault_id.clone());
     let request_replace_listener = listen_for_replace_requests(
         arc_provider.clone(),
-        vault_id.clone(),
         replace_event_tx.clone(),
         !opts.no_auto_replace,
     );
     let accept_replace_listener = listen_for_accept_replace(
         arc_provider.clone(),
         btc_rpc.clone(),
-        vault_id.clone(),
         opts.network.0,
         num_confirmations,
     );
     let execute_replace_listener =
-        listen_for_execute_replace(arc_provider.clone(), vault_id.clone(), replace_event_tx);
+        listen_for_execute_replace(arc_provider.clone(), replace_event_tx);
 
     // redeem handling
     let redeem_listener = listen_for_redeem_requests(
         arc_provider.clone(),
         btc_rpc.clone(),
-        vault_id.clone(),
         opts.network.0,
         num_confirmations,
     );
@@ -278,11 +252,15 @@ async fn main() -> Result<(), Error> {
     // misc copies of variables to move into spawn closures
     let no_auto_auction = opts.no_auto_auction;
     let no_issue_execution = opts.no_issue_execution;
+    let no_api = opts.no_api;
     let auction_provider = arc_provider.clone();
 
+    // starts all the tasks
     let result = tokio::try_join!(
         tokio::spawn(async move {
-            api_listener.await;
+            if !no_api {
+                api_listener.await;
+            }
         }),
         tokio::spawn(async move {
             arc_provider
@@ -361,20 +339,4 @@ async fn main() -> Result<(), Error> {
     };
 
     Ok(())
-}
-
-/// Loads the credentials for the given user from the keyfile
-///
-/// # Arguments
-///
-/// * `file_path` - path to the json file containing the credentials
-/// * `key_name` - name of the key to get
-fn get_credentials_from_file(file_path: &str, key_name: &str) -> Result<Pair, KeyLoadingError> {
-    let file = std::fs::File::open(file_path)?;
-    let reader = std::io::BufReader::new(file);
-    let map: HashMap<String, String> = serde_json::from_reader(reader)?;
-    let pair_str = map.get(key_name).ok_or(KeyLoadingError::KeyNotFound)?;
-    let pair =
-        Pair::from_string(pair_str, None).map_err(|e| KeyLoadingError::SecretStringError(e))?;
-    Ok(pair)
 }

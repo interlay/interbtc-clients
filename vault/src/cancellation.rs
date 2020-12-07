@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use futures::channel::mpsc::Receiver;
 use futures::*;
 use log::*;
-use runtime::{IssuePallet, ReplacePallet, UtilFuncs};
-use sp_core::{crypto::AccountId32, H256};
+use runtime::{IssuePallet, ReplacePallet, UtilFuncs, AccountId};
+use sp_core::H256;
 use std::marker::{Send, Sync};
 use std::sync::Arc;
 use tokio::time;
@@ -26,7 +26,7 @@ pub enum ProcessEvent {
 
 pub struct CancellationScheduler<P: IssuePallet + ReplacePallet + UtilFuncs> {
     provider: Arc<P>,
-    vault_id: AccountId32,
+    vault_id: AccountId,
     period: Option<u32>,
 }
 
@@ -61,7 +61,7 @@ pub trait Canceller<P> {
     /// Gets a list of open replace/issue processes
     async fn get_open_processes(
         provider: Arc<P>,
-        vault_id: AccountId32,
+        vault_id: AccountId,
     ) -> Result<Vec<UnconvertedOpenTime>, Error>
     where
         P: 'async_trait;
@@ -84,7 +84,7 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for IssueCancell
 
     async fn get_open_processes(
         provider: Arc<P>,
-        vault_id: AccountId32,
+        vault_id: AccountId,
     ) -> Result<Vec<UnconvertedOpenTime>, Error>
     where
         P: 'async_trait,
@@ -124,7 +124,7 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for ReplaceCance
 
     async fn get_open_processes(
         provider: Arc<P>,
-        vault_id: AccountId32,
+        vault_id: AccountId,
     ) -> Result<Vec<UnconvertedOpenTime>, Error>
     where
         P: 'async_trait,
@@ -204,7 +204,7 @@ impl EventSelector for ProductionEventSelector {
 
 /// The actual cancellation scheduling and handling
 impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
-    pub fn new(provider: Arc<P>, vault_id: AccountId32) -> CancellationScheduler<P> {
+    pub fn new(provider: Arc<P>, vault_id: AccountId) -> CancellationScheduler<P> {
         CancellationScheduler {
             provider,
             vault_id,
@@ -482,6 +482,10 @@ mod tests {
                 &self,
                 account_id: AccountId,
             ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
+            async fn get_old_vault_replace_requests(
+                &self,
+                account_id: AccountId,
+            ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
             async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, RuntimeError>;
         }
@@ -623,7 +627,7 @@ mod tests {
         let (_, mut event_listener) = mpsc::channel::<ProcessEvent>(16);
         let mut active_processes: Vec<ActiveProcess> = vec![];
         let mut cancellation_scheduler =
-            CancellationScheduler::new(Arc::new(provider), AccountId32::default());
+            CancellationScheduler::new(Arc::new(provider), AccountId::default());
 
         // simulate that the issue expires
         let selector = TestEventSelector {
@@ -673,7 +677,7 @@ mod tests {
         ];
 
         let mut cancellation_scheduler =
-            CancellationScheduler::new(Arc::new(provider), AccountId32::default());
+            CancellationScheduler::new(Arc::new(provider), AccountId::default());
         // simulate that we have a timeout
         let selector = TestEventSelector {
             on_event: |timeout, _| match timeout {
@@ -734,7 +738,7 @@ mod tests {
         let (_, mut event_listener) = mpsc::channel::<ProcessEvent>(16);
         let mut active_processes: Vec<ActiveProcess> = vec![];
         let mut cancellation_scheduler =
-            CancellationScheduler::new(Arc::new(provider), AccountId32::default());
+            CancellationScheduler::new(Arc::new(provider), AccountId::default());
 
         // simulate that the issue gets executed
         let selector = TestEventSelector {
@@ -774,7 +778,7 @@ mod tests {
         let (_, mut event_listener) = mpsc::channel::<ProcessEvent>(16);
         let mut active_processes: Vec<ActiveProcess> = vec![];
         let mut cancellation_scheduler =
-            CancellationScheduler::new(Arc::new(provider), AccountId32::default());
+            CancellationScheduler::new(Arc::new(provider), AccountId::default());
 
         // simulate that we have a timeout
         let selector = TestEventSelector {
@@ -807,7 +811,7 @@ mod tests {
         let (_, mut event_listener) = mpsc::channel::<ProcessEvent>(16);
         let mut active_processes: Vec<ActiveProcess> = vec![];
         let mut cancellation_scheduler =
-            CancellationScheduler::new(Arc::new(provider), AccountId32::default());
+            CancellationScheduler::new(Arc::new(provider), AccountId::default());
 
         // simulate that we have a timeout
         let selector = TestEventSelector {

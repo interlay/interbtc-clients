@@ -78,9 +78,9 @@ struct Opts {
     #[clap(long, default_value = "ws://127.0.0.1:9944")]
     polka_btc_url: String,
 
-    /// Keyring used to sign transactions.
-    #[clap(long, default_value = "alice")]
-    keyring: AccountKeyring,
+    /// keyring / keyfile options.
+    #[clap(flatten)]
+    account_info: runtime::cli::ProviderUserOpts,
 
     /// Connection settings for Bitcoin Core.
     #[clap(flatten)]
@@ -468,13 +468,10 @@ async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
 
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
+    let (key_pair, wallet_name) = opts.account_info.get_key_pair()?;
+    let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
-
-    let btc_rpc = BitcoinCore::new(
-        opts.bitcoin
-            .new_client(Some(&format!("{}", opts.keyring)))?,
-    );
+    let btc_rpc = BitcoinCore::new(opts.bitcoin.new_client(Some(&wallet_name))?);
 
     match opts.subcmd {
         SubCommand::SetExchangeRate(info) => {

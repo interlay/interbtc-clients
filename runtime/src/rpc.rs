@@ -21,7 +21,7 @@ use substrate_subxt::{
 use tokio::sync::RwLock;
 use tokio::time::delay_for;
 
-use crate::balances_dot::AccountStoreExt;
+use crate::balances_dot::*;
 use crate::btc_relay::*;
 use crate::exchange_rate_oracle::*;
 use crate::frame_system::*;
@@ -296,6 +296,8 @@ pub trait DotBalancesPallet {
     async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
 
     async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
+
+    async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -314,6 +316,13 @@ impl DotBalancesPallet for PolkaBtcProvider {
             .account(self.account_id.clone(), None)
             .await?
             .reserved)
+    }
+
+    async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), Error> {
+        self.ext_client
+            .transfer_and_watch(&*self.signer.write().await, &destination, amount)
+            .await?;
+        Ok(())
     }
 }
 
@@ -386,8 +395,14 @@ pub trait ReplacePallet {
     /// * `replace_id` - the ID of the replacement request
     async fn cancel_replace(&self, replace_id: H256) -> Result<(), Error>;
 
-    /// Get all replace requests to a particular vault
+    /// Get all replace requests accepted by the given vault
     async fn get_new_vault_replace_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error>;
+
+    /// Get all replace requests made by the given vault
+    async fn get_old_vault_replace_requests(
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error>;
@@ -476,7 +491,7 @@ impl ReplacePallet for PolkaBtcProvider {
         Ok(())
     }
 
-    /// Get all replace requests to a particular vault
+    /// Get all replace requests accepted by the given vault
     async fn get_new_vault_replace_requests(
         &self,
         account_id: AccountId,
@@ -485,6 +500,22 @@ impl ReplacePallet for PolkaBtcProvider {
             .rpc_client
             .request(
                 "replace_getNewVaultReplaceRequests",
+                Params::Array(vec![to_json_value(account_id)?]),
+            )
+            .await?;
+
+        Ok(result)
+    }
+
+    /// Get all replace requests made by the given vault
+    async fn get_old_vault_replace_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error> {
+        let result: Vec<(H256, PolkaBtcReplaceRequest)> = self
+            .rpc_client
+            .request(
+                "replace_getOldVaultReplaceRequests",
                 Params::Array(vec![to_json_value(account_id)?]),
             )
             .await?;
@@ -810,7 +841,7 @@ pub trait IssuePallet {
     async fn request_issue(
         &self,
         amount: u128,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        vault_id: AccountId,
         griefing_collateral: u128,
     ) -> Result<H256, Error>;
 
@@ -839,7 +870,7 @@ impl IssuePallet for PolkaBtcProvider {
     async fn request_issue(
         &self,
         amount: u128,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        vault_id: AccountId,
         griefing_collateral: u128,
     ) -> Result<H256, Error> {
         let result = self
@@ -914,7 +945,7 @@ pub trait RedeemPallet {
         &self,
         amount_polka_btc: u128,
         btc_address: BtcAddress,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        vault_id: AccountId,
     ) -> Result<H256, Error>;
 
     /// Execute a redeem request by providing a Bitcoin transaction inclusion proof
@@ -946,7 +977,7 @@ impl RedeemPallet for PolkaBtcProvider {
         &self,
         amount_polka_btc: u128,
         btc_address: BtcAddress,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        vault_id: AccountId,
     ) -> Result<H256, Error> {
         let result = self
             .ext_client

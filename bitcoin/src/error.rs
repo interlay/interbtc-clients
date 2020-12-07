@@ -7,6 +7,7 @@ use bitcoincore_rpc::{
     jsonrpc::error::RpcError,
 };
 use hex::FromHexError;
+use serde_json::Error as SerdeJsonError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -21,6 +22,10 @@ pub enum Error {
     ConfirmationError,
     #[error("Could not find block at height")]
     InvalidBitcoinHeight,
+    #[error("Json error: {0}")]
+    SerdeJsonError(#[from] SerdeJsonError),
+    #[error("Failed to sign transaction")]
+    TransactionSigningError,
 }
 
 #[derive(Error, Debug)]

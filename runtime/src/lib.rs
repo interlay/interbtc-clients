@@ -1,3 +1,4 @@
+pub mod cli;
 mod error;
 pub mod pallets;
 mod rpc;

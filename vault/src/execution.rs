@@ -10,7 +10,7 @@ use runtime::{
     BtcAddress, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest,
     PolkaBtcRuntime, RedeemPallet, ReplacePallet, UtilFuncs,
 };
-use sp_core::{crypto::AccountId32, H256};
+use sp_core::H256;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 #[derive(Debug, Clone)]
@@ -163,10 +163,10 @@ impl Request {
 pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<B>,
-    vault_id: AccountId32,
     num_confirmations: u32,
     network: Network,
 ) -> Result<(), Error> {
+    let vault_id = provider.get_account_id().clone();
     // get all open redeem/replaces and map them to the shared Request type
     let open_redeems = provider
         .clone()
@@ -176,7 +176,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
         .filter(|(_, request)| !request.completed)
         .map(|(hash, request)| Request::from_redeem_request(hash, request));
     let open_replaces = provider
-        .get_new_vault_replace_requests(vault_id.clone())
+        .get_old_vault_replace_requests(vault_id)
         .await?
         .into_iter()
         .filter(|(_, request)| !request.completed)
@@ -353,7 +353,7 @@ mod tests {
                 &self,
                 amount_polka_btc: u128,
                 btc_address: BtcAddress,
-                vault_id: AccountId32,
+                vault_id: AccountId,
             ) -> Result<H256, RuntimeError>;
             async fn execute_redeem(
                 &self,
@@ -392,6 +392,10 @@ mod tests {
                 &self,
                 account_id: AccountId,
             ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
+            async fn get_old_vault_replace_requests(
+                &self,
+                account_id: AccountId,
+            ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
             async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, RuntimeError>;
         }
@@ -425,6 +429,12 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
+            async fn send_transaction<A: PartialAddress + 'static>(
+                &self,
+                address: String,
+                sat: u64,
+                redeem_id: &[u8; 32],
+            ) -> Result<Txid, BitcoinError>;
             async fn send_to_address<A: PartialAddress + 'static>(
                 &self,
                 address: String,

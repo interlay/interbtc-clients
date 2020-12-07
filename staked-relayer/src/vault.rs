@@ -271,6 +271,13 @@ mod tests {
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
 
+            async fn send_transaction<A: PartialAddress + 'static>(
+                &self,
+                address: String,
+                sat: u64,
+                redeem_id: &[u8; 32],
+            ) -> Result<Txid, BitcoinError>;
+
             async fn send_to_address<A: PartialAddress + 'static>(
                 &self,
                 address: String,

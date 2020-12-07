@@ -211,6 +211,13 @@ mod tests {
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
 
+            async fn send_transaction<A: PartialAddress + 'static>(
+                &self,
+                address: String,
+                sat: u64,
+                redeem_id: &[u8; 32],
+            ) -> Result<Txid, Error>;
+
             async fn send_to_address<A: PartialAddress + 'static>(
                 &self,
                 address: String,

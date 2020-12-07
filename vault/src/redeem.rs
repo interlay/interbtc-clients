@@ -2,7 +2,6 @@ use crate::execution::*;
 use bitcoin::BitcoinCore;
 use log::{error, info};
 use runtime::{pallets::redeem::RequestRedeemEvent, PolkaBtcProvider, PolkaBtcRuntime};
-use sp_core::crypto::AccountId32;
 use std::sync::Arc;
 
 /// Listen for RequestRedeemEvent directed at this vault; upon reception, transfer
@@ -12,20 +11,18 @@ use std::sync::Arc;
 ///
 /// * `provider` - the parachain RPC handle
 /// * `btc_rpc` - the bitcoin RPC handle
-/// * `vault_id` - the id of this vault
 /// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn listen_for_redeem_requests(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<BitcoinCore>,
-    vault_id: AccountId32,
     network: bitcoin::Network,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     provider
         .on_event::<RequestRedeemEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async {
-                if event.vault_id != vault_id.clone() {
+                if &event.vault_id != provider.get_account_id() {
                     return;
                 }
                 info!("Received redeem request: {:?}", event);

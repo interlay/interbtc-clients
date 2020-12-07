@@ -19,7 +19,9 @@ pub use bitcoincore_rpc::{
         Address, Amount, Block, BlockHeader, Network, PubkeyHash, Script, ScriptHash, Transaction,
         TxOut, Txid, WPubkeyHash,
     },
-    bitcoincore_rpc_json::{GetRawTransactionResult, GetTransactionResult, WalletTxInfo},
+    bitcoincore_rpc_json::{
+        CreateRawTransactionInput, GetRawTransactionResult, GetTransactionResult, WalletTxInfo,
+    },
     json::{self, AddressType, GetBlockResult},
     jsonrpc::error::RpcError,
     jsonrpc::Error as JsonRpcError,
@@ -29,8 +31,7 @@ pub use error::{BitcoinRpcError, ConversionError, Error};
 pub use iter::{get_transactions, stream_blocks, stream_in_chain_transactions};
 use rand::{self, Rng};
 use sp_core::H256;
-use std::sync::Arc;
-use std::{collections::HashMap, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
 
 #[macro_use]
@@ -38,6 +39,7 @@ extern crate num_derive;
 
 const NOT_IN_MEMPOOL_ERROR_CODE: i32 = BitcoinRpcError::RpcInvalidAddressOrKey as i32;
 
+#[derive(Debug, Clone)]
 pub struct TransactionMetadata {
     pub txid: Txid,
     pub proof: Vec<u8>,
@@ -84,11 +86,18 @@ pub trait BitcoinCoreApi {
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
+    async fn send_transaction<A: PartialAddress + 'static>(
+        &self,
+        address: String,
+        sat: u64,
+        request_id: &[u8; 32],
+    ) -> Result<Txid, Error>;
+
     async fn send_to_address<A: PartialAddress + 'static>(
         &self,
         address: String,
         sat: u64,
-        redeem_id: &[u8; 32],
+        request_id: &[u8; 32],
         op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
@@ -103,6 +112,38 @@ pub struct BitcoinCore {
 impl BitcoinCore {
     pub fn new(rpc: Client) -> Self {
         Self { rpc }
+    }
+
+    /// Version of rust_bitcoincore_rpc::create_raw_transaction_hex that accepts an op_return
+    fn create_raw_transaction_hex_with_op_return(
+        &self,
+        address: String,
+        amount: Amount,
+        request_id: &[u8; 32],
+    ) -> Result<String, Error> {
+        let mut outputs = serde_json::Map::<String, serde_json::Value>::new();
+        // add the payment output
+        outputs.insert(address, serde_json::Value::from(amount.as_btc()));
+
+        // add the op_return data - bitcoind will add op_return and the length automatically
+        outputs.insert(
+            "data".to_string(),
+            serde_json::Value::from(request_id.to_hex()),
+        );
+        let args = [
+            serde_json::to_value::<&[json::CreateRawTransactionInput]>(&[])?,
+            serde_json::to_value(outputs)?,
+        ];
+        Ok(self.rpc.call("createrawtransaction", &args)?)
+    }
+
+    #[cfg(feature = "regtest-manual-mining")]
+    pub fn mine_block(&self) -> Result<(), Error> {
+        self.rpc.generate_to_address(
+            1,
+            &self.rpc.get_new_address(None, Some(AddressType::Bech32))?,
+        )?;
+        Ok(())
     }
 }
 
@@ -280,6 +321,11 @@ impl BitcoinCoreApi for BitcoinCore {
     ) -> Result<TransactionMetadata, Error> {
         let get_retry_policy = || ExponentialBackoff {
             max_elapsed_time: Some(op_timeout),
+            max_interval: Duration::from_secs(5 * 60), // wait at most 5 minutes before retrying
+            initial_interval: Duration::from_secs(1),
+            current_interval: Duration::from_secs(1),
+            multiplier: 2.0,            // delay doubles every time
+            randomization_factor: 0.25, // random value between 25% below and 25% above the ideal delay
             ..Default::default()
         };
 
@@ -321,48 +367,76 @@ impl BitcoinCoreApi for BitcoinCore {
         })
     }
 
-    /// Send an amount of Bitcoin to an address and wait until it has a confirmation.
+    /// Send an amount of Bitcoin to an address, but only submit the transaction
+    /// to the mempool; this method does not wait until the block is included in
+    /// the blockchain.
     ///
     /// # Arguments
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
-    /// * `redeem_id` - the redeemid for which this transfer is being made
+    /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
+    async fn send_transaction<A: PartialAddress + 'static>(
+        &self,
+        address: String,
+        sat: u64,
+        request_id: &[u8; 32],
+    ) -> Result<Txid, Error> {
+        // todo: remove this delay
+        let delay = rand::thread_rng().gen_range(1000, 10000);
+        delay_for(Duration::from_millis(delay)).await;
+
+        // create raw transaction that includes the op_return. If we were to add the op_return
+        // after funding, the fees might be insufficient. An alternative to our own version of
+        // this function would be to call create_raw_transaction (without the _hex suffix), and
+        // to add the op_return afterwards. However, this function fails if no inputs are
+        // specified, as is the case for us prior to calling fund_raw_transaction.
+        let raw_tx = self.create_raw_transaction_hex_with_op_return(
+            address,
+            Amount::from_sat(sat),
+            request_id,
+        )?;
+
+        // fund the transaction: adds required inputs, and possibly a return-to-self output
+        let funded_raw_tx = self.rpc.fund_raw_transaction(raw_tx, None, None)?;
+
+        // sign the transaction
+        let signed_funded_raw_tx =
+            self.rpc
+                .sign_raw_transaction_with_wallet(&funded_raw_tx.transaction()?, None, None)?;
+
+        // Make sure signing is successful
+        if let Some(_) = signed_funded_raw_tx.errors {
+            return Err(Error::TransactionSigningError);
+        }
+
+        // place the transaction into the mempool
+        let txid = self
+            .rpc
+            .send_raw_transaction(&signed_funded_raw_tx.transaction()?)?;
+
+        Ok(txid)
+    }
+
+    /// Send an amount of Bitcoin to an address and wait until it is included
+    /// in the blockchain with the requested number of confirmations.
+    ///
+    /// # Arguments
+    /// * `address` - Bitcoin address to fund
+    /// * `sat` - number of Satoshis to transfer
+    /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
     /// * `op_timeout` - how long operations will be retried
     /// * `num_confirmations` - how many confirmations we need to wait for
     async fn send_to_address<A: PartialAddress + 'static>(
         &self,
         address: String,
         sat: u64,
-        redeem_id: &[u8; 32],
+        request_id: &[u8; 32],
         op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
-        let mut recipients = HashMap::<String, Amount>::new();
-        recipients.insert(address.clone(), Amount::from_sat(sat));
+        let txid = self.send_transaction::<A>(address, sat, request_id).await?;
 
-        let delay = rand::thread_rng().gen_range(1000, 10000);
-        delay_for(Duration::from_millis(delay)).await;
-
-        let raw_tx = self
-            .rpc
-            .create_raw_transaction_hex(&[], &recipients, None, None)?;
-
-        let raw_tx = self.rpc.fund_raw_transaction(raw_tx, None, None)?;
-
-        let mut tx = raw_tx.transaction().unwrap();
-
-        // include the redeem is in the transaction
-        add_redeem_id(&mut tx, redeem_id);
-
-        let signed_raw_tx =
-            self.rpc
-                .sign_raw_transaction_with_wallet(tx.serialize().to_hex(), None, None)?;
-
-        let txid = self
-            .rpc
-            .send_raw_transaction(signed_raw_tx.transaction().unwrap().serialize().to_hex())?;
-
-        #[cfg(feature = "regtest")]
+        #[cfg(feature = "regtest-mine-on-tx")]
         self.rpc.generate_to_address(
             1,
             &self.rpc.get_new_address(None, Some(AddressType::Bech32))?,
@@ -425,21 +499,6 @@ impl TransactionExt for Transaction {
             }
         })
     }
-}
-
-/// Adds op_return with the given id at index 1, occording to the redeem spec
-fn add_redeem_id(tx: &mut Transaction, redeem_id: &[u8; 32]) {
-    // Index 1: Data UTXO: OP_RETURN containing identifier
-    tx.output.insert(
-        1,
-        TxOut {
-            value: 0,
-            script_pubkey: Builder::new()
-                .push_opcode(opcodes::OP_RETURN)
-                .push_slice(redeem_id)
-                .into_script(),
-        },
-    );
 }
 
 pub fn extract_btc_addresses<A: PartialAddress>(tx: GetRawTransactionResult) -> Vec<A> {
@@ -513,11 +572,18 @@ mod tests {
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
 
+            async fn send_transaction<A: PartialAddress + 'static>(
+                &self,
+                address: String,
+                sat: u64,
+                request_id: &[u8; 32],
+            ) -> Result<Txid, Error>;
+
             async fn send_to_address<A: PartialAddress + 'static>(
                 &self,
                 address: String,
                 sat: u64,
-                redeem_id: &[u8; 32],
+                request_id: &[u8; 32],
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
