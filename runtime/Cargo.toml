@@ -55,7 +55,7 @@ package = "staked-relayers"
 [dependencies.module-vault-registry]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "0.3.1"
+version = "0.3.2"
 package = "vault-registry"
 
 [dependencies.module-exchange-rate-oracle-rpc-runtime-api]

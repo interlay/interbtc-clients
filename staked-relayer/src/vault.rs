@@ -5,9 +5,9 @@ use futures::stream::iter;
 use futures::stream::StreamExt;
 use log::{error, info};
 use runtime::{
-    pallets::vault_registry::RegisterVaultEvent, AccountId, BtcAddress, Error as RuntimeError,
-    H256Le, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, StakedRelayerPallet,
-    VaultRegistryPallet,
+    pallets::vault_registry::{RegisterVaultEvent, UpdateBtcAddressEvent},
+    AccountId, BtcAddress, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
+    PolkaBtcVault, StakedRelayerPallet, VaultRegistryPallet,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -15,27 +15,31 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 
 #[derive(Default)]
-pub struct Vaults(RwLock<HashMap<BtcAddress, PolkaBtcVault>>);
+pub struct Vaults(RwLock<HashMap<BtcAddress, AccountId>>);
 
 impl Vaults {
-    pub fn from(vaults: HashMap<BtcAddress, PolkaBtcVault>) -> Self {
+    pub fn from(vaults: HashMap<BtcAddress, AccountId>) -> Self {
         Self(RwLock::new(vaults))
     }
 
-    pub async fn write(&self, key: BtcAddress, value: PolkaBtcVault) {
+    pub async fn write(&self, key: BtcAddress, value: AccountId) {
         self.0.write().await.insert(key, value);
+    }
+
+    pub async fn add_vault(&self, vault: PolkaBtcVault) {
+        let mut vaults = self.0.write().await;
+        for address in vault.wallet.addresses {
+            vaults.insert(address, vault.id.clone());
+        }
     }
 
     pub async fn contains_key(&self, key: BtcAddress) -> Option<AccountId> {
         let vaults = self.0.read().await;
-        if let Some(vault) = vaults.get(&key.clone()) {
-            return Some(vault.id.clone());
-        }
-        None
+        vaults.get(&key).map(|id| id.clone())
     }
 }
 
-pub struct VaultsMonitor<P: StakedRelayerPallet, B: BitcoinCoreApi> {
+pub struct VaultTheftMonitor<P: StakedRelayerPallet, B: BitcoinCoreApi> {
     btc_height: u32,
     btc_rpc: Arc<B>,
     polka_rpc: Arc<P>,
@@ -43,7 +47,7 @@ pub struct VaultsMonitor<P: StakedRelayerPallet, B: BitcoinCoreApi> {
     delay: Duration,
 }
 
-impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultsMonitor<P, B> {
+impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultTheftMonitor<P, B> {
     pub fn new(
         btc_height: u32,
         btc_rpc: Arc<B>,
@@ -146,6 +150,25 @@ impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultsMonitor<P, B> {
     }
 }
 
+pub async fn listen_for_wallet_updates(
+    polka_rpc: Arc<PolkaBtcProvider>,
+    vaults: Arc<Vaults>,
+) -> Result<(), RuntimeError> {
+    let vaults = &vaults;
+    polka_rpc
+        .on_event::<UpdateBtcAddressEvent<PolkaBtcRuntime>, _, _, _>(
+            |event| async move {
+                info!(
+                    "Added new btc address {} for vault {}",
+                    event.btc_address, event.vault_id
+                );
+                vaults.write(event.btc_address, event.vault_id).await;
+            },
+            |err| error!("Error (UpdateBtcAddressEvent): {}", err.to_string()),
+        )
+        .await
+}
+
 pub async fn listen_for_vaults_registered(
     polka_rpc: Arc<PolkaBtcProvider>,
     vaults: Arc<Vaults>,
@@ -156,12 +179,12 @@ pub async fn listen_for_vaults_registered(
                 match polka_rpc.get_vault(event.account_id).await {
                     Ok(vault) => {
                         info!("Vault registered: {}", vault.id);
-                        vaults.write(vault.wallet.get_btc_address(), vault).await;
+                        vaults.add_vault(vault).await;
                     }
                     Err(err) => error!("Error getting vault: {}", err.to_string()),
                 };
             },
-            |err| error!("Error (Vault): {}", err.to_string()),
+            |err| error!("Error (RegisterVaultEvent): {}", err.to_string()),
         )
         .await
 }
@@ -293,12 +316,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_filter_matching_vaults() {
-        let mut vault = PolkaBtcVault::default();
-        vault.id = AccountKeyring::Bob.to_account_id();
         let vaults = Vaults::from(
-            vec![(BtcAddress::P2PKH(H160::from_slice(&[0; 20])), vault)]
-                .into_iter()
-                .collect(),
+            vec![(
+                BtcAddress::P2PKH(H160::from_slice(&[0; 20])),
+                AccountKeyring::Bob.to_account_id(),
+            )]
+            .into_iter()
+            .collect(),
         );
 
         assert_eq!(
@@ -325,7 +349,7 @@ mod tests {
             .never()
             .returning(|_, _, _, _, _| Ok(()));
 
-        let monitor = VaultsMonitor::new(
+        let monitor = VaultTheftMonitor::new(
             0,
             Arc::new(MockBitcoin::default()),
             Arc::new(Vaults::default()),
@@ -355,7 +379,7 @@ mod tests {
             .once()
             .returning(|_, _, _, _, _| Ok(()));
 
-        let monitor = VaultsMonitor::new(
+        let monitor = VaultTheftMonitor::new(
             0,
             Arc::new(MockBitcoin::default()),
             Arc::new(Vaults::default()),
