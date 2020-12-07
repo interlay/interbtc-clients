@@ -15,7 +15,6 @@ use relayer_core::bitcoin::Client as BtcClient;
 use relayer_core::{Backing, Config, Runner};
 use runtime::substrate_subxt::PairSigner;
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
-use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -65,9 +64,9 @@ struct Opts {
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
 
-    /// Staked relayer keyring.
-    #[clap(long, default_value = "alice")]
-    keyring: AccountKeyring,
+    /// keyring / key-file options.
+    #[clap(flatten)]
+    account_info: runtime::cli::ProviderUserOpts,
 
     /// Connection settings for Bitcoin Core.
     #[clap(flatten)]
@@ -81,7 +80,8 @@ async fn main() -> Result<(), Error> {
     let http_addr = opts.http_addr.parse()?;
     let oracle_timeout_ms = opts.oracle_timeout_ms;
 
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
+    let (key_pair, _) = opts.account_info.get_key_pair()?;
+    let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
     let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
 
     let btc_client = BtcClient::new::<RelayError>(opts.bitcoin.new_client(None)?);

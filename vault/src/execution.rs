@@ -10,7 +10,7 @@ use runtime::{
     BtcAddress, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest,
     PolkaBtcRuntime, RedeemPallet, ReplacePallet, UtilFuncs,
 };
-use sp_core::{crypto::AccountId32, H256};
+use sp_core::H256;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 #[derive(Debug, Clone)]

@@ -35,7 +35,16 @@ OPTIONS:
         --bitcoin-rpc-pass <bitcoin-rpc-pass>    [env: BITCOIN_RPC_PASS=]
         --bitcoin-rpc-url <bitcoin-rpc-url>      [env: BITCOIN_RPC_URL=]
         --bitcoin-rpc-user <bitcoin-rpc-user>    [env: BITCOIN_RPC_USER=]
-        --keyring <keyring>                      Keyring used to sign transactions [default: alice; valid values: alice, bob, charlie, dave, eve, ferdie]
+        --key-file <key-file>
+            Path to the json file containing key pairs in a map. Valid content of this file is e.g.
+            `{ "MyUser1": "<credentials>", "MyUser2": "<credentials>" }`. Credentials should be a
+            `0x`-prefixed 64-digit hex string, or a BIP-39 key phrase of 12, 15, 18, 21 or 24 words.
+            See `sp_core::from_string_with_seed` for more details
+        --key-name <key-name>
+            The name of the account from the key-file to use
+        --keyring <keyring>
+            Keyring to use, mutually exclusive with key-file [alid values: alice, bob, charlie, 
+            dave, eve, ferdie]
         --polka-btc-url <polka-btc-url>
             Parachain URL, can be over WebSockets or HTTP [default: ws://127.0.0.1:9944]
 

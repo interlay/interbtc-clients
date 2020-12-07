@@ -399,7 +399,7 @@ impl BitcoinCoreApi for BitcoinCore {
         // fund the transaction: adds required inputs, and possibly a return-to-self output
         let funded_raw_tx = self.rpc.fund_raw_transaction(raw_tx, None, None)?;
 
-        // sign the transaction TODO: error checking
+        // sign the transaction
         let signed_funded_raw_tx =
             self.rpc
                 .sign_raw_transaction_with_wallet(&funded_raw_tx.transaction()?, None, None)?;

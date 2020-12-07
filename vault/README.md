@@ -93,8 +93,8 @@ OPTIONS:
             The name of the account from the key-file to use
 
         --keyring <keyring>
-            Keyring for vault, mutually exclusive with key-file [default: bob; valid values: alice,
-            bob, charlie, dave, eve, ferdie]
+            Keyring to use, mutually exclusive with key-file [alid values: alice, bob, charlie, 
+            dave, eve, ferdie]
 
         --max-collateral <max-collateral>
             Maximum total collateral to keep the vault securely collateralized [default: 1000000]
