@@ -109,7 +109,7 @@ impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultTheftMonitor<P, B> {
 
         let (raw_tx, proof) = self.get_raw_tx_and_proof(tx_id, &block_hash)?;
 
-        let addresses = tx.extract_btc_addresses();
+        let addresses = tx.extract_input_addresses();
         let vault_ids = filter_matching_vaults(addresses, &self.vaults).await;
 
         for vault_id in vault_ids {
