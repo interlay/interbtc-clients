@@ -367,6 +367,7 @@ mod tests {
                 &self,
                 account_id: AccountId,
             ) -> Result<Vec<(H256, PolkaBtcRedeemRequest)>, RuntimeError>;
+            async fn set_redeem_period(&self, period: u32) -> Result<(), RuntimeError>;
         }
         #[async_trait]
         pub trait ReplacePallet {

@@ -457,6 +457,7 @@ mod tests {
                 account_id: AccountId,
             ) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, RuntimeError>;
             async fn get_issue_period(&self) -> Result<u32, RuntimeError>;
+            async fn set_issue_period(&self, period: u32) -> Result<(), RuntimeError>;
         }
         #[async_trait]
         pub trait ReplacePallet {
