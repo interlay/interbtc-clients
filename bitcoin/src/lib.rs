@@ -28,8 +28,8 @@ pub use bitcoincore_rpc::{
     Auth, Client, Error as BitcoinError, RpcApi,
 };
 pub use error::{BitcoinRpcError, ConversionError, Error};
+use futures::lock::Mutex;
 pub use iter::{get_transactions, stream_blocks, stream_in_chain_transactions};
-use rand::{self, Rng};
 use sp_core::H256;
 use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
@@ -107,11 +107,15 @@ pub trait BitcoinCoreApi {
 
 pub struct BitcoinCore {
     rpc: Client,
+    transaction_creation_lock: Mutex<()>,
 }
 
 impl BitcoinCore {
     pub fn new(rpc: Client) -> Self {
-        Self { rpc }
+        Self {
+            rpc,
+            transaction_creation_lock: Mutex::new(()),
+        }
     }
 
     /// Version of rust_bitcoincore_rpc::create_raw_transaction_hex that accepts an op_return
@@ -381,10 +385,6 @@ impl BitcoinCoreApi for BitcoinCore {
         sat: u64,
         request_id: &[u8; 32],
     ) -> Result<Txid, Error> {
-        // todo: remove this delay
-        let delay = rand::thread_rng().gen_range(1000, 10000);
-        delay_for(Duration::from_millis(delay)).await;
-
         // create raw transaction that includes the op_return. If we were to add the op_return
         // after funding, the fees might be insufficient. An alternative to our own version of
         // this function would be to call create_raw_transaction (without the _hex suffix), and
@@ -395,6 +395,11 @@ impl BitcoinCoreApi for BitcoinCore {
             Amount::from_sat(sat),
             request_id,
         )?;
+
+        // ensure no other fund_raw_transaction calls are made until we submitted the
+        // transaction to the bitcoind. If we don't do this, the same uxto may be used
+        // as input twice (i.e. double spend)
+        let _lock = self.transaction_creation_lock.lock().await;
 
         // fund the transaction: adds required inputs, and possibly a return-to-self output
         let funded_raw_tx = self.rpc.fund_raw_transaction(raw_tx, None, None)?;
