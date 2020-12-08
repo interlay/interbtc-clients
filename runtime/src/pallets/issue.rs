@@ -59,3 +59,9 @@ pub struct IssuePeriodStore<T: Issue> {
     #[store(returns = u32)]
     pub _runtime: PhantomData<T>,
 }
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct SetIssuePeriodCall<T: Issue> {
+    pub period: u32,
+    pub _runtime: PhantomData<T>,
+}

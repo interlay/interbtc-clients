@@ -1,6 +1,7 @@
 pub use module_exchange_rate_oracle::BtcTxFeesPerByte;
 
 use async_trait::async_trait;
+use core::marker::PhantomData;
 use jsonrpsee::{
     common::{to_value as to_json_value, Params},
     Client as RpcClient,
@@ -15,8 +16,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use substrate_subxt::Error as XtError;
 use substrate_subxt::{
-    system::System, Client, ClientBuilder, Event, EventSubscription, EventsDecoder, PairSigner,
-    Signer,
+    sudo::*, system::System, Call, Client, ClientBuilder, Event, EventSubscription, EventsDecoder,
+    PairSigner, Signer,
 };
 use tokio::sync::RwLock;
 use tokio::time::delay_for;
@@ -272,6 +273,14 @@ impl PolkaBtcProvider {
         Ok(())
     }
 
+    async fn sudo<C: Call<PolkaBtcRuntime>>(&self, call: C) -> Result<(), Error> {
+        let encoded = self.ext_client.encode(call)?;
+        self.ext_client
+            .sudo_and_watch(&*self.signer.write().await, &encoded)
+            .await?;
+        Ok(())
+    }
+
     /// Gets a copy of the signer with a unique nonce
     async fn get_unique_signer(&self) -> PairSigner<PolkaBtcRuntime, KeyPair> {
         let mut signer = self.signer.write().await;
@@ -429,6 +438,10 @@ pub trait ReplacePallet {
     /// request is created and required completion time by a vault
     async fn get_replace_period(&self) -> Result<u32, Error>;
 
+    /// Set the time difference in number of blocks between when a replace
+    /// request is created and required completion time by a vault 
+    async fn set_replace_period(&self, period: u32) -> Result<(), Error>;
+
     /// Get a replace request from storage
     async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, Error>;
 }
@@ -543,6 +556,15 @@ impl ReplacePallet for PolkaBtcProvider {
 
     async fn get_replace_period(&self) -> Result<u32, Error> {
         Ok(self.ext_client.replace_period(None).await?)
+    }
+
+    async fn set_replace_period(&self, period: u32) -> Result<(), Error> {
+        Ok(self
+            .sudo(SetReplacePeriodCall {
+                period,
+                _runtime: PhantomData {},
+            })
+            .await?)
     }
 
     async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, Error> {
@@ -885,6 +907,8 @@ pub trait IssuePallet {
     ) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, Error>;
 
     async fn get_issue_period(&self) -> Result<u32, Error>;
+
+    async fn set_issue_period(&self, period: u32) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -956,6 +980,15 @@ impl IssuePallet for PolkaBtcProvider {
     async fn get_issue_period(&self) -> Result<u32, Error> {
         Ok(self.ext_client.issue_period(None).await?)
     }
+
+    async fn set_issue_period(&self, period: u32) -> Result<(), Error> {
+        Ok(self
+            .sudo(SetIssuePeriodCall {
+                period,
+                _runtime: PhantomData {},
+            })
+            .await?)
+    }
 }
 
 #[async_trait]
@@ -987,6 +1020,8 @@ pub trait RedeemPallet {
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, PolkaBtcRedeemRequest)>, Error>;
+
+    async fn set_redeem_period(&self, period: u32) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -1057,6 +1092,15 @@ impl RedeemPallet for PolkaBtcProvider {
             .await?;
 
         Ok(result)
+    }
+
+    async fn set_redeem_period(&self, period: u32) -> Result<(), Error> {
+        Ok(self
+            .sudo(SetRedeemPeriodCall {
+                period,
+                _runtime: PhantomData {},
+            })
+            .await?)
     }
 }
 

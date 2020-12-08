@@ -61,3 +61,18 @@ pub async fn execute_issue(
     info!("Executed issue ID {:?}", issue_id);
     Ok(())
 }
+
+/// Set issue period of PolkaBTC
+pub async fn set_issue_period(
+    issue_prov: &PolkaBtcProvider,
+    period: u32,
+) -> Result<(), Error> {
+    issue_prov.set_issue_period(period).await?;
+
+    info!(
+        "Set the issue period to {:?}",
+        period,
+    );
+
+    Ok(())
+}

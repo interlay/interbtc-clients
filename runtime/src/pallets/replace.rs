@@ -105,3 +105,9 @@ pub struct ReplaceRequestsStore<T: Replace> {
     pub _runtime: PhantomData<T>,
     pub replace_id: T::H256,
 }
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct SetReplacePeriodCall<T: Replace> {
+    pub period: u32,
+    pub _runtime: PhantomData<T>,
+}

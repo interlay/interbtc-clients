@@ -28,7 +28,7 @@ use sp_runtime::{
 };
 use std::collections::BTreeSet;
 pub use substrate_subxt;
-use substrate_subxt::{balances, extrinsic::DefaultExtra, system, Runtime};
+use substrate_subxt::{balances, extrinsic::DefaultExtra, sudo, system, Runtime};
 
 pub const MINIMUM_STAKE: u64 = 100;
 
@@ -103,3 +103,5 @@ impl frame_system::System for PolkaBtcRuntime {}
 impl redeem::Redeem for PolkaBtcRuntime {}
 
 impl replace::Replace for PolkaBtcRuntime {}
+
+impl sudo::Sudo for PolkaBtcRuntime {}

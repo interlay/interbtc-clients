@@ -124,6 +124,13 @@ enum SubCommand {
     GetChainStats(ChainStatOpts),
     /// Print all historic events.
     DumpEvents(DumpOpts),
+    /// Set issue period.
+    SetIssuePeriod(SetIssuePeriodInfo),
+    /// Set redeem period.
+    SetRedeemPeriod(SetRedeemPeriodInfo),
+    /// Set replace period.
+    SetReplacePeriod(SetReplacePeriodInfo),
+
 }
 
 #[derive(Clap)]
@@ -306,6 +313,27 @@ struct SendBitcoinInfo {
     /// Hex encoded OP_RETURN data for request.
     #[clap(long)]
     op_return: String,
+}
+
+#[derive(Clap)]
+struct SetIssuePeriodInfo {
+    /// Period after issue requests expire.
+    #[clap(long)]
+    period: u32,
+}
+
+#[derive(Clap)]
+struct SetRedeemPeriodInfo {
+    /// Period after redeem requests expire.
+    #[clap(long)]
+    period: u32,
+}
+
+#[derive(Clap)]
+struct SetReplacePeriodInfo {
+    /// Period after replace requests expire.
+    #[clap(long)]
+    period: u32,
 }
 
 #[derive(Clap)]
@@ -637,6 +665,27 @@ async fn main() -> Result<(), Error> {
                 }
             },
         },
+        SubCommand::SetIssuePeriod(info) => {
+            issue::set_issue_period(
+                &provider,
+                info.period,
+            )
+            .await?;
+        },
+        SubCommand::SetRedeemPeriod(info) => {
+            redeem::set_redeem_period(
+                &provider,
+                info.period,
+            )
+            .await?;
+        },
+        SubCommand::SetReplacePeriod(info) => {
+            replace::set_replace_period(
+                &provider,
+                info.period,
+            )
+            .await?;
+        }
     }
 
     Ok(())
