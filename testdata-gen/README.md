@@ -79,4 +79,5 @@ SUBCOMMANDS:
     set-exchange-rate    Set the DOT to BTC exchange rate
     set-issue-period     Set the period after which issue requests expire.
     set-redeem-period    Set the period after which redeem requests expire.
+    set-replace-period    Set the period after which replace requests expire.
 ```
