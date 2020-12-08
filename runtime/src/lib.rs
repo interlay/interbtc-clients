@@ -1,3 +1,4 @@
+pub mod cli;
 mod error;
 pub mod pallets;
 mod rpc;
@@ -6,7 +7,8 @@ mod rpc;
 mod tests;
 
 pub use btc_relay::{
-    Address, BitcoinBlockHeight, BlockBuilder, Formattable, H256Le, RawBlockHeader, RichBlockHeader,
+    BitcoinBlockHeight, BlockBuilder, BtcAddress, Formattable, H256Le, RawBlockHeader,
+    RichBlockHeader,
 };
 pub use error::{Error, XtError};
 use pallets::*;
@@ -64,6 +66,7 @@ impl pallets::Core for PolkaBtcRuntime {
     type H256Le = H256Le;
     type H160 = H160;
     type H256 = H256;
+    type BtcAddress = BtcAddress;
     type ErrorCode = ErrorCode;
     type ErrorCodes = BTreeSet<ErrorCode>;
     type StatusCode = StatusCode;

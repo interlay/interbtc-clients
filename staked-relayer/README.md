@@ -2,7 +2,7 @@
 
 ## Responsibilities
 
-- Receive block headers from [Bitcoin Core](https://github.com/bitcoin/bitcoin) 
+- Receive block headers from [Bitcoin Core](https://github.com/bitcoin/bitcoin)
 - Submit block headers to the [PolkaBTC Parachain](https://github.com/interlay/BTC-Parachain)
 - Register and stake DOT collateral
 - Participate in core governance procedures
@@ -43,7 +43,7 @@ When using cargo to run the vault, arguments to cargo and the vault are separate
 cargo run -- --help
 ```
 
-For convenience, a copy of this output is included below. Note that the bitcoin RPC configuration can be passed either as command line arguments, or as environment variables. By running `source ../.env`, the default RPC configuration is loaded into environment variables. 
+For convenience, a copy of this output is included below. Note that the bitcoin RPC configuration can be passed either as command line arguments, or as environment variables. By running `source ../.env`, the default RPC configuration is loaded into environment variables.
 
 ```
 USAGE:
@@ -60,10 +60,21 @@ OPTIONS:
         --http-addr <http-addr>
             Address to listen on for JSON-RPC requests [default: [::0]:3030]
 
-        --keyring <keyring>                                Staked relayer keyring [default: alice; valid values: alice, bob, charlie, dave, eve, ferdie]
+        --keyfile <keyfile>
+            Path to the json file containing key pairs in a map. Valid content of this file is e.g.
+            `{ "MyUser1": "<credentials>", "MyUser2": "<credentials>" }`. Credentials should be a
+            `0x`-prefixed 64-digit hex string, or a BIP-39 key phrase of 12, 15, 18, 21 or 24 words.
+            See `sp_core::from_string_with_seed` for more details
+
+        --keyname <keyname>
+            The name of the account from the keyfile to use
+
+        --keyring <keyring>
+            Keyring to use, mutually exclusive with keyfile [valid values: alice, bob, charlie,
+            dave, eve, ferdie]
+
         --max-batch-size <max-batch-size>
-            Max batch size for combined block header submission, currently unsupported [default: 1]
-            [possible values: 1]
+            Max batch size for combined block header submission. [default: 16]
 
         --oracle-timeout-ms <oracle-timeout-ms>
             Timeout in milliseconds to repeat oracle liveness check [default: 5000]

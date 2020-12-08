@@ -58,8 +58,10 @@ USAGE:
 
 FLAGS:
     -h, --help                              Prints help information
+        --no-api                            Don't run the RPC API
         --no-auto-auction                   Opt out of auctioning under-collateralized vaults
         --no-auto-replace                   Opt out of participation in replace requests
+        --no-issue-execution                Don't try to execute issues
         --no-startup-collateral-increase    Don't check the collateralization rate at startup
     -V, --version                           Prints version information
 
@@ -82,8 +84,18 @@ OPTIONS:
         --http-addr <http-addr>
             Address to listen on for JSON-RPC requests [default: [::0]:3031]
 
+        --keyfile <keyfile>
+            Path to the json file containing key pairs in a map. Valid content of this file is e.g.
+            `{ "MyUser1": "<credentials>", "MyUser2": "<credentials>" }`. Credentials should be a
+            `0x`-prefixed 64-digit hex string, or a BIP-39 key phrase of 12, 15, 18, 21 or 24 words.
+            See `sp_core::from_string_with_seed` for more details
+
+        --keyname <keyname>
+            The name of the account from the keyfile to use
+
         --keyring <keyring>
-            Keyring for vault [default: bob; valid values: alice, bob, charlie, dave, eve, ferdie]
+            Keyring to use, mutually exclusive with keyfile [valid values: alice, bob, charlie,
+            dave, eve, ferdie]
 
         --max-collateral <max-collateral>
             Maximum total collateral to keep the vault securely collateralized [default: 1000000]

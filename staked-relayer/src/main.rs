@@ -15,7 +15,6 @@ use relayer_core::bitcoin::Client as BtcClient;
 use relayer_core::{Backing, Config, Runner};
 use runtime::substrate_subxt::PairSigner;
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
-use sp_keyring::AccountKeyring;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -49,9 +48,8 @@ struct Opts {
     #[clap(long)]
     relay_start_height: Option<u32>,
 
-    /// Max batch size for combined block header submission,
-    /// currently unsupported.
-    #[clap(long, default_value = "1", possible_value = "1")]
+    /// Max batch size for combined block header submission.
+    #[clap(long, default_value = "16")]
     max_batch_size: u32,
 
     /// Timeout in milliseconds to repeat oracle liveness check.
@@ -66,9 +64,9 @@ struct Opts {
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
 
-    /// Staked relayer keyring.
-    #[clap(long, default_value = "alice")]
-    keyring: AccountKeyring,
+    /// keyring / keyfile options.
+    #[clap(flatten)]
+    account_info: runtime::cli::ProviderUserOpts,
 
     /// Connection settings for Bitcoin Core.
     #[clap(flatten)]
@@ -82,10 +80,12 @@ async fn main() -> Result<(), Error> {
     let http_addr = opts.http_addr.parse()?;
     let oracle_timeout_ms = opts.oracle_timeout_ms;
 
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
+    let (key_pair, _) = opts.account_info.get_key_pair()?;
+    let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
     let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
 
     let btc_client = BtcClient::new::<RelayError>(opts.bitcoin.new_client(None)?);
+    let btc_rpc = Arc::new(bitcoin::BitcoinCore::new(opts.bitcoin.new_client(None)?));
 
     let current_height = btc_client.get_block_count()?;
 
@@ -95,9 +95,8 @@ async fn main() -> Result<(), Error> {
     } else {
         current_height + 1
     };
-    let btc_rpc = Arc::new(bitcoin::BitcoinCore::new(opts.bitcoin.new_client(None)?));
 
-    let mut runner = Runner::new(
+    let mut relayer = Runner::new(
         PolkaClient::new(provider.clone()),
         btc_client,
         Config {
@@ -112,11 +111,19 @@ async fn main() -> Result<(), Error> {
         .get_all_vaults()
         .await?
         .into_iter()
-        .map(|vault| (vault.wallet.get_btc_address(), vault));
+        .flat_map(|vault| {
+            vault
+                .wallet
+                .addresses
+                .iter()
+                .map(|addr| (addr.clone(), vault.id.clone()))
+                .collect::<Vec<_>>()
+        })
+        .collect();
 
-    // collect (btc_address, vault) into HashMap
-    let vaults = Arc::new(Vaults::from(vaults.into_iter().collect()));
-    let mut vaults_monitor = VaultsMonitor::new(
+    // store vaults in Arc<RwLock>
+    let vaults = Arc::new(Vaults::from(vaults));
+    let mut vaults_monitor = VaultTheftMonitor::new(
         btc_height,
         btc_rpc.clone(),
         vaults.clone(),
@@ -124,6 +131,7 @@ async fn main() -> Result<(), Error> {
         Duration::from_secs(opts.scan_block_delay),
     );
 
+    let wallet_update_listener = listen_for_wallet_updates(provider.clone(), vaults.clone());
     let vaults_listener = listen_for_vaults_registered(provider.clone(), vaults);
     let status_update_listener = listen_for_status_updates(btc_rpc.clone(), provider.clone());
     let relay_listener = listen_for_blocks_stored(
@@ -137,11 +145,15 @@ async fn main() -> Result<(), Error> {
     let result = tokio::try_join!(
         // runs json-rpc server for incoming requests
         tokio::spawn(async move { api.await }),
-        // runs subscription service to update registered vaults
+        // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
         tokio::spawn(async move { vaults_listener.await.unwrap() }),
         // runs vault theft checks
         tokio::spawn(async move {
-            vaults_monitor.scan().await;
+            vaults_monitor.scan().await.unwrap();
+        }),
+        // keep vault wallets up-to-date
+        tokio::spawn(async move {
+            wallet_update_listener.await.unwrap();
         }),
         // runs oracle liveness check
         tokio::spawn(async move {
@@ -158,7 +170,7 @@ async fn main() -> Result<(), Error> {
         tokio::spawn(async move {
             status_update_listener.await.unwrap();
         }),
-        tokio::task::spawn_blocking(move || runner.run().unwrap())
+        tokio::task::spawn_blocking(move || relayer.run().unwrap())
     );
     match result {
         Ok(res) => {

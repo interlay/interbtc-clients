@@ -1,84 +1,101 @@
 image: "registry.gitlab.com/interlay/containers/rust-base:nightly-2020-10-01"
 
 variables:
-  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+    CARGO_HOME: $CI_PROJECT_DIR/.cargo
 
 stages:
-  - test
-  - build
+    - test
+    - build
 
 test-crates:
-  stage: test
+    stage: test
 
-  variables:
-    CARGO_HOME: $CI_PROJECT_DIR/.cargo
-    RUSTC_WRAPPER: /usr/local/bin/sccache
-    SCCACHE_GCS_RW_MODE: READ_WRITE
-  script:
-    - rustup show
-    - rustc --version
-    - rustfmt --version
-    - cargo --version
-    - SCCACHE_START_SERVER=1 SCCACHE_IDLE_TIMEOUT=0 sccache
-    - sccache -s
+    variables:
+        CARGO_HOME: $CI_PROJECT_DIR/.cargo
+        RUSTC_WRAPPER: /usr/local/bin/sccache
+        SCCACHE_GCS_RW_MODE: READ_WRITE
+    script:
+        - rustup show
+        - rustc --version
+        - rustfmt --version
+        - cargo --version
+        - SCCACHE_START_SERVER=1 SCCACHE_IDLE_TIMEOUT=0 sccache
+        - sccache -s
 
-    # - cargo fmt -- --check
-    - cargo check --all
-    - cargo test --all
+        # - cargo fmt -- --check
+        - cargo check --all
+        - cargo test --all
 
-    - sccache -s
-  cache:
-    key: cargo
-    paths:
-        - .cargo
+        - sccache -s
+    cache:
+        key: cargo
+        paths:
+            - .cargo
 
 docker-publish-staked-relayer:
-  stage: build
-  image:
-    name: gcr.io/kaniko-project/executor:debug
-    entrypoint: [""]
-  script:
-    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
-    - |
-      /kaniko/executor --context $CI_PROJECT_DIR \
-      --dockerfile $CI_PROJECT_DIR/staked-relayer/Dockerfile \
-      --destination $CI_REGISTRY_IMAGE/staked-relayer:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
-      --destination $CI_REGISTRY_IMAGE/staked-relayer:$CI_COMMIT_BRANCH
-  only:
-    - master
-    - dev
-    - kaniko # debug
+    stage: build
+    image:
+        name: gcr.io/kaniko-project/executor:debug
+        entrypoint: [""]
+    script:
+        - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+        - |
+            /kaniko/executor --context $CI_PROJECT_DIR \
+            --dockerfile $CI_PROJECT_DIR/staked-relayer/Dockerfile \
+            --destination $CI_REGISTRY_IMAGE/staked-relayer:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
+            --destination $CI_REGISTRY_IMAGE/staked-relayer:$CI_COMMIT_BRANCH
+    only:
+        - master
+        - dev
+        - kaniko # debug
 
 docker-publish-oracle:
-  stage: build
-  image:
-    name: gcr.io/kaniko-project/executor:debug
-    entrypoint: [""]
-  script:
-    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
-    - |
-      /kaniko/executor --context $CI_PROJECT_DIR \
-        --dockerfile $CI_PROJECT_DIR/oracle/Dockerfile \
-        --destination $CI_REGISTRY_IMAGE/oracle:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
-        --destination $CI_REGISTRY_IMAGE/oracle:$CI_COMMIT_BRANCH
-  only:
-    - master
-    - dev
-    - kaniko # debug
+    stage: build
+    image:
+        name: gcr.io/kaniko-project/executor:debug
+        entrypoint: [""]
+    script:
+        - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+        - |
+            /kaniko/executor --context $CI_PROJECT_DIR \
+              --dockerfile $CI_PROJECT_DIR/oracle/Dockerfile \
+              --destination $CI_REGISTRY_IMAGE/oracle:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
+              --destination $CI_REGISTRY_IMAGE/oracle:$CI_COMMIT_BRANCH
+    only:
+        - master
+        - dev
+        - kaniko # debug
 
 docker-publish-vault:
-  stage: build
-  image:
-    name: gcr.io/kaniko-project/executor:debug
-    entrypoint: [""]
-  script:
-    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
-    - |
-      /kaniko/executor --context $CI_PROJECT_DIR \
-        --dockerfile $CI_PROJECT_DIR/vault/Dockerfile \
-        --destination $CI_REGISTRY_IMAGE/vault:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
-        --destination $CI_REGISTRY_IMAGE/vault:$CI_COMMIT_BRANCH
-  only:
-    - master
-    - dev
-    - kaniko # debug
+    stage: build
+    image:
+        name: gcr.io/kaniko-project/executor:debug
+        entrypoint: [""]
+    script:
+        - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+        - |
+            /kaniko/executor --context $CI_PROJECT_DIR \
+              --dockerfile $CI_PROJECT_DIR/vault/Dockerfile \
+              --destination $CI_REGISTRY_IMAGE/vault:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
+              --destination $CI_REGISTRY_IMAGE/vault:$CI_COMMIT_BRANCH
+    only:
+        - master
+        - dev
+        - kaniko # debug
+
+docker-publish-testdata-gen:
+    stage: build
+    image:
+        name: gcr.io/kaniko-project/executor:debug
+        entrypoint: [""]
+    script:
+        - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+        - |
+            /kaniko/executor --context $CI_PROJECT_DIR \
+              --dockerfile $CI_PROJECT_DIR/testdata-gen/Dockerfile \
+              --destination $CI_REGISTRY_IMAGE/testdata-gen:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
+              --destination $CI_REGISTRY_IMAGE/testdata-gen:$CI_COMMIT_BRANCH
+    only:
+        - master
+        - dev
+        - kaniko # debug

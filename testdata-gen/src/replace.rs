@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
 use crate::{utils, Error};
-use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use bitcoin::{BitcoinCore, BitcoinCoreApi, PartialAddress};
 use log::info;
 use runtime::pallets::btc_relay::H256Le;
-use runtime::{PolkaBtcProvider, ReplacePallet};
+use runtime::{BtcAddress, PolkaBtcProvider, ReplacePallet};
 use sp_core::H256;
 use std::convert::TryInto;
 use std::time::Duration;
@@ -45,13 +45,14 @@ pub async fn execute_replace(
     replace_id: H256,
 ) -> Result<(), Error> {
     let replace_request = replace_prov.get_replace_request(replace_id).await?;
-    let btc_address =
-        bitcoin::hash_to_p2wpkh(replace_request.btc_address, bitcoin::Network::Regtest)?;
+    let btc_address = replace_request
+        .btc_address
+        .encode_str(bitcoin::Network::Regtest)?;
 
     println!("Satoshis: {}", replace_request.amount);
 
     let tx_metadata = btc_rpc
-        .send_to_address(
+        .send_to_address::<BtcAddress>(
             btc_address,
             replace_request.amount.try_into().unwrap(),
             &replace_id.to_fixed_bytes(),
@@ -66,7 +67,6 @@ pub async fn execute_replace(
         .execute_replace(
             replace_id,
             H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
-            tx_metadata.block_height,
             tx_metadata.proof,
             tx_metadata.raw_tx,
         )

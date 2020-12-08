@@ -1,11 +1,12 @@
-use crate::cancelation::ProcessEvent;
+use crate::cancellation::ProcessEvent;
+use crate::constants::get_retry_policy;
 use crate::error::Error;
-use crate::execution::*;
+use crate::execution::Request;
 use backoff::future::FutureOperation as _;
 use bitcoin::BitcoinCore;
 use futures::channel::mpsc::Sender;
 use futures::SinkExt;
-use log::{error, info, trace};
+use log::*;
 use runtime::{
     pallets::{
         replace::{AcceptReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent},
@@ -14,33 +15,30 @@ use runtime::{
     DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet,
     VaultRegistryPallet,
 };
-use sp_core::crypto::AccountId32;
 use std::sync::Arc;
+use std::time::Duration;
 
 /// Listen for AcceptReplaceEvent directed at this vault and continue the replacement
-/// procedure by transfering bitcoin and calling execute_replace
+/// procedure by transferring bitcoin and calling execute_replace
 ///
 /// # Arguments
 ///
 /// * `provider` - the parachain RPC handle
 /// * `btc_rpc` - the bitcoin RPC handle
-/// * `vault_id` - the id of this vault
 /// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn listen_for_accept_replace(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<BitcoinCore>,
-    vault_id: AccountId32,
     network: bitcoin::Network,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
-    let vault_id = &vault_id;
     let provider = &provider;
     let btc_rpc = &btc_rpc;
     provider
         .on_event::<AcceptReplaceEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
-                if event.old_vault_id != vault_id.clone() {
+                if &event.old_vault_id != provider.get_account_id() {
                     return;
                 }
                 info!("Received accept replace event: {:?}", event);
@@ -104,7 +102,13 @@ pub async fn handle_accepted_replace_request(
             .get_vault(event.new_vault_id.clone())
             .await?)
     })
-    .retry(get_retry_policy())
+    .retry_notify(get_retry_policy(), |e, dur: Duration| {
+        warn!(
+            "get_vault failed: {} - next retry in {:.3} s",
+            e,
+            dur.as_secs_f64()
+        )
+    })
     .await?;
 
     let request = Request::from_replace_request_event(&event, wallet.get_btc_address());
@@ -118,22 +122,19 @@ pub async fn handle_accepted_replace_request(
 /// # Arguments
 ///
 /// * `provider` - the parachain RPC handle
-/// * `vault_id` - the id of this vault
 /// * `event_channel` - the channel over which to signal events
 /// * `accept_replace_requests` - if true, we attempt to accept replace requests
 pub async fn listen_for_replace_requests(
     provider: Arc<PolkaBtcProvider>,
-    vault_id: AccountId32,
     event_channel: Sender<ProcessEvent>,
     accept_replace_requests: bool,
 ) -> Result<(), runtime::Error> {
     let provider = &provider;
-    let vault_id = &vault_id;
     let event_channel = &event_channel;
     provider
         .on_event::<RequestReplaceEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
-                if event.old_vault_id == vault_id.clone() {
+                if &event.old_vault_id == provider.get_account_id() {
                     // don't respond to requests we placed ourselves
                     return;
                 }
@@ -237,23 +238,21 @@ async fn handle_auction_replace<P: DotBalancesPallet + ReplacePallet + VaultRegi
 }
 
 /// Listen for ExecuteReplaceEvent directed at this vault and continue the replacement
-/// procedure by transfering bitcoin and calling execute_replace
+/// procedure by transferring bitcoin and calling execute_replace
 ///
 /// # Arguments
 ///
-/// * `vault_id` - the id of this vault
 /// * `event_channel` - the channel over which to signal events
 pub async fn listen_for_execute_replace(
     provider: Arc<PolkaBtcProvider>,
-    vault_id: AccountId32,
     event_channel: Sender<ProcessEvent>,
 ) -> Result<(), runtime::Error> {
-    let vault_id = &vault_id;
     let event_channel = &event_channel;
+    let provider = &provider;
     provider
         .on_event::<ExecuteReplaceEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
-                if event.new_vault_id == vault_id.clone() {
+                if &event.new_vault_id == provider.get_account_id() {
                     info!("Received event: execute replace #{}", event.replace_id);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
@@ -273,10 +272,10 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use runtime::{
-        pallets::Core, AccountId, Error as RuntimeError, H256Le, PolkaBtcReplaceRequest,
-        PolkaBtcRuntime, PolkaBtcVault,
+        pallets::Core, AccountId, BtcAddress, Error as RuntimeError, H256Le,
+        PolkaBtcReplaceRequest, PolkaBtcRuntime, PolkaBtcVault,
     };
-    use sp_core::{H160, H256};
+    use sp_core::H256;
 
     macro_rules! assert_err {
         ($result:expr, $err:pat) => {{
@@ -295,10 +294,10 @@ mod tests {
         pub trait VaultRegistryPallet {
             async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
             async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, RuntimeError>;
-            async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), RuntimeError>;
+            async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
             async fn lock_additional_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
-            async fn update_btc_address(&self, address: H160) -> Result<(), RuntimeError>;
+            async fn update_btc_address(&self, address: BtcAddress) -> Result<(), RuntimeError>;
             async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
             async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, RuntimeError>;
@@ -320,12 +319,15 @@ mod tests {
                 &self,
                 replace_id: H256,
                 tx_id: H256Le,
-                tx_block_height: u32,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
             async fn get_new_vault_replace_requests(
+                &self,
+                account_id: AccountId,
+            ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
+            async fn get_old_vault_replace_requests(
                 &self,
                 account_id: AccountId,
             ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
@@ -337,6 +339,7 @@ mod tests {
         pub trait DotBalancesPallet {
             async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
             async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
+            async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), RuntimeError>;
         }
     }
 

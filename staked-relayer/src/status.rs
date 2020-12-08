@@ -31,12 +31,9 @@ impl<B: BitcoinCoreApi, P: StakedRelayerPallet> StatusUpdateMonitor<B, P> {
         if !utils::is_registered(&self.polka_rpc).await {
             return Ok(());
         }
-        // TODO: ignore self submitted
-
         // we can only automate NO_DATA checks, all other suggestible
         // status updates can only be voted upon manually
         if let Some(ErrorCode::NoDataBTCRelay) = event.add_error {
-            // TODO: check status_code?
             match self
                 .btc_rpc
                 .is_block_known(convert_block_hash(event.block_hash)?)
@@ -64,9 +61,15 @@ pub async fn listen_for_status_updates(
     polka_rpc: Arc<PolkaBtcProvider>,
 ) -> Result<(), RuntimeError> {
     let monitor = &StatusUpdateMonitor::new(btc_rpc, polka_rpc.clone());
+
+    let polka_rpc = &polka_rpc;
     polka_rpc
         .on_event::<PolkaBtcStatusUpdateSuggestedEvent, _, _, _>(
             |event| async move {
+                if event.account_id == *polka_rpc.get_account_id() {
+                    return; // ignore events we caused ourselves
+                }
+
                 info!("Status update {} suggested", event.status_update_id);
                 if let Err(err) = monitor.on_status_update_suggested(event).await {
                     error!("Error: {}", err.to_string());
@@ -182,11 +185,11 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, GetBlockResult, GetRawTransactionResult, Transaction, TransactionMetadata, Txid,
+        Block, GetBlockResult, GetRawTransactionResult, PartialAddress, Transaction,
+        TransactionMetadata, Txid,
     };
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode, MINIMUM_STAKE};
-    use sp_core::H160;
     use sp_keyring::AccountKeyring;
     use std::time::Duration;
 
@@ -287,7 +290,7 @@ mod tests {
 
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
 
-            fn get_new_address(&self) -> Result<H160, BitcoinError>;
+            fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, BitcoinError>;
 
             fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
 
@@ -306,7 +309,14 @@ mod tests {
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
 
-            async fn send_to_address(
+            async fn send_transaction<A: PartialAddress + 'static>(
+                &self,
+                address: String,
+                sat: u64,
+                redeem_id: &[u8; 32],
+            ) -> Result<Txid, BitcoinError>;
+
+            async fn send_to_address<A: PartialAddress + 'static>(
                 &self,
                 address: String,
                 sat: u64,
@@ -314,6 +324,8 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
+
+            fn create_wallet(&self, wallet: &str) -> Result<(), BitcoinError>;
         }
     }
 

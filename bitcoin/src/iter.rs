@@ -1,10 +1,15 @@
 use crate::{BitcoinCoreApi, Error};
 use bitcoincore_rpc::{
-    bitcoin::{Block, Transaction},
+    bitcoin::{Block, BlockHash, Transaction},
     json::GetBlockResult,
 };
+use futures::prelude::*;
+use futures::stream::StreamExt;
 use std::iter;
 use std::sync::Arc;
+use std::time::Duration;
+
+const BLOCK_WAIT_TIMEOUT: u64 = 6;
 
 /// Iterate over transactions, starting with transactions in the mempool, and continuing
 /// with transactions from the best in-chain block, and stopping after the block at
@@ -82,6 +87,72 @@ pub fn get_blocks<T: BitcoinCoreApi>(
     })
 }
 
+/// Stream all transactions in blocks produced by Bitcoin Core.
+///
+/// # Arguments:
+///
+/// * `rpc` - bitcoin rpc
+/// * `from_height` - height of the first block of the stream
+pub fn stream_in_chain_transactions<T: BitcoinCoreApi>(
+    rpc: Arc<T>,
+    from_height: u32,
+) -> impl Stream<Item = Result<(BlockHash, Transaction), Error>> + Unpin {
+    Box::pin(stream_blocks(rpc, from_height).flat_map(|result| {
+        futures::stream::iter(result.map_or_else(
+            |err| vec![Err(err)],
+            |block| {
+                let block_hash = block.block_hash();
+                block
+                    .txdata
+                    .into_iter()
+                    .map(|tx| Ok((block_hash, tx)))
+                    .collect()
+            },
+        ))
+    }))
+}
+
+/// Stream blocks continuously `from_height` awaiting the production of
+/// new blocks as reported by Bitcoin core.
+///
+/// # Arguments:
+///
+/// * `rpc` - bitcoin rpc
+/// * `from_height` - height of the first block of the stream
+pub fn stream_blocks<T: BitcoinCoreApi>(
+    rpc: Arc<T>,
+    from_height: u32,
+) -> impl Stream<Item = Result<Block, Error>> + Unpin {
+    struct StreamState<T> {
+        rpc: Arc<T>,
+        next_height: u32,
+    }
+
+    let state = StreamState {
+        rpc: rpc.clone(),
+        next_height: from_height,
+    };
+
+    Box::pin(stream::unfold(state, |mut state| async move {
+        // FIXME: if Bitcoin Core forks, this may skip a block
+        let height = state.next_height;
+        match state
+            .rpc
+            .wait_for_block(height, Duration::from_secs(BLOCK_WAIT_TIMEOUT))
+            .await
+        {
+            Ok(block_hash) => match state.rpc.get_block(&block_hash) {
+                Ok(block) => {
+                    state.next_height += 1;
+                    Some((Ok(block), state))
+                }
+                Err(e) => Some((Err(e), state)),
+            },
+            Err(e) => Some((Err(e), state)),
+        }
+    }))
+}
+
 /// small helper function for getting the block info of the best block. This simplifies
 /// error handling a little bit
 fn get_best_block_info<T: BitcoinCoreApi>(rpc: Arc<T>) -> Result<GetBlockResult, Error> {
@@ -121,7 +192,7 @@ mod tests {
 
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
 
-            fn get_new_address(&self) -> Result<H160, Error>;
+            fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, Error>;
 
             fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
 
@@ -140,7 +211,14 @@ mod tests {
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
 
-            async fn send_to_address(
+            async fn send_transaction<A: PartialAddress + 'static>(
+                &self,
+                address: String,
+                sat: u64,
+                redeem_id: &[u8; 32],
+            ) -> Result<Txid, Error>;
+
+            async fn send_to_address<A: PartialAddress + 'static>(
                 &self,
                 address: String,
                 sat: u64,
@@ -148,6 +226,8 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
+
+            fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
         }
     }
 

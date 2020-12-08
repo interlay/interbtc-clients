@@ -1,27 +1,27 @@
+use crate::constants::*;
 use crate::error::Error;
+use crate::issue::{process_issue_requests, IssueIds};
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::Network;
-use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
-use log::{error, info};
+use bitcoin::{BitcoinCoreApi, PartialAddress, Transaction, TransactionExt, TransactionMetadata};
+use log::*;
 use runtime::{
     pallets::{redeem::RequestRedeemEvent, replace::AcceptReplaceEvent},
-    H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcRuntime,
-    RedeemPallet, ReplacePallet, UtilFuncs,
+    BtcAddress, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest,
+    PolkaBtcRuntime, RedeemPallet, ReplacePallet, UtilFuncs,
 };
-use sp_core::{crypto::AccountId32, H160, H256};
+use sp_core::H256;
 use std::{collections::HashMap, sync::Arc, time::Duration};
-
-// keep trying for 24 hours
-const MAX_RETRYING_TIME: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[derive(Debug, Clone)]
 pub struct Request {
     hash: H256,
     open_time: Option<u32>,
     amount: u128,
-    btc_address: H160,
+    btc_address: BtcAddress,
     request_type: RequestType,
 }
+
 #[derive(Debug, Copy, Clone)]
 pub enum RequestType {
     Redeem,
@@ -52,7 +52,7 @@ impl Request {
     /// Constructs a Request for the given AcceptReplaceEvent
     pub fn from_replace_request_event(
         request: &AcceptReplaceEvent<PolkaBtcRuntime>,
-        btc_address: H160,
+        btc_address: BtcAddress,
     ) -> Request {
         Request {
             btc_address,
@@ -94,7 +94,9 @@ impl Request {
         num_confirmations: u32,
         network: Network,
     ) -> Result<TransactionMetadata, Error> {
-        let address = bitcoin::hash_to_p2wpkh(self.btc_address, network)
+        let address = self
+            .btc_address
+            .encode_str(network)
             .map_err(|e| -> bitcoin::Error { e.into() })?;
 
         info!("Sending bitcoin to {}", self.btc_address);
@@ -103,11 +105,11 @@ impl Request {
         // the call could fail to get the metadata even if the transaction
         // itself was successful
         let tx_metadata = btc_rpc
-            .send_to_address(
+            .send_to_address::<BtcAddress>(
                 address,
                 self.amount as u64,
                 &self.hash.to_fixed_bytes(),
-                MAX_RETRYING_TIME,
+                BITCOIN_MAX_RETRYING_TIME,
                 num_confirmations,
             )
             .await?;
@@ -135,14 +137,21 @@ impl Request {
                 &*provider,
                 self.hash,
                 H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
-                tx_metadata.block_height,
                 tx_metadata.proof.clone(),
                 tx_metadata.raw_tx.clone(),
             )
             .await
             .map_err(|x| x.into())
         })
-        .retry(get_retry_policy())
+        .retry_notify(get_retry_policy(), |e, dur: Duration| {
+            warn!(
+                "{:?} execution of request {} failed: {} - next retry in {:.3} s",
+                self.request_type,
+                self.hash,
+                e,
+                dur.as_secs_f64()
+            )
+        })
         .await?;
 
         Ok(())
@@ -154,10 +163,10 @@ impl Request {
 pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<B>,
-    vault_id: AccountId32,
     num_confirmations: u32,
     network: Network,
 ) -> Result<(), Error> {
+    let vault_id = provider.get_account_id().clone();
     // get all open redeem/replaces and map them to the shared Request type
     let open_redeems = provider
         .clone()
@@ -167,7 +176,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
         .filter(|(_, request)| !request.completed)
         .map(|(hash, request)| Request::from_redeem_request(hash, request));
     let open_replaces = provider
-        .get_new_vault_replace_requests(vault_id.clone())
+        .get_old_vault_replace_requests(vault_id)
         .await?
         .into_iter()
         .filter(|(_, request)| !request.completed)
@@ -211,7 +220,11 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
                 // Payment has been made, but it might not have been confirmed enough times yet
                 let tx_metadata = btc_rpc
                     .clone()
-                    .wait_for_transaction_metadata(tx.txid(), MAX_RETRYING_TIME, num_confirmations)
+                    .wait_for_transaction_metadata(
+                        tx.txid(),
+                        BITCOIN_MAX_RETRYING_TIME,
+                        num_confirmations,
+                    )
                     .await;
 
                 match tx_metadata {
@@ -264,6 +277,25 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     Ok(())
 }
 
+/// Execute open issue requests, retry if stream ends early.
+pub async fn execute_open_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
+    provider: Arc<PolkaBtcProvider>,
+    btc_rpc: Arc<B>,
+    issue_set: Arc<IssueIds>,
+    num_confirmations: u32,
+) -> Result<(), Error> {
+    (|| async {
+        process_issue_requests(&provider, &btc_rpc, &issue_set, num_confirmations).await?;
+        Ok(())
+    })
+    .retry(ExponentialBackoff {
+        max_elapsed_time: None,
+        ..get_retry_policy()
+    })
+    .await?;
+    Ok(())
+}
+
 /// Get the Request from the hashmap that the given Transaction satisfies, based
 /// on the OP_RETURN and the amount of btc that is transfered to the address
 fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -> Option<Request> {
@@ -277,14 +309,6 @@ fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -
     }
 }
 
-/// gets our default retrying policy
-pub fn get_retry_policy() -> ExponentialBackoff {
-    ExponentialBackoff {
-        max_elapsed_time: Some(MAX_RETRYING_TIME),
-        ..Default::default()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -294,6 +318,7 @@ mod tests {
         Transaction, TransactionMetadata, Txid,
     };
     use runtime::{AccountId, Error as RuntimeError};
+    use sp_core::H160;
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {
@@ -327,14 +352,13 @@ mod tests {
             async fn request_redeem(
                 &self,
                 amount_polka_btc: u128,
-                btc_address: H160,
-                vault_id: AccountId32,
+                btc_address: BtcAddress,
+                vault_id: AccountId,
             ) -> Result<H256, RuntimeError>;
             async fn execute_redeem(
                 &self,
                 redeem_id: H256,
                 tx_id: H256Le,
-                tx_block_height: u32,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -360,12 +384,15 @@ mod tests {
                 &self,
                 replace_id: H256,
                 tx_id: H256Le,
-                tx_block_height: u32,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
             async fn get_new_vault_replace_requests(
+                &self,
+                account_id: AccountId,
+            ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
+            async fn get_old_vault_replace_requests(
                 &self,
                 account_id: AccountId,
             ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
@@ -389,7 +416,7 @@ mod tests {
             fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
-            fn get_new_address(&self) -> Result<H160, BitcoinError>;
+            fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, BitcoinError>;
             fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
             fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
             fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
@@ -402,7 +429,13 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
-            async fn send_to_address(
+            async fn send_transaction<A: PartialAddress + 'static>(
+                &self,
+                address: String,
+                sat: u64,
+                redeem_id: &[u8; 32],
+            ) -> Result<Txid, BitcoinError>;
+            async fn send_to_address<A: PartialAddress + 'static>(
                 &self,
                 address: String,
                 sat: u64,
@@ -410,6 +443,7 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
+            fn create_wallet(&self, wallet: &str) -> Result<(), BitcoinError>;
         }
     }
 
@@ -427,18 +461,18 @@ mod tests {
         let mut provider = MockProvider::default();
         let mut btc_rpc = MockBitcoin::default();
         btc_rpc
-            .expect_send_to_address()
+            .expect_send_to_address::<BtcAddress>()
             .times(1) // checks that this function is not retried
             .returning(|_, _, _, _, _| Ok(dummy_transaction_metadata()));
 
         provider
             .expect_execute_redeem()
             .times(1)
-            .returning(|_, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _| Ok(()));
 
         let request = Request {
             amount: 100,
-            btc_address: H160::from_slice(&[1; 20]),
+            btc_address: BtcAddress::P2SH(H160::from_slice(&[1; 20])),
             hash: H256::from_slice(&[1; 32]),
             open_time: None,
             request_type: RequestType::Redeem,
@@ -456,18 +490,18 @@ mod tests {
         let mut provider = MockProvider::default();
         let mut btc_rpc = MockBitcoin::default();
         btc_rpc
-            .expect_send_to_address()
+            .expect_send_to_address::<BtcAddress>()
             .times(1) // checks that this function is not retried
             .returning(|_, _, _, _, _| Ok(dummy_transaction_metadata()));
 
         provider
             .expect_execute_replace()
             .times(1)
-            .returning(|_, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _| Ok(()));
 
         let request = Request {
             amount: 100,
-            btc_address: H160::from_slice(&[1; 20]),
+            btc_address: BtcAddress::P2SH(H160::from_slice(&[1; 20])),
             hash: H256::from_slice(&[1; 32]),
             open_time: None,
             request_type: RequestType::Replace,
@@ -485,13 +519,13 @@ mod tests {
         let provider = MockProvider::default();
         let mut btc_rpc = MockBitcoin::default();
         btc_rpc
-            .expect_send_to_address()
+            .expect_send_to_address::<BtcAddress>()
             .times(1) // checks that this function is not retried
             .returning(|_, _, _, _, _| Err(BitcoinError::ConfirmationError));
 
         let request = Request {
             amount: 100,
-            btc_address: H160::from_slice(&[1; 20]),
+            btc_address: BtcAddress::P2SH(H160::from_slice(&[1; 20])),
             hash: H256::from_slice(&[1; 32]),
             open_time: None,
             request_type: RequestType::Replace,

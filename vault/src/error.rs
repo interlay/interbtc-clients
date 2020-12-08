@@ -4,6 +4,7 @@ use parity_scale_codec::Error as CodecError;
 use runtime::{substrate_subxt::Error as XtError, Error as RuntimeError};
 use std::net::AddrParseError;
 use thiserror::Error;
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Insufficient funds available")]
@@ -14,6 +15,10 @@ pub enum Error {
     ChannelClosed,
     #[error("Invalid Bitcoin network")]
     InvalidBitcoinNetwork,
+    #[error("Expected blocks but got none")]
+    NoIncomingBlocks,
+    #[error("Failed to load or create bitcoin wallet: {0}")]
+    WalletInitializationFailure(BitcoinError),
 
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),

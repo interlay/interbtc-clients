@@ -48,9 +48,19 @@ impl Issuing<Error> for Client {
         })
     }
 
-    fn submit_block_header_batch(&self, _headers: Vec<u8>) -> Result<(), CoreError<Error>> {
-        // TODO: expose functionality on-chain
-        self.submit_block_header(_headers)
+    fn submit_block_header_batch(&self, headers: Vec<Vec<u8>>) -> Result<(), CoreError<Error>> {
+        block_on(
+            self.rpc.store_block_headers(
+                headers
+                    .iter()
+                    .map(|header| encode_raw_header(header.to_vec()))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+        )
+        .map_err(|e| {
+            error!("Failed to submit blocks: {}", e);
+            CoreError::Issuing(Error::PolkaBtcError(e))
+        })
     }
 
     fn get_best_height(&self) -> Result<u32, CoreError<Error>> {

@@ -5,13 +5,13 @@ use clap::Clap;
 #[derive(Clap, Debug, Clone)]
 pub struct BitcoinOpts {
     #[clap(long, env = "BITCOIN_RPC_URL")]
-    bitcoin_rpc_url: String,
+    pub bitcoin_rpc_url: String,
 
     #[clap(long, env = "BITCOIN_RPC_USER")]
-    bitcoin_rpc_user: String,
+    pub bitcoin_rpc_user: String,
 
     #[clap(long, env = "BITCOIN_RPC_PASS")]
-    bitcoin_rpc_pass: String,
+    pub bitcoin_rpc_pass: String,
 }
 
 impl BitcoinOpts {

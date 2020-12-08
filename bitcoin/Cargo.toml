@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 thiserror = "1.0"
-bitcoincore-rpc = { git = "https://github.com/gregdhill/rust-bitcoincore-rpc" }
+bitcoincore-rpc = { git = "https://github.com/gregdhill/rust-bitcoincore-rpc", rev = "cf83a0a" }
 hex = "0.4.2"
 sp-core = "2.0.0-rc6"
 async-trait = "0.1.40"
@@ -17,10 +17,22 @@ rand = "0.7.3"
 num = "0.2"
 num-traits = "0.2"
 num-derive = "0.3"
+futures = "0.3.5"
+serde_json = "1"
+
+[dependencies.polkabtc-bitcoin]
+git = "https://gitlab.com/interlay/btc-parachain"
+branch = "dev"
+version = "0.3.1"
+package = "bitcoin"
+optional = true
 
 [dev-dependencies]
 mockall = "0.8.1"
 
 [features]
-regtest = []
+default = ["polkabtc"]
+regtest-mine-on-tx = []
+regtest-manual-mining = []
 cli = ["clap"]
+polkabtc = ["polkabtc-bitcoin"]

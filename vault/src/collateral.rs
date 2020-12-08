@@ -2,18 +2,15 @@ use crate::error::Error;
 use log::*;
 use runtime::{
     pallets::exchange_rate_oracle::SetExchangeRateEvent, pallets::vault_registry::VaultStatus,
-    DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, VaultRegistryPallet,
+    DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, VaultRegistryPallet, AccountId
 };
-use sp_core::crypto::AccountId32;
 use std::sync::Arc;
 
 pub async fn maintain_collateralization_rate(
     provider: Arc<PolkaBtcProvider>,
-    vault_id: AccountId32,
     maximum_collateral: u128,
 ) -> Result<(), runtime::Error> {
     let provider = &provider;
-    let vault_id = &vault_id;
     provider
         .on_event::<SetExchangeRateEvent<PolkaBtcRuntime>, _, _, _>(
             |_| async move {
@@ -22,7 +19,7 @@ pub async fn maintain_collateralization_rate(
 
                 match lock_required_collateral(
                     provider.clone(),
-                    vault_id.clone(),
+                    provider.get_account_id().clone(),
                     maximum_collateral,
                 )
                 .await
@@ -53,7 +50,7 @@ pub async fn maintain_collateralization_rate(
 /// * `maximum_collateral` - the upperbound of total collateral that is allowed to be placed
 pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet>(
     provider: Arc<P>,
-    vault_id: AccountId32,
+    vault_id: AccountId,
     maximum_collateral: u128,
 ) -> Result<(), Error> {
     // check that the vault is registered and active
@@ -118,9 +115,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use runtime::{
-        pallets::Core, AccountId, Error as RuntimeError, PolkaBtcRuntime, PolkaBtcVault,
+        pallets::Core, AccountId, BtcAddress, Error as RuntimeError, PolkaBtcRuntime, PolkaBtcVault,
     };
-    use sp_core::H160;
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {
@@ -152,10 +148,10 @@ mod tests {
         pub trait VaultRegistryPallet {
             async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
             async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, RuntimeError>;
-            async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), RuntimeError>;
+            async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
             async fn lock_additional_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
-            async fn update_btc_address(&self, address: H160) -> Result<(), RuntimeError>;
+            async fn update_btc_address(&self, address: BtcAddress) -> Result<(), RuntimeError>;
             async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
             async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, RuntimeError>;
@@ -165,6 +161,7 @@ mod tests {
         pub trait DotBalancesPallet {
             async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
             async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
+            async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), RuntimeError>;
         }
     }
 
@@ -188,7 +185,7 @@ mod tests {
             .expect_get_reserved_dot_balance()
             .returning(|| Ok(75));
 
-        let vault_id = AccountId32::default();
+        let vault_id = AccountId::default();
         assert_ok!(lock_required_collateral(Arc::new(provider), vault_id, 100).await);
     }
 
@@ -212,7 +209,7 @@ mod tests {
             .expect_get_reserved_dot_balance()
             .returning(|| Ok(200));
 
-        let vault_id = AccountId32::default();
+        let vault_id = AccountId::default();
         assert_ok!(lock_required_collateral(Arc::new(provider), vault_id, 150).await);
     }
 
@@ -236,7 +233,7 @@ mod tests {
             .expect_get_reserved_dot_balance()
             .returning(|| Ok(150));
 
-        let vault_id = AccountId32::default();
+        let vault_id = AccountId::default();
         assert_ok!(lock_required_collateral(Arc::new(provider), vault_id, 75).await);
     }
 
@@ -260,7 +257,7 @@ mod tests {
             .expect_get_reserved_dot_balance()
             .returning(|| Ok(75));
 
-        let vault_id = AccountId32::default();
+        let vault_id = AccountId::default();
         assert_err!(
             lock_required_collateral(Arc::new(provider), vault_id, 50).await,
             Error::InsufficientFunds
@@ -291,7 +288,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(()));
 
-        let vault_id = AccountId32::default();
+        let vault_id = AccountId::default();
         assert_err!(
             lock_required_collateral(Arc::new(provider), vault_id, 75).await,
             Error::InsufficientFunds
@@ -321,7 +318,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(()));
 
-        let vault_id = AccountId32::default();
+        let vault_id = AccountId::default();
         assert_ok!(lock_required_collateral(Arc::new(provider), vault_id, 200).await);
     }
 
@@ -344,7 +341,7 @@ mod tests {
             .expect_get_reserved_dot_balance()
             .returning(|| Ok(25));
 
-        let vault_id = AccountId32::default();
+        let vault_id = AccountId::default();
         assert_err!(
             lock_required_collateral(Arc::new(provider), vault_id, 25).await,
             Error::InsufficientFunds
@@ -370,7 +367,7 @@ mod tests {
             .expect_get_reserved_dot_balance()
             .returning(|| Ok(100));
 
-        let vault_id = AccountId32::default();
+        let vault_id = AccountId::default();
         assert_ok!(lock_required_collateral(Arc::new(provider), vault_id, 200).await);
     }
 
@@ -385,7 +382,7 @@ mod tests {
             })
         });
 
-        let vault_id = AccountId32::default();
+        let vault_id = AccountId::default();
         assert_err!(
             lock_required_collateral(Arc::new(provider), vault_id, 75).await,
             Error::RuntimeError(runtime::Error::VaultNotFound)

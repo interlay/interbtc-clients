@@ -5,21 +5,23 @@ use jsonrpsee::{
     common::{to_value as to_json_value, Params},
     Client as RpcClient,
 };
-use module_vault_registry_rpc_runtime_api::BalanceWrapper;
+use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
 use sp_core::sr25519::Pair as KeyPair;
-use sp_core::{H160, H256};
+use sp_core::H256;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 use substrate_subxt::Error as XtError;
 use substrate_subxt::{
     system::System, Client, ClientBuilder, Event, EventSubscription, EventsDecoder, PairSigner,
     Signer,
 };
 use tokio::sync::RwLock;
+use tokio::time::delay_for;
 
-use crate::balances_dot::AccountStoreExt;
+use crate::balances_dot::*;
 use crate::btc_relay::*;
 use crate::exchange_rate_oracle::*;
 use crate::frame_system::*;
@@ -133,18 +135,6 @@ impl PolkaBtcProvider {
         Ok(vaults)
     }
 
-    /// Submit extrinsic to register a vault.
-    ///
-    /// # Arguments
-    /// * `collateral` - deposit
-    /// * `btc_address` - Bitcoin address hash
-    pub async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), Error> {
-        self.ext_client
-            .register_vault_and_watch(&*self.signer.write().await, collateral, btc_address)
-            .await?;
-        Ok(())
-    }
-
     /// Calls `callback` with each of the past events stored in the chain
     ///
     /// # Arguments
@@ -230,7 +220,6 @@ impl PolkaBtcProvider {
         let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
         sub.filter_event::<T>();
 
-        // TODO: possible future optimization: let caller determine buffer size
         let (tx, mut rx) = futures::channel::mpsc::channel::<T>(32);
 
         // two tasks: one for event listening and one for callback calling
@@ -307,6 +296,8 @@ pub trait DotBalancesPallet {
     async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
 
     async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
+
+    async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -325,6 +316,13 @@ impl DotBalancesPallet for PolkaBtcProvider {
             .account(self.account_id.clone(), None)
             .await?
             .reserved)
+    }
+
+    async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), Error> {
+        self.ext_client
+            .transfer_and_watch(&*self.signer.write().await, &destination, amount)
+            .await?;
+        Ok(())
     }
 }
 
@@ -379,14 +377,12 @@ pub trait ReplacePallet {
     /// * `&self` - sender of the transaction: the old vault
     /// * `replace_id` - the ID of the replacement request
     /// * `tx_id` - the backing chain transaction id
-    /// * `tx_block_height` - the blocked height of the backing transaction
     /// * 'merkle_proof' - the merkle root of the block
     /// * `raw_tx` - the transaction id in bytes
     async fn execute_replace(
         &self,
         replace_id: H256,
         tx_id: H256Le,
-        tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error>;
@@ -399,8 +395,14 @@ pub trait ReplacePallet {
     /// * `replace_id` - the ID of the replacement request
     async fn cancel_replace(&self, replace_id: H256) -> Result<(), Error>;
 
-    /// Get all replace requests to a particular vault
+    /// Get all replace requests accepted by the given vault
     async fn get_new_vault_replace_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error>;
+
+    /// Get all replace requests made by the given vault
+    async fn get_old_vault_replace_requests(
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error>;
@@ -467,7 +469,6 @@ impl ReplacePallet for PolkaBtcProvider {
         &self,
         replace_id: H256,
         tx_id: H256Le,
-        tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error> {
@@ -476,7 +477,6 @@ impl ReplacePallet for PolkaBtcProvider {
                 &*self.signer.write().await,
                 replace_id,
                 tx_id,
-                tx_block_height,
                 merkle_proof,
                 raw_tx,
             )
@@ -491,7 +491,7 @@ impl ReplacePallet for PolkaBtcProvider {
         Ok(())
     }
 
-    /// Get all replace requests to a particular vault
+    /// Get all replace requests accepted by the given vault
     async fn get_new_vault_replace_requests(
         &self,
         account_id: AccountId,
@@ -500,6 +500,22 @@ impl ReplacePallet for PolkaBtcProvider {
             .rpc_client
             .request(
                 "replace_getNewVaultReplaceRequests",
+                Params::Array(vec![to_json_value(account_id)?]),
+            )
+            .await?;
+
+        Ok(result)
+    }
+
+    /// Get all replace requests made by the given vault
+    async fn get_old_vault_replace_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error> {
+        let result: Vec<(H256, PolkaBtcReplaceRequest)> = self
+            .rpc_client
+            .request(
+                "replace_getOldVaultReplaceRequests",
                 Params::Array(vec![to_json_value(account_id)?]),
             )
             .await?;
@@ -825,7 +841,7 @@ pub trait IssuePallet {
     async fn request_issue(
         &self,
         amount: u128,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        vault_id: AccountId,
         griefing_collateral: u128,
     ) -> Result<H256, Error>;
 
@@ -834,7 +850,6 @@ pub trait IssuePallet {
         &self,
         issue_id: H256,
         tx_id: H256Le,
-        tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error>;
@@ -855,7 +870,7 @@ impl IssuePallet for PolkaBtcProvider {
     async fn request_issue(
         &self,
         amount: u128,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        vault_id: AccountId,
         griefing_collateral: u128,
     ) -> Result<H256, Error> {
         let result = self
@@ -879,7 +894,6 @@ impl IssuePallet for PolkaBtcProvider {
         &self,
         issue_id: H256,
         tx_id: H256Le,
-        tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error> {
@@ -888,7 +902,6 @@ impl IssuePallet for PolkaBtcProvider {
                 &*self.signer.write().await,
                 issue_id,
                 tx_id,
-                tx_block_height,
                 merkle_proof,
                 raw_tx,
             )
@@ -931,8 +944,8 @@ pub trait RedeemPallet {
     async fn request_redeem(
         &self,
         amount_polka_btc: u128,
-        btc_address: H160,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        btc_address: BtcAddress,
+        vault_id: AccountId,
     ) -> Result<H256, Error>;
 
     /// Execute a redeem request by providing a Bitcoin transaction inclusion proof
@@ -940,7 +953,6 @@ pub trait RedeemPallet {
         &self,
         redeem_id: H256,
         tx_id: H256Le,
-        tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error>;
@@ -964,8 +976,8 @@ impl RedeemPallet for PolkaBtcProvider {
     async fn request_redeem(
         &self,
         amount_polka_btc: u128,
-        btc_address: H160,
-        vault_id: <PolkaBtcRuntime as System>::AccountId,
+        btc_address: BtcAddress,
+        vault_id: AccountId,
     ) -> Result<H256, Error> {
         let result = self
             .ext_client
@@ -988,7 +1000,6 @@ impl RedeemPallet for PolkaBtcProvider {
         &self,
         redeem_id: H256,
         tx_id: H256Le,
-        tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error> {
@@ -997,7 +1008,6 @@ impl RedeemPallet for PolkaBtcProvider {
                 &*self.signer.write().await,
                 redeem_id,
                 tx_id,
-                tx_block_height,
                 merkle_proof,
                 raw_tx,
             )
@@ -1028,6 +1038,8 @@ impl RedeemPallet for PolkaBtcProvider {
     }
 }
 
+const BLOCK_WAIT_TIMEOUT: u64 = 6;
+
 #[async_trait]
 pub trait BtcRelayPallet {
     async fn get_best_block(&self) -> Result<H256Le, Error>;
@@ -1046,7 +1058,15 @@ pub trait BtcRelayPallet {
 
     async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error>;
 
+    async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error>;
+
     async fn get_bitcoin_confirmations(&self) -> Result<u32, Error>;
+
+    async fn wait_for_block_in_relay(
+        &self,
+        block_hash: H256Le,
+        num_confirmations: u32,
+    ) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -1066,7 +1086,6 @@ impl BtcRelayPallet for PolkaBtcProvider {
     /// # Arguments
     /// * `height` - chain height
     async fn get_block_hash(&self, height: u32) -> Result<H256Le, Error> {
-        // TODO: adjust chain index
         Ok(self.ext_client.chains_hashes(0, height, None).await?)
     }
 
@@ -1109,9 +1128,45 @@ impl BtcRelayPallet for PolkaBtcProvider {
         Ok(())
     }
 
+    /// Stores multiple block headers in the BTC-Relay.
+    ///
+    /// # Arguments
+    /// * `headers` - raw block headers
+    async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error> {
+        self.ext_client
+            .store_block_headers_and_watch(&*self.signer.write().await, headers)
+            .await?;
+        Ok(())
+    }
+
     /// Get the global security parameter k for stable Bitcoin transactions
     async fn get_bitcoin_confirmations(&self) -> Result<u32, Error> {
         Ok(self.ext_client.stable_bitcoin_confirmations(None).await?)
+    }
+
+    /// Wait until Bitcoin block is submitted to the relay
+    async fn wait_for_block_in_relay(
+        &self,
+        block_hash: H256Le,
+        num_confirmations: u32,
+    ) -> Result<(), Error> {
+        loop {
+            let rich_block_header = match self.get_block_header(block_hash).await {
+                // rpc returns zero-initialized storage items if not set, therefore
+                // a block header only exists if the height is non-zero
+                Ok(block_header) if block_header.block_height > 0 => block_header,
+                _ => {
+                    delay_for(Duration::from_secs(BLOCK_WAIT_TIMEOUT)).await;
+                    continue;
+                }
+            };
+
+            if rich_block_header.block_height + num_confirmations
+                <= self.get_best_block_height().await?
+            {
+                return Ok(());
+            }
+        }
     }
 }
 
@@ -1121,13 +1176,13 @@ pub trait VaultRegistryPallet {
 
     async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, Error>;
 
-    async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), Error>;
+    async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), Error>;
 
     async fn lock_additional_collateral(&self, amount: u128) -> Result<(), Error>;
 
     async fn withdraw_collateral(&self, amount: u128) -> Result<(), Error>;
 
-    async fn update_btc_address(&self, address: H160) -> Result<(), Error>;
+    async fn update_btc_address(&self, address: BtcAddress) -> Result<(), Error>;
 
     async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, Error>;
 
@@ -1169,7 +1224,7 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     /// # Arguments
     /// * `collateral` - deposit
     /// * `btc_address` - Bitcoin address hash
-    async fn register_vault(&self, collateral: u128, btc_address: H160) -> Result<(), Error> {
+    async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), Error> {
         self.ext_client
             .register_vault_and_watch(&*self.signer.write().await, collateral, btc_address)
             .await?;
@@ -1209,7 +1264,7 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     ///
     /// # Arguments
     /// * `address` - the new address of the vault
-    async fn update_btc_address(&self, address: H160) -> Result<(), Error> {
+    async fn update_btc_address(&self, address: BtcAddress) -> Result<(), Error> {
         self.ext_client
             .update_btc_address_and_watch(&*self.signer.write().await, address)
             .await?;

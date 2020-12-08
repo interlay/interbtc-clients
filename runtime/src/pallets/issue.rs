@@ -23,14 +23,13 @@ pub struct RequestIssueEvent<T: Issue> {
     pub requester: T::AccountId,
     pub amount: T::PolkaBTC,
     pub vault_id: T::AccountId,
-    pub btc_address: T::H160,
+    pub btc_address: T::BtcAddress,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct ExecuteIssueCall<T: Issue> {
     pub issue_id: T::H256,
     pub tx_id: H256Le,
-    pub tx_block_height: u32,
     pub merkle_proof: Vec<u8>,
     pub raw_tx: Vec<u8>,
     pub _runtime: PhantomData<T>,

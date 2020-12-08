@@ -38,7 +38,6 @@ pub struct AuctionReplaceCall<T: Replace> {
 pub struct ExecuteReplaceCall<T: Replace> {
     pub replace_id: T::H256,
     pub tx_id: T::H256Le,
-    pub _tx_block_height: u32,
     pub merkle_proof: Vec<u8>,
     pub raw_tx: Vec<u8>,
 }

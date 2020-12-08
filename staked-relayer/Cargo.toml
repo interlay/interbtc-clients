@@ -18,10 +18,11 @@ sp-keyring = "2.0.0"
 sp-core = "2.0.0"
 async-trait = "0.1.40"
 serde = "1.0.116"
-relayer-core = { git = "https://gitlab.com/interlay/relayer-core", branch = "master" }
+relayer-core = { git = "https://gitlab.com/interlay/relayer-core", rev = "6e84ca46" }
 runtime = { path = "../runtime" }
 bitcoin = { path = "../bitcoin", features = ["cli"] }
 jsonrpc-http-server = "15.1.0"
+backoff = { version = "0.2.1", features = ["tokio"] }
 
 [dev-dependencies]
 mockall = "0.8.1"

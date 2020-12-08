@@ -5,7 +5,7 @@ use sp_runtime::traits::{AtLeast32Bit, MaybeSerialize, Member};
 use std::fmt::Debug;
 use substrate_subxt::balances::AccountData;
 use substrate_subxt::system::{System, SystemEventsDecoder};
-use substrate_subxt_proc_macro::{module, Event, Store};
+use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
 #[module]
 pub trait DOT: System {
@@ -32,4 +32,18 @@ pub struct AccountStore<T: DOT> {
 pub struct ReservedEvent<T: DOT> {
     pub account_id: T::AccountId,
     pub balance: T::Balance,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct TransferCall<'a, T: DOT> {
+    pub to: &'a <T as System>::Address,
+    #[codec(compact)]
+    pub amount: T::Balance,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct TransferEvent<T: DOT> {
+    pub from: <T as System>::AccountId,
+    pub to: <T as System>::AccountId,
+    pub amount: T::Balance,
 }

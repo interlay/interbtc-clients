@@ -1,4 +1,5 @@
 use super::Error;
+use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use futures::executor::block_on;
 use hex::FromHex;
 use jsonrpc_http_server::{
@@ -7,10 +8,10 @@ use jsonrpc_http_server::{
 };
 use log::info;
 use parity_scale_codec::{Decode, Encode};
-use runtime::{PolkaBtcProvider, ReplacePallet, VaultRegistryPallet};
+use runtime::{BtcAddress, PolkaBtcProvider, ReplacePallet, VaultRegistryPallet};
 use serde::{Deserialize, Deserializer};
 use sp_core::crypto::Ss58Codec;
-use sp_core::{H160, H256};
+use sp_core::H256;
 use std::{net::SocketAddr, sync::Arc};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -69,17 +70,26 @@ fn _request_replace(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), E
 #[derive(Encode, Decode, Debug)]
 struct RegisterVaultJsonRpcRequest {
     collateral: u128,
-    btc_address: H160,
 }
 
-fn _register_vault(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+#[derive(Encode, Decode, Debug)]
+struct RegisterVaultJsonRpcResponse {
+    address: BtcAddress,
+}
+
+fn _register_vault(
+    api: &Arc<PolkaBtcProvider>,
+    btc: &Arc<BitcoinCore>,
+    params: Params,
+) -> Result<RegisterVaultJsonRpcResponse, Error> {
     let req = parse_params::<RegisterVaultJsonRpcRequest>(params)?;
-    let result = block_on(api.register_vault(req.collateral, req.btc_address));
+    let address = btc.get_new_address()?;
+    let result = block_on(api.register_vault(req.collateral, address));
     info!(
         "Registering vault with bitcoind address {} and collateral = {}: {:?}",
-        req.btc_address, req.collateral, result
+        address, req.collateral, result
     );
-    Ok(result?)
+    Ok(result.map(|_| RegisterVaultJsonRpcResponse { address })?)
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -108,15 +118,18 @@ fn _withdraw_collateral(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(
 }
 
 #[derive(Encode, Decode, Debug)]
-struct UpdateBtcAddressJsonRpcRequest {
-    address: H160,
+struct UpdateBtcAddressJsonRpcResponse {
+    address: BtcAddress,
 }
 
-fn _update_btc_address(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
-    let req = parse_params::<UpdateBtcAddressJsonRpcRequest>(params)?;
-    let result = block_on(api.update_btc_address(req.address));
-    info!("Updating btc address to {}: {:?}", req.address, result);
-    Ok(result.map(|_| ())?)
+fn _update_btc_address(
+    api: &Arc<PolkaBtcProvider>,
+    btc: &Arc<BitcoinCore>,
+) -> Result<UpdateBtcAddressJsonRpcResponse, Error> {
+    let address = btc.get_new_address()?;
+    let result = block_on(api.update_btc_address(address));
+    info!("Updating btc address to {}: {:?}", address, result);
+    Ok(result.map(|_| UpdateBtcAddressJsonRpcResponse { address })?)
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -134,7 +147,12 @@ fn _withdraw_replace(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), 
     Ok(result?)
 }
 
-pub async fn start(api: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String) {
+pub async fn start(
+    api: Arc<PolkaBtcProvider>,
+    btc: Arc<BitcoinCore>,
+    addr: SocketAddr,
+    origin: String,
+) {
     let mut io = IoHandler::default();
     {
         let api = api.clone();
@@ -148,8 +166,9 @@ pub async fn start(api: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String)
     }
     {
         let api = api.clone();
+        let btc = btc.clone();
         io.add_method("register_vault", move |params| {
-            handle_resp(_register_vault(&api, params))
+            handle_resp(_register_vault(&api, &btc, params))
         });
     }
     {
@@ -166,8 +185,9 @@ pub async fn start(api: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String)
     }
     {
         let api = api.clone();
-        io.add_method("update_btc_address", move |params| {
-            handle_resp(_update_btc_address(&api, params))
+        let btc = btc.clone();
+        io.add_method("update_btc_address", move |_| {
+            handle_resp(_update_btc_address(&api, &btc))
         });
     }
     {
