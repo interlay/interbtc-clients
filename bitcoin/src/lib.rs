@@ -551,12 +551,14 @@ fn vin_to_address<A: PartialAddress>(vin: TxIn) -> Result<A, Error> {
         };
 
         // TODO: reuse logic from bitcoin crate
-        let (size, len) = parse_compact_uint(&input_script[pos..pos + 3]);
+        let last = std::cmp::min(pos + 3, input_script.len());
+        let (size, len) = parse_compact_uint(&input_script[pos..last]);
         pos += len;
         // skip sigs
         pos += size as usize;
         // parse redeem_script or compressed public_key
-        let (_size, len) = parse_compact_uint(&input_script[pos..pos + 3]);
+        let last = std::cmp::min(pos + 3, input_script.len());
+        let (_size, len) = parse_compact_uint(&input_script[pos..last]);
         pos += len;
 
         if p2pkh {
