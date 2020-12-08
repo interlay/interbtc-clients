@@ -18,10 +18,9 @@ When using cargo to run the vault, arguments to cargo and the vault are separate
 cargo run -- --help
 ```
 
-For convenience, a modified version of this output is included below. Note that the bitcoin RPC configuration can be passed either as command line arguments, or as environment variables. By running `source ../.env`, the default RPC configuration is loaded into environment variables. 
+For convenience, a modified version of this output is included below. Note that the bitcoin RPC configuration can be passed either as command line arguments, or as environment variables. By running `source ../.env`, the default RPC configuration is loaded into environment variables.
 
-This tool uses subcommands, e.g. `cargo run -- --keyring bob set-exchange-rate`, and some of these have subcommands of themselves. For example, vault api-calls are made with `cargo run -- api-call vault <API_SUBCOMMAND>`. To get more info about sub commands, use `--help`, e.g.  `cargo run -- request-issue --help` or `cargo run -- api-call vault register-vault --help`.
-
+This tool uses subcommands, e.g. `cargo run -- --keyring bob set-exchange-rate`, and some of these have subcommands of themselves. For example, vault api-calls are made with `cargo run -- api-call vault <API_SUBCOMMAND>`. To get more info about sub commands, use `--help`, e.g. `cargo run -- request-issue --help` or `cargo run -- api-call vault register-vault --help`.
 
 ```
 USAGE:
@@ -78,4 +77,7 @@ SUBCOMMANDS:
     send-bitcoin         Send BTC to an address
     set-btc-tx-fees      Set the current estimated bitcoin transaction fees
     set-exchange-rate    Set the DOT to BTC exchange rate
+    set-issue-period     Set the period after which issue requests expire.
+    set-redeem-period    Set the period after which redeem requests expire.
+    set-replace-period    Set the period after which replace requests expire.
 ```

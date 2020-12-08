@@ -60,3 +60,9 @@ pub struct RedeemRequestsStore<T: Redeem> {
     pub _runtime: PhantomData<T>,
     pub redeem_id: T::H256,
 }
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct SetRedeemPeriodCall<T: Redeem> {
+    pub period: u32,
+    pub _runtime: PhantomData<T>,
+}

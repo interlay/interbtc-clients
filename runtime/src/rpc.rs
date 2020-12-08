@@ -1,6 +1,7 @@
 pub use module_exchange_rate_oracle::BtcTxFeesPerByte;
 
 use async_trait::async_trait;
+use core::marker::PhantomData;
 use jsonrpsee::{
     common::{to_value as to_json_value, Params},
     Client as RpcClient,
@@ -15,8 +16,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use substrate_subxt::Error as XtError;
 use substrate_subxt::{
-    system::System, Client, ClientBuilder, Event, EventSubscription, EventsDecoder, PairSigner,
-    Signer,
+    sudo::*, system::System, Call, Client, ClientBuilder, Event, EventSubscription, EventsDecoder,
+    PairSigner, Signer,
 };
 use tokio::sync::RwLock;
 use tokio::time::delay_for;
@@ -88,7 +89,7 @@ pub struct PolkaBtcProvider {
 impl PolkaBtcProvider {
     pub async fn new<P: Into<jsonrpsee::Client>>(
         rpc_client: P,
-        signer: PairSigner<PolkaBtcRuntime, KeyPair>,
+        mut signer: PairSigner<PolkaBtcRuntime, KeyPair>,
     ) -> Result<Self, Error> {
         let account_id = signer.account_id().clone();
         let rpc_client = rpc_client.into();
@@ -96,6 +97,15 @@ impl PolkaBtcProvider {
             .set_client(rpc_client.clone())
             .build()
             .await?;
+
+        // query account info in order to get the nonce value used for communication
+        let account_info = crate::frame_system::AccountStoreExt::account(
+            &ext_client,
+            account_id.clone(),
+            Option::<H256>::None,
+        )
+        .await?;
+        signer.set_nonce(account_info.nonce);
 
         // there is a race condition on signing
         // since we run the relayer in the background
@@ -262,6 +272,23 @@ impl PolkaBtcProvider {
 
         Ok(())
     }
+
+    async fn sudo<C: Call<PolkaBtcRuntime>>(&self, call: C) -> Result<(), Error> {
+        let encoded = self.ext_client.encode(call)?;
+        self.ext_client
+            .sudo_and_watch(&*self.signer.write().await, &encoded)
+            .await?;
+        Ok(())
+    }
+
+    /// Gets a copy of the signer with a unique nonce
+    async fn get_unique_signer(&self) -> PairSigner<PolkaBtcRuntime, KeyPair> {
+        let mut signer = self.signer.write().await;
+        // return the current value, increment afterwards
+        let ret = signer.clone();
+        signer.increment_nonce();
+        ret
+    }
 }
 
 #[async_trait]
@@ -320,7 +347,7 @@ impl DotBalancesPallet for PolkaBtcProvider {
 
     async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), Error> {
         self.ext_client
-            .transfer_and_watch(&*self.signer.write().await, &destination, amount)
+            .transfer_and_watch(&self.get_unique_signer().await, &destination, amount)
             .await?;
         Ok(())
     }
@@ -411,6 +438,10 @@ pub trait ReplacePallet {
     /// request is created and required completion time by a vault
     async fn get_replace_period(&self) -> Result<u32, Error>;
 
+    /// Set the time difference in number of blocks between when a replace
+    /// request is created and required completion time by a vault 
+    async fn set_replace_period(&self, period: u32) -> Result<(), Error>;
+
     /// Get a replace request from storage
     async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, Error>;
 }
@@ -424,7 +455,7 @@ impl ReplacePallet for PolkaBtcProvider {
     ) -> Result<H256, Error> {
         let result = self
             .ext_client
-            .request_replace_and_watch(&*self.signer.write().await, amount, griefing_collateral)
+            .request_replace_and_watch(&self.get_unique_signer().await, amount, griefing_collateral)
             .await?;
 
         if let Some(event) = result.request_replace()? {
@@ -436,14 +467,14 @@ impl ReplacePallet for PolkaBtcProvider {
 
     async fn withdraw_replace(&self, replace_id: H256) -> Result<(), Error> {
         self.ext_client
-            .withdraw_replace_and_watch(&*self.signer.write().await, replace_id)
+            .withdraw_replace_and_watch(&self.get_unique_signer().await, replace_id)
             .await?;
         Ok(())
     }
 
     async fn accept_replace(&self, replace_id: H256, collateral: u128) -> Result<(), Error> {
         self.ext_client
-            .accept_replace_and_watch(&*self.signer.write().await, replace_id, collateral)
+            .accept_replace_and_watch(&self.get_unique_signer().await, replace_id, collateral)
             .await?;
         Ok(())
     }
@@ -456,7 +487,7 @@ impl ReplacePallet for PolkaBtcProvider {
     ) -> Result<(), Error> {
         self.ext_client
             .auction_replace_and_watch(
-                &*self.signer.write().await,
+                &self.get_unique_signer().await,
                 old_vault,
                 btc_amount,
                 collateral,
@@ -474,7 +505,7 @@ impl ReplacePallet for PolkaBtcProvider {
     ) -> Result<(), Error> {
         self.ext_client
             .execute_replace_and_watch(
-                &*self.signer.write().await,
+                &self.get_unique_signer().await,
                 replace_id,
                 tx_id,
                 merkle_proof,
@@ -486,7 +517,7 @@ impl ReplacePallet for PolkaBtcProvider {
 
     async fn cancel_replace(&self, replace_id: H256) -> Result<(), Error> {
         self.ext_client
-            .cancel_replace_and_watch(&*self.signer.write().await, replace_id)
+            .cancel_replace_and_watch(&self.get_unique_signer().await, replace_id)
             .await?;
         Ok(())
     }
@@ -525,6 +556,15 @@ impl ReplacePallet for PolkaBtcProvider {
 
     async fn get_replace_period(&self) -> Result<u32, Error> {
         Ok(self.ext_client.replace_period(None).await?)
+    }
+
+    async fn set_replace_period(&self, period: u32) -> Result<(), Error> {
+        Ok(self
+            .sudo(SetReplacePeriodCall {
+                period,
+                _runtime: PhantomData {},
+            })
+            .await?)
     }
 
     async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, Error> {
@@ -577,7 +617,7 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
     /// * `btc_to_dot_rate` - the current BTC to DOT exchange rate encoded with the GRANULARITY
     async fn set_exchange_rate_info(&self, btc_to_dot_rate: u128) -> Result<(), Error> {
         self.ext_client
-            .set_exchange_rate_and_watch(&*self.signer.write().await, btc_to_dot_rate)
+            .set_exchange_rate_and_watch(&self.get_unique_signer().await, btc_to_dot_rate)
             .await?;
         Ok(())
     }
@@ -591,7 +631,7 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
     /// * `hour` - The estimated Satoshis per bytes to get included in the next 6 blocks (~hour)
     async fn set_btc_tx_fees_per_byte(&self, fast: u32, half: u32, hour: u32) -> Result<(), Error> {
         self.ext_client
-            .set_btc_tx_fees_per_byte_and_watch(&*self.signer.write().await, fast, half, hour)
+            .set_btc_tx_fees_per_byte_and_watch(&self.get_unique_signer().await, fast, half, hour)
             .await?;
         Ok(())
     }
@@ -663,7 +703,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// * `stake` - deposit
     async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error> {
         self.ext_client
-            .register_staked_relayer_and_watch(&*self.signer.write().await, stake)
+            .register_staked_relayer_and_watch(&self.get_unique_signer().await, stake)
             .await?;
         Ok(())
     }
@@ -671,7 +711,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// Submit extrinsic to deregister the staked relayer.
     async fn deregister_staked_relayer(&self) -> Result<(), Error> {
         self.ext_client
-            .deregister_staked_relayer_and_watch(&*self.signer.write().await)
+            .deregister_staked_relayer_and_watch(&self.get_unique_signer().await)
             .await?;
         Ok(())
     }
@@ -703,7 +743,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     ) -> Result<(), Error> {
         self.ext_client
             .suggest_status_update_and_watch(
-                &*self.signer.write().await,
+                &self.get_unique_signer().await,
                 deposit,
                 status_code,
                 add_error,
@@ -726,7 +766,11 @@ impl StakedRelayerPallet for PolkaBtcProvider {
         approve: bool,
     ) -> Result<(), Error> {
         self.ext_client
-            .vote_on_status_update_and_watch(&*self.signer.write().await, status_update_id, approve)
+            .vote_on_status_update_and_watch(
+                &self.get_unique_signer().await,
+                status_update_id,
+                approve,
+            )
             .await?;
         Ok(())
     }
@@ -748,7 +792,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// Submit extrinsic to report that the oracle is offline.
     async fn report_oracle_offline(&self) -> Result<(), Error> {
         self.ext_client
-            .report_oracle_offline_and_watch(&*self.signer.write().await)
+            .report_oracle_offline_and_watch(&self.get_unique_signer().await)
             .await?;
         Ok(())
     }
@@ -773,7 +817,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     ) -> Result<(), Error> {
         self.ext_client
             .report_vault_theft_and_watch(
-                &*self.signer.write().await,
+                &self.get_unique_signer().await,
                 vault_id,
                 tx_id,
                 tx_block_height,
@@ -863,6 +907,8 @@ pub trait IssuePallet {
     ) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, Error>;
 
     async fn get_issue_period(&self) -> Result<u32, Error>;
+
+    async fn set_issue_period(&self, period: u32) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -876,7 +922,7 @@ impl IssuePallet for PolkaBtcProvider {
         let result = self
             .ext_client
             .request_issue_and_watch(
-                &*self.signer.write().await,
+                &self.get_unique_signer().await,
                 amount,
                 vault_id,
                 griefing_collateral,
@@ -899,7 +945,7 @@ impl IssuePallet for PolkaBtcProvider {
     ) -> Result<(), Error> {
         self.ext_client
             .execute_issue_and_watch(
-                &*self.signer.write().await,
+                &self.get_unique_signer().await,
                 issue_id,
                 tx_id,
                 merkle_proof,
@@ -911,7 +957,7 @@ impl IssuePallet for PolkaBtcProvider {
 
     async fn cancel_issue(&self, issue_id: H256) -> Result<(), Error> {
         self.ext_client
-            .cancel_issue_and_watch(&*self.signer.write().await, issue_id)
+            .cancel_issue_and_watch(&self.get_unique_signer().await, issue_id)
             .await?;
         Ok(())
     }
@@ -933,6 +979,15 @@ impl IssuePallet for PolkaBtcProvider {
 
     async fn get_issue_period(&self) -> Result<u32, Error> {
         Ok(self.ext_client.issue_period(None).await?)
+    }
+
+    async fn set_issue_period(&self, period: u32) -> Result<(), Error> {
+        Ok(self
+            .sudo(SetIssuePeriodCall {
+                period,
+                _runtime: PhantomData {},
+            })
+            .await?)
     }
 }
 
@@ -965,6 +1020,8 @@ pub trait RedeemPallet {
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, PolkaBtcRedeemRequest)>, Error>;
+
+    async fn set_redeem_period(&self, period: u32) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -982,7 +1039,7 @@ impl RedeemPallet for PolkaBtcProvider {
         let result = self
             .ext_client
             .request_redeem_and_watch(
-                &*self.signer.write().await,
+                &self.get_unique_signer().await,
                 amount_polka_btc,
                 btc_address,
                 vault_id,
@@ -1005,7 +1062,7 @@ impl RedeemPallet for PolkaBtcProvider {
     ) -> Result<(), Error> {
         self.ext_client
             .execute_redeem_and_watch(
-                &*self.signer.write().await,
+                &self.get_unique_signer().await,
                 redeem_id,
                 tx_id,
                 merkle_proof,
@@ -1017,7 +1074,7 @@ impl RedeemPallet for PolkaBtcProvider {
 
     async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), Error> {
         self.ext_client
-            .cancel_redeem_and_watch(&*self.signer.write().await, redeem_id, reimburse)
+            .cancel_redeem_and_watch(&self.get_unique_signer().await, redeem_id, reimburse)
             .await?;
         Ok(())
     }
@@ -1035,6 +1092,15 @@ impl RedeemPallet for PolkaBtcProvider {
             .await?;
 
         Ok(result)
+    }
+
+    async fn set_redeem_period(&self, period: u32) -> Result<(), Error> {
+        Ok(self
+            .sudo(SetRedeemPeriodCall {
+                period,
+                _runtime: PhantomData {},
+            })
+            .await?)
     }
 }
 
@@ -1112,7 +1178,7 @@ impl BtcRelayPallet for PolkaBtcProvider {
         // TODO: can we initialize the relay through the chain-spec?
         // we would also need to consider re-initialization per governance
         self.ext_client
-            .initialize_and_watch(&*self.signer.write().await, header, height)
+            .initialize_and_watch(&self.get_unique_signer().await, header, height)
             .await?;
         Ok(())
     }
@@ -1123,7 +1189,7 @@ impl BtcRelayPallet for PolkaBtcProvider {
     /// * `header` - raw block header
     async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error> {
         self.ext_client
-            .store_block_header_and_watch(&*self.signer.write().await, header)
+            .store_block_header_and_watch(&self.get_unique_signer().await, header)
             .await?;
         Ok(())
     }
@@ -1134,7 +1200,7 @@ impl BtcRelayPallet for PolkaBtcProvider {
     /// * `headers` - raw block headers
     async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error> {
         self.ext_client
-            .store_block_headers_and_watch(&*self.signer.write().await, headers)
+            .store_block_headers_and_watch(&self.get_unique_signer().await, headers)
             .await?;
         Ok(())
     }
@@ -1226,7 +1292,7 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     /// * `btc_address` - Bitcoin address hash
     async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), Error> {
         self.ext_client
-            .register_vault_and_watch(&*self.signer.write().await, collateral, btc_address)
+            .register_vault_and_watch(&self.get_unique_signer().await, collateral, btc_address)
             .await?;
         Ok(())
     }
@@ -1238,7 +1304,7 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     /// * `amount` - the amount of extra collateral to lock
     async fn lock_additional_collateral(&self, amount: u128) -> Result<(), Error> {
         self.ext_client
-            .lock_additional_collateral_and_watch(&*self.signer.write().await, amount)
+            .lock_additional_collateral_and_watch(&self.get_unique_signer().await, amount)
             .await?;
         Ok(())
     }
@@ -1255,7 +1321,7 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     /// * `amount` - the amount of collateral to withdraw
     async fn withdraw_collateral(&self, amount: u128) -> Result<(), Error> {
         self.ext_client
-            .withdraw_collateral_and_watch(&*self.signer.write().await, amount)
+            .withdraw_collateral_and_watch(&self.get_unique_signer().await, amount)
             .await?;
         Ok(())
     }
@@ -1266,7 +1332,7 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     /// * `address` - the new address of the vault
     async fn update_btc_address(&self, address: BtcAddress) -> Result<(), Error> {
         self.ext_client
-            .update_btc_address_and_watch(&*self.signer.write().await, address)
+            .update_btc_address_and_watch(&self.get_unique_signer().await, address)
             .await?;
         Ok(())
     }

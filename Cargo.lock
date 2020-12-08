@@ -523,7 +523,6 @@ dependencies = [
  "num",
  "num-derive",
  "num-traits",
- "rand 0.7.3",
  "serde_json",
  "sp-core",
  "thiserror",
@@ -5931,7 +5930,7 @@ dependencies = [
 
 [[package]]
 name = "runtime"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "bitcoin 0.3.1",

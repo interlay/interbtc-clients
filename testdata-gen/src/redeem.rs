@@ -62,3 +62,18 @@ pub async fn execute_redeem(
     info!("Executed redeem ID {:?}", redeem_id);
     Ok(())
 }
+
+/// Set redeem period of PolkaBTC
+pub async fn set_redeem_period(
+    redeem_prov: &PolkaBtcProvider,
+    period: u32,
+) -> Result<(), Error> {
+    redeem_prov.set_redeem_period(period).await?;
+
+    info!(
+        "Set the redeem period to {:?}",
+        period,
+    );
+
+    Ok(())
+}

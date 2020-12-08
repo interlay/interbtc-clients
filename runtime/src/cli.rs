@@ -30,11 +30,8 @@ impl ProviderUserOpts {
     /// Get the key pair and the username, the latter of which is used for wallet selection.
     pub fn get_key_pair(&self) -> Result<(Pair, String), Error> {
         // load parachain credentials
-        let (pair, user_name) = match (
-            self.keyfile.as_ref(),
-            self.keyname.as_ref(),
-            &self.keyring,
-        ) {
+        let (pair, user_name) = match (self.keyfile.as_ref(), self.keyname.as_ref(), &self.keyring)
+        {
             (Some(file_path), Some(keyname), None) => (
                 get_credentials_from_file(&file_path, &keyname)?,
                 keyname.to_string(),
