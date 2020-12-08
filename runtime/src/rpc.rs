@@ -420,6 +420,10 @@ pub trait ReplacePallet {
     /// request is created and required completion time by a vault
     async fn get_replace_period(&self) -> Result<u32, Error>;
 
+    /// Set the time difference in number of blocks between when a replace
+    /// request is created and required completion time by a vault 
+    async fn set_replace_period(&self, period: u32) -> Result<(), Error>;
+
     /// Get a replace request from storage
     async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, Error>;
 }
@@ -534,6 +538,15 @@ impl ReplacePallet for PolkaBtcProvider {
 
     async fn get_replace_period(&self) -> Result<u32, Error> {
         Ok(self.ext_client.replace_period(None).await?)
+    }
+
+    async fn set_replace_period(&self, period: u32) -> Result<(), Error> {
+        Ok(self
+            .sudo(SetReplacePeriodCall {
+                period,
+                _runtime: PhantomData {},
+            })
+            .await?)
     }
 
     async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, Error> {

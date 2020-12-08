@@ -398,6 +398,7 @@ mod tests {
                 account_id: AccountId,
             ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
+            async fn set_replace_period(&self, period: u32) -> Result<(), RuntimeError>;
             async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, RuntimeError>;
         }
     }

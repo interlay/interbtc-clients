@@ -126,8 +126,10 @@ enum SubCommand {
     DumpEvents(DumpOpts),
     /// Set issue period.
     SetIssuePeriod(SetIssuePeriodInfo),
-    ///Set redeem period.
+    /// Set redeem period.
     SetRedeemPeriod(SetRedeemPeriodInfo),
+    /// Set replace period.
+    SetReplacePeriod(SetReplacePeriodInfo),
 
 }
 
@@ -322,7 +324,14 @@ struct SetIssuePeriodInfo {
 
 #[derive(Clap)]
 struct SetRedeemPeriodInfo {
-    /// Period after issue requests expire.
+    /// Period after redeem requests expire.
+    #[clap(long)]
+    period: u32,
+}
+
+#[derive(Clap)]
+struct SetReplacePeriodInfo {
+    /// Period after replace requests expire.
     #[clap(long)]
     period: u32,
 }
@@ -665,6 +674,13 @@ async fn main() -> Result<(), Error> {
         },
         SubCommand::SetRedeemPeriod(info) => {
             redeem::set_redeem_period(
+                &provider,
+                info.period,
+            )
+            .await?;
+        },
+        SubCommand::SetReplacePeriod(info) => {
+            replace::set_replace_period(
                 &provider,
                 info.period,
             )

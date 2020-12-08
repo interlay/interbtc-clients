@@ -74,3 +74,18 @@ pub async fn execute_replace(
 
     Ok(())
 }
+
+/// Set replace period of PolkaBTC
+pub async fn set_replace_period(
+    replace_prov: &PolkaBtcProvider,
+    period: u32,
+) -> Result<(), Error> {
+    replace_prov.set_replace_period(period).await?;
+
+    info!(
+        "Set the replace period to {:?}",
+        period,
+    );
+
+    Ok(())
+}
