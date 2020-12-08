@@ -523,7 +523,6 @@ dependencies = [
  "num",
  "num-derive",
  "num-traits",
- "rand 0.7.3",
  "serde_json",
  "sp-core",
  "thiserror",
