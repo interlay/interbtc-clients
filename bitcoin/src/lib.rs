@@ -516,24 +516,24 @@ impl TransactionExt for Transaction {
 }
 
 // https://gitlab.com/interlay/btc-parachain/-/blob/dev/crates/bitcoin/src/parser.rs#L264
-fn parse_compact_uint(varint: &[u8]) -> (u64, usize) {
-    match varint[0] {
+fn parse_compact_uint(varint: &[u8]) -> Result<(u64, usize), Error> {
+    match varint.get(0).ok_or(Error::ParsingError)? {
         0xfd => {
             let mut num_bytes: [u8; 2] = Default::default();
-            num_bytes.copy_from_slice(&varint[1..3]);
-            (u16::from_le_bytes(num_bytes) as u64, 3)
+            num_bytes.copy_from_slice(&varint.get(1..3).ok_or(Error::ParsingError)?);
+            Ok((u16::from_le_bytes(num_bytes) as u64, 3))
         }
         0xfe => {
             let mut num_bytes: [u8; 4] = Default::default();
-            num_bytes.copy_from_slice(&varint[1..5]);
-            (u32::from_le_bytes(num_bytes) as u64, 5)
+            num_bytes.copy_from_slice(&varint.get(1..5).ok_or(Error::ParsingError)?);
+            Ok((u32::from_le_bytes(num_bytes) as u64, 5))
         }
         0xff => {
             let mut num_bytes: [u8; 8] = Default::default();
-            num_bytes.copy_from_slice(&varint[1..9]);
-            (u64::from_le_bytes(num_bytes) as u64, 9)
+            num_bytes.copy_from_slice(&varint.get(1..9).ok_or(Error::ParsingError)?);
+            Ok((u64::from_le_bytes(num_bytes) as u64, 9))
         }
-        _ => (varint[0] as u64, 1),
+        _ => Ok((varint[0] as u64, 1)),
     }
 }
 
@@ -542,6 +542,11 @@ fn vin_to_address<A: PartialAddress>(vin: TxIn) -> Result<A, Error> {
         Script::new_v0_wpkh(&WPubkeyHash::hash(&vin.witness[1]))
     } else {
         let input_script = vin.script_sig.as_bytes();
+        if input_script.len() == 0 {
+            // ignore empty scripts (i.e. witness)
+            return Err(Error::ParsingError);
+        }
+
         let mut p2pkh = true;
         let mut pos = if input_script[0] == 0x00 {
             p2pkh = false;
@@ -552,19 +557,23 @@ fn vin_to_address<A: PartialAddress>(vin: TxIn) -> Result<A, Error> {
 
         // TODO: reuse logic from bitcoin crate
         let last = std::cmp::min(pos + 3, input_script.len());
-        let (size, len) = parse_compact_uint(&input_script[pos..last]);
+        let (size, len) =
+            parse_compact_uint(input_script.get(pos..last).ok_or(Error::ParsingError)?)?;
         pos += len;
         // skip sigs
         pos += size as usize;
         // parse redeem_script or compressed public_key
         let last = std::cmp::min(pos + 3, input_script.len());
-        let (_size, len) = parse_compact_uint(&input_script[pos..last]);
+        let (_size, len) =
+            parse_compact_uint(input_script.get(pos..last).ok_or(Error::ParsingError)?)?;
         pos += len;
 
+        let bytes = input_script.get(pos..).ok_or(Error::ParsingError)?;
+
         if p2pkh {
-            Script::new_p2pkh(&PubkeyHash::hash(&input_script[pos..]))
+            Script::new_p2pkh(&PubkeyHash::hash(bytes))
         } else {
-            Script::new_p2sh(&ScriptHash::hash(&input_script[pos..]))
+            Script::new_p2sh(&ScriptHash::hash(bytes))
         }
     };
 
