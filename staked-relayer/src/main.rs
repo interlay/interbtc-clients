@@ -89,12 +89,7 @@ async fn main() -> Result<(), Error> {
 
     let current_height = btc_client.get_block_count()?;
 
-    // scan from custom height or the current tip
-    let btc_height = if let Some(height) = opts.scan_start_height {
-        height
-    } else {
-        current_height + 1
-    };
+
 
     let mut relayer = Runner::new(
         PolkaClient::new(provider.clone()),
@@ -123,8 +118,10 @@ async fn main() -> Result<(), Error> {
 
     // store vaults in Arc<RwLock>
     let vaults = Arc::new(Vaults::from(vaults));
+    // scan from custom height or the current tip
+    let scan_start_height = opts.scan_start_height.unwrap_or(current_height + 1);
     let mut vaults_monitor = VaultTheftMonitor::new(
-        btc_height,
+        scan_start_height,
         btc_rpc.clone(),
         vaults.clone(),
         provider.clone(),

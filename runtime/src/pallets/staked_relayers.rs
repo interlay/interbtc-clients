@@ -46,7 +46,6 @@ pub struct ReportOracleOffline<T: StakedRelayers> {
 pub struct ReportVaultTheftCall<T: StakedRelayers> {
     pub vault_id: T::AccountId,
     pub tx_id: T::H256Le,
-    pub tx_block_height: u32,
     pub merkle_proof: Vec<u8>,
     pub raw_tx: Vec<u8>,
 }
