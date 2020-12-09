@@ -675,7 +675,6 @@ pub trait StakedRelayerPallet {
         &self,
         vault_id: AccountId,
         tx_id: H256Le,
-        tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error>;
@@ -811,7 +810,6 @@ impl StakedRelayerPallet for PolkaBtcProvider {
         &self,
         vault_id: AccountId,
         tx_id: H256Le,
-        tx_block_height: u32,
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error> {
@@ -820,7 +818,6 @@ impl StakedRelayerPallet for PolkaBtcProvider {
                 &self.get_unique_signer().await,
                 vault_id,
                 tx_id,
-                tx_block_height,
                 merkle_proof,
                 raw_tx,
             )

@@ -94,7 +94,6 @@ impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultTheftMonitor<P, B> {
                 .report_vault_theft(
                     vault_id,
                     H256Le::from_bytes_le(&tx_id.as_hash()),
-                    self.btc_height,
                     proof,
                     raw_tx,
                 )
@@ -127,7 +126,7 @@ impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultTheftMonitor<P, B> {
 
         let mut stream = bitcoin::stream_in_chain_transactions(
             self.btc_rpc.clone(),
-            self.btc_rpc.get_block_count()? as u32,
+            self.btc_height
         );
 
         loop {
@@ -241,7 +240,6 @@ mod tests {
                 &self,
                 vault_id: AccountId,
                 tx_id: H256Le,
-                tx_block_height: u32,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -351,7 +349,7 @@ mod tests {
         parachain
             .expect_report_vault_theft()
             .never()
-            .returning(|_, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _| Ok(()));
 
         let monitor = VaultTheftMonitor::new(
             0,
@@ -381,7 +379,7 @@ mod tests {
         parachain
             .expect_report_vault_theft()
             .once()
-            .returning(|_, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _| Ok(()));
 
         let monitor = VaultTheftMonitor::new(
             0,

@@ -252,7 +252,6 @@ mod tests {
                 &self,
                 vault_id: AccountId,
                 tx_id: H256Le,
-                tx_block_height: u32,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
