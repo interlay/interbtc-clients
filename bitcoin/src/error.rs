@@ -26,6 +26,8 @@ pub enum Error {
     SerdeJsonError(#[from] SerdeJsonError),
     #[error("Failed to sign transaction")]
     TransactionSigningError,
+    #[error("Failed to parse transaction")]
+    ParsingError,
 }
 
 #[derive(Error, Debug)]
