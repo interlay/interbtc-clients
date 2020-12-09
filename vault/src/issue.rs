@@ -1,4 +1,4 @@
-use crate::cancellation::ProcessEvent;
+use crate::cancellation::RequestEvent;
 use crate::Error;
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::channel::mpsc::Sender;
@@ -103,7 +103,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
 /// * `issue_set` - all issue ids observed since vault started
 pub async fn listen_for_issue_requests(
     provider: Arc<PolkaBtcProvider>,
-    event_channel: Sender<ProcessEvent>,
+    event_channel: Sender<RequestEvent>,
     issue_set: Arc<IssueIds>,
 ) -> Result<(), runtime::Error> {
     let event_channel = &event_channel;
@@ -116,7 +116,7 @@ pub async fn listen_for_issue_requests(
                     info!("Received request issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
-                    let _ = event_channel.clone().send(ProcessEvent::Opened).await;
+                    let _ = event_channel.clone().send(RequestEvent::Opened).await;
                 }
 
                 issue_set.0.lock().await.insert(event.issue_id);
@@ -136,7 +136,7 @@ pub async fn listen_for_issue_requests(
 /// * `issue_set` - all issue ids observed since vault started
 pub async fn listen_for_issue_executes(
     provider: Arc<PolkaBtcProvider>,
-    event_channel: Sender<ProcessEvent>,
+    event_channel: Sender<RequestEvent>,
     issue_set: Arc<IssueIds>,
 ) -> Result<(), runtime::Error> {
     let event_channel = &event_channel;
@@ -151,7 +151,7 @@ pub async fn listen_for_issue_executes(
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel
                         .clone()
-                        .send(ProcessEvent::Executed(event.issue_id))
+                        .send(RequestEvent::Executed(event.issue_id))
                         .await;
                 }
                 issue_set.0.lock().await.remove(&event.issue_id);
