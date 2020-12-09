@@ -38,6 +38,8 @@ use crate::Error;
 use crate::PolkaBtcRuntime;
 use futures::{stream::StreamExt, SinkExt};
 
+pub type PolkaBtcHeader = <PolkaBtcRuntime as System>::Header;
+
 pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
 
 pub type PolkaBtcVault =
@@ -145,6 +147,18 @@ impl PolkaBtcProvider {
         Ok(vaults)
     }
 
+    /// Subscribe to new parachain blocks.
+    pub async fn on_block<F, R>(&self, on_block: F) -> Result<(), Error>
+    where
+        F: Fn(PolkaBtcHeader) -> R,
+        R: Future<Output = Result<(), Error>>,
+    {
+        let mut sub = self.ext_client.subscribe_finalized_blocks().await?;
+        loop {
+            on_block(sub.next().await).await?;
+        }
+    }
+
     /// Calls `callback` with each of the past events stored in the chain
     ///
     /// # Arguments
@@ -203,6 +217,7 @@ impl PolkaBtcProvider {
             }
         }
     }
+
     /// Subscription service that should listen forever, only returns if the initial subscription
     /// cannot be established. This function uses two concurrent tasks: one for the event listener,
     /// and one that calls the given callback. This allows the callback to take a long time to
@@ -439,7 +454,7 @@ pub trait ReplacePallet {
     async fn get_replace_period(&self) -> Result<u32, Error>;
 
     /// Set the time difference in number of blocks between when a replace
-    /// request is created and required completion time by a vault 
+    /// request is created and required completion time by a vault
     async fn set_replace_period(&self, period: u32) -> Result<(), Error>;
 
     /// Get a replace request from storage
