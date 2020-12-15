@@ -30,6 +30,7 @@ use sp_runtime::{
 use std::collections::BTreeSet;
 pub use substrate_subxt;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, sudo, system, Runtime};
+use sp_arithmetic::{FixedI128, FixedU128};
 
 pub const MINIMUM_STAKE: u64 = 100;
 
@@ -71,6 +72,8 @@ impl pallets::Core for PolkaBtcRuntime {
     type ErrorCode = ErrorCode;
     type ErrorCodes = BTreeSet<ErrorCode>;
     type StatusCode = StatusCode;
+    type SignedFixedPoint = FixedU128;
+    type UnsignedFixedPoint = FixedI128;
 }
 
 impl balances::Balances for PolkaBtcRuntime {

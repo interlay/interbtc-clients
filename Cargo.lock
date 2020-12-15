@@ -5930,7 +5930,7 @@ dependencies = [
 
 [[package]]
 name = "runtime"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "async-trait",
  "bitcoin 0.3.1",
@@ -5951,6 +5951,7 @@ dependencies = [
  "security",
  "serde",
  "serde_json",
+ "sp-arithmetic",
  "sp-core",
  "sp-keyring",
  "sp-runtime",
