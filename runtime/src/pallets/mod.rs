@@ -39,4 +39,7 @@ pub trait Core: System {
     type ErrorCodes: Codec + EncodeLike + Member + Default;
     type ErrorCode: Codec + EncodeLike + Member + Default;
     type StatusCode: Codec + EncodeLike + Member + Default;
+
+    type SignedFixedPoint: Codec + EncodeLike + Member + Default;
+    type UnsignedFixedPoint: Codec + EncodeLike + Member + Default;
 }

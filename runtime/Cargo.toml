@@ -1,6 +1,6 @@
 [package]
 name = "runtime"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 
@@ -10,6 +10,7 @@ frame-support = "2.0.0"
 frame-system = "2.0.0"
 async-trait = "0.1.40"
 sp-runtime = "2.0.0"
+sp-arithmetic = "2.0.0"
 sp-core = "2.0.0"
 thiserror = "1.0"
 serde_json = "1.0.57"
