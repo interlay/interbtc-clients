@@ -307,19 +307,6 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
 
     /// Gets a list of requests that have been requested from this vault
     async fn get_open_requests<T: Canceller<P>>(&mut self) -> Result<Vec<ActiveRequest>, Error> {
-        let ret = self
-            .get_open_requests_by_end::<T>()
-            .await?
-            .into_iter()
-            .map(|(id, end_time)| ActiveRequest { id, end_time })
-            .collect();
-        Ok(ret)
-    }
-
-    /// Gets a list of issue that have been requested from this vault
-    async fn get_open_requests_by_end<T: Canceller<P>>(
-        &mut self,
-    ) -> Result<Vec<(H256, u32)>, Error> {
         let open_requests =
             T::get_open_requests(self.provider.clone(), self.vault_id.clone()).await?;
 
@@ -341,20 +328,20 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
 
                 let deadline_block = open_time + period;
 
-                let end_block = if chain_height < deadline_block {
-                    deadline_block - chain_height
+                let end_time = if chain_height < deadline_block {
+                    deadline_block
                 } else {
                     // deadline has already passed, should cancel ASAP
                     // this branch can occur when e.g. the vault has been restarted
                     0
                 };
 
-                Ok((*id, end_block))
+                Ok(ActiveRequest { id: *id, end_time })
             })
-            .collect::<Result<Vec<(H256, u32)>, Error>>()?;
+            .collect::<Result<Vec<ActiveRequest>, Error>>()?;
 
         // sort by ascending duration
-        ret.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        ret.sort_by(|a, b| a.end_time.partial_cmp(&b.end_time).unwrap());
 
         Ok(ret)
     }
@@ -543,13 +530,22 @@ mod tests {
         // checks that the delay is calculated correctly, and that the vec is sorted
         assert_eq!(
             canceller
-                .get_open_requests_by_end::<IssueCanceller>()
+                .get_open_requests::<IssueCanceller>()
                 .await
                 .unwrap(),
             vec![
-                (H256::from_slice(&[2; 32]), 0),
-                (H256::from_slice(&[3; 32]), 0),
-                (H256::from_slice(&[1; 32]), 5)
+                ActiveRequest {
+                    id: H256::from_slice(&[2; 32]),
+                    end_time: 0
+                },
+                ActiveRequest {
+                    id: H256::from_slice(&[3; 32]),
+                    end_time: 0
+                },
+                ActiveRequest {
+                    id: H256::from_slice(&[1; 32]),
+                    end_time: 105
+                },
             ]
         );
     }
@@ -577,7 +573,7 @@ mod tests {
 
         let mut canceller = CancellationScheduler::new(Arc::new(provider), Default::default());
         assert_err!(
-            canceller.get_open_requests_by_end::<IssueCanceller>().await,
+            canceller.get_open_requests::<IssueCanceller>().await,
             Error::InvalidOpenTime
         );
     }
