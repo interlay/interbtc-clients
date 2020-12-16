@@ -4,7 +4,7 @@ use crate::{utils, Error};
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
 use runtime::pallets::btc_relay::H256Le;
-use runtime::{BtcAddress, PolkaBtcProvider, RedeemPallet, AccountId};
+use runtime::{AccountId, BtcAddress, PolkaBtcProvider, RedeemPallet};
 use sp_core::H256;
 use std::convert::TryInto;
 use std::time::Duration;
@@ -64,16 +64,10 @@ pub async fn execute_redeem(
 }
 
 /// Set redeem period of PolkaBTC
-pub async fn set_redeem_period(
-    redeem_prov: &PolkaBtcProvider,
-    period: u32,
-) -> Result<(), Error> {
+pub async fn set_redeem_period(redeem_prov: &PolkaBtcProvider, period: u32) -> Result<(), Error> {
     redeem_prov.set_redeem_period(period).await?;
 
-    info!(
-        "Set the redeem period to {:?}",
-        period,
-    );
+    info!("Set the redeem period to {:?}", period);
 
     Ok(())
 }

@@ -384,6 +384,7 @@ mod tests {
             traits::{BlakeTwo256, Hash},
         },
         AccountId, Error as RuntimeError, H256Le, PolkaBtcIssueRequest, PolkaBtcReplaceRequest,
+        PolkaBtcRequestIssueEvent,
     };
     use sp_core::H256;
 
@@ -439,7 +440,7 @@ mod tests {
                 amount: u128,
                 vault_id: AccountId,
                 griefing_collateral: u128,
-            ) -> Result<H256, RuntimeError>;
+            ) -> Result<PolkaBtcRequestIssueEvent, RuntimeError>;
             async fn execute_issue(
                 &self,
                 issue_id: H256,

@@ -89,8 +89,6 @@ async fn main() -> Result<(), Error> {
 
     let current_height = btc_client.get_block_count()?;
 
-
-
     let mut relayer = Runner::new(
         PolkaClient::new(provider.clone()),
         btc_client,
