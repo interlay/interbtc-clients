@@ -51,6 +51,7 @@ pub type PolkaBtcIssueRequest = IssueRequest<
     <PolkaBtcRuntime as Core>::PolkaBTC,
     <PolkaBtcRuntime as Core>::DOT,
 >;
+pub type PolkaBtcRequestIssueEvent = RequestIssueEvent<PolkaBtcRuntime>;
 
 pub type PolkaBtcRedeemRequest = RedeemRequest<
     AccountId,
@@ -899,7 +900,7 @@ pub trait IssuePallet {
         amount: u128,
         vault_id: AccountId,
         griefing_collateral: u128,
-    ) -> Result<H256, Error>;
+    ) -> Result<PolkaBtcRequestIssueEvent, Error>;
 
     /// Execute a issue request by providing a Bitcoin transaction inclusion proof
     async fn execute_issue(
@@ -930,7 +931,7 @@ impl IssuePallet for PolkaBtcProvider {
         amount: u128,
         vault_id: AccountId,
         griefing_collateral: u128,
-    ) -> Result<H256, Error> {
+    ) -> Result<PolkaBtcRequestIssueEvent, Error> {
         let result = self
             .ext_client
             .request_issue_and_watch(
@@ -941,11 +942,7 @@ impl IssuePallet for PolkaBtcProvider {
             )
             .await?;
 
-        if let Some(event) = result.request_issue()? {
-            Ok(event.issue_id)
-        } else {
-            Err(Error::RequestIssueIDNotFound)
-        }
+        result.request_issue()?.ok_or(Error::RequestIssueIDNotFound)
     }
 
     async fn execute_issue(

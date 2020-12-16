@@ -124,10 +124,8 @@ impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultTheftMonitor<P, B> {
 
         let mut backoff = get_retry_policy();
 
-        let mut stream = bitcoin::stream_in_chain_transactions(
-            self.btc_rpc.clone(),
-            self.btc_height
-        );
+        let mut stream =
+            bitcoin::stream_in_chain_transactions(self.btc_rpc.clone(), self.btc_height);
 
         loop {
             match stream.next().await.unwrap() {

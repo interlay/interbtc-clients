@@ -130,7 +130,6 @@ enum SubCommand {
     SetRedeemPeriod(SetRedeemPeriodInfo),
     /// Set replace period.
     SetReplacePeriod(SetReplacePeriodInfo),
-
 }
 
 #[derive(Clap)]
@@ -538,7 +537,7 @@ async fn main() -> Result<(), Error> {
                 .bitcoin_network
                 .serialize_address(vault.wallet.get_btc_address())?;
 
-            let issue_id = issue::request_issue(
+            let request_data = issue::request_issue(
                 &provider,
                 info.issue_amount,
                 info.griefing_collateral,
@@ -549,8 +548,8 @@ async fn main() -> Result<(), Error> {
             issue::execute_issue(
                 &provider,
                 &btc_rpc,
-                issue_id,
-                info.issue_amount,
+                request_data.issue_id,
+                request_data.amount,
                 vault_btc_address,
             )
             .await?;
@@ -666,25 +665,13 @@ async fn main() -> Result<(), Error> {
             },
         },
         SubCommand::SetIssuePeriod(info) => {
-            issue::set_issue_period(
-                &provider,
-                info.period,
-            )
-            .await?;
-        },
+            issue::set_issue_period(&provider, info.period).await?;
+        }
         SubCommand::SetRedeemPeriod(info) => {
-            redeem::set_redeem_period(
-                &provider,
-                info.period,
-            )
-            .await?;
-        },
+            redeem::set_redeem_period(&provider, info.period).await?;
+        }
         SubCommand::SetReplacePeriod(info) => {
-            replace::set_replace_period(
-                &provider,
-                info.period,
-            )
-            .await?;
+            replace::set_replace_period(&provider, info.period).await?;
         }
     }
 

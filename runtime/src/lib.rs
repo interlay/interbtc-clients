@@ -15,11 +15,12 @@ use pallets::*;
 pub use rpc::{
     historic_event_types, AccountId, BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet,
     ExchangeRateOraclePallet, IssuePallet, PolkaBtcHeader, PolkaBtcIssueRequest, PolkaBtcProvider,
-    PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcStatusUpdate, PolkaBtcVault,
-    RedeemPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet, UtilFuncs,
-    VaultRegistryPallet,
+    PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent, PolkaBtcStatusUpdate,
+    PolkaBtcVault, RedeemPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet,
+    TimestampPallet, UtilFuncs, VaultRegistryPallet,
 };
 pub use security::{ErrorCode, StatusCode};
+use sp_arithmetic::{FixedI128, FixedU128};
 use sp_core::{H160, H256};
 pub use sp_runtime;
 use sp_runtime::{
@@ -30,7 +31,6 @@ use sp_runtime::{
 use std::collections::BTreeSet;
 pub use substrate_subxt;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, sudo, system, Runtime};
-use sp_arithmetic::{FixedI128, FixedU128};
 
 pub const MINIMUM_STAKE: u64 = 100;
 
