@@ -500,6 +500,9 @@ async fn main() -> Result<(), Error> {
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
     let btc_rpc = BitcoinCore::new(opts.bitcoin.new_client(Some(&wallet_name))?);
 
+    // try to load or create wallet; but silently fail, since not all commands need a loaded wallet
+    let _ = btc_rpc.create_wallet(&wallet_name);
+
     match opts.subcmd {
         SubCommand::SetExchangeRate(info) => {
             provider.set_exchange_rate_info(info.exchange_rate).await?;
