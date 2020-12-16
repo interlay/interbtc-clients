@@ -38,9 +38,9 @@ struct Opts {
     polka_btc_url: String,
 
     /// Exchange rate from Planck to Satoshi.
-    /// hardcoded to 1 BTC = 3855.2318793 DOT
+    /// hardcoded to 1 BTC = 3855.23187 DOT
     /// at granularity of 5
-    #[clap(long, default_value = "38552318793")]
+    #[clap(long, default_value = "385523187")]
     exchange_rate: u128,
 
     /// Timeout for exchange rate setter, default 30 minutes.
