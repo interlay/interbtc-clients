@@ -7,6 +7,7 @@ use jsonrpsee::{
     Client as RpcClient,
 };
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
+use sp_arithmetic::FixedU128;
 use sp_core::sr25519::Pair as KeyPair;
 use sp_core::H256;
 use std::collections::BTreeSet;
@@ -21,11 +22,11 @@ use substrate_subxt::{
 };
 use tokio::sync::RwLock;
 use tokio::time::delay_for;
-use sp_arithmetic::FixedU128;
 
 use crate::balances_dot::*;
 use crate::btc_relay::*;
 use crate::exchange_rate_oracle::*;
+use crate::fee::*;
 use crate::frame_system::*;
 use crate::issue::*;
 use crate::pallets::Core;
@@ -35,7 +36,6 @@ use crate::security::*;
 use crate::staked_relayers::*;
 use crate::timestamp::*;
 use crate::vault_registry::*;
-use crate::fee::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
 use futures::{stream::StreamExt, SinkExt};
@@ -646,16 +646,15 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
         Ok(self.ext_client.satoshi_per_bytes(None).await?)
     }
 
-
     /// Converts the amount in btc to dot, based on the current set exchange rate.
     async fn btc_to_dots(&self, amount_btc: u128) -> Result<u128, Error> {
         let result: BalanceWrapper<_> = self
-        .rpc_client
-        .request(
-            "exchangeRateOracle_btcToDots",
-            Params::Array(vec![to_json_value(BalanceWrapper { amount: amount_btc })?]),
-        )
-        .await?;
+            .rpc_client
+            .request(
+                "exchangeRateOracle_btcToDots",
+                Params::Array(vec![to_json_value(BalanceWrapper { amount: amount_btc })?]),
+            )
+            .await?;
 
         Ok(result.amount)
     }
@@ -663,12 +662,12 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
     /// Converts the amount in dot to btc, based on the current set exchange rate.
     async fn dots_to_btc(&self, amount_dot: u128) -> Result<u128, Error> {
         let result: BalanceWrapper<_> = self
-        .rpc_client
-        .request(
-            "exchangeRateOracle_dotsToBtc",
-            Params::Array(vec![to_json_value(BalanceWrapper { amount: amount_dot })?]),
-        )
-        .await?;
+            .rpc_client
+            .request(
+                "exchangeRateOracle_dotsToBtc",
+                Params::Array(vec![to_json_value(BalanceWrapper { amount: amount_dot })?]),
+            )
+            .await?;
 
         Ok(result.amount)
     }

@@ -14,13 +14,13 @@ pub use error::{Error, XtError};
 use pallets::*;
 pub use rpc::{
     historic_event_types, AccountId, BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet,
-    ExchangeRateOraclePallet, IssuePallet, PolkaBtcHeader, PolkaBtcIssueRequest, PolkaBtcProvider,
-    PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent, PolkaBtcStatusUpdate,
-    PolkaBtcVault, RedeemPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet,
-    TimestampPallet, UtilFuncs, VaultRegistryPallet, FeePallet
+    ExchangeRateOraclePallet, FeePallet, IssuePallet, PolkaBtcHeader, PolkaBtcIssueRequest,
+    PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent,
+    PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, ReplacePallet, SecurityPallet,
+    StakedRelayerPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
 };
 pub use security::{ErrorCode, StatusCode};
-pub use sp_arithmetic::{FixedI128, FixedU128, FixedPointNumber, traits as FixedPointTraits};
+pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
 use sp_core::{H160, H256};
 pub use sp_runtime;
 use sp_runtime::{
