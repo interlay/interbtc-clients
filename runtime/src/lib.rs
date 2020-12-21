@@ -14,13 +14,13 @@ pub use error::{Error, XtError};
 use pallets::*;
 pub use rpc::{
     historic_event_types, AccountId, BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet,
-    ExchangeRateOraclePallet, IssuePallet, PolkaBtcHeader, PolkaBtcIssueRequest, PolkaBtcProvider,
-    PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent, PolkaBtcStatusUpdate,
-    PolkaBtcVault, RedeemPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet,
-    TimestampPallet, UtilFuncs, VaultRegistryPallet,
+    ExchangeRateOraclePallet, FeePallet, IssuePallet, PolkaBtcHeader, PolkaBtcIssueRequest,
+    PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent,
+    PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, ReplacePallet, SecurityPallet,
+    StakedRelayerPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
 };
 pub use security::{ErrorCode, StatusCode};
-use sp_arithmetic::{FixedI128, FixedU128};
+pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
 use sp_core::{H160, H256};
 pub use sp_runtime;
 use sp_runtime::{
@@ -72,8 +72,8 @@ impl pallets::Core for PolkaBtcRuntime {
     type ErrorCode = ErrorCode;
     type ErrorCodes = BTreeSet<ErrorCode>;
     type StatusCode = StatusCode;
-    type SignedFixedPoint = FixedU128;
-    type UnsignedFixedPoint = FixedI128;
+    type SignedFixedPoint = FixedI128;
+    type UnsignedFixedPoint = FixedU128;
 }
 
 impl balances::Balances for PolkaBtcRuntime {
@@ -109,3 +109,5 @@ impl redeem::Redeem for PolkaBtcRuntime {}
 impl replace::Replace for PolkaBtcRuntime {}
 
 impl sudo::Sudo for PolkaBtcRuntime {}
+
+impl fee::Fee for PolkaBtcRuntime {}

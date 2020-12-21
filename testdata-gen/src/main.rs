@@ -10,11 +10,13 @@ mod vault;
 use bitcoin::{BitcoinCore, BitcoinCoreApi, ConversionError, PartialAddress};
 use clap::Clap;
 use error::Error;
+use log::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     substrate_subxt::PairSigner, BtcAddress, ErrorCode as PolkaBtcErrorCode,
-    ExchangeRateOraclePallet, H256Le, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet,
-    StatusCode as PolkaBtcStatusCode, TimestampPallet, VaultRegistryPallet,
+    ExchangeRateOraclePallet, FeePallet, FixedPointNumber, H256Le, PolkaBtcProvider,
+    PolkaBtcRuntime, RedeemPallet, StatusCode as PolkaBtcStatusCode, TimestampPallet,
+    VaultRegistryPallet,
 };
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
@@ -286,9 +288,9 @@ struct RequestIssueInfo {
     #[clap(long, default_value = "100000")]
     issue_amount: u128,
 
-    /// Griefing collateral for request.
-    #[clap(long, default_value = "100")]
-    griefing_collateral: u128,
+    /// Griefing collateral for request. If unset, the necessary amount will be calculated calculated automatically.
+    #[clap(long)]
+    griefing_collateral: Option<u128>,
 
     /// Vault keyring to derive `vault_id`.
     #[clap(long, default_value = "bob")]
@@ -540,13 +542,27 @@ async fn main() -> Result<(), Error> {
                 .bitcoin_network
                 .serialize_address(vault.wallet.get_btc_address())?;
 
-            let request_data = issue::request_issue(
-                &provider,
-                info.issue_amount,
-                info.griefing_collateral,
-                vault_id,
-            )
-            .await?;
+            let griefing_collateral = match info.griefing_collateral {
+                Some(x) => x,
+                None => {
+                    // calculate required amount
+                    let amount_in_dot = provider.btc_to_dots(info.issue_amount).await?;
+                    let required_griefing_collateral_rate =
+                        provider.get_issue_griefing_collateral().await?;
+                    let griefing_collateral = required_griefing_collateral_rate
+                        .checked_mul_int(amount_in_dot)
+                        .ok_or(Error::MathError)?;
+                    info!(
+                        "Griefing collateral not set; defaulting to {}",
+                        griefing_collateral
+                    );
+                    griefing_collateral
+                }
+            };
+
+            let request_data =
+                issue::request_issue(&provider, info.issue_amount, griefing_collateral, vault_id)
+                    .await?;
 
             issue::execute_issue(
                 &provider,

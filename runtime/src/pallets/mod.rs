@@ -2,6 +2,7 @@ pub mod balances_dot;
 pub mod btc_relay;
 pub mod collateral;
 pub mod exchange_rate_oracle;
+pub mod fee;
 pub mod frame_system;
 pub mod issue;
 pub mod redeem;

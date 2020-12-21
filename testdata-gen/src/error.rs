@@ -14,6 +14,8 @@ pub enum Error {
     InvalidRequestId,
     #[error("Unknown Bitcoin network")]
     UnknownBitcoinNetwork,
+    #[error("Mathematical operation error")]
+    MathError,
 
     #[error("IoError: {0}")]
     IoError(#[from] IoError),
