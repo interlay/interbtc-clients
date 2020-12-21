@@ -85,7 +85,7 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for IssueCancell
             .get_vault_issue_requests(vault_id)
             .await?
             .iter()
-            .filter(|(_, issue)| !issue.completed)
+            .filter(|(_, issue)| !issue.completed && !issue.cancelled)
             .map(|(id, issue)| UnconvertedOpenTime {
                 id: *id,
                 open_time: issue.opentime,
@@ -126,7 +126,7 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for ReplaceCance
             .get_new_vault_replace_requests(vault_id)
             .await?
             .iter()
-            .filter(|(_, replace)| !replace.completed)
+            .filter(|(_, replace)| !replace.completed && !replace.cancelled)
             .map(|(id, replace)| UnconvertedOpenTime {
                 id: *id,
                 open_time: replace.open_time,
