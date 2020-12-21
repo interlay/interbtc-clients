@@ -17,10 +17,10 @@ pub use rpc::{
     ExchangeRateOraclePallet, IssuePallet, PolkaBtcHeader, PolkaBtcIssueRequest, PolkaBtcProvider,
     PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent, PolkaBtcStatusUpdate,
     PolkaBtcVault, RedeemPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet,
-    TimestampPallet, UtilFuncs, VaultRegistryPallet,
+    TimestampPallet, UtilFuncs, VaultRegistryPallet, FeePallet
 };
 pub use security::{ErrorCode, StatusCode};
-use sp_arithmetic::{FixedI128, FixedU128};
+pub use sp_arithmetic::{FixedI128, FixedU128, FixedPointNumber, traits as FixedPointTraits};
 use sp_core::{H160, H256};
 pub use sp_runtime;
 use sp_runtime::{
@@ -72,8 +72,8 @@ impl pallets::Core for PolkaBtcRuntime {
     type ErrorCode = ErrorCode;
     type ErrorCodes = BTreeSet<ErrorCode>;
     type StatusCode = StatusCode;
-    type SignedFixedPoint = FixedU128;
-    type UnsignedFixedPoint = FixedI128;
+    type SignedFixedPoint = FixedI128;
+    type UnsignedFixedPoint = FixedU128;
 }
 
 impl balances::Balances for PolkaBtcRuntime {
@@ -109,3 +109,5 @@ impl redeem::Redeem for PolkaBtcRuntime {}
 impl replace::Replace for PolkaBtcRuntime {}
 
 impl sudo::Sudo for PolkaBtcRuntime {}
+
+impl fee::Fee for PolkaBtcRuntime {}

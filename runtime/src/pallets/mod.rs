@@ -10,6 +10,7 @@ pub mod security;
 pub mod staked_relayers;
 pub mod timestamp;
 pub mod vault_registry;
+pub mod fee;
 
 pub use btc_relay::{BitcoinBlockHeight, BtcAddress, H256Le, RawBlockHeader, RichBlockHeader};
 pub use security::{ErrorCode, StatusCode};
