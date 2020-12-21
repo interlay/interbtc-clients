@@ -67,7 +67,7 @@ pub trait BitcoinCoreApi {
 
     fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
 
-    fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, Error>;
+    fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
 
     fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
 
@@ -86,16 +86,16 @@ pub trait BitcoinCoreApi {
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
-    async fn send_transaction<A: PartialAddress + 'static>(
+    async fn send_transaction<A: PartialAddress + Send + 'static>(
         &self,
-        address: String,
+        address: A,
         sat: u64,
         request_id: &[u8; 32],
     ) -> Result<Txid, Error>;
 
-    async fn send_to_address<A: PartialAddress + 'static>(
+    async fn send_to_address<A: PartialAddress + Send + 'static>(
         &self,
-        address: String,
+        address: A,
         sat: u64,
         request_id: &[u8; 32],
         op_timeout: Duration,
@@ -108,12 +108,14 @@ pub trait BitcoinCoreApi {
 pub struct BitcoinCore {
     rpc: Client,
     transaction_creation_lock: Mutex<()>,
+    network: Network,
 }
 
 impl BitcoinCore {
-    pub fn new(rpc: Client) -> Self {
+    pub fn new(rpc: Client, network: Network) -> Self {
         Self {
             rpc,
+            network,
             transaction_creation_lock: Mutex::new(()),
         }
     }
@@ -275,7 +277,7 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     /// Gets a new address from the wallet
-    fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, Error> {
+    fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error> {
         let address = self.rpc.get_new_address(None, Some(AddressType::Bech32))?;
         Ok(A::decode_str(&address.to_string())?)
     }
@@ -379,19 +381,20 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
     /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
-    async fn send_transaction<A: PartialAddress + 'static>(
+    async fn send_transaction<A: PartialAddress + Send + 'static>(
         &self,
-        address: String,
+        address: A,
         sat: u64,
         request_id: &[u8; 32],
     ) -> Result<Txid, Error> {
+        let address_string = address.encode_str(self.network.clone())?;
         // create raw transaction that includes the op_return. If we were to add the op_return
         // after funding, the fees might be insufficient. An alternative to our own version of
         // this function would be to call create_raw_transaction (without the _hex suffix), and
         // to add the op_return afterwards. However, this function fails if no inputs are
         // specified, as is the case for us prior to calling fund_raw_transaction.
         let raw_tx = self.create_raw_transaction_hex_with_op_return(
-            address,
+            address_string,
             Amount::from_sat(sat),
             request_id,
         )?;
@@ -431,9 +434,9 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
     /// * `op_timeout` - how long operations will be retried
     /// * `num_confirmations` - how many confirmations we need to wait for
-    async fn send_to_address<A: PartialAddress + 'static>(
+    async fn send_to_address<A: PartialAddress + Send + 'static>(
         &self,
-        address: String,
+        address: A,
         sat: u64,
         request_id: &[u8; 32],
         op_timeout: Duration,

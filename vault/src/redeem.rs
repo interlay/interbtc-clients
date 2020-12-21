@@ -16,7 +16,6 @@ use std::sync::Arc;
 pub async fn listen_for_redeem_requests(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<BitcoinCore>,
-    network: bitcoin::Network,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     provider
@@ -37,7 +36,7 @@ pub async fn listen_for_redeem_requests(
                     // prepare the action that will be executed after the bitcoin transfer
                     let request = Request::from_redeem_request_event(&event);
                     let result = request
-                        .pay_and_execute(provider, btc_rpc, num_confirmations, network)
+                        .pay_and_execute(provider, btc_rpc, num_confirmations)
                         .await;
 
                     match result {

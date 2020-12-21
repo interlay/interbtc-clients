@@ -36,10 +36,10 @@ pub async fn execute_redeem(
     btc_rpc: &BitcoinCore,
     redeem_id: H256,
     redeem_amount: u128,
-    btc_address: String,
+    btc_address: BtcAddress,
 ) -> Result<(), Error> {
     let tx_metadata = btc_rpc
-        .send_to_address::<BtcAddress>(
+        .send_to_address(
             btc_address,
             redeem_amount.try_into().unwrap(),
             &redeem_id.to_fixed_bytes(),

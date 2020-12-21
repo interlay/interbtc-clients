@@ -2,8 +2,7 @@ use crate::constants::*;
 use crate::error::Error;
 use crate::issue::{process_issue_requests, IssueIds};
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
-use bitcoin::Network;
-use bitcoin::{BitcoinCoreApi, PartialAddress, Transaction, TransactionExt, TransactionMetadata};
+use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use log::*;
 use runtime::{
     pallets::{redeem::RequestRedeemEvent, replace::AcceptReplaceEvent},
@@ -79,11 +78,8 @@ impl Request {
         provider: Arc<P>,
         btc_rpc: Arc<B>,
         num_confirmations: u32,
-        network: Network,
     ) -> Result<(), Error> {
-        let tx_metadata = self
-            .transfer_btc(btc_rpc, num_confirmations, network)
-            .await?;
+        let tx_metadata = self.transfer_btc(btc_rpc, num_confirmations).await?;
         self.execute(provider, tx_metadata).await
     }
 
@@ -92,13 +88,7 @@ impl Request {
         &self,
         btc_rpc: Arc<B>,
         num_confirmations: u32,
-        network: Network,
     ) -> Result<TransactionMetadata, Error> {
-        let address = self
-            .btc_address
-            .encode_str(network)
-            .map_err(|e| -> bitcoin::Error { e.into() })?;
-
         info!("Sending bitcoin to {}", self.btc_address);
 
         // make bitcoin transfer. Note: do not retry this call;
@@ -106,7 +96,7 @@ impl Request {
         // itself was successful
         let tx_metadata = btc_rpc
             .send_to_address::<BtcAddress>(
-                address,
+                self.btc_address,
                 self.amount as u64,
                 &self.hash.to_fixed_bytes(),
                 BITCOIN_MAX_RETRYING_TIME,
@@ -164,7 +154,6 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<B>,
     num_confirmations: u32,
-    network: Network,
 ) -> Result<(), Error> {
     let vault_id = provider.get_account_id().clone();
     // get all open redeem/replaces and map them to the shared Request type
@@ -259,7 +248,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
             );
 
             match request
-                .pay_and_execute(provider, btc_rpc, num_confirmations, network)
+                .pay_and_execute(provider, btc_rpc, num_confirmations)
                 .await
             {
                 Ok(_) => info!(

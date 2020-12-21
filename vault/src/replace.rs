@@ -30,7 +30,6 @@ use std::time::Duration;
 pub async fn listen_for_accept_replace(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<BitcoinCore>,
-    network: bitcoin::Network,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     let provider = &provider;
@@ -54,7 +53,6 @@ pub async fn listen_for_accept_replace(
                         &event,
                         btc_rpc.clone(),
                         provider.clone(),
-                        network,
                         num_confirmations,
                     )
                     .await;
@@ -92,7 +90,6 @@ pub async fn handle_accepted_replace_request(
     event: &AcceptReplaceEvent<PolkaBtcRuntime>,
     btc_rpc: Arc<BitcoinCore>,
     provider: Arc<PolkaBtcProvider>,
-    network: bitcoin::Network,
     num_confirmations: u32,
 ) -> Result<(), Error> {
     // retrieve vault's btc address
@@ -113,7 +110,7 @@ pub async fn handle_accepted_replace_request(
 
     let request = Request::from_replace_request_event(&event, wallet.get_btc_address());
     request
-        .pay_and_execute(provider, btc_rpc, num_confirmations, network)
+        .pay_and_execute(provider, btc_rpc, num_confirmations)
         .await
 }
 

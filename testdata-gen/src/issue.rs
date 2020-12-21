@@ -38,10 +38,10 @@ pub async fn execute_issue(
     btc_rpc: &BitcoinCore,
     issue_id: H256,
     issue_amount: u128,
-    vault_btc_address: String,
+    vault_btc_address: BtcAddress,
 ) -> Result<(), Error> {
     let tx_metadata = btc_rpc
-        .send_to_address::<BtcAddress>(
+        .send_to_address(
             vault_btc_address,
             issue_amount.try_into().unwrap(),
             &issue_id.to_fixed_bytes(),

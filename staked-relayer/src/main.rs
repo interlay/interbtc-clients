@@ -85,7 +85,11 @@ async fn main() -> Result<(), Error> {
     let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
 
     let btc_client = BtcClient::new::<RelayError>(opts.bitcoin.new_client(None)?);
-    let btc_rpc = Arc::new(bitcoin::BitcoinCore::new(opts.bitcoin.new_client(None)?));
+    let dummy_network = bitcoin::Network::Regtest; // we don't make any transaction so this is not used
+    let btc_rpc = Arc::new(bitcoin::BitcoinCore::new(
+        opts.bitcoin.new_client(None)?,
+        dummy_network,
+    ));
 
     let current_height = btc_client.get_block_count()?;
 

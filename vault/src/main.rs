@@ -125,7 +125,10 @@ async fn main() -> Result<(), Error> {
     // load parachain credentials
     let (pair, wallet) = opts.account_info.get_key_pair()?;
 
-    let btc_rpc = Arc::new(BitcoinCore::new(opts.bitcoin.new_client(Some(&wallet))?));
+    let btc_rpc = Arc::new(BitcoinCore::new(
+        opts.bitcoin.new_client(Some(&wallet))?,
+        opts.network.0,
+    ));
 
     // load wallet. Exit on failure, since without wallet we can't do a lot
     btc_rpc
@@ -157,12 +160,8 @@ async fn main() -> Result<(), Error> {
         }
     }
 
-    let open_request_executor = execute_open_requests(
-        arc_provider.clone(),
-        btc_rpc.clone(),
-        num_confirmations,
-        opts.network.0,
-    );
+    let open_request_executor =
+        execute_open_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
     tokio::spawn(async move {
         info!("Checking for open replace/redeem requests..");
         match open_request_executor.await {
@@ -230,22 +229,14 @@ async fn main() -> Result<(), Error> {
         replace_event_tx.clone(),
         !opts.no_auto_replace,
     );
-    let accept_replace_listener = listen_for_accept_replace(
-        arc_provider.clone(),
-        btc_rpc.clone(),
-        opts.network.0,
-        num_confirmations,
-    );
+    let accept_replace_listener =
+        listen_for_accept_replace(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
     let execute_replace_listener =
         listen_for_execute_replace(arc_provider.clone(), replace_event_tx);
 
     // redeem handling
-    let redeem_listener = listen_for_redeem_requests(
-        arc_provider.clone(),
-        btc_rpc.clone(),
-        opts.network.0,
-        num_confirmations,
-    );
+    let redeem_listener =
+        listen_for_redeem_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
 
     let api_listener = api::start(
         arc_provider.clone(),
