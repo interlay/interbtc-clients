@@ -1,6 +1,6 @@
 [package]
 name = "vault"
-version = "0.2.5"
+version = "0.2.6"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 
