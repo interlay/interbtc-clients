@@ -180,11 +180,7 @@ mod tests {
                 hash: &BlockHash,
             ) -> Result<Vec<Option<GetRawTransactionResult>>, Error>;
 
-            fn get_raw_tx_for(
-                &self,
-                txid: &Txid,
-                block_hash: &BlockHash,
-            ) -> Result<Vec<u8>, Error>;
+            fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
 
             fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
 
@@ -192,7 +188,7 @@ mod tests {
 
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
 
-            fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, Error>;
+            fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
 
             fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
 
@@ -211,18 +207,27 @@ mod tests {
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
 
-            async fn send_transaction<A: PartialAddress + 'static>(
+            async fn create_transaction<A: PartialAddress + Send + 'static>(
                 &self,
-                address: String,
+                address: A,
                 sat: u64,
-                redeem_id: &[u8; 32],
+                request_id: &[u8; 32],
+            ) -> Result<LockedTransaction, Error>;
+
+            fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
+
+            async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
+                &self,
+                address: A,
+                sat: u64,
+                request_id: &[u8; 32],
             ) -> Result<Txid, Error>;
 
-            async fn send_to_address<A: PartialAddress + 'static>(
+            async fn send_to_address<A: PartialAddress + Send + 'static>(
                 &self,
-                address: String,
+                address: A,
                 sat: u64,
-                redeem_id: &[u8; 32],
+                request_id: &[u8; 32],
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;

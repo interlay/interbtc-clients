@@ -52,7 +52,7 @@ async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
     let btc_client = opts.bitcoin.new_client(None)?;
-    let btc_rpc = bitcoin::BitcoinCore::new(btc_client);
+    let btc_rpc = bitcoin::BitcoinCore::new(btc_client, bitcoin::Network::Regtest);
 
     let btc_height = if let Some(height) = opts.start_height {
         height

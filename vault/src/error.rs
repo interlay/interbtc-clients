@@ -19,6 +19,8 @@ pub enum Error {
     NoIncomingBlocks,
     #[error("Failed to load or create bitcoin wallet: {0}")]
     WalletInitializationFailure(BitcoinError),
+    #[error("Transaction contains more than one return-to-self uxto")]
+    TooManyReturnToSelfAddresses,
 
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),

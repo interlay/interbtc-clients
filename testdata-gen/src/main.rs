@@ -200,30 +200,17 @@ enum RelayerApiSubCommand {
     AccountId,
 }
 
-enum BitcoinNetwork {
-    Mainnet,
-    Testnet,
-    Regtest,
-}
+#[derive(Debug, Copy, Clone)]
+struct BitcoinNetwork(bitcoin::Network);
 
 impl FromStr for BitcoinNetwork {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Error> {
         match s {
-            "mainnet" => Ok(Self::Mainnet),
-            "testnet" => Ok(Self::Testnet),
-            "regtest" => Ok(Self::Regtest),
+            "mainnet" => Ok(BitcoinNetwork(bitcoin::Network::Bitcoin)),
+            "testnet" => Ok(BitcoinNetwork(bitcoin::Network::Testnet)),
+            "regtest" => Ok(BitcoinNetwork(bitcoin::Network::Regtest)),
             _ => Err(Error::UnknownBitcoinNetwork),
-        }
-    }
-}
-
-impl BitcoinNetwork {
-    fn serialize_address(&self, address: BtcAddress) -> Result<String, ConversionError> {
-        match *self {
-            BitcoinNetwork::Mainnet => address.encode_str(bitcoin::Network::Bitcoin),
-            BitcoinNetwork::Testnet => address.encode_str(bitcoin::Network::Testnet),
-            BitcoinNetwork::Regtest => address.encode_str(bitcoin::Network::Regtest),
         }
     }
 }
@@ -305,7 +292,7 @@ struct RequestIssueInfo {
 struct SendBitcoinInfo {
     /// Recipient Bitcoin address.
     #[clap(long)]
-    btc_address: String,
+    btc_address: BtcAddressFromStr,
 
     /// Amount of BTC to transfer.
     #[clap(long, default_value = "0")]
@@ -314,6 +301,10 @@ struct SendBitcoinInfo {
     /// Hex encoded OP_RETURN data for request.
     #[clap(long)]
     op_return: String,
+
+    /// Bitcoin network type for address encoding.
+    #[clap(long, default_value = "regtest")]
+    bitcoin_network: BitcoinNetwork,
 }
 
 #[derive(Clap)]
@@ -390,6 +381,10 @@ struct ExecuteReplaceInfo {
     /// Replace id for the replace request.
     #[clap(long)]
     replace_id: String,
+
+    /// Bitcoin network type for address encoding.
+    #[clap(long, default_value = "regtest")]
+    bitcoin_network: BitcoinNetwork,
 }
 
 #[derive(Clap, Encode, Decode, Debug)]
@@ -491,6 +486,16 @@ fn data_to_request_id(data: &[u8]) -> Result<[u8; 32], TryFromSliceError> {
     data.try_into()
 }
 
+fn get_btc_rpc(
+    wallet_name: String,
+    bitcoin_opts: bitcoin::cli::BitcoinOpts,
+    network: BitcoinNetwork,
+) -> Result<BitcoinCore, Error> {
+    let btc_rpc = BitcoinCore::new(bitcoin_opts.new_client(Some(&wallet_name))?, network.0);
+    btc_rpc.create_wallet(&wallet_name)?;
+    Ok(btc_rpc)
+}
+
 /// Generates testdata to be used on a development environment of the BTC-Parachain
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -500,10 +505,6 @@ async fn main() -> Result<(), Error> {
     let (key_pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
     let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
-    let btc_rpc = BitcoinCore::new(opts.bitcoin.new_client(Some(&wallet_name))?);
-
-    // try to load or create wallet; but silently fail, since not all commands need a loaded wallet
-    let _ = btc_rpc.create_wallet(&wallet_name);
 
     match opts.subcmd {
         SubCommand::SetExchangeRate(info) => {
@@ -538,9 +539,7 @@ async fn main() -> Result<(), Error> {
             let vault_id = info.vault.to_account_id();
             let vault = provider.get_vault(vault_id.clone()).await?;
 
-            let vault_btc_address = info
-                .bitcoin_network
-                .serialize_address(vault.wallet.get_btc_address())?;
+            let vault_btc_address = vault.wallet.get_btc_address();
 
             let griefing_collateral = match info.griefing_collateral {
                 Some(x) => x,
@@ -564,6 +563,7 @@ async fn main() -> Result<(), Error> {
                 issue::request_issue(&provider, info.issue_amount, griefing_collateral, vault_id)
                     .await?;
 
+            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
             issue::execute_issue(
                 &provider,
                 &btc_rpc,
@@ -575,10 +575,10 @@ async fn main() -> Result<(), Error> {
         }
         SubCommand::SendBitcoin(info) => {
             let data = &hex::decode(info.op_return)?;
-
+            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
             let tx_metadata = btc_rpc
-                .send_to_address::<BtcAddress>(
-                    info.btc_address,
+                .send_to_address(
+                    info.btc_address.0,
                     info.satoshis,
                     &data_to_request_id(data)?,
                     Duration::from_secs(15 * 60),
@@ -601,16 +601,13 @@ async fn main() -> Result<(), Error> {
             let redeem_id = H256::from_str(&info.redeem_id).map_err(|_| Error::InvalidRequestId)?;
             let redeem_request = provider.get_redeem_request(redeem_id).await?;
 
-            let btc_address = info
-                .bitcoin_network
-                .serialize_address(redeem_request.btc_address)?;
-
+            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
             redeem::execute_redeem(
                 &provider,
                 &btc_rpc,
                 redeem_id,
                 redeem_request.amount_btc,
-                btc_address,
+                redeem_request.btc_address,
             )
             .await?;
         }
@@ -628,6 +625,7 @@ async fn main() -> Result<(), Error> {
         SubCommand::ExecuteReplace(info) => {
             let replace_id =
                 H256::from_str(&info.replace_id).map_err(|_| Error::InvalidRequestId)?;
+            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
             replace::execute_replace(&provider, &btc_rpc, replace_id).await?;
         }
         SubCommand::GetChainStats(opts) => {
