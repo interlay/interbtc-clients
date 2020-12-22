@@ -1,6 +1,6 @@
 use crate::Error;
 use log::info;
-use runtime::{BtcAddress, PolkaBtcProvider, VaultRegistryPallet};
+use runtime::{BtcAddress, PolkaBtcProvider, UtilFuncs, VaultRegistryPallet};
 
 /// Register a vault with a Bitcoin address
 pub async fn register_vault(

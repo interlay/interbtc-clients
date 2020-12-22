@@ -126,11 +126,6 @@ impl PolkaBtcProvider {
         Self::new(rpc_client, signer).await
     }
 
-    /// Get the address of the configured signer.
-    pub fn get_account_id(&self) -> &AccountId {
-        &self.account_id
-    }
-
     /// Fetch all active vaults.
     pub async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, Error> {
         let mut vaults = Vec::new();
@@ -297,6 +292,9 @@ pub trait UtilFuncs {
     async fn get_current_chain_height(&self) -> Result<u32, Error>;
 
     async fn get_blockchain_height_at(&self, parachain_height: u32) -> Result<u32, Error>;
+
+    /// Get the address of the configured signer.
+    fn get_account_id(&self) -> &AccountId;
 }
 
 #[async_trait]
@@ -315,6 +313,10 @@ impl UtilFuncs for PolkaBtcProvider {
             .block_hash(Some(parachain_height.into()))
             .await?;
         Ok(self.ext_client.best_block_height(hash).await?)
+    }
+
+    fn get_account_id(&self) -> &AccountId {
+        &self.account_id
     }
 }
 

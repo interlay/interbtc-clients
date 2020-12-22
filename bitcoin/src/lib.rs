@@ -28,10 +28,10 @@ pub use bitcoincore_rpc::{
     Auth, Client, Error as BitcoinError, RpcApi,
 };
 pub use error::{BitcoinRpcError, ConversionError, Error};
-use futures::lock::Mutex;
 pub use iter::{get_transactions, stream_blocks, stream_in_chain_transactions};
 use sp_core::H256;
 use std::{sync::Arc, time::Duration};
+use tokio::sync::{Mutex, OwnedMutexGuard};
 use tokio::time::delay_for;
 
 #[macro_use]
@@ -86,7 +86,16 @@ pub trait BitcoinCoreApi {
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
-    async fn send_transaction<A: PartialAddress + Send + 'static>(
+    async fn create_transaction<A: PartialAddress + Send + 'static>(
+        &self,
+        address: A,
+        sat: u64,
+        request_id: &[u8; 32],
+    ) -> Result<LockedTransaction, Error>;
+
+    fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
+
+    async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
         &self,
         address: A,
         sat: u64,
@@ -105,9 +114,21 @@ pub trait BitcoinCoreApi {
     fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
 }
 
+pub struct LockedTransaction {
+    pub transaction: Transaction,
+    _lock: OwnedMutexGuard<()>,
+}
+impl LockedTransaction {
+    fn new(transaction: Transaction, lock: OwnedMutexGuard<()>) -> Self {
+        LockedTransaction {
+            transaction,
+            _lock: lock,
+        }
+    }
+}
 pub struct BitcoinCore {
     rpc: Client,
-    transaction_creation_lock: Mutex<()>,
+    transaction_creation_lock: Arc<Mutex<()>>,
     network: Network,
 }
 
@@ -116,7 +137,7 @@ impl BitcoinCore {
         Self {
             rpc,
             network,
-            transaction_creation_lock: Mutex::new(()),
+            transaction_creation_lock: Arc::new(Mutex::new(())),
         }
     }
 
@@ -373,20 +394,20 @@ impl BitcoinCoreApi for BitcoinCore {
         })
     }
 
-    /// Send an amount of Bitcoin to an address, but only submit the transaction
-    /// to the mempool; this method does not wait until the block is included in
-    /// the blockchain.
+    /// Creates and return a transaction; it is not submitted to the mempool. While the returned value
+    /// is alive, no other transactions can be created (this is guarded by a mutex). This prevents
+    /// accidental double spending.
     ///
     /// # Arguments
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
     /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
-    async fn send_transaction<A: PartialAddress + Send + 'static>(
+    async fn create_transaction<A: PartialAddress + Send + 'static>(
         &self,
         address: A,
         sat: u64,
         request_id: &[u8; 32],
-    ) -> Result<Txid, Error> {
+    ) -> Result<LockedTransaction, Error> {
         let address_string = address.encode_str(self.network.clone())?;
         // create raw transaction that includes the op_return. If we were to add the op_return
         // after funding, the fees might be insufficient. An alternative to our own version of
@@ -402,7 +423,7 @@ impl BitcoinCoreApi for BitcoinCore {
         // ensure no other fund_raw_transaction calls are made until we submitted the
         // transaction to the bitcoind. If we don't do this, the same uxto may be used
         // as input twice (i.e. double spend)
-        let _lock = self.transaction_creation_lock.lock().await;
+        let lock = self.transaction_creation_lock.clone().lock_owned().await;
 
         // fund the transaction: adds required inputs, and possibly a return-to-self output
         let funded_raw_tx = self.rpc.fund_raw_transaction(raw_tx, None, None)?;
@@ -417,11 +438,37 @@ impl BitcoinCoreApi for BitcoinCore {
             return Err(Error::TransactionSigningError);
         }
 
-        // place the transaction into the mempool
-        let txid = self
-            .rpc
-            .send_raw_transaction(&signed_funded_raw_tx.transaction()?)?;
+        let transaction = signed_funded_raw_tx.transaction()?;
 
+        Ok(LockedTransaction::new(transaction, lock))
+    }
+
+    /// Submits a transaction to the mempool
+    ///
+    /// # Arguments
+    /// * `transaction` - The transaction created by create_transaction
+    fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error> {
+        // place the transaction into the mempool
+        let txid = self.rpc.send_raw_transaction(&transaction.transaction)?;
+        Ok(txid)
+    }
+
+    /// Send an amount of Bitcoin to an address, but only submit the transaction
+    /// to the mempool; this method does not wait until the block is included in
+    /// the blockchain.
+    ///
+    /// # Arguments
+    /// * `address` - Bitcoin address to fund
+    /// * `sat` - number of Satoshis to transfer
+    /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
+    async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
+        &self,
+        address: A,
+        sat: u64,
+        request_id: &[u8; 32],
+    ) -> Result<Txid, Error> {
+        let tx = self.create_transaction(address, sat, request_id).await?;
+        let txid = self.send_transaction(tx)?;
         Ok(txid)
     }
 
@@ -442,7 +489,9 @@ impl BitcoinCoreApi for BitcoinCore {
         op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
-        let txid = self.send_transaction::<A>(address, sat, request_id).await?;
+        let txid = self
+            .create_and_send_transaction(address, sat, request_id)
+            .await?;
 
         #[cfg(feature = "regtest-mine-on-tx")]
         self.rpc.generate_to_address(
@@ -479,6 +528,7 @@ pub trait TransactionExt {
     fn get_op_return(&self) -> Option<H256>;
     fn get_payment_amount_to<A: PartialAddress + PartialEq>(&self, dest: A) -> Option<u64>;
     fn extract_input_addresses<A: PartialAddress>(&self) -> Vec<A>;
+    fn extract_output_addresses<A: PartialAddress>(&self) -> Result<Vec<A>, Error>;
 }
 
 impl TransactionExt for Transaction {
@@ -515,6 +565,20 @@ impl TransactionExt for Transaction {
             .iter()
             .filter_map(|vin| vin_to_address(vin.clone()).map_or(None, |addr| Some(addr)))
             .collect::<Vec<A>>()
+    }
+
+    /// return the addresses that are used as outputs with non-zero value in this transaction
+    fn extract_output_addresses<A: PartialAddress>(&self) -> Result<Vec<A>, Error> {
+        self.output
+            .iter()
+            .filter(|x| x.value > 0)
+            .map(|tx_out| {
+                let payload = Payload::from_script(&tx_out.script_pubkey)
+                    .ok_or(ConversionError::InvalidPayload)?;
+                let address = PartialAddress::from_payload(payload)?;
+                Ok(address)
+            })
+            .collect()
     }
 }
 

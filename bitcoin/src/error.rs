@@ -28,6 +28,8 @@ pub enum Error {
     TransactionSigningError,
     #[error("Failed to parse transaction")]
     ParsingError,
+    #[error("Error occurred in callback: {0}")]
+    CallbackError(Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Error, Debug)]

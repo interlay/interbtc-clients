@@ -12,7 +12,7 @@ use runtime::{
         replace::{AcceptReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent},
         vault_registry::Vault,
     },
-    DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet,
+    DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet, UtilFuncs,
     VaultRegistryPallet,
 };
 use std::sync::Arc;

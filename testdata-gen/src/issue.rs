@@ -5,7 +5,7 @@ use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
 use runtime::{
     pallets::btc_relay::H256Le, AccountId, BtcAddress, IssuePallet, PolkaBtcProvider,
-    PolkaBtcRequestIssueEvent,
+    PolkaBtcRequestIssueEvent, UtilFuncs,
 };
 use sp_core::H256;
 use std::convert::TryInto;

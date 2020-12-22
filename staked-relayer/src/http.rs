@@ -8,7 +8,7 @@ use jsonrpc_http_server::{DomainsValidation, ServerBuilder};
 use parity_scale_codec::{Decode, Encode};
 use runtime::ErrorCode as PolkaBtcErrorCode;
 use runtime::StatusCode as PolkaBtcStatusCode;
-use runtime::{H256Le, PolkaBtcProvider, SecurityPallet, StakedRelayerPallet};
+use runtime::{H256Le, PolkaBtcProvider, SecurityPallet, StakedRelayerPallet, UtilFuncs};
 use serde::{Deserialize, Deserializer};
 use sp_core::crypto::Ss58Codec;
 use std::net::SocketAddr;

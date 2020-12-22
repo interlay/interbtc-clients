@@ -4,7 +4,7 @@ use crate::{utils, Error};
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
 use runtime::pallets::btc_relay::H256Le;
-use runtime::{BtcAddress, PolkaBtcProvider, ReplacePallet};
+use runtime::{BtcAddress, PolkaBtcProvider, ReplacePallet, UtilFuncs};
 use sp_core::H256;
 use std::convert::TryInto;
 use std::time::Duration;
@@ -45,7 +45,7 @@ pub async fn execute_replace(
     replace_id: H256,
 ) -> Result<(), Error> {
     let replace_request = replace_prov.get_replace_request(replace_id).await?;
-    println!("Satoshis: {}", replace_request.amount);
+    info!("Satoshis: {}", replace_request.amount);
 
     let tx_metadata = btc_rpc
         .send_to_address::<BtcAddress>(

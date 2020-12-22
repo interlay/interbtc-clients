@@ -6,7 +6,7 @@ use futures::{SinkExt, StreamExt};
 use log::{error, info};
 use runtime::{
     pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
-    BtcRelayPallet, H256Le, IssuePallet, PolkaBtcProvider, PolkaBtcRuntime,
+    BtcRelayPallet, H256Le, IssuePallet, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs,
 };
 use sp_core::H256;
 use std::collections::HashSet;

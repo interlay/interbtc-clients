@@ -2,7 +2,8 @@ use crate::error::Error;
 use log::*;
 use runtime::{
     pallets::exchange_rate_oracle::SetExchangeRateEvent, pallets::vault_registry::VaultStatus,
-    AccountId, DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, VaultRegistryPallet,
+    AccountId, DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs,
+    VaultRegistryPallet,
 };
 use std::sync::Arc;
 
