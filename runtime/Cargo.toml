@@ -35,6 +35,12 @@ branch = "dev"
 version = "0.3.1"
 package = "bitcoin"
 
+[dependencies.module-refund]
+git = "https://gitlab.com/interlay/btc-parachain"
+branch = "dev"
+version = "0.3.1"
+package = "refund"
+
 [dependencies.module-btc-relay]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"

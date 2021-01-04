@@ -6,6 +6,7 @@ pub mod fee;
 pub mod frame_system;
 pub mod issue;
 pub mod redeem;
+pub mod refund;
 pub mod replace;
 pub mod security;
 pub mod staked_relayers;

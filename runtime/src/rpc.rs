@@ -31,6 +31,7 @@ use crate::frame_system::*;
 use crate::issue::*;
 use crate::pallets::Core;
 use crate::redeem::*;
+use crate::refund::*;
 use crate::replace::*;
 use crate::security::*;
 use crate::staked_relayers::*;
@@ -60,6 +61,11 @@ pub type PolkaBtcRedeemRequest = RedeemRequest<
     <PolkaBtcRuntime as System>::BlockNumber,
     <PolkaBtcRuntime as Core>::PolkaBTC,
     <PolkaBtcRuntime as Core>::DOT,
+>;
+
+pub type PolkaBtcRefundRequest = RefundRequest<
+    AccountId,
+    <PolkaBtcRuntime as Core>::PolkaBTC,
 >;
 
 pub type PolkaBtcReplaceRequest = ReplaceRequest<
@@ -1122,6 +1128,61 @@ impl RedeemPallet for PolkaBtcProvider {
                 _runtime: PhantomData {},
             })
             .await?)
+    }
+}
+
+#[async_trait]
+pub trait RefundPallet {
+    /// Execute a refund request by providing a Bitcoin transaction inclusion proof
+    async fn execute_refund(
+        &self,
+        refund_id: H256,
+        tx_id: H256Le,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>,
+    ) -> Result<(), Error>;
+
+    /// Get all open refund requests requested of the given vault
+    async fn get_vault_refund_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, PolkaBtcRefundRequest)>, Error>;
+}
+
+#[async_trait]
+impl RefundPallet for PolkaBtcProvider {
+    async fn execute_refund(
+        &self,
+        refund_id: H256,
+        tx_id: H256Le,
+        merkle_proof: Vec<u8>,
+        raw_tx: Vec<u8>,
+    ) -> Result<(), Error> {
+        self.ext_client
+            .execute_refund_and_watch(
+                &*self.signer.write().await,
+                refund_id,
+                tx_id,
+                merkle_proof,
+                raw_tx,
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn get_vault_refund_requests(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Vec<(H256, PolkaBtcRefundRequest)>, Error> {
+        let result: Vec<(H256, PolkaBtcRefundRequest)> = self
+            .rpc_client
+            .request(
+                "refund_getVaultRefundRequests",
+                Params::Array(vec![to_json_value(account_id)?]),
+            )
+            .await?;
+
+        Ok(result)
     }
 }
 
