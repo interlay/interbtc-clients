@@ -28,7 +28,7 @@ cargo run --release -- --dev
 
 ## Getting Started
 
-Run the staked relayer client:
+The basic command to run the staked relayer client:
 
 ```
 source ../.env
@@ -37,7 +37,7 @@ cargo run
 
 ### Options
 
-When using cargo to run the vault, arguments to cargo and the vault are separated by `--`. For example, to pass `--help` to the relayer to get a list of all command line options that is guaranteed to be up date, run:
+When using cargo to run the staked relayer, arguments to cargo and the staked relayer are separated by `--`. For example, to pass `--help` to the relayer to get a list of all command line options that is guaranteed to be up date, run:
 
 ```
 cargo run -- --help
@@ -62,9 +62,7 @@ OPTIONS:
 
         --keyfile <keyfile>
             Path to the json file containing key pairs in a map. Valid content of this file is e.g.
-            `{ "MyUser1": "<credentials>", "MyUser2": "<credentials>" }`. Credentials should be a
-            `0x`-prefixed 64-digit hex string, or a BIP-39 key phrase of 12, 15, 18, 21 or 24 words.
-            See `sp_core::from_string_with_seed` for more details
+            `{ "MyUser1": "<Polkadot Account Mnemonic>", "MyUser2": "<Polkadot Account Mnemonic>" }`.
 
         --keyname <keyname>
             The name of the account from the keyfile to use
@@ -99,3 +97,27 @@ OPTIONS:
         --status-update-deposit <status-update-deposit>
             Timeout in milliseconds to repeat oracle liveness check [default: 100]
 ```
+
+## Example
+
+First, ensure you have a running Bitcoin node and a `keyfile.json` as specified above. An example keyfile looks as follows:
+```
+{ 
+    "relayer": "car timber smoke zone west involve board success norm inherit door road" 
+}
+```
+
+Next, ensure the Polkadot account whose mnemonic you provided in `keyfile.json` is funded with enough DOT to pay for the activation transaction.
+
+Then, run the staked relayer as in the example below:
+```
+cargo run -- \
+    --bitcoin-rpc-url http://localhost:18332 \
+    --bitcoin-rpc-user rpcuser \
+    --bitcoin-rpc-pass rpcpass \
+    --keyfile /path/to/keyfile.json \
+    --keyname relayer \
+    --polka-btc-url 'wss://beta.polkabtc.io/api/parachain'
+```
+
+Once the staked relayer is running, go to https://beta.polkabtc.io to the Relayer page and register by locking some DOT. The relayer client can contribute to the running of PolkaBTC without locking DOT, but interest is only earned if the relayer is registered. You can check its status on the Dashboard page.
