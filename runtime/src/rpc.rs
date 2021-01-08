@@ -324,6 +324,8 @@ impl UtilFuncs for PolkaBtcProvider {
 pub trait DotBalancesPallet {
     async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
 
+    async fn get_free_dot_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
+
     async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
 
     async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), Error>;
@@ -335,6 +337,14 @@ impl DotBalancesPallet for PolkaBtcProvider {
         Ok(self
             .ext_client
             .account(self.account_id.clone(), None)
+            .await?
+            .free)
+    }
+
+    async fn get_free_dot_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
+        Ok(self
+            .ext_client
+            .account(id.clone(), None)
             .await?
             .free)
     }
@@ -1265,6 +1275,8 @@ pub trait VaultRegistryPallet {
 
     async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), Error>;
 
+    async fn register_vault_with_id(&self, id: AccountId, collateral: u128, btc_address: BtcAddress) -> Result<(), Error>;
+
     async fn lock_additional_collateral(&self, amount: u128) -> Result<(), Error>;
 
     async fn withdraw_collateral(&self, amount: u128) -> Result<(), Error>;
@@ -1312,6 +1324,19 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     /// * `collateral` - deposit
     /// * `btc_address` - Bitcoin address hash
     async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), Error> {
+        self.ext_client
+            .register_vault_and_watch(&*self.signer.write().await, collateral, btc_address)
+            .await?;
+        Ok(())
+    }
+
+    /// Submit extrinsic to register a vault.
+    ///
+    /// # Arguments
+    /// * `id` - AccountId of the new vault
+    /// * `collateral` - deposit
+    /// * `btc_address` - Bitcoin address hash
+    async fn register_vault_with_id(&self, id: AccountId, collateral: u128, btc_address: BtcAddress) -> Result<(), Error> {
         self.ext_client
             .register_vault_and_watch(&*self.signer.write().await, collateral, btc_address)
             .await?;

@@ -466,7 +466,7 @@ dependencies = [
  "cfg-if 0.1.10",
  "clang-sys",
  "clap 2.33.3",
- "env_logger",
+ "env_logger 0.7.1",
  "lazy_static",
  "lazycell",
  "log 0.4.11",
@@ -1580,6 +1580,19 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aafcde04e90a5226a6443b7aabdb016ba2f8307c847d524724bd9b346dd1a2d3"
+dependencies = [
+ "atty",
+ "humantime",
+ "log 0.4.11",
+ "regex",
+ "termcolor",
+]
+
+[[package]]
+name = "env_logger"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
@@ -1711,15 +1724,23 @@ name = "faucet"
 version = "0.2.0"
 dependencies = [
  "bitcoin 0.2.0",
+ "btc-parachain",
  "clap 3.0.0-beta.2",
- "env_logger",
+ "env_logger 0.6.2",
  "futures 0.3.7",
  "hex 0.4.2",
  "jsonrpc-http-server",
+ "jsonrpsee",
  "log 0.4.11",
  "parity-scale-codec",
  "runtime",
  "serde",
+ "serde_json",
+ "sp-core",
+ "sp-keyring",
+ "substrate-subxt",
+ "substrate-subxt-client",
+ "tempdir",
  "thiserror",
  "tokio 0.2.22",
 ]
@@ -1759,7 +1780,7 @@ version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fdbe0d94371f9ce939b555dd342d0686cc4c0cadbcd4b61d70af5ff97eb4126"
 dependencies = [
- "env_logger",
+ "env_logger 0.7.1",
  "log 0.4.11",
 ]
 
@@ -4532,7 +4553,7 @@ version = "0.2.1"
 dependencies = [
  "chrono",
  "clap 3.0.0-beta.2",
- "env_logger",
+ "env_logger 0.7.1",
  "log 0.4.11",
  "reqwest",
  "runtime",
@@ -8046,7 +8067,7 @@ dependencies = [
  "backoff",
  "bitcoin 0.2.0",
  "clap 3.0.0-beta.2",
- "env_logger",
+ "env_logger 0.7.1",
  "frame-system",
  "futures 0.3.7",
  "hex 0.4.2",
@@ -8405,7 +8426,7 @@ version = "0.1.0"
 dependencies = [
  "bitcoin 0.2.0",
  "clap 3.0.0-beta.2",
- "env_logger",
+ "env_logger 0.7.1",
  "frame-system",
  "hex 0.4.2",
  "jsonrpc-core",
@@ -9144,7 +9165,7 @@ dependencies = [
  "backoff",
  "bitcoin 0.2.0",
  "clap 3.0.0-beta.2",
- "env_logger",
+ "env_logger 0.7.1",
  "futures 0.3.7",
  "hex 0.4.2",
  "jsonrpc-http-server",

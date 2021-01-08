@@ -16,7 +16,7 @@ struct Opts {
     polka_btc_url: String,
 
     /// Address to listen on for JSON-RPC requests.
-    #[clap(long, default_value = "[::0]:3030")]
+    #[clap(long, default_value = "[::0]:3033")]
     http_addr: String,
 
     /// keyring / keyfile options.
