@@ -86,7 +86,7 @@ OPTIONS:
 
         --keyfile <keyfile>
             Path to the json file containing key pairs in a map. Valid content of this file is e.g.
-            `{ "MyUser1": "<Polkadot Account Mnemonic>", "MyUser2": "<Polkadot Account Mnemonic>" }`.
+            `{ "MyUser1": "<Polkadot Account Mnemonic>", "MyUser2": "<Polkadot Account Mnemonic>" }`
 
         --keyname <keyname>
             The name of the account from the keyfile to use
