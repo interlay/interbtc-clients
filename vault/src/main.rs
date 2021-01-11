@@ -8,6 +8,7 @@ mod error;
 mod execution;
 mod issue;
 mod redeem;
+mod refund;
 mod replace;
 
 use crate::{
@@ -18,6 +19,7 @@ use crate::{
     execution::{execute_open_issue_requests, execute_open_requests},
     issue::*,
     redeem::*,
+    refund::*,
     replace::*,
 };
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
@@ -238,6 +240,10 @@ async fn main() -> Result<(), Error> {
     let redeem_listener =
         listen_for_redeem_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
 
+    // refund handling
+    let refund_listener =
+    listen_for_refund_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
+
     let api_listener = api::start(
         arc_provider.clone(),
         btc_rpc.clone(),
@@ -312,6 +318,10 @@ async fn main() -> Result<(), Error> {
         // redeem handling
         tokio::spawn(async move {
             redeem_listener.await.unwrap();
+        }),
+        // refund handling
+        tokio::spawn(async move {
+            refund_listener.await.unwrap();
         }),
         // replace handling
         tokio::spawn(async move {

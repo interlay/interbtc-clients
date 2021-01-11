@@ -5,9 +5,9 @@ use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use log::*;
 use runtime::{
-    pallets::{redeem::RequestRedeemEvent, replace::AcceptReplaceEvent},
-    BtcAddress, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest,
-    PolkaBtcRuntime, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    pallets::{redeem::RequestRedeemEvent, replace::AcceptReplaceEvent, refund::RequestRefundEvent},
+    BtcAddress, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcRefundRequest,
+    PolkaBtcRuntime, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet, RefundPallet
 };
 use sp_core::H256;
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -25,6 +25,7 @@ pub struct Request {
 pub enum RequestType {
     Redeem,
     Replace,
+    Refund,
 }
 
 impl Request {
@@ -46,6 +47,28 @@ impl Request {
             amount: request.amount,
             btc_address: request.btc_address,
             request_type: RequestType::Replace,
+        }
+    }
+    /// Constructs a Request for the given PolkaBtcRefundRequest
+    fn from_refund_request(hash: H256, request: PolkaBtcRefundRequest) -> Request {
+        Request {
+            hash,
+            open_time: None,
+            amount: request.amount_btc,
+            btc_address: request.btc_address,
+            request_type: RequestType::Refund,
+        }
+    }
+    /// Constructs a Request for the given RequestRefundEvent
+    pub fn from_refund_request_event(
+        request: &RequestRefundEvent<PolkaBtcRuntime>,
+    ) -> Request {
+        Request {
+            btc_address: request.btc_address,
+            amount: request.amount_polka_btc,
+            hash: request.refund_id,
+            open_time: None,
+            request_type: RequestType::Refund,
         }
     }
     /// Constructs a Request for the given AcceptReplaceEvent
@@ -75,7 +98,7 @@ impl Request {
     /// Makes the bitcoin transfer and executes the request
     pub async fn pay_and_execute<
         B: BitcoinCoreApi,
-        P: ReplacePallet + RedeemPallet + VaultRegistryPallet + UtilFuncs + Send + Sync,
+        P: ReplacePallet + RefundPallet + RedeemPallet + VaultRegistryPallet + UtilFuncs + Send + Sync,
     >(
         &self,
         provider: Arc<P>,
@@ -137,7 +160,7 @@ impl Request {
     }
 
     /// Executes the request. Upon failure it will retry
-    async fn execute<P: ReplacePallet + RedeemPallet>(
+    async fn execute<P: ReplacePallet + RedeemPallet + RefundPallet>(
         &self,
         provider: Arc<P>,
         tx_metadata: TransactionMetadata,
@@ -146,6 +169,7 @@ impl Request {
         let execute = match self.request_type {
             RequestType::Redeem => RedeemPallet::execute_redeem,
             RequestType::Replace => ReplacePallet::execute_replace,
+            RequestType::Refund => RefundPallet::execute_refund,
         };
 
         // Retry until success or timeout
@@ -193,15 +217,22 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
         .filter(|(_, request)| !request.completed)
         .map(|(hash, request)| Request::from_redeem_request(hash, request));
     let open_replaces = provider
-        .get_old_vault_replace_requests(vault_id)
+        .get_old_vault_replace_requests(vault_id.clone())
         .await?
         .into_iter()
         .filter(|(_, request)| !request.completed)
         .map(|(hash, request)| Request::from_replace_request(hash, request));
+    let open_refunds = provider
+        .get_vault_refund_requests(vault_id)
+        .await?
+        .into_iter()
+        .filter(|(_, request)| !request.completed)
+        .map(|(hash, request)| Request::from_refund_request(hash, request));
 
-    // Place all redeems&replaces into a hashmap, indexed by their redeemid/replaceid
+    // Place all redeems,replaces&refunds into a hashmap, indexed by their redeemid/replaceid
     let mut hash_map = open_redeems
         .chain(open_replaces)
+        .chain(open_refunds)
         .map(|x| (x.hash, x))
         .collect::<HashMap<_, _>>();
 

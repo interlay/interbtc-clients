@@ -15,9 +15,9 @@ use pallets::*;
 pub use rpc::{
     historic_event_types, AccountId, BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet,
     ExchangeRateOraclePallet, FeePallet, IssuePallet, PolkaBtcHeader, PolkaBtcIssueRequest,
-    PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent,
+    PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent, PolkaBtcRefundRequest,
     PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, ReplacePallet, SecurityPallet,
-    StakedRelayerPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
+    StakedRelayerPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet, RefundPallet
 };
 pub use security::{ErrorCode, StatusCode};
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
@@ -107,6 +107,8 @@ impl frame_system::System for PolkaBtcRuntime {}
 impl redeem::Redeem for PolkaBtcRuntime {}
 
 impl replace::Replace for PolkaBtcRuntime {}
+
+impl refund::Refund for PolkaBtcRuntime {}
 
 impl sudo::Sudo for PolkaBtcRuntime {}
 
