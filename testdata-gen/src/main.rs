@@ -14,9 +14,9 @@ use log::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     substrate_subxt::PairSigner, BtcAddress, ErrorCode as PolkaBtcErrorCode,
-    ExchangeRateOraclePallet, FeePallet, FixedPointNumber, H256Le, PolkaBtcProvider,
-    PolkaBtcRuntime, RedeemPallet, StatusCode as PolkaBtcStatusCode, TimestampPallet,
-    VaultRegistryPallet,
+    ExchangeRateOraclePallet, FeePallet, FixedPointNumber, FixedPointTraits::*, FixedU128, H256Le,
+    PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, StatusCode as PolkaBtcStatusCode,
+    TimestampPallet, VaultRegistryPallet,
 };
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
@@ -548,9 +548,20 @@ async fn main() -> Result<(), Error> {
                     let amount_in_dot = provider.btc_to_dots(info.issue_amount).await?;
                     let required_griefing_collateral_rate =
                         provider.get_issue_griefing_collateral().await?;
-                    let griefing_collateral = required_griefing_collateral_rate
-                        .checked_mul_int(amount_in_dot)
-                        .ok_or(Error::MathError)?;
+
+                    // we add 0.5 before we do the final integer division to round the result we return.
+                    // note that unwrapping is safe because we use a constant
+                    let calc_griefing_collateral = || {
+                        let rounding_addition = FixedU128::checked_from_rational(1, 2).unwrap();
+
+                        FixedU128::checked_from_integer(amount_in_dot)?
+                            .checked_mul(&required_griefing_collateral_rate)?
+                            .checked_add(&rounding_addition)?
+                            .into_inner()
+                            .checked_div(FixedU128::accuracy())
+                    };
+
+                    let griefing_collateral = calc_griefing_collateral().ok_or(Error::MathError)?;
                     info!(
                         "Griefing collateral not set; defaulting to {}",
                         griefing_collateral
