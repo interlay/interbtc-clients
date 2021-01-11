@@ -7,7 +7,7 @@ use runtime::substrate_subxt::PairSigner;
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
 use std::sync::Arc;
 
-/// Indexing service to write and read `OP_RETURN` data.
+/// ROC faucet for enabling users to test PolkaBTC
 #[derive(Clap)]
 #[clap(version = "0.1", author = "Interlay <contact@interlay.io>")]
 struct Opts {

@@ -291,25 +291,23 @@ mod tests {
 
     #[tokio::test]
     async fn test_fund_user_once_succeeds() {
-        let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+        let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let roc_to_planck = 10000000000;
         let user_allowance: u128 = 1;
         let vault_allowance: u128 = 500;
         let expected_amount: u128 = user_allowance * roc_to_planck;
 
-        let store = Store::new(Config::new("./kv")).expect("Unable to open kv store");
+        let store =
+            Store::new(Config::new(tmp_dir.path().join("kv1"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
         kv.clear().unwrap();
 
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
-        let alice_funds_before = alice_provider.get_free_dot_balance().await.unwrap();
         let bob_funds_before = alice_provider
             .get_free_dot_balance_for_id(bob_account_id.clone())
             .await
             .unwrap();
-        println!("Alice: {}", alice_funds_before);
-        println!("Bob: {}", bob_funds_before);
         let req = FundAccountJsonRpcRequest {
             account_id: bob_account_id.clone(),
         };
@@ -327,27 +325,25 @@ mod tests {
             Err(e) => eprintln!("Funding error: {}", e),
         }
 
-        let alice_funds_after = alice_provider.get_free_dot_balance().await.unwrap();
         let bob_funds_after = alice_provider
             .get_free_dot_balance_for_id(bob_account_id)
             .await
             .unwrap();
-        println!("Alice {}", alice_funds_after);
-        println!("Bob {}", bob_funds_after);
 
         assert_eq!(bob_funds_before + expected_amount, bob_funds_after);
     }
 
     #[tokio::test]
     async fn test_fund_user_after_six_hours_succeeds() {
-        let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+        let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let roc_to_planck = 10000000000;
         let user_allowance: u128 = 1;
         let vault_allowance: u128 = 500;
         let expected_amount: u128 = user_allowance * roc_to_planck;
 
-        let store = Store::new(Config::new("./kv")).expect("Unable to open kv store");
+        let store =
+            Store::new(Config::new(tmp_dir.path().join("kv2"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
 
         // Add a seven hours old request to kv store, so it will be filtered out
@@ -389,14 +385,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_fund_user_twice_in_a_row_fails() {
-        let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+        let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let roc_to_planck = 10000000000;
         let user_allowance: u128 = 1;
         let vault_allowance: u128 = 500;
         let expected_amount: u128 = user_allowance * roc_to_planck;
 
-        let store = Store::new(Config::new("./kv")).expect("Unable to open kv store");
+        let store =
+            Store::new(Config::new(tmp_dir.path().join("kv3"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
         kv.clear().unwrap();
 
@@ -443,7 +440,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fund_vault_once_succeeds() {
-        let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+        let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let roc_to_planck = 10000000000;
         let user_allowance: u128 = 1;
@@ -466,7 +463,8 @@ mod tests {
             account_id: bob_account_id.clone(),
         };
 
-        let store = Store::new(Config::new("./kv")).expect("Unable to open kv store");
+        let store =
+            Store::new(Config::new(tmp_dir.path().join("kv4"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
         kv.clear().unwrap();
         match _fund_account(
@@ -492,7 +490,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fund_vault_twice_in_a_row_fails() {
-        let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+        let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let roc_to_planck = 10000000000;
         let user_allowance: u128 = 1;
@@ -515,7 +513,8 @@ mod tests {
             account_id: bob_account_id.clone(),
         };
 
-        let store = Store::new(Config::new("./kv")).expect("Unable to open kv store");
+        let store =
+            Store::new(Config::new(tmp_dir.path().join("kv5"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
         kv.clear().unwrap();
         match _fund_account(
