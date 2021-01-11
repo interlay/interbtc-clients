@@ -150,7 +150,6 @@ mod tests {
             async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
             async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, RuntimeError>;
             async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-            async fn register_vault_with_id(&self, id: AccountId, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
             async fn lock_additional_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn update_btc_address(&self, address: BtcAddress) -> Result<(), RuntimeError>;

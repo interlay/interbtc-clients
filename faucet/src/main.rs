@@ -26,6 +26,14 @@ struct Opts {
     /// Comma separated list of allowed origins.
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
+
+    /// ROC allowance per request for regular users.
+    #[clap(long, default_value = "1")]
+    user_allowance: u128,
+
+    /// ROC allowance per request for vaults.
+    #[clap(long, default_value = "500")]
+    vault_allowance: u128,
 }
 
 #[tokio::main]
@@ -38,7 +46,14 @@ async fn main() -> Result<(), Error> {
     let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
 
     let http_addr = opts.http_addr.parse()?;
-    http::start(provider.clone(), http_addr, opts.rpc_cors_domain).await;
+    http::start(
+        provider.clone(),
+        http_addr,
+        opts.rpc_cors_domain,
+        opts.user_allowance,
+        opts.vault_allowance,
+    )
+    .await;
 
     Ok(())
 }
