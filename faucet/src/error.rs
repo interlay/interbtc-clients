@@ -3,6 +3,7 @@ use parity_scale_codec::Error as CodecError;
 use runtime::Error as RuntimeError;
 use std::net::AddrParseError;
 use thiserror::Error;
+use kv::Error as KVError;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -14,4 +15,8 @@ pub enum Error {
     JsonRpcError(#[from] JsonRpcError),
     #[error("AddrParseError: {0}")]
     AddrParseError(#[from] AddrParseError),
+    #[error("KV store error: {0}")]
+    KVError(#[from] KVError),
+    #[error("Too many faucet requests")]
+    FaucetOveruseError,
 }

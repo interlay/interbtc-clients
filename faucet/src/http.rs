@@ -1,5 +1,5 @@
 use crate::Error;
-use chrono::{DateTime, Duration, FixedOffset, Utc};
+use chrono::{DateTime, Duration, Utc};
 use futures::{self, executor::block_on};
 use hex::FromHex;
 use jsonrpc_http_server::jsonrpc_core::serde_json::Value;
@@ -59,7 +59,7 @@ async fn _fund_account_raw(
     vault_allowance: u128,
 ) -> Result<(), Error> {
     let req: FundAccountJsonRpcRequest = parse_params(params)?;
-    _fund_account(api, req, store, user_allowance, vault_allowance)
+    fund_account(api, req, store, user_allowance, vault_allowance)
         .await
         .unwrap();
     Ok(())
@@ -82,10 +82,7 @@ async fn get_faucet_amount(
 }
 
 fn open_kv_store<'a>(store: Store) -> Result<Bucket<'a, String, Json<Vec<String>>>, Error> {
-    match store.bucket::<String, Json<Vec<String>>>(Some("store")) {
-        Ok(value) => Ok(value),
-        Err(_) => Err(Error::RuntimeError(runtime::Error::FaucetKVStoreError)),
-    }
+    Ok(store.bucket::<String, Json<Vec<String>>>(Some("store"))?)
 }
 
 fn update_kv_store(
@@ -93,62 +90,51 @@ fn update_kv_store(
     account_id: AccountId,
     requests: Vec<String>,
 ) -> Result<(), Error> {
-    match kv.set(account_id.to_string(), Json(requests)) {
-        Ok(_) => (),
-        Err(_) => return Err(Error::RuntimeError(runtime::Error::FaucetKVStoreError)),
-    };
-
-    match kv.flush() {
-        Ok(_) => Ok(()),
-        Err(_) => Err(Error::RuntimeError(runtime::Error::FaucetKVStoreError)),
-    }
+    kv.set(account_id.to_string(), Json(requests))?;
+    kv.flush()?;
+    Ok(())
 }
 
 fn get_historic_requests(
     kv: Bucket<String, Json<Vec<String>>>,
     account_id: AccountId,
 ) -> Result<Vec<String>, Error> {
-    let kv_query = match kv.get(account_id.to_string()) {
-        Ok(value) => value,
-        Err(_) => return Err(Error::RuntimeError(runtime::Error::FaucetKVStoreError)),
-    };
-
+    let kv_query = kv.get(account_id.to_string())?;
     match kv_query {
         Some(value) => Ok(value.0),
         None => Ok(Vec::new()),
     }
 }
 
-fn filter_last_six_hours_requests(requests: Vec<String>) -> Vec<DateTime<FixedOffset>> {
+fn filter_last_six_hours_requests(requests: Vec<String>) -> Vec<String> {
     let filter_datetime = Utc::now().checked_sub_signed(Duration::hours(6)).unwrap();
     requests
         .iter()
-        .map(|request_datetime_string| DateTime::parse_from_rfc2822(request_datetime_string))
-        .filter(|parse_result| parse_result.is_ok())
-        .map(|some_datetime| some_datetime.unwrap())
+        .filter_map(|request_datetime_string| DateTime::parse_from_rfc2822(request_datetime_string).ok())
         .filter(|datetime| datetime.ge(&filter_datetime))
-        .collect::<Vec<DateTime<FixedOffset>>>()
+        .map(|datetime| datetime.to_rfc2822())
+        .collect::<Vec<String>>()
 }
 
 async fn atomic_faucet_funding(
     provider: &Arc<PolkaBtcProvider>,
     kv: Bucket<'_, String, Json<Vec<String>>>,
-    mut requests: Vec<String>,
+    requests: Vec<String>,
     account_id: AccountId,
     user_allowance: u128,
     vault_allowance: u128,
 ) -> Result<(), Error> {
-    let recent_requests = filter_last_six_hours_requests(requests.clone());
+    let filtered_requests = filter_last_six_hours_requests(requests.clone());
     // Only allow one request every six hours
-    if recent_requests.len() > 0 {
-        return Err(Error::RuntimeError(runtime::Error::FaucetOveruseError));
+    if filtered_requests.len() > 0 {
+        return Err(Error::FaucetOveruseError);
     }
 
-    // Add current request to kv store
-    requests.push(Utc::now().to_rfc2822());
-    update_kv_store(&kv, account_id.clone(), requests)?;
+    // Add current request to kv store, discarding expired requests
+    let mut recent_requests = filtered_requests.clone();
+    recent_requests.push(Utc::now().to_rfc2822());
+    update_kv_store(&kv, account_id.clone(), recent_requests)?;
 
-    // Need to hold lock and make checks before transferring
     let amount = get_faucet_amount(
         &provider,
         account_id.clone(),
@@ -160,7 +146,7 @@ async fn atomic_faucet_funding(
     Ok(())
 }
 
-async fn _fund_account(
+async fn fund_account(
     api: &Arc<PolkaBtcProvider>,
     req: FundAccountJsonRpcRequest,
     store: Store,
@@ -234,7 +220,7 @@ mod tests {
     use runtime::{AccountId, BtcAddress, PolkaBtcRuntime, VaultRegistryPallet};
 
     use super::{
-        DotBalancesPallet, FundAccountJsonRpcRequest, PolkaBtcProvider, _fund_account,
+        DotBalancesPallet, FundAccountJsonRpcRequest, PolkaBtcProvider, fund_account,
         open_kv_store, update_kv_store,
     };
     use jsonrpsee::Client as JsonRpseeClient;
@@ -312,18 +298,13 @@ mod tests {
             account_id: bob_account_id.clone(),
         };
 
-        match _fund_account(
+        fund_account(
             &Arc::from(alice_provider.clone()),
             req,
             store,
             user_allowance,
             vault_allowance,
-        )
-        .await
-        {
-            Ok(_) => println!("Funding suceeded"),
-            Err(e) => eprintln!("Funding error: {}", e),
-        }
+        ).await.expect("Funding the account failed");
 
         let bob_funds_after = alice_provider
             .get_free_dot_balance_for_id(bob_account_id)
@@ -345,13 +326,12 @@ mod tests {
         let store =
             Store::new(Config::new(tmp_dir.path().join("kv2"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
+        kv.clear().unwrap();
 
         // Add a seven hours old request to kv store, so it will be filtered out
         let filter_datetime = Utc::now().checked_sub_signed(Duration::hours(7)).unwrap();
         let requests = vec![filter_datetime.to_rfc2822()];
         update_kv_store(&kv, bob_account_id.clone(), requests).unwrap();
-
-        kv.clear().unwrap();
 
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         let bob_funds_before = alice_provider
@@ -362,18 +342,13 @@ mod tests {
             account_id: bob_account_id.clone(),
         };
 
-        match _fund_account(
+        fund_account(
             &Arc::from(alice_provider.clone()),
             req,
             store,
             user_allowance,
             vault_allowance,
-        )
-        .await
-        {
-            Ok(_) => println!("Funding suceeded"),
-            Err(e) => eprintln!("Funding error: {}", e),
-        }
+        ).await.expect("Funding the account failed");
 
         let bob_funds_after = alice_provider
             .get_free_dot_balance_for_id(bob_account_id)
@@ -406,18 +381,13 @@ mod tests {
             account_id: bob_account_id.clone(),
         };
 
-        match _fund_account(
+        fund_account(
             &Arc::from(alice_provider.clone()),
             req.clone(),
             store.clone(),
             user_allowance,
             vault_allowance,
-        )
-        .await
-        {
-            Ok(_) => println!("Funding suceeded"),
-            Err(e) => eprintln!("Funding error: {}", e),
-        }
+        ).await.expect("Funding the account failed");
 
         let bob_funds_after = alice_provider
             .get_free_dot_balance_for_id(bob_account_id)
@@ -426,7 +396,7 @@ mod tests {
         assert_eq!(bob_funds_before + expected_amount, bob_funds_after);
 
         assert_err!(
-            _fund_account(
+            fund_account(
                 &Arc::from(alice_provider.clone()),
                 req,
                 store,
@@ -434,7 +404,7 @@ mod tests {
                 vault_allowance
             )
             .await,
-            Error::RuntimeError(runtime::Error::FaucetOveruseError)
+            Error::FaucetOveruseError
         );
     }
 
@@ -467,18 +437,13 @@ mod tests {
             Store::new(Config::new(tmp_dir.path().join("kv4"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
         kv.clear().unwrap();
-        match _fund_account(
+        fund_account(
             &Arc::from(alice_provider.clone()),
             req,
             store,
             user_allowance,
             vault_allowance,
-        )
-        .await
-        {
-            Ok(_) => println!("Funding suceeded"),
-            Err(e) => eprintln!("Funding error: {}", e),
-        }
+        ).await.expect("Funding the account failed");
 
         let bob_funds_after = alice_provider
             .get_free_dot_balance_for_id(bob_account_id)
@@ -517,18 +482,13 @@ mod tests {
             Store::new(Config::new(tmp_dir.path().join("kv5"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
         kv.clear().unwrap();
-        match _fund_account(
+        fund_account(
             &Arc::from(alice_provider.clone()),
             req.clone(),
             store.clone(),
             user_allowance,
             vault_allowance,
-        )
-        .await
-        {
-            Ok(_) => println!("Funding suceeded"),
-            Err(e) => eprintln!("Funding error: {}", e),
-        }
+        ).await.expect("Funding the account failed");
 
         let bob_funds_after = alice_provider
             .get_free_dot_balance_for_id(bob_account_id)
@@ -538,7 +498,7 @@ mod tests {
         assert_eq!(bob_funds_before + expected_amount, bob_funds_after);
 
         assert_err!(
-            _fund_account(
+            fund_account(
                 &Arc::from(alice_provider.clone()),
                 req,
                 store,
@@ -546,7 +506,7 @@ mod tests {
                 vault_allowance
             )
             .await,
-            Error::RuntimeError(runtime::Error::FaucetOveruseError)
+            Error::FaucetOveruseError
         );
     }
 }

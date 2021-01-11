@@ -44,10 +44,6 @@ pub enum Error {
     /// Occurs during websocket handshake
     #[error("Rpc error: {0}")]
     WsHandshake(#[from] WsNewDnsError),
-    #[error("Too many faucet requests")]
-    FaucetOveruseError,
-    #[error("Error reading or writing from local kv store")]
-    FaucetKVStoreError,
 }
 
 #[derive(Error, Debug)]
