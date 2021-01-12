@@ -22,7 +22,6 @@ substrate-subxt-proc-macro = { git = "https://github.com/paritytech/substrate-su
 substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", rev = "27c377a" }
 clap = "3.0.0-beta.2"
 sp-keyring = "2.0.0"
-kv = { version = "0.22.0", features = ["json-value"] }
 
 [dependencies.btc-parachain-runtime]
 git = "https://gitlab.com/interlay/btc-parachain"

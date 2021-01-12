@@ -7,7 +7,7 @@ use runtime::substrate_subxt::PairSigner;
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
 use std::sync::Arc;
 
-/// ROC faucet for enabling users to test PolkaBTC
+/// DOT faucet for enabling users to test PolkaBTC
 #[derive(Clap)]
 #[clap(version = "0.1", author = "Interlay <contact@interlay.io>")]
 struct Opts {
@@ -27,11 +27,11 @@ struct Opts {
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
 
-    /// ROC allowance per request for regular users.
+    /// DOT allowance per request for regular users.
     #[clap(long, default_value = "1")]
     user_allowance: u128,
 
-    /// ROC allowance per request for vaults.
+    /// DOT allowance per request for vaults.
     #[clap(long, default_value = "500")]
     vault_allowance: u128,
 }

@@ -1,10 +1,10 @@
 # PolkaBTC Faucet Client
 
-Transfer ROC to users.
+Transfer DOT to users.
 
 ## Responsibilities
 
-- Send 1 ROC (testnet DOT) to users and 500 ROC to registered vaults
+- Send 1 DOT (testnet DOT) to users and 500 DOT to registered vaults
 - Prevent accounts from request more than once every 6 hours
 
 ## Getting Started
@@ -46,7 +46,7 @@ OPTIONS:
 
         --rpc-cors-domain <rpc-cors-domain>    Comma separated list of allowed origins [default: *]
         --user-allowance <user-allowance>
-            ROC allowance per request for regular users [default: 1]
+            DOT allowance per request for regular users [default: 1]
 
-        --vault-allowance <vault-allowance>    ROC allowance per request for vaults [default: 500]
+        --vault-allowance <vault-allowance>    DOT allowance per request for vaults [default: 500]
 ```

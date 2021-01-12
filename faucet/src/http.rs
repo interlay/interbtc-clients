@@ -1,5 +1,5 @@
 use crate::Error;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, FixedOffset, Utc};
 use futures::{self, executor::block_on};
 use hex::FromHex;
 use jsonrpc_http_server::jsonrpc_core::serde_json::Value;
@@ -14,6 +14,9 @@ use runtime::{
 use serde::{Deserialize, Deserializer};
 use std::net::SocketAddr;
 use std::sync::Arc;
+
+const KV_STORE_NAME: &str = "store";
+const FAUCET_COOLDOWN_HOURS: i64 = 6;
 
 fn parse_params<T: Decode>(params: Params) -> Result<T, Error> {
     let raw: [RawBytes; 1] = params.parse()?;
@@ -68,21 +71,25 @@ async fn _fund_account_raw(
 async fn get_faucet_amount(
     provider: &Arc<PolkaBtcProvider>,
     id: AccountId,
-    user_allowance_roc: u128,
-    vault_allowance_roc: u128,
-) -> u128 {
+    user_allowance_dot: u128,
+    vault_allowance_dot: u128,
+) -> Result<u128, Error> {
     let req_vault = provider.get_vault(id.clone()).await;
-    let roc_to_planck = 10000000000;
-    let vault_allowance_planck = vault_allowance_roc * roc_to_planck;
-    let user_allowance_planck = user_allowance_roc * roc_to_planck;
+    let dot_to_planck = 10000000000;
+    let vault_allowance_planck = vault_allowance_dot
+        .checked_mul(dot_to_planck)
+        .ok_or(Error::MathError)?;
+    let user_allowance_planck = user_allowance_dot
+        .checked_mul(dot_to_planck)
+        .ok_or(Error::MathError)?;
     match req_vault {
-        Ok(_) => vault_allowance_planck,
-        Err(_) => user_allowance_planck,
+        Ok(_) => Ok(vault_allowance_planck),
+        Err(_) => Ok(user_allowance_planck),
     }
 }
 
 fn open_kv_store<'a>(store: Store) -> Result<Bucket<'a, String, Json<Vec<String>>>, Error> {
-    Ok(store.bucket::<String, Json<Vec<String>>>(Some("store"))?)
+    Ok(store.bucket::<String, Json<Vec<String>>>(Some(KV_STORE_NAME))?)
 }
 
 fn update_kv_store(
@@ -106,14 +113,20 @@ fn get_historic_requests(
     }
 }
 
-fn filter_last_six_hours_requests(requests: Vec<String>) -> Vec<String> {
-    let filter_datetime = Utc::now().checked_sub_signed(Duration::hours(6)).unwrap();
+fn filter_requests_older_than_cooldown(requests: Vec<String>) -> Vec<DateTime<FixedOffset>> {
+    // We are subtracting FAUCET_COOLDOWN_HOURS from the milliseconds since the unix epoch.
+    // Unless there's a bug in the std lib implementation of Utc::now() or a false reading from the
+    // system clock, unwrap will never panic
+    let filter_datetime = Utc::now()
+        .checked_sub_signed(Duration::hours(FAUCET_COOLDOWN_HOURS))
+        .unwrap();
     requests
         .iter()
-        .filter_map(|request_datetime_string| DateTime::parse_from_rfc2822(request_datetime_string).ok())
+        .filter_map(|request_datetime_string| {
+            DateTime::parse_from_rfc2822(request_datetime_string).ok()
+        })
         .filter(|datetime| datetime.ge(&filter_datetime))
-        .map(|datetime| datetime.to_rfc2822())
-        .collect::<Vec<String>>()
+        .collect::<Vec<DateTime<FixedOffset>>>()
 }
 
 async fn atomic_faucet_funding(
@@ -124,16 +137,14 @@ async fn atomic_faucet_funding(
     user_allowance: u128,
     vault_allowance: u128,
 ) -> Result<(), Error> {
-    let filtered_requests = filter_last_six_hours_requests(requests.clone());
-    // Only allow one request every six hours
+    let filtered_requests = filter_requests_older_than_cooldown(requests.clone());
+
     if filtered_requests.len() > 0 {
         return Err(Error::FaucetOveruseError);
     }
 
-    // Add current request to kv store, discarding expired requests
-    let mut recent_requests = filtered_requests.clone();
-    recent_requests.push(Utc::now().to_rfc2822());
-    update_kv_store(&kv, account_id.clone(), recent_requests)?;
+    // Add current request to kv store, effectively discarding previous requests
+    update_kv_store(&kv, account_id.clone(), vec![Utc::now().to_rfc2822()])?;
 
     let amount = get_faucet_amount(
         &provider,
@@ -141,7 +152,7 @@ async fn atomic_faucet_funding(
         user_allowance,
         vault_allowance,
     )
-    .await;
+    .await?;
     provider.transfer_to(account_id, amount).await?;
     Ok(())
 }
@@ -220,13 +231,13 @@ mod tests {
     use runtime::{AccountId, BtcAddress, PolkaBtcRuntime, VaultRegistryPallet};
 
     use super::{
-        DotBalancesPallet, FundAccountJsonRpcRequest, PolkaBtcProvider, fund_account,
-        open_kv_store, update_kv_store,
+        fund_account, open_kv_store, update_kv_store, DotBalancesPallet, FundAccountJsonRpcRequest,
+        PolkaBtcProvider,
     };
     use jsonrpsee::Client as JsonRpseeClient;
+    use runtime::substrate_subxt::PairSigner;
     use sp_core::H160;
     use sp_keyring::AccountKeyring;
-    use substrate_subxt::PairSigner;
     use substrate_subxt_client::{
         DatabaseConfig, KeystoreConfig, Role, SubxtClient, SubxtClientConfig,
     };
@@ -279,10 +290,10 @@ mod tests {
     async fn test_fund_user_once_succeeds() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
-        let roc_to_planck = 10000000000;
+        let dot_to_planck = 10000000000;
         let user_allowance: u128 = 1;
         let vault_allowance: u128 = 500;
-        let expected_amount: u128 = user_allowance * roc_to_planck;
+        let expected_amount: u128 = user_allowance.checked_mul(dot_to_planck).unwrap();
 
         let store =
             Store::new(Config::new(tmp_dir.path().join("kv1"))).expect("Unable to open kv store");
@@ -304,7 +315,9 @@ mod tests {
             store,
             user_allowance,
             vault_allowance,
-        ).await.expect("Funding the account failed");
+        )
+        .await
+        .expect("Funding the account failed");
 
         let bob_funds_after = alice_provider
             .get_free_dot_balance_for_id(bob_account_id)
@@ -315,20 +328,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fund_user_after_six_hours_succeeds() {
+    async fn test_fund_user_after_cooldown_succeeds() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
-        let roc_to_planck = 10000000000;
+        let dot_to_planck = 10000000000;
         let user_allowance: u128 = 1;
         let vault_allowance: u128 = 500;
-        let expected_amount: u128 = user_allowance * roc_to_planck;
+        let expected_amount: u128 = user_allowance.checked_mul(dot_to_planck).unwrap();
 
         let store =
             Store::new(Config::new(tmp_dir.path().join("kv2"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
         kv.clear().unwrap();
 
-        // Add a seven hours old request to kv store, so it will be filtered out
+        // Add a request older than the cooldown length to kv store, so it will be filtered out
         let filter_datetime = Utc::now().checked_sub_signed(Duration::hours(7)).unwrap();
         let requests = vec![filter_datetime.to_rfc2822()];
         update_kv_store(&kv, bob_account_id.clone(), requests).unwrap();
@@ -348,7 +361,9 @@ mod tests {
             store,
             user_allowance,
             vault_allowance,
-        ).await.expect("Funding the account failed");
+        )
+        .await
+        .expect("Funding the account failed");
 
         let bob_funds_after = alice_provider
             .get_free_dot_balance_for_id(bob_account_id)
@@ -362,10 +377,10 @@ mod tests {
     async fn test_fund_user_twice_in_a_row_fails() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
-        let roc_to_planck = 10000000000;
+        let dot_to_planck = 10000000000;
         let user_allowance: u128 = 1;
         let vault_allowance: u128 = 500;
-        let expected_amount: u128 = user_allowance * roc_to_planck;
+        let expected_amount: u128 = user_allowance.checked_mul(dot_to_planck).unwrap();
 
         let store =
             Store::new(Config::new(tmp_dir.path().join("kv3"))).expect("Unable to open kv store");
@@ -387,7 +402,9 @@ mod tests {
             store.clone(),
             user_allowance,
             vault_allowance,
-        ).await.expect("Funding the account failed");
+        )
+        .await
+        .expect("Funding the account failed");
 
         let bob_funds_after = alice_provider
             .get_free_dot_balance_for_id(bob_account_id)
@@ -412,10 +429,10 @@ mod tests {
     async fn test_fund_vault_once_succeeds() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
-        let roc_to_planck = 10000000000;
+        let dot_to_planck = 10000000000;
         let user_allowance: u128 = 1;
         let vault_allowance: u128 = 500;
-        let expected_amount: u128 = vault_allowance * roc_to_planck;
+        let expected_amount: u128 = vault_allowance.checked_mul(dot_to_planck).unwrap();
 
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         let bob_vault_address = BtcAddress::P2PKH(H160::random());
@@ -443,7 +460,9 @@ mod tests {
             store,
             user_allowance,
             vault_allowance,
-        ).await.expect("Funding the account failed");
+        )
+        .await
+        .expect("Funding the account failed");
 
         let bob_funds_after = alice_provider
             .get_free_dot_balance_for_id(bob_account_id)
@@ -457,10 +476,10 @@ mod tests {
     async fn test_fund_vault_twice_in_a_row_fails() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
-        let roc_to_planck = 10000000000;
+        let dot_to_planck = 10000000000;
         let user_allowance: u128 = 1;
         let vault_allowance: u128 = 500;
-        let expected_amount: u128 = vault_allowance * roc_to_planck;
+        let expected_amount: u128 = vault_allowance.checked_mul(dot_to_planck).unwrap();
 
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         let bob_vault_address = BtcAddress::P2PKH(H160::random());
@@ -488,7 +507,9 @@ mod tests {
             store.clone(),
             user_allowance,
             vault_allowance,
-        ).await.expect("Funding the account failed");
+        )
+        .await
+        .expect("Funding the account failed");
 
         let bob_funds_after = alice_provider
             .get_free_dot_balance_for_id(bob_account_id)

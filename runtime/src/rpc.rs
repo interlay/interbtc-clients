@@ -337,11 +337,7 @@ pub trait DotBalancesPallet {
 #[async_trait]
 impl DotBalancesPallet for PolkaBtcProvider {
     async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
-        Ok(self
-            .ext_client
-            .account(self.account_id.clone(), None)
-            .await?
-            .free)
+        Ok(Self::get_free_dot_balance_for_id(&self, self.account_id.clone()).await?)
     }
 
     async fn get_free_dot_balance_for_id(
