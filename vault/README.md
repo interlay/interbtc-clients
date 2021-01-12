@@ -35,7 +35,7 @@ cargo run --release -- --dev
 
 ## Getting Started
 
-Run the vault client:
+The basic command to run the vault client:
 
 ```
 source ../.env
@@ -86,9 +86,7 @@ OPTIONS:
 
         --keyfile <keyfile>
             Path to the json file containing key pairs in a map. Valid content of this file is e.g.
-            `{ "MyUser1": "<credentials>", "MyUser2": "<credentials>" }`. Credentials should be a
-            `0x`-prefixed 64-digit hex string, or a BIP-39 key phrase of 12, 15, 18, 21 or 24 words.
-            See `sp_core::from_string_with_seed` for more details
+            `{ "MyUser1": "<Polkadot Account Mnemonic>", "MyUser2": "<Polkadot Account Mnemonic>" }`
 
         --keyname <keyname>
             The name of the account from the keyfile to use
@@ -109,3 +107,27 @@ OPTIONS:
         --rpc-cors-domain <rpc-cors-domain>
             Comma separated list of allowed origins [default: *]
 ```
+
+## Example
+
+First, ensure you have a running Bitcoin node and a `keyfile.json` as specified above. An example keyfile looks as follows:
+```
+{ 
+    "vault": "car timber smoke zone west involve board success norm inherit door road" 
+}
+```
+
+Next, ensure the Polkadot account whose mnemonic you provided in `keyfile.json` is funded with enough DOT to pay for the registration transaction.
+
+Then, run the vault and register it with the parachain as in the example below:
+```
+cargo run -- \
+    --bitcoin-rpc-url http://localhost:18332 \
+    --bitcoin-rpc-user rpcuser \
+    --bitcoin-rpc-pass rpcpass \
+    --keyfile /path/to/keyfile.json \
+    --keyname vault \
+    --polka-btc-url 'wss://beta.polkabtc.io/api/parachain'
+```
+
+Once the vault is running, go to https://beta.polkabtc.io to the Vault page and register some collateral, so the vault you registered can start issuing. You can also check its status on the Dashboard page.

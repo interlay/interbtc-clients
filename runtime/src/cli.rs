@@ -14,10 +14,7 @@ pub struct ProviderUserOpts {
 
     /// Path to the json file containing key pairs in a map.
     /// Valid content of this file is e.g.
-    /// `{ "MyUser1": "<credentials>", "MyUser2": "<credentials>" }`.
-    /// Credentials should be a `0x`-prefixed 64-digit hex string, or
-    /// a BIP-39 key phrase of 12, 15, 18, 21 or 24 words. See
-    /// `sp_core::from_string_with_seed` for more details.
+    /// `{ "MyUser1": "<Polkadot Account Mnemonic>", "MyUser2": "<Polkadot Account Mnemonic>" }`.
     #[clap(long, conflicts_with = "keyring", requires = "keyname")]
     keyfile: Option<String>,
 
