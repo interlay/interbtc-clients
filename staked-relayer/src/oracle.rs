@@ -77,6 +77,10 @@ mod tests {
             async fn set_btc_tx_fees_per_byte(&self, fast: u32, half: u32, hour: u32) -> Result<(), Error>;
 
             async fn get_btc_tx_fees_per_byte(&self) -> Result<BtcTxFeesPerByte, Error>;
+
+            async fn btc_to_dots(&self, amount: u128) -> Result<u128, Error>;
+
+            async fn dots_to_btc(&self, amount: u128) -> Result<u128, Error>;
         }
 
         #[async_trait]
@@ -104,7 +108,6 @@ mod tests {
                 &self,
                 vault_id: AccountId,
                 tx_id: H256Le,
-                tx_block_height: u32,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), Error>;

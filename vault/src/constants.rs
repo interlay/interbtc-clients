@@ -1,17 +1,6 @@
 use backoff::ExponentialBackoff;
 use std::time::Duration;
 
-/// Interval at which new blocks are expected to be added in the parachain
-pub const SECONDS_PER_BLOCK: u32 = 6; // TODO: re-use constant from the parachain
-
-/// number of seconds after the issue/replace deadline before the issue/replace is
-/// actually canceled. When set too low, chances are we try to cancel before
-/// required block has been added
-pub const CANCEL_MARGIN_SECONDS: u32 = 5 * 60;
-
-/// Time to wait after failing to read the open issue/replace list before retrying
-pub const REQUEST_RETRY_INTERVAL: Duration = Duration::from_secs(15 * 60);
-
 /// Retry bitcoin ops for at most 24 hours
 pub const BITCOIN_MAX_RETRYING_TIME: Duration = Duration::from_secs(24 * 60 * 60);
 

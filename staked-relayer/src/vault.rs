@@ -94,7 +94,6 @@ impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultTheftMonitor<P, B> {
                 .report_vault_theft(
                     vault_id,
                     H256Le::from_bytes_le(&tx_id.as_hash()),
-                    self.btc_height,
                     proof,
                     raw_tx,
                 )
@@ -125,10 +124,8 @@ impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultTheftMonitor<P, B> {
 
         let mut backoff = get_retry_policy();
 
-        let mut stream = bitcoin::stream_in_chain_transactions(
-            self.btc_rpc.clone(),
-            self.btc_rpc.get_block_count()? as u32,
-        );
+        let mut stream =
+            bitcoin::stream_in_chain_transactions(self.btc_rpc.clone(), self.btc_height);
 
         loop {
             match stream.next().await.unwrap() {
@@ -205,13 +202,14 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, Error as BitcoinError, GetBlockResult, GetRawTransactionResult, PartialAddress,
-        Transaction, TransactionMetadata,
+        Block, Error as BitcoinError, GetBlockResult, GetRawTransactionResult, LockedTransaction,
+        PartialAddress, Transaction, TransactionMetadata,
     };
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
     use sp_core::H160;
     use sp_keyring::AccountKeyring;
+    use std::future::Future;
 
     mockall::mock! {
         Provider {}
@@ -241,7 +239,6 @@ mod tests {
                 &self,
                 vault_id: AccountId,
                 tx_id: H256Le,
-                tx_block_height: u32,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -267,11 +264,7 @@ mod tests {
                 hash: &BlockHash,
             ) -> Result<Vec<Option<GetRawTransactionResult>>, BitcoinError>;
 
-            fn get_raw_tx_for(
-                &self,
-                txid: &Txid,
-                block_hash: &BlockHash,
-            ) -> Result<Vec<u8>, BitcoinError>;
+            fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
 
             fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
 
@@ -279,7 +272,7 @@ mod tests {
 
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
 
-            fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, BitcoinError>;
+            fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError>;
 
             fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
 
@@ -298,18 +291,27 @@ mod tests {
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
 
-            async fn send_transaction<A: PartialAddress + 'static>(
+            async fn create_transaction<A: PartialAddress + Send + 'static>(
                 &self,
-                address: String,
+                address: A,
                 sat: u64,
-                redeem_id: &[u8; 32],
+                request_id: &[u8; 32],
+            ) -> Result<LockedTransaction, BitcoinError>;
+
+            fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
+
+            async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
+                &self,
+                address: A,
+                sat: u64,
+                request_id: &[u8; 32],
             ) -> Result<Txid, BitcoinError>;
 
-            async fn send_to_address<A: PartialAddress + 'static>(
+            async fn send_to_address<A: PartialAddress + Send + 'static>(
                 &self,
-                address: String,
+                address: A,
                 sat: u64,
-                redeem_id: &[u8; 32],
+                request_id: &[u8; 32],
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
@@ -351,7 +353,7 @@ mod tests {
         parachain
             .expect_report_vault_theft()
             .never()
-            .returning(|_, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _| Ok(()));
 
         let monitor = VaultTheftMonitor::new(
             0,
@@ -381,7 +383,7 @@ mod tests {
         parachain
             .expect_report_vault_theft()
             .once()
-            .returning(|_, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _| Ok(()));
 
         let monitor = VaultTheftMonitor::new(
             0,

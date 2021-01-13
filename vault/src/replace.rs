@@ -1,4 +1,4 @@
-use crate::cancellation::ProcessEvent;
+use crate::cancellation::RequestEvent;
 use crate::constants::get_retry_policy;
 use crate::error::Error;
 use crate::execution::Request;
@@ -12,7 +12,7 @@ use runtime::{
         replace::{AcceptReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent},
         vault_registry::Vault,
     },
-    DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet,
+    DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet, UtilFuncs,
     VaultRegistryPallet,
 };
 use std::sync::Arc;
@@ -30,7 +30,6 @@ use std::time::Duration;
 pub async fn listen_for_accept_replace(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<BitcoinCore>,
-    network: bitcoin::Network,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     let provider = &provider;
@@ -54,7 +53,6 @@ pub async fn listen_for_accept_replace(
                         &event,
                         btc_rpc.clone(),
                         provider.clone(),
-                        network,
                         num_confirmations,
                     )
                     .await;
@@ -92,7 +90,6 @@ pub async fn handle_accepted_replace_request(
     event: &AcceptReplaceEvent<PolkaBtcRuntime>,
     btc_rpc: Arc<BitcoinCore>,
     provider: Arc<PolkaBtcProvider>,
-    network: bitcoin::Network,
     num_confirmations: u32,
 ) -> Result<(), Error> {
     // retrieve vault's btc address
@@ -113,7 +110,7 @@ pub async fn handle_accepted_replace_request(
 
     let request = Request::from_replace_request_event(&event, wallet.get_btc_address());
     request
-        .pay_and_execute(provider, btc_rpc, num_confirmations, network)
+        .pay_and_execute(provider, btc_rpc, num_confirmations)
         .await
 }
 
@@ -126,7 +123,7 @@ pub async fn handle_accepted_replace_request(
 /// * `accept_replace_requests` - if true, we attempt to accept replace requests
 pub async fn listen_for_replace_requests(
     provider: Arc<PolkaBtcProvider>,
-    event_channel: Sender<ProcessEvent>,
+    event_channel: Sender<RequestEvent>,
     accept_replace_requests: bool,
 ) -> Result<(), runtime::Error> {
     let provider = &provider;
@@ -150,7 +147,7 @@ pub async fn listen_for_replace_requests(
                             info!("Accepted replace request #{}", event.replace_id);
                             // try to send the event, but ignore the returned result since
                             // the only way it can fail is if the channel is closed
-                            let _ = event_channel.clone().send(ProcessEvent::Opened).await;
+                            let _ = event_channel.clone().send(RequestEvent::Opened).await;
                         }
                         Err(e) => error!(
                             "Failed to accept replace request #{}: {}",
@@ -245,7 +242,7 @@ async fn handle_auction_replace<P: DotBalancesPallet + ReplacePallet + VaultRegi
 /// * `event_channel` - the channel over which to signal events
 pub async fn listen_for_execute_replace(
     provider: Arc<PolkaBtcProvider>,
-    event_channel: Sender<ProcessEvent>,
+    event_channel: Sender<RequestEvent>,
 ) -> Result<(), runtime::Error> {
     let event_channel = &event_channel;
     let provider = &provider;
@@ -258,7 +255,7 @@ pub async fn listen_for_execute_replace(
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel
                         .clone()
-                        .send(ProcessEvent::Executed(event.replace_id))
+                        .send(RequestEvent::Executed(event.replace_id))
                         .await;
                 }
             },

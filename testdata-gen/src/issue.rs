@@ -3,7 +3,10 @@
 use crate::{utils, Error};
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
-use runtime::{pallets::btc_relay::H256Le, BtcAddress, IssuePallet, PolkaBtcProvider, AccountId};
+use runtime::{
+    pallets::btc_relay::H256Le, AccountId, BtcAddress, IssuePallet, PolkaBtcProvider,
+    PolkaBtcRequestIssueEvent, UtilFuncs,
+};
 use sp_core::H256;
 use std::convert::TryInto;
 use std::time::Duration;
@@ -14,8 +17,8 @@ pub async fn request_issue(
     amount: u128,
     griefing_collateral: u128,
     vault_id: AccountId,
-) -> Result<H256, Error> {
-    let issue_id = issue_prov
+) -> Result<PolkaBtcRequestIssueEvent, Error> {
+    let issue_data = issue_prov
         .request_issue(amount, vault_id.clone(), griefing_collateral)
         .await?;
 
@@ -23,10 +26,10 @@ pub async fn request_issue(
         "Requested {:?} to issue {:?} PolkaBTC from {:?}",
         issue_prov.get_account_id(),
         amount,
-        vault_id
+        issue_data.vault_id
     );
 
-    Ok(issue_id)
+    Ok(issue_data)
 }
 
 /// Execute issue of PolkaBTC
@@ -35,10 +38,10 @@ pub async fn execute_issue(
     btc_rpc: &BitcoinCore,
     issue_id: H256,
     issue_amount: u128,
-    vault_btc_address: String,
+    vault_btc_address: BtcAddress,
 ) -> Result<(), Error> {
     let tx_metadata = btc_rpc
-        .send_to_address::<BtcAddress>(
+        .send_to_address(
             vault_btc_address,
             issue_amount.try_into().unwrap(),
             &issue_id.to_fixed_bytes(),
@@ -63,16 +66,10 @@ pub async fn execute_issue(
 }
 
 /// Set issue period of PolkaBTC
-pub async fn set_issue_period(
-    issue_prov: &PolkaBtcProvider,
-    period: u32,
-) -> Result<(), Error> {
+pub async fn set_issue_period(issue_prov: &PolkaBtcProvider, period: u32) -> Result<(), Error> {
     issue_prov.set_issue_period(period).await?;
 
-    info!(
-        "Set the issue period to {:?}",
-        period,
-    );
+    info!("Set the issue period to {:?}", period,);
 
     Ok(())
 }

@@ -11,7 +11,7 @@ mod redeem;
 mod replace;
 
 use crate::{
-    cancellation::{CancellationScheduler, IssueCanceller, ProcessEvent, ReplaceCanceller},
+    cancellation::{CancellationScheduler, IssueCanceller, ReplaceCanceller, RequestEvent},
     collateral::*,
     constants::*,
     error::Error,
@@ -24,10 +24,11 @@ use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use core::str::FromStr;
 use futures::channel::mpsc;
+use futures::SinkExt;
 use log::*;
 use runtime::{
-    substrate_subxt::PairSigner, BtcRelayPallet, Error as RuntimeError, PolkaBtcProvider,
-    PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
+    substrate_subxt::PairSigner, BtcRelayPallet, Error as RuntimeError, PolkaBtcHeader,
+    PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
 };
 use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
@@ -124,7 +125,10 @@ async fn main() -> Result<(), Error> {
     // load parachain credentials
     let (pair, wallet) = opts.account_info.get_key_pair()?;
 
-    let btc_rpc = Arc::new(BitcoinCore::new(opts.bitcoin.new_client(Some(&wallet))?));
+    let btc_rpc = Arc::new(BitcoinCore::new(
+        opts.bitcoin.new_client(Some(&wallet))?,
+        opts.network.0,
+    ));
 
     // load wallet. Exit on failure, since without wallet we can't do a lot
     btc_rpc
@@ -156,12 +160,8 @@ async fn main() -> Result<(), Error> {
         }
     }
 
-    let open_request_executor = execute_open_requests(
-        arc_provider.clone(),
-        btc_rpc.clone(),
-        num_confirmations,
-        opts.network.0,
-    );
+    let open_request_executor =
+        execute_open_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
     tokio::spawn(async move {
         info!("Checking for open replace/redeem requests..");
         match open_request_executor.await {
@@ -193,9 +193,13 @@ async fn main() -> Result<(), Error> {
     }
     info!("Starting to listen for events..");
 
+    let (issue_block_tx, issue_block_rx) = mpsc::channel::<PolkaBtcHeader>(16);
+    let (replace_block_tx, replace_block_rx) = mpsc::channel::<PolkaBtcHeader>(16);
+    let block_listener = arc_provider.clone();
+
     // Issue handling
     let issue_set = Arc::new(IssueIds::new());
-    let (issue_event_tx, issue_event_rx) = mpsc::channel::<ProcessEvent>(16);
+    let (issue_event_tx, issue_event_rx) = mpsc::channel::<RequestEvent>(16);
     let mut issue_cancellation_scheduler =
         CancellationScheduler::new(arc_provider.clone(), vault_id.clone());
     let issue_request_listener = listen_for_issue_requests(
@@ -217,7 +221,7 @@ async fn main() -> Result<(), Error> {
     );
 
     // replace handling
-    let (replace_event_tx, replace_event_rx) = mpsc::channel::<ProcessEvent>(16);
+    let (replace_event_tx, replace_event_rx) = mpsc::channel::<RequestEvent>(16);
     let mut replace_cancellation_scheduler =
         CancellationScheduler::new(arc_provider.clone(), vault_id.clone());
     let request_replace_listener = listen_for_replace_requests(
@@ -225,22 +229,14 @@ async fn main() -> Result<(), Error> {
         replace_event_tx.clone(),
         !opts.no_auto_replace,
     );
-    let accept_replace_listener = listen_for_accept_replace(
-        arc_provider.clone(),
-        btc_rpc.clone(),
-        opts.network.0,
-        num_confirmations,
-    );
+    let accept_replace_listener =
+        listen_for_accept_replace(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
     let execute_replace_listener =
         listen_for_execute_replace(arc_provider.clone(), replace_event_tx);
 
     // redeem handling
-    let redeem_listener = listen_for_redeem_requests(
-        arc_provider.clone(),
-        btc_rpc.clone(),
-        opts.network.0,
-        num_confirmations,
-    );
+    let redeem_listener =
+        listen_for_redeem_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
 
     let api_listener = api::start(
         arc_provider.clone(),
@@ -272,6 +268,28 @@ async fn main() -> Result<(), Error> {
             collateral_maintainer.await.unwrap();
         }),
         tokio::spawn(async move {
+            let issue_block_tx = &issue_block_tx;
+            let replace_block_tx = &replace_block_tx;
+
+            block_listener
+                .clone()
+                .on_block(move |header| async move {
+                    issue_block_tx
+                        .clone()
+                        .send(header.clone())
+                        .await
+                        .map_err(|_| RuntimeError::ChannelClosed)?;
+                    replace_block_tx
+                        .clone()
+                        .send(header.clone())
+                        .await
+                        .map_err(|_| RuntimeError::ChannelClosed)?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+        }),
+        tokio::spawn(async move {
             issue_request_listener.await.unwrap();
         }),
         tokio::spawn(async move {
@@ -279,7 +297,7 @@ async fn main() -> Result<(), Error> {
         }),
         tokio::spawn(async move {
             issue_cancellation_scheduler
-                .handle_cancellation::<IssueCanceller>(issue_event_rx)
+                .handle_cancellation::<IssueCanceller>(issue_block_rx, issue_event_rx)
                 .await
                 .unwrap();
         }),
@@ -323,7 +341,7 @@ async fn main() -> Result<(), Error> {
         }),
         tokio::spawn(async move {
             replace_cancellation_scheduler
-                .handle_cancellation::<ReplaceCanceller>(replace_event_rx)
+                .handle_cancellation::<ReplaceCanceller>(replace_block_rx, replace_event_rx)
                 .await
                 .unwrap();
         }),

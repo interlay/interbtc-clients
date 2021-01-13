@@ -2,6 +2,7 @@ pub mod balances_dot;
 pub mod btc_relay;
 pub mod collateral;
 pub mod exchange_rate_oracle;
+pub mod fee;
 pub mod frame_system;
 pub mod issue;
 pub mod redeem;
@@ -39,4 +40,7 @@ pub trait Core: System {
     type ErrorCodes: Codec + EncodeLike + Member + Default;
     type ErrorCode: Codec + EncodeLike + Member + Default;
     type StatusCode: Codec + EncodeLike + Member + Default;
+
+    type SignedFixedPoint: Codec + EncodeLike + Member + Default;
+    type UnsignedFixedPoint: Codec + EncodeLike + Member + Default;
 }

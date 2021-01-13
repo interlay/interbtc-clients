@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
 use crate::{utils, Error};
-use bitcoin::{BitcoinCore, BitcoinCoreApi, PartialAddress};
+use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
 use runtime::pallets::btc_relay::H256Le;
-use runtime::{BtcAddress, PolkaBtcProvider, ReplacePallet};
+use runtime::{BtcAddress, PolkaBtcProvider, ReplacePallet, UtilFuncs};
 use sp_core::H256;
 use std::convert::TryInto;
 use std::time::Duration;
@@ -45,15 +45,11 @@ pub async fn execute_replace(
     replace_id: H256,
 ) -> Result<(), Error> {
     let replace_request = replace_prov.get_replace_request(replace_id).await?;
-    let btc_address = replace_request
-        .btc_address
-        .encode_str(bitcoin::Network::Regtest)?;
-
-    println!("Satoshis: {}", replace_request.amount);
+    info!("Satoshis: {}", replace_request.amount);
 
     let tx_metadata = btc_rpc
         .send_to_address::<BtcAddress>(
-            btc_address,
+            replace_request.btc_address,
             replace_request.amount.try_into().unwrap(),
             &replace_id.to_fixed_bytes(),
             Duration::from_secs(15 * 60),
@@ -76,16 +72,10 @@ pub async fn execute_replace(
 }
 
 /// Set replace period of PolkaBTC
-pub async fn set_replace_period(
-    replace_prov: &PolkaBtcProvider,
-    period: u32,
-) -> Result<(), Error> {
+pub async fn set_replace_period(replace_prov: &PolkaBtcProvider, period: u32) -> Result<(), Error> {
     replace_prov.set_replace_period(period).await?;
 
-    info!(
-        "Set the replace period to {:?}",
-        period,
-    );
+    info!("Set the replace period to {:?}", period,);
 
     Ok(())
 }

@@ -8,7 +8,7 @@ use jsonrpc_http_server::{
 };
 use log::info;
 use parity_scale_codec::{Decode, Encode};
-use runtime::{BtcAddress, PolkaBtcProvider, ReplacePallet, VaultRegistryPallet};
+use runtime::{BtcAddress, PolkaBtcProvider, ReplacePallet, UtilFuncs, VaultRegistryPallet};
 use serde::{Deserialize, Deserializer};
 use sp_core::crypto::Ss58Codec;
 use sp_core::H256;

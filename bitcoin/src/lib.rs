@@ -28,10 +28,10 @@ pub use bitcoincore_rpc::{
     Auth, Client, Error as BitcoinError, RpcApi,
 };
 pub use error::{BitcoinRpcError, ConversionError, Error};
-use futures::lock::Mutex;
 pub use iter::{get_transactions, stream_blocks, stream_in_chain_transactions};
 use sp_core::H256;
 use std::{sync::Arc, time::Duration};
+use tokio::sync::{Mutex, OwnedMutexGuard};
 use tokio::time::delay_for;
 
 #[macro_use]
@@ -67,7 +67,7 @@ pub trait BitcoinCoreApi {
 
     fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
 
-    fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, Error>;
+    fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
 
     fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
 
@@ -86,16 +86,25 @@ pub trait BitcoinCoreApi {
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
-    async fn send_transaction<A: PartialAddress + 'static>(
+    async fn create_transaction<A: PartialAddress + Send + 'static>(
         &self,
-        address: String,
+        address: A,
+        sat: u64,
+        request_id: &[u8; 32],
+    ) -> Result<LockedTransaction, Error>;
+
+    fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
+
+    async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
+        &self,
+        address: A,
         sat: u64,
         request_id: &[u8; 32],
     ) -> Result<Txid, Error>;
 
-    async fn send_to_address<A: PartialAddress + 'static>(
+    async fn send_to_address<A: PartialAddress + Send + 'static>(
         &self,
-        address: String,
+        address: A,
         sat: u64,
         request_id: &[u8; 32],
         op_timeout: Duration,
@@ -105,16 +114,30 @@ pub trait BitcoinCoreApi {
     fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
 }
 
+pub struct LockedTransaction {
+    pub transaction: Transaction,
+    _lock: OwnedMutexGuard<()>,
+}
+impl LockedTransaction {
+    fn new(transaction: Transaction, lock: OwnedMutexGuard<()>) -> Self {
+        LockedTransaction {
+            transaction,
+            _lock: lock,
+        }
+    }
+}
 pub struct BitcoinCore {
     rpc: Client,
-    transaction_creation_lock: Mutex<()>,
+    transaction_creation_lock: Arc<Mutex<()>>,
+    network: Network,
 }
 
 impl BitcoinCore {
-    pub fn new(rpc: Client) -> Self {
+    pub fn new(rpc: Client, network: Network) -> Self {
         Self {
             rpc,
-            transaction_creation_lock: Mutex::new(()),
+            network,
+            transaction_creation_lock: Arc::new(Mutex::new(())),
         }
     }
 
@@ -275,7 +298,7 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     /// Gets a new address from the wallet
-    fn get_new_address<A: PartialAddress + 'static>(&self) -> Result<A, Error> {
+    fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error> {
         let address = self.rpc.get_new_address(None, Some(AddressType::Bech32))?;
         Ok(A::decode_str(&address.to_string())?)
     }
@@ -371,27 +394,28 @@ impl BitcoinCoreApi for BitcoinCore {
         })
     }
 
-    /// Send an amount of Bitcoin to an address, but only submit the transaction
-    /// to the mempool; this method does not wait until the block is included in
-    /// the blockchain.
+    /// Creates and return a transaction; it is not submitted to the mempool. While the returned value
+    /// is alive, no other transactions can be created (this is guarded by a mutex). This prevents
+    /// accidental double spending.
     ///
     /// # Arguments
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
     /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
-    async fn send_transaction<A: PartialAddress + 'static>(
+    async fn create_transaction<A: PartialAddress + Send + 'static>(
         &self,
-        address: String,
+        address: A,
         sat: u64,
         request_id: &[u8; 32],
-    ) -> Result<Txid, Error> {
+    ) -> Result<LockedTransaction, Error> {
+        let address_string = address.encode_str(self.network.clone())?;
         // create raw transaction that includes the op_return. If we were to add the op_return
         // after funding, the fees might be insufficient. An alternative to our own version of
         // this function would be to call create_raw_transaction (without the _hex suffix), and
         // to add the op_return afterwards. However, this function fails if no inputs are
         // specified, as is the case for us prior to calling fund_raw_transaction.
         let raw_tx = self.create_raw_transaction_hex_with_op_return(
-            address,
+            address_string,
             Amount::from_sat(sat),
             request_id,
         )?;
@@ -399,7 +423,7 @@ impl BitcoinCoreApi for BitcoinCore {
         // ensure no other fund_raw_transaction calls are made until we submitted the
         // transaction to the bitcoind. If we don't do this, the same uxto may be used
         // as input twice (i.e. double spend)
-        let _lock = self.transaction_creation_lock.lock().await;
+        let lock = self.transaction_creation_lock.clone().lock_owned().await;
 
         // fund the transaction: adds required inputs, and possibly a return-to-self output
         let funded_raw_tx = self.rpc.fund_raw_transaction(raw_tx, None, None)?;
@@ -414,11 +438,37 @@ impl BitcoinCoreApi for BitcoinCore {
             return Err(Error::TransactionSigningError);
         }
 
-        // place the transaction into the mempool
-        let txid = self
-            .rpc
-            .send_raw_transaction(&signed_funded_raw_tx.transaction()?)?;
+        let transaction = signed_funded_raw_tx.transaction()?;
 
+        Ok(LockedTransaction::new(transaction, lock))
+    }
+
+    /// Submits a transaction to the mempool
+    ///
+    /// # Arguments
+    /// * `transaction` - The transaction created by create_transaction
+    fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error> {
+        // place the transaction into the mempool
+        let txid = self.rpc.send_raw_transaction(&transaction.transaction)?;
+        Ok(txid)
+    }
+
+    /// Send an amount of Bitcoin to an address, but only submit the transaction
+    /// to the mempool; this method does not wait until the block is included in
+    /// the blockchain.
+    ///
+    /// # Arguments
+    /// * `address` - Bitcoin address to fund
+    /// * `sat` - number of Satoshis to transfer
+    /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
+    async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
+        &self,
+        address: A,
+        sat: u64,
+        request_id: &[u8; 32],
+    ) -> Result<Txid, Error> {
+        let tx = self.create_transaction(address, sat, request_id).await?;
+        let txid = self.send_transaction(tx)?;
         Ok(txid)
     }
 
@@ -431,15 +481,17 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
     /// * `op_timeout` - how long operations will be retried
     /// * `num_confirmations` - how many confirmations we need to wait for
-    async fn send_to_address<A: PartialAddress + 'static>(
+    async fn send_to_address<A: PartialAddress + Send + 'static>(
         &self,
-        address: String,
+        address: A,
         sat: u64,
         request_id: &[u8; 32],
         op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
-        let txid = self.send_transaction::<A>(address, sat, request_id).await?;
+        let txid = self
+            .create_and_send_transaction(address, sat, request_id)
+            .await?;
 
         #[cfg(feature = "regtest-mine-on-tx")]
         self.rpc.generate_to_address(
@@ -476,6 +528,7 @@ pub trait TransactionExt {
     fn get_op_return(&self) -> Option<H256>;
     fn get_payment_amount_to<A: PartialAddress + PartialEq>(&self, dest: A) -> Option<u64>;
     fn extract_input_addresses<A: PartialAddress>(&self) -> Vec<A>;
+    fn extract_output_addresses<A: PartialAddress>(&self) -> Result<Vec<A>, Error>;
 }
 
 impl TransactionExt for Transaction {
@@ -513,27 +566,41 @@ impl TransactionExt for Transaction {
             .filter_map(|vin| vin_to_address(vin.clone()).map_or(None, |addr| Some(addr)))
             .collect::<Vec<A>>()
     }
+
+    /// return the addresses that are used as outputs with non-zero value in this transaction
+    fn extract_output_addresses<A: PartialAddress>(&self) -> Result<Vec<A>, Error> {
+        self.output
+            .iter()
+            .filter(|x| x.value > 0)
+            .map(|tx_out| {
+                let payload = Payload::from_script(&tx_out.script_pubkey)
+                    .ok_or(ConversionError::InvalidPayload)?;
+                let address = PartialAddress::from_payload(payload)?;
+                Ok(address)
+            })
+            .collect()
+    }
 }
 
 // https://gitlab.com/interlay/btc-parachain/-/blob/dev/crates/bitcoin/src/parser.rs#L264
-fn parse_compact_uint(varint: &[u8]) -> (u64, usize) {
-    match varint[0] {
+fn parse_compact_uint(varint: &[u8]) -> Result<(u64, usize), Error> {
+    match varint.get(0).ok_or(Error::ParsingError)? {
         0xfd => {
             let mut num_bytes: [u8; 2] = Default::default();
-            num_bytes.copy_from_slice(&varint[1..3]);
-            (u16::from_le_bytes(num_bytes) as u64, 3)
+            num_bytes.copy_from_slice(&varint.get(1..3).ok_or(Error::ParsingError)?);
+            Ok((u16::from_le_bytes(num_bytes) as u64, 3))
         }
         0xfe => {
             let mut num_bytes: [u8; 4] = Default::default();
-            num_bytes.copy_from_slice(&varint[1..5]);
-            (u32::from_le_bytes(num_bytes) as u64, 5)
+            num_bytes.copy_from_slice(&varint.get(1..5).ok_or(Error::ParsingError)?);
+            Ok((u32::from_le_bytes(num_bytes) as u64, 5))
         }
         0xff => {
             let mut num_bytes: [u8; 8] = Default::default();
-            num_bytes.copy_from_slice(&varint[1..9]);
-            (u64::from_le_bytes(num_bytes) as u64, 9)
+            num_bytes.copy_from_slice(&varint.get(1..9).ok_or(Error::ParsingError)?);
+            Ok((u64::from_le_bytes(num_bytes) as u64, 9))
         }
-        _ => (varint[0] as u64, 1),
+        _ => Ok((varint[0] as u64, 1)),
     }
 }
 
@@ -542,6 +609,11 @@ fn vin_to_address<A: PartialAddress>(vin: TxIn) -> Result<A, Error> {
         Script::new_v0_wpkh(&WPubkeyHash::hash(&vin.witness[1]))
     } else {
         let input_script = vin.script_sig.as_bytes();
+        if input_script.len() == 0 {
+            // ignore empty scripts (i.e. witness)
+            return Err(Error::ParsingError);
+        }
+
         let mut p2pkh = true;
         let mut pos = if input_script[0] == 0x00 {
             p2pkh = false;
@@ -551,18 +623,24 @@ fn vin_to_address<A: PartialAddress>(vin: TxIn) -> Result<A, Error> {
         };
 
         // TODO: reuse logic from bitcoin crate
-        let (size, len) = parse_compact_uint(&input_script[pos..pos + 3]);
+        let last = std::cmp::min(pos + 3, input_script.len());
+        let (size, len) =
+            parse_compact_uint(input_script.get(pos..last).ok_or(Error::ParsingError)?)?;
         pos += len;
         // skip sigs
         pos += size as usize;
         // parse redeem_script or compressed public_key
-        let (_size, len) = parse_compact_uint(&input_script[pos..pos + 3]);
+        let last = std::cmp::min(pos + 3, input_script.len());
+        let (_size, len) =
+            parse_compact_uint(input_script.get(pos..last).ok_or(Error::ParsingError)?)?;
         pos += len;
 
+        let bytes = input_script.get(pos..).ok_or(Error::ParsingError)?;
+
         if p2pkh {
-            Script::new_p2pkh(&PubkeyHash::hash(&input_script[pos..]))
+            Script::new_p2pkh(&PubkeyHash::hash(bytes))
         } else {
-            Script::new_p2sh(&ScriptHash::hash(&input_script[pos..]))
+            Script::new_p2sh(&ScriptHash::hash(bytes))
         }
     };
 

@@ -37,7 +37,7 @@ async fn scan(
         // TODO: handle errors here, we probably want to retry
         let block_hash = btc_rpc.wait_for_block(btc_height, block_delay).await?;
         for maybe_tx in btc_rpc.get_block_transactions(&block_hash)? {
-            if let Some(tx) = maybe_tx {
+            if let Some(_tx) = maybe_tx {
                 // let _results = bitcoin::extract_op_returns(tx);
                 // TODO: store key-value (op_return:tx_id) in db
                 // e.g. https://github.com/rust-rocksdb/rust-rocksdb
@@ -52,7 +52,7 @@ async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
     let btc_client = opts.bitcoin.new_client(None)?;
-    let btc_rpc = bitcoin::BitcoinCore::new(btc_client);
+    let btc_rpc = bitcoin::BitcoinCore::new(btc_client, bitcoin::Network::Regtest);
 
     let btc_height = if let Some(height) = opts.start_height {
         height
