@@ -10,12 +10,18 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Invalid request id")]
-    InvalidRequestId,
     #[error("Unknown Bitcoin network")]
     UnknownBitcoinNetwork,
     #[error("Mathematical operation error")]
     MathError,
+    #[error("Expected OP_RETURN data")]
+    ExpectedOpReturn,
+    #[error("Expected Bitcoin address")]
+    ExpectedBitcoinAddress,
+    #[error("Issue has been completed")]
+    IssueCompleted,
+    #[error("Issue has been cancelled")]
+    IssueCancelled,
 
     #[error("IoError: {0}")]
     IoError(#[from] IoError),
