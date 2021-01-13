@@ -12,7 +12,7 @@ pub trait ExchangeRateOracle: Core + Timestamp {}
 /// Current BTC/DOT exchange rate
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct ExchangeRateStore<T: ExchangeRateOracle> {
-    #[store(returns = T::u128)]
+    #[store(returns = T::UnsignedFixedPoint)]
     pub _runtime: PhantomData<T>,
 }
 
@@ -32,14 +32,14 @@ pub struct MaxDelayStore<T: ExchangeRateOracle> {
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct SetExchangeRateCall<T: ExchangeRateOracle> {
-    pub rate: T::u128,
+    pub rate: T::UnsignedFixedPoint,
     pub _runtime: PhantomData<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct SetExchangeRateEvent<T: ExchangeRateOracle> {
     pub sender: T::AccountId,
-    pub rate: T::u128,
+    pub rate: T::UnsignedFixedPoint,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
