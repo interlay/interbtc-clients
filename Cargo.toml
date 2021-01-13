@@ -6,7 +6,7 @@ members = [
   "testdata-gen",
   "vault",
   "bitcoin",
-  "backend"
+  "faucet"
 ]
 
 [patch.crates-io]
