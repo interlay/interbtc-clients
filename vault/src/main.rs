@@ -242,7 +242,7 @@ async fn main() -> Result<(), Error> {
 
     // refund handling
     let refund_listener =
-    listen_for_refund_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
+        listen_for_refund_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
 
     let api_listener = api::start(
         arc_provider.clone(),

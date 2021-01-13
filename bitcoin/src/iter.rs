@@ -96,20 +96,23 @@ pub fn get_blocks<T: BitcoinCoreApi>(
 pub fn stream_in_chain_transactions<T: BitcoinCoreApi>(
     rpc: Arc<T>,
     from_height: u32,
+    num_confirmations: u32,
 ) -> impl Stream<Item = Result<(BlockHash, Transaction), Error>> + Unpin {
-    Box::pin(stream_blocks(rpc, from_height).flat_map(|result| {
-        futures::stream::iter(result.map_or_else(
-            |err| vec![Err(err)],
-            |block| {
-                let block_hash = block.block_hash();
-                block
-                    .txdata
-                    .into_iter()
-                    .map(|tx| Ok((block_hash, tx)))
-                    .collect()
-            },
-        ))
-    }))
+    Box::pin(
+        stream_blocks(rpc, from_height, num_confirmations).flat_map(|result| {
+            futures::stream::iter(result.map_or_else(
+                |err| vec![Err(err)],
+                |block| {
+                    let block_hash = block.block_hash();
+                    block
+                        .txdata
+                        .into_iter()
+                        .map(|tx| Ok((block_hash, tx)))
+                        .collect()
+                },
+            ))
+        }),
+    )
 }
 
 /// Stream blocks continuously `from_height` awaiting the production of
@@ -122,6 +125,7 @@ pub fn stream_in_chain_transactions<T: BitcoinCoreApi>(
 pub fn stream_blocks<T: BitcoinCoreApi>(
     rpc: Arc<T>,
     from_height: u32,
+    num_confirmations: u32,
 ) -> impl Stream<Item = Result<Block, Error>> + Unpin {
     struct StreamState<T> {
         rpc: Arc<T>,
@@ -133,12 +137,16 @@ pub fn stream_blocks<T: BitcoinCoreApi>(
         next_height: from_height,
     };
 
-    Box::pin(stream::unfold(state, |mut state| async move {
+    Box::pin(stream::unfold(state, move |mut state| async move {
         // FIXME: if Bitcoin Core forks, this may skip a block
         let height = state.next_height;
         match state
             .rpc
-            .wait_for_block(height, Duration::from_secs(BLOCK_WAIT_TIMEOUT))
+            .wait_for_block(
+                height,
+                Duration::from_secs(BLOCK_WAIT_TIMEOUT),
+                num_confirmations,
+            )
             .await
         {
             Ok(block_hash) => match state.rpc.get_block(&block_hash) {
@@ -171,7 +179,7 @@ mod tests {
 
         #[async_trait]
         trait BitcoinCoreApi {
-            async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, Error>;
+            async fn wait_for_block(&self, height: u32, delay: Duration, num_confirmations: u32) -> Result<BlockHash, Error>;
 
             fn get_block_count(&self) -> Result<u64, Error>;
 

@@ -7,8 +7,8 @@ use futures::stream::StreamExt;
 use log::*;
 use runtime::{
     pallets::vault_registry::{RegisterVaultEvent, UpdateBtcAddressEvent},
-    AccountId, BtcAddress, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
-    PolkaBtcVault, StakedRelayerPallet, VaultRegistryPallet,
+    AccountId, BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, PolkaBtcProvider,
+    PolkaBtcRuntime, PolkaBtcVault, StakedRelayerPallet, VaultRegistryPallet,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -40,7 +40,7 @@ impl Vaults {
     }
 }
 
-pub struct VaultTheftMonitor<P: StakedRelayerPallet, B: BitcoinCoreApi> {
+pub struct VaultTheftMonitor<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi> {
     btc_height: u32,
     btc_rpc: Arc<B>,
     polka_rpc: Arc<P>,
@@ -48,7 +48,7 @@ pub struct VaultTheftMonitor<P: StakedRelayerPallet, B: BitcoinCoreApi> {
     delay: Duration,
 }
 
-impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultTheftMonitor<P, B> {
+impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi> VaultTheftMonitor<P, B> {
     pub fn new(
         btc_height: u32,
         btc_rpc: Arc<B>,
@@ -122,10 +122,15 @@ impl<P: StakedRelayerPallet, B: BitcoinCoreApi> VaultTheftMonitor<P, B> {
     pub async fn scan(&mut self) -> Result<(), Error> {
         utils::wait_until_registered(&self.polka_rpc, self.delay).await;
 
+        let num_confirmations = self.polka_rpc.get_bitcoin_confirmations().await?;
+
         let mut backoff = get_retry_policy();
 
-        let mut stream =
-            bitcoin::stream_in_chain_transactions(self.btc_rpc.clone(), self.btc_height);
+        let mut stream = bitcoin::stream_in_chain_transactions(
+            self.btc_rpc.clone(),
+            self.btc_height,
+            num_confirmations,
+        );
 
         loop {
             match stream.next().await.unwrap() {
@@ -207,6 +212,7 @@ mod tests {
     };
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
+    use runtime::{RawBlockHeader, RichBlockHeader, BitcoinBlockHeight};
     use sp_core::H160;
     use sp_keyring::AccountKeyring;
 
@@ -247,6 +253,35 @@ mod tests {
                 raw_tx: Vec<u8>,
             ) -> Result<bool, RuntimeError>;
         }
+
+        #[async_trait]
+        pub trait BtcRelayPallet {
+            async fn get_best_block(&self) -> Result<H256Le, RuntimeError>;
+
+            async fn get_best_block_height(&self) -> Result<u32, RuntimeError>;
+
+            async fn get_block_hash(&self, height: u32) -> Result<H256Le, RuntimeError>;
+
+            async fn get_block_header(&self, hash: H256Le) -> Result<RichBlockHeader, RuntimeError>;
+
+            async fn initialize_btc_relay(
+                &self,
+                header: RawBlockHeader,
+                height: BitcoinBlockHeight,
+            ) -> Result<(), RuntimeError>;
+
+            async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), RuntimeError>;
+
+            async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), RuntimeError>;
+
+            async fn get_bitcoin_confirmations(&self) -> Result<u32, RuntimeError>;
+
+            async fn wait_for_block_in_relay(
+                &self,
+                block_hash: H256Le,
+                num_confirmations: u32,
+            ) -> Result<(), RuntimeError>;
+        }
     }
 
     mockall::mock! {
@@ -254,7 +289,7 @@ mod tests {
 
         #[async_trait]
         trait BitcoinCoreApi {
-            async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, BitcoinError>;
+            async fn wait_for_block(&self, height: u32, delay: Duration, num_confirmations: u32) -> Result<BlockHash, BitcoinError>;
 
             fn get_block_count(&self) -> Result<u64, BitcoinError>;
 

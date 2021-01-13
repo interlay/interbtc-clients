@@ -268,7 +268,7 @@ mod tests {
 
         #[async_trait]
         trait BitcoinCoreApi {
-            async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, BitcoinError>;
+            async fn wait_for_block(&self, height: u32, delay: Duration, num_confirmations: u32) -> Result<BlockHash, BitcoinError>;
 
             fn get_block_count(&self) -> Result<u64, BitcoinError>;
 
