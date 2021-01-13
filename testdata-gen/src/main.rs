@@ -508,7 +508,8 @@ async fn main() -> Result<(), Error> {
 
     match opts.subcmd {
         SubCommand::SetExchangeRate(info) => {
-            provider.set_exchange_rate_info(info.exchange_rate).await?;
+            let rate = FixedU128::checked_from_rational(info.exchange_rate, 100_000).unwrap();
+            provider.set_exchange_rate_info(rate).await?;
         }
         SubCommand::GetExchangeRate => {
             let (rate, time, delay) = provider.get_exchange_rate_info().await?;

@@ -11,7 +11,6 @@ use sp_arithmetic::FixedU128;
 use sp_core::sr25519::Pair as KeyPair;
 use sp_core::H256;
 use std::collections::BTreeSet;
-use std::convert::TryInto;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -603,9 +602,9 @@ impl TimestampPallet for PolkaBtcProvider {
 
 #[async_trait]
 pub trait ExchangeRateOraclePallet {
-    async fn get_exchange_rate_info(&self) -> Result<(u64, u64, u64), Error>;
+    async fn get_exchange_rate_info(&self) -> Result<(FixedU128, u64, u64), Error>;
 
-    async fn set_exchange_rate_info(&self, btc_to_dot_rate: u128) -> Result<(), Error>;
+    async fn set_exchange_rate_info(&self, dot_per_btc: FixedU128) -> Result<(), Error>;
 
     async fn set_btc_tx_fees_per_byte(&self, fast: u32, half: u32, hour: u32) -> Result<(), Error>;
 
@@ -618,15 +617,15 @@ pub trait ExchangeRateOraclePallet {
 
 #[async_trait]
 impl ExchangeRateOraclePallet for PolkaBtcProvider {
-    /// Returns the last exchange rate, the time at which it was set
+    /// Returns the last exchange rate in planck per satoshis, the time at which it was set
     /// and the configured max delay.
-    async fn get_exchange_rate_info(&self) -> Result<(u64, u64, u64), Error> {
+    async fn get_exchange_rate_info(&self) -> Result<(FixedU128, u64, u64), Error> {
         let get_rate = self.ext_client.exchange_rate(None);
         let get_time = self.ext_client.last_exchange_rate_time(None);
         let get_delay = self.ext_client.max_delay(None);
 
         match tokio::try_join!(get_rate, get_time, get_delay) {
-            Ok((rate, time, delay)) => Ok((rate.try_into()?, time, delay)),
+            Ok((rate, time, delay)) => Ok((rate, time, delay)),
             Err(_) => Err(Error::ExchangeRateInfo),
         }
     }
@@ -634,10 +633,10 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
     /// Sets the current exchange rate as BTC/DOT
     ///
     /// # Arguments
-    /// * `btc_to_dot_rate` - the current BTC to DOT exchange rate encoded with the GRANULARITY
-    async fn set_exchange_rate_info(&self, btc_to_dot_rate: u128) -> Result<(), Error> {
+    /// * `dot_per_btc` - the current dot per btc exchange rate
+    async fn set_exchange_rate_info(&self, dot_per_btc: FixedU128) -> Result<(), Error> {
         self.ext_client
-            .set_exchange_rate_and_watch(&*self.signer.write().await, btc_to_dot_rate)
+            .set_exchange_rate_and_watch(&*self.signer.write().await, dot_per_btc)
             .await?;
         Ok(())
     }

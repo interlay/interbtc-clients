@@ -4,7 +4,9 @@ use clap::Clap;
 use error::Error;
 use log::{error, info};
 use runtime::substrate_subxt::PairSigner;
-use runtime::{ExchangeRateOraclePallet, PolkaBtcProvider, PolkaBtcRuntime};
+use runtime::{
+    ExchangeRateOraclePallet, FixedPointNumber, FixedU128, PolkaBtcProvider, PolkaBtcRuntime,
+};
 use sp_keyring::AccountKeyring;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -85,9 +87,12 @@ async fn main() -> Result<(), Error> {
             chrono::offset::Local::now()
         );
 
-        match provider.set_exchange_rate_info(exchange_rate).await {
-            Err(e) => error!("Error: {}", e.to_string()),
-            _ => (),
+        match FixedU128::checked_from_rational(exchange_rate, 100_000) {
+            Some(rate) => match provider.set_exchange_rate_info(rate).await {
+                Err(e) => error!("Error: {}", e.to_string()),
+                _ => (),
+            },
+            None => error!("Failed to construct fixed point rational"),
         };
         delay_for(timeout).await;
     }
