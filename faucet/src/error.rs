@@ -1,3 +1,4 @@
+use chrono::ParseError;
 use jsonrpc_http_server::jsonrpc_core::Error as JsonRpcError;
 use kv::Error as KVError;
 use parity_scale_codec::Error as CodecError;
@@ -17,6 +18,8 @@ pub enum Error {
     AddrParseError(#[from] AddrParseError),
     #[error("KV store error: {0}")]
     KVError(#[from] KVError),
+    #[error("Error parsing datetime string: {0}")]
+    DatetimeParsingError(#[from] ParseError),
     #[error("Too many faucet requests")]
     FaucetOveruseError,
     #[error("Mathematical operation error")]
