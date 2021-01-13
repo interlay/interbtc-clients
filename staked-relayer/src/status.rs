@@ -191,7 +191,7 @@ mod tests {
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode, MINIMUM_STAKE};
     use sp_keyring::AccountKeyring;
-    use std::{future::Future, time::Duration};
+    use std::time::Duration;
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {

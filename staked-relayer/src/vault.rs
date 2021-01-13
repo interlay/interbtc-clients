@@ -209,7 +209,6 @@ mod tests {
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
     use sp_core::H160;
     use sp_keyring::AccountKeyring;
-    use std::future::Future;
 
     mockall::mock! {
         Provider {}
