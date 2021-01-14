@@ -765,7 +765,7 @@ dependencies = [
  "btc-parachain-runtime",
  "frame-benchmarking",
  "frame-benchmarking-cli",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "module-exchange-rate-oracle-rpc",
  "module-issue-rpc",
  "module-redeem-rpc",
@@ -2972,7 +2972,7 @@ checksum = "489b9c612e60c766f751ab40fcb43cbb55a1e10bb44a9b4307ed510ca598cbd7"
 dependencies = [
  "failure",
  "futures 0.1.30",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpc-pubsub",
  "log 0.4.11",
  "serde",
@@ -2987,6 +2987,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0745a6379e3edc893c84ec203589790774e4247420033e71a76d3ab4687991fa"
 dependencies = [
  "futures 0.1.30",
+ "log 0.4.11",
+ "serde",
+ "serde_derive",
+ "serde_json",
+]
+
+[[package]]
+name = "jsonrpc-core"
+version = "16.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a47c4c3ac843f9a4238943f97620619033dadef4b378cd1e8addd170de396b3"
+dependencies = [
+ "futures 0.3.7",
  "log 0.4.11",
  "serde",
  "serde_derive",
@@ -3021,11 +3034,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fb5c4513b7b542f42da107942b7b759f27120b5cc894729f88254b28dff44b7"
 dependencies = [
  "hyper 0.12.35",
- "jsonrpc-core",
- "jsonrpc-server-utils",
+ "jsonrpc-core 15.1.0",
+ "jsonrpc-server-utils 15.1.0",
  "log 0.4.11",
  "net2",
  "parking_lot 0.10.2",
+ "unicase 2.6.0",
+]
+
+[[package]]
+name = "jsonrpc-http-server"
+version = "16.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baf0d9a2b5a7396ea4847b39c2f91504013eaeac8b49681efb5b4bcb0ab27651"
+dependencies = [
+ "futures 0.1.30",
+ "futures 0.3.7",
+ "hyper 0.12.35",
+ "jsonrpc-core 16.0.0",
+ "jsonrpc-server-utils 16.0.0",
+ "log 0.4.11",
+ "net2",
+ "parking_lot 0.11.0",
  "unicase 2.6.0",
 ]
 
@@ -3035,8 +3065,8 @@ version = "15.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf50e53e4eea8f421a7316c5f63e395f7bc7c4e786a6dc54d76fab6ff7aa7ce7"
 dependencies = [
- "jsonrpc-core",
- "jsonrpc-server-utils",
+ "jsonrpc-core 15.1.0",
+ "jsonrpc-server-utils 15.1.0",
  "log 0.4.11",
  "parity-tokio-ipc",
  "parking_lot 0.10.2",
@@ -3049,7 +3079,7 @@ version = "15.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "639558e0604013be9787ae52f798506ae42bf4220fe587bdc5625871cc8b9c77"
 dependencies = [
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "log 0.4.11",
  "parking_lot 0.10.2",
  "rand 0.7.3",
@@ -3064,7 +3094,24 @@ checksum = "72f1f3990650c033bd8f6bd46deac76d990f9bbfb5f8dc8c4767bf0a00392176"
 dependencies = [
  "bytes 0.4.12",
  "globset",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
+ "lazy_static",
+ "log 0.4.11",
+ "tokio 0.1.22",
+ "tokio-codec",
+ "unicase 2.6.0",
+]
+
+[[package]]
+name = "jsonrpc-server-utils"
+version = "16.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d199e3780083bd0798911be3cc0543515a57a98e97f6051957af36fb11852939"
+dependencies = [
+ "bytes 0.4.12",
+ "futures 0.1.30",
+ "globset",
+ "jsonrpc-core 16.0.0",
  "lazy_static",
  "log 0.4.11",
  "tokio 0.1.22",
@@ -3078,8 +3125,8 @@ version = "15.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6596fe75209b73a2a75ebe1dce4e60e03b88a2b25e8807b667597f6315150d22"
 dependencies = [
- "jsonrpc-core",
- "jsonrpc-server-utils",
+ "jsonrpc-core 15.1.0",
+ "jsonrpc-server-utils 15.1.0",
  "log 0.4.11",
  "parity-ws",
  "parking_lot 0.10.2",
@@ -4051,7 +4098,7 @@ name = "module-exchange-rate-oracle-rpc"
 version = "0.3.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#48de7ac0d491f5ac43253e6f68dd51cf5948f414"
 dependencies = [
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "module-exchange-rate-oracle-rpc-runtime-api",
@@ -4079,7 +4126,7 @@ name = "module-issue-rpc"
 version = "0.3.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#48de7ac0d491f5ac43253e6f68dd51cf5948f414"
 dependencies = [
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "module-issue-rpc-runtime-api",
@@ -4106,7 +4153,7 @@ name = "module-redeem-rpc"
 version = "0.3.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#48de7ac0d491f5ac43253e6f68dd51cf5948f414"
 dependencies = [
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "module-redeem-rpc-runtime-api",
@@ -4133,7 +4180,7 @@ name = "module-replace-rpc"
 version = "0.3.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#48de7ac0d491f5ac43253e6f68dd51cf5948f414"
 dependencies = [
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "module-replace-rpc-runtime-api",
@@ -4160,7 +4207,7 @@ name = "module-sla-rpc"
 version = "0.3.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#48de7ac0d491f5ac43253e6f68dd51cf5948f414"
 dependencies = [
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "module-exchange-rate-oracle-rpc-runtime-api",
@@ -4189,7 +4236,7 @@ name = "module-staked-relayers-rpc"
 version = "0.3.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#48de7ac0d491f5ac43253e6f68dd51cf5948f414"
 dependencies = [
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "module-staked-relayers-rpc-runtime-api",
@@ -4216,7 +4263,7 @@ name = "module-vault-registry-rpc"
 version = "0.3.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#48de7ac0d491f5ac43253e6f68dd51cf5948f414"
 dependencies = [
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "module-exchange-rate-oracle-rpc-runtime-api",
@@ -4861,7 +4908,7 @@ version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90fb0463589eeb1be8a3237e7260d139240e7d113950904f5a3cae5502576078"
 dependencies = [
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "pallet-transaction-payment-rpc-runtime-api",
@@ -6717,7 +6764,7 @@ checksum = "fbc3793d8ff10dbeb0b683151a1ea33570dc994195cc29451e0b72ce35179adc"
 dependencies = [
  "futures 0.3.7",
  "hash-db",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpc-pubsub",
  "log 0.4.11",
  "parity-scale-codec",
@@ -6750,7 +6797,7 @@ checksum = "cfb4b79b9b6b410c745a00eb4ead11b2ef0819e6eac970a5ec6415abf82777be"
 dependencies = [
  "derive_more",
  "futures 0.3.7",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "jsonrpc-pubsub",
@@ -6774,8 +6821,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f9118867e60870b99cc1877edb4c35878babe6696335841e5b636dcba2fdb3d"
 dependencies = [
  "futures 0.1.30",
- "jsonrpc-core",
- "jsonrpc-http-server",
+ "jsonrpc-core 15.1.0",
+ "jsonrpc-http-server 15.1.0",
  "jsonrpc-ipc-server",
  "jsonrpc-pubsub",
  "jsonrpc-ws-server",
@@ -6799,7 +6846,7 @@ dependencies = [
  "futures 0.3.7",
  "futures-timer 3.0.2",
  "hash-db",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpc-pubsub",
  "lazy_static",
  "log 0.4.11",
@@ -8126,7 +8173,7 @@ dependencies = [
  "frame-system",
  "futures 0.3.7",
  "hex 0.4.2",
- "jsonrpc-http-server",
+ "jsonrpc-http-server 15.1.0",
  "log 0.4.11",
  "mockall",
  "parity-scale-codec",
@@ -8292,7 +8339,7 @@ checksum = "44e6202803178f25f71a3218a69341289d38c1369cc63e78dfe51577599163f7"
 dependencies = [
  "frame-system-rpc-runtime-api",
  "futures 0.3.7",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "log 0.4.11",
@@ -8484,7 +8531,7 @@ dependencies = [
  "env_logger",
  "frame-system",
  "hex 0.4.2",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "log 0.4.11",
  "parity-scale-codec",
  "primitive-types",
@@ -9276,13 +9323,14 @@ dependencies = [
  "env_logger",
  "futures 0.3.7",
  "hex 0.4.2",
- "jsonrpc-http-server",
+ "jsonrpc-http-server 16.0.0",
  "log 0.4.11",
  "mockall",
  "parity-scale-codec",
  "runtime",
  "serde",
  "serde_json",
+ "sp-arithmetic",
  "sp-core",
  "sp-keyring",
  "thiserror",

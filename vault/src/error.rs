@@ -21,6 +21,10 @@ pub enum Error {
     WalletInitializationFailure(BitcoinError),
     #[error("Transaction contains more than one return-to-self uxto")]
     TooManyReturnToSelfAddresses,
+    #[error("Mathematical operation caused an overflow")]
+    ArithmeticOverflow,
+    #[error("Mathematical operation caused an underflow")]
+    ArithmeticUnderflow,
 
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),

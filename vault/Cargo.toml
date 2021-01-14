@@ -12,6 +12,7 @@ thiserror = "1.0"
 clap = "3.0.0-beta.2"
 sp-keyring = "2.0.0"
 sp-core = "2.0.0"
+sp-arithmetic = "2.0.0"
 runtime = { path = "../runtime" }
 bitcoin = { path = "../bitcoin", features = ["cli"] }
 backoff = { version = "0.2.1", features = ["tokio"] }
@@ -19,7 +20,7 @@ serde = "1.0.116"
 serde_json = { version = "1.0.57", features = ["raw_value"] }
 hex = "0.4.2"
 parity-scale-codec = "1.3.1"
-jsonrpc-http-server = "15.1.0"
+jsonrpc-http-server = "16.0.0"
 futures = "0.3.5"
 async-trait = "0.1.40"
 
