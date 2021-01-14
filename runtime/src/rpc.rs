@@ -1527,6 +1527,7 @@ impl VaultRegistryPallet for PolkaBtcProvider {
 pub trait FeePallet {
     async fn get_issue_griefing_collateral(&self) -> Result<FixedU128, Error>;
     async fn get_issue_fee(&self) -> Result<FixedU128, Error>;
+    async fn get_replace_griefing_collateral(&self) -> Result<FixedU128, Error>;
 }
 
 #[async_trait]
@@ -1537,5 +1538,9 @@ impl FeePallet for PolkaBtcProvider {
 
     async fn get_issue_fee(&self) -> Result<FixedU128, Error> {
         Ok(self.ext_client.issue_fee(None).await?)
+    }
+    
+    async fn get_replace_griefing_collateral(&self) -> Result<FixedU128, Error> {
+        Ok(self.ext_client.replace_griefing_collateral(None).await?)
     }
 }

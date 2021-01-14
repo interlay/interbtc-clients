@@ -5,7 +5,14 @@ use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use futures::stream::StreamExt;
 use log::*;
-use runtime::{BtcAddress, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcRefundRequest, PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RefundPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet, pallets::{redeem::RequestRedeemEvent, refund::RequestRefundEvent, replace::{AcceptReplaceEvent, AuctionReplaceEvent}}};
+use runtime::{
+    pallets::{
+        redeem::RequestRedeemEvent, refund::RequestRefundEvent, replace::{AcceptReplaceEvent, AuctionReplaceEvent},
+    },
+    BtcAddress, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcRefundRequest,
+    PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RefundPallet, ReplacePallet, UtilFuncs,
+    VaultRegistryPallet,
+};
 use sp_core::H256;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
@@ -362,13 +369,12 @@ mod tests {
     //     use super::*;
     //     use async_trait::async_trait;
     //     use bitcoin::{
-    //         Block, BlockHash, Error as BitcoinError, GetBlockResult,
+    //         Block, BlockHash, Error as BitcoinError, GetBlockResult, GetRawTransactionResult,
     //         LockedTransaction, Network, PartialAddress, Transaction, TransactionMetadata, Txid,
     //     };
     //     use runtime::{AccountId, Error as RuntimeError, PolkaBtcVault};
     //     use sp_core::H160;
     //     use std::future::Future;
-
     //     macro_rules! assert_ok {
     //         ( $x:expr $(,)? ) => {
     //             let is = $x;
@@ -381,7 +387,6 @@ mod tests {
     //             assert_eq!($x, Ok($y));
     //         };
     //     }
-
     //     macro_rules! assert_err {
     //         ($result:expr, $err:pat) => {{
     //             match $result {
@@ -401,7 +406,6 @@ mod tests {
     //             async fn get_blockchain_height_at(&self, parachain_height: u32) -> Result<u32, RuntimeError>;
     //             fn get_account_id(&self) -> &AccountId;
     //         }
-
     //         #[async_trait]
     //         pub trait VaultRegistryPallet {
     //             async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
@@ -414,7 +418,6 @@ mod tests {
     //             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
     //             async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, RuntimeError>;
     //         }
-
     //         #[async_trait]
     //         pub trait RedeemPallet {
     //             async fn get_redeem_request(&self, redeem_id: H256) -> Result<PolkaBtcRedeemRequest, RuntimeError>;
