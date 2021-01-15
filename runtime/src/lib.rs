@@ -15,9 +15,10 @@ use pallets::*;
 pub use rpc::{
     historic_event_types, AccountId, BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet,
     ExchangeRateOraclePallet, FeePallet, IssuePallet, PolkaBtcHeader, PolkaBtcIssueRequest,
-    PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent,
-    PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, ReplacePallet, SecurityPallet,
-    StakedRelayerPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
+    PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest,
+    PolkaBtcRequestIssueEvent, PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet,
+    ReplacePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet, UtilFuncs,
+    VaultRegistryPallet,
 };
 pub use security::{ErrorCode, StatusCode};
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};

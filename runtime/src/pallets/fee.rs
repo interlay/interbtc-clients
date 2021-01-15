@@ -7,9 +7,14 @@ use substrate_subxt_proc_macro::{module, Store};
 #[module]
 pub trait Fee: Core {}
 
-/// Current BTC/DOT exchange rate
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct IssueGriefingCollateralStore<T: Fee> {
+    #[store(returns = T::UnsignedFixedPoint)]
+    pub _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct ReplaceGriefingCollateralStore<T: Fee> {
     #[store(returns = T::UnsignedFixedPoint)]
     pub _runtime: PhantomData<T>,
 }

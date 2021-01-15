@@ -8,8 +8,13 @@ use jsonrpc_http_server::{
 };
 use log::info;
 use parity_scale_codec::{Decode, Encode};
-use runtime::{BtcAddress, PolkaBtcProvider, ReplacePallet, UtilFuncs, VaultRegistryPallet};
+use runtime::{
+    BtcAddress, ExchangeRateOraclePallet, FeePallet, FixedPointNumber,
+    FixedPointTraits::{CheckedAdd, CheckedMul},
+    PolkaBtcProvider, ReplacePallet, UtilFuncs, VaultRegistryPallet,
+};
 use serde::{Deserialize, Deserializer};
+use sp_arithmetic::FixedU128;
 use sp_core::crypto::Ss58Codec;
 use sp_core::H256;
 use std::{net::SocketAddr, sync::Arc};
@@ -54,17 +59,31 @@ fn _account_id(api: &Arc<PolkaBtcProvider>) -> Result<AccountIdJsonRpcResponse, 
 #[derive(Encode, Decode, Debug)]
 struct ReplaceRequestJsonRpcRequest {
     amount: u128,
-    griefing_collateral: u128,
 }
 
-fn _request_replace(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+async fn _request_replace(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
     let req = parse_params::<ReplaceRequestJsonRpcRequest>(params)?;
-    let result = block_on(api.request_replace(req.amount, req.griefing_collateral));
+
+    let amount_in_dot = api.btc_to_dots(req.amount).await?;
+    let griefing_collateral_percentage = api.get_replace_griefing_collateral().await?;
+    let griefing_collateral = calculate_for(amount_in_dot, griefing_collateral_percentage)?;
+    let result = block_on(api.request_replace(req.amount, griefing_collateral));
     info!(
         "Requesting replace for amount = {} with griefing_collateral = {}: {:?}",
-        req.amount, req.griefing_collateral, result
+        req.amount, griefing_collateral, result
     );
     Ok(result.map(|_| ())?)
+}
+
+/// Take the `percentage` of an `amount`
+fn calculate_for(amount: u128, percentage: FixedU128) -> Result<u128, Error> {
+    FixedU128::checked_from_integer(amount)
+        .ok_or(Error::ArithmeticOverflow)?
+        .checked_mul(&percentage)
+        .ok_or(Error::ArithmeticOverflow)?
+        .into_inner()
+        .checked_div(FixedU128::accuracy())
+        .ok_or(Error::ArithmeticUnderflow)
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -156,43 +175,44 @@ pub async fn start(
     let mut io = IoHandler::default();
     {
         let api = api.clone();
-        io.add_method("account_id", move |_| handle_resp(_account_id(&api)));
+        io.add_sync_method("account_id", move |_| handle_resp(_account_id(&api)));
     }
     {
         let api = api.clone();
         io.add_method("request_replace", move |params| {
-            handle_resp(_request_replace(&api, params))
+            let api = api.clone();
+            async move { handle_resp(_request_replace(&api, params).await) }
         });
     }
     {
         let api = api.clone();
         let btc = btc.clone();
-        io.add_method("register_vault", move |params| {
+        io.add_sync_method("register_vault", move |params| {
             handle_resp(_register_vault(&api, &btc, params))
         });
     }
     {
         let api = api.clone();
-        io.add_method("lock_additional_collateral", move |params| {
+        io.add_sync_method("lock_additional_collateral", move |params| {
             handle_resp(_lock_additional_collateral(&api, params))
         });
     }
     {
         let api = api.clone();
-        io.add_method("withdraw_collateral", move |params| {
+        io.add_sync_method("withdraw_collateral", move |params| {
             handle_resp(_withdraw_collateral(&api, params))
         });
     }
     {
         let api = api.clone();
         let btc = btc.clone();
-        io.add_method("update_btc_address", move |_| {
+        io.add_sync_method("update_btc_address", move |_| {
             handle_resp(_update_btc_address(&api, &btc))
         });
     }
     {
         let api = api.clone();
-        io.add_method("withdraw_replace", move |params| {
+        io.add_sync_method("withdraw_replace", move |params| {
             handle_resp(_withdraw_replace(&api, params))
         });
     }
