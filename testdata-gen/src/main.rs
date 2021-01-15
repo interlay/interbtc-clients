@@ -33,6 +33,7 @@ impl std::str::FromStr for BtcAddressFromStr {
         Ok(BtcAddressFromStr(PartialAddress::decode_str(btc_address)?))
     }
 }
+
 #[derive(Debug, Encode, Decode)]
 struct PolkaBtcStatusCodeFromStr(PolkaBtcStatusCode);
 impl std::str::FromStr for PolkaBtcStatusCodeFromStr {
@@ -237,6 +238,7 @@ struct ChainStatOpts {
     #[clap(long)]
     end: Option<u32>,
 }
+
 #[derive(Clap)]
 struct SetExchangeRateInfo {
     /// Exchange rate from BTC to DOT.
@@ -258,6 +260,7 @@ struct SetBtcTxFeesInfo {
     #[clap(long, default_value = "300")]
     hour: u32,
 }
+
 #[derive(Clap)]
 struct RegisterVaultInfo {
     /// Bitcoin address for vault to receive funds.
@@ -286,21 +289,29 @@ struct RequestIssueInfo {
     /// Bitcoin network type for address encoding.
     #[clap(long, default_value = "regtest")]
     bitcoin_network: BitcoinNetwork,
+
+    /// Do not transfer BTC or execute the issue request.
+    #[clap(long)]
+    no_execute: bool,
 }
 
 #[derive(Clap)]
 struct SendBitcoinInfo {
     /// Recipient Bitcoin address.
     #[clap(long)]
-    btc_address: BtcAddressFromStr,
+    btc_address: Option<BtcAddressFromStr>,
 
     /// Amount of BTC to transfer.
     #[clap(long, default_value = "0")]
-    satoshis: u64,
+    satoshis: u128,
 
     /// Hex encoded OP_RETURN data for request.
-    #[clap(long)]
-    op_return: String,
+    #[clap(long, conflicts_with("issue-id"))]
+    op_return: Option<String>,
+
+    /// Issue id for the issue request.
+    #[clap(long, conflicts_with("op-return"))]
+    issue_id: Option<H256>,
 
     /// Bitcoin network type for address encoding.
     #[clap(long, default_value = "regtest")]
@@ -347,7 +358,7 @@ struct RequestRedeemInfo {
 struct ExecuteRedeemInfo {
     /// Redeem id for the redeem request.
     #[clap(long)]
-    redeem_id: String,
+    redeem_id: H256,
 
     /// Bitcoin network type for address encoding.
     #[clap(long, default_value = "regtest")]
@@ -369,7 +380,7 @@ struct RequestReplaceInfo {
 struct AcceptReplaceInfo {
     /// Replace id for the replace request.
     #[clap(long)]
-    replace_id: String,
+    replace_id: H256,
 
     /// Collateral used to back replace.
     #[clap(long, default_value = "10000")]
@@ -380,7 +391,7 @@ struct AcceptReplaceInfo {
 struct ExecuteReplaceInfo {
     /// Replace id for the replace request.
     #[clap(long)]
-    replace_id: String,
+    replace_id: H256,
 
     /// Bitcoin network type for address encoding.
     #[clap(long, default_value = "regtest")]
@@ -575,6 +586,11 @@ async fn main() -> Result<(), Error> {
                 issue::request_issue(&provider, info.issue_amount, griefing_collateral, vault_id)
                     .await?;
 
+            if info.no_execute {
+                println!("{}", hex::encode(request_data.issue_id.as_bytes()));
+                return Ok(());
+            }        
+
             let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
             issue::execute_issue(
                 &provider,
@@ -586,17 +602,38 @@ async fn main() -> Result<(), Error> {
             .await?;
         }
         SubCommand::SendBitcoin(info) => {
-            let data = &hex::decode(info.op_return)?;
+            let (op_return, btc_address, satoshis) = if let Some(issue_id) = info.issue_id {
+                // gets the data from on-chain
+                let issue_request = issue::get_issue_by_id(&provider, issue_id).await?;
+                if issue_request.completed {
+                    return Err(Error::IssueCompleted);
+                } else if issue_request.cancelled {
+                    return Err(Error::IssueCancelled);
+                }
+
+                (
+                    issue_id.as_bytes().to_vec(),
+                    issue_request.btc_address,
+                    issue_request.amount + issue_request.fee,
+                )
+            } else {
+                // expects cli configuration
+                let op_return = info.op_return.ok_or(Error::ExpectedOpReturn)?;
+                let btc_address = info.btc_address.ok_or(Error::ExpectedBitcoinAddress)?.0;
+                (hex::decode(op_return)?, btc_address, info.satoshis)
+            };
+
             let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
             let tx_metadata = btc_rpc
                 .send_to_address(
-                    info.btc_address.0,
-                    info.satoshis,
-                    &data_to_request_id(data)?,
+                    btc_address,
+                    satoshis.try_into().unwrap(),
+                    &data_to_request_id(&op_return)?,
                     Duration::from_secs(15 * 60),
                     1,
                 )
                 .await?;
+
             println!("{}", tx_metadata.txid);
         }
         SubCommand::RequestRedeem(info) => {
@@ -610,7 +647,7 @@ async fn main() -> Result<(), Error> {
             println!("{}", hex::encode(redeem_id.as_bytes()));
         }
         SubCommand::ExecuteRedeem(info) => {
-            let redeem_id = H256::from_str(&info.redeem_id).map_err(|_| Error::InvalidRequestId)?;
+            let redeem_id = info.redeem_id;
             let redeem_request = provider.get_redeem_request(redeem_id).await?;
 
             let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
@@ -630,15 +667,11 @@ async fn main() -> Result<(), Error> {
             println!("{}", hex::encode(replace_id.as_bytes()));
         }
         SubCommand::AcceptReplace(info) => {
-            let replace_id =
-                H256::from_str(&info.replace_id).map_err(|_| Error::InvalidRequestId)?;
-            replace::accept_replace(&provider, replace_id, info.collateral).await?;
+            replace::accept_replace(&provider, info.replace_id, info.collateral).await?;
         }
         SubCommand::ExecuteReplace(info) => {
-            let replace_id =
-                H256::from_str(&info.replace_id).map_err(|_| Error::InvalidRequestId)?;
             let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
-            replace::execute_replace(&provider, &btc_rpc, replace_id).await?;
+            replace::execute_replace(&provider, &btc_rpc, info.replace_id).await?;
         }
         SubCommand::GetChainStats(opts) => {
             stats::report_chain_stats(&provider, opts.start, opts.end).await?;

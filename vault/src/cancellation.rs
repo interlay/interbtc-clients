@@ -436,6 +436,7 @@ mod tests {
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
             async fn cancel_issue(&self, issue_id: H256) -> Result<(), RuntimeError>;
+            async fn get_issue_request(&self, issue_id: H256) -> Result<PolkaBtcIssueRequest, RuntimeError>;
             async fn get_vault_issue_requests(
                 &self,
                 account_id: AccountId,
@@ -463,6 +464,7 @@ mod tests {
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
+            async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, RuntimeError>;
             async fn get_new_vault_replace_requests(
                 &self,
                 account_id: AccountId,
@@ -473,7 +475,6 @@ mod tests {
             ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
             async fn set_replace_period(&self, period: u32) -> Result<(), RuntimeError>;
-            async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, RuntimeError>;
         }
         #[async_trait]
         pub trait UtilFuncs {
