@@ -55,7 +55,10 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use runtime::PolkaBtcStatusUpdate;
-    use runtime::{FixedPointNumber, AccountId, BtcTxFeesPerByte, Error, ErrorCode, H256Le, StatusCode, FixedU128};
+    use runtime::{
+        AccountId, BtcTxFeesPerByte, Error, ErrorCode, FixedPointNumber, FixedU128, H256Le,
+        StatusCode,
+    };
     use std::collections::BTreeSet;
     use std::iter::FromIterator;
 

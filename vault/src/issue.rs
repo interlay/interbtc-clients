@@ -6,7 +6,7 @@ use futures::{SinkExt, StreamExt};
 use log::{error, info};
 use runtime::{
     pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
-    H256Le, IssuePallet, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs,
+    BtcRelayPallet, H256Le, IssuePallet, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs,
 };
 use sp_core::H256;
 use std::collections::HashSet;
@@ -41,6 +41,7 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
             provider,
             btc_rpc,
             issue_set,
+            num_confirmations,
             block_hash,
             transaction,
         )
@@ -58,12 +59,22 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
     provider: &Arc<PolkaBtcProvider>,
     btc_rpc: &Arc<B>,
     issue_set: &Arc<IssueIds>,
+    num_confirmations: u32,
     block_hash: BlockHash,
     transaction: Transaction,
 ) -> Result<(), Error> {
     if let Some(op_return) = transaction.get_op_return() {
         if let Some(issue_id) = issue_set.0.lock().await.take(&op_return) {
             info!("Executing issue with id {}", issue_id);
+
+            // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
+            // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
+            provider
+                .wait_for_block_in_relay(
+                    H256Le::from_bytes_le(&block_hash.to_vec()),
+                    num_confirmations,
+                )
+                .await?;
 
             // found tx, submit proof
             let txid = transaction.txid();

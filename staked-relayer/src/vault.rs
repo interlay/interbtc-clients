@@ -103,7 +103,21 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi> VaultTheftMonit
         Ok(())
     }
 
-    async fn check_transaction(&self, tx: Transaction, block_hash: BlockHash) -> Result<(), Error> {
+    async fn check_transaction(
+        &self,
+        tx: Transaction,
+        block_hash: BlockHash,
+        num_confirmations: u32,
+    ) -> Result<(), Error> {
+        // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
+        // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
+        self.polka_rpc
+            .wait_for_block_in_relay(
+                H256Le::from_bytes_le(&block_hash.to_vec()),
+                num_confirmations,
+            )
+            .await?;
+
         let tx_id = tx.txid();
 
         let (raw_tx, proof) = self.get_raw_tx_and_proof(tx_id, &block_hash)?;
@@ -134,7 +148,10 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi> VaultTheftMonit
 
         loop {
             match stream.next().await.unwrap() {
-                Ok((block_hash, tx)) => match self.check_transaction(tx, block_hash).await {
+                Ok((block_hash, tx)) => match self
+                    .check_transaction(tx, block_hash, num_confirmations)
+                    .await
+                {
                     Ok(_) => {
                         backoff.reset();
                         continue; // don't execute the delay below
@@ -212,7 +229,7 @@ mod tests {
     };
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
-    use runtime::{RawBlockHeader, RichBlockHeader, BitcoinBlockHeight};
+    use runtime::{BitcoinBlockHeight, RawBlockHeader, RichBlockHeader};
     use sp_core::H160;
     use sp_keyring::AccountKeyring;
 
