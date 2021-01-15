@@ -5,9 +5,12 @@ use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use log::*;
 use runtime::{
-    pallets::{redeem::RequestRedeemEvent, replace::AcceptReplaceEvent, refund::RequestRefundEvent},
-    BtcAddress, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcReplaceRequest, PolkaBtcRefundRequest,
-    PolkaBtcRuntime, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet, RefundPallet
+    pallets::{
+        redeem::RequestRedeemEvent, refund::RequestRefundEvent, replace::AcceptReplaceEvent,
+    },
+    BtcAddress, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcRefundRequest,
+    PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RefundPallet, ReplacePallet, UtilFuncs,
+    VaultRegistryPallet,
 };
 use sp_core::H256;
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -60,9 +63,7 @@ impl Request {
         }
     }
     /// Constructs a Request for the given RequestRefundEvent
-    pub fn from_refund_request_event(
-        request: &RequestRefundEvent<PolkaBtcRuntime>,
-    ) -> Request {
+    pub fn from_refund_request_event(request: &RequestRefundEvent<PolkaBtcRuntime>) -> Request {
         Request {
             btc_address: request.btc_address,
             amount: request.amount_polka_btc,

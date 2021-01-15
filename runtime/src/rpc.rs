@@ -62,10 +62,7 @@ pub type PolkaBtcRedeemRequest = RedeemRequest<
     <PolkaBtcRuntime as Core>::DOT,
 >;
 
-pub type PolkaBtcRefundRequest = RefundRequest<
-    AccountId,
-    <PolkaBtcRuntime as Core>::PolkaBTC,
->;
+pub type PolkaBtcRefundRequest = RefundRequest<AccountId, <PolkaBtcRuntime as Core>::PolkaBTC>;
 
 pub type PolkaBtcReplaceRequest = ReplaceRequest<
     AccountId,

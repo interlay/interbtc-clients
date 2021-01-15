@@ -50,7 +50,12 @@ pub struct TransactionMetadata {
 
 #[async_trait]
 pub trait BitcoinCoreApi {
-    async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, Error>;
+    async fn wait_for_block(
+        &self,
+        height: u32,
+        delay: Duration,
+        num_confirmations: u32,
+    ) -> Result<BlockHash, Error>;
 
     fn get_block_count(&self) -> Result<u64, Error>;
 
@@ -191,16 +196,31 @@ impl BitcoinCoreApi for BitcoinCore {
     /// # Arguments
     /// * `height` - block height to fetch
     /// * `delay` - wait period before re-checking
-    async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, Error> {
+    async fn wait_for_block(
+        &self,
+        height: u32,
+        delay: Duration,
+        num_confirmations: u32,
+    ) -> Result<BlockHash, Error> {
         loop {
             match self.rpc.get_block_hash(height.into()) {
-                Ok(hash) => return Ok(hash),
+                Ok(hash) => {
+                    let info = self.rpc.get_block_info(&hash)?;
+                    if info.confirmations >= num_confirmations {
+                        return Ok(hash);
+                    } else {
+                        delay_for(delay).await;
+                        continue;
+                    }
+                }
                 Err(e) => {
-                    delay_for(delay).await;
                     if let BitcoinError::JsonRpc(JsonRpcError::Rpc(rpc_error)) = &e {
                         match BitcoinRpcError::from(rpc_error.clone()) {
                             // block does not exist yet
-                            BitcoinRpcError::RpcInvalidParameter => continue,
+                            BitcoinRpcError::RpcInvalidParameter => {
+                                delay_for(delay).await;
+                                continue;
+                            }
                             _ => (),
                         };
                     }

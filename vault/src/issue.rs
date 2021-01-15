@@ -30,8 +30,11 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     issue_set: &Arc<IssueIds>,
     num_confirmations: u32,
 ) -> Result<(), Error> {
-    let mut stream =
-        bitcoin::stream_in_chain_transactions(btc_rpc.clone(), btc_rpc.get_block_count()? as u32);
+    let mut stream = bitcoin::stream_in_chain_transactions(
+        btc_rpc.clone(),
+        btc_rpc.get_block_count()? as u32,
+        num_confirmations,
+    );
 
     while let Some(Ok((block_hash, transaction))) = stream.next().await {
         if let Err(e) = process_transaction_and_execute_issue(
@@ -64,7 +67,8 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
         if let Some(issue_id) = issue_set.0.lock().await.take(&op_return) {
             info!("Executing issue with id {}", issue_id);
 
-            // make sure block is included in relay
+            // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
+            // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
             provider
                 .wait_for_block_in_relay(
                     H256Le::from_bytes_le(&block_hash.to_vec()),
