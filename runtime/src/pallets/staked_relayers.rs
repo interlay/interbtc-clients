@@ -50,6 +50,11 @@ pub struct ReportVaultTheftCall<T: StakedRelayers> {
     pub raw_tx: Vec<u8>,
 }
 
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct SetMaturityPeriodCall<T: StakedRelayers> {
+    pub period: T::BlockNumber,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct RegisterStakedRelayerEvent<T: StakedRelayers> {
     pub account_id: T::AccountId,
