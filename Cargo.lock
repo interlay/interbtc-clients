@@ -536,7 +536,7 @@ dependencies = [
 [[package]]
 name = "bitcoin"
 version = "0.26.0"
-source = "git+https://github.com/gregdhill/rust-bitcoin#2a682aa115e95119161624a9e234d71af7ee505b"
+source = "git+https://github.com/gregdhill/rust-bitcoin?rev=6854b6882a89adbab196db829584e60285cfe7b8#6854b6882a89adbab196db829584e60285cfe7b8"
 dependencies = [
  "bech32",
  "bitcoin_hashes 0.9.4",
@@ -561,8 +561,8 @@ dependencies = [
 
 [[package]]
 name = "bitcoincore-rpc"
-version = "0.11.0"
-source = "git+https://github.com/gregdhill/rust-bitcoincore-rpc?rev=d77f2da#d77f2da09da64b032a7131e9636c21e6d85131a7"
+version = "0.12.0"
+source = "git+https://github.com/gregdhill/rust-bitcoincore-rpc?rev=76743d8ea9e9df9d4f0ea73b967994a4b451455c#76743d8ea9e9df9d4f0ea73b967994a4b451455c"
 dependencies = [
  "bitcoincore-rpc-json",
  "jsonrpc",
@@ -574,7 +574,7 @@ dependencies = [
 [[package]]
 name = "bitcoincore-rpc-json"
 version = "0.12.0"
-source = "git+https://github.com/gregdhill/rust-bitcoincore-rpc?rev=d77f2da#d77f2da09da64b032a7131e9636c21e6d85131a7"
+source = "git+https://github.com/gregdhill/rust-bitcoincore-rpc?rev=76743d8ea9e9df9d4f0ea73b967994a4b451455c#76743d8ea9e9df9d4f0ea73b967994a4b451455c"
 dependencies = [
  "bitcoin 0.26.0",
  "hex 0.3.2",
@@ -5990,7 +5990,7 @@ dependencies = [
 [[package]]
 name = "relayer-core"
 version = "0.2.2"
-source = "git+https://gitlab.com/interlay/relayer-core?rev=637d6f87#637d6f878b484a54f3efa596f5586a3d3ff51ef3"
+source = "git+https://gitlab.com/interlay/relayer-core?rev=d1bce1a80118bc73301318f5f099b87416fc45f8#d1bce1a80118bc73301318f5f099b87416fc45f8"
 dependencies = [
  "bitcoincore-rpc",
  "hex 0.4.2",
@@ -7154,9 +7154,9 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.19.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
+checksum = "733b114f058f260c0af7591434eef4272ae1a8ec2751766d3cb89c6df8d5e450"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys",
@@ -7165,9 +7165,9 @@ dependencies = [
 
 [[package]]
 name = "secp256k1-sys"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11553d210db090930f4432bea123b31f70bbf693ace14504ea2a35e796c28dd2"
+checksum = "67e4b6455ee49f5901c8985b88f98fb0a0e1d90a6661f5a03f4888bd987dad29"
 dependencies = [
  "cc",
 ]
