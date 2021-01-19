@@ -7,6 +7,7 @@ use jsonrpc_http_server::jsonrpc_core::Error as JsonRpcError;
 use jsonrpc_http_server::jsonrpc_core::{IoHandler, Params};
 use jsonrpc_http_server::{DomainsValidation, ServerBuilder};
 use kv::*;
+use log::error;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     AccountId, DotBalancesPallet, PolkaBtcProvider, SecurityPallet, VaultRegistryPallet,
@@ -28,7 +29,10 @@ fn parse_params<T: Decode>(params: Params) -> Result<T, Error> {
 fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError> {
     match resp {
         Ok(data) => Ok(format!("0x{}", hex::encode(data.encode())).into()),
-        Err(_) => Err(JsonRpcError::internal_error()),
+        Err(err) => {
+            error!("Error: {}", err.to_string());
+            Err(JsonRpcError::invalid_request())
+        }
     }
 }
 
@@ -63,10 +67,7 @@ async fn _fund_account_raw(
     vault_allowance: u128,
 ) -> Result<(), Error> {
     let req: FundAccountJsonRpcRequest = parse_params(params)?;
-    fund_account(api, req, store, user_allowance, vault_allowance)
-        .await
-        .unwrap();
-    Ok(())
+    fund_account(api, req, store, user_allowance, vault_allowance).await
 }
 
 async fn get_faucet_amount(
@@ -108,7 +109,7 @@ fn has_request_expired(last_claim_time: Option<String>) -> Result<bool, Error> {
     // system clock, unwrap will never panic
     let filter_datetime = Utc::now()
         .checked_sub_signed(Duration::hours(FAUCET_COOLDOWN_HOURS))
-        .unwrap();
+        .ok_or(Error::MathError)?;
     Ok(match last_claim_time {
         Some(datetime) => DateTime::parse_from_rfc2822(&datetime)?.lt(&filter_datetime),
         None => true,
