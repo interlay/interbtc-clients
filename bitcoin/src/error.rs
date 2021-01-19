@@ -2,7 +2,8 @@ use crate::BitcoinError;
 use bitcoincore_rpc::{
     bitcoin::{
         consensus::encode::Error as BitcoinEncodeError, hashes::Error as HashesError,
-        util::address::Error as AddressError,
+        secp256k1::Error as Secp256k1Error, util::address::Error as AddressError,
+        util::key::Error as KeyError,
     },
     jsonrpc::error::RpcError,
 };
@@ -18,18 +19,25 @@ pub enum Error {
     BitcoinError(#[from] BitcoinError),
     #[error("ConversionError: {0}")]
     ConversionError(#[from] ConversionError),
+    #[error("Error occurred in callback: {0}")]
+    CallbackError(Box<dyn std::error::Error + Send + Sync>),
+    #[error("Json error: {0}")]
+    SerdeJsonError(#[from] SerdeJsonError),
+    #[error("Secp256k1Error: {0}")]
+    Secp256k1Error(#[from] Secp256k1Error),
+    #[error("KeyError: {0}")]
+    KeyError(#[from] KeyError),
+
     #[error("Could not confirm transaction")]
     ConfirmationError,
     #[error("Could not find block at height")]
     InvalidBitcoinHeight,
-    #[error("Json error: {0}")]
-    SerdeJsonError(#[from] SerdeJsonError),
     #[error("Failed to sign transaction")]
     TransactionSigningError,
     #[error("Failed to parse transaction")]
     ParsingError,
-    #[error("Error occurred in callback: {0}")]
-    CallbackError(Box<dyn std::error::Error + Send + Sync>),
+    #[error("Failed to obtain public key")]
+    MissingPublicKey,
 }
 
 #[derive(Error, Debug)]

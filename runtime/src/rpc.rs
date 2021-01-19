@@ -392,7 +392,13 @@ pub trait ReplacePallet {
     /// * `&self` - the initiator of the transaction: the new vault
     /// * `replace_id` - the unique identifier for the specific request
     /// * `collateral` - the collateral for replacement
-    async fn accept_replace(&self, replace_id: H256, collateral: u128) -> Result<(), Error>;
+    /// * `btc_address` - the address to send funds to
+    async fn accept_replace(
+        &self,
+        replace_id: H256,
+        collateral: u128,
+        btc_address: BtcAddress,
+    ) -> Result<(), Error>;
 
     /// Auction forces vault replacement
     ///
@@ -402,11 +408,13 @@ pub trait ReplacePallet {
     /// * `old_vault` - the old vault of the replacement request
     /// * `btc_amount` - the btc amount to be transferred over from old to new
     /// * `collateral` - the collateral to be transferred over from old to new
+    /// * `btc_address` - the address to send funds to
     async fn auction_replace(
         &self,
         old_vault: AccountId,
         btc_amount: u128,
         collateral: u128,
+        btc_address: BtcAddress,
     ) -> Result<(), Error>;
 
     /// Execute vault replacement
@@ -484,9 +492,19 @@ impl ReplacePallet for PolkaBtcProvider {
         Ok(())
     }
 
-    async fn accept_replace(&self, replace_id: H256, collateral: u128) -> Result<(), Error> {
+    async fn accept_replace(
+        &self,
+        replace_id: H256,
+        collateral: u128,
+        btc_address: BtcAddress,
+    ) -> Result<(), Error> {
         self.ext_client
-            .accept_replace_and_watch(&*self.signer.write().await, replace_id, collateral)
+            .accept_replace_and_watch(
+                &*self.signer.write().await,
+                replace_id,
+                collateral,
+                btc_address,
+            )
             .await?;
         Ok(())
     }
@@ -496,6 +514,7 @@ impl ReplacePallet for PolkaBtcProvider {
         old_vault: AccountId,
         btc_amount: u128,
         collateral: u128,
+        btc_address: BtcAddress,
     ) -> Result<(), Error> {
         self.ext_client
             .auction_replace_and_watch(
@@ -503,6 +522,7 @@ impl ReplacePallet for PolkaBtcProvider {
                 old_vault,
                 btc_amount,
                 collateral,
+                btc_address,
             )
             .await?;
         Ok(())
@@ -1345,13 +1365,16 @@ pub trait VaultRegistryPallet {
 
     async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, Error>;
 
-    async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), Error>;
+    async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey)
+        -> Result<(), Error>;
 
     async fn lock_additional_collateral(&self, amount: u128) -> Result<(), Error>;
 
     async fn withdraw_collateral(&self, amount: u128) -> Result<(), Error>;
 
-    async fn update_btc_address(&self, address: BtcAddress) -> Result<(), Error>;
+    async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), Error>;
+
+    async fn register_address(&self, btc_address: BtcAddress) -> Result<(), Error>;
 
     async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, Error>;
 
@@ -1392,10 +1415,14 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     ///
     /// # Arguments
     /// * `collateral` - deposit
-    /// * `btc_address` - Bitcoin address hash
-    async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), Error> {
+    /// * `public_key` - Bitcoin public key
+    async fn register_vault(
+        &self,
+        collateral: u128,
+        public_key: BtcPublicKey,
+    ) -> Result<(), Error> {
         self.ext_client
-            .register_vault_and_watch(&*self.signer.write().await, collateral, btc_address)
+            .register_vault_and_watch(&*self.signer.write().await, collateral, public_key)
             .await?;
         Ok(())
     }
@@ -1429,13 +1456,24 @@ impl VaultRegistryPallet for PolkaBtcProvider {
         Ok(())
     }
 
-    /// Update the default BTC address for the vault corresponding to the signer.
+    /// Update the default BTC public key for the vault corresponding to the signer.
     ///
     /// # Arguments
-    /// * `address` - the new address of the vault
-    async fn update_btc_address(&self, address: BtcAddress) -> Result<(), Error> {
+    /// * `public_key` - the new public key of the vault
+    async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), Error> {
         self.ext_client
-            .update_btc_address_and_watch(&*self.signer.write().await, address)
+            .update_public_key_and_watch(&*self.signer.write().await, public_key)
+            .await?;
+        Ok(())
+    }
+
+    /// Register a new BTC address, useful for change addresses.
+    ///
+    /// # Arguments
+    /// * `btc_address` - the new btc address of the vault
+    async fn register_address(&self, btc_address: BtcAddress) -> Result<(), Error> {
+        self.ext_client
+            .register_address_and_watch(&*self.signer.write().await, btc_address)
             .await?;
         Ok(())
     }

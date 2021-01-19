@@ -25,6 +25,7 @@ pub struct WithdrawReplaceCall<T: Replace> {
 pub struct AcceptReplaceCall<T: Replace> {
     pub replace_id: T::H256,
     pub collateral: T::DOT,
+    pub btc_address: T::BtcAddress,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
@@ -32,6 +33,7 @@ pub struct AuctionReplaceCall<T: Replace> {
     pub old_vault: T::AccountId,
     pub btc_amount: T::PolkaBTC,
     pub collateral: T::DOT,
+    pub btc_address: T::BtcAddress,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
@@ -67,6 +69,7 @@ pub struct AcceptReplaceEvent<T: Replace> {
     pub replace_id: T::H256,
     pub collateral: T::DOT,
     pub btc_amount: T::PolkaBTC,
+    pub btc_address: T::BtcAddress,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
@@ -84,6 +87,7 @@ pub struct AuctionReplaceEvent<T: Replace> {
     pub btc_amount: T::PolkaBTC,
     pub collateral: T::DOT,
     pub current_height: T::BlockNumber,
+    pub btc_address: T::BtcAddress,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]

@@ -209,7 +209,7 @@ mod tests {
 
     use chrono::{Duration, Utc};
     use kv::{Config, Store};
-    use runtime::{AccountId, BtcAddress, PolkaBtcRuntime, VaultRegistryPallet};
+    use runtime::{AccountId, BtcPublicKey, PolkaBtcRuntime, VaultRegistryPallet};
 
     use super::{
         fund_account, open_kv_store, update_kv_store, DotBalancesPallet, FundAccountJsonRpcRequest,
@@ -217,7 +217,6 @@ mod tests {
     };
     use jsonrpsee::Client as JsonRpseeClient;
     use runtime::substrate_subxt::PairSigner;
-    use sp_core::H160;
     use sp_keyring::AccountKeyring;
     use substrate_subxt_client::{
         DatabaseConfig, KeystoreConfig, Role, SubxtClient, SubxtClientConfig,
@@ -232,6 +231,13 @@ mod tests {
                 _ => panic!("expected: Err($err)"),
             }
         }};
+    }
+
+    fn dummy_public_key() -> BtcPublicKey {
+        BtcPublicKey([
+            2, 205, 114, 218, 156, 16, 235, 172, 106, 37, 18, 153, 202, 140, 176, 91, 207, 51, 187,
+            55, 18, 45, 222, 180, 119, 54, 243, 97, 173, 150, 161, 169, 230,
+        ])
     }
 
     async fn default_provider_client(key: AccountKeyring) -> (JsonRpseeClient, TempDir) {
@@ -415,9 +421,8 @@ mod tests {
         let expected_amount_planck: u128 = dot_to_planck(vault_allowance_dot);
 
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-        let bob_vault_address = BtcAddress::P2PKH(H160::random());
         bob_provider
-            .register_vault(100, bob_vault_address)
+            .register_vault(100, dummy_public_key())
             .await
             .unwrap();
 
@@ -461,9 +466,8 @@ mod tests {
         let expected_amount_planck: u128 = dot_to_planck(vault_allowance_dot);
 
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-        let bob_vault_address = BtcAddress::P2PKH(H160::random());
         bob_provider
-            .register_vault(100, bob_vault_address)
+            .register_vault(100, dummy_public_key())
             .await
             .unwrap();
 

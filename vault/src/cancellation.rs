@@ -370,8 +370,8 @@ mod tests {
             generic::Digest,
             traits::{BlakeTwo256, Hash},
         },
-        AccountId, Error as RuntimeError, H256Le, PolkaBtcIssueRequest, PolkaBtcReplaceRequest,
-        PolkaBtcRequestIssueEvent,
+        AccountId, BtcAddress, Error as RuntimeError, H256Le, PolkaBtcIssueRequest,
+        PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent,
     };
     use sp_core::H256;
 
@@ -444,17 +444,19 @@ mod tests {
             async fn get_issue_period(&self) -> Result<u32, RuntimeError>;
             async fn set_issue_period(&self, period: u32) -> Result<(), RuntimeError>;
         }
+
         #[async_trait]
         pub trait ReplacePallet {
             async fn request_replace(&self, amount: u128, griefing_collateral: u128)
                 -> Result<H256, RuntimeError>;
             async fn withdraw_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
-            async fn accept_replace(&self, replace_id: H256, collateral: u128) -> Result<(), RuntimeError>;
+            async fn accept_replace(&self, replace_id: H256, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
             async fn auction_replace(
                 &self,
                 old_vault: AccountId,
                 btc_amount: u128,
                 collateral: u128,
+                btc_address: BtcAddress,
             ) -> Result<(), RuntimeError>;
             async fn execute_replace(
                 &self,

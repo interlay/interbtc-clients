@@ -5,7 +5,7 @@ use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
 use runtime::{
     pallets::btc_relay::H256Le, AccountId, BtcAddress, IssuePallet, PolkaBtcIssueRequest,
-    PolkaBtcProvider, PolkaBtcRequestIssueEvent, UtilFuncs
+    PolkaBtcProvider, PolkaBtcRequestIssueEvent, UtilFuncs,
 };
 use sp_core::H256;
 use std::convert::TryInto;
@@ -20,7 +20,6 @@ pub async fn get_issue_by_id(
 
     Ok(issue_request)
 }
-
 
 /// Request issue of PolkaBTC
 pub async fn request_issue(

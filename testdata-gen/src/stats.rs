@@ -78,9 +78,9 @@ pub async fn dump_json(provider: &PolkaBtcProvider, output_folder_name: &str) ->
             info!("{} blocks remaining..", num_blocks_remaining);
             match event {
                 Event::issue(x) => match x {
-                    IssueEvent::RequestIssue(issue_id, requester, amount, vault_id, btc_address) => {
+                    IssueEvent::RequestIssue(issue_id, requester, amount, vault_id, btc_address, public_key) => {
                         issue_requests.write(RequestIssueEvent::<PolkaBtcRuntime> {
-                            issue_id, requester, amount, vault_id, btc_address 
+                            issue_id, requester, amount, vault_id, btc_address, public_key
                         })?;
                     }
                     IssueEvent::CancelIssue(issue_id, requester) => {
@@ -139,7 +139,7 @@ pub async fn report_chain_stats(
         .on_past_events(start, end, |event, num_blocks_remaining| {
             info!("{} blocks remaining..", num_blocks_remaining);
             match event {
-                Event::issue(IssueEvent::RequestIssue(id, _, amount, _, _)) => {
+                Event::issue(IssueEvent::RequestIssue(id, _, amount, _, _, _)) => {
                     issue_requests.push((id, amount));
                 }
                 Event::issue(IssueEvent::ExecuteIssue(id, _, _)) => {

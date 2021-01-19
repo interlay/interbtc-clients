@@ -26,13 +26,13 @@ sp-keyring = "2.0.0"
 [dependencies.btc-parachain-runtime]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "0.3.2"
+version = "0.4.0"
 package = "btc-parachain-runtime"
 
 [dependencies.module-bitcoin]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "0.3.1"
+version = "0.4.0"
 package = "bitcoin"
 
 [dependencies.module-refund]
@@ -44,7 +44,7 @@ package = "refund"
 [dependencies.module-btc-relay]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "0.3.2"
+version = "0.4.0"
 package = "btc-relay"
 
 [dependencies.module-security]
@@ -56,13 +56,13 @@ package = "security"
 [dependencies.module-staked-relayers]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "0.3.2"
+version = "0.4.0"
 package = "staked-relayers"
 
 [dependencies.module-vault-registry]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "0.3.3"
+version = "0.4.0"
 package = "vault-registry"
 
 [dependencies.module-exchange-rate-oracle-rpc-runtime-api]
@@ -74,19 +74,19 @@ package = "module-exchange-rate-oracle-rpc-runtime-api"
 [dependencies.module-issue]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "0.3.2"
+version = "0.4.0"
 package = "issue"
 
 [dependencies.module-redeem]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "0.3.2"
+version = "0.4.0"
 package = "redeem"
 
 [dependencies.module-replace]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "0.3.2"
+version = "0.4.0"
 package = "replace"
 
 [dependencies.module-exchange-rate-oracle]
@@ -103,4 +103,4 @@ sp-keyring = "2.0.0"
 [dev-dependencies.btc-parachain]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "0.3.2"
+version = "0.4.0"
