@@ -66,10 +66,7 @@ async fn _fund_account_raw(
     vault_allowance: u128,
 ) -> Result<(), Error> {
     let req: FundAccountJsonRpcRequest = parse_params(params)?;
-    match fund_account(api, req, store, user_allowance, vault_allowance).await {
-        Ok(_) => Ok(()),
-        Err(e) => Err(e),
-    }
+    fund_account(api, req, store, user_allowance, vault_allowance).await
 }
 
 async fn get_faucet_amount(
