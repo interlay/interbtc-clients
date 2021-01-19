@@ -610,7 +610,7 @@ pub trait TransactionExt {
     fn get_op_return(&self) -> Option<H256>;
     fn get_payment_amount_to<A: PartialAddress + PartialEq>(&self, dest: A) -> Option<u64>;
     fn extract_input_addresses<A: PartialAddress>(&self) -> Vec<A>;
-    fn extract_output_addresses<A: PartialAddress>(&self) -> Result<Vec<A>, Error>;
+    fn extract_output_addresses<A: PartialAddress>(&self) -> Vec<A>;
 }
 
 impl TransactionExt for Transaction {
@@ -650,15 +650,13 @@ impl TransactionExt for Transaction {
     }
 
     /// return the addresses that are used as outputs with non-zero value in this transaction
-    fn extract_output_addresses<A: PartialAddress>(&self) -> Result<Vec<A>, Error> {
+    fn extract_output_addresses<A: PartialAddress>(&self) -> Vec<A> {
         self.output
             .iter()
             .filter(|x| x.value > 0)
-            .map(|tx_out| {
-                let payload = Payload::from_script(&tx_out.script_pubkey)
-                    .ok_or(ConversionError::InvalidPayload)?;
-                let address = PartialAddress::from_payload(payload)?;
-                Ok(address)
+            .filter_map(|tx_out| {
+                let payload = Payload::from_script(&tx_out.script_pubkey)?;
+                PartialAddress::from_payload(payload).ok()
             })
             .collect()
     }

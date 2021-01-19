@@ -128,7 +128,7 @@ impl Request {
 
         let return_to_self_addresses = tx
             .transaction
-            .extract_output_addresses()?
+            .extract_output_addresses()
             .into_iter()
             .filter(|x| x != &self.btc_address)
             .collect::<Vec<_>>();

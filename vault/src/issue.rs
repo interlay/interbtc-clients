@@ -122,7 +122,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
     block_hash: BlockHash,
     transaction: Transaction,
 ) -> Result<(), Error> {
-    let addresses = transaction.extract_output_addresses::<BtcAddress>()?;
+    let addresses = transaction.extract_output_addresses::<BtcAddress>();
     let mut issue_requests = issue_set.0.lock().await;
     if let Some(address) = addresses.iter().find(|&vout| issue_requests.contains_value(vout)) {
         // tx has output to address
