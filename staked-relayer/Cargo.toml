@@ -18,7 +18,7 @@ sp-keyring = "2.0.0"
 sp-core = "2.0.0"
 async-trait = "0.1.40"
 serde = "1.0.116"
-relayer-core = { git = "https://gitlab.com/interlay/relayer-core", rev = "637d6f87" }
+relayer-core = { git = "https://gitlab.com/interlay/relayer-core", rev = "d1bce1a80118bc73301318f5f099b87416fc45f8" }
 runtime = { path = "../runtime" }
 bitcoin = { path = "../bitcoin", features = ["cli"] }
 jsonrpc-http-server = "15.1.0"
