@@ -15,8 +15,8 @@ use parity_scale_codec::{Decode, Encode};
 use runtime::{
     substrate_subxt::PairSigner, BtcAddress, ErrorCode as PolkaBtcErrorCode,
     ExchangeRateOraclePallet, FeePallet, FixedPointNumber, FixedPointTraits::*, FixedU128, H256Le,
-    PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, StatusCode as PolkaBtcStatusCode,
-    TimestampPallet, VaultRegistryPallet,
+    PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, StakedRelayerPallet,
+    StatusCode as PolkaBtcStatusCode, TimestampPallet, VaultRegistryPallet,
 };
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
@@ -133,6 +133,8 @@ enum SubCommand {
     SetRedeemPeriod(SetRedeemPeriodInfo),
     /// Set replace period.
     SetReplacePeriod(SetReplacePeriodInfo),
+    /// Set relayer maturity period.
+    SetRelayerMaturityPeriod(SetRelayerMaturityPeriodInfo),
 }
 
 #[derive(Clap)]
@@ -335,6 +337,12 @@ struct SetRedeemPeriodInfo {
 #[derive(Clap)]
 struct SetReplacePeriodInfo {
     /// Period after replace requests expire.
+    #[clap(long)]
+    period: u32,
+}
+#[derive(Clap)]
+struct SetRelayerMaturityPeriodInfo {
+    /// Duration of the relayer bonding period.
     #[clap(long)]
     period: u32,
 }
@@ -589,7 +597,7 @@ async fn main() -> Result<(), Error> {
             if info.no_execute {
                 println!("{}", hex::encode(request_data.issue_id.as_bytes()));
                 return Ok(());
-            }        
+            }
 
             let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
             issue::execute_issue(
@@ -734,6 +742,9 @@ async fn main() -> Result<(), Error> {
         }
         SubCommand::SetReplacePeriod(info) => {
             replace::set_replace_period(&provider, info.period).await?;
+        }
+        SubCommand::SetRelayerMaturityPeriod(info) => {
+            provider.set_maturity_period(info.period).await?;
         }
     }
 

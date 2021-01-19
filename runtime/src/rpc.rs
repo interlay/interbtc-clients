@@ -726,6 +726,8 @@ pub trait StakedRelayerPallet {
         vault_id: AccountId,
         raw_tx: Vec<u8>,
     ) -> Result<bool, Error>;
+
+    async fn set_maturity_period(&self, period: u32) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -891,6 +893,15 @@ impl StakedRelayerPallet for PolkaBtcProvider {
                 _ => false,
             },
         )
+    }
+
+    /// Sets the maturity period.
+    ///
+    /// # Arguments
+    ///
+    /// * `period` - the number of blocks to wait before a relayer is considered active.
+    async fn set_maturity_period(&self, period: u32) -> Result<(), Error> {
+        Ok(self.sudo(SetMaturityPeriodCall { period }).await?)
     }
 }
 

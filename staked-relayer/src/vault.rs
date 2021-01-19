@@ -269,6 +269,7 @@ mod tests {
                 vault_id: AccountId,
                 raw_tx: Vec<u8>,
             ) -> Result<bool, RuntimeError>;
+            async fn set_maturity_period(&self, period: u32) -> Result<(), RuntimeError>;
         }
 
         #[async_trait]
