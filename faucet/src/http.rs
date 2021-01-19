@@ -7,6 +7,7 @@ use jsonrpc_http_server::jsonrpc_core::Error as JsonRpcError;
 use jsonrpc_http_server::jsonrpc_core::{IoHandler, Params};
 use jsonrpc_http_server::{DomainsValidation, ServerBuilder};
 use kv::*;
+use log::error;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     AccountId, DotBalancesPallet, PolkaBtcProvider, SecurityPallet, VaultRegistryPallet,
@@ -29,7 +30,7 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
     match resp {
         Ok(data) => Ok(format!("0x{}", hex::encode(data.encode())).into()),
         Err(err) => {
-            println!("Error: {}", err);
+            error!("Error: {}", err.to_string());
             Err(JsonRpcError::invalid_request())
         }
     }
