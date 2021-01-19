@@ -154,11 +154,17 @@ async fn main() -> Result<(), Error> {
         match provider.get_vault(vault_id.clone()).await {
             Ok(_) => info!("Not registering vault -- already registered"),
             Err(RuntimeError::VaultNotFound) => {
-                let btc_address = btc_rpc.get_new_address()?;
-                provider.register_vault(collateral, btc_address).await?;
+                let public_key = btc_rpc.get_new_public_key()?;
+                provider.register_vault(collateral, public_key).await?;
                 info!("Automatically registered vault");
             }
             Err(err) => return Err(err.into()),
+        }
+    }
+
+    if let Ok(vault) = provider.get_vault(vault_id.clone()).await {
+        if !btc_rpc.wallet_has_public_key(vault.wallet.public_key)? {
+            return Err(bitcoin::Error::MissingPublicKey.into());
         }
     }
 
@@ -200,12 +206,13 @@ async fn main() -> Result<(), Error> {
     let block_listener = arc_provider.clone();
 
     // Issue handling
-    let issue_set = Arc::new(IssueIds::new());
+    let issue_set = Arc::new(IssueRequests::new());
     let (issue_event_tx, issue_event_rx) = mpsc::channel::<RequestEvent>(16);
     let mut issue_cancellation_scheduler =
         CancellationScheduler::new(arc_provider.clone(), vault_id.clone());
     let issue_request_listener = listen_for_issue_requests(
         arc_provider.clone(),
+        btc_rpc.clone(),
         issue_event_tx.clone(),
         issue_set.clone(),
     );
@@ -228,6 +235,7 @@ async fn main() -> Result<(), Error> {
         CancellationScheduler::new(arc_provider.clone(), vault_id.clone());
     let request_replace_listener = listen_for_replace_requests(
         arc_provider.clone(),
+        btc_rpc.clone(),
         replace_event_tx.clone(),
         !opts.no_auto_replace,
     );
@@ -256,6 +264,7 @@ async fn main() -> Result<(), Error> {
     let no_issue_execution = opts.no_issue_execution;
     let no_api = opts.no_api;
     let auction_provider = arc_provider.clone();
+    let auction_btc_rpc = btc_rpc.clone();
 
     // starts all the tasks
     let result = tokio::try_join!(
@@ -339,7 +348,9 @@ async fn main() -> Result<(), Error> {
                 // that affect this (e.g. `SetExchangeRate`, `WithdrawCollateral`) but
                 // polling is easier for now
                 loop {
-                    if let Err(e) = monitor_collateral_of_vaults(&auction_provider).await {
+                    if let Err(e) =
+                        monitor_collateral_of_vaults(&auction_provider, &auction_btc_rpc).await
+                    {
                         error!(
                             "Error while monitoring collateral of vaults: {}",
                             e.to_string()

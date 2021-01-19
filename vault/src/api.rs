@@ -8,7 +8,7 @@ use jsonrpc_http_server::{
 };
 use log::info;
 use parity_scale_codec::{Decode, Encode};
-use runtime::{BtcAddress, PolkaBtcProvider, ReplacePallet, UtilFuncs, VaultRegistryPallet};
+use runtime::{BtcPublicKey, PolkaBtcProvider, ReplacePallet, UtilFuncs, VaultRegistryPallet};
 use serde::{Deserialize, Deserializer};
 use sp_core::crypto::Ss58Codec;
 use sp_core::H256;
@@ -74,7 +74,7 @@ struct RegisterVaultJsonRpcRequest {
 
 #[derive(Encode, Decode, Debug)]
 struct RegisterVaultJsonRpcResponse {
-    address: BtcAddress,
+    public_key: BtcPublicKey,
 }
 
 fn _register_vault(
@@ -83,13 +83,13 @@ fn _register_vault(
     params: Params,
 ) -> Result<RegisterVaultJsonRpcResponse, Error> {
     let req = parse_params::<RegisterVaultJsonRpcRequest>(params)?;
-    let address = btc.get_new_address()?;
-    let result = block_on(api.register_vault(req.collateral, address));
+    let public_key: BtcPublicKey = btc.get_new_public_key()?;
+    let result = block_on(api.register_vault(req.collateral, public_key.clone()));
     info!(
-        "Registering vault with bitcoind address {} and collateral = {}: {:?}",
-        address, req.collateral, result
+        "Registering vault with bitcoind public_key {:?} and collateral = {}: {:?}",
+        public_key, req.collateral, result
     );
-    Ok(result.map(|_| RegisterVaultJsonRpcResponse { address })?)
+    Ok(result.map(|_| RegisterVaultJsonRpcResponse { public_key })?)
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -115,21 +115,6 @@ fn _withdraw_collateral(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(
         req.amount, result
     );
     Ok(result?)
-}
-
-#[derive(Encode, Decode, Debug)]
-struct UpdateBtcAddressJsonRpcResponse {
-    address: BtcAddress,
-}
-
-fn _update_btc_address(
-    api: &Arc<PolkaBtcProvider>,
-    btc: &Arc<BitcoinCore>,
-) -> Result<UpdateBtcAddressJsonRpcResponse, Error> {
-    let address = btc.get_new_address()?;
-    let result = block_on(api.update_btc_address(address));
-    info!("Updating btc address to {}: {:?}", address, result);
-    Ok(result.map(|_| UpdateBtcAddressJsonRpcResponse { address })?)
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -181,13 +166,6 @@ pub async fn start(
         let api = api.clone();
         io.add_method("withdraw_collateral", move |params| {
             handle_resp(_withdraw_collateral(&api, params))
-        });
-    }
-    {
-        let api = api.clone();
-        let btc = btc.clone();
-        io.add_method("update_btc_address", move |_| {
-            handle_resp(_update_btc_address(&api, &btc))
         });
     }
     {

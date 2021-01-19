@@ -116,7 +116,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use runtime::{
-        pallets::Core, AccountId, BtcAddress, Error as RuntimeError, PolkaBtcRuntime, PolkaBtcVault,
+        pallets::Core, AccountId, BtcAddress, BtcPublicKey, Error as RuntimeError, PolkaBtcRuntime,
+        PolkaBtcVault,
     };
 
     macro_rules! assert_ok {
@@ -149,10 +150,11 @@ mod tests {
         pub trait VaultRegistryPallet {
             async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
             async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, RuntimeError>;
-            async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
+            async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
             async fn lock_additional_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
-            async fn update_btc_address(&self, address: BtcAddress) -> Result<(), RuntimeError>;
+            async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
+            async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;
             async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
             async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, RuntimeError>;

@@ -30,12 +30,15 @@ pub async fn request_replace(
 
 pub async fn accept_replace(
     replace_prov: &PolkaBtcProvider,
+    btc_rpc: &BitcoinCore,
     replace_id: H256,
     collateral: u128,
 ) -> Result<(), Error> {
     info!("Collateral: {}", collateral);
-
-    replace_prov.accept_replace(replace_id, collateral).await?;
+    let address = btc_rpc.get_new_address()?;
+    replace_prov
+        .accept_replace(replace_id, collateral, address)
+        .await?;
     Ok(())
 }
 
@@ -49,7 +52,7 @@ pub async fn execute_replace(
 
     let tx_metadata = btc_rpc
         .send_to_address::<BtcAddress>(
-            replace_request.btc_address,
+            replace_request.btc_address.unwrap(),
             replace_request.amount.try_into().unwrap(),
             &replace_id.to_fixed_bytes(),
             Duration::from_secs(15 * 60),

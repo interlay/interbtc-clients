@@ -1,5 +1,6 @@
 use crate::{
-    Address, ConversionError, Hash, Network, Payload, PubkeyHash, Script, ScriptHash, WPubkeyHash,
+    secp256k1::SecretKey, Address, ConversionError, Error, Hash, Network, Payload, PubkeyHash,
+    Script, ScriptHash, WPubkeyHash,
 };
 use sp_core::H160;
 use std::str::FromStr;
@@ -80,9 +81,22 @@ impl PartialAddress for Payload {
     }
 }
 
+pub fn calculate_deposit_secret_key(
+    vault_key: SecretKey,
+    issue_key: SecretKey,
+) -> Result<SecretKey, Error> {
+    let mut deposit_key = vault_key.clone();
+    deposit_key.mul_assign(&issue_key[..])?;
+    Ok(deposit_key)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::secp256k1;
+    use secp256k1::rand::rngs::OsRng;
+    use secp256k1::{PublicKey, Secp256k1, SecretKey};
+    use sp_core::H256;
 
     #[test]
     fn test_encode_and_decode_payload() {
@@ -93,6 +107,36 @@ mod tests {
                 .unwrap()
                 .encode_str(Network::Regtest)
                 .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_calculate_deposit_secret_key() {
+        let secp = Secp256k1::new();
+        let mut rng = OsRng::new().unwrap();
+
+        // c
+        let secure_id = H256::random();
+        let secret_key = SecretKey::from_slice(secure_id.as_bytes()).unwrap();
+
+        // v
+        let vault_secret_key = SecretKey::new(&mut rng);
+        // V
+        let vault_public_key = PublicKey::from_secret_key(&secp, &vault_secret_key);
+
+        // D = V * c
+        let mut deposit_public_key = vault_public_key.clone();
+        deposit_public_key
+            .mul_assign(&secp, &secret_key[..])
+            .unwrap();
+
+        // d = v * c
+        let deposit_secret_key =
+            calculate_deposit_secret_key(vault_secret_key, secret_key).unwrap();
+
+        assert_eq!(
+            deposit_public_key,
+            PublicKey::from_secret_key(&secp, &deposit_secret_key)
         );
     }
 }

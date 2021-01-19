@@ -16,7 +16,7 @@ use runtime::{
     substrate_subxt::PairSigner, BtcAddress, ErrorCode as PolkaBtcErrorCode,
     ExchangeRateOraclePallet, FeePallet, FixedPointNumber, FixedPointTraits::*, FixedU128, H256Le,
     PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, StakedRelayerPallet,
-    StatusCode as PolkaBtcStatusCode, TimestampPallet, VaultRegistryPallet,
+    StatusCode as PolkaBtcStatusCode, TimestampPallet,
 };
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
@@ -265,13 +265,13 @@ struct SetBtcTxFeesInfo {
 
 #[derive(Clap)]
 struct RegisterVaultInfo {
-    /// Bitcoin address for vault to receive funds.
-    #[clap(long)]
-    btc_address: BtcAddressFromStr,
-
     /// Collateral to secure position.
     #[clap(long, default_value = "100000")]
     collateral: u128,
+
+    /// Bitcoin network type for address encoding.
+    #[clap(long, default_value = "regtest")]
+    bitcoin_network: BitcoinNetwork,
 }
 
 #[derive(Clap)]
@@ -393,6 +393,10 @@ struct AcceptReplaceInfo {
     /// Collateral used to back replace.
     #[clap(long, default_value = "10000")]
     collateral: u128,
+
+    /// Bitcoin network type for address encoding.
+    #[clap(long, default_value = "regtest")]
+    bitcoin_network: BitcoinNetwork,
 }
 
 #[derive(Clap)]
@@ -553,13 +557,11 @@ async fn main() -> Result<(), Error> {
             println!("{}", provider.get_time_now().await?);
         }
         SubCommand::RegisterVault(info) => {
-            vault::register_vault(provider, info.btc_address.0, info.collateral).await?;
+            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
+            vault::register_vault(provider, btc_rpc.get_new_public_key()?, info.collateral).await?;
         }
         SubCommand::RequestIssue(info) => {
             let vault_id = info.vault.to_account_id();
-            let vault = provider.get_vault(vault_id.clone()).await?;
-
-            let vault_btc_address = vault.wallet.get_btc_address();
 
             let griefing_collateral = match info.griefing_collateral {
                 Some(x) => x,
@@ -593,6 +595,8 @@ async fn main() -> Result<(), Error> {
             let request_data =
                 issue::request_issue(&provider, info.issue_amount, griefing_collateral, vault_id)
                     .await?;
+
+            let vault_btc_address = request_data.btc_address;
 
             if info.no_execute {
                 println!("{}", hex::encode(request_data.issue_id.as_bytes()));
@@ -675,7 +679,8 @@ async fn main() -> Result<(), Error> {
             println!("{}", hex::encode(replace_id.as_bytes()));
         }
         SubCommand::AcceptReplace(info) => {
-            replace::accept_replace(&provider, info.replace_id, info.collateral).await?;
+            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
+            replace::accept_replace(&provider, &btc_rpc, info.replace_id, info.collateral).await?;
         }
         SubCommand::ExecuteReplace(info) => {
             let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;

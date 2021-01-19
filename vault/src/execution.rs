@@ -1,6 +1,6 @@
 use crate::constants::*;
 use crate::error::Error;
-use crate::issue::{process_issue_requests, IssueIds};
+use crate::issue::{process_issue_requests, IssueRequests};
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use log::*;
@@ -43,14 +43,14 @@ impl Request {
         }
     }
     /// Constructs a Request for the given PolkaBtcReplaceRequest
-    fn from_replace_request(hash: H256, request: PolkaBtcReplaceRequest) -> Request {
-        Request {
+    fn from_replace_request(hash: H256, request: PolkaBtcReplaceRequest) -> Option<Request> {
+        Some(Request {
             hash,
             open_time: Some(request.open_time),
             amount: request.amount,
-            btc_address: request.btc_address,
+            btc_address: request.btc_address?,
             request_type: RequestType::Replace,
-        }
+        })
     }
     /// Constructs a Request for the given PolkaBtcRefundRequest
     fn from_refund_request(hash: H256, request: PolkaBtcRefundRequest) -> Request {
@@ -73,12 +73,9 @@ impl Request {
         }
     }
     /// Constructs a Request for the given AcceptReplaceEvent
-    pub fn from_replace_request_event(
-        request: &AcceptReplaceEvent<PolkaBtcRuntime>,
-        btc_address: BtcAddress,
-    ) -> Request {
+    pub fn from_replace_request_event(request: &AcceptReplaceEvent<PolkaBtcRuntime>) -> Request {
         Request {
-            btc_address,
+            btc_address: request.btc_address,
             amount: request.btc_amount,
             hash: request.replace_id,
             open_time: None,
@@ -145,7 +142,7 @@ impl Request {
                 let wallet = provider.get_vault(vault_id).await?.wallet;
                 if !wallet.has_btc_address(&address) {
                     info!("Registering address {}", address);
-                    provider.update_btc_address(address.clone()).await?;
+                    provider.register_address(address.clone()).await?;
                 }
             }
             _ => return Err(Error::TooManyReturnToSelfAddresses),
@@ -222,7 +219,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
         .await?
         .into_iter()
         .filter(|(_, request)| !request.completed && !request.cancelled)
-        .map(|(hash, request)| Request::from_replace_request(hash, request));
+        .filter_map(|(hash, request)| Request::from_replace_request(hash, request));
     let open_refunds = provider
         .get_vault_refund_requests(vault_id)
         .await?
@@ -330,7 +327,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
 pub async fn execute_open_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: Arc<PolkaBtcProvider>,
     btc_rpc: Arc<B>,
-    issue_set: Arc<IssueIds>,
+    issue_set: Arc<IssueRequests>,
     num_confirmations: u32,
 ) -> Result<(), Error> {
     (|| async {
@@ -360,181 +357,181 @@ fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -
 
 #[cfg(test)]
 mod tests {
-//     use super::*;
-//     use async_trait::async_trait;
-//     use bitcoin::{
-//         Block, BlockHash, Error as BitcoinError, GetBlockResult, GetRawTransactionResult,
-//         LockedTransaction, Network, PartialAddress, Transaction, TransactionMetadata, Txid,
-//     };
-//     use runtime::{AccountId, Error as RuntimeError, PolkaBtcVault};
-//     use sp_core::H160;
-//     use std::future::Future;
-// 
-//     macro_rules! assert_ok {
-//         ( $x:expr $(,)? ) => {
-//             let is = $x;
-//             match is {
-//                 Ok(_) => (),
-//                 _ => assert!(false, "Expected Ok(_). Got {:#?}", is),
-//             }
-//         };
-//         ( $x:expr, $y:expr $(,)? ) => {
-//             assert_eq!($x, Ok($y));
-//         };
-//     }
-// 
-//     macro_rules! assert_err {
-//         ($result:expr, $err:pat) => {{
-//             match $result {
-//                 Err($err) => (),
-//                 Ok(v) => panic!("assertion failed: Ok({:?})", v),
-//                 _ => panic!("expected: Err($err)"),
-//             }
-//         }};
-//     }
-// 
-//     mockall::mock! {
-//         Provider {}
-// 
-//         #[async_trait]
-//         pub trait UtilFuncs {
-//             async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
-//             async fn get_blockchain_height_at(&self, parachain_height: u32) -> Result<u32, RuntimeError>;
-//             fn get_account_id(&self) -> &AccountId;
-//         }
-// 
-//         #[async_trait]
-//         pub trait VaultRegistryPallet {
-//             async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
-//             async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, RuntimeError>;
-//             async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-//             async fn lock_additional_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
-//             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
-//             async fn update_btc_address(&self, address: BtcAddress) -> Result<(), RuntimeError>;
-//             async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
-//             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
-//             async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, RuntimeError>;
-//         }
-// 
-//         #[async_trait]
-//         pub trait RedeemPallet {
-//             async fn get_redeem_request(&self, redeem_id: H256) -> Result<PolkaBtcRedeemRequest, RuntimeError>;
-//             async fn request_redeem(
-//                 &self,
-//                 amount_polka_btc: u128,
-//                 btc_address: BtcAddress,
-//                 vault_id: AccountId,
-//             ) -> Result<H256, RuntimeError>;
-//             async fn execute_redeem(
-//                 &self,
-//                 redeem_id: H256,
-//                 tx_id: H256Le,
-//                 merkle_proof: Vec<u8>,
-//                 raw_tx: Vec<u8>,
-//             ) -> Result<(), RuntimeError>;
-//             async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), RuntimeError>;
-//             async fn get_vault_redeem_requests(
-//                 &self,
-//                 account_id: AccountId,
-//             ) -> Result<Vec<(H256, PolkaBtcRedeemRequest)>, RuntimeError>;
-//             async fn set_redeem_period(&self, period: u32) -> Result<(), RuntimeError>;
-//         }
-//         #[async_trait]
-//         pub trait ReplacePallet {
-//             async fn request_replace(&self, amount: u128, griefing_collateral: u128)
-//                 -> Result<H256, RuntimeError>;
-//             async fn withdraw_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
-//             async fn accept_replace(&self, replace_id: H256, collateral: u128) -> Result<(), RuntimeError>;
-//             async fn auction_replace(
-//                 &self,
-//                 old_vault: AccountId,
-//                 btc_amount: u128,
-//                 collateral: u128,
-//             ) -> Result<(), RuntimeError>;
-//             async fn execute_replace(
-//                 &self,
-//                 replace_id: H256,
-//                 tx_id: H256Le,
-//                 merkle_proof: Vec<u8>,
-//                 raw_tx: Vec<u8>,
-//             ) -> Result<(), RuntimeError>;
-//             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
-//             async fn get_new_vault_replace_requests(
-//                 &self,
-//                 account_id: AccountId,
-//             ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
-//             async fn get_old_vault_replace_requests(
-//                 &self,
-//                 account_id: AccountId,
-//             ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
-//             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
-//             async fn set_replace_period(&self, period: u32) -> Result<(), RuntimeError>;
-//             async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, RuntimeError>;
-//         }
-//     }
-// 
-//     mockall::mock! {
-//         Bitcoin {}
-// 
-//         #[async_trait]
-//         trait BitcoinCoreApi {
-//             async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, BitcoinError>;
-//             fn get_block_count(&self) -> Result<u64, BitcoinError>;
-//             fn get_block_transactions(
-//                 &self,
-//                 hash: &BlockHash,
-//             ) -> Result<Vec<Option<GetRawTransactionResult>>, BitcoinError>;
-//             fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
-//             fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
-//             fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
-//             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
-//             fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError>;
-//             fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
-//             fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
-//             fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
-//             fn get_mempool_transactions<'a>(
-//                 self: Arc<Self>,
-//             ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + 'a>, BitcoinError>;
-//             async fn wait_for_transaction_metadata(
-//                 &self,
-//                 txid: Txid,
-//                 op_timeout: Duration,
-//                 num_confirmations: u32,
-//             ) -> Result<TransactionMetadata, BitcoinError>;
-//             async fn create_transaction<A: PartialAddress + Send + 'static>(
-//                 &self,
-//                 address: A,
-//                 sat: u64,
-//                 request_id: &[u8; 32],
-//             ) -> Result<LockedTransaction, BitcoinError>;
-//             fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
-//             async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
-//                 &self,
-//                 address: A,
-//                 sat: u64,
-//                 request_id: &[u8; 32],
-//             ) -> Result<Txid, BitcoinError>;
-//             async fn send_to_address<A: PartialAddress + Send + 'static>(
-//                 &self,
-//                 address: A,
-//                 sat: u64,
-//                 request_id: &[u8; 32],
-//                 op_timeout: Duration,
-//                 num_confirmations: u32,
-//             ) -> Result<TransactionMetadata, BitcoinError>;
-//             fn create_wallet(&self, wallet: &str) -> Result<(), BitcoinError>;
-//         }
-//     }
-// 
-//     fn dummy_transaction_metadata() -> TransactionMetadata {
-//         TransactionMetadata {
-//             block_hash: Default::default(),
-//             block_height: Default::default(),
-//             proof: Default::default(),
-//             raw_tx: Default::default(),
-//             txid: Default::default(),
-//         }
-//     }
+    //     use super::*;
+    //     use async_trait::async_trait;
+    //     use bitcoin::{
+    //         Block, BlockHash, Error as BitcoinError, GetBlockResult, GetRawTransactionResult,
+    //         LockedTransaction, Network, PartialAddress, Transaction, TransactionMetadata, Txid,
+    //     };
+    //     use runtime::{AccountId, Error as RuntimeError, PolkaBtcVault};
+    //     use sp_core::H160;
+    //     use std::future::Future;
+
+    //     macro_rules! assert_ok {
+    //         ( $x:expr $(,)? ) => {
+    //             let is = $x;
+    //             match is {
+    //                 Ok(_) => (),
+    //                 _ => assert!(false, "Expected Ok(_). Got {:#?}", is),
+    //             }
+    //         };
+    //         ( $x:expr, $y:expr $(,)? ) => {
+    //             assert_eq!($x, Ok($y));
+    //         };
+    //     }
+
+    //     macro_rules! assert_err {
+    //         ($result:expr, $err:pat) => {{
+    //             match $result {
+    //                 Err($err) => (),
+    //                 Ok(v) => panic!("assertion failed: Ok({:?})", v),
+    //                 _ => panic!("expected: Err($err)"),
+    //             }
+    //         }};
+    //     }
+
+    //     mockall::mock! {
+    //         Provider {}
+
+    //         #[async_trait]
+    //         pub trait UtilFuncs {
+    //             async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
+    //             async fn get_blockchain_height_at(&self, parachain_height: u32) -> Result<u32, RuntimeError>;
+    //             fn get_account_id(&self) -> &AccountId;
+    //         }
+
+    //         #[async_trait]
+    //         pub trait VaultRegistryPallet {
+    //             async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
+    //             async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, RuntimeError>;
+    //             async fn register_vault(&self, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
+    //             async fn lock_additional_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
+    //             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
+    //             async fn update_btc_address(&self, address: BtcAddress) -> Result<(), RuntimeError>;
+    //             async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
+    //             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
+    //             async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, RuntimeError>;
+    //         }
+
+    //         #[async_trait]
+    //         pub trait RedeemPallet {
+    //             async fn get_redeem_request(&self, redeem_id: H256) -> Result<PolkaBtcRedeemRequest, RuntimeError>;
+    //             async fn request_redeem(
+    //                 &self,
+    //                 amount_polka_btc: u128,
+    //                 btc_address: BtcAddress,
+    //                 vault_id: AccountId,
+    //             ) -> Result<H256, RuntimeError>;
+    //             async fn execute_redeem(
+    //                 &self,
+    //                 redeem_id: H256,
+    //                 tx_id: H256Le,
+    //                 merkle_proof: Vec<u8>,
+    //                 raw_tx: Vec<u8>,
+    //             ) -> Result<(), RuntimeError>;
+    //             async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), RuntimeError>;
+    //             async fn get_vault_redeem_requests(
+    //                 &self,
+    //                 account_id: AccountId,
+    //             ) -> Result<Vec<(H256, PolkaBtcRedeemRequest)>, RuntimeError>;
+    //             async fn set_redeem_period(&self, period: u32) -> Result<(), RuntimeError>;
+    //         }
+    //         #[async_trait]
+    //         pub trait ReplacePallet {
+    //             async fn request_replace(&self, amount: u128, griefing_collateral: u128)
+    //                 -> Result<H256, RuntimeError>;
+    //             async fn withdraw_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
+    //             async fn accept_replace(&self, replace_id: H256, collateral: u128) -> Result<(), RuntimeError>;
+    //             async fn auction_replace(
+    //                 &self,
+    //                 old_vault: AccountId,
+    //                 btc_amount: u128,
+    //                 collateral: u128,
+    //             ) -> Result<(), RuntimeError>;
+    //             async fn execute_replace(
+    //                 &self,
+    //                 replace_id: H256,
+    //                 tx_id: H256Le,
+    //                 merkle_proof: Vec<u8>,
+    //                 raw_tx: Vec<u8>,
+    //             ) -> Result<(), RuntimeError>;
+    //             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
+    //             async fn get_new_vault_replace_requests(
+    //                 &self,
+    //                 account_id: AccountId,
+    //             ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
+    //             async fn get_old_vault_replace_requests(
+    //                 &self,
+    //                 account_id: AccountId,
+    //             ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
+    //             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
+    //             async fn set_replace_period(&self, period: u32) -> Result<(), RuntimeError>;
+    //             async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, RuntimeError>;
+    //         }
+    //     }
+
+    //     mockall::mock! {
+    //         Bitcoin {}
+
+    //         #[async_trait]
+    //         trait BitcoinCoreApi {
+    //             async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, BitcoinError>;
+    //             fn get_block_count(&self) -> Result<u64, BitcoinError>;
+    //             fn get_block_transactions(
+    //                 &self,
+    //                 hash: &BlockHash,
+    //             ) -> Result<Vec<Option<GetRawTransactionResult>>, BitcoinError>;
+    //             fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+    //             fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+    //             fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
+    //             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
+    //             fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError>;
+    //             fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
+    //             fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
+    //             fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
+    //             fn get_mempool_transactions<'a>(
+    //                 self: Arc<Self>,
+    //             ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + 'a>, BitcoinError>;
+    //             async fn wait_for_transaction_metadata(
+    //                 &self,
+    //                 txid: Txid,
+    //                 op_timeout: Duration,
+    //                 num_confirmations: u32,
+    //             ) -> Result<TransactionMetadata, BitcoinError>;
+    //             async fn create_transaction<A: PartialAddress + Send + 'static>(
+    //                 &self,
+    //                 address: A,
+    //                 sat: u64,
+    //                 request_id: &[u8; 32],
+    //             ) -> Result<LockedTransaction, BitcoinError>;
+    //             fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
+    //             async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
+    //                 &self,
+    //                 address: A,
+    //                 sat: u64,
+    //                 request_id: &[u8; 32],
+    //             ) -> Result<Txid, BitcoinError>;
+    //             async fn send_to_address<A: PartialAddress + Send + 'static>(
+    //                 &self,
+    //                 address: A,
+    //                 sat: u64,
+    //                 request_id: &[u8; 32],
+    //                 op_timeout: Duration,
+    //                 num_confirmations: u32,
+    //             ) -> Result<TransactionMetadata, BitcoinError>;
+    //             fn create_wallet(&self, wallet: &str) -> Result<(), BitcoinError>;
+    //         }
+    //     }
+
+    //     fn dummy_transaction_metadata() -> TransactionMetadata {
+    //         TransactionMetadata {
+    //             block_hash: Default::default(),
+    //             block_height: Default::default(),
+    //             proof: Default::default(),
+    //             raw_tx: Default::default(),
+    //             txid: Default::default(),
+    //         }
+    //     }
 
     // TODO: re-enable these tests
 

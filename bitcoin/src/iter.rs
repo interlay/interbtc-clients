@@ -180,57 +180,47 @@ mod tests {
         #[async_trait]
         trait BitcoinCoreApi {
             async fn wait_for_block(&self, height: u32, delay: Duration, num_confirmations: u32) -> Result<BlockHash, Error>;
-
             fn get_block_count(&self) -> Result<u64, Error>;
-
             fn get_block_transactions(
                 &self,
                 hash: &BlockHash,
             ) -> Result<Vec<Option<GetRawTransactionResult>>, Error>;
-
             fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
-
             fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
-
             fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error>;
-
             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
-
             fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
-
+            fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error>;
+            fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + 'static>(
+                &self,
+                public_key: P,
+                secret_key: Vec<u8>,
+            ) -> Result<(), Error>;
             fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
-
             fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
-
             fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
-
             fn get_mempool_transactions<'a>(
                 self: Arc<Self>,
             ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + 'a>, Error>;
-
             async fn wait_for_transaction_metadata(
                 &self,
                 txid: Txid,
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
-
             async fn create_transaction<A: PartialAddress + Send + 'static>(
                 &self,
                 address: A,
                 sat: u64,
                 request_id: &[u8; 32],
             ) -> Result<LockedTransaction, Error>;
-
             fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
-
             async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
                 &self,
                 address: A,
                 sat: u64,
                 request_id: &[u8; 32],
             ) -> Result<Txid, Error>;
-
             async fn send_to_address<A: PartialAddress + Send + 'static>(
                 &self,
                 address: A,
@@ -239,8 +229,10 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
-
             fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
+            fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
+                where
+                    P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + 'static;
         }
     }
 

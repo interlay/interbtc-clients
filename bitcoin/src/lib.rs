@@ -15,9 +15,12 @@ pub use bitcoincore_rpc::{
         consensus::encode::{deserialize, serialize},
         hash_types::BlockHash,
         hashes::{hex::ToHex, Hash},
+        secp256k1,
+        secp256k1::constants::PUBLIC_KEY_SIZE,
+        secp256k1::SecretKey,
         util::{address::Payload, psbt::serialize::Serialize},
-        Address, Amount, Block, BlockHeader, Network, PubkeyHash, Script, ScriptHash, Transaction,
-        TxIn, TxOut, Txid, WPubkeyHash,
+        Address, Amount, Block, BlockHeader, Network, PrivateKey, PubkeyHash, PublicKey, Script,
+        ScriptHash, Transaction, TxIn, TxOut, Txid, WPubkeyHash,
     },
     bitcoincore_rpc_json::{
         CreateRawTransactionInput, GetRawTransactionResult, GetTransactionResult, WalletTxInfo,
@@ -74,6 +77,14 @@ pub trait BitcoinCoreApi {
 
     fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
 
+    fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error>;
+
+    fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + 'static>(
+        &self,
+        public_key: P,
+        secret_key: Vec<u8>,
+    ) -> Result<(), Error>;
+
     fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
 
     fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
@@ -117,6 +128,10 @@ pub trait BitcoinCoreApi {
     ) -> Result<TransactionMetadata, Error>;
 
     fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
+
+    fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
+    where
+        P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + 'static;
 }
 
 pub struct LockedTransaction {
@@ -321,6 +336,39 @@ impl BitcoinCoreApi for BitcoinCore {
     fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error> {
         let address = self.rpc.get_new_address(None, Some(AddressType::Bech32))?;
         Ok(A::decode_str(&address.to_string())?)
+    }
+
+    /// Gets a new public key for an address in the wallet
+    fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error> {
+        let address = self.rpc.get_new_address(None, Some(AddressType::Bech32))?;
+        let address_info = self.rpc.get_address_info(&address)?;
+        let public_key = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
+        Ok(P::from(public_key.key.serialize()))
+    }
+
+    /// Derive and import the private key for the master public key and public secret
+    fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + 'static>(
+        &self,
+        public_key: P,
+        secret_key: Vec<u8>,
+    ) -> Result<(), Error> {
+        let address = Address::p2wpkh(&PublicKey::from_slice(&public_key.into())?, self.network)
+            .map_err(|err| ConversionError::from(err))?;
+        let private_key = self.rpc.dump_private_key(&address)?;
+        let deposit_secret_key = addr::calculate_deposit_secret_key(
+            private_key.key,
+            SecretKey::from_slice(&secret_key)?,
+        )?;
+        self.rpc.import_private_key(
+            &PrivateKey {
+                compressed: private_key.compressed,
+                network: self.network,
+                key: deposit_secret_key,
+            },
+            None,
+            None,
+        )?;
+        Ok(())
     }
 
     fn get_best_block_hash(&self) -> Result<BlockHash, Error> {
@@ -540,6 +588,20 @@ impl BitcoinCoreApi for BitcoinCore {
         // wallet does not exist, create
         self.rpc.create_wallet(wallet, None, None, None, None)?;
         Ok(())
+    }
+
+    fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
+    where
+        P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + 'static,
+    {
+        let address = Address::p2wpkh(
+            &PublicKey::from_slice(&public_key.clone().into())?,
+            self.network,
+        )
+        .map_err(|err| ConversionError::from(err))?;
+        let address_info = self.rpc.get_address_info(&address)?;
+        let wallet_pubkey = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
+        Ok(P::from(wallet_pubkey.key.serialize()) == public_key)
     }
 }
 
