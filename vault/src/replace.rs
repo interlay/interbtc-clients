@@ -1,7 +1,7 @@
 use crate::cancellation::RequestEvent;
 use crate::error::Error;
 use crate::execution::Request;
-use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use bitcoin::BitcoinCoreApi;
 use futures::channel::mpsc::Sender;
 use futures::SinkExt;
 use log::*;
@@ -21,9 +21,9 @@ use std::sync::Arc;
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
-pub async fn listen_for_accept_replace(
+pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<BitcoinCore>,
+    btc_rpc: Arc<B>,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     let provider = &provider;
@@ -80,9 +80,9 @@ pub async fn listen_for_accept_replace(
 /// * `provider` - the parachain RPC handle
 /// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
-pub async fn handle_accepted_replace_request(
+pub async fn handle_accepted_replace_request<B: BitcoinCoreApi>(
     event: &AcceptReplaceEvent<PolkaBtcRuntime>,
-    btc_rpc: Arc<BitcoinCore>,
+    btc_rpc: Arc<B>,
     provider: Arc<PolkaBtcProvider>,
     num_confirmations: u32,
 ) -> Result<(), Error> {
@@ -99,9 +99,9 @@ pub async fn handle_accepted_replace_request(
 /// * `provider` - the parachain RPC handle
 /// * `event_channel` - the channel over which to signal events
 /// * `accept_replace_requests` - if true, we attempt to accept replace requests
-pub async fn listen_for_replace_requests(
+pub async fn listen_for_replace_requests<B: BitcoinCoreApi>(
     provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<BitcoinCore>,
+    btc_rpc: Arc<B>,
     event_channel: Sender<RequestEvent>,
     accept_replace_requests: bool,
 ) -> Result<(), runtime::Error> {
@@ -176,9 +176,9 @@ pub async fn handle_replace_request<
 /// # Arguments
 ///
 /// * `provider` - the parachain RPC handle
-pub async fn monitor_collateral_of_vaults(
+pub async fn monitor_collateral_of_vaults<B: BitcoinCoreApi>(
     provider: &Arc<PolkaBtcProvider>,
-    btc_rpc: &Arc<BitcoinCore>,
+    btc_rpc: &Arc<B>,
 ) -> Result<(), Error> {
     for vault in provider.get_all_vaults().await? {
         trace!("Checking collateral of {}", vault.id);

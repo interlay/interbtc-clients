@@ -54,7 +54,7 @@ impl FromStr for BitcoinNetwork {
 /// and the PolkaBTC Parachain.
 #[derive(Clap, Debug, Clone)]
 #[clap(version = "0.1", author = "Interlay <contact@interlay.io>")]
-struct Opts {
+pub struct Opts {
     /// Parachain URL, can be over WebSockets or HTTP.
     #[clap(long, default_value = "ws://127.0.0.1:9944")]
     polka_btc_url: String,
@@ -121,11 +121,14 @@ struct Opts {
 async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
+    let intact_opts = opts.clone();
 
     info!("Command line arguments: {:?}", opts.clone());
 
-    // load parachain credentials
     let (pair, wallet) = opts.account_info.get_key_pair()?;
+    let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);
+    let provider = PolkaBtcProvider::from_url(opts.polka_btc_url.clone(), signer).await?;
+    let arc_provider = Arc::new(provider.clone());
 
     let btc_rpc = Arc::new(BitcoinCore::new(
         opts.bitcoin.new_client(Some(&wallet))?,
@@ -137,32 +140,34 @@ async fn main() -> Result<(), Error> {
         .create_wallet(&wallet)
         .map_err(|e| Error::WalletInitializationFailure(e))?;
 
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);
-    let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
-    let arc_provider = Arc::new(provider.clone());
-    let vault_id = provider.get_account_id().clone();
+    start(intact_opts, arc_provider, btc_rpc).await
+}
+
+pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static> (opts: Opts, arc_provider: Arc<PolkaBtcProvider>, btc_rpc: Arc<B>) 
+-> Result<(), Error> {
+    let vault_id = arc_provider.clone().get_account_id().clone();
 
     let collateral_timeout_ms = opts.collateral_timeout_ms;
 
     let num_confirmations = match opts.btc_confirmations {
         Some(x) => x,
-        None => arc_provider.clone().get_bitcoin_confirmations().await?,
+        None => arc_provider.clone().clone().get_bitcoin_confirmations().await?,
     };
     info!("Using {} bitcoin confirmations", num_confirmations);
 
     if let Some(collateral) = opts.auto_register_with_collateral {
-        match provider.get_vault(vault_id.clone()).await {
+        match arc_provider.clone().get_vault(vault_id.clone()).await {
             Ok(_) => info!("Not registering vault -- already registered"),
             Err(RuntimeError::VaultNotFound) => {
                 let public_key = btc_rpc.get_new_public_key()?;
-                provider.register_vault(collateral, public_key).await?;
+                arc_provider.clone().register_vault(collateral, public_key).await?;
                 info!("Automatically registered vault");
             }
             Err(err) => return Err(err.into()),
         }
     }
 
-    if let Ok(vault) = provider.get_vault(vault_id.clone()).await {
+    if let Ok(vault) = arc_provider.clone().get_vault(vault_id.clone()).await {
         if !btc_rpc.wallet_has_public_key(vault.wallet.public_key)? {
             return Err(bitcoin::Error::MissingPublicKey.into());
         }
