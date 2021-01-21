@@ -1,9 +1,9 @@
 use crate::relay::Error as RelayError;
 use backoff::ExponentialBackoff;
+use bitcoin::BitcoinError as BitcoinCoreError;
 use bitcoin::Error as BitcoinError;
 use jsonrpc_http_server::jsonrpc_core::Error as JsonRpcError;
 use parity_scale_codec::Error as CodecError;
-use relayer_core::bitcoin::bitcoincore_rpc::Error as BtcRpcError;
 use relayer_core::Error as CoreError;
 use runtime::substrate_subxt::Error as XtError;
 use runtime::Error as RuntimeError;
@@ -22,8 +22,6 @@ pub enum Error {
 
     #[error("RuntimeError: {0}")]
     RuntimeError(#[from] RuntimeError),
-    #[error("BtcRpcError: {0}")]
-    BtcRpcError(#[from] BtcRpcError),
     #[error("RelayError: {0}")]
     RelayError(#[from] RelayError),
     #[error("SubXtError: {0}")]
@@ -36,6 +34,8 @@ pub enum Error {
     CodecError(#[from] CodecError),
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
+    #[error("BitcoinCoreError: {0}")]
+    BitcoinCoreError(#[from] BitcoinCoreError),
     #[error("JsonRpcError: {0}")]
     JsonRpcError(#[from] JsonRpcError),
 }
