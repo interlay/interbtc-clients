@@ -75,30 +75,33 @@ pub async fn get_blocks<T: BitcoinCoreApi + Send + Sync + 'static>(
         rpc,
         stop_height,
     };
-    Box::pin(stream::unfold(state, |mut state| async {
-        // get height and hash of the block we potentially are about to fetch
-        let (next_height, next_hash) = match (&state.height, &state.prev_block) {
-            (Some(height), Some(block)) => (height - 1, block.header.prev_blockhash),
-            _ => match get_best_block_info(state.rpc.clone()).await {
-                Ok(info) => (info.height, info.hash),
-                Err(e) => return Some((Err(e), state)), // abort
-            },
-        };
+    Box::pin(
+        stream::unfold(state, |mut state| async {
+            // get height and hash of the block we potentially are about to fetch
+            let (next_height, next_hash) = match (&state.height, &state.prev_block) {
+                (Some(height), Some(block)) => (height - 1, block.header.prev_blockhash),
+                _ => match get_best_block_info(state.rpc.clone()).await {
+                    Ok(info) => (info.height, info.hash),
+                    Err(e) => return Some((Err(e), state)), // abort
+                },
+            };
 
-        let ret = if next_height < state.stop_height as usize {
-            return None;
-        } else {
-            match state.rpc.get_block(&next_hash).await {
-                Ok(block) => {
-                    state.height = Some(next_height);
-                    state.prev_block = Some(block.clone());
-                    Ok(block)
+            let ret = if next_height < state.stop_height as usize {
+                return None;
+            } else {
+                match state.rpc.get_block(&next_hash).await {
+                    Ok(block) => {
+                        state.height = Some(next_height);
+                        state.prev_block = Some(block.clone());
+                        Ok(block)
+                    }
+                    Err(e) => Err(e),
                 }
-                Err(e) => Err(e),
-            }
-        };
-        Some((ret, state))
-    }))
+            };
+            Some((ret, state))
+        })
+        .fuse(),
+    )
 }
 
 /// Stream all transactions in blocks produced by Bitcoin Core.
@@ -153,28 +156,31 @@ pub async fn stream_blocks<T: BitcoinCoreApi>(
         next_height: from_height,
     };
 
-    Box::pin(stream::unfold(state, move |mut state| async move {
-        // FIXME: if Bitcoin Core forks, this may skip a block
-        let height = state.next_height;
-        match state
-            .rpc
-            .wait_for_block(
-                height,
-                Duration::from_secs(BLOCK_WAIT_TIMEOUT),
-                num_confirmations,
-            )
-            .await
-        {
-            Ok(block_hash) => match state.rpc.get_block(&block_hash).await {
-                Ok(block) => {
-                    state.next_height += 1;
-                    Some((Ok(block), state))
-                }
+    Box::pin(
+        stream::unfold(state, move |mut state| async move {
+            // FIXME: if Bitcoin Core forks, this may skip a block
+            let height = state.next_height;
+            match state
+                .rpc
+                .wait_for_block(
+                    height,
+                    Duration::from_secs(BLOCK_WAIT_TIMEOUT),
+                    num_confirmations,
+                )
+                .await
+            {
+                Ok(block_hash) => match state.rpc.get_block(&block_hash).await {
+                    Ok(block) => {
+                        state.next_height += 1;
+                        Some((Ok(block), state))
+                    }
+                    Err(e) => Some((Err(e), state)),
+                },
                 Err(e) => Some((Err(e), state)),
-            },
-            Err(e) => Some((Err(e), state)),
-        }
-    }))
+            }
+        })
+        .fuse(),
+    )
 }
 
 /// small helper function for getting the block info of the best block. This simplifies
