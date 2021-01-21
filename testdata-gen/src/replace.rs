@@ -35,7 +35,7 @@ pub async fn accept_replace(
     collateral: u128,
 ) -> Result<(), Error> {
     info!("Collateral: {}", collateral);
-    let address = btc_rpc.get_new_address()?;
+    let address = btc_rpc.get_new_address().await?;
     replace_prov
         .accept_replace(replace_id, collateral, address)
         .await?;

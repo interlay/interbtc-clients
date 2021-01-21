@@ -22,9 +22,7 @@ pub use bitcoincore_rpc::{
         Address, Amount, Block, BlockHeader, Network, PrivateKey, PubkeyHash, PublicKey, Script,
         ScriptHash, Transaction, TxIn, TxOut, Txid, WPubkeyHash,
     },
-    bitcoincore_rpc_json::{
-        CreateRawTransactionInput, GetRawTransactionResult, GetTransactionResult, WalletTxInfo,
-    },
+    bitcoincore_rpc_json::{CreateRawTransactionInput, GetTransactionResult, WalletTxInfo},
     json::{self, AddressType, GetBlockResult},
     jsonrpc::error::RpcError,
     jsonrpc::Error as JsonRpcError,
@@ -60,40 +58,37 @@ pub trait BitcoinCoreApi {
         num_confirmations: u32,
     ) -> Result<BlockHash, Error>;
 
-    fn get_block_count(&self) -> Result<u64, Error>;
+    async fn get_block_count(&self) -> Result<u64, Error>;
 
-    fn get_block_transactions(
+    async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+
+    async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+
+    async fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error>;
+
+    async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
+
+    async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
+
+    async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(
         &self,
-        hash: &BlockHash,
-    ) -> Result<Vec<Option<GetRawTransactionResult>>, Error>;
+    ) -> Result<P, Error>;
 
-    fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
-
-    fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
-
-    fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error>;
-
-    fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
-
-    fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
-
-    fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error>;
-
-    fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + 'static>(
+    async fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
         &self,
         public_key: P,
         secret_key: Vec<u8>,
     ) -> Result<(), Error>;
 
-    fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
+    async fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
 
-    fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
+    async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
 
-    fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
+    async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
 
-    fn get_mempool_transactions<'a>(
+    async fn get_mempool_transactions<'a>(
         self: Arc<Self>,
-    ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + 'a>, Error>;
+    ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + Send + 'a>, Error>;
 
     async fn wait_for_transaction_metadata(
         &self,
@@ -109,7 +104,7 @@ pub trait BitcoinCoreApi {
         request_id: &[u8; 32],
     ) -> Result<LockedTransaction, Error>;
 
-    fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
+    async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
 
     async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
         &self,
@@ -127,11 +122,17 @@ pub trait BitcoinCoreApi {
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
-    fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
+    async fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
 
-    fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
+    async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
     where
-        P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + 'static;
+        P: Into<[u8; PUBLIC_KEY_SIZE]>
+            + From<[u8; PUBLIC_KEY_SIZE]>
+            + Clone
+            + PartialEq
+            + Send
+            + Sync
+            + 'static;
 }
 
 pub struct LockedTransaction {
@@ -196,11 +197,13 @@ impl BitcoinCore {
 
 /// true if the given indicates that the item was not found in the mempool
 fn err_not_in_mempool(err: &bitcoincore_rpc::Error) -> bool {
-    matches!(err,
-        &bitcoincore_rpc::Error::JsonRpc(
-            JsonRpcError::Rpc(
-                RpcError {code: NOT_IN_MEMPOOL_ERROR_CODE, .. }
-        )))
+    matches!(
+        err,
+        &bitcoincore_rpc::Error::JsonRpc(JsonRpcError::Rpc(RpcError {
+            code: NOT_IN_MEMPOOL_ERROR_CODE,
+            ..
+        }))
+    )
 }
 
 #[async_trait]
@@ -246,32 +249,8 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     /// Get the tip of the main chain as reported by Bitcoin core.
-    fn get_block_count(&self) -> Result<u64, Error> {
+    async fn get_block_count(&self) -> Result<u64, Error> {
         Ok(self.rpc.get_block_count()?)
-    }
-
-    /// Get all transactions in a block identified by the
-    /// given hash.
-    ///
-    /// # Arguments
-    /// * `hash` - block hash to query
-    fn get_block_transactions(
-        &self,
-        hash: &BlockHash,
-    ) -> Result<Vec<Option<GetRawTransactionResult>>, Error> {
-        let info = self.rpc.get_block_info(hash)?;
-        let txs = info
-            .tx
-            .iter()
-            .map(
-                |id| match self.rpc.get_raw_transaction_info(&id, Some(hash)) {
-                    Ok(tx) => Some(tx),
-                    // TODO: log error
-                    Err(_) => None,
-                },
-            )
-            .collect::<Vec<Option<GetRawTransactionResult>>>();
-        Ok(txs)
     }
 
     /// Get the raw transaction identified by `Txid` and stored
@@ -280,7 +259,7 @@ impl BitcoinCoreApi for BitcoinCore {
     /// # Arguments
     /// * `txid` - transaction ID
     /// * `block_hash` - hash of the block tx is stored in
-    fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
+    async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
         Ok(serialize(
             &self.rpc.get_raw_transaction(txid, Some(block_hash))?,
         ))
@@ -291,7 +270,7 @@ impl BitcoinCoreApi for BitcoinCore {
     /// # Arguments
     /// * `txid` - transaction ID
     /// * `block_hash` - hash of the block tx is stored in
-    fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
+    async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
         Ok(self.rpc.get_tx_out_proof(&[txid], Some(block_hash))?)
     }
 
@@ -299,7 +278,7 @@ impl BitcoinCoreApi for BitcoinCore {
     ///
     /// # Arguments
     /// * `height` - block height
-    fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error> {
+    async fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error> {
         match self.rpc.get_block_hash(height.into()) {
             Ok(block_hash) => Ok(block_hash),
             Err(e) => Err(
@@ -320,7 +299,7 @@ impl BitcoinCoreApi for BitcoinCore {
     ///
     /// # Arguments
     /// * `block_hash` - hash of the block to verify
-    fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error> {
+    async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error> {
         match self.rpc.get_block(&block_hash) {
             Ok(_) => Ok(true),
             Err(BitcoinError::JsonRpc(JsonRpcError::Rpc(RpcError { code, .. })))
@@ -333,13 +312,15 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     /// Gets a new address from the wallet
-    fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error> {
+    async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error> {
         let address = self.rpc.get_new_address(None, Some(AddressType::Bech32))?;
         Ok(A::decode_str(&address.to_string())?)
     }
 
     /// Gets a new public key for an address in the wallet
-    fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error> {
+    async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(
+        &self,
+    ) -> Result<P, Error> {
         let address = self.rpc.get_new_address(None, Some(AddressType::Bech32))?;
         let address_info = self.rpc.get_address_info(&address)?;
         let public_key = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
@@ -347,7 +328,7 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     /// Derive and import the private key for the master public key and public secret
-    fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + 'static>(
+    async fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
         &self,
         public_key: P,
         secret_key: Vec<u8>,
@@ -371,23 +352,23 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(())
     }
 
-    fn get_best_block_hash(&self) -> Result<BlockHash, Error> {
+    async fn get_best_block_hash(&self) -> Result<BlockHash, Error> {
         Ok(self.rpc.get_best_block_hash()?)
     }
 
-    fn get_block(&self, hash: &BlockHash) -> Result<Block, Error> {
+    async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error> {
         Ok(self.rpc.get_block(hash)?)
     }
 
-    fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error> {
+    async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error> {
         Ok(self.rpc.get_block_info(hash)?)
     }
 
     /// Get the transactions that are currently in the mempool. Since `impl trait` is not
     /// allowed within trait method, we have to use trait objects.
-    fn get_mempool_transactions<'a>(
+    async fn get_mempool_transactions<'a>(
         self: Arc<Self>,
-    ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + 'a>, Error> {
+    ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + Send + 'a>, Error> {
         // get txids from the mempool
         let txids = self.rpc.get_raw_mempool()?;
         // map txid to the actual Transaction structs
@@ -445,11 +426,11 @@ impl BitcoinCoreApi for BitcoinCore {
         .retry(get_retry_policy())
         .await?;
 
-        let proof = (|| async { Ok(self.get_proof_for(txid, &block_hash)?) })
+        let proof = (|| async { Ok(self.get_proof_for(txid, &block_hash).await?) })
             .retry(get_retry_policy())
             .await?;
 
-        let raw_tx = (|| async { Ok(self.get_raw_tx_for(&txid, &block_hash)?) })
+        let raw_tx = (|| async { Ok(self.get_raw_tx_for(&txid, &block_hash).await?) })
             .retry(get_retry_policy())
             .await?;
 
@@ -515,7 +496,7 @@ impl BitcoinCoreApi for BitcoinCore {
     ///
     /// # Arguments
     /// * `transaction` - The transaction created by create_transaction
-    fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error> {
+    async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error> {
         // place the transaction into the mempool
         let txid = self.rpc.send_raw_transaction(&transaction.transaction)?;
         Ok(txid)
@@ -536,7 +517,7 @@ impl BitcoinCoreApi for BitcoinCore {
         request_id: &[u8; 32],
     ) -> Result<Txid, Error> {
         let tx = self.create_transaction(address, sat, request_id).await?;
-        let txid = self.send_transaction(tx)?;
+        let txid = self.send_transaction(tx).await?;
         Ok(txid)
     }
 
@@ -576,7 +557,7 @@ impl BitcoinCoreApi for BitcoinCore {
     ///
     /// # Arguments
     /// * `wallet` - name of the wallet
-    fn create_wallet(&self, wallet: &str) -> Result<(), Error> {
+    async fn create_wallet(&self, wallet: &str) -> Result<(), Error> {
         // NOTE: bitcoincore-rpc does not expose listwalletdir
         if self.rpc.list_wallets()?.contains(&wallet.to_string()) {
             // wallet already loaded
@@ -590,9 +571,15 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(())
     }
 
-    fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
+    async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
     where
-        P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + 'static,
+        P: Into<[u8; PUBLIC_KEY_SIZE]>
+            + From<[u8; PUBLIC_KEY_SIZE]>
+            + Clone
+            + PartialEq
+            + Send
+            + Sync
+            + 'static,
     {
         let address = Address::p2wpkh(
             &PublicKey::from_slice(&public_key.clone().into())?,

@@ -3,6 +3,7 @@ use crate::error::Error;
 use crate::issue::{process_issue_requests, IssueRequests};
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
+use futures::stream::StreamExt;
 use log::*;
 use runtime::{
     pallets::{
@@ -148,7 +149,7 @@ impl Request {
             _ => return Err(Error::TooManyReturnToSelfAddresses),
         };
 
-        let txid = btc_rpc.send_transaction(tx)?;
+        let txid = btc_rpc.send_transaction(tx).await?;
         let tx_metadata = btc_rpc
             .wait_for_transaction_metadata(txid, BITCOIN_MAX_RETRYING_TIME, num_confirmations)
             .await?;
@@ -245,7 +246,9 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     };
 
     // iterate through transactions..
-    for x in bitcoin::get_transactions(btc_rpc.clone(), btc_start_height)? {
+    let mut transaction_stream =
+        bitcoin::get_transactions(btc_rpc.clone(), btc_start_height).await?;
+    while let Some(x) = transaction_stream.next().await {
         let tx = x?;
 
         // get the request this transaction corresponds to, if any
@@ -360,7 +363,7 @@ mod tests {
     //     use super::*;
     //     use async_trait::async_trait;
     //     use bitcoin::{
-    //         Block, BlockHash, Error as BitcoinError, GetBlockResult, GetRawTransactionResult,
+    //         Block, BlockHash, Error as BitcoinError, GetBlockResult,
     //         LockedTransaction, Network, PartialAddress, Transaction, TransactionMetadata, Txid,
     //     };
     //     use runtime::{AccountId, Error as RuntimeError, PolkaBtcVault};
@@ -476,20 +479,16 @@ mod tests {
     //         #[async_trait]
     //         trait BitcoinCoreApi {
     //             async fn wait_for_block(&self, height: u32, delay: Duration) -> Result<BlockHash, BitcoinError>;
-    //             fn get_block_count(&self) -> Result<u64, BitcoinError>;
-    //             fn get_block_transactions(
-    //                 &self,
-    //                 hash: &BlockHash,
-    //             ) -> Result<Vec<Option<GetRawTransactionResult>>, BitcoinError>;
-    //             fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
-    //             fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
-    //             fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
-    //             fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
-    //             fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError>;
-    //             fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
-    //             fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
-    //             fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
-    //             fn get_mempool_transactions<'a>(
+    //             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
+    //             async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+    //             async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+    //            async  fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
+    //             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
+    //             async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError>;
+    //             async fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
+    //             async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
+    //             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
+    //             async fn get_mempool_transactions<'a>(
     //                 self: Arc<Self>,
     //             ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + 'a>, BitcoinError>;
     //             async fn wait_for_transaction_metadata(
@@ -504,7 +503,7 @@ mod tests {
     //                 sat: u64,
     //                 request_id: &[u8; 32],
     //             ) -> Result<LockedTransaction, BitcoinError>;
-    //             fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
+    //             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
     //             async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
     //                 &self,
     //                 address: A,
@@ -519,7 +518,7 @@ mod tests {
     //                 op_timeout: Duration,
     //                 num_confirmations: u32,
     //             ) -> Result<TransactionMetadata, BitcoinError>;
-    //             fn create_wallet(&self, wallet: &str) -> Result<(), BitcoinError>;
+    //             async fn create_wallet(&self, wallet: &str) -> Result<(), BitcoinError>;
     //         }
     //     }
 
