@@ -21,6 +21,8 @@ pub use bitcoincore_rpc::{
         util::{address::Payload, psbt::serialize::Serialize},
         Address, Amount, Block, BlockHeader, Network, PrivateKey, PubkeyHash, PublicKey, Script,
         ScriptHash, Transaction, TxIn, TxOut, Txid, WPubkeyHash,
+        OutPoint, TxMerkleNode,
+        util::uint::Uint256,
     },
     bitcoincore_rpc_json::{CreateRawTransactionInput, GetTransactionResult, WalletTxInfo},
     json::{self, AddressType, GetBlockResult},
