@@ -151,8 +151,8 @@ impl<B: BitcoinCoreApi, P: StakedRelayerPallet> RelayMonitor<B, P> {
     }
 }
 
-pub async fn listen_for_blocks_stored(
-    btc_rpc: Arc<BitcoinCore>,
+pub async fn listen_for_blocks_stored<B: BitcoinCoreApi>(
+    btc_rpc: Arc<B>,
     polka_rpc: Arc<PolkaBtcProvider>,
     status_update_deposit: u128,
 ) -> Result<(), RuntimeError> {

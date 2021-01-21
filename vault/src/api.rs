@@ -1,5 +1,5 @@
 use super::Error;
-use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use bitcoin::BitcoinCoreApi;
 use futures::executor::block_on;
 use hex::FromHex;
 use jsonrpc_http_server::{
@@ -77,9 +77,9 @@ struct RegisterVaultJsonRpcResponse {
     public_key: BtcPublicKey,
 }
 
-fn _register_vault(
+fn _register_vault<B: BitcoinCoreApi>(
     api: &Arc<PolkaBtcProvider>,
-    btc: &Arc<BitcoinCore>,
+    btc: &Arc<B>,
     params: Params,
 ) -> Result<RegisterVaultJsonRpcResponse, Error> {
     let req = parse_params::<RegisterVaultJsonRpcRequest>(params)?;
@@ -132,9 +132,9 @@ fn _withdraw_replace(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), 
     Ok(result?)
 }
 
-pub async fn start(
+pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     api: Arc<PolkaBtcProvider>,
-    btc: Arc<BitcoinCore>,
+    btc: Arc<B>,
     addr: SocketAddr,
     origin: String,
 ) {
