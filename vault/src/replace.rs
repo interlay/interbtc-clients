@@ -269,8 +269,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, BlockHash, Error as BitcoinError, GetBlockResult,
-        LockedTransaction, PartialAddress, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        Block, BlockHash, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress,
+        Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
         pallets::Core, AccountId, BtcAddress, BtcPublicKey, Error as RuntimeError, H256Le,

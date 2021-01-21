@@ -3,6 +3,7 @@ use crate::error::Error;
 use crate::issue::{process_issue_requests, IssueRequests};
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
+use futures::stream::StreamExt;
 use log::*;
 use runtime::{
     pallets::{
@@ -14,7 +15,6 @@ use runtime::{
 };
 use sp_core::H256;
 use std::{collections::HashMap, sync::Arc, time::Duration};
-use futures::stream::StreamExt;
 
 #[derive(Debug, Clone)]
 pub struct Request {
@@ -246,7 +246,8 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     };
 
     // iterate through transactions..
-    let mut transaction_stream = bitcoin::get_transactions(btc_rpc.clone(), btc_start_height).await?;
+    let mut transaction_stream =
+        bitcoin::get_transactions(btc_rpc.clone(), btc_start_height).await?;
     while let Some(x) = transaction_stream.next().await {
         let tx = x?;
 

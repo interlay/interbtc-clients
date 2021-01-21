@@ -1,9 +1,9 @@
+use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use log::*;
 use runtime::substrate_subxt::PairSigner;
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
 use std::sync::Arc;
-use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use vault::{start, Error, Opts};
 
 #[tokio::main]
@@ -26,7 +26,8 @@ async fn main() -> Result<(), Error> {
 
     // load wallet. Exit on failure, since without wallet we can't do a lot
     btc_rpc
-        .create_wallet(&wallet).await
+        .create_wallet(&wallet)
+        .await
         .map_err(|e| Error::WalletInitializationFailure(e))?;
 
     start(intact_opts, arc_provider, btc_rpc).await

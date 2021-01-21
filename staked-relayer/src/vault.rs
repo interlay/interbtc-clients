@@ -144,7 +144,8 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi> VaultTheftMonit
             self.btc_rpc.clone(),
             self.btc_height,
             num_confirmations,
-        ).await;
+        )
+        .await;
 
         loop {
             match stream.next().await.unwrap() {
@@ -224,8 +225,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, Error as BitcoinError, GetBlockResult, LockedTransaction,
-        PartialAddress, Transaction, TransactionMetadata, PUBLIC_KEY_SIZE,
+        Block, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress,
+        Transaction, TransactionMetadata, PUBLIC_KEY_SIZE,
     };
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};

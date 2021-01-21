@@ -28,8 +28,8 @@ use futures::channel::mpsc;
 use futures::SinkExt;
 use log::*;
 use runtime::{
-    BtcRelayPallet, Error as RuntimeError, PolkaBtcHeader,
-    PolkaBtcProvider, UtilFuncs, VaultRegistryPallet,
+    BtcRelayPallet, Error as RuntimeError, PolkaBtcHeader, PolkaBtcProvider, UtilFuncs,
+    VaultRegistryPallet,
 };
 use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
@@ -118,15 +118,24 @@ pub struct Opts {
     pub network: BitcoinNetwork,
 }
 
-pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static> (opts: Opts, arc_provider: Arc<PolkaBtcProvider>, btc_rpc: Arc<B>) 
--> Result<(), Error> {
+pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
+    opts: Opts,
+    arc_provider: Arc<PolkaBtcProvider>,
+    btc_rpc: Arc<B>,
+) -> Result<(), Error> {
     let vault_id = arc_provider.clone().get_account_id().clone();
 
     let collateral_timeout_ms = opts.collateral_timeout_ms;
 
     let num_confirmations = match opts.btc_confirmations {
         Some(x) => x,
-        None => arc_provider.clone().clone().get_bitcoin_confirmations().await?,
+        None => {
+            arc_provider
+                .clone()
+                .clone()
+                .get_bitcoin_confirmations()
+                .await?
+        }
     };
     info!("Using {} bitcoin confirmations", num_confirmations);
 
@@ -135,7 +144,10 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static> (opts: Opts, arc_p
             Ok(_) => info!("Not registering vault -- already registered"),
             Err(RuntimeError::VaultNotFound) => {
                 let public_key = btc_rpc.get_new_public_key().await?;
-                arc_provider.clone().register_vault(collateral, public_key).await?;
+                arc_provider
+                    .clone()
+                    .register_vault(collateral, public_key)
+                    .await?;
                 info!("Automatically registered vault");
             }
             Err(err) => return Err(err.into()),
@@ -143,7 +155,10 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static> (opts: Opts, arc_p
     }
 
     if let Ok(vault) = arc_provider.clone().get_vault(vault_id.clone()).await {
-        if !btc_rpc.wallet_has_public_key(vault.wallet.public_key).await? {
+        if !btc_rpc
+            .wallet_has_public_key(vault.wallet.public_key)
+            .await?
+        {
             return Err(bitcoin::Error::MissingPublicKey.into());
         }
     }

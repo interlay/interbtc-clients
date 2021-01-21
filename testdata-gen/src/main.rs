@@ -558,7 +558,12 @@ async fn main() -> Result<(), Error> {
         }
         SubCommand::RegisterVault(info) => {
             let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
-            vault::register_vault(provider, btc_rpc.get_new_public_key().await?, info.collateral).await?;
+            vault::register_vault(
+                provider,
+                btc_rpc.get_new_public_key().await?,
+                info.collateral,
+            )
+            .await?;
         }
         SubCommand::RequestIssue(info) => {
             let vault_id = info.vault.to_account_id();

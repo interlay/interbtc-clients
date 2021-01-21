@@ -36,7 +36,8 @@ impl<B: BitcoinCoreApi, P: StakedRelayerPallet> StatusUpdateMonitor<B, P> {
         if let Some(ErrorCode::NoDataBTCRelay) = event.add_error {
             match self
                 .btc_rpc
-                .is_block_known(convert_block_hash(event.block_hash)?).await
+                .is_block_known(convert_block_hash(event.block_hash)?)
+                .await
             {
                 Ok(true) => {
                     self.polka_rpc
@@ -185,8 +186,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, GetBlockResult, LockedTransaction, PartialAddress,
-        Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        Block, GetBlockResult, LockedTransaction, PartialAddress, Transaction, TransactionMetadata,
+        Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode, MINIMUM_STAKE};

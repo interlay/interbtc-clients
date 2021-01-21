@@ -49,13 +49,11 @@ pub async fn get_in_chain_transactions<T: BitcoinCoreApi + Send + Sync + 'static
     })
 }
 
-
-
 struct GetBlocksState<T> {
     height: Option<usize>,
     prev_block: Option<Block>,
     rpc: Arc<T>,
-    stop_height: u32
+    stop_height: u32,
 }
 
 /// Iterate over blocks, start at the best_best, stop at `stop_height`. Note:
@@ -70,7 +68,7 @@ struct GetBlocksState<T> {
 pub async fn get_blocks<T: BitcoinCoreApi + Send + Sync + 'static>(
     rpc: Arc<T>,
     stop_height: u32,
-) -> impl Stream<Item = Result<Block, Error>> + Unpin{
+) -> impl Stream<Item = Result<Block, Error>> + Unpin {
     let state = GetBlocksState {
         height: None,
         prev_block: None,
@@ -115,19 +113,21 @@ pub async fn stream_in_chain_transactions<T: BitcoinCoreApi>(
     num_confirmations: u32,
 ) -> impl Stream<Item = Result<(BlockHash, Transaction), Error>> + Unpin {
     Box::pin(
-        stream_blocks(rpc, from_height, num_confirmations).await.flat_map(|result| {
-            futures::stream::iter(result.map_or_else(
-                |err| vec![Err(err)],
-                |block| {
-                    let block_hash = block.block_hash();
-                    block
-                        .txdata
-                        .into_iter()
-                        .map(|tx| Ok((block_hash, tx)))
-                        .collect()
-                },
-            ))
-        }),
+        stream_blocks(rpc, from_height, num_confirmations)
+            .await
+            .flat_map(|result| {
+                futures::stream::iter(result.map_or_else(
+                    |err| vec![Err(err)],
+                    |block| {
+                        let block_hash = block.block_hash();
+                        block
+                            .txdata
+                            .into_iter()
+                            .map(|tx| Ok((block_hash, tx)))
+                            .collect()
+                    },
+                ))
+            }),
     )
 }
 

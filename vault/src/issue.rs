@@ -11,26 +11,27 @@ use runtime::{
 };
 use sha2::{Digest, Sha256};
 use sp_core::H256;
+use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use std::hash::Hash;
-use std::borrow::Borrow;
 
 #[derive(Debug, Default)]
 pub struct ReversibleHashMap<K, V>((HashMap<K, V>, HashMap<V, K>));
 
-impl<K, V> ReversibleHashMap<K, V> where
+impl<K, V> ReversibleHashMap<K, V>
+where
     K: Hash + Eq + Copy + Default,
-    V: Hash + Eq + Copy + Default
-{ 
+    V: Hash + Eq + Copy + Default,
+{
     pub fn new() -> ReversibleHashMap<K, V> {
         Default::default()
     }
 
     pub fn insert(&mut self, k: K, v: V) -> (Option<K>, Option<V>) {
-        let k1 = self.0.0.insert(k, v);
-        let k2 = self.0.1.insert(v, k);
+        let k1 = self.0 .0.insert(k, v);
+        let k2 = self.0 .1.insert(v, k);
         (k2, k1)
     }
 
@@ -40,8 +41,8 @@ impl<K, V> ReversibleHashMap<K, V> where
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        if let Some(v) = self.0.0.remove(k) {
-            self.0.1.remove(&v);
+        if let Some(v) = self.0 .0.remove(k) {
+            self.0 .1.remove(&v);
             Some(v)
         } else {
             None
@@ -54,8 +55,8 @@ impl<K, V> ReversibleHashMap<K, V> where
         V: Borrow<Q>,
         Q: Hash + Eq,
     {
-        if let Some(k) = self.0.1.remove(v) {
-            self.0.0.remove(&k);
+        if let Some(k) = self.0 .1.remove(v) {
+            self.0 .0.remove(&k);
             Some(k)
         } else {
             None
@@ -68,7 +69,7 @@ impl<K, V> ReversibleHashMap<K, V> where
         V: Borrow<Q>,
         Q: Hash + Eq,
     {
-        self.0.1.contains_key(v)
+        self.0 .1.contains_key(v)
     }
 }
 
@@ -93,7 +94,8 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
         btc_rpc.clone(),
         btc_rpc.get_block_count().await? as u32,
         num_confirmations,
-    ).await;
+    )
+    .await;
 
     while let Some(Ok((block_hash, transaction))) = stream.next().await {
         if let Err(e) = process_transaction_and_execute_issue(
@@ -124,7 +126,10 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
 ) -> Result<(), Error> {
     let addresses = transaction.extract_output_addresses::<BtcAddress>();
     let mut issue_requests = issue_set.0.lock().await;
-    if let Some(address) = addresses.iter().find(|&vout| issue_requests.contains_value(vout)) {
+    if let Some(address) = addresses
+        .iter()
+        .find(|&vout| issue_requests.contains_value(vout))
+    {
         // tx has output to address
         if let Some(issue_id) = issue_requests.remove_value(address) {
             info!("Executing issue with id {}", issue_id);
@@ -170,7 +175,9 @@ async fn add_new_deposit_key<B: BitcoinCoreApi + Send + Sync + 'static>(
     hasher.input(public_key.0.to_vec());
     // input issue id
     hasher.input(secure_id.as_bytes());
-    btc_rpc.add_new_deposit_key(public_key, hasher.result().as_slice().to_vec()).await?;
+    btc_rpc
+        .add_new_deposit_key(public_key, hasher.result().as_slice().to_vec())
+        .await?;
     Ok(())
 }
 
@@ -201,7 +208,9 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel.clone().send(RequestEvent::Opened).await;
 
-                    if let Err(e) = add_new_deposit_key(btc_rpc, event.issue_id, event.public_key).await {
+                    if let Err(e) =
+                        add_new_deposit_key(btc_rpc, event.issue_id, event.public_key).await
+                    {
                         error!(
                             "Failed to add new deposit key #{}: {}",
                             event.issue_id,
@@ -210,7 +219,11 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static
                     }
                 }
 
-                issue_set.0.lock().await.insert(event.issue_id, event.btc_address);
+                issue_set
+                    .0
+                    .lock()
+                    .await
+                    .insert(event.issue_id, event.btc_address);
             },
             |error| error!("Error reading issue event: {}", error.to_string()),
         )
