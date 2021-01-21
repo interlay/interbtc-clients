@@ -3,11 +3,13 @@
 #![allow(unused_variables)]
 
 use bitcoin::{
+    secp256k1::{PublicKey, SecretKey, Secp256k1, rand::rngs::OsRng},
     serialize, BitcoinCore, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError,
     GetBlockResult, Hash, LockedTransaction, OutPoint, PartialAddress, Script, Transaction,
     TransactionMetadata, TxIn, TxMerkleNode, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
 };
 use runtime::pallets::btc_relay::{TransactionBuilder, TransactionInputBuilder, TransactionOutput};
+use runtime::UtilFuncs;
 use runtime::BtcAddress::P2PKH;
 use runtime::{
     pallets::issue::*,
@@ -172,6 +174,30 @@ struct MockBitcoinCore {
     blocks: RwLock<Vec<Block>>,
 }
 
+pub fn merkle_proof(block: &Block) -> Vec<u8> {
+    let mut ret = Vec::new();
+
+    // header
+    ret.append(&mut serialize(&block.header));
+
+    // number of transcations:
+    ret.append(&mut serialize(&(block.txdata.len() as u32)));
+
+    // number of hashes:
+    ret.push(1);
+
+    // hashes
+    ret.append(&mut block.txdata[0].txid().as_ref().to_vec());
+
+    // number of bytes of flag bits:
+    ret.push(1);
+
+    // flag bits:
+    ret.push(1);
+
+    ret
+}
+
 impl MockBitcoinCore {
     fn new(provider: Arc<PolkaBtcProvider>) -> Self {
         Self {
@@ -179,9 +205,18 @@ impl MockBitcoinCore {
             blocks: RwLock::new(vec![]),
         }
     }
+    async fn send_block(&self, address: BtcAddress, amount: u64) -> Block {
+        let block = self.generate_block(address, amount).await;
 
-    async fn generate_block(&self) -> Vec<u8> {
-        let address = BtcAddress::P2PKH(H160::from([0; 20]));
+        let raw_block_header = serialize(&block.header);
+        self.provider
+            .store_block_header(raw_block_header.try_into().unwrap())
+            .await
+            .unwrap();
+
+        block
+    }
+    async fn generate_block(&self, address: BtcAddress, amount: u64) -> Block {
         let target = U256::from(2).pow(254.into());
         let mut bytes = [0u8; 32];
         target.to_big_endian(&mut bytes);
@@ -194,10 +229,18 @@ impl MockBitcoinCore {
         } else {
             blocks[blocks.len() - 1].header.block_hash()
         };
+
+        let tmp = Self::generate_coinbase_transaction(
+            &address,
+            amount,
+            blocks.len() as u32,
+        );
+        let w= serialize(&tmp);
+
         let mut block = Block {
             txdata: vec![Self::generate_coinbase_transaction(
                 &address,
-                10000,
+                amount,
                 blocks.len() as u32,
             )],
             header: BlockHeader {
@@ -211,11 +254,17 @@ impl MockBitcoinCore {
         };
         block.header.merkle_root = block.merkle_root();
 
-        let ret = serialize(&block.header);
+        loop {
+            if let Ok(_) = block.header.validate_pow(&target) {
+                break;
+            }
+            block.header.nonce += 1;
+        }
 
-        blocks.push(block);
 
-        ret
+        blocks.push(block.clone());
+            
+        block
     }
 
     fn generate_coinbase_transaction(
@@ -228,7 +277,7 @@ impl MockBitcoinCore {
         Transaction {
             input: vec![TxIn {
                 previous_output: OutPoint::null(), // coinbase
-                witness: vec![vec![0; 32]],
+                witness: vec![],
                 script_sig: Default::default(),
                 sequence: u32::max_value(),
             }],
@@ -237,27 +286,18 @@ impl MockBitcoinCore {
                 value: reward,
             }],
             lock_time: height,
-            version: 2,
+            version: 1,
         }
-        //     let mut tx_builder = TransactionBuilder::new();
-        //
-        //     let mut input_builder = TransactionInputBuilder::new();
-        //     input_builder
-        //         .with_coinbase(true)
-        //         .with_previous_index(u32::max_value())
-        //         .with_previous_hash(H256Le::zero())
-        //         .with_height(height)
-        //         .add_witness(&vec![0; 32])
-        //         .with_sequence(u32::max_value());
-        //     tx_builder.add_input(input_builder.build());
-        //
-        //     // FIXME: this is most likely not what real-world transactions look like
-        //     tx_builder.add_output(TransactionOutput::payment(reward, address));
     }
 
     async fn init(self) -> Self {
+        let address = BtcAddress::P2PKH(H160::from([0; 20]));
+
+        let block = self.generate_block(address, 10000).await;
+
+        let raw_block_header = serialize(&block.header);
         self.provider
-            .initialize_btc_relay(self.generate_block().await.try_into().unwrap(), 0)
+            .initialize_btc_relay(raw_block_header.try_into().unwrap(), 0)
             .await
             .unwrap();
 
@@ -282,7 +322,6 @@ impl BitcoinCoreApi for MockBitcoinCore {
             }
             delay_for(Duration::from_secs(1)).await;
         }
-        unimplemented!();
     }
     async fn get_block_count(&self) -> Result<u64, BitcoinError> {
         Ok(self.blocks.read().await.len().try_into().unwrap())
@@ -313,10 +352,11 @@ impl BitcoinCoreApi for MockBitcoinCore {
     async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(
         &self,
     ) -> Result<P, BitcoinError> {
-        let key = (0..PUBLIC_KEY_SIZE)
-            .map(|_| thread_rng().gen::<u8>())
-            .collect::<Vec<_>>();
-        Ok(P::from(key.try_into().unwrap()))
+        let secp = Secp256k1::new();
+        let mut rng = OsRng::new().unwrap();
+        let secret_key = SecretKey::new(&mut rng);
+        let public_key = PublicKey::from_secret_key(&secp, &secret_key);
+        Ok(P::from(public_key.serialize()))
     }
     async fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
         &self,
@@ -394,6 +434,21 @@ impl BitcoinCoreApi for MockBitcoinCore {
     }
 }
 
+
+trait Translate {
+    type Associated;
+    fn translate(&self) -> Self::Associated;
+}
+
+impl Translate for Txid {
+    type Associated = H256Le;
+    fn translate(&self) -> Self::Associated {
+        H256Le::from_bytes_le(&self.to_vec())
+    }
+}
+
+
+
 #[tokio::test]
 async fn test_issue_succeeds() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
@@ -413,25 +468,41 @@ async fn test_start_vault_succeeds() {
         .init()
         .await;
 
-    let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-    relayer_provider
-        .store_block_header(btc_rpc.generate_block().await.try_into().unwrap())
-        .await
-        .unwrap();
-    relayer_provider
-        .store_block_header(btc_rpc.generate_block().await.try_into().unwrap())
-        .await
-        .unwrap();
+    let address = BtcAddress::P2PKH(H160::from([0; 20]));
 
-    //     let vault_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    btc_rpc.send_block(address, 10000).await;
+    btc_rpc.send_block(address, 10000).await;
+
+    relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
+
+    let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
+    let key = btc_rpc.get_new_public_key().await.unwrap();
+
+    vault_provider.register_vault(100000000000, key).await.unwrap();
+
+    let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
+
+
+    let issue = user_provider.request_issue(100000, vault_provider.get_account_id().clone(), 10000).await.unwrap();
+
+    let block = btc_rpc.send_block(issue.btc_address, issue.amount as u64).await;
+
+    let proof = merkle_proof(&block);
+    log::warn!("proof: {:?}", proof);
+    let raw_tx = serialize(&block.txdata[0]);
+    log::warn!("raw_tx: {:?}", raw_tx);
+    user_provider.execute_issue(issue.issue_id, block.txdata[0].txid().translate(), proof, raw_tx).await.unwrap();
+
+
     //     vault_provider
     //     .set_exchange_rate_info(FixedU128::checked_from_rational(10000u128, 100_000).unwrap())
     //     .await
     //     .unwrap();
-    //
+    // 
     //     let opts = default_vault_args();
-    //
     //     let btc_rpc = Arc::new(MockBitcoinCore::new(Arc::new(relayer_provider)).init().await);
+
     //     // let mut btc_rpc = MockBitcoin::default();
     //
     //
