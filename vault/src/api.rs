@@ -83,7 +83,7 @@ fn _register_vault<B: BitcoinCoreApi>(
     params: Params,
 ) -> Result<RegisterVaultJsonRpcResponse, Error> {
     let req = parse_params::<RegisterVaultJsonRpcRequest>(params)?;
-    let public_key: BtcPublicKey = btc.get_new_public_key()?;
+    let public_key: BtcPublicKey = block_on(btc.get_new_public_key())?;
     let result = block_on(api.register_vault(req.collateral, public_key.clone()));
     info!(
         "Registering vault with bitcoind public_key {:?} and collateral = {}: {:?}",

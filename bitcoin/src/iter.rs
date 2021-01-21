@@ -19,12 +19,12 @@ const BLOCK_WAIT_TIMEOUT: u64 = 6;
 ///
 /// * `rpc` - bitcoin rpc
 /// * `stop_height` - height of the last block the iterator will return transactions from
-pub fn get_transactions<T: BitcoinCoreApi>(
+pub async fn get_transactions<T: BitcoinCoreApi + Send + Sync + 'static>(
     rpc: Arc<T>,
     stop_height: u32,
-) -> Result<impl Iterator<Item = Result<Transaction, Error>>, Error> {
-    let mempool_transactions = rpc.clone().get_mempool_transactions()?;
-    let in_chain_transactions = get_in_chain_transactions(rpc, stop_height);
+) -> Result<impl Stream<Item = Result<Transaction, Error>> + Unpin, Error> {
+    let mempool_transactions = stream::iter(rpc.clone().get_mempool_transactions().await?);
+    let in_chain_transactions = get_in_chain_transactions(rpc, stop_height).await;
     Ok(mempool_transactions.chain(in_chain_transactions))
 }
 
@@ -34,19 +34,28 @@ pub fn get_transactions<T: BitcoinCoreApi>(
 ///
 /// * `rpc` - bitcoin rpc
 /// * `stop_height` - height of the last block the iterator will return transactions from
-pub fn get_in_chain_transactions<T: BitcoinCoreApi>(
+pub async fn get_in_chain_transactions<T: BitcoinCoreApi + Send + Sync + 'static>(
     rpc: Arc<T>,
     stop_height: u32,
-) -> impl Iterator<Item = Result<Transaction, Error>> {
-    get_blocks(rpc, stop_height).flat_map(|block| {
+) -> impl Stream<Item = Result<Transaction, Error>> + Send + Unpin {
+    get_blocks(rpc, stop_height).await.flat_map(|block| {
         // unfortunately two different iterators don't have compatible types, so we have
         // to box them to trait objects
-        let transactions: Box<dyn Iterator<Item = _>> = match block {
-            Ok(e) => Box::new(e.txdata.into_iter().map(|x| Ok(x))),
-            Err(e) => Box::new(iter::once(Err(e))),
+        let transactions: Box<dyn Stream<Item = _> + Unpin + Send> = match block {
+            Ok(e) => Box::new(stream::iter(e.txdata.into_iter().map(|x| Ok(x)))),
+            Err(e) => Box::new(stream::iter(iter::once(Err(e)))),
         };
         transactions
     })
+}
+
+
+
+struct GetBlocksState<T> {
+    height: Option<usize>,
+    prev_block: Option<Block>,
+    rpc: Arc<T>,
+    stop_height: u32
 }
 
 /// Iterate over blocks, start at the best_best, stop at `stop_height`. Note:
@@ -58,33 +67,40 @@ pub fn get_in_chain_transactions<T: BitcoinCoreApi>(
 ///
 /// * `rpc` - bitcoin rpc
 /// * `stop_height` - height of the last block the iterator will return
-pub fn get_blocks<T: BitcoinCoreApi>(
+pub async fn get_blocks<T: BitcoinCoreApi + Send + Sync + 'static>(
     rpc: Arc<T>,
     stop_height: u32,
-) -> impl Iterator<Item = Result<Block, Error>> {
-    let mut state: Option<(usize, Block)> = None;
-    iter::from_fn(move || {
+) -> impl Stream<Item = Result<Block, Error>> + Unpin{
+    let state = GetBlocksState {
+        height: None,
+        prev_block: None,
+        rpc,
+        stop_height,
+    };
+    Box::pin(stream::unfold(state, |mut state| async {
         // get height and hash of the block we potentially are about to fetch
-        let (next_height, next_hash) = match &state {
-            Some((height, block)) => (height - 1, block.header.prev_blockhash),
-            None => match get_best_block_info(rpc.clone()) {
+        let (next_height, next_hash) = match (&state.height, &state.prev_block) {
+            (Some(height), Some(block)) => (height - 1, block.header.prev_blockhash),
+            _ => match get_best_block_info(state.rpc.clone()).await {
                 Ok(info) => (info.height, info.hash),
-                Err(e) => return Some(Err(e)), // abort
+                Err(e) => return Some((Err(e), state)), // abort
             },
         };
 
-        if next_height < stop_height as usize {
-            None
+        let ret = if next_height < state.stop_height as usize {
+            return None;
         } else {
-            match rpc.get_block(&next_hash) {
+            match state.rpc.get_block(&next_hash).await {
                 Ok(block) => {
-                    state = Some((next_height, block.clone()));
-                    Some(Ok(block))
+                    state.height = Some(next_height);
+                    state.prev_block = Some(block.clone());
+                    Ok(block)
                 }
-                Err(e) => Some(Err(e)),
+                Err(e) => Err(e),
             }
-        }
-    })
+        };
+        Some((ret, state))
+    }))
 }
 
 /// Stream all transactions in blocks produced by Bitcoin Core.
@@ -93,13 +109,13 @@ pub fn get_blocks<T: BitcoinCoreApi>(
 ///
 /// * `rpc` - bitcoin rpc
 /// * `from_height` - height of the first block of the stream
-pub fn stream_in_chain_transactions<T: BitcoinCoreApi>(
+pub async fn stream_in_chain_transactions<T: BitcoinCoreApi>(
     rpc: Arc<T>,
     from_height: u32,
     num_confirmations: u32,
 ) -> impl Stream<Item = Result<(BlockHash, Transaction), Error>> + Unpin {
     Box::pin(
-        stream_blocks(rpc, from_height, num_confirmations).flat_map(|result| {
+        stream_blocks(rpc, from_height, num_confirmations).await.flat_map(|result| {
             futures::stream::iter(result.map_or_else(
                 |err| vec![Err(err)],
                 |block| {
@@ -122,7 +138,7 @@ pub fn stream_in_chain_transactions<T: BitcoinCoreApi>(
 ///
 /// * `rpc` - bitcoin rpc
 /// * `from_height` - height of the first block of the stream
-pub fn stream_blocks<T: BitcoinCoreApi>(
+pub async fn stream_blocks<T: BitcoinCoreApi>(
     rpc: Arc<T>,
     from_height: u32,
     num_confirmations: u32,
@@ -149,7 +165,7 @@ pub fn stream_blocks<T: BitcoinCoreApi>(
             )
             .await
         {
-            Ok(block_hash) => match state.rpc.get_block(&block_hash) {
+            Ok(block_hash) => match state.rpc.get_block(&block_hash).await {
                 Ok(block) => {
                     state.next_height += 1;
                     Some((Ok(block), state))
@@ -163,9 +179,9 @@ pub fn stream_blocks<T: BitcoinCoreApi>(
 
 /// small helper function for getting the block info of the best block. This simplifies
 /// error handling a little bit
-fn get_best_block_info<T: BitcoinCoreApi>(rpc: Arc<T>) -> Result<GetBlockResult, Error> {
-    let hash = rpc.get_best_block_hash()?;
-    rpc.get_block_info(&hash)
+async fn get_best_block_info<T: BitcoinCoreApi>(rpc: Arc<T>) -> Result<GetBlockResult, Error> {
+    let hash = rpc.get_best_block_hash().await?;
+    rpc.get_block_info(&hash).await
 }
 
 #[cfg(test)]
@@ -180,28 +196,24 @@ mod tests {
         #[async_trait]
         trait BitcoinCoreApi {
             async fn wait_for_block(&self, height: u32, delay: Duration, num_confirmations: u32) -> Result<BlockHash, Error>;
-            fn get_block_count(&self) -> Result<u64, Error>;
-            fn get_block_transactions(
-                &self,
-                hash: &BlockHash,
-            ) -> Result<Vec<Option<GetRawTransactionResult>>, Error>;
-            fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
-            fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
-            fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error>;
-            fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
-            fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
-            fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error>;
-            fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + 'static>(
+            async fn get_block_count(&self) -> Result<u64, Error>;
+            async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+            async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+           async  fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error>;
+            async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
+            async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
+            async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error>;
+            async fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
                 &self,
                 public_key: P,
                 secret_key: Vec<u8>,
             ) -> Result<(), Error>;
-            fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
-            fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
-            fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
-            fn get_mempool_transactions<'a>(
+            async fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
+            async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
+            async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
+            async fn get_mempool_transactions<'a>(
                 self: Arc<Self>,
-            ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + 'a>, Error>;
+            ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + Send +'a>, Error>;
             async fn wait_for_transaction_metadata(
                 &self,
                 txid: Txid,
@@ -214,7 +226,7 @@ mod tests {
                 sat: u64,
                 request_id: &[u8; 32],
             ) -> Result<LockedTransaction, Error>;
-            fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
+            async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
             async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
                 &self,
                 address: A,
@@ -229,10 +241,10 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
-            fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
-            fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
+            async fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
+            async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
                 where
-                    P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + 'static;
+                    P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
         }
     }
 
@@ -287,8 +299,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_transaction_iterator_succeeds() {
+    #[tokio::test]
+    async fn test_transaction_iterator_succeeds() {
         // we abuse version number within the transaction to check whether the sequence is correct
 
         let mut bitcoin = MockBitcoin::default();
@@ -317,20 +329,20 @@ mod tests {
             .returning(|&hash| Ok(dummy_block_info(21, hash)));
 
         let btc_rpc = Arc::new(bitcoin);
-        let mut iter = get_transactions(btc_rpc, 20).unwrap();
+        let mut iter = get_transactions(btc_rpc, 20).await.unwrap();
 
-        assert_eq!(iter.next().unwrap().unwrap().version, 0);
-        assert_eq!(iter.next().unwrap().unwrap().version, 1);
-        assert_eq!(iter.next().unwrap().unwrap().version, 2);
-        assert_eq!(iter.next().unwrap().unwrap().version, 3);
-        assert_eq!(iter.next().unwrap().unwrap().version, 4);
-        assert_eq!(iter.next().unwrap().unwrap().version, 5);
-        assert!(iter.next().is_none());
-        assert!(iter.next().is_none());
+        assert_eq!(iter.next().await.unwrap().unwrap().version, 0);
+        assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
+        assert_eq!(iter.next().await.unwrap().unwrap().version, 2);
+        assert_eq!(iter.next().await.unwrap().unwrap().version, 3);
+        assert_eq!(iter.next().await.unwrap().unwrap().version, 4);
+        assert_eq!(iter.next().await.unwrap().unwrap().version, 5);
+        assert!(iter.next().await.is_none());
+        assert!(iter.next().await.is_none());
     }
 
-    #[test]
-    fn test_transaction_iterator_skips_over_empty_blocks() {
+    #[tokio::test]
+    async fn test_transaction_iterator_skips_over_empty_blocks() {
         let mut bitcoin = MockBitcoin::default();
         bitcoin
             .expect_get_mempool_transactions()
@@ -366,17 +378,17 @@ mod tests {
             .returning(|&hash| Ok(dummy_block_info(23, hash)));
 
         let btc_rpc = Arc::new(bitcoin);
-        let mut iter = get_transactions(btc_rpc, 20).unwrap();
+        let mut iter = get_transactions(btc_rpc, 20).await.unwrap();
 
-        assert_eq!(iter.next().unwrap().unwrap().version, 1);
-        assert_eq!(iter.next().unwrap().unwrap().version, 2);
-        assert_eq!(iter.next().unwrap().unwrap().version, 3);
-        assert_eq!(iter.next().unwrap().unwrap().version, 4);
-        assert!(iter.next().is_none());
-        assert!(iter.next().is_none());
+        assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
+        assert_eq!(iter.next().await.unwrap().unwrap().version, 2);
+        assert_eq!(iter.next().await.unwrap().unwrap().version, 3);
+        assert_eq!(iter.next().await.unwrap().unwrap().version, 4);
+        assert!(iter.next().await.is_none());
+        assert!(iter.next().await.is_none());
     }
-    #[test]
-    fn test_transaction_iterator_can_have_invalid_height() {
+    #[tokio::test]
+    async fn test_transaction_iterator_can_have_invalid_height() {
         let mut bitcoin = MockBitcoin::default();
         bitcoin
             .expect_get_mempool_transactions()
@@ -392,13 +404,13 @@ mod tests {
 
         let btc_rpc = Arc::new(bitcoin);
 
-        let mut iter = get_transactions(btc_rpc, 21).unwrap();
+        let mut iter = get_transactions(btc_rpc, 21).await.unwrap();
 
-        assert!(iter.next().is_none());
+        assert!(iter.next().await.is_none());
     }
 
-    #[test]
-    fn test_transaction_iterator_always_iterates_over_mempool() {
+    #[tokio::test]
+    async fn test_transaction_iterator_always_iterates_over_mempool() {
         let mut bitcoin = MockBitcoin::default();
         bitcoin
             .expect_get_mempool_transactions()
@@ -414,15 +426,15 @@ mod tests {
 
         let btc_rpc = Arc::new(bitcoin);
 
-        let mut iter = get_transactions(btc_rpc, 21).unwrap();
+        let mut iter = get_transactions(btc_rpc, 21).await.unwrap();
 
-        assert_eq!(iter.next().unwrap().unwrap().version, 1);
-        assert_eq!(iter.next().unwrap().unwrap().version, 2);
-        assert!(iter.next().is_none());
+        assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
+        assert_eq!(iter.next().await.unwrap().unwrap().version, 2);
+        assert!(iter.next().await.is_none());
     }
 
-    #[test]
-    fn test_transaction_iterator_can_have_start_equal_to_height() {
+    #[tokio::test]
+    async fn test_transaction_iterator_can_have_start_equal_to_height() {
         let mut bitcoin = MockBitcoin::default();
         bitcoin
             .expect_get_mempool_transactions()
@@ -443,9 +455,9 @@ mod tests {
 
         let btc_rpc = Arc::new(bitcoin);
 
-        let mut iter = get_transactions(btc_rpc, 20).unwrap();
+        let mut iter = get_transactions(btc_rpc, 20).await.unwrap();
 
-        assert_eq!(iter.next().unwrap().unwrap().version, 1);
-        assert!(iter.next().is_none());
+        assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
+        assert!(iter.next().await.is_none());
     }
 }

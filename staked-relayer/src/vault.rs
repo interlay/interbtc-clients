@@ -65,13 +65,13 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi> VaultTheftMonit
         }
     }
 
-    fn get_raw_tx_and_proof(
+    async fn get_raw_tx_and_proof(
         &self,
         tx_id: Txid,
         hash: &BlockHash,
     ) -> Result<(Vec<u8>, Vec<u8>), Error> {
-        let raw_tx = self.btc_rpc.get_raw_tx_for(&tx_id, hash)?;
-        let proof = self.btc_rpc.get_proof_for(tx_id, hash)?;
+        let raw_tx = self.btc_rpc.get_raw_tx_for(&tx_id, hash).await?;
+        let proof = self.btc_rpc.get_proof_for(tx_id, hash).await?;
         Ok((raw_tx, proof))
     }
 
@@ -120,7 +120,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi> VaultTheftMonit
 
         let tx_id = tx.txid();
 
-        let (raw_tx, proof) = self.get_raw_tx_and_proof(tx_id, &block_hash)?;
+        let (raw_tx, proof) = self.get_raw_tx_and_proof(tx_id, &block_hash).await?;
 
         let addresses = tx.extract_input_addresses();
         let vault_ids = filter_matching_vaults(addresses, &self.vaults).await;
@@ -144,7 +144,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi> VaultTheftMonit
             self.btc_rpc.clone(),
             self.btc_height,
             num_confirmations,
-        );
+        ).await;
 
         loop {
             match stream.next().await.unwrap() {
@@ -224,7 +224,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, Error as BitcoinError, GetBlockResult, GetRawTransactionResult, LockedTransaction,
+        Block, Error as BitcoinError, GetBlockResult, LockedTransaction,
         PartialAddress, Transaction, TransactionMetadata, PUBLIC_KEY_SIZE,
     };
     use runtime::PolkaBtcStatusUpdate;
@@ -300,28 +300,24 @@ mod tests {
         #[async_trait]
         trait BitcoinCoreApi {
             async fn wait_for_block(&self, height: u32, delay: Duration, num_confirmations: u32) -> Result<BlockHash, BitcoinError>;
-            fn get_block_count(&self) -> Result<u64, BitcoinError>;
-            fn get_block_transactions(
-                &self,
-                hash: &BlockHash,
-            ) -> Result<Vec<Option<GetRawTransactionResult>>, BitcoinError>;
-            fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
-            fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
-            fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
-            fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
-            fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError>;
-            fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, BitcoinError>;
-            fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + 'static>(
+            async fn get_block_count(&self) -> Result<u64, BitcoinError>;
+            async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+            async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+           async  fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
+            async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
+            async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError>;
+            async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, BitcoinError>;
+            async fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
                 &self,
                 public_key: P,
                 secret_key: Vec<u8>,
             ) -> Result<(), BitcoinError>;
-            fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
-            fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
-            fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
-            fn get_mempool_transactions<'a>(
+            async fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
+            async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
+            async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
+            async fn get_mempool_transactions<'a>(
                 self: Arc<Self>,
-            ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + 'a>, BitcoinError>;
+            ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send +'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(
                 &self,
                 txid: Txid,
@@ -334,7 +330,7 @@ mod tests {
                 sat: u64,
                 request_id: &[u8; 32],
             ) -> Result<LockedTransaction, BitcoinError>;
-            fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
+            async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
             async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
                 &self,
                 address: A,
@@ -349,10 +345,10 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
-            fn create_wallet(&self, wallet: &str) -> Result<(), BitcoinError>;
-            fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError>
+            async fn create_wallet(&self, wallet: &str) -> Result<(), BitcoinError>;
+            async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError>
                 where
-                    P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + 'static;
+                    P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
         }
     }
 

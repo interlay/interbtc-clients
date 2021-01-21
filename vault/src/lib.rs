@@ -21,15 +21,15 @@ use crate::{
     refund::*,
     replace::*,
 };
-use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use bitcoin::BitcoinCoreApi;
 use clap::Clap;
 use core::str::FromStr;
 use futures::channel::mpsc;
 use futures::SinkExt;
 use log::*;
 use runtime::{
-    substrate_subxt::PairSigner, BtcRelayPallet, Error as RuntimeError, PolkaBtcHeader,
-    PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
+    BtcRelayPallet, Error as RuntimeError, PolkaBtcHeader,
+    PolkaBtcProvider, UtilFuncs, VaultRegistryPallet,
 };
 use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
@@ -134,7 +134,7 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static> (opts: Opts, arc_p
         match arc_provider.clone().get_vault(vault_id.clone()).await {
             Ok(_) => info!("Not registering vault -- already registered"),
             Err(RuntimeError::VaultNotFound) => {
-                let public_key = btc_rpc.get_new_public_key()?;
+                let public_key = btc_rpc.get_new_public_key().await?;
                 arc_provider.clone().register_vault(collateral, public_key).await?;
                 info!("Automatically registered vault");
             }
@@ -143,7 +143,7 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static> (opts: Opts, arc_p
     }
 
     if let Ok(vault) = arc_provider.clone().get_vault(vault_id.clone()).await {
-        if !btc_rpc.wallet_has_public_key(vault.wallet.public_key)? {
+        if !btc_rpc.wallet_has_public_key(vault.wallet.public_key).await? {
             return Err(bitcoin::Error::MissingPublicKey.into());
         }
     }

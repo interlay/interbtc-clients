@@ -91,9 +91,9 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
 ) -> Result<(), Error> {
     let mut stream = bitcoin::stream_in_chain_transactions(
         btc_rpc.clone(),
-        btc_rpc.get_block_count()? as u32,
+        btc_rpc.get_block_count().await? as u32,
         num_confirmations,
-    );
+    ).await;
 
     while let Some(Ok((block_hash, transaction))) = stream.next().await {
         if let Err(e) = process_transaction_and_execute_issue(
@@ -140,8 +140,8 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
 
             // found tx, submit proof
             let txid = transaction.txid();
-            let raw_tx = btc_rpc.get_raw_tx_for(&txid, &block_hash)?;
-            let proof = btc_rpc.get_proof_for(txid.clone(), &block_hash)?;
+            let raw_tx = btc_rpc.get_raw_tx_for(&txid, &block_hash).await?;
+            let proof = btc_rpc.get_proof_for(txid.clone(), &block_hash).await?;
 
             // this will error if someone else executes the issue first
             provider
@@ -160,7 +160,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
 }
 
 /// Import the deposit key using the on-chain key derivation scheme
-fn add_new_deposit_key<B: BitcoinCoreApi + Send + Sync + 'static>(
+async fn add_new_deposit_key<B: BitcoinCoreApi + Send + Sync + 'static>(
     btc_rpc: &Arc<B>,
     secure_id: H256,
     public_key: BtcPublicKey,
@@ -170,7 +170,7 @@ fn add_new_deposit_key<B: BitcoinCoreApi + Send + Sync + 'static>(
     hasher.input(public_key.0.to_vec());
     // input issue id
     hasher.input(secure_id.as_bytes());
-    btc_rpc.add_new_deposit_key(public_key, hasher.result().as_slice().to_vec())?;
+    btc_rpc.add_new_deposit_key(public_key, hasher.result().as_slice().to_vec()).await?;
     Ok(())
 }
 
@@ -201,7 +201,7 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel.clone().send(RequestEvent::Opened).await;
 
-                    if let Err(e) = add_new_deposit_key(btc_rpc, event.issue_id, event.public_key) {
+                    if let Err(e) = add_new_deposit_key(btc_rpc, event.issue_id, event.public_key).await {
                         error!(
                             "Failed to add new deposit key #{}: {}",
                             event.issue_id,

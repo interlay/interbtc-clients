@@ -509,13 +509,13 @@ fn data_to_request_id(data: &[u8]) -> Result<[u8; 32], TryFromSliceError> {
     data.try_into()
 }
 
-fn get_btc_rpc(
+async fn get_btc_rpc(
     wallet_name: String,
     bitcoin_opts: bitcoin::cli::BitcoinOpts,
     network: BitcoinNetwork,
 ) -> Result<BitcoinCore, Error> {
     let btc_rpc = BitcoinCore::new(bitcoin_opts.new_client(Some(&wallet_name))?, network.0);
-    btc_rpc.create_wallet(&wallet_name)?;
+    btc_rpc.create_wallet(&wallet_name).await?;
     Ok(btc_rpc)
 }
 
@@ -557,8 +557,8 @@ async fn main() -> Result<(), Error> {
             println!("{}", provider.get_time_now().await?);
         }
         SubCommand::RegisterVault(info) => {
-            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
-            vault::register_vault(provider, btc_rpc.get_new_public_key()?, info.collateral).await?;
+            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
+            vault::register_vault(provider, btc_rpc.get_new_public_key().await?, info.collateral).await?;
         }
         SubCommand::RequestIssue(info) => {
             let vault_id = info.vault.to_account_id();
@@ -603,7 +603,7 @@ async fn main() -> Result<(), Error> {
                 return Ok(());
             }
 
-            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
+            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
             issue::execute_issue(
                 &provider,
                 &btc_rpc,
@@ -635,7 +635,7 @@ async fn main() -> Result<(), Error> {
                 (hex::decode(op_return)?, btc_address, info.satoshis)
             };
 
-            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
+            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
             let tx_metadata = btc_rpc
                 .send_to_address(
                     btc_address,
@@ -662,7 +662,7 @@ async fn main() -> Result<(), Error> {
             let redeem_id = info.redeem_id;
             let redeem_request = provider.get_redeem_request(redeem_id).await?;
 
-            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
+            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
             redeem::execute_redeem(
                 &provider,
                 &btc_rpc,
@@ -679,11 +679,11 @@ async fn main() -> Result<(), Error> {
             println!("{}", hex::encode(replace_id.as_bytes()));
         }
         SubCommand::AcceptReplace(info) => {
-            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
+            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
             replace::accept_replace(&provider, &btc_rpc, info.replace_id, info.collateral).await?;
         }
         SubCommand::ExecuteReplace(info) => {
-            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network)?;
+            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
             replace::execute_replace(&provider, &btc_rpc, info.replace_id).await?;
         }
         SubCommand::GetChainStats(opts) => {

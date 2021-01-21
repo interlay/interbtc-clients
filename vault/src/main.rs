@@ -26,7 +26,7 @@ async fn main() -> Result<(), Error> {
 
     // load wallet. Exit on failure, since without wallet we can't do a lot
     btc_rpc
-        .create_wallet(&wallet)
+        .create_wallet(&wallet).await
         .map_err(|e| Error::WalletInitializationFailure(e))?;
 
     start(intact_opts, arc_provider, btc_rpc).await
