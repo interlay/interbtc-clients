@@ -6,13 +6,12 @@ mod status;
 mod utils;
 mod vault;
 
+use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use error::Error;
 use oracle::OracleMonitor;
-use relay::Client as PolkaClient;
-use relay::Error as RelayError;
-use relayer_core::bitcoin::Client as BtcClient;
-use relayer_core::{Backing, Config, Runner};
+use relay::{BitcoinClient, PolkaBtcClient};
+use relayer_core::{Config, Runner};
 use runtime::substrate_subxt::PairSigner;
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
 use std::sync::Arc;
@@ -84,18 +83,17 @@ async fn main() -> Result<(), Error> {
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
     let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
 
-    let btc_client = BtcClient::new::<RelayError>(opts.bitcoin.new_client(None)?);
     let dummy_network = bitcoin::Network::Regtest; // we don't make any transaction so this is not used
-    let btc_rpc = Arc::new(bitcoin::BitcoinCore::new(
+    let btc_rpc = Arc::new(BitcoinCore::new(
         opts.bitcoin.new_client(None)?,
         dummy_network,
     ));
 
-    let current_height = btc_client.get_block_count()?;
+    let current_height = btc_rpc.get_block_count()? as u32;
 
     let mut relayer = Runner::new(
-        PolkaClient::new(provider.clone()),
-        btc_client,
+        PolkaBtcClient::new(provider.clone()),
+        BitcoinClient::new(opts.bitcoin.new_client(None)?),
         Config {
             start_height: opts.relay_start_height.unwrap_or(current_height),
             max_batch_size: opts.max_batch_size,

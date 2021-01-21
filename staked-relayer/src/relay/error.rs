@@ -1,3 +1,4 @@
+use bitcoin::BitcoinError;
 use runtime::Error as PolkaBtcError;
 use thiserror::Error;
 
@@ -8,6 +9,8 @@ pub enum Error {
     #[error("Failed to serialize block header")]
     SerializeHeader,
 
+    #[error("BitcoinError: {0}")]
+    BitcoinError(#[from] BitcoinError),
     #[error("PolkaBtcError: {0}")]
     PolkaBtcError(#[from] PolkaBtcError),
 }
