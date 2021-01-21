@@ -10,17 +10,17 @@ use std::collections::HashMap;
 pub struct ProviderUserOpts {
     /// Keyring to use, mutually exclusive with keyfile.
     #[clap(long)]
-    keyring: Option<AccountKeyring>,
+    pub keyring: Option<AccountKeyring>,
 
     /// Path to the json file containing key pairs in a map.
     /// Valid content of this file is e.g.
     /// `{ "MyUser1": "<Polkadot Account Mnemonic>", "MyUser2": "<Polkadot Account Mnemonic>" }`.
     #[clap(long, conflicts_with = "keyring", requires = "keyname")]
-    keyfile: Option<String>,
+    pub keyfile: Option<String>,
 
     /// The name of the account from the keyfile to use.
     #[clap(long, conflicts_with = "keyring", requires = "keyfile")]
-    keyname: Option<String>,
+    pub keyname: Option<String>,
 }
 
 impl ProviderUserOpts {
