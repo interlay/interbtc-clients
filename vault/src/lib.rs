@@ -249,24 +249,27 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     let refund_listener =
         listen_for_refund_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
 
-    let api_listener = api::start(
-        arc_provider.clone(),
-        btc_rpc.clone(),
-        opts.http_addr.parse()?,
-        opts.rpc_cors_domain,
-    );
+    let api_listener = if opts.no_api {
+        None
+    } else {
+        Some(api::start(
+            arc_provider.clone(),
+            btc_rpc.clone(),
+            opts.http_addr.parse()?,
+            opts.rpc_cors_domain,
+        ))
+    };
 
     // misc copies of variables to move into spawn closures
     let no_auto_auction = opts.no_auto_auction;
     let no_issue_execution = opts.no_issue_execution;
-    let no_api = opts.no_api;
     let auction_provider = arc_provider.clone();
     let auction_btc_rpc = btc_rpc.clone();
     let auction_replace_event_tx = replace_event_tx.clone();
     // starts all the tasks
     let result = tokio::try_join!(
         tokio::spawn(async move {
-            if !no_api {
+            if let Some(api_listener) = api_listener {
                 api_listener.await;
             }
         }),

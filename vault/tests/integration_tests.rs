@@ -589,7 +589,7 @@ async fn test_issue_succeeds() {
     send_transaction(&alice_provider).await;
 }
 
-#[tokio::test]
+#[tokio::test(threaded_scheduler)]
 async fn test_start_vault_succeeds() {
     let _ = env_logger::try_init();
 
@@ -603,8 +603,8 @@ async fn test_start_vault_succeeds() {
     let address = BtcAddress::P2PKH(H160::from([0; 20]));
 
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-    btc_rpc.send_block(address, 10000).await;
-    btc_rpc.send_block(address, 10000).await;
+    // btc_rpc.send_block(address, 10000).await;
+    // btc_rpc.send_block(address, 10000).await;
 
     relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
 
@@ -618,7 +618,6 @@ async fn test_start_vault_succeeds() {
 
     let issue = user_provider.request_issue(100000, vault_provider.get_account_id().clone(), 10000).await.unwrap();
 
-    let address = BtcAddress::P2PKH(H160::from_slice(&[2;20]));
 
     let block = btc_rpc.send_block(issue.btc_address, issue.amount as u64).await;
 
@@ -626,6 +625,12 @@ async fn test_start_vault_succeeds() {
     let raw_tx = btc_rpc.get_raw_tx_for(&block.txdata[1].txid(), &block.header.block_hash()).await.unwrap();
     user_provider.execute_issue(issue.issue_id, block.txdata[1].txid().translate(), proof, raw_tx).await.unwrap();
 
+    let address = BtcAddress::P2PKH(H160::from_slice(&[2;20]));
+    let issue = user_provider.request_redeem(10000, address, vault_provider.get_account_id().clone()).await.unwrap();
+
+    let opts = default_vault_args();
+    let fut_vault = vault::start(opts, Arc::new(vault_provider), Arc::new(btc_rpc));
+    fut_vault.await.unwrap();
 
     //     vault_provider
     //     .set_exchange_rate_info(FixedU128::checked_from_rational(10000u128, 100_000).unwrap())
@@ -646,5 +651,6 @@ async fn test_start_vault_succeeds() {
     //         delay_for(Duration::from_secs(10)).await;
     //     };
     //
-    //     let fut_vault = vault::start(opts, Arc::new(vault_provider), btc_rpc);
+
+
 }

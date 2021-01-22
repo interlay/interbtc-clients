@@ -170,8 +170,10 @@ impl Request {
             RequestType::Refund => RefundPallet::execute_refund,
         };
 
+        tokio::time::delay_for(Duration::from_secs(15)).await;
+
         // Retry until success or timeout
-        (|| async {
+        let ret = (|| async {
             // call the selected function
             (execute)(
                 &*provider,
@@ -192,9 +194,10 @@ impl Request {
                 dur.as_secs_f64()
             )
         })
-        .await?;
+        .await;
 
-        Ok(())
+        warn!("Execution result: {:?}", ret);
+        Ok(ret?)
     }
 }
 
