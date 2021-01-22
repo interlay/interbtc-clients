@@ -393,23 +393,40 @@ impl BitcoinCoreApi for MockBitcoinCore {
         txid: &Txid,
         block_hash: &BlockHash,
     ) -> Result<Vec<u8>, BitcoinError> {
-        unimplemented!();
+        let blocks = self.blocks.read().await;
+
+        let transaction = blocks.iter().find_map(|x| {
+            x.txdata.iter().find(|y| &y.txid() == txid) 
+        }).ok_or(BitcoinError::InvalidBitcoinHeight)?;
+        
+        Ok(serialize(transaction))
     }
     async fn get_proof_for(
         &self,
         txid: Txid,
         block_hash: &BlockHash,
     ) -> Result<Vec<u8>, BitcoinError> {
-        unimplemented!();
+        let blocks = self.blocks.read().await;
+
+        // we assume the txid is at index 1
+        let block = blocks.iter().find(|x| x.txdata[1].txid() == txid) 
+            .ok_or(BitcoinError::InvalidBitcoinHeight)?;
+
+        Ok(merkle_proof(&block))
     }
     async fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError> {
-        unimplemented!();
+        let blocks = self.blocks.read().await;
+        let block = blocks.get(height as usize)
+            .ok_or(BitcoinError::InvalidBitcoinHeight)?;
+        Ok(block.header.block_hash())
     }
     async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError> {
-        unimplemented!();
+        Ok(self.blocks.read().await.iter().any(|x| x.block_hash() == block_hash))
     }
     async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError> {
-        unimplemented!();
+        let bytes: [u8; 20] = (0..20).map(|_| thread_rng().gen::<u8>()).collect::<Vec<_>>().as_slice().try_into().unwrap();
+        let address = BtcAddress::P2PKH(H160::from(bytes));
+        Ok(A::decode_str(&address.to_string())?)
     }
     async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(
         &self,
@@ -428,10 +445,14 @@ impl BitcoinCoreApi for MockBitcoinCore {
         unimplemented!();
     }
     async fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError> {
-        unimplemented!();
+        let blocks = self.blocks.read().await;
+        Ok(blocks[blocks.len() - 1].block_hash())
     }
     async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError> {
-        unimplemented!();
+        let blocks = self.blocks.read().await;
+        let block = blocks.iter().find(|x| &x.block_hash() == hash)
+            .ok_or(BitcoinError::InvalidBitcoinHeight)?;
+        Ok(block.clone())
     }
     async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError> {
         unimplemented!();
@@ -440,7 +461,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         self: Arc<Self>,
     ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>
     {
-        unimplemented!();
+        Ok(Box::new(std::iter::empty()))
     }
     async fn wait_for_transaction_metadata(
         &self,
@@ -448,7 +469,23 @@ impl BitcoinCoreApi for MockBitcoinCore {
         op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, BitcoinError> {
-        unimplemented!();
+        let blocks = self.blocks.read().await;
+        let (block_height, block) = blocks
+            .iter()
+            .enumerate()
+            .find(|x| x.1.txdata[1].txid() == txid) 
+            .ok_or(BitcoinError::InvalidBitcoinHeight)?;
+        let block_hash = block.block_hash();
+        let proof = self.get_proof_for(txid, &block_hash).await.unwrap();
+        let raw_tx = self.get_raw_tx_for(&txid, &block_hash).await.unwrap();
+
+        Ok(TransactionMetadata {
+            block_hash,
+            proof,
+            raw_tx,
+            txid,
+            block_height: block_height as u32
+        })
     }
     async fn create_transaction<A: PartialAddress + Send + 'static>(
         &self,
@@ -480,7 +517,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         unimplemented!();
     }
     async fn create_wallet(&self, wallet: &str) -> Result<(), BitcoinError> {
-        unimplemented!();
+        Ok(())
     }
     async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError>
     where
@@ -552,15 +589,8 @@ async fn test_start_vault_succeeds() {
 
     let block = btc_rpc.send_block(issue.btc_address, issue.amount as u64).await;
 
-    let proof = merkle_proof(&block);
-    log::warn!("proof: {:?}", proof);
-    let raw_tx = serialize(&block.txdata[1]);
-    log::warn!("raw_tx: {:?}", raw_tx);
-    log::warn!("txid1: {:?}", block.txdata[1].txid());
-    log::warn!("txid1: {}", block.txdata[1].txid());
-    log::warn!("txid2: {:?}", block.txdata[1].txid().translate());
-    log::warn!("txid2: {}", block.txdata[1].txid().translate());
-    log::warn!("tx: {:#?}", block.txdata[1]);
+    let proof = btc_rpc.get_proof_for(block.txdata[1].txid(), &block.header.block_hash()).await.unwrap();
+    let raw_tx = btc_rpc.get_raw_tx_for(&block.txdata[1].txid(), &block.header.block_hash()).await.unwrap();
     user_provider.execute_issue(issue.issue_id, block.txdata[1].txid().translate(), proof, raw_tx).await.unwrap();
 
 
