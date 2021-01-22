@@ -15,7 +15,7 @@ use crate::{
     cancellation::{CancellationScheduler, IssueCanceller, ReplaceCanceller, RequestEvent},
     collateral::*,
     constants::*,
-    execution::{execute_open_issue_requests, execute_open_requests},
+    execution::{execute_open_issue_requests},
     issue::*,
     redeem::*,
     refund::*,
@@ -35,6 +35,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
 
 pub use crate::error::Error;
+pub use execution::execute_open_requests;
 
 #[derive(Debug, Copy, Clone)]
 pub struct BitcoinNetwork(pub bitcoin::Network);

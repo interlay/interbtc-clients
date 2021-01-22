@@ -46,7 +46,8 @@ use tempdir::TempDir;
 use tokio::sync::{RwLock, Mutex, OwnedMutexGuard};
 use tokio::time::delay_for;
 use vault;
-
+use futures::future::join;
+use tokio::time::timeout;
 fn default_vault_args() -> vault::Opts {
     vault::Opts {
         polka_btc_url: "".to_string(), // only used by bin
@@ -216,16 +217,17 @@ impl MockBitcoinCore {
             transaction_creation_lock: Arc::new(Mutex::new(()))
         }
     }
-    async fn send_block(&self, address: BtcAddress, amount: u64) -> Block {
+    async fn send_block_with_payment(&self, address: BtcAddress, amount: u64) -> Block {
         let block = self.generate_block(address, amount).await;
-
+        self.send_block(block.clone()).await;
+        block
+    }
+    async fn send_block(&self, block: Block) {
         let raw_block_header = serialize(&block.header);
         self.provider
             .store_block_header(raw_block_header.try_into().unwrap())
             .await
             .unwrap();
-
-        block
     }
     async fn generate_block_with_transaction(&self, transaction: &Transaction) -> Block {
         let target = U256::from(2).pow(254.into());
@@ -520,6 +522,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
     }
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError> {
         let block = self.generate_block_with_transaction(&transaction.transaction).await;
+        self.send_block(block.clone()).await;
         Ok(block.txdata[1].txid())
     }
     async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
@@ -603,54 +606,66 @@ async fn test_start_vault_succeeds() {
     let address = BtcAddress::P2PKH(H160::from([0; 20]));
 
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-    // btc_rpc.send_block(address, 10000).await;
-    // btc_rpc.send_block(address, 10000).await;
 
     relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
 
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
+    
     let key = btc_rpc.get_new_public_key().await.unwrap();
-
     vault_provider.register_vault(100000000000, key).await.unwrap();
 
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-
     let issue = user_provider.request_issue(100000, vault_provider.get_account_id().clone(), 10000).await.unwrap();
 
-
-    let block = btc_rpc.send_block(issue.btc_address, issue.amount as u64).await;
+    let block = btc_rpc.send_block_with_payment(issue.btc_address, issue.amount as u64).await;
 
     let proof = btc_rpc.get_proof_for(block.txdata[1].txid(), &block.header.block_hash()).await.unwrap();
     let raw_tx = btc_rpc.get_raw_tx_for(&block.txdata[1].txid(), &block.header.block_hash()).await.unwrap();
     user_provider.execute_issue(issue.issue_id, block.txdata[1].txid().translate(), proof, raw_tx).await.unwrap();
 
     let address = BtcAddress::P2PKH(H160::from_slice(&[2;20]));
-    let issue = user_provider.request_redeem(10000, address, vault_provider.get_account_id().clone()).await.unwrap();
+    let redeem_id = user_provider.request_redeem(10000, address, vault_provider.get_account_id().clone()).await.unwrap();
 
     let opts = default_vault_args();
-    let fut_vault = vault::start(opts, Arc::new(vault_provider), Arc::new(btc_rpc));
-    fut_vault.await.unwrap();
-
-    //     vault_provider
-    //     .set_exchange_rate_info(FixedU128::checked_from_rational(10000u128, 100_000).unwrap())
-    //     .await
-    //     .unwrap();
-    // 
-    //     let opts = default_vault_args();
-    //     let btc_rpc = Arc::new(MockBitcoinCore::new(Arc::new(relayer_provider)).init().await);
-
-    //     // let mut btc_rpc = MockBitcoin::default();
-    //
-    //
-    //     // block.consensus_encode(writer)
-    //
-    //
-    //
-    //     let fut_issue = || async {
-    //         delay_for(Duration::from_secs(10)).await;
-    //     };
-    //
-
-
+    let task = join(
+        vault::execute_open_requests(Arc::new(vault_provider), Arc::new(btc_rpc), 0),
+        wait_for_redeem(Arc::new(user_provider), redeem_id)
+    );
+    let (ret1, _) = timeout(Duration::from_secs(30), task).await.unwrap();
+    ret1.unwrap();
 }
+
+async fn wait_for_redeem(provider: Arc<PolkaBtcProvider>, redeem_id: H256) -> ExecuteRedeemEvent<PolkaBtcRuntime>{
+    wait_for_event::<ExecuteRedeemEvent<PolkaBtcRuntime>, _>(provider, |x| x.redeem_id == redeem_id).await
+}
+
+async fn wait_for_event<T, F>(
+    provider: Arc<PolkaBtcProvider>,
+    f: F,
+) -> T
+where
+    T: Event<PolkaBtcRuntime> + Clone + std::fmt::Debug,
+    F: Fn(T) -> bool,
+{
+    let (tx, mut rx) = futures::channel::mpsc::channel(1);
+    let event_writer = provider
+        .on_event::<T, _, _, _>(
+            |event| async {
+                warn!("Received event: {:?}", event);
+                if (f)(event.clone()) {
+                    tx.clone().send(event).await.unwrap();
+                }
+            },
+            |_| {},
+        )
+        .fuse();
+    let event_reader = rx.next().fuse();
+    pin_mut!(event_reader, event_writer);
+
+    match futures::future::select(event_writer, event_reader).await {
+        Either::Right((ret, _)) => ret.unwrap(),
+        _ => panic!()
+    }
+}
+
