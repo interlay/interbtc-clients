@@ -101,74 +101,12 @@ async fn default_provider_client(key: AccountKeyring) -> (JsonRpseeClient, TempD
     return (client, tmp);
 }
 
-async fn setup_provider(client: JsonRpseeClient, key: AccountKeyring) -> PolkaBtcProvider {
+async fn setup_provider(client: JsonRpseeClient, key: AccountKeyring) -> Arc<PolkaBtcProvider> {
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key.pair());
-    PolkaBtcProvider::new(client, signer)
+    let ret = PolkaBtcProvider::new(client, signer)
         .await
-        .expect("Error creating provider")
-}
-
-async fn send_transaction(provider: &PolkaBtcProvider) {
-    let address = BtcAddress::P2PKH(H160::zero());
-    // place the transaction into the mempool
-    let block = BlockBuilder::new()
-        .with_version(2)
-        .with_coinbase(&address, 50, 3)
-        .with_timestamp(1588813835)
-        .mine(U256::from(2).pow(254.into()));
-    let output_address = BtcAddress::P2PKH(H160::zero());
-
-    let transaction = TransactionBuilder::new()
-        .with_version(2)
-        .add_input(
-            TransactionInputBuilder::new()
-                .with_coinbase(false)
-                .with_previous_hash(block.transactions[0].hash())
-                .with_script(&[
-                    0, 71, 48, 68, 2, 32, 91, 128, 41, 150, 96, 53, 187, 63, 230, 129, 53, 234,
-                    210, 186, 21, 187, 98, 38, 255, 112, 30, 27, 228, 29, 132, 140, 155, 62, 123,
-                    216, 232, 168, 2, 32, 72, 126, 179, 207, 142, 8, 99, 8, 32, 78, 244, 166, 106,
-                    160, 207, 227, 61, 210, 172, 234, 234, 93, 59, 159, 79, 12, 194, 240, 212, 3,
-                    120, 50, 1, 71, 81, 33, 3, 113, 209, 131, 177, 9, 29, 242, 229, 15, 217, 247,
-                    165, 78, 111, 80, 79, 50, 200, 117, 80, 30, 233, 210, 167, 133, 175, 62, 253,
-                    134, 127, 212, 51, 33, 2, 128, 200, 184, 235, 148, 25, 43, 34, 28, 173, 55, 54,
-                    189, 164, 187, 243, 243, 152, 7, 84, 210, 85, 156, 238, 77, 97, 188, 240, 162,
-                    197, 105, 62, 82, 174,
-                ])
-                .build(),
-        )
-        .add_output(TransactionOutput::payment(10000.into(), &output_address))
-        .add_output(TransactionOutput::op_return(0, H256::zero().as_bytes()))
-        .build();
-
-    let block = BlockBuilder::new()
-        .with_previous_hash(block.header.hash())
-        .with_version(2)
-        .with_coinbase(&address, 50, 3)
-        .with_timestamp(1588813835)
-        .add_transaction(transaction)
-        .mine(U256::from(2).pow(254.into()));
-
-    let block_header = RawBlockHeader::from_bytes(&block.header.format()).unwrap();
-    provider.store_block_header(block_header).await.unwrap();
-}
-
-async fn initialize_btc_relay(provider: &PolkaBtcProvider) {
-    let height = 0;
-    let address = BtcAddress::P2PKH(H160::zero());
-    let block = BlockBuilder::new()
-        .with_version(2)
-        .with_coinbase(&address, 50, 3)
-        .with_timestamp(1588813835)
-        .mine(U256::from(2).pow(254.into()));
-
-    let block_header = RawBlockHeader::from_bytes(&block.header.format())
-        .expect("could not serialize block header");
-
-    provider
-        .initialize_btc_relay(block_header, height)
-        .await
-        .unwrap();
+        .expect("Error creating provider");
+    Arc::new(ret)
 }
 
 struct MockBitcoinCore {
@@ -582,55 +520,47 @@ impl Translate for Txid {
     }
 }
 
-
-
-#[tokio::test]
-async fn test_issue_succeeds() {
-    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-    let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
-    initialize_btc_relay(&alice_provider).await;
-    send_transaction(&alice_provider).await;
-}
-
 #[tokio::test(threaded_scheduler)]
 async fn test_start_vault_succeeds() {
     let _ = env_logger::try_init();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-    let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-
-    let btc_rpc = MockBitcoinCore::new(Arc::new(relayer_provider))
-        .init()
-        .await;
-
-    let address = BtcAddress::P2PKH(H160::from([0; 20]));
 
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
+    let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
+
+    let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).init().await;
 
     relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
-
-    let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     
-    let key = btc_rpc.get_new_public_key().await.unwrap();
-    vault_provider.register_vault(100000000000, key).await.unwrap();
+    vault_provider.register_vault(100000000000, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
 
-    let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
     let issue = user_provider.request_issue(100000, vault_provider.get_account_id().clone(), 10000).await.unwrap();
 
-    let block = btc_rpc.send_block_with_payment(issue.btc_address, issue.amount as u64).await;
+    let metadata = btc_rpc.send_to_address(
+        issue.btc_address, 
+        issue.amount as u64,
+        &[0; 32],
+        Duration::from_secs(30),
+        0
+    ).await.unwrap();
 
-    let proof = btc_rpc.get_proof_for(block.txdata[1].txid(), &block.header.block_hash()).await.unwrap();
-    let raw_tx = btc_rpc.get_raw_tx_for(&block.txdata[1].txid(), &block.header.block_hash()).await.unwrap();
-    user_provider.execute_issue(issue.issue_id, block.txdata[1].txid().translate(), proof, raw_tx).await.unwrap();
+    user_provider.execute_issue(
+        issue.issue_id, 
+        metadata.txid.translate(), 
+        metadata.proof, 
+        metadata.raw_tx
+    ).await.unwrap();
 
     let address = BtcAddress::P2PKH(H160::from_slice(&[2;20]));
     let redeem_id = user_provider.request_redeem(10000, address, vault_provider.get_account_id().clone()).await.unwrap();
 
     let opts = default_vault_args();
     let task = join(
-        vault::execute_open_requests(Arc::new(vault_provider), Arc::new(btc_rpc), 0),
-        wait_for_redeem(Arc::new(user_provider), redeem_id)
+        vault::service::execute_open_requests(vault_provider, Arc::new(btc_rpc), 0),
+        wait_for_redeem(user_provider, redeem_id)
     );
     let (ret1, _) = timeout(Duration::from_secs(30), task).await.unwrap();
     ret1.unwrap();

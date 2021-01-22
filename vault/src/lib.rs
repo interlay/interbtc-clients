@@ -17,7 +17,6 @@ use crate::{
     constants::*,
     execution::{execute_open_issue_requests},
     issue::*,
-    redeem::*,
     refund::*,
     replace::*,
 };
@@ -35,7 +34,12 @@ use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
 
 pub use crate::error::Error;
-pub use execution::execute_open_requests;
+
+pub mod service {
+    pub use crate::execution::execute_open_requests;
+    pub use crate::redeem::listen_for_redeem_requests;
+}
+use service::*;
 
 #[derive(Debug, Copy, Clone)]
 pub struct BitcoinNetwork(pub bitcoin::Network);
