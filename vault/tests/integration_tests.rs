@@ -43,7 +43,7 @@ use substrate_subxt_client::{
     DatabaseConfig, KeystoreConfig, Role, SubxtClient, SubxtClientConfig,
 };
 use tempdir::TempDir;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Mutex, OwnedMutexGuard};
 use tokio::time::delay_for;
 use vault;
 
@@ -173,6 +173,7 @@ async fn initialize_btc_relay(provider: &PolkaBtcProvider) {
 struct MockBitcoinCore {
     provider: Arc<PolkaBtcProvider>,
     blocks: RwLock<Vec<Block>>,
+    transaction_creation_lock: Arc<Mutex<()>>,
 }
 
 pub fn merkle_proof(block: &Block) -> Vec<u8> {
@@ -212,6 +213,7 @@ impl MockBitcoinCore {
         Self {
             provider,
             blocks: RwLock::new(vec![]),
+            transaction_creation_lock: Arc::new(Mutex::new(()))
         }
     }
     async fn send_block(&self, address: BtcAddress, amount: u64) -> Block {
@@ -225,7 +227,7 @@ impl MockBitcoinCore {
 
         block
     }
-    async fn generate_block(&self, address: BtcAddress, amount: u64) -> Block {
+    async fn generate_block_with_transaction(&self, transaction: &Transaction) -> Block {
         let target = U256::from(2).pow(254.into());
         let mut bytes = [0u8; 32];
         target.to_big_endian(&mut bytes);
@@ -239,38 +241,15 @@ impl MockBitcoinCore {
             blocks[blocks.len() - 1].header.block_hash()
         };
 
-        let tmp = Self::generate_coinbase_transaction(
-            &address,
-            amount,
-            blocks.len() as u32,
-        );
-        let w= serialize(&tmp);
-
-
-        // let s = Secp256k1::new();
-        // let mut rng = OsRng::new().unwrap();
-        // let (private, public) = s.generate_keypair(&mut rng);
-        // Script::new_p2pkh(pubkey_hash)
-        // let public_key = key::PublicKey {
-        //     compressed: true,
-        //     key: s.generate_keypair(&mut rng).1,
-        // };
-
-        // Generate pay-to-pubkey-hash address
-        // let addressz = Address::p2pkh(&public_key, Network::Regtest);
-
-
-
         let mut block = Block {
-            txdata: vec![Self::generate_coinbase_transaction(
-                &address,
-                amount,
-                blocks.len() as u32,
-            ), Self::generate_normal_transaction(
-                &address,
-                amount,
-                blocks.len() as u32,
-            )],
+            txdata: vec![
+                Self::generate_coinbase_transaction(
+                    &BtcAddress::P2PKH(H160::from([1; 20])),
+                    10000,
+                    blocks.len() as u32,
+                ), 
+                transaction.clone()
+            ],
             header: BlockHeader {
                 version: 2,
                 merkle_root: Default::default(),
@@ -294,12 +273,18 @@ impl MockBitcoinCore {
             
         block
     }
+    async fn generate_block(&self, address: BtcAddress, amount: u64) -> Block {
+        self.generate_block_with_transaction(&Self::generate_normal_transaction(
+                &address,
+                amount,
+            )).await
+    }
 
-    fn generate_normal_transaction(
-        address: &BtcAddress,
+    fn generate_normal_transaction<A: PartialAddress + Send + 'static> (
+        address: &A,
         reward: u64,
-        height: u32,
     ) -> Transaction {
+        let address:BtcAddress = BtcAddress::decode_str(&address.encode_str(Network::Regtest).unwrap()).unwrap();
         let address = Script::from(address.to_script().as_bytes().to_vec());
 
         Transaction {
@@ -324,7 +309,7 @@ impl MockBitcoinCore {
                 script_pubkey: address,
                 value: reward,
             }],
-            lock_time: height,
+            lock_time: 0,
             version: 2,
         }
     }
@@ -442,7 +427,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         public_key: P,
         secret_key: Vec<u8>,
     ) -> Result<(), BitcoinError> {
-        unimplemented!();
+        Ok(())
     }
     async fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError> {
         let blocks = self.blocks.read().await;
@@ -455,7 +440,34 @@ impl BitcoinCoreApi for MockBitcoinCore {
         Ok(block.clone())
     }
     async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError> {
-        unimplemented!();
+        let blocks = self.blocks.read().await;
+
+        let (block_height, block) = blocks
+            .iter()
+            .enumerate()
+            .find(|x| &x.1.block_hash() == hash) 
+            .ok_or(BitcoinError::InvalidBitcoinHeight)?;
+        Ok(GetBlockResult {
+            height: block_height,
+            hash: block.block_hash(),
+            confirmations: Default::default(),
+            size: Default::default(),
+            strippedsize: Default::default(),
+            weight: Default::default(),
+            version: Default::default(),
+            version_hex: Default::default(),
+            merkleroot: Default::default(),
+            tx: Default::default(),
+            time: Default::default(),
+            mediantime: Default::default(),
+            nonce: Default::default(),
+            bits: Default::default(),
+            difficulty: Default::default(),
+            chainwork: Default::default(),
+            n_tx: Default::default(),
+            previousblockhash: Default::default(),
+            nextblockhash: Default::default(),
+        })
     }
     async fn get_mempool_transactions<'a>(
         self: Arc<Self>,
@@ -493,10 +505,22 @@ impl BitcoinCoreApi for MockBitcoinCore {
         sat: u64,
         request_id: &[u8; 32],
     ) -> Result<LockedTransaction, BitcoinError> {
-        unimplemented!();
+
+        let mut op_return_script = vec![0x6a, 32];
+        op_return_script.append(&mut request_id.to_vec());
+        
+        let op_return = TxOut {
+            value: 0,
+            script_pubkey: Script::from(op_return_script),
+        };
+        let mut transaction = MockBitcoinCore::generate_normal_transaction(&address, sat);
+        transaction.output.push(op_return);
+
+        Ok(LockedTransaction::new(transaction, self.transaction_creation_lock.clone().lock_owned().await))
     }
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError> {
-        unimplemented!();
+        let block = self.generate_block_with_transaction(&transaction.transaction).await;
+        Ok(block.txdata[1].txid())
     }
     async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
         &self,
@@ -504,7 +528,9 @@ impl BitcoinCoreApi for MockBitcoinCore {
         sat: u64,
         request_id: &[u8; 32],
     ) -> Result<Txid, BitcoinError> {
-        unimplemented!();
+        let tx = self.create_transaction(address, sat, request_id).await?;
+        let txid = self.send_transaction(tx).await?;
+        Ok(txid)
     }
     async fn send_to_address<A: PartialAddress + Send + 'static>(
         &self,
@@ -514,7 +540,14 @@ impl BitcoinCoreApi for MockBitcoinCore {
         op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, BitcoinError> {
-        unimplemented!();
+        let txid = self
+            .create_and_send_transaction(address, sat, request_id)
+            .await.unwrap();
+        let metadata = self
+            .wait_for_transaction_metadata(txid, op_timeout, num_confirmations)
+            .await
+            .unwrap();
+        Ok(metadata)
     }
     async fn create_wallet(&self, wallet: &str) -> Result<(), BitcoinError> {
         Ok(())

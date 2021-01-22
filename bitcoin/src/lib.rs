@@ -141,7 +141,7 @@ pub struct LockedTransaction {
     _lock: OwnedMutexGuard<()>,
 }
 impl LockedTransaction {
-    fn new(transaction: Transaction, lock: OwnedMutexGuard<()>) -> Self {
+    pub fn new(transaction: Transaction, lock: OwnedMutexGuard<()>) -> Self {
         LockedTransaction {
             transaction,
             _lock: lock,
