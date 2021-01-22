@@ -3,10 +3,11 @@
 #![allow(unused_variables)]
 
 use bitcoin::{
-    secp256k1::{PublicKey, SecretKey, Secp256k1, rand::rngs::OsRng},
+    secp256k1::{PublicKey, SecretKey, Secp256k1, rand::rngs::OsRng}, key, Network, Address,
     serialize, BitcoinCore, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError,
     GetBlockResult, Hash, LockedTransaction, OutPoint, PartialAddress, Script, Transaction,
     TransactionMetadata, TxIn, TxMerkleNode, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
+    PartialMerkleTree, 
 };
 use runtime::pallets::btc_relay::{TransactionBuilder, TransactionInputBuilder, TransactionOutput};
 use runtime::UtilFuncs;
@@ -180,20 +181,28 @@ pub fn merkle_proof(block: &Block) -> Vec<u8> {
     // header
     ret.append(&mut serialize(&block.header));
 
-    // number of transcations:
-    ret.append(&mut serialize(&(block.txdata.len() as u32)));
-
-    // number of hashes:
-    ret.push(1);
-
-    // hashes
-    ret.append(&mut block.txdata[0].txid().as_ref().to_vec());
-
-    // number of bytes of flag bits:
-    ret.push(1);
-
-    // flag bits:
-    ret.push(1);
+    let txids = block.txdata.iter().map(|x| x.txid()).collect::<Vec<_>>();
+    let partial_merkle_tree = PartialMerkleTree::from_txids(&txids, &[false, true]);
+    ret.append(&mut serialize(&partial_merkle_tree));
+// 
+// 
+//     // number of transcations:
+//     ret.append(&mut serialize(&(block.txdata.len() as u32)));
+// 
+//     // number of hashes:
+//     ret.push(block.txdata.len() as u8);
+// 
+// 
+//     // hashes
+//     for tx in block.txdata.iter() {
+//         ret.append(&mut tx.txid().as_ref().to_vec());
+//     }
+// 
+//     // number of bytes of flag bits:
+//     ret.push(1);
+// 
+//     // flag bits:
+//     ret.push(3);
 
     ret
 }
@@ -237,8 +246,27 @@ impl MockBitcoinCore {
         );
         let w= serialize(&tmp);
 
+
+        // let s = Secp256k1::new();
+        // let mut rng = OsRng::new().unwrap();
+        // let (private, public) = s.generate_keypair(&mut rng);
+        // Script::new_p2pkh(pubkey_hash)
+        // let public_key = key::PublicKey {
+        //     compressed: true,
+        //     key: s.generate_keypair(&mut rng).1,
+        // };
+
+        // Generate pay-to-pubkey-hash address
+        // let addressz = Address::p2pkh(&public_key, Network::Regtest);
+
+
+
         let mut block = Block {
             txdata: vec![Self::generate_coinbase_transaction(
+                &address,
+                amount,
+                blocks.len() as u32,
+            ), Self::generate_normal_transaction(
                 &address,
                 amount,
                 blocks.len() as u32,
@@ -265,6 +293,40 @@ impl MockBitcoinCore {
         blocks.push(block.clone());
             
         block
+    }
+
+    fn generate_normal_transaction(
+        address: &BtcAddress,
+        reward: u64,
+        height: u32,
+    ) -> Transaction {
+        let address = Script::from(address.to_script().as_bytes().to_vec());
+
+        Transaction {
+            input: vec![TxIn {
+                previous_output: OutPoint {
+                    txid: Txid::from_slice(&[1;32]).unwrap(),
+                    vout: 0,
+                }, // coinbase
+                witness: vec![],
+                script_sig: Script::from(vec![0, 71, 48, 68, 2, 32, 91, 128, 41, 150, 96, 53, 187, 63, 230, 129, 53, 234,
+                    210, 186, 21, 187, 98, 38, 255, 112, 30, 27, 228, 29, 132, 140, 155, 62, 123,
+                    216, 232, 168, 2, 32, 72, 126, 179, 207, 142, 8, 99, 8, 32, 78, 244, 166, 106,
+                    160, 207, 227, 61, 210, 172, 234, 234, 93, 59, 159, 79, 12, 194, 240, 212, 3,
+                    120, 50, 1, 71, 81, 33, 3, 113, 209, 131, 177, 9, 29, 242, 229, 15, 217, 247,
+                    165, 78, 111, 80, 79, 50, 200, 117, 80, 30, 233, 210, 167, 133, 175, 62, 253,
+                    134, 127, 212, 51, 33, 2, 128, 200, 184, 235, 148, 25, 43, 34, 28, 173, 55, 54,
+                    189, 164, 187, 243, 243, 152, 7, 84, 210, 85, 156, 238, 77, 97, 188, 240, 162,
+                    197, 105, 62, 82, 174]),
+                sequence: u32::max_value(),
+            }],
+            output: vec![TxOut {
+                script_pubkey: address,
+                value: reward,
+            }],
+            lock_time: height,
+            version: 2,
+        }
     }
 
     fn generate_coinbase_transaction(
@@ -486,13 +548,20 @@ async fn test_start_vault_succeeds() {
 
     let issue = user_provider.request_issue(100000, vault_provider.get_account_id().clone(), 10000).await.unwrap();
 
+    let address = BtcAddress::P2PKH(H160::from_slice(&[2;20]));
+
     let block = btc_rpc.send_block(issue.btc_address, issue.amount as u64).await;
 
     let proof = merkle_proof(&block);
     log::warn!("proof: {:?}", proof);
-    let raw_tx = serialize(&block.txdata[0]);
+    let raw_tx = serialize(&block.txdata[1]);
     log::warn!("raw_tx: {:?}", raw_tx);
-    user_provider.execute_issue(issue.issue_id, block.txdata[0].txid().translate(), proof, raw_tx).await.unwrap();
+    log::warn!("txid1: {:?}", block.txdata[1].txid());
+    log::warn!("txid1: {}", block.txdata[1].txid());
+    log::warn!("txid2: {:?}", block.txdata[1].txid().translate());
+    log::warn!("txid2: {}", block.txdata[1].txid().translate());
+    log::warn!("tx: {:#?}", block.txdata[1]);
+    user_provider.execute_issue(issue.issue_id, block.txdata[1].txid().translate(), proof, raw_tx).await.unwrap();
 
 
     //     vault_provider
