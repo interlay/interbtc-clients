@@ -14,11 +14,13 @@ use runtime::UtilFuncs;
 use runtime::BtcAddress::P2PKH;
 use runtime::{
     pallets::issue::*,
+    pallets::refund::*,
     pallets::redeem::*,
     substrate_subxt::{Event, PairSigner},
     BlockBuilder, BtcAddress, BtcPublicKey, BtcRelayPallet, ExchangeRateOraclePallet,
     FixedPointNumber, FixedU128, Formattable, H256Le, IssuePallet, PolkaBtcProvider,
     PolkaBtcRuntime, RawBlockHeader, RedeemPallet, ReplacePallet, VaultRegistryPallet,
+    FeePallet
 };
 use sp_core::H160;
 use sp_core::H256;
@@ -564,11 +566,88 @@ async fn test_redeem_succeeds() {
         vault::service::listen_for_redeem_requests(vault_provider, btc_rpc, 0),
         async {
             let redeem_id = user_provider.request_redeem(10000, address, vault_id).await.unwrap();
-            wait_for_redeem(user_provider, redeem_id).await;
+            assert_redeem_event(Duration::from_secs(30), user_provider, redeem_id).await;
         }
     );
-    timeout(Duration::from_secs(45), fut).await.unwrap();
 }
+
+#[tokio::test(threaded_scheduler)]
+async fn test_refund_succeeds() {
+    let _ = env_logger::try_init();
+
+    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+
+    let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
+    let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
+
+    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).init().await);
+
+    relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
+    
+    let refund_service = vault::service::listen_for_refund_requests(vault_provider.clone(), btc_rpc.clone(), 0);
+
+    let issue_amount = 100000;
+    let fee = user_provider.get_issue_fee().await.unwrap();
+    let amount_btc_including_fee = issue_amount + fee.checked_mul_int(issue_amount).unwrap();
+    let collateral = user_provider
+        .get_required_collateral_for_polkabtc(amount_btc_including_fee)
+        .await
+        .unwrap();
+
+    vault_provider.register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+
+    let vault_id = vault_provider.get_account_id().clone();
+    let fut_user = async {
+        let over_payment = 10000;
+
+        let issue = user_provider.request_issue(issue_amount, vault_provider.get_account_id().clone(), 10000).await.unwrap();
+
+        let metadata = btc_rpc.send_to_address(
+            issue.btc_address, 
+            issue.amount as u64 + over_payment,
+            None,
+            Duration::from_secs(30),
+            0
+        ).await.unwrap();
+
+        let (refund_request, _) = join(
+            assert_event::<RequestRefundEvent<PolkaBtcRuntime>, _>(
+                Duration::from_secs(30),
+                user_provider.clone(),
+                |x| x.vault_id == vault_id,
+            ),
+            async {
+                user_provider.execute_issue(
+                    issue.issue_id, 
+                    metadata.txid.translate(), 
+                    metadata.proof, 
+                    metadata.raw_tx
+                ).await.unwrap();
+            }
+        ).await;
+        
+        assert_event::<ExecuteRefundEvent<PolkaBtcRuntime>, _>(
+            Duration::from_secs(30),
+            user_provider.clone(),
+            |x| {
+                if &x.refund_id == &refund_request.refund_id {
+                    assert_eq!(x.amount, (over_payment as f64 * 0.995) as u128);
+                    true
+                } else {
+                    false
+                }
+            },
+        ).await;
+    };
+
+
+    test_service(
+        refund_service,
+        fut_user
+    ).await;
+}
+
 
 pub async fn test_service<T: Future, U: Future>(service: T, fut: U) -> U::Output {
     pin_mut!(service, fut);
@@ -615,19 +694,19 @@ async fn test_execute_open_requests_succeeds() {
     let address = BtcAddress::P2PKH(H160::from_slice(&[2;20]));
     let redeem_id = user_provider.request_redeem(10000, address, vault_provider.get_account_id().clone()).await.unwrap();
 
-    let task = join(
+    let ret = join(
         vault::service::execute_open_requests(vault_provider, Arc::new(btc_rpc), 0),
-        wait_for_redeem(user_provider, redeem_id)
-    );
-    let (ret1, _) = timeout(Duration::from_secs(30), task).await.unwrap();
-    ret1.unwrap();
+        assert_redeem_event(Duration::from_secs(30), user_provider, redeem_id)
+    ).await;
+    ret.0.unwrap();
 }
 
-async fn wait_for_redeem(provider: Arc<PolkaBtcProvider>, redeem_id: H256) -> ExecuteRedeemEvent<PolkaBtcRuntime>{
-    wait_for_event::<ExecuteRedeemEvent<PolkaBtcRuntime>, _>(provider, |x| x.redeem_id == redeem_id).await
+async fn assert_redeem_event(duration: Duration, provider: Arc<PolkaBtcProvider>, redeem_id: H256) -> ExecuteRedeemEvent<PolkaBtcRuntime>{
+    assert_event::<ExecuteRedeemEvent<PolkaBtcRuntime>, _>(duration, provider, |x| x.redeem_id == redeem_id).await
 }
 
-async fn wait_for_event<T, F>(
+async fn assert_event<T, F>(
+    duration: Duration,
     provider: Arc<PolkaBtcProvider>,
     f: F,
 ) -> T
@@ -651,9 +730,13 @@ where
     let event_reader = rx.next().fuse();
     pin_mut!(event_reader, event_writer);
 
-    match futures::future::select(event_writer, event_reader).await {
-        Either::Right((ret, _)) => ret.unwrap(),
-        _ => panic!()
-    }
+    timeout(duration, 
+        async {
+            match futures::future::select(event_writer, event_reader).await {
+                Either::Right((ret, _)) => ret.unwrap(),
+                _ => panic!()
+            }
+        }
+    ).await.unwrap()
 }
 

@@ -38,6 +38,7 @@ pub use crate::error::Error;
 pub mod service {
     pub use crate::execution::execute_open_requests;
     pub use crate::redeem::listen_for_redeem_requests;
+    pub use crate::refund::listen_for_refund_requests;
 }
 use service::*;
 
