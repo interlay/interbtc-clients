@@ -443,18 +443,20 @@ impl BitcoinCoreApi for MockBitcoinCore {
         &self,
         address: A,
         sat: u64,
-        request_id: &[u8; 32],
+        request_id: Option<H256>,
     ) -> Result<LockedTransaction, BitcoinError> {
 
-        let mut op_return_script = vec![0x6a, 32];
-        op_return_script.append(&mut request_id.to_vec());
-        
-        let op_return = TxOut {
-            value: 0,
-            script_pubkey: Script::from(op_return_script),
-        };
         let mut transaction = MockBitcoinCore::generate_normal_transaction(&address, sat);
-        transaction.output.push(op_return);
+
+        if let Some(request_id) = request_id {
+            let mut op_return_script = vec![0x6a, 32];
+            op_return_script.append(&mut request_id.to_fixed_bytes().to_vec());
+            let op_return = TxOut {
+                value: 0,
+                script_pubkey: Script::from(op_return_script),
+            };
+            transaction.output.push(op_return);
+        }
 
         Ok(LockedTransaction::new(transaction, self.transaction_creation_lock.clone().lock_owned().await))
     }
@@ -467,7 +469,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         &self,
         address: A,
         sat: u64,
-        request_id: &[u8; 32],
+        request_id: Option<H256>,
     ) -> Result<Txid, BitcoinError> {
         let tx = self.create_transaction(address, sat, request_id).await?;
         let txid = self.send_transaction(tx).await?;
@@ -477,7 +479,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         &self,
         address: A,
         sat: u64,
-        request_id: &[u8; 32],
+        request_id: Option<H256>,
         op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, BitcoinError> {
@@ -542,7 +544,7 @@ async fn test_start_vault_succeeds() {
     let metadata = btc_rpc.send_to_address(
         issue.btc_address, 
         issue.amount as u64,
-        &[0; 32],
+        None,
         Duration::from_secs(30),
         0
     ).await.unwrap();
