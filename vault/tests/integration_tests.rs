@@ -48,6 +48,8 @@ use tokio::time::delay_for;
 use vault;
 use futures::future::join;
 use tokio::time::timeout;
+use futures::Future;
+
 fn default_vault_args() -> vault::Opts {
     vault::Opts {
         polka_btc_url: "".to_string(), // only used by bin
@@ -523,7 +525,62 @@ impl Translate for Txid {
 }
 
 #[tokio::test(threaded_scheduler)]
-async fn test_start_vault_succeeds() {
+async fn test_redeem_succeeds() {
+    let _ = env_logger::try_init();
+
+    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+
+    let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
+    let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
+
+    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).init().await);
+
+    relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
+    
+    vault_provider.register_vault(100000000000, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+
+    let issue = user_provider.request_issue(100000, vault_provider.get_account_id().clone(), 10000).await.unwrap();
+
+    let metadata = btc_rpc.send_to_address(
+        issue.btc_address, 
+        issue.amount as u64,
+        None,
+        Duration::from_secs(30),
+        0
+    ).await.unwrap();
+
+    user_provider.execute_issue(
+        issue.issue_id, 
+        metadata.txid.translate(), 
+        metadata.proof, 
+        metadata.raw_tx
+    ).await.unwrap();
+
+    
+    let address = BtcAddress::P2PKH(H160::from_slice(&[2;20]));
+    let vault_id = vault_provider.get_account_id().clone();
+    let fut = test_service(
+        vault::service::listen_for_redeem_requests(vault_provider, btc_rpc, 0),
+        async {
+            let redeem_id = user_provider.request_redeem(10000, address, vault_id).await.unwrap();
+            wait_for_redeem(user_provider, redeem_id).await;
+        }
+    );
+    timeout(Duration::from_secs(45), fut).await.unwrap();
+}
+
+pub async fn test_service<T: Future, U: Future>(service: T, fut: U) -> U::Output {
+    pin_mut!(service, fut);
+    match futures::future::select(service, fut).await {
+        Either::Right((ret, _)) => ret,
+        _ => panic!()
+    }
+}
+
+
+#[tokio::test(threaded_scheduler)]
+async fn test_execute_open_requests_succeeds() {
     let _ = env_logger::try_init();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
@@ -537,7 +594,6 @@ async fn test_start_vault_succeeds() {
     relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
     
     vault_provider.register_vault(100000000000, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
-
 
     let issue = user_provider.request_issue(100000, vault_provider.get_account_id().clone(), 10000).await.unwrap();
 
@@ -559,7 +615,6 @@ async fn test_start_vault_succeeds() {
     let address = BtcAddress::P2PKH(H160::from_slice(&[2;20]));
     let redeem_id = user_provider.request_redeem(10000, address, vault_provider.get_account_id().clone()).await.unwrap();
 
-    let opts = default_vault_args();
     let task = join(
         vault::service::execute_open_requests(vault_provider, Arc::new(btc_rpc), 0),
         wait_for_redeem(user_provider, redeem_id)
@@ -581,6 +636,7 @@ where
     F: Fn(T) -> bool,
 {
     let (tx, mut rx) = futures::channel::mpsc::channel(1);
+    warn!("Waiting for event.");
     let event_writer = provider
         .on_event::<T, _, _, _>(
             |event| async {
