@@ -14,8 +14,6 @@ pub enum Error {
     UnknownBitcoinNetwork,
     #[error("Mathematical operation error")]
     MathError,
-    #[error("Expected OP_RETURN data")]
-    ExpectedOpReturn,
     #[error("Expected Bitcoin address")]
     ExpectedBitcoinAddress,
     #[error("Issue has been completed")]

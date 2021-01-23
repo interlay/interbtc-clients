@@ -191,6 +191,7 @@ mod tests {
     };
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode, MINIMUM_STAKE};
+    use sp_core::H256;
     use sp_keyring::AccountKeyring;
     use std::time::Duration;
 
@@ -299,20 +300,20 @@ mod tests {
                 &self,
                 address: A,
                 sat: u64,
-                request_id: &[u8; 32],
+                request_id: Option<H256>,
             ) -> Result<LockedTransaction, BitcoinError>;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
             async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
                 &self,
                 address: A,
                 sat: u64,
-                request_id: &[u8; 32],
+                request_id: Option<H256>,
             ) -> Result<Txid, BitcoinError>;
             async fn send_to_address<A: PartialAddress + Send + 'static>(
                 &self,
                 address: A,
                 sat: u64,
-                request_id: &[u8; 32],
+                request_id: Option<H256>,
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;

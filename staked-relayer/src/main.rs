@@ -89,7 +89,7 @@ async fn main() -> Result<(), Error> {
         dummy_network,
     ));
 
-    let current_height = btc_rpc.get_block_count()? as u32;
+    let current_height = btc_rpc.get_block_count().await? as u32;
 
     let mut relayer = Runner::new(
         PolkaBtcClient::new(provider.clone()),
