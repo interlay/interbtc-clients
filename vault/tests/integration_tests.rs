@@ -16,6 +16,7 @@ use runtime::{
     pallets::issue::*,
     pallets::refund::*,
     pallets::redeem::*,
+    pallets::treasury::*,
     substrate_subxt::{Event, PairSigner},
     BlockBuilder, BtcAddress, BtcPublicKey, BtcRelayPallet, ExchangeRateOraclePallet,
     FixedPointNumber, FixedU128, Formattable, H256Le, IssuePallet, PolkaBtcProvider,
@@ -648,6 +649,77 @@ async fn test_refund_succeeds() {
     ).await;
 }
 
+#[tokio::test(threaded_scheduler)]
+async fn test_issue_overpayment_succeeds() {
+    let _ = env_logger::try_init();
+
+    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+
+    let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
+    let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
+
+    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).init().await);
+
+    relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
+    
+    let refund_service = vault::service::listen_for_refund_requests(vault_provider.clone(), btc_rpc.clone(), 0);
+
+    let issue_amount = 100000;
+    let over_payment_factor = 3;
+    let total_btc = issue_amount * over_payment_factor;
+    let fee = user_provider.get_issue_fee().await.unwrap();
+    let amount_btc_including_fee = total_btc + fee.checked_mul_int(total_btc).unwrap();
+    let collateral = user_provider
+        .get_required_collateral_for_polkabtc(amount_btc_including_fee)
+        .await
+        .unwrap();
+
+    vault_provider.register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+
+    let vault_id = vault_provider.get_account_id().clone();
+    let fut_user = async {
+
+        let issue = user_provider.request_issue(issue_amount, vault_provider.get_account_id().clone(), 10000).await.unwrap();
+
+        let metadata = btc_rpc.send_to_address(
+            issue.btc_address, 
+            issue.amount as u64 * over_payment_factor as u64,
+            None,
+            Duration::from_secs(30),
+            0
+        ).await.unwrap();
+        
+        let (refund_request, _) = join(
+            assert_event::<MintEvent<PolkaBtcRuntime>, _>(
+                Duration::from_secs(30),
+                user_provider.clone(),
+                |x| {
+                    if &x.account_id == user_provider.get_account_id() {
+                        // allow rounding errors
+                        assert_eq!(x.amount, issue_amount * over_payment_factor);
+                        true
+                    } else {
+                        false
+                    }
+                }
+            ),
+            async {
+                user_provider.execute_issue(
+                    issue.issue_id, 
+                    metadata.txid.translate(), 
+                    metadata.proof, 
+                    metadata.raw_tx
+                ).await.unwrap()
+            }
+        ).await;
+    };
+
+    test_service(
+        refund_service,
+        fut_user
+    ).await;
+}
 
 pub async fn test_service<T: Future, U: Future>(service: T, fut: U) -> U::Output {
     pin_mut!(service, fut);
