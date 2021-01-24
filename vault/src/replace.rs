@@ -179,6 +179,7 @@ pub async fn handle_replace_request<
 pub async fn check_collateral_of_vaults<B: BitcoinCoreApi>(
     provider: &Arc<PolkaBtcProvider>,
     btc_rpc: &Arc<B>,
+    event_channel: Sender<RequestEvent>,
 ) -> Result<(), Error> {
     let vault_id = provider.get_account_id().clone();
     let vaults = provider
@@ -194,7 +195,12 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi>(
             .unwrap_or(false)
         {
             match auction_replace(&provider, &btc_rpc, &vault).await {
-                Ok(_) => info!("Auction replace for vault {} submitted", vault.id),
+                Ok(_) => {
+                    info!("Auction replace for vault {} submitted", vault.id);
+                    // try to send the event, but ignore the returned result since
+                    // the only way it can fail is if the channel is closed
+                    let _ = event_channel.clone().send(RequestEvent::Opened).await;
+                },
                 Err(e) => error!("Failed to auction vault {}: {}", vault.id, e.to_string()),
             };
         }
