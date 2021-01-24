@@ -344,7 +344,7 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
                 // polling is easier for now
                 loop {
                     if let Err(e) =
-                        monitor_collateral_of_vaults(&auction_provider, &auction_btc_rpc).await
+                        check_collateral_of_vaults(&auction_provider, &auction_btc_rpc).await
                     {
                         error!(
                             "Error while monitoring collateral of vaults: {}",

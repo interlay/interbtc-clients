@@ -176,20 +176,24 @@ pub async fn handle_replace_request<
 /// # Arguments
 ///
 /// * `provider` - the parachain RPC handle
-pub async fn monitor_collateral_of_vaults<B: BitcoinCoreApi>(
+pub async fn check_collateral_of_vaults<B: BitcoinCoreApi>(
     provider: &Arc<PolkaBtcProvider>,
     btc_rpc: &Arc<B>,
 ) -> Result<(), Error> {
-    for vault in provider.get_all_vaults().await? {
+    let vault_id = provider.get_account_id().clone();
+    let vaults = provider
+        .get_all_vaults()
+        .await?
+        .into_iter()
+        .filter(|vault| vault.id != vault_id);
+    for vault in vaults {
         trace!("Checking collateral of {}", vault.id);
-        if vault.id == provider.get_account_id().clone() {
-            continue;
-        } else if provider
+        if provider
             .is_vault_below_auction_threshold(vault.id.clone())
             .await
             .unwrap_or(false)
         {
-            match handle_auction_replace(&provider, &btc_rpc, &vault).await {
+            match auction_replace(&provider, &btc_rpc, &vault).await {
                 Ok(_) => info!("Auction replace for vault {} submitted", vault.id),
                 Err(e) => error!("Failed to auction vault {}: {}", vault.id, e.to_string()),
             };
@@ -198,7 +202,7 @@ pub async fn monitor_collateral_of_vaults<B: BitcoinCoreApi>(
     Ok(())
 }
 
-async fn handle_auction_replace<
+async fn auction_replace<
     B: BitcoinCoreApi,
     P: DotBalancesPallet + ReplacePallet + VaultRegistryPallet,
 >(
@@ -422,7 +426,7 @@ mod tests {
 
         let vault = PolkaBtcVault::default();
         assert_err!(
-            handle_auction_replace(&Arc::new(provider), &Arc::new(bitcoin), &vault).await,
+            auction_replace(&Arc::new(provider), &Arc::new(bitcoin), &vault).await,
             Error::InsufficientFunds
         );
     }
