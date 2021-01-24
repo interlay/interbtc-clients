@@ -40,7 +40,7 @@ pub mod service {
     pub use crate::replace::listen_for_replace_requests;
     pub use crate::replace::listen_for_accept_replace;
     pub use crate::replace::listen_for_execute_replace;
-    pub use crate::replace::monitor_collateral_of_vaults;
+    pub use crate::replace::check_collateral_of_vaults;
     pub use crate::issue::listen_for_issue_requests;
     pub use crate::issue::listen_for_issue_executes;
     pub use crate::issue::listen_for_issue_cancels;
