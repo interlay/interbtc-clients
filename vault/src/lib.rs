@@ -12,11 +12,9 @@ mod refund;
 mod replace;
 
 use crate::{
-    cancellation::{CancellationScheduler, IssueCanceller, ReplaceCanceller, RequestEvent},
+    cancellation::{CancellationScheduler, IssueCanceller, ReplaceCanceller},
     collateral::*,
     constants::*,
-    execution::{execute_open_issue_requests},
-    issue::*,
     refund::*,
     replace::*,
 };
@@ -37,9 +35,15 @@ pub use crate::error::Error;
 
 pub mod service {
     pub use crate::execution::execute_open_requests;
+    pub use crate::execution::execute_open_issue_requests;
     pub use crate::redeem::listen_for_redeem_requests;
     pub use crate::refund::listen_for_refund_requests;
+    pub use crate::issue::listen_for_issue_requests;
+    pub use crate::issue::listen_for_issue_executes;
+    pub use crate::issue::listen_for_issue_cancels;
 }
+pub use crate::issue::IssueRequests;
+pub use crate::cancellation::RequestEvent;
 use service::*;
 
 #[derive(Debug, Copy, Clone)]

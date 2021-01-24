@@ -49,9 +49,11 @@ use tempdir::TempDir;
 use tokio::sync::{RwLock, Mutex, OwnedMutexGuard};
 use tokio::time::delay_for;
 use vault;
+use vault::{IssueRequests, RequestEvent};
 use futures::future::join;
 use tokio::time::timeout;
 use futures::Future;
+use futures::channel::mpsc;
 
 fn default_vault_args() -> vault::Opts {
     vault::Opts {
@@ -717,6 +719,79 @@ async fn test_issue_overpayment_succeeds() {
 
     test_service(
         refund_service,
+        fut_user
+    ).await;
+}
+
+#[tokio::test(threaded_scheduler)]
+async fn test_automatic_issue_execution_succeeds() {
+    let _ = env_logger::try_init();
+
+    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+
+    let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    let vault1_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
+    let vault2_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
+    let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
+
+    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).init().await);
+
+    relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
+    
+    let issue_amount = 100000;
+    let fee = user_provider.get_issue_fee().await.unwrap();
+    let amount_btc_including_fee = issue_amount + fee.checked_mul_int(issue_amount).unwrap();
+    let collateral = user_provider
+        .get_required_collateral_for_polkabtc(amount_btc_including_fee)
+        .await
+        .unwrap();
+
+    vault1_provider.register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+    vault2_provider.register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+
+    let fut_user = async {
+        let issue = user_provider.request_issue(
+            issue_amount, 
+            vault1_provider.get_account_id().clone(), 
+            10000
+        ).await.unwrap();
+
+        let metadata = btc_rpc.send_to_address(
+            issue.btc_address, 
+            issue.amount as u64,
+            None,
+            Duration::from_secs(30),
+            0
+        ).await.unwrap();
+        
+        // wait for vault2 to execute this issue
+        let vault_id = vault1_provider.get_account_id().clone();
+        assert_event::<ExecuteIssueEvent<PolkaBtcRuntime>, _>(
+            Duration::from_secs(30),
+            user_provider.clone(),
+            move |x| x.vault_id == vault_id,
+        ).await;
+    };
+
+    let issue_set = Arc::new(IssueRequests::new());
+    let (issue_event_tx, issue_event_rx) = mpsc::channel::<RequestEvent>(16);
+    let service = join (
+        vault::service::listen_for_issue_requests(
+            vault2_provider.clone(),
+            btc_rpc.clone(),
+            issue_event_tx.clone(),
+            issue_set.clone(),
+        ),
+        vault::service::execute_open_issue_requests(
+            vault2_provider.clone(),
+            btc_rpc.clone(),
+            issue_set.clone(),
+            0,
+        )
+    );
+
+    test_service(
+        service,
         fut_user
     ).await;
 }
