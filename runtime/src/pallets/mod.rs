@@ -11,6 +11,7 @@ pub mod replace;
 pub mod security;
 pub mod staked_relayers;
 pub mod timestamp;
+pub mod treasury;
 pub mod vault_registry;
 
 pub use btc_relay::{

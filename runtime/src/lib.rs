@@ -115,3 +115,5 @@ impl refund::Refund for PolkaBtcRuntime {}
 impl sudo::Sudo for PolkaBtcRuntime {}
 
 impl fee::Fee for PolkaBtcRuntime {}
+
+impl treasury::Treasury for PolkaBtcRuntime {}
