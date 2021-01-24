@@ -16,7 +16,6 @@ use crate::{
     collateral::*,
     constants::*,
     refund::*,
-    replace::*,
 };
 use bitcoin::BitcoinCoreApi;
 use clap::Clap;
@@ -38,6 +37,10 @@ pub mod service {
     pub use crate::execution::execute_open_issue_requests;
     pub use crate::redeem::listen_for_redeem_requests;
     pub use crate::refund::listen_for_refund_requests;
+    pub use crate::replace::listen_for_replace_requests;
+    pub use crate::replace::listen_for_accept_replace;
+    pub use crate::replace::listen_for_execute_replace;
+    pub use crate::replace::monitor_collateral_of_vaults;
     pub use crate::issue::listen_for_issue_requests;
     pub use crate::issue::listen_for_issue_executes;
     pub use crate::issue::listen_for_issue_cancels;

@@ -9,13 +9,14 @@ use bitcoin::{
     TransactionMetadata, TxIn, TxMerkleNode, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
     PartialMerkleTree, 
 };
-use runtime::pallets::btc_relay::{TransactionBuilder, TransactionInputBuilder, TransactionOutput};
+use runtime::pallets::{btc_relay::{TransactionBuilder, TransactionInputBuilder, TransactionOutput}, replace::AcceptReplaceCall};
 use runtime::UtilFuncs;
 use runtime::BtcAddress::P2PKH;
 use runtime::{
     pallets::issue::*,
     pallets::refund::*,
     pallets::redeem::*,
+    pallets::replace::*,
     pallets::treasury::*,
     substrate_subxt::{Event, PairSigner},
     BlockBuilder, BtcAddress, BtcPublicKey, BtcRelayPallet, ExchangeRateOraclePallet,
@@ -358,7 +359,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
     async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError> {
         let bytes: [u8; 20] = (0..20).map(|_| thread_rng().gen::<u8>()).collect::<Vec<_>>().as_slice().try_into().unwrap();
         let address = BtcAddress::P2PKH(H160::from(bytes));
-        Ok(A::decode_str(&address.to_string())?)
+        Ok(A::decode_str(&address.encode_str(Network::Regtest)?)?)
     }
     async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(
         &self,
@@ -572,6 +573,75 @@ async fn test_redeem_succeeds() {
             assert_redeem_event(Duration::from_secs(30), user_provider, redeem_id).await;
         }
     );
+}
+
+#[tokio::test(threaded_scheduler)]
+async fn test_replace_succeeds() {
+    let _ = env_logger::try_init();
+
+    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+
+    let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    let old_vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
+    let new_vault_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
+    let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
+
+    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).init().await);
+
+    relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
+    
+    old_vault_provider.register_vault(100000000000, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+    new_vault_provider.register_vault(100000000000, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+
+    let issue_amount = 100000;
+    let issue = user_provider.request_issue(100000, old_vault_provider.get_account_id().clone(), 10000).await.unwrap();
+
+    let metadata = btc_rpc.send_to_address(
+        issue.btc_address, 
+        issue.amount as u64,
+        None,
+        Duration::from_secs(30),
+        0
+    ).await.unwrap();
+
+    user_provider.execute_issue(
+        issue.issue_id, 
+        metadata.txid.translate(), 
+        metadata.proof, 
+        metadata.raw_tx
+    ).await.unwrap();
+
+
+    let (replace_event_tx, _) = mpsc::channel::<RequestEvent>(16);
+    let fut = test_service(
+        join(
+            vault::service::listen_for_replace_requests(
+                new_vault_provider.clone(),
+                btc_rpc.clone(),
+                replace_event_tx.clone(),
+                true,
+            ),
+            vault::service::listen_for_accept_replace(
+                old_vault_provider.clone(), 
+                btc_rpc.clone(), 
+                0
+            )
+        ),
+        async {
+            let replace_id = old_vault_provider.request_replace(issue_amount, 1000000).await.unwrap();
+            
+            assert_event::<AcceptReplaceEvent<PolkaBtcRuntime>, _>(
+                Duration::from_secs(30),
+                old_vault_provider.clone(),
+                |e| e.replace_id == replace_id
+            ).await;
+            assert_event::<ExecuteReplaceEvent<PolkaBtcRuntime>, _>(
+                Duration::from_secs(30),
+                old_vault_provider.clone(),
+                |e| e.replace_id == replace_id
+            ).await;
+        }
+    ).await;
 }
 
 #[tokio::test(threaded_scheduler)]
