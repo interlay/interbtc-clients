@@ -536,7 +536,7 @@ dependencies = [
 [[package]]
 name = "bitcoin"
 version = "0.26.0"
-source = "git+https://github.com/gregdhill/rust-bitcoin?rev=6854b6882a89adbab196db829584e60285cfe7b8#6854b6882a89adbab196db829584e60285cfe7b8"
+source = "git+https://github.com/gregdhill/rust-bitcoin?rev=e7ceb09e86f0badf997179ef3a46906d6ffaf100#e7ceb09e86f0badf997179ef3a46906d6ffaf100"
 dependencies = [
  "bech32",
  "bitcoin_hashes 0.9.4",
@@ -562,7 +562,7 @@ dependencies = [
 [[package]]
 name = "bitcoincore-rpc"
 version = "0.12.0"
-source = "git+https://github.com/gregdhill/rust-bitcoincore-rpc?rev=76743d8ea9e9df9d4f0ea73b967994a4b451455c#76743d8ea9e9df9d4f0ea73b967994a4b451455c"
+source = "git+https://github.com/gregdhill/rust-bitcoincore-rpc?rev=dc5c7f6ef7d6a773ce1b15d0c8e0925a63045eed#dc5c7f6ef7d6a773ce1b15d0c8e0925a63045eed"
 dependencies = [
  "bitcoincore-rpc-json",
  "jsonrpc",
@@ -574,7 +574,7 @@ dependencies = [
 [[package]]
 name = "bitcoincore-rpc-json"
 version = "0.12.0"
-source = "git+https://github.com/gregdhill/rust-bitcoincore-rpc?rev=76743d8ea9e9df9d4f0ea73b967994a4b451455c#76743d8ea9e9df9d4f0ea73b967994a4b451455c"
+source = "git+https://github.com/gregdhill/rust-bitcoincore-rpc?rev=dc5c7f6ef7d6a773ce1b15d0c8e0925a63045eed#dc5c7f6ef7d6a773ce1b15d0c8e0925a63045eed"
 dependencies = [
  "bitcoin 0.26.0",
  "hex 0.3.2",
@@ -5989,17 +5989,6 @@ dependencies = [
 
 [[package]]
 name = "relayer-core"
-version = "0.2.2"
-source = "git+https://gitlab.com/interlay/relayer-core?rev=d1bce1a80118bc73301318f5f099b87416fc45f8#d1bce1a80118bc73301318f5f099b87416fc45f8"
-dependencies = [
- "bitcoincore-rpc",
- "hex 0.4.2",
- "log 0.4.11",
- "thiserror",
-]
-
-[[package]]
-name = "relayer-core"
 version = "0.3.0"
 source = "git+https://gitlab.com/interlay/relayer-core?rev=49deea6c1219d3a0e682e35444a08055a238fed7#49deea6c1219d3a0e682e35444a08055a238fed7"
 dependencies = [
@@ -7165,8 +7154,7 @@ dependencies = [
 [[package]]
 name = "secp256k1"
 version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "733b114f058f260c0af7591434eef4272ae1a8ec2751766d3cb89c6df8d5e450"
+source = "git+https://github.com/gregdhill/rust-secp256k1?rev=c86808fac70a3adf7ce180ae62151cf841914893#c86808fac70a3adf7ce180ae62151cf841914893"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys",
@@ -7176,8 +7164,7 @@ dependencies = [
 [[package]]
 name = "secp256k1-sys"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67e4b6455ee49f5901c8985b88f98fb0a0e1d90a6661f5a03f4888bd987dad29"
+source = "git+https://github.com/gregdhill/rust-secp256k1?rev=c86808fac70a3adf7ce180ae62151cf841914893#c86808fac70a3adf7ce180ae62151cf841914893"
 dependencies = [
  "cc",
 ]
@@ -8265,7 +8252,7 @@ dependencies = [
  "log 0.4.11",
  "mockall",
  "parity-scale-codec",
- "relayer-core 0.3.0",
+ "relayer-core",
  "runtime",
  "serde",
  "sp-core",
@@ -8624,7 +8611,7 @@ dependencies = [
  "log 0.4.11",
  "parity-scale-codec",
  "primitive-types",
- "relayer-core 0.2.2",
+ "relayer-core",
  "reqwest",
  "runtime",
  "serde",
