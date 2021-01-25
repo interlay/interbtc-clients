@@ -238,6 +238,8 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
         listen_for_accept_replace(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
     let execute_replace_listener =
         listen_for_execute_replace(arc_provider.clone(), replace_event_tx.clone());
+    let auction_replace_listener =
+        listen_for_auction_replace(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
 
     // redeem handling
     let redeem_listener =
@@ -333,6 +335,9 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
         }),
         tokio::spawn(async move {
             accept_replace_listener.await.unwrap();
+        }),
+        tokio::spawn(async move {
+            auction_replace_listener.await.unwrap();
         }),
         tokio::spawn(async move {
             execute_replace_listener.await.unwrap();

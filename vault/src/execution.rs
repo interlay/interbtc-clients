@@ -5,14 +5,7 @@ use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use futures::stream::StreamExt;
 use log::*;
-use runtime::{
-    pallets::{
-        redeem::RequestRedeemEvent, refund::RequestRefundEvent, replace::AcceptReplaceEvent,
-    },
-    BtcAddress, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcRefundRequest,
-    PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RefundPallet, ReplacePallet, UtilFuncs,
-    VaultRegistryPallet,
-};
+use runtime::{BtcAddress, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcRefundRequest, PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RefundPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet, pallets::{redeem::RequestRedeemEvent, refund::RequestRefundEvent, replace::{AcceptReplaceEvent, AuctionReplaceEvent}}};
 use sp_core::H256;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
@@ -74,7 +67,17 @@ impl Request {
         }
     }
     /// Constructs a Request for the given AcceptReplaceEvent
-    pub fn from_replace_request_event(request: &AcceptReplaceEvent<PolkaBtcRuntime>) -> Request {
+    pub fn from_accept_replace_event(request: &AcceptReplaceEvent<PolkaBtcRuntime>) -> Request {
+        Request {
+            btc_address: request.btc_address,
+            amount: request.btc_amount,
+            hash: request.replace_id,
+            open_time: None,
+            request_type: RequestType::Replace,
+        }
+    }
+    /// Constructs a Request for the given AuctionReplaceEvent
+    pub fn from_auction_replace_event(request: &AuctionReplaceEvent<PolkaBtcRuntime>) -> Request {
         Request {
             btc_address: request.btc_address,
             amount: request.btc_amount,
