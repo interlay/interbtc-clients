@@ -169,9 +169,9 @@ impl Request {
             RequestType::Replace => ReplacePallet::execute_replace,
             RequestType::Refund => RefundPallet::execute_refund,
         };
-        
+
         // Retry until success or timeout
-        let ret = (|| async {
+        (|| async {
             // call the selected function
             (execute)(
                 &*provider,
@@ -192,10 +192,9 @@ impl Request {
                 dur.as_secs_f64()
             )
         })
-        .await;
+        .await?;
 
-        warn!("Execution result: {:?}", ret);
-        Ok(ret?)
+        Ok(())
     }
 }
 

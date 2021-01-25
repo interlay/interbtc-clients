@@ -1124,8 +1124,7 @@ impl RedeemPallet for PolkaBtcProvider {
         merkle_proof: Vec<u8>,
         raw_tx: Vec<u8>,
     ) -> Result<(), Error> {
-        println!("pre-execute");
-        let ret =self.ext_client
+        self.ext_client
             .execute_redeem_and_watch(
                 &*self.signer.write().await,
                 redeem_id,
@@ -1133,9 +1132,7 @@ impl RedeemPallet for PolkaBtcProvider {
                 merkle_proof,
                 raw_tx,
             )
-            .await;
-        println!("post-execute");
-        ret?;
+            .await?;
         Ok(())
     }
 
