@@ -18,9 +18,10 @@ pub use bitcoincore_rpc::{
         secp256k1,
         secp256k1::constants::PUBLIC_KEY_SIZE,
         secp256k1::SecretKey,
-        util::{address::Payload, psbt::serialize::Serialize},
-        Address, Amount, Block, BlockHeader, Network, PrivateKey, PubkeyHash, PublicKey, Script,
-        ScriptHash, Transaction, TxIn, TxOut, Txid, WPubkeyHash,
+        util::uint::Uint256,
+        util::{address::Payload, psbt::serialize::Serialize, key, merkleblock::PartialMerkleTree},
+        Address, Amount, Block, BlockHeader, Network, OutPoint, PrivateKey, PubkeyHash, PublicKey,
+        Script, ScriptHash, Transaction, TxIn, TxMerkleNode, TxOut, Txid, WPubkeyHash,
     },
     bitcoincore_rpc_json::{CreateRawTransactionInput, GetTransactionResult, WalletTxInfo},
     json::{self, AddressType, GetBlockResult},
@@ -140,7 +141,7 @@ pub struct LockedTransaction {
     _lock: OwnedMutexGuard<()>,
 }
 impl LockedTransaction {
-    fn new(transaction: Transaction, lock: OwnedMutexGuard<()>) -> Self {
+    pub fn new(transaction: Transaction, lock: OwnedMutexGuard<()>) -> Self {
         LockedTransaction {
             transaction,
             _lock: lock,

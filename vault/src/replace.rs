@@ -11,6 +11,8 @@ use runtime::{
     VaultRegistryPallet,
 };
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::delay_for;
 
 /// Listen for AcceptReplaceEvent directed at this vault and continue the replacement
 /// procedure by transferring bitcoin and calling execute_replace
@@ -197,6 +199,36 @@ pub async fn handle_replace_request<
     }
 }
 
+/// Monitor the collateralization rate of all vaults and request auctions and auction_replace them
+/// when possible.
+///
+/// # Arguments
+///
+/// * `provider` - the parachain RPC handle
+/// * `btc_rpc` - the bitcoin RPC handle
+/// * `num_confirmations` - the number of bitcoin confirmation to await
+/// * `interval` - interval between checks
+pub async fn monitor_collateral_of_vaults<B: BitcoinCoreApi>(
+    provider: Arc<PolkaBtcProvider>,
+    btc_rpc: Arc<B>,
+    mut event_channel: Sender<RequestEvent>,
+    interval: Duration,
+) -> Result<(), runtime::Error>{
+    // we could automatically check vault collateralization rates on events
+    // that affect this (e.g. `SetExchangeRate`, `WithdrawCollateral`) but
+    // polling is easier for now
+    loop {
+        if let Err(e) =
+            check_collateral_of_vaults(&provider, &btc_rpc, &mut event_channel).await
+        {
+            error!(
+                "Error while monitoring collateral of vaults: {}",
+                e.to_string()
+            );
+        }
+        delay_for(interval).await
+    }
+}
 /// Monitor the collateralization rate of all vaults and request auctions.
 ///
 /// # Arguments
@@ -205,7 +237,7 @@ pub async fn handle_replace_request<
 pub async fn check_collateral_of_vaults<B: BitcoinCoreApi>(
     provider: &Arc<PolkaBtcProvider>,
     btc_rpc: &Arc<B>,
-    event_channel: Sender<RequestEvent>,
+    event_channel: &mut Sender<RequestEvent>,
 ) -> Result<(), Error> {
     let vault_id = provider.get_account_id().clone();
     let vaults = provider
@@ -225,7 +257,7 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi>(
                     info!("Auction replace for vault {} submitted", vault.id);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
-                    let _ = event_channel.clone().send(RequestEvent::Opened).await;
+                    let _ = event_channel.send(RequestEvent::Opened).await;
                 },
                 Err(e) => error!("Failed to auction vault {}: {}", vault.id, e.to_string()),
             };

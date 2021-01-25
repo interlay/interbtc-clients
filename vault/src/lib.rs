@@ -12,14 +12,10 @@ mod refund;
 mod replace;
 
 use crate::{
-    cancellation::{CancellationScheduler, IssueCanceller, ReplaceCanceller, RequestEvent},
+    cancellation::{CancellationScheduler, IssueCanceller, ReplaceCanceller},
     collateral::*,
     constants::*,
-    execution::{execute_open_issue_requests, execute_open_requests},
-    issue::*,
-    redeem::*,
     refund::*,
-    replace::*,
 };
 use bitcoin::BitcoinCoreApi;
 use clap::Clap;
@@ -31,10 +27,29 @@ use runtime::{
     BtcRelayPallet, Error as RuntimeError, PolkaBtcHeader, PolkaBtcProvider, UtilFuncs,
     VaultRegistryPallet,
 };
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::time::delay_for;
 
 pub use crate::error::Error;
+
+pub mod service {
+    pub use crate::execution::execute_open_requests;
+    pub use crate::execution::execute_open_issue_requests;
+    pub use crate::redeem::listen_for_redeem_requests;
+    pub use crate::refund::listen_for_refund_requests;
+    pub use crate::replace::listen_for_replace_requests;
+    pub use crate::replace::listen_for_accept_replace;
+    pub use crate::replace::listen_for_execute_replace;
+    pub use crate::replace::listen_for_auction_replace;
+    pub use crate::replace::monitor_collateral_of_vaults;
+    pub use crate::issue::listen_for_issue_requests;
+    pub use crate::issue::listen_for_issue_executes;
+    pub use crate::issue::listen_for_issue_cancels;
+}
+pub use crate::issue::IssueRequests;
+pub use crate::cancellation::RequestEvent;
+use service::*;
 
 #[derive(Debug, Copy, Clone)]
 pub struct BitcoinNetwork(pub bitcoin::Network);
@@ -124,8 +139,6 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     btc_rpc: Arc<B>,
 ) -> Result<(), Error> {
     let vault_id = arc_provider.clone().get_account_id().clone();
-
-    let collateral_timeout_ms = opts.collateral_timeout_ms;
 
     let num_confirmations = match opts.btc_confirmations {
         Some(x) => x,
@@ -240,6 +253,13 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
         listen_for_execute_replace(arc_provider.clone(), replace_event_tx.clone());
     let auction_replace_listener =
         listen_for_auction_replace(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
+    let third_party_collateral_listener = monitor_collateral_of_vaults(
+        arc_provider.clone(),
+        btc_rpc.clone(),
+        replace_event_tx.clone(),
+        Duration::from_millis(opts.collateral_timeout_ms)
+    );
+
 
     // redeem handling
     let redeem_listener =
@@ -249,24 +269,25 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     let refund_listener =
         listen_for_refund_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
 
-    let api_listener = api::start(
-        arc_provider.clone(),
-        btc_rpc.clone(),
-        opts.http_addr.parse()?,
-        opts.rpc_cors_domain,
-    );
+    let api_listener = if opts.no_api {
+        None
+    } else {
+        Some(api::start(
+            arc_provider.clone(),
+            btc_rpc.clone(),
+            opts.http_addr.parse()?,
+            opts.rpc_cors_domain,
+        ))
+    };
 
     // misc copies of variables to move into spawn closures
     let no_auto_auction = opts.no_auto_auction;
     let no_issue_execution = opts.no_issue_execution;
-    let no_api = opts.no_api;
-    let auction_provider = arc_provider.clone();
-    let auction_btc_rpc = btc_rpc.clone();
-    let auction_replace_event_tx = replace_event_tx.clone();
+
     // starts all the tasks
     let result = tokio::try_join!(
         tokio::spawn(async move {
-            if !no_api {
+            if let Some(api_listener) = api_listener {
                 api_listener.await;
             }
         }),
@@ -344,20 +365,7 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
         }),
         tokio::spawn(async move {
             if !no_auto_auction {
-                // we could automatically check vault collateralization rates on events
-                // that affect this (e.g. `SetExchangeRate`, `WithdrawCollateral`) but
-                // polling is easier for now
-                loop {
-                    if let Err(e) =
-                        check_collateral_of_vaults(&auction_provider, &auction_btc_rpc, auction_replace_event_tx.clone()).await
-                    {
-                        error!(
-                            "Error while monitoring collateral of vaults: {}",
-                            e.to_string()
-                        );
-                    }
-                    delay_for(Duration::from_secs(collateral_timeout_ms)).await
-                }
+                third_party_collateral_listener.await.unwrap();
             }
         }),
         tokio::spawn(async move {

@@ -26,3 +26,10 @@ sha2 = "0.8.2"
 
 [dev-dependencies]
 mockall = "0.8.1"
+tempdir = "0.3.7"
+rand = "0.7"
+schnorrkel = "0.9.1"
+substrate-subxt-client = "0.4.0"
+jsonrpsee = "0.1.0"
+btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.4.0" }
+
