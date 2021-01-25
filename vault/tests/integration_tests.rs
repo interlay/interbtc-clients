@@ -51,7 +51,7 @@ use tokio::sync::{RwLock, Mutex, OwnedMutexGuard};
 use tokio::time::delay_for;
 use vault;
 use vault::{IssueRequests, RequestEvent};
-use futures::future::join;
+use futures::future::{join, try_join};
 use tokio::time::timeout;
 use futures::Future;
 use futures::channel::mpsc;
@@ -639,6 +639,87 @@ async fn test_replace_succeeds() {
                 Duration::from_secs(30),
                 old_vault_provider.clone(),
                 |e| e.replace_id == replace_id
+            ).await;
+        }
+    ).await;
+}
+
+#[tokio::test(threaded_scheduler)]
+async fn test_auction_replace_succeeds() {
+    // register two vaults. Issue with old_vault at capacity. Change exchange rate such that new_vault
+    // will auction_replace.
+    
+    let _ = env_logger::try_init();
+
+    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+
+    let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    let old_vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
+    let new_vault_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
+    let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
+
+    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).init().await);
+
+    relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
+
+    let issue_amount = 100000;
+    let fee = user_provider.get_issue_fee().await.unwrap();
+    let amount_btc_including_fee = issue_amount + fee.checked_mul_int(issue_amount).unwrap();
+    let collateral = user_provider
+        .get_required_collateral_for_polkabtc(amount_btc_including_fee)
+        .await
+        .unwrap();
+
+    old_vault_provider.register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+    new_vault_provider.register_vault(collateral*2, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+
+    let issue = user_provider.request_issue(issue_amount, old_vault_provider.get_account_id().clone(), 10000).await.unwrap();
+
+    let metadata = btc_rpc.send_to_address(
+        issue.btc_address, 
+        issue.amount as u64,
+        None,
+        Duration::from_secs(30),
+        0
+    ).await.unwrap();
+
+    user_provider.execute_issue(
+        issue.issue_id, 
+        metadata.txid.translate(), 
+        metadata.proof, 
+        metadata.raw_tx
+    ).await.unwrap();
+
+
+    let (replace_event_tx, _) = mpsc::channel::<RequestEvent>(16);
+    let fut = test_service(
+        try_join(
+            vault::service::monitor_collateral_of_vaults(
+                new_vault_provider.clone(),
+                btc_rpc.clone(),
+                replace_event_tx.clone(),
+                Duration::from_secs(1),
+            ),
+            vault::service::listen_for_auction_replace(
+                old_vault_provider.clone(), 
+                btc_rpc.clone(), 
+                0
+            )
+        ),
+        async {
+            let old_vault_id = old_vault_provider.get_account_id();
+            let new_vault_id = new_vault_provider.get_account_id();
+            relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(2u128, 100)).await.unwrap();
+            
+            assert_event::<AuctionReplaceEvent<PolkaBtcRuntime>, _>(
+                Duration::from_secs(30),
+                old_vault_provider.clone(),
+                |e| &e.old_vault_id == old_vault_id
+            ).await;
+            assert_event::<ExecuteReplaceEvent<PolkaBtcRuntime>, _>(
+                Duration::from_secs(30),
+                old_vault_provider.clone(),
+                |e| &e.new_vault_id == new_vault_id
             ).await;
         }
     ).await;
