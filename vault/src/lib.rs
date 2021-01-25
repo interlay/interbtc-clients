@@ -237,7 +237,9 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     let accept_replace_listener =
         listen_for_accept_replace(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
     let execute_replace_listener =
-        listen_for_execute_replace(arc_provider.clone(), replace_event_tx);
+        listen_for_execute_replace(arc_provider.clone(), replace_event_tx.clone());
+    let auction_replace_listener =
+        listen_for_auction_replace(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
 
     // redeem handling
     let redeem_listener =
@@ -260,7 +262,7 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     let no_api = opts.no_api;
     let auction_provider = arc_provider.clone();
     let auction_btc_rpc = btc_rpc.clone();
-
+    let auction_replace_event_tx = replace_event_tx.clone();
     // starts all the tasks
     let result = tokio::try_join!(
         tokio::spawn(async move {
@@ -335,6 +337,9 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
             accept_replace_listener.await.unwrap();
         }),
         tokio::spawn(async move {
+            auction_replace_listener.await.unwrap();
+        }),
+        tokio::spawn(async move {
             execute_replace_listener.await.unwrap();
         }),
         tokio::spawn(async move {
@@ -344,7 +349,7 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
                 // polling is easier for now
                 loop {
                     if let Err(e) =
-                        monitor_collateral_of_vaults(&auction_provider, &auction_btc_rpc).await
+                        check_collateral_of_vaults(&auction_provider, &auction_btc_rpc, auction_replace_event_tx.clone()).await
                     {
                         error!(
                             "Error while monitoring collateral of vaults: {}",
