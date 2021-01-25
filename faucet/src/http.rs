@@ -247,9 +247,8 @@ mod tests {
             impl_version: "0.0.1",
             author: "Interlay Ltd",
             copyright_start_year: 2020,
-            db: DatabaseConfig::RocksDb {
-                path: tmp.path().join("db"),
-                cache_size: 128,
+            db: DatabaseConfig::ParityDb {
+                path: tmp.path().join("db")
             },
             keystore: KeystoreConfig::Path {
                 path: tmp.path().join("keystore"),
