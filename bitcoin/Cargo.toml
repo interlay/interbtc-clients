@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 thiserror = "1.0"
-bitcoincore-rpc = { git = "https://github.com/gregdhill/rust-bitcoincore-rpc", rev = "76743d8ea9e9df9d4f0ea73b967994a4b451455c" }
+bitcoincore-rpc = { git = "https://github.com/gregdhill/rust-bitcoincore-rpc", rev = "dc5c7f6ef7d6a773ce1b15d0c8e0925a63045eed" }
 hex = "0.4.2"
 sp-core = "2.0.0-rc6"
 async-trait = "0.1.40"

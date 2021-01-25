@@ -12,7 +12,7 @@ sp-keyring = "2.0.0"
 sp-core = "2.0.0"
 primitive-types = { default-features = false, version = "0.7.2", features = ["codec"]}
 runtime = { path = "../runtime" }
-relayer-core = { git = "https://gitlab.com/interlay/relayer-core", rev = "d1bce1a80118bc73301318f5f099b87416fc45f8" }
+relayer-core = { git = "https://gitlab.com/interlay/relayer-core", rev = "49deea6c1219d3a0e682e35444a08055a238fed7" }
 thiserror = "1.0"
 bitcoin = { path = "../bitcoin", features = ["cli"] }
 clap = "3.0.0-beta.2"
