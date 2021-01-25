@@ -54,7 +54,7 @@ pub async fn execute_replace(
         .send_to_address::<BtcAddress>(
             replace_request.btc_address.unwrap(),
             replace_request.amount.try_into().unwrap(),
-            &replace_id.to_fixed_bytes(),
+            Some(replace_id),
             Duration::from_secs(15 * 60),
             1,
         )

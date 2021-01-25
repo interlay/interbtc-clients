@@ -195,6 +195,7 @@ mod tests {
     use super::*;
     use crate::*;
     pub use bitcoincore_rpc::bitcoin::TxMerkleNode;
+    use sp_core::H256;
 
     mockall::mock! {
         Bitcoin {}
@@ -230,20 +231,20 @@ mod tests {
                 &self,
                 address: A,
                 sat: u64,
-                request_id: &[u8; 32],
+                request_id: Option<H256>,
             ) -> Result<LockedTransaction, Error>;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
             async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
                 &self,
                 address: A,
                 sat: u64,
-                request_id: &[u8; 32],
+                request_id: Option<H256>,
             ) -> Result<Txid, Error>;
             async fn send_to_address<A: PartialAddress + Send + 'static>(
                 &self,
                 address: A,
                 sat: u64,
-                request_id: &[u8; 32],
+                request_id: Option<H256>,
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;

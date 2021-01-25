@@ -120,11 +120,7 @@ impl Request {
         info!("Sending bitcoin to {}", self.btc_address);
 
         let tx = btc_rpc
-            .create_transaction(
-                self.btc_address,
-                self.amount as u64,
-                &self.hash.to_fixed_bytes(),
-            )
+            .create_transaction(self.btc_address, self.amount as u64, Some(self.hash))
             .await?;
 
         let return_to_self_addresses = tx
@@ -501,20 +497,20 @@ mod tests {
     //                 &self,
     //                 address: A,
     //                 sat: u64,
-    //                 request_id: &[u8; 32],
+    //                 request_id: Option<H256>,
     //             ) -> Result<LockedTransaction, BitcoinError>;
     //             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
     //             async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
     //                 &self,
     //                 address: A,
     //                 sat: u64,
-    //                 request_id: &[u8; 32],
+    //                 request_id: Option<H256>,
     //             ) -> Result<Txid, BitcoinError>;
     //             async fn send_to_address<A: PartialAddress + Send + 'static>(
     //                 &self,
     //                 address: A,
     //                 sat: u64,
-    //                 request_id: &[u8; 32],
+    //                 request_id: Option<H256>,
     //                 op_timeout: Duration,
     //                 num_confirmations: u32,
     //             ) -> Result<TransactionMetadata, BitcoinError>;

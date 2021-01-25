@@ -54,7 +54,7 @@ pub async fn execute_issue(
         .send_to_address(
             vault_btc_address,
             issue_amount.try_into().unwrap(),
-            &issue_id.to_fixed_bytes(),
+            None,
             Duration::from_secs(15 * 60),
             1,
         )

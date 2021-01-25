@@ -42,7 +42,7 @@ pub async fn execute_redeem(
         .send_to_address(
             btc_address,
             redeem_amount.try_into().unwrap(),
-            &redeem_id.to_fixed_bytes(),
+            Some(redeem_id),
             Duration::from_secs(15 * 60),
             1,
         )

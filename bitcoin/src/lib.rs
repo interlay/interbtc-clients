@@ -101,7 +101,7 @@ pub trait BitcoinCoreApi {
         &self,
         address: A,
         sat: u64,
-        request_id: &[u8; 32],
+        request_id: Option<H256>,
     ) -> Result<LockedTransaction, Error>;
 
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
@@ -110,14 +110,14 @@ pub trait BitcoinCoreApi {
         &self,
         address: A,
         sat: u64,
-        request_id: &[u8; 32],
+        request_id: Option<H256>,
     ) -> Result<Txid, Error>;
 
     async fn send_to_address<A: PartialAddress + Send + 'static>(
         &self,
         address: A,
         sat: u64,
-        request_id: &[u8; 32],
+        request_id: Option<H256>,
         op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
@@ -162,22 +162,25 @@ impl BitcoinCore {
         }
     }
 
-    /// Version of rust_bitcoincore_rpc::create_raw_transaction_hex that accepts an op_return
-    fn create_raw_transaction_hex_with_op_return(
+    /// Wrapper of rust_bitcoincore_rpc::create_raw_transaction_hex that accepts an optional op_return
+    fn create_raw_transaction_hex(
         &self,
         address: String,
         amount: Amount,
-        request_id: &[u8; 32],
+        request_id: Option<H256>,
     ) -> Result<String, Error> {
         let mut outputs = serde_json::Map::<String, serde_json::Value>::new();
         // add the payment output
         outputs.insert(address, serde_json::Value::from(amount.as_btc()));
 
-        // add the op_return data - bitcoind will add op_return and the length automatically
-        outputs.insert(
-            "data".to_string(),
-            serde_json::Value::from(request_id.to_hex()),
-        );
+        if let Some(request_id) = request_id {
+            // add the op_return data - bitcoind will add op_return and the length automatically
+            outputs.insert(
+                "data".to_string(),
+                serde_json::Value::from(request_id.to_hex()),
+            );
+        }
+
         let args = [
             serde_json::to_value::<&[json::CreateRawTransactionInput]>(&[])?,
             serde_json::to_value(outputs)?,
@@ -455,19 +458,16 @@ impl BitcoinCoreApi for BitcoinCore {
         &self,
         address: A,
         sat: u64,
-        request_id: &[u8; 32],
+        request_id: Option<H256>,
     ) -> Result<LockedTransaction, Error> {
         let address_string = address.encode_str(self.network.clone())?;
-        // create raw transaction that includes the op_return. If we were to add the op_return
+        // create raw transaction that includes the op_return (if any). If we were to add the op_return
         // after funding, the fees might be insufficient. An alternative to our own version of
         // this function would be to call create_raw_transaction (without the _hex suffix), and
         // to add the op_return afterwards. However, this function fails if no inputs are
         // specified, as is the case for us prior to calling fund_raw_transaction.
-        let raw_tx = self.create_raw_transaction_hex_with_op_return(
-            address_string,
-            Amount::from_sat(sat),
-            request_id,
-        )?;
+        let raw_tx =
+            self.create_raw_transaction_hex(address_string, Amount::from_sat(sat), request_id)?;
 
         // ensure no other fund_raw_transaction calls are made until we submitted the
         // transaction to the bitcoind. If we don't do this, the same uxto may be used
@@ -514,7 +514,7 @@ impl BitcoinCoreApi for BitcoinCore {
         &self,
         address: A,
         sat: u64,
-        request_id: &[u8; 32],
+        request_id: Option<H256>,
     ) -> Result<Txid, Error> {
         let tx = self.create_transaction(address, sat, request_id).await?;
         let txid = self.send_transaction(tx).await?;
@@ -534,7 +534,7 @@ impl BitcoinCoreApi for BitcoinCore {
         &self,
         address: A,
         sat: u64,
-        request_id: &[u8; 32],
+        request_id: Option<H256>,
         op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {

@@ -20,7 +20,6 @@ use runtime::{
 };
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
-use std::array::TryFromSliceError;
 use std::convert::TryInto;
 use std::str::FromStr;
 use std::time::Duration;
@@ -307,12 +306,8 @@ struct SendBitcoinInfo {
     #[clap(long, default_value = "0")]
     satoshis: u128,
 
-    /// Hex encoded OP_RETURN data for request.
-    #[clap(long, conflicts_with("issue-id"))]
-    op_return: Option<String>,
-
     /// Issue id for the issue request.
-    #[clap(long, conflicts_with("op-return"))]
+    #[clap(long)]
     issue_id: Option<H256>,
 
     /// Bitcoin network type for address encoding.
@@ -505,10 +500,6 @@ struct VoteOnStatusUpdateJsonRpcRequest {
     pub approve: bool,
 }
 
-fn data_to_request_id(data: &[u8]) -> Result<[u8; 32], TryFromSliceError> {
-    data.try_into()
-}
-
 async fn get_btc_rpc(
     wallet_name: String,
     bitcoin_opts: bitcoin::cli::BitcoinOpts,
@@ -619,7 +610,7 @@ async fn main() -> Result<(), Error> {
             .await?;
         }
         SubCommand::SendBitcoin(info) => {
-            let (op_return, btc_address, satoshis) = if let Some(issue_id) = info.issue_id {
+            let (btc_address, satoshis) = if let Some(issue_id) = info.issue_id {
                 // gets the data from on-chain
                 let issue_request = issue::get_issue_by_id(&provider, issue_id).await?;
                 if issue_request.completed {
@@ -629,15 +620,13 @@ async fn main() -> Result<(), Error> {
                 }
 
                 (
-                    issue_id.as_bytes().to_vec(),
                     issue_request.btc_address,
                     issue_request.amount + issue_request.fee,
                 )
             } else {
                 // expects cli configuration
-                let op_return = info.op_return.ok_or(Error::ExpectedOpReturn)?;
                 let btc_address = info.btc_address.ok_or(Error::ExpectedBitcoinAddress)?.0;
-                (hex::decode(op_return)?, btc_address, info.satoshis)
+                (btc_address, info.satoshis)
             };
 
             let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
@@ -645,7 +634,7 @@ async fn main() -> Result<(), Error> {
                 .send_to_address(
                     btc_address,
                     satoshis.try_into().unwrap(),
-                    &data_to_request_id(&op_return)?,
+                    None,
                     Duration::from_secs(15 * 60),
                     1,
                 )
