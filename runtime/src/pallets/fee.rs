@@ -19,6 +19,7 @@ pub struct IssueFeeStore<T: Fee> {
     pub _runtime: PhantomData<T>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct ReplaceGriefingCollateralStore<T: Fee> {
     #[store(returns = T::UnsignedFixedPoint)]
     pub _runtime: PhantomData<T>,
