@@ -9,7 +9,7 @@ use jsonrpc_http_server::{
 use log::info;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    BtcAddress, ExchangeRateOraclePallet, FeePallet, FixedPointNumber,
+    ExchangeRateOraclePallet, FeePallet, FixedPointNumber,
     FixedPointTraits::{CheckedAdd, CheckedMul},
     PolkaBtcProvider, ReplacePallet, UtilFuncs, VaultRegistryPallet, BtcPublicKey
 };
@@ -196,14 +196,7 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     }
     {
         let api = api.clone();
-        io.add_sync_method("update_btc_address", move |_| {
-            handle_resp(_update_btc_address(&api, &btc))
-        });
-    }
-    {
-        let api = api.clone();
-        io.add_method("withdraw_replace", move |params| {
-            let btc = btc.clone();
+        io.add_sync_method("withdraw_replace", move |params| {
             handle_resp(_withdraw_replace(&api, params))
         });
     }
