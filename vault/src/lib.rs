@@ -34,21 +34,21 @@ use tokio::time::delay_for;
 pub use crate::error::Error;
 
 pub mod service {
-    pub use crate::execution::execute_open_requests;
     pub use crate::execution::execute_open_issue_requests;
+    pub use crate::execution::execute_open_requests;
+    pub use crate::issue::listen_for_issue_cancels;
+    pub use crate::issue::listen_for_issue_executes;
+    pub use crate::issue::listen_for_issue_requests;
     pub use crate::redeem::listen_for_redeem_requests;
     pub use crate::refund::listen_for_refund_requests;
-    pub use crate::replace::listen_for_replace_requests;
     pub use crate::replace::listen_for_accept_replace;
-    pub use crate::replace::listen_for_execute_replace;
     pub use crate::replace::listen_for_auction_replace;
+    pub use crate::replace::listen_for_execute_replace;
+    pub use crate::replace::listen_for_replace_requests;
     pub use crate::replace::monitor_collateral_of_vaults;
-    pub use crate::issue::listen_for_issue_requests;
-    pub use crate::issue::listen_for_issue_executes;
-    pub use crate::issue::listen_for_issue_cancels;
 }
-pub use crate::issue::IssueRequests;
 pub use crate::cancellation::RequestEvent;
+pub use crate::issue::IssueRequests;
 use service::*;
 
 #[derive(Debug, Copy, Clone)]
@@ -257,9 +257,8 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
         arc_provider.clone(),
         btc_rpc.clone(),
         replace_event_tx.clone(),
-        Duration::from_millis(opts.collateral_timeout_ms)
+        Duration::from_millis(opts.collateral_timeout_ms),
     );
-
 
     // redeem handling
     let redeem_listener =

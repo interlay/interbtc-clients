@@ -1,4 +1,4 @@
-image: "registry.gitlab.com/interlay/containers/rust-base:nightly-2020-10-01"
+image: "registry.gitlab.com/interlay/containers/rust-base:nightly-2021-01-25"
 
 variables:
     CARGO_HOME: $CI_PROJECT_DIR/.cargo

@@ -29,13 +29,13 @@ async fn test_client_with(key: AccountKeyring) -> PolkaBtcProvider {
         author: "Interlay Ltd",
         copyright_start_year: 2020,
         db: DatabaseConfig::ParityDb {
-            path: tmp.path().join("db")
+            path: tmp.path().join("db"),
         },
         keystore: KeystoreConfig::Path {
             path: tmp.path().join("keystore"),
             password: None,
         },
-        chain_spec: btc_parachain::chain_spec::development_config(true).unwrap(),
+        chain_spec: btc_parachain::chain_spec::development_config(21u32.into()),
         role: Role::Authority(key.clone()),
         telemetry: None,
     };
@@ -43,7 +43,7 @@ async fn test_client_with(key: AccountKeyring) -> PolkaBtcProvider {
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key.pair());
 
     PolkaBtcProvider::new(
-        SubxtClient::from_config(config, btc_parachain::service::new_full)
+        SubxtClient::from_config(config, btc_parachain_service::new_full)
             .expect("Error creating subxt client"),
         signer,
     )

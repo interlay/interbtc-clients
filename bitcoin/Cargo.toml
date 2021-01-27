@@ -8,7 +8,6 @@ edition = "2018"
 thiserror = "1.0"
 bitcoincore-rpc = { git = "https://github.com/gregdhill/rust-bitcoincore-rpc", rev = "dc5c7f6ef7d6a773ce1b15d0c8e0925a63045eed" }
 hex = "0.4.2"
-sp-core = "2.0.0-rc6"
 async-trait = "0.1.40"
 tokio = { version = "0.2.22", features = ["full"] }
 backoff = { version = "0.2.1", features = ["tokio"] }
@@ -19,10 +18,13 @@ num-derive = "0.3"
 futures = "0.3.5"
 serde_json = "1"
 
+# Substrate dependencies
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
+
 [dependencies.polkabtc-bitcoin]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
-version = "0.4.0"
+version = "0.5.0"
 package = "bitcoin"
 optional = true
 

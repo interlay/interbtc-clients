@@ -19,7 +19,7 @@ pub use bitcoincore_rpc::{
         secp256k1::constants::PUBLIC_KEY_SIZE,
         secp256k1::SecretKey,
         util::uint::Uint256,
-        util::{address::Payload, psbt::serialize::Serialize, key, merkleblock::PartialMerkleTree},
+        util::{address::Payload, key, merkleblock::PartialMerkleTree, psbt::serialize::Serialize},
         Address, Amount, Block, BlockHeader, Network, OutPoint, PrivateKey, PubkeyHash, PublicKey,
         Script, ScriptHash, Transaction, TxIn, TxMerkleNode, TxOut, Txid, WPubkeyHash,
     },

@@ -207,16 +207,15 @@ mod tests {
     use crate::Error;
     use std::sync::Arc;
 
-    use chrono::{Duration, Utc};
-    use kv::{Config, Store};
-    use runtime::{AccountId, BtcPublicKey, PolkaBtcRuntime, VaultRegistryPallet};
-
     use super::{
         fund_account, open_kv_store, update_kv_store, DotBalancesPallet, FundAccountJsonRpcRequest,
         PolkaBtcProvider, DOT_TO_PLANCK,
     };
+    use chrono::{Duration, Utc};
     use jsonrpsee::Client as JsonRpseeClient;
+    use kv::{Config, Store};
     use runtime::substrate_subxt::PairSigner;
+    use runtime::{AccountId, BtcPublicKey, PolkaBtcRuntime, VaultRegistryPallet};
     use sp_keyring::AccountKeyring;
     use substrate_subxt_client::{
         DatabaseConfig, KeystoreConfig, Role, SubxtClient, SubxtClientConfig,
@@ -248,18 +247,18 @@ mod tests {
             author: "Interlay Ltd",
             copyright_start_year: 2020,
             db: DatabaseConfig::ParityDb {
-                path: tmp.path().join("db")
+                path: tmp.path().join("db"),
             },
             keystore: KeystoreConfig::Path {
                 path: tmp.path().join("keystore"),
                 password: None,
             },
-            chain_spec: btc_parachain::chain_spec::development_config(true).unwrap(),
+            chain_spec: btc_parachain::chain_spec::development_config(21u32.into()),
             role: Role::Authority(key.clone()),
             telemetry: None,
         };
 
-        let client = SubxtClient::from_config(config, btc_parachain::service::new_full)
+        let client = SubxtClient::from_config(config, btc_parachain_service::new_full)
             .expect("Error creating subxt client")
             .into();
         return (client, tmp);

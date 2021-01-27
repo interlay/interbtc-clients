@@ -6,7 +6,9 @@ use futures::channel::mpsc::Sender;
 use futures::SinkExt;
 use log::*;
 use runtime::{
-    pallets::replace::{AcceptReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent, AuctionReplaceEvent},
+    pallets::replace::{
+        AcceptReplaceEvent, AuctionReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent,
+    },
     DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet, UtilFuncs,
     VaultRegistryPallet,
 };
@@ -213,14 +215,12 @@ pub async fn monitor_collateral_of_vaults<B: BitcoinCoreApi>(
     btc_rpc: Arc<B>,
     mut event_channel: Sender<RequestEvent>,
     interval: Duration,
-) -> Result<(), runtime::Error>{
+) -> Result<(), runtime::Error> {
     // we could automatically check vault collateralization rates on events
     // that affect this (e.g. `SetExchangeRate`, `WithdrawCollateral`) but
     // polling is easier for now
     loop {
-        if let Err(e) =
-            check_collateral_of_vaults(&provider, &btc_rpc, &mut event_channel).await
-        {
+        if let Err(e) = check_collateral_of_vaults(&provider, &btc_rpc, &mut event_channel).await {
             error!(
                 "Error while monitoring collateral of vaults: {}",
                 e.to_string()
@@ -258,7 +258,7 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi>(
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel.send(RequestEvent::Opened).await;
-                },
+                }
                 Err(e) => error!("Failed to auction vault {}: {}", vault.id, e.to_string()),
             };
         }
