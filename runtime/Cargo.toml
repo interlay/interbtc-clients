@@ -28,12 +28,6 @@ frame-system = { git = "https://github.com/paritytech/substrate", branch = "roco
 substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "c7168df" }
 substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "c7168df" }
 
-[dependencies.btc-parachain-runtime]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
-version = "0.5.0"
-package = "btc-parachain-runtime"
-
 [dependencies.module-bitcoin]
 git = "https://gitlab.com/interlay/btc-parachain"
 branch = "dev"
