@@ -22,7 +22,7 @@ test-crates:
         - SCCACHE_START_SERVER=1 SCCACHE_IDLE_TIMEOUT=0 sccache
         - sccache -s
 
-        # - cargo fmt -- --check
+        - cargo fmt -- --check
         - cargo check --all
         - cargo test --all
 
