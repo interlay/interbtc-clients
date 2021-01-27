@@ -6,26 +6,29 @@ mod bitcoin_simulator;
 use bitcoin_simulator::*;
 
 use bitcoin::{
-    secp256k1::{PublicKey, SecretKey, Secp256k1, rand::rngs::OsRng}, key, Network, Address,
-    serialize, BitcoinCore, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError,
-    GetBlockResult, Hash, LockedTransaction, OutPoint, PartialAddress, Script, Transaction,
-    TransactionMetadata, TxIn, TxMerkleNode, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
-    PartialMerkleTree, 
+    key,
+    secp256k1::{rand::rngs::OsRng, PublicKey, Secp256k1, SecretKey},
+    serialize, Address, BitcoinCore, BitcoinCoreApi, Block, BlockHash, BlockHeader,
+    Error as BitcoinError, GetBlockResult, Hash, LockedTransaction, Network, OutPoint,
+    PartialAddress, PartialMerkleTree, Script, Transaction, TransactionMetadata, TxIn,
+    TxMerkleNode, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
 };
-use runtime::pallets::{btc_relay::{TransactionBuilder, TransactionInputBuilder, TransactionOutput}, replace::AcceptReplaceCall};
-use runtime::UtilFuncs;
+use runtime::pallets::{
+    btc_relay::{TransactionBuilder, TransactionInputBuilder, TransactionOutput},
+    replace::AcceptReplaceCall,
+};
 use runtime::BtcAddress::P2PKH;
+use runtime::UtilFuncs;
 use runtime::{
     pallets::issue::*,
-    pallets::refund::*,
     pallets::redeem::*,
+    pallets::refund::*,
     pallets::replace::*,
     pallets::treasury::*,
     substrate_subxt::{Event, PairSigner},
-    BlockBuilder, BtcAddress, BtcPublicKey, BtcRelayPallet, ExchangeRateOraclePallet,
+    BlockBuilder, BtcAddress, BtcPublicKey, BtcRelayPallet, ExchangeRateOraclePallet, FeePallet,
     FixedPointNumber, FixedU128, Formattable, H256Le, IssuePallet, PolkaBtcProvider,
     PolkaBtcRuntime, RawBlockHeader, RedeemPallet, ReplacePallet, VaultRegistryPallet,
-    FeePallet
 };
 use sp_core::H160;
 use sp_core::H256;
@@ -33,8 +36,11 @@ use sp_core::U256;
 use sp_keyring::AccountKeyring;
 // use staked_relayer;
 use async_trait::async_trait;
+use futures::channel::mpsc;
 use futures::future::Either;
+use futures::future::{join, try_join};
 use futures::pin_mut;
+use futures::Future;
 use futures::FutureExt;
 use futures::SinkExt;
 use futures::StreamExt;
@@ -50,14 +56,11 @@ use substrate_subxt_client::{
     DatabaseConfig, KeystoreConfig, Role, SubxtClient, SubxtClientConfig,
 };
 use tempdir::TempDir;
-use tokio::sync::{RwLock, Mutex, OwnedMutexGuard};
+use tokio::sync::{Mutex, OwnedMutexGuard, RwLock};
 use tokio::time::delay_for;
+use tokio::time::timeout;
 use vault;
 use vault::{IssueRequests, RequestEvent};
-use futures::future::{join, try_join};
-use tokio::time::timeout;
-use futures::Future;
-use futures::channel::mpsc;
 
 trait Translate {
     type Associated;
@@ -113,12 +116,12 @@ async fn default_provider_client(key: AccountKeyring) -> (JsonRpseeClient, TempD
             path: tmp.path().join("keystore"),
             password: None,
         },
-        chain_spec: btc_parachain::chain_spec::development_config(true).unwrap(),
+        chain_spec: btc_parachain::chain_spec::development_config(21u32.into()),
         role: Role::Authority(key.clone()),
         telemetry: None,
     };
 
-    let client = SubxtClient::from_config(config, btc_parachain::service::new_full)
+    let client = SubxtClient::from_config(config, btc_parachain_service::new_full)
         .expect("Error creating subxt client")
         .into();
     return (client, tmp);
@@ -132,8 +135,6 @@ async fn setup_provider(client: JsonRpseeClient, key: AccountKeyring) -> Arc<Pol
     Arc::new(ret)
 }
 
-
-
 #[tokio::test(threaded_scheduler)]
 async fn test_redeem_succeeds() {
     let _ = env_logger::try_init();
@@ -146,36 +147,53 @@ async fn test_redeem_succeeds() {
 
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
-    relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
-    
-    vault_provider.register_vault(100000000000, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+    relayer_provider
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .await
+        .unwrap();
 
-    let issue = user_provider.request_issue(100000, vault_provider.get_account_id().clone(), 10000).await.unwrap();
+    vault_provider
+        .register_vault(100000000000, btc_rpc.get_new_public_key().await.unwrap())
+        .await
+        .unwrap();
 
-    let metadata = btc_rpc.send_to_address(
-        issue.btc_address, 
-        issue.amount as u64,
-        None,
-        Duration::from_secs(30),
-        0
-    ).await.unwrap();
+    let issue = user_provider
+        .request_issue(100000, vault_provider.get_account_id().clone(), 10000)
+        .await
+        .unwrap();
 
-    user_provider.execute_issue(
-        issue.issue_id, 
-        metadata.txid.translate(), 
-        metadata.proof, 
-        metadata.raw_tx
-    ).await.unwrap();
+    let metadata = btc_rpc
+        .send_to_address(
+            issue.btc_address,
+            issue.amount as u64,
+            None,
+            Duration::from_secs(30),
+            0,
+        )
+        .await
+        .unwrap();
 
-    
-    let address = BtcAddress::P2PKH(H160::from_slice(&[2;20]));
+    user_provider
+        .execute_issue(
+            issue.issue_id,
+            metadata.txid.translate(),
+            metadata.proof,
+            metadata.raw_tx,
+        )
+        .await
+        .unwrap();
+
+    let address = BtcAddress::P2PKH(H160::from_slice(&[2; 20]));
     let vault_id = vault_provider.get_account_id().clone();
     let fut = test_service(
         vault::service::listen_for_redeem_requests(vault_provider, btc_rpc, 0),
         async {
-            let redeem_id = user_provider.request_redeem(10000, address, vault_id).await.unwrap();
+            let redeem_id = user_provider
+                .request_redeem(10000, address, vault_id)
+                .await
+                .unwrap();
             assert_redeem_event(Duration::from_secs(30), user_provider, redeem_id).await;
-        }
+        },
     );
 }
 
@@ -192,29 +210,46 @@ async fn test_replace_succeeds() {
 
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
-    relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
-    
-    old_vault_provider.register_vault(100000000000, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
-    new_vault_provider.register_vault(100000000000, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+    relayer_provider
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .await
+        .unwrap();
+
+    old_vault_provider
+        .register_vault(100000000000, btc_rpc.get_new_public_key().await.unwrap())
+        .await
+        .unwrap();
+    new_vault_provider
+        .register_vault(100000000000, btc_rpc.get_new_public_key().await.unwrap())
+        .await
+        .unwrap();
 
     let issue_amount = 100000;
-    let issue = user_provider.request_issue(100000, old_vault_provider.get_account_id().clone(), 10000).await.unwrap();
+    let issue = user_provider
+        .request_issue(100000, old_vault_provider.get_account_id().clone(), 10000)
+        .await
+        .unwrap();
 
-    let metadata = btc_rpc.send_to_address(
-        issue.btc_address, 
-        issue.amount as u64,
-        None,
-        Duration::from_secs(30),
-        0
-    ).await.unwrap();
+    let metadata = btc_rpc
+        .send_to_address(
+            issue.btc_address,
+            issue.amount as u64,
+            None,
+            Duration::from_secs(30),
+            0,
+        )
+        .await
+        .unwrap();
 
-    user_provider.execute_issue(
-        issue.issue_id, 
-        metadata.txid.translate(), 
-        metadata.proof, 
-        metadata.raw_tx
-    ).await.unwrap();
-
+    user_provider
+        .execute_issue(
+            issue.issue_id,
+            metadata.txid.translate(),
+            metadata.proof,
+            metadata.raw_tx,
+        )
+        .await
+        .unwrap();
 
     let (replace_event_tx, _) = mpsc::channel::<RequestEvent>(16);
     let fut = test_service(
@@ -226,26 +261,32 @@ async fn test_replace_succeeds() {
                 true,
             ),
             vault::service::listen_for_accept_replace(
-                old_vault_provider.clone(), 
-                btc_rpc.clone(), 
-                0
-            )
+                old_vault_provider.clone(),
+                btc_rpc.clone(),
+                0,
+            ),
         ),
         async {
-            let replace_id = old_vault_provider.request_replace(issue_amount, 1000000).await.unwrap();
-            
+            let replace_id = old_vault_provider
+                .request_replace(issue_amount, 1000000)
+                .await
+                .unwrap();
+
             assert_event::<AcceptReplaceEvent<PolkaBtcRuntime>, _>(
                 Duration::from_secs(30),
                 old_vault_provider.clone(),
-                |e| e.replace_id == replace_id
-            ).await;
+                |e| e.replace_id == replace_id,
+            )
+            .await;
             assert_event::<ExecuteReplaceEvent<PolkaBtcRuntime>, _>(
                 Duration::from_secs(30),
                 old_vault_provider.clone(),
-                |e| e.replace_id == replace_id
-            ).await;
-        }
-    ).await;
+                |e| e.replace_id == replace_id,
+            )
+            .await;
+        },
+    )
+    .await;
 }
 
 #[tokio::test(threaded_scheduler)]
@@ -253,7 +294,7 @@ async fn test_replace_succeeds() {
 async fn test_auction_replace_succeeds() {
     // register two vaults. Issue with old_vault at capacity. Change exchange rate such that new_vault
     // will auction_replace.
-    
+
     let _ = env_logger::try_init();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
@@ -265,7 +306,10 @@ async fn test_auction_replace_succeeds() {
 
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
-    relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
+    relayer_provider
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .await
+        .unwrap();
 
     let issue_amount = 100000;
     let fee = user_provider.get_issue_fee().await.unwrap();
@@ -275,26 +319,44 @@ async fn test_auction_replace_succeeds() {
         .await
         .unwrap();
 
-    old_vault_provider.register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
-    new_vault_provider.register_vault(collateral*2, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+    old_vault_provider
+        .register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap())
+        .await
+        .unwrap();
+    new_vault_provider
+        .register_vault(collateral * 2, btc_rpc.get_new_public_key().await.unwrap())
+        .await
+        .unwrap();
 
-    let issue = user_provider.request_issue(issue_amount, old_vault_provider.get_account_id().clone(), 10000).await.unwrap();
+    let issue = user_provider
+        .request_issue(
+            issue_amount,
+            old_vault_provider.get_account_id().clone(),
+            10000,
+        )
+        .await
+        .unwrap();
 
-    let metadata = btc_rpc.send_to_address(
-        issue.btc_address, 
-        issue.amount as u64,
-        None,
-        Duration::from_secs(30),
-        0
-    ).await.unwrap();
+    let metadata = btc_rpc
+        .send_to_address(
+            issue.btc_address,
+            issue.amount as u64,
+            None,
+            Duration::from_secs(30),
+            0,
+        )
+        .await
+        .unwrap();
 
-    user_provider.execute_issue(
-        issue.issue_id, 
-        metadata.txid.translate(), 
-        metadata.proof, 
-        metadata.raw_tx
-    ).await.unwrap();
-
+    user_provider
+        .execute_issue(
+            issue.issue_id,
+            metadata.txid.translate(),
+            metadata.proof,
+            metadata.raw_tx,
+        )
+        .await
+        .unwrap();
 
     let (replace_event_tx, _) = mpsc::channel::<RequestEvent>(16);
     let fut = test_service(
@@ -306,28 +368,34 @@ async fn test_auction_replace_succeeds() {
                 Duration::from_secs(1),
             ),
             vault::service::listen_for_auction_replace(
-                old_vault_provider.clone(), 
-                btc_rpc.clone(), 
-                0
-            )
+                old_vault_provider.clone(),
+                btc_rpc.clone(),
+                0,
+            ),
         ),
         async {
             let old_vault_id = old_vault_provider.get_account_id();
             let new_vault_id = new_vault_provider.get_account_id();
-            relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(2u128, 100)).await.unwrap();
-            
+            relayer_provider
+                .set_exchange_rate_info(FixedU128::saturating_from_rational(2u128, 100))
+                .await
+                .unwrap();
+
             assert_event::<AuctionReplaceEvent<PolkaBtcRuntime>, _>(
                 Duration::from_secs(30),
                 old_vault_provider.clone(),
-                |e| &e.old_vault_id == old_vault_id
-            ).await;
+                |e| &e.old_vault_id == old_vault_id,
+            )
+            .await;
             assert_event::<ExecuteReplaceEvent<PolkaBtcRuntime>, _>(
                 Duration::from_secs(30),
                 old_vault_provider.clone(),
-                |e| &e.new_vault_id == new_vault_id
-            ).await;
-        }
-    ).await;
+                |e| &e.new_vault_id == new_vault_id,
+            )
+            .await;
+        },
+    )
+    .await;
 }
 
 #[tokio::test(threaded_scheduler)]
@@ -342,9 +410,13 @@ async fn test_refund_succeeds() {
 
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
-    relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
-    
-    let refund_service = vault::service::listen_for_refund_requests(vault_provider.clone(), btc_rpc.clone(), 0);
+    relayer_provider
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .await
+        .unwrap();
+
+    let refund_service =
+        vault::service::listen_for_refund_requests(vault_provider.clone(), btc_rpc.clone(), 0);
 
     let issue_amount = 100000;
     let fee = user_provider.get_issue_fee().await.unwrap();
@@ -354,21 +426,30 @@ async fn test_refund_succeeds() {
         .await
         .unwrap();
 
-    vault_provider.register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+    vault_provider
+        .register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap())
+        .await
+        .unwrap();
 
     let vault_id = vault_provider.get_account_id().clone();
     let fut_user = async {
         let over_payment = 10000;
 
-        let issue = user_provider.request_issue(issue_amount, vault_provider.get_account_id().clone(), 10000).await.unwrap();
+        let issue = user_provider
+            .request_issue(issue_amount, vault_provider.get_account_id().clone(), 10000)
+            .await
+            .unwrap();
 
-        let metadata = btc_rpc.send_to_address(
-            issue.btc_address, 
-            issue.amount as u64 + over_payment,
-            None,
-            Duration::from_secs(30),
-            0
-        ).await.unwrap();
+        let metadata = btc_rpc
+            .send_to_address(
+                issue.btc_address,
+                issue.amount as u64 + over_payment,
+                None,
+                Duration::from_secs(30),
+                0,
+            )
+            .await
+            .unwrap();
 
         let (refund_request, _) = join(
             assert_event::<RequestRefundEvent<PolkaBtcRuntime>, _>(
@@ -377,15 +458,19 @@ async fn test_refund_succeeds() {
                 |x| x.vault_id == vault_id,
             ),
             async {
-                user_provider.execute_issue(
-                    issue.issue_id, 
-                    metadata.txid.translate(), 
-                    metadata.proof, 
-                    metadata.raw_tx
-                ).await.unwrap();
-            }
-        ).await;
-        
+                user_provider
+                    .execute_issue(
+                        issue.issue_id,
+                        metadata.txid.translate(),
+                        metadata.proof,
+                        metadata.raw_tx,
+                    )
+                    .await
+                    .unwrap();
+            },
+        )
+        .await;
+
         assert_event::<ExecuteRefundEvent<PolkaBtcRuntime>, _>(
             Duration::from_secs(30),
             user_provider.clone(),
@@ -397,14 +482,11 @@ async fn test_refund_succeeds() {
                     false
                 }
             },
-        ).await;
+        )
+        .await;
     };
 
-
-    test_service(
-        refund_service,
-        fut_user
-    ).await;
+    test_service(refund_service, fut_user).await;
 }
 
 #[tokio::test(threaded_scheduler)]
@@ -419,9 +501,13 @@ async fn test_issue_overpayment_succeeds() {
 
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
-    relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
-    
-    let refund_service = vault::service::listen_for_refund_requests(vault_provider.clone(), btc_rpc.clone(), 0);
+    relayer_provider
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .await
+        .unwrap();
+
+    let refund_service =
+        vault::service::listen_for_refund_requests(vault_provider.clone(), btc_rpc.clone(), 0);
 
     let issue_amount = 100000;
     let over_payment_factor = 3;
@@ -433,21 +519,29 @@ async fn test_issue_overpayment_succeeds() {
         .await
         .unwrap();
 
-    vault_provider.register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+    vault_provider
+        .register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap())
+        .await
+        .unwrap();
 
     let vault_id = vault_provider.get_account_id().clone();
     let fut_user = async {
+        let issue = user_provider
+            .request_issue(issue_amount, vault_provider.get_account_id().clone(), 10000)
+            .await
+            .unwrap();
 
-        let issue = user_provider.request_issue(issue_amount, vault_provider.get_account_id().clone(), 10000).await.unwrap();
+        let metadata = btc_rpc
+            .send_to_address(
+                issue.btc_address,
+                issue.amount as u64 * over_payment_factor as u64,
+                None,
+                Duration::from_secs(30),
+                0,
+            )
+            .await
+            .unwrap();
 
-        let metadata = btc_rpc.send_to_address(
-            issue.btc_address, 
-            issue.amount as u64 * over_payment_factor as u64,
-            None,
-            Duration::from_secs(30),
-            0
-        ).await.unwrap();
-        
         let (refund_request, _) = join(
             assert_event::<MintEvent<PolkaBtcRuntime>, _>(
                 Duration::from_secs(30),
@@ -460,23 +554,24 @@ async fn test_issue_overpayment_succeeds() {
                     } else {
                         false
                     }
-                }
+                },
             ),
             async {
-                user_provider.execute_issue(
-                    issue.issue_id, 
-                    metadata.txid.translate(), 
-                    metadata.proof, 
-                    metadata.raw_tx
-                ).await.unwrap()
-            }
-        ).await;
+                user_provider
+                    .execute_issue(
+                        issue.issue_id,
+                        metadata.txid.translate(),
+                        metadata.proof,
+                        metadata.raw_tx,
+                    )
+                    .await
+                    .unwrap()
+            },
+        )
+        .await;
     };
 
-    test_service(
-        refund_service,
-        fut_user
-    ).await;
+    test_service(refund_service, fut_user).await;
 }
 
 #[tokio::test(threaded_scheduler)]
@@ -492,8 +587,11 @@ async fn test_automatic_issue_execution_succeeds() {
 
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
-    relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
-    
+    relayer_provider
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .await
+        .unwrap();
+
     let issue_amount = 100000;
     let fee = user_provider.get_issue_fee().await.unwrap();
     let amount_btc_including_fee = issue_amount + fee.checked_mul_int(issue_amount).unwrap();
@@ -502,36 +600,49 @@ async fn test_automatic_issue_execution_succeeds() {
         .await
         .unwrap();
 
-    vault1_provider.register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
-    vault2_provider.register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+    vault1_provider
+        .register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap())
+        .await
+        .unwrap();
+    vault2_provider
+        .register_vault(collateral, btc_rpc.get_new_public_key().await.unwrap())
+        .await
+        .unwrap();
 
     let fut_user = async {
-        let issue = user_provider.request_issue(
-            issue_amount, 
-            vault1_provider.get_account_id().clone(), 
-            10000
-        ).await.unwrap();
+        let issue = user_provider
+            .request_issue(
+                issue_amount,
+                vault1_provider.get_account_id().clone(),
+                10000,
+            )
+            .await
+            .unwrap();
 
-        let metadata = btc_rpc.send_to_address(
-            issue.btc_address, 
-            issue.amount as u64,
-            None,
-            Duration::from_secs(30),
-            0
-        ).await.unwrap();
-        
+        let metadata = btc_rpc
+            .send_to_address(
+                issue.btc_address,
+                issue.amount as u64,
+                None,
+                Duration::from_secs(30),
+                0,
+            )
+            .await
+            .unwrap();
+
         // wait for vault2 to execute this issue
         let vault_id = vault1_provider.get_account_id().clone();
         assert_event::<ExecuteIssueEvent<PolkaBtcRuntime>, _>(
             Duration::from_secs(30),
             user_provider.clone(),
             move |x| x.vault_id == vault_id,
-        ).await;
+        )
+        .await;
     };
 
     let issue_set = Arc::new(IssueRequests::new());
     let (issue_event_tx, issue_event_rx) = mpsc::channel::<RequestEvent>(16);
-    let service = join (
+    let service = join(
         vault::service::listen_for_issue_requests(
             vault2_provider.clone(),
             btc_rpc.clone(),
@@ -543,23 +654,19 @@ async fn test_automatic_issue_execution_succeeds() {
             btc_rpc.clone(),
             issue_set.clone(),
             0,
-        )
+        ),
     );
 
-    test_service(
-        service,
-        fut_user
-    ).await;
+    test_service(service, fut_user).await;
 }
 
 pub async fn test_service<T: Future, U: Future>(service: T, fut: U) -> U::Output {
     pin_mut!(service, fut);
     match futures::future::select(service, fut).await {
         Either::Right((ret, _)) => ret,
-        _ => panic!()
+        _ => panic!(),
     }
 }
-
 
 #[tokio::test(threaded_scheduler)]
 async fn test_execute_open_requests_succeeds() {
@@ -573,46 +680,68 @@ async fn test_execute_open_requests_succeeds() {
 
     let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
-    relayer_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100)).await.unwrap();
-    
-    vault_provider.register_vault(100000000000, btc_rpc.get_new_public_key().await.unwrap()).await.unwrap();
+    relayer_provider
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .await
+        .unwrap();
 
-    let issue = user_provider.request_issue(100000, vault_provider.get_account_id().clone(), 10000).await.unwrap();
+    vault_provider
+        .register_vault(100000000000, btc_rpc.get_new_public_key().await.unwrap())
+        .await
+        .unwrap();
 
-    let metadata = btc_rpc.send_to_address(
-        issue.btc_address, 
-        issue.amount as u64,
-        None,
-        Duration::from_secs(30),
-        0
-    ).await.unwrap();
+    let issue = user_provider
+        .request_issue(100000, vault_provider.get_account_id().clone(), 10000)
+        .await
+        .unwrap();
 
-    user_provider.execute_issue(
-        issue.issue_id, 
-        metadata.txid.translate(), 
-        metadata.proof, 
-        metadata.raw_tx
-    ).await.unwrap();
+    let metadata = btc_rpc
+        .send_to_address(
+            issue.btc_address,
+            issue.amount as u64,
+            None,
+            Duration::from_secs(30),
+            0,
+        )
+        .await
+        .unwrap();
 
-    let address = BtcAddress::P2PKH(H160::from_slice(&[2;20]));
-    let redeem_id = user_provider.request_redeem(10000, address, vault_provider.get_account_id().clone()).await.unwrap();
+    user_provider
+        .execute_issue(
+            issue.issue_id,
+            metadata.txid.translate(),
+            metadata.proof,
+            metadata.raw_tx,
+        )
+        .await
+        .unwrap();
+
+    let address = BtcAddress::P2PKH(H160::from_slice(&[2; 20]));
+    let redeem_id = user_provider
+        .request_redeem(10000, address, vault_provider.get_account_id().clone())
+        .await
+        .unwrap();
 
     let ret = join(
         vault::service::execute_open_requests(vault_provider, Arc::new(btc_rpc), 0),
-        assert_redeem_event(Duration::from_secs(30), user_provider, redeem_id)
-    ).await;
+        assert_redeem_event(Duration::from_secs(30), user_provider, redeem_id),
+    )
+    .await;
     ret.0.unwrap();
 }
 
-async fn assert_redeem_event(duration: Duration, provider: Arc<PolkaBtcProvider>, redeem_id: H256) -> ExecuteRedeemEvent<PolkaBtcRuntime>{
-    assert_event::<ExecuteRedeemEvent<PolkaBtcRuntime>, _>(duration, provider, |x| x.redeem_id == redeem_id).await
-}
-
-async fn assert_event<T, F>(
+async fn assert_redeem_event(
     duration: Duration,
     provider: Arc<PolkaBtcProvider>,
-    f: F,
-) -> T
+    redeem_id: H256,
+) -> ExecuteRedeemEvent<PolkaBtcRuntime> {
+    assert_event::<ExecuteRedeemEvent<PolkaBtcRuntime>, _>(duration, provider, |x| {
+        x.redeem_id == redeem_id
+    })
+    .await
+}
+
+async fn assert_event<T, F>(duration: Duration, provider: Arc<PolkaBtcProvider>, f: F) -> T
 where
     T: Event<PolkaBtcRuntime> + Clone + std::fmt::Debug,
     F: Fn(T) -> bool,
@@ -633,13 +762,12 @@ where
     let event_reader = rx.next().fuse();
     pin_mut!(event_reader, event_writer);
 
-    timeout(duration, 
-        async {
-            match futures::future::select(event_writer, event_reader).await {
-                Either::Right((ret, _)) => ret.unwrap(),
-                _ => panic!()
-            }
+    timeout(duration, async {
+        match futures::future::select(event_writer, event_reader).await {
+            Either::Right((ret, _)) => ret.unwrap(),
+            _ => panic!(),
         }
-    ).await.unwrap()
+    })
+    .await
+    .unwrap()
 }
-

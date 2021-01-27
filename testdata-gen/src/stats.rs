@@ -102,6 +102,11 @@ pub async fn dump_json(provider: &PolkaBtcProvider, output_folder_name: &str) ->
                             redeem_id, redeemer, amount_polka_btc, vault_id, btc_address,
                         })?;
                     }
+                    RedeemEvent::LiquidationRedeem(
+                        _, _
+                    ) => {
+              
+                    }
                     RedeemEvent::CancelRedeem(redeem_id, redeemer) => {
                         redeem_cancellations.write(CancelRedeemEvent::<PolkaBtcRuntime> {
                             redeem_id, redeemer,

@@ -9,9 +9,9 @@ use jsonrpc_http_server::{
 use log::info;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    ExchangeRateOraclePallet, FeePallet, FixedPointNumber,
+    BtcPublicKey, ExchangeRateOraclePallet, FeePallet, FixedPointNumber,
     FixedPointTraits::{CheckedAdd, CheckedMul},
-    PolkaBtcProvider, ReplacePallet, UtilFuncs, VaultRegistryPallet, BtcPublicKey
+    PolkaBtcProvider, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use serde::{Deserialize, Deserializer};
 use sp_arithmetic::FixedU128;

@@ -15,21 +15,21 @@ bitcoin = { path = "../bitcoin", features = ["cli"] }
 thiserror = "1.0"
 jsonrpc-http-server = "16.0.0"
 jsonrpsee = "0.1.0"
-parity-scale-codec = "1.3.1"
+parity-scale-codec = "1.3.6"
 serde_json = "1.0.57"
-sp-core = "2.0.0"
-sp-keyring = "2.0.0"
 serde = "1.0.116"
 futures = "0.3.5"
 hex = "0.4.2"
 kv = { version = "0.22.0", features = ["json-value"] }
+pin-project-lite = "0.2.4"
+
+# Substrate dependencies
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 
 [dev-dependencies]
-substrate-subxt-client = "0.4.0"
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "c7168df" }
 tempdir = "0.3.7"
-sp-keyring = "2.0.0"
+btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["standalone"] }
+btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["standalone"] }
 
-[dev-dependencies.btc-parachain]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
-version = "0.4.0"

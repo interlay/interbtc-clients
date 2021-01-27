@@ -43,8 +43,8 @@ docker run --network host --entrypoint bitcoin-cli ruimarinho/bitcoin-core:0.20 
 Building requires Rust `nightly`. Run the following commands to set it up:
 
 ```
-rustup toolchain install nightly-2020-10-01
-rustup default nightly-2020-10-01
+rustup toolchain install nightly-2021-01-25
+rustup default nightly-2021-01-25
 ```
 
 ## Getting Started

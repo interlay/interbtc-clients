@@ -7,7 +7,9 @@ use futures::stream::StreamExt;
 use log::*;
 use runtime::{
     pallets::{
-        redeem::RequestRedeemEvent, refund::RequestRefundEvent, replace::{AcceptReplaceEvent, AuctionReplaceEvent},
+        redeem::RequestRedeemEvent,
+        refund::RequestRefundEvent,
+        replace::{AcceptReplaceEvent, AuctionReplaceEvent},
     },
     BtcAddress, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcRefundRequest,
     PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RefundPallet, ReplacePallet, UtilFuncs,
