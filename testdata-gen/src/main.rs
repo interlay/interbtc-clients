@@ -3,7 +3,6 @@ mod error;
 mod issue;
 mod redeem;
 mod replace;
-mod stats;
 mod utils;
 mod vault;
 
@@ -122,10 +121,6 @@ enum SubCommand {
     ExecuteReplace(ExecuteReplaceInfo),
     /// Send a API request.
     ApiCall(ApiCall),
-    /// Get issue & redeem statistics.
-    GetChainStats(ChainStatOpts),
-    /// Print all historic events.
-    DumpEvents(DumpOpts),
     /// Set issue period.
     SetIssuePeriod(SetIssuePeriodInfo),
     /// Set redeem period.
@@ -215,29 +210,6 @@ impl FromStr for BitcoinNetwork {
             _ => Err(Error::UnknownBitcoinNetwork),
         }
     }
-}
-
-#[derive(Clap)]
-struct DumpOpts {
-    /// Print all raw events, rather than the JSON output of a select subset.
-    #[clap(long)]
-    raw: bool,
-
-    /// Path of the output directory. Will be created if it does not exist.
-    /// If any logs exist in this folder, they will be overwritten.
-    #[clap(long, default_value = "event-logs", conflicts_with = "raw")]
-    output_folder: String,
-}
-
-#[derive(Clap)]
-struct ChainStatOpts {
-    /// The height of the chain to start from. If left unspecified, it starts from the genesis.
-    #[clap(long)]
-    start: Option<u32>,
-
-    /// The height of the chain to end at. If left unspecified, it continues at the current chain height.
-    #[clap(long)]
-    end: Option<u32>,
 }
 
 #[derive(Clap)]
@@ -679,16 +651,6 @@ async fn main() -> Result<(), Error> {
         SubCommand::ExecuteReplace(info) => {
             let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
             replace::execute_replace(&provider, &btc_rpc, info.replace_id).await?;
-        }
-        SubCommand::GetChainStats(opts) => {
-            stats::report_chain_stats(&provider, opts.start, opts.end).await?;
-        }
-        SubCommand::DumpEvents(opts) => {
-            if opts.raw {
-                stats::dump_raw_events(&provider).await?;
-            } else {
-                stats::dump_json(&provider, &opts.output_folder).await?;
-            }
         }
         SubCommand::ApiCall(api_call) => match api_call.subcmd {
             ApiSubCommand::Vault(cmd) => match cmd.subcmd {
