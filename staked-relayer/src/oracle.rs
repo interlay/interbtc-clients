@@ -1,10 +1,25 @@
 use super::Error;
+use crate::utils;
 use log::info;
 use runtime::{
     ErrorCode, ExchangeRateOraclePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
     MINIMUM_STAKE,
 };
 use std::sync::Arc;
+use std::time::Duration;
+
+pub async fn report_offline_oracle<
+    P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet,
+>(
+    rpc: Arc<P>,
+    checking_interval: Duration,
+) {
+    let monitor = OracleMonitor::new(rpc);
+    utils::check_every(checking_interval, || async {
+        monitor.report_offline().await
+    })
+    .await
+}
 
 pub struct OracleMonitor<
     P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet,
