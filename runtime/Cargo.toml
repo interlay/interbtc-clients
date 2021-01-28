@@ -97,5 +97,5 @@ package = "exchange-rate-oracle"
 [dev-dependencies]
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "c7168df" }
 tempdir = "0.3.7"
-btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["standalone"] }
-btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["standalone"] }
+btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
+btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
