@@ -34,5 +34,5 @@ rand = "0.7"
 schnorrkel = "0.9.1"
 jsonrpsee = "0.1.0"
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "c7168df" }
-btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["standalone"] }
-btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["standalone"] }
+btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
+btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }

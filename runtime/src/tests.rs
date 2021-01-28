@@ -35,7 +35,7 @@ async fn test_client_with(key: AccountKeyring) -> PolkaBtcProvider {
             path: tmp.path().join("keystore"),
             password: None,
         },
-        chain_spec: btc_parachain::chain_spec::development_config(21u32.into()),
+        chain_spec: btc_parachain::chain_spec::development_config(),
         role: Role::Authority(key.clone()),
         telemetry: None,
     };
