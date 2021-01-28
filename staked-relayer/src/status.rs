@@ -1,8 +1,8 @@
 use super::Error;
 use crate::utils;
 use bitcoin::{
-    BitcoinCore, BitcoinCoreApi, BlockHash, ConversionError as BitcoinConversionError,
-    Error as BitcoinError, Hash,
+    BitcoinCoreApi, BlockHash, ConversionError as BitcoinConversionError, Error as BitcoinError,
+    Hash,
 };
 use log::{error, info, warn};
 use runtime::{
@@ -57,8 +57,8 @@ impl<B: BitcoinCoreApi, P: StakedRelayerPallet> StatusUpdateMonitor<B, P> {
     }
 }
 
-pub async fn listen_for_status_updates(
-    btc_rpc: Arc<BitcoinCore>,
+pub async fn listen_for_status_updates<B: BitcoinCoreApi>(
+    btc_rpc: Arc<B>,
     polka_rpc: Arc<PolkaBtcProvider>,
 ) -> Result<(), RuntimeError> {
     let monitor = &StatusUpdateMonitor::new(btc_rpc, polka_rpc.clone());
