@@ -11,12 +11,8 @@ mod redeem;
 mod refund;
 mod replace;
 
-use crate::{
-    cancellation::{CancellationScheduler, IssueCanceller, ReplaceCanceller},
-    collateral::*,
-    constants::*,
-    refund::*,
-};
+use crate::collateral::lock_required_collateral;
+use crate::{constants::*, refund::*};
 use bitcoin::BitcoinCoreApi;
 use clap::Clap;
 use core::str::FromStr;
@@ -34,6 +30,10 @@ use tokio::time::delay_for;
 pub use crate::error::Error;
 
 pub mod service {
+    pub use crate::cancellation::CancellationScheduler;
+    pub use crate::cancellation::IssueCanceller;
+    pub use crate::cancellation::ReplaceCanceller;
+    pub use crate::collateral::maintain_collateralization_rate;
     pub use crate::execution::execute_open_issue_requests;
     pub use crate::execution::execute_open_requests;
     pub use crate::issue::listen_for_issue_cancels;
