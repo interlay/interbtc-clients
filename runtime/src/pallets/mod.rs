@@ -9,6 +9,7 @@ pub mod redeem;
 pub mod refund;
 pub mod replace;
 pub mod security;
+pub mod sla;
 pub mod staked_relayers;
 pub mod timestamp;
 pub mod treasury;

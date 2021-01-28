@@ -5,9 +5,11 @@ use staked_relayer::Vaults;
 
 use bitcoin::{BitcoinCore, BitcoinCoreApi as _};
 use clap::Clap;
+use log::*;
 use relayer_core::{Config, Runner};
+use runtime::pallets::sla::UpdateRelayerSLAEvent;
 use runtime::substrate_subxt::PairSigner;
-use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
+use runtime::{PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -132,6 +134,20 @@ async fn main() -> Result<(), Error> {
     let api = start_api(provider.clone(), http_addr, opts.rpc_cors_domain);
 
     let result = tokio::try_join!(
+        tokio::spawn(async move {
+            let relayer_id = provider.get_account_id();
+            provider
+                .on_event::<UpdateRelayerSLAEvent<PolkaBtcRuntime>, _, _, _>(
+                    |event| async move {
+                        if &event.relayer_id == relayer_id {
+                            info!("Received event: new total SLA score = {:?}", event.new_sla);
+                        }
+                    },
+                    |err| error!("Error (UpdateRelayerSLAEvent): {}", err.to_string()),
+                )
+                .await
+                .unwrap();
+        }),
         // runs json-rpc server for incoming requests
         tokio::spawn(async move { api.await }),
         // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
