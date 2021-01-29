@@ -29,3 +29,10 @@ frame-system = { git = "https://github.com/paritytech/substrate", branch = "roco
 
 [dev-dependencies]
 mockall = "0.8.1"
+tempdir = "0.3.7"
+rand = "0.7"
+schnorrkel = "0.9.1"
+jsonrpsee = "0.1.0"
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "c7168df" }
+btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
+btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
