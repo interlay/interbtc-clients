@@ -20,11 +20,14 @@ spec:
       command:
         - cat
       tty: true
+      env:
+        - name: CARGO_HOME
+          value: /cargo
       envFrom:
         - secretRef:
             name: rust-builder-env
       volumeMounts:
-        - mountPath: /root/.cargo
+        - mountPath: /cargo
           name: cargo-volume
     - name: kaniko
       image: gcr.io/kaniko-project/executor:debug
