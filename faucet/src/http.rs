@@ -76,14 +76,6 @@ async fn _fund_account_raw(
     fund_account(api, req, store, user_allowance, vault_allowance).await
 }
 
-async fn is_vault(provider: &Arc<PolkaBtcProvider>, id: AccountId) -> bool {
-    let req_vault = provider.get_vault(id.clone()).await;
-    match req_vault {
-        Ok(_) => true,
-        Err(_) => false,
-    }
-}
-
 async fn get_faucet_amount(
     is_vault: bool,
     user_allowance_dot: u128,
@@ -162,7 +154,7 @@ async fn atomic_faucet_funding(
     vault_allowance: u128,
 ) -> Result<(), Error> {
     let last_request_json = kv.get(account_id.to_string())?;
-    let is_vault = is_vault(provider, account_id.clone()).await;
+    let is_vault = provider.get_vault(account_id.clone()).await.is_ok();
     if !is_funding_allowed(last_request_json, is_vault)? {
         return Err(Error::FaucetOveruseError);
     }
