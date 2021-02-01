@@ -354,7 +354,7 @@ mod tests {
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
-        let expected_amount_planck: u128 = dot_to_planck(user_allowance_dot);
+        let expected_amount_planck: u128 = dot_to_planck(vault_allowance_dot);
 
         let store =
             Store::new(Config::new(tmp_dir.path().join("kv3"))).expect("Unable to open kv store");
@@ -362,10 +362,7 @@ mod tests {
         kv.clear().unwrap();
 
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
-        let bob_funds_before = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id.clone())
-            .await
-            .unwrap();
+
         let req = FundAccountJsonRpcRequest {
             account_id: bob_account_id.clone(),
         };
@@ -380,15 +377,14 @@ mod tests {
         .await
         .expect("Funding the account failed");
 
-        let bob_funds_after = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id)
-            .await
-            .unwrap();
-        assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
-
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         bob_provider
             .register_vault(100, dummy_public_key())
+            .await
+            .unwrap();
+
+        let bob_funds_before = alice_provider
+            .get_free_dot_balance_for_id(bob_account_id.clone())
             .await
             .unwrap();
 
@@ -401,6 +397,12 @@ mod tests {
         )
         .await
         .expect("Funding the account failed");
+
+        let bob_funds_after = alice_provider
+            .get_free_dot_balance_for_id(bob_account_id)
+            .await
+            .unwrap();
+        assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
     }
 
     #[tokio::test]
@@ -554,50 +556,5 @@ mod tests {
             .await,
             Error::FaucetOveruseError
         );
-    }
-
-    #[tokio::test]
-    async fn test_fund_user_immediately_after_registering_as_vault() {
-        let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-        let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
-        let user_allowance_dot: u128 = 1;
-        let vault_allowance_dot: u128 = 500;
-        let expected_amount_planck: u128 = dot_to_planck(vault_allowance_dot);
-
-        let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-        bob_provider
-            .register_vault(100, dummy_public_key())
-            .await
-            .unwrap();
-
-        let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
-        let bob_funds_before = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id.clone())
-            .await
-            .unwrap();
-        let req = FundAccountJsonRpcRequest {
-            account_id: bob_account_id.clone(),
-        };
-
-        let store =
-            Store::new(Config::new(tmp_dir.path().join("kv4"))).expect("Unable to open kv store");
-        let kv = open_kv_store(store.clone()).unwrap();
-        kv.clear().unwrap();
-        fund_account(
-            &Arc::from(alice_provider.clone()),
-            req,
-            store,
-            user_allowance_dot,
-            vault_allowance_dot,
-        )
-        .await
-        .expect("Funding the account failed");
-
-        let bob_funds_after = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id)
-            .await
-            .unwrap();
-
-        assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
     }
 }
