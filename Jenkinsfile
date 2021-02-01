@@ -2,7 +2,6 @@ pipeline {
     agent {
         kubernetes {
             yamlFile '.deploy/rust-builder-pod.yaml'
-            workspaceVolume persistentVolumeClaimWorkspaceVolume(claimName: 'jenkins-rust-agent-pvc', readOnly: false)
         }
     }
     environment {
