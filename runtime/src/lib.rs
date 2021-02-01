@@ -13,9 +13,9 @@ pub use btc_relay::{
 pub use error::{Error, XtError};
 use pallets::*;
 pub use rpc::{
-    AccountId, BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet,
-    ExchangeRateOraclePallet, FeePallet, IssuePallet, PolkaBtcHeader, PolkaBtcIssueRequest,
-    PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcRefundRequest, PolkaBtcReplaceRequest,
+    AccountId, BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet, ExchangeRateOraclePallet,
+    FeePallet, IssuePallet, PolkaBtcHeader, PolkaBtcIssueRequest, PolkaBtcProvider,
+    PolkaBtcRedeemRequest, PolkaBtcRefundRequest, PolkaBtcReplaceRequest,
     PolkaBtcRequestIssueEvent, PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, RefundPallet,
     ReplacePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet, UtilFuncs,
     VaultRegistryPallet,

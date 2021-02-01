@@ -49,9 +49,9 @@ struct Opts {
     #[clap(long, default_value = "1800000")]
     timeout_ms: u64,
 
-    /// Keyring for authorized oracle.
-    #[clap(long, default_value = "bob")]
-    keyring: AccountKeyring,
+    /// keyring / keyfile options.
+    #[clap(flatten)]
+    account_info: runtime::cli::ProviderUserOpts,
 
     /// Fetch the exchange rate from CoinGecko.
     #[clap(long, conflicts_with("exchange-rate"))]
@@ -63,7 +63,8 @@ async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
 
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(opts.keyring.pair());
+    let (key_pair, _) = opts.account_info.get_key_pair()?;
+    let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
     let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
 
     let timeout = Duration::from_millis(opts.timeout_ms);
