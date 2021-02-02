@@ -155,11 +155,11 @@ async fn test_redeem_succeeds() {
     )
     .await;
 
-    let address = BtcAddress::P2PKH(H160::from_slice(&[2; 20]));
-    let vault_id = vault_provider.get_account_id().clone();
     test_service(
-        vault::service::listen_for_redeem_requests(vault_provider, btc_rpc, 0),
+        vault::service::listen_for_redeem_requests(vault_provider.clone(), btc_rpc, 0),
         async {
+            let address = BtcAddress::P2PKH(H160::from_slice(&[2; 20]));
+            let vault_id = vault_provider.clone().get_account_id().clone();
             let redeem_id = user_provider
                 .request_redeem(10000, address, vault_id)
                 .await

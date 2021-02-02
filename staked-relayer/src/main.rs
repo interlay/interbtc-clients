@@ -1,24 +1,15 @@
-mod error;
-mod http;
-mod oracle;
-mod relay;
-mod status;
-mod utils;
-mod vault;
+use staked_relayer::relay::{BitcoinClient, PolkaBtcClient};
+use staked_relayer::service::*;
+use staked_relayer::Error;
+use staked_relayer::Vaults;
 
-use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use bitcoin::{BitcoinCore, BitcoinCoreApi as _};
 use clap::Clap;
-use error::Error;
-use oracle::OracleMonitor;
-use relay::{BitcoinClient, PolkaBtcClient};
 use relayer_core::{Config, Runner};
 use runtime::substrate_subxt::PairSigner;
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
 use std::sync::Arc;
 use std::time::Duration;
-
-use status::*;
-use vault::*;
 
 /// The Staked Relayer client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
@@ -100,7 +91,8 @@ async fn main() -> Result<(), Error> {
         },
     )?;
 
-    let oracle_monitor = OracleMonitor::new(provider.clone());
+    let oracle_monitor =
+        report_offline_oracle(provider.clone(), Duration::from_millis(oracle_timeout_ms));
 
     let vaults = provider
         .get_all_vaults()
@@ -120,7 +112,7 @@ async fn main() -> Result<(), Error> {
     let vaults = Arc::new(Vaults::from(vaults));
     // scan from custom height or the current tip
     let scan_start_height = opts.scan_start_height.unwrap_or(current_height + 1);
-    let mut vaults_monitor = VaultTheftMonitor::new(
+    let vaults_monitor = report_vault_thefts(
         scan_start_height,
         btc_rpc.clone(),
         vaults.clone(),
@@ -137,7 +129,7 @@ async fn main() -> Result<(), Error> {
         opts.status_update_deposit,
     );
 
-    let api = http::start(provider.clone(), http_addr, opts.rpc_cors_domain);
+    let api = start_api(provider.clone(), http_addr, opts.rpc_cors_domain);
 
     let result = tokio::try_join!(
         // runs json-rpc server for incoming requests
@@ -146,19 +138,14 @@ async fn main() -> Result<(), Error> {
         tokio::spawn(async move { vaults_listener.await.unwrap() }),
         // runs vault theft checks
         tokio::spawn(async move {
-            vaults_monitor.scan().await.unwrap();
+            vaults_monitor.await.unwrap();
         }),
         // keep vault wallets up-to-date
         tokio::spawn(async move {
             wallet_update_listener.await.unwrap();
         }),
         // runs oracle liveness check
-        tokio::spawn(async move {
-            utils::check_every(Duration::from_millis(oracle_timeout_ms), || async {
-                oracle_monitor.report_offline().await
-            })
-            .await
-        }),
+        tokio::spawn(async move { oracle_monitor.await }),
         // runs `NO_DATA` checks and submits status updates
         tokio::spawn(async move {
             relay_listener.await.unwrap();

@@ -500,7 +500,7 @@ dependencies = [
 [[package]]
 name = "bitcoin"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "bitcoin_hashes 0.7.6",
  "frame-support",
@@ -696,7 +696,7 @@ dependencies = [
 [[package]]
 name = "btc-parachain"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "btc-parachain-rpc",
  "btc-parachain-runtime",
@@ -724,7 +724,7 @@ dependencies = [
 [[package]]
 name = "btc-parachain-rpc"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "btc-parachain-runtime",
  "jsonrpc-core 15.1.0",
@@ -750,8 +750,8 @@ dependencies = [
 
 [[package]]
 name = "btc-parachain-runtime"
-version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+version = "0.5.1"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "btc-relay",
  "collateral",
@@ -820,8 +820,8 @@ dependencies = [
 
 [[package]]
 name = "btc-parachain-service"
-version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+version = "0.5.1"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "btc-parachain-rpc",
  "btc-parachain-runtime",
@@ -863,7 +863,7 @@ dependencies = [
 [[package]]
 name = "btc-relay"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "bitcoin 0.5.0",
  "frame-benchmarking",
@@ -1112,7 +1112,7 @@ dependencies = [
 [[package]]
 name = "collateral"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -1661,7 +1661,7 @@ checksum = "f7531096570974c3a9dcf9e4b8e1cede1ec26cf5046219fb3b9d897503b9be59"
 [[package]]
 name = "exchange-rate-oracle"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "collateral",
  "frame-benchmarking",
@@ -1768,7 +1768,7 @@ dependencies = [
 [[package]]
 name = "fee"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "collateral",
  "frame-benchmarking",
@@ -1902,7 +1902,7 @@ checksum = "69a039c3498dc930fe810151a34ba0c1c70b02b8625035592e74432f678591f2"
 [[package]]
 name = "frame-benchmarking"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -1959,7 +1959,7 @@ dependencies = [
 [[package]]
 name = "frame-metadata"
 version = "12.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "parity-scale-codec",
  "serde",
@@ -1970,7 +1970,7 @@ dependencies = [
 [[package]]
 name = "frame-support"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "bitflags",
  "frame-metadata",
@@ -1995,7 +1995,7 @@ dependencies = [
 [[package]]
 name = "frame-support-procedural"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "Inflector",
  "frame-support-procedural-tools",
@@ -2007,7 +2007,7 @@ dependencies = [
 [[package]]
 name = "frame-support-procedural-tools"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "frame-support-procedural-tools-derive",
  "proc-macro-crate",
@@ -2019,7 +2019,7 @@ dependencies = [
 [[package]]
 name = "frame-support-procedural-tools-derive"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.8",
@@ -2029,7 +2029,7 @@ dependencies = [
 [[package]]
 name = "frame-system"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "frame-support",
  "impl-trait-for-tuples 0.2.0",
@@ -2906,7 +2906,7 @@ checksum = "47be2f14c678be2fdcab04ab1171db51b2762ce6f0a8ee87c8dd4a04ed216135"
 [[package]]
 name = "issue"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "bitcoin 0.5.0",
  "btc-relay",
@@ -4095,7 +4095,7 @@ dependencies = [
 [[package]]
 name = "module-exchange-rate-oracle-rpc"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
@@ -4111,7 +4111,7 @@ dependencies = [
 [[package]]
 name = "module-exchange-rate-oracle-rpc-runtime-api"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4123,7 +4123,7 @@ dependencies = [
 [[package]]
 name = "module-issue-rpc"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
@@ -4139,7 +4139,7 @@ dependencies = [
 [[package]]
 name = "module-issue-rpc-runtime-api"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4150,7 +4150,7 @@ dependencies = [
 [[package]]
 name = "module-redeem-rpc"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
@@ -4166,7 +4166,7 @@ dependencies = [
 [[package]]
 name = "module-redeem-rpc-runtime-api"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4177,7 +4177,7 @@ dependencies = [
 [[package]]
 name = "module-refund-rpc"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
@@ -4193,7 +4193,7 @@ dependencies = [
 [[package]]
 name = "module-refund-rpc-runtime-api"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4204,7 +4204,7 @@ dependencies = [
 [[package]]
 name = "module-replace-rpc"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
@@ -4220,7 +4220,7 @@ dependencies = [
 [[package]]
 name = "module-replace-rpc-runtime-api"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4231,7 +4231,7 @@ dependencies = [
 [[package]]
 name = "module-sla-rpc"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
@@ -4248,7 +4248,7 @@ dependencies = [
 [[package]]
 name = "module-sla-rpc-runtime-api"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "frame-support",
  "module-exchange-rate-oracle-rpc-runtime-api",
@@ -4260,7 +4260,7 @@ dependencies = [
 [[package]]
 name = "module-staked-relayers-rpc"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
@@ -4276,7 +4276,7 @@ dependencies = [
 [[package]]
 name = "module-staked-relayers-rpc-runtime-api"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4287,7 +4287,7 @@ dependencies = [
 [[package]]
 name = "module-vault-registry-rpc"
 version = "0.3.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
@@ -4304,7 +4304,7 @@ dependencies = [
 [[package]]
 name = "module-vault-registry-rpc-runtime-api"
 version = "0.3.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "frame-support",
  "module-exchange-rate-oracle-rpc-runtime-api",
@@ -4744,7 +4744,7 @@ dependencies = [
 [[package]]
 name = "pallet-balances"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -4844,7 +4844,7 @@ dependencies = [
 [[package]]
 name = "pallet-randomness-collective-flip"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -4936,7 +4936,7 @@ dependencies = [
 [[package]]
 name = "pallet-timestamp"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -5025,7 +5025,7 @@ dependencies = [
 [[package]]
 name = "parachain-info"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "cumulus-primitives",
  "frame-support",
@@ -6096,7 +6096,7 @@ dependencies = [
 [[package]]
 name = "redeem"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "bitcoin 0.5.0",
  "btc-relay",
@@ -6173,7 +6173,7 @@ dependencies = [
 [[package]]
 name = "refund"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "bitcoin 0.5.0",
  "btc-relay",
@@ -6252,7 +6252,7 @@ dependencies = [
 [[package]]
 name = "replace"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "bitcoin 0.5.0",
  "btc-relay",
@@ -7527,7 +7527,7 @@ dependencies = [
 [[package]]
 name = "security"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -7824,7 +7824,7 @@ dependencies = [
 [[package]]
 name = "sla"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "collateral",
  "exchange-rate-oracle",
@@ -7960,7 +7960,7 @@ dependencies = [
 [[package]]
 name = "sp-api"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "hash-db",
  "parity-scale-codec",
@@ -7976,7 +7976,7 @@ dependencies = [
 [[package]]
 name = "sp-api-proc-macro"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "blake2-rfc",
  "proc-macro-crate",
@@ -7988,7 +7988,7 @@ dependencies = [
 [[package]]
 name = "sp-application-crypto"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "parity-scale-codec",
  "serde",
@@ -8000,7 +8000,7 @@ dependencies = [
 [[package]]
 name = "sp-arithmetic"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "integer-sqrt",
  "num-traits 0.2.14",
@@ -8156,7 +8156,7 @@ dependencies = [
 [[package]]
 name = "sp-core"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "base58",
  "blake2-rfc",
@@ -8209,7 +8209,7 @@ dependencies = [
 [[package]]
 name = "sp-debug-derive"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.8",
@@ -8219,7 +8219,7 @@ dependencies = [
 [[package]]
 name = "sp-externalities"
 version = "0.8.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "environmental",
  "parity-scale-codec",
@@ -8247,7 +8247,7 @@ dependencies = [
 [[package]]
 name = "sp-inherents"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
@@ -8259,7 +8259,7 @@ dependencies = [
 [[package]]
 name = "sp-io"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "futures 0.3.12",
  "hash-db",
@@ -8294,7 +8294,7 @@ dependencies = [
 [[package]]
 name = "sp-keystore"
 version = "0.8.0"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "async-trait",
  "derive_more",
@@ -8345,7 +8345,7 @@ dependencies = [
 [[package]]
 name = "sp-panic-handler"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "backtrace",
 ]
@@ -8362,7 +8362,7 @@ dependencies = [
 [[package]]
 name = "sp-runtime"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "either",
  "hash256-std-hasher",
@@ -8383,7 +8383,7 @@ dependencies = [
 [[package]]
 name = "sp-runtime-interface"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "impl-trait-for-tuples 0.2.0",
  "parity-scale-codec",
@@ -8400,7 +8400,7 @@ dependencies = [
 [[package]]
 name = "sp-runtime-interface-proc-macro"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "Inflector",
  "proc-macro-crate",
@@ -8444,7 +8444,7 @@ dependencies = [
 [[package]]
 name = "sp-state-machine"
 version = "0.8.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "hash-db",
  "log 0.4.14",
@@ -8466,12 +8466,12 @@ dependencies = [
 [[package]]
 name = "sp-std"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 
 [[package]]
 name = "sp-storage"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -8497,7 +8497,7 @@ dependencies = [
 [[package]]
 name = "sp-timestamp"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "impl-trait-for-tuples 0.2.0",
  "parity-scale-codec",
@@ -8511,7 +8511,7 @@ dependencies = [
 [[package]]
 name = "sp-tracing"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "log 0.4.14",
  "parity-scale-codec",
@@ -8540,7 +8540,7 @@ dependencies = [
 [[package]]
 name = "sp-trie"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "hash-db",
  "memory-db",
@@ -8566,7 +8566,7 @@ dependencies = [
 [[package]]
 name = "sp-version"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -8578,7 +8578,7 @@ dependencies = [
 [[package]]
 name = "sp-wasm-interface"
 version = "2.0.1"
-source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#0b0d124d5f9be89f614f2be8e9da038fcb9f540e"
+source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "impl-trait-for-tuples 0.2.0",
  "parity-scale-codec",
@@ -8605,20 +8605,27 @@ dependencies = [
  "async-trait",
  "backoff",
  "bitcoin 0.2.0",
+ "btc-parachain",
+ "btc-parachain-service",
  "clap 3.0.0-beta.2",
  "env_logger 0.7.1",
  "frame-system",
  "futures 0.3.12",
  "hex 0.4.2",
  "jsonrpc-http-server 15.1.0",
+ "jsonrpsee",
  "log 0.4.14",
  "mockall",
  "parity-scale-codec",
+ "rand 0.7.3",
  "relayer-core",
  "runtime",
+ "schnorrkel",
  "serde",
  "sp-core",
  "sp-keyring",
+ "substrate-subxt-client",
+ "tempdir",
  "thiserror",
  "tokio 0.2.24",
 ]
@@ -8626,7 +8633,7 @@ dependencies = [
 [[package]]
 name = "staked-relayers"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "bitcoin 0.5.0",
  "btc-relay",
@@ -9506,7 +9513,7 @@ checksum = "efd1f82c56340fdf16f2a953d7bda4f8fdffba13d93b00844c25572110b26079"
 [[package]]
 name = "treasury"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -9560,7 +9567,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04f8ab788026715fa63b31960869617cba39117e520eb415b0139543e325ab59"
 dependencies = [
  "cfg-if 0.1.10",
- "rand 0.7.3",
+ "rand 0.3.23",
  "static_assertions",
 ]
 
@@ -9726,7 +9733,7 @@ dependencies = [
 [[package]]
 name = "util"
 version = "0.3.3"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.8",
@@ -9778,7 +9785,7 @@ dependencies = [
 [[package]]
 name = "vault-registry"
 version = "0.5.0"
-source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#bf835e435553e8b6df5a6b7c3c072af59887a03c"
+source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#37bf64f676fe02dfd5c0960d52e1b5691dc5a0a0"
 dependencies = [
  "bitcoin 0.5.0",
  "collateral",
