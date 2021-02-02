@@ -263,6 +263,7 @@ mod tests {
                 raw_tx: Vec<u8>,
             ) -> Result<bool, RuntimeError>;
             async fn set_maturity_period(&self, period: u32) -> Result<(), RuntimeError>;
+            async fn evaluate_status_update(&self, status_update_id: u64) -> Result<(), RuntimeError>;
         }
     }
 

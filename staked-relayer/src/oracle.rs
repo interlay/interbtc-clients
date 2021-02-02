@@ -134,6 +134,7 @@ mod tests {
                 raw_tx: Vec<u8>,
             ) -> Result<bool, Error>;
             async fn set_maturity_period(&self, period: u32) -> Result<(), Error>;
+            async fn evaluate_status_update(&self, status_update_id: u64) -> Result<(), Error>;
         }
 
         #[async_trait]

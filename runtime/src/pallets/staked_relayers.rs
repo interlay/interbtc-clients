@@ -61,6 +61,12 @@ pub struct SetMaturityPeriodCall<T: StakedRelayers> {
     pub period: T::BlockNumber,
 }
 
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct EvaluateStatusUpdateCall<T: StakedRelayers> {
+    pub status_update_id: u64,
+    pub _runtime: PhantomData<T>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct RegisterStakedRelayerEvent<T: StakedRelayers> {
     pub account_id: T::AccountId,
