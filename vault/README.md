@@ -70,10 +70,13 @@ OPTIONS:
             Automatically register the vault with the given amount of collateral and a newly
             generated address
 
+        --auto-register-with-faucet-url <auto-register-with-faucet-url>
+            Automatically register the vault with the colletral received from the faucet and a newly
+            generated address. The parameter is the URL of the faucet
+
         --bitcoin-rpc-pass <bitcoin-rpc-pass>                              [env: BITCOIN_RPC_PASS=]
         --bitcoin-rpc-url <bitcoin-rpc-url>                                [env: BITCOIN_RPC_URL=]
         --bitcoin-rpc-user <bitcoin-rpc-user>                              [env: BITCOIN_RPC_USER=]
-
         --btc-confirmations <btc-confirmations>
             How many bitcoin confirmations to wait for. If not specified, the parachain settings
             will be used (recommended)
@@ -92,14 +95,13 @@ OPTIONS:
             The name of the account from the keyfile to use
 
         --keyring <keyring>
-            Keyring to use, mutually exclusive with keyfile [valid values: alice, bob, charlie,
-            dave, eve, ferdie]
+            Keyring to use, mutually exclusive with keyfile
 
         --max-collateral <max-collateral>
             Maximum total collateral to keep the vault securely collateralized [default: 1000000]
 
         --network <network>
-            Bitcoin network type for address encoding [default: regtest; valid values: regtest, testnet, mainnet]
+            Bitcoin network type for address encoding [default: regtest]
 
         --polka-btc-url <polka-btc-url>
             Parachain URL, can be over WebSockets or HTTP [default: ws://127.0.0.1:9944]

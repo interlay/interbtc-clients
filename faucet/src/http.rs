@@ -192,6 +192,8 @@ pub async fn start(
     vault_allowance: u128,
 ) {
     let mut io = IoHandler::default();
+    io.add_sync_method("user_allowance", move |_| handle_resp(Ok(user_allowance)));
+    io.add_sync_method("vault_allowance", move |_| handle_resp(Ok(vault_allowance)));
     let api = api.clone();
     {
         let api = api.clone();
@@ -233,10 +235,9 @@ mod tests {
     use std::sync::Arc;
 
     use super::{
-        fund_account, open_kv_store, update_kv_store, DotBalancesPallet, FundAccountJsonRpcRequest,
+        fund_account, open_kv_store, DotBalancesPallet, FundAccountJsonRpcRequest,
         PolkaBtcProvider, DOT_TO_PLANCK,
     };
-    use chrono::{Duration, Utc};
     use jsonrpsee::Client as JsonRpseeClient;
     use kv::{Config, Store};
     use runtime::substrate_subxt::PairSigner;

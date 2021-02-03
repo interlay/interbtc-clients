@@ -20,7 +20,7 @@ use sp_core::H256;
 use std::{net::SocketAddr, sync::Arc};
 
 #[derive(Debug, Clone, Deserialize)]
-struct RawBytes(#[serde(deserialize_with = "hex_to_buffer")] Vec<u8>);
+pub(crate) struct RawBytes(#[serde(deserialize_with = "hex_to_buffer")] pub(crate) Vec<u8>);
 
 pub fn hex_to_buffer<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
 where

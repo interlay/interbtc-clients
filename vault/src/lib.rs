@@ -16,12 +16,15 @@ use crate::{constants::*, refund::*};
 use bitcoin::BitcoinCoreApi;
 use clap::Clap;
 use core::str::FromStr;
-use futures::channel::mpsc;
 use futures::SinkExt;
+use futures::{channel::mpsc, executor::block_on};
+use jsonrpc_core::Value;
+use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use log::*;
+use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    pallets::sla::UpdateVaultSLAEvent, BtcRelayPallet, Error as RuntimeError, PolkaBtcHeader,
-    PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
+    pallets::sla::UpdateVaultSLAEvent, AccountId, BtcRelayPallet, Error as RuntimeError,
+    PolkaBtcHeader, PolkaBtcProvider, UtilFuncs, VaultRegistryPallet,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -50,6 +53,8 @@ pub mod service {
 pub use crate::cancellation::RequestEvent;
 pub use crate::issue::IssueRequests;
 use service::*;
+
+const DOT_TO_PLANCK: u128 = 10000000000;
 
 #[derive(Debug, Copy, Clone)]
 pub struct BitcoinNetwork(pub bitcoin::Network);
@@ -86,6 +91,11 @@ pub struct Opts {
     /// Automatically register the vault with the given amount of collateral and a newly generated address.
     #[clap(long)]
     pub auto_register_with_collateral: Option<u128>,
+
+    /// Automatically register the vault with the colletral received from the faucet and a newly generated address.
+    /// The parameter is the URL of the faucet
+    #[clap(long)]
+    pub auto_register_with_faucet_url: Option<String>,
 
     /// Opt out of auctioning under-collateralized vaults.
     #[clap(long)]
@@ -133,6 +143,77 @@ pub struct Opts {
     pub network: BitcoinNetwork,
 }
 
+async fn generate_btc_key_and_register<B: BitcoinCoreApi + Send + Sync + 'static>(
+    vault_id: AccountId,
+    collateral: u128,
+    arc_provider: Arc<PolkaBtcProvider>,
+    btc_rpc: Arc<B>,
+) -> Result<(), Error> {
+    match arc_provider.clone().get_vault(vault_id.clone()).await {
+        Ok(_) => info!("Not registering vault -- already registered"),
+        Err(RuntimeError::VaultNotFound) => {
+            let public_key = btc_rpc.get_new_public_key().await?;
+            arc_provider
+                .clone()
+                .register_vault(collateral, public_key)
+                .await?;
+            info!("Automatically registered vault");
+        }
+        Err(err) => return Err(err.into()),
+    };
+    Ok(())
+}
+
+fn substract_tx_fees(amount_in_dot: u128) -> Result<u128, Error> {
+    // subtract 0.2 DOT (estimated fees) from `amount`
+    let tx_fees = DOT_TO_PLANCK
+        .checked_mul(2)
+        .ok_or(Error::MathError)?
+        .checked_div(10)
+        .ok_or(Error::MathError)?;
+
+    amount_in_dot
+        .checked_mul(DOT_TO_PLANCK)
+        .ok_or(Error::MathError)?
+        .checked_sub(tx_fees)
+        .ok_or(Error::MathError)
+}
+
+fn _lock_additional_collateral(api: &Arc<PolkaBtcProvider>, amount: u128) -> Result<(), Error> {
+    let result = block_on(api.lock_additional_collateral(amount));
+    info!(
+        "Locking additional collateral; amount {}: {:?}",
+        amount, result
+    );
+    Ok(result?)
+}
+
+async fn get_faucet_allowance(
+    faucet_connection: TypedClient,
+    allowance_type: &str,
+) -> Result<u128, Error> {
+    let raw_allowance = faucet_connection
+        .call_method::<(), api::RawBytes>(&allowance_type, "", ())
+        .await?;
+    Ok(Decode::decode(&mut &raw_allowance.0[..])?)
+}
+
+async fn get_funding(faucet_connection: TypedClient, vault_id: AccountId) -> Result<(), Error> {
+    let funding_request = FundAccountJsonRpcRequest {
+        account_id: vault_id,
+    };
+    let eq = format!("0x{}", hex::encode(funding_request.encode()));
+    faucet_connection
+        .call_method::<Vec<String>, Value>("fund_account", "", vec![eq.clone()])
+        .await?;
+    Ok(())
+}
+
+#[derive(Encode, Decode, Debug, Clone, serde::Serialize)]
+struct FundAccountJsonRpcRequest {
+    pub account_id: AccountId,
+}
+
 pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     opts: Opts,
     arc_provider: Arc<PolkaBtcProvider>,
@@ -153,18 +234,34 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     info!("Using {} bitcoin confirmations", num_confirmations);
 
     if let Some(collateral) = opts.auto_register_with_collateral {
-        match arc_provider.clone().get_vault(vault_id.clone()).await {
-            Ok(_) => info!("Not registering vault -- already registered"),
-            Err(RuntimeError::VaultNotFound) => {
-                let public_key = btc_rpc.get_new_public_key().await?;
-                arc_provider
-                    .clone()
-                    .register_vault(collateral, public_key)
-                    .await?;
-                info!("Automatically registered vault");
-            }
-            Err(err) => return Err(err.into()),
-        }
+        generate_btc_key_and_register(
+            vault_id.clone(),
+            collateral,
+            arc_provider.clone(),
+            btc_rpc.clone(),
+        )
+        .await?
+    }
+
+    if let Some(faucet_url) = opts.auto_register_with_faucet_url {
+        let connection = jsonrpc_http::connect::<TypedClient>(&faucet_url).await?;
+        get_funding(connection.clone(), vault_id.clone()).await?;
+        let user_allowance_in_dot: u128 =
+            get_faucet_allowance(connection.clone(), "user_allowance").await?;
+        println!("user_allowance_in_dot: {:?}", user_allowance_in_dot);
+        let registration_collateral = substract_tx_fees(user_allowance_in_dot)?;
+        generate_btc_key_and_register(
+            vault_id.clone(),
+            registration_collateral,
+            arc_provider.clone(),
+            btc_rpc.clone(),
+        )
+        .await?;
+        get_funding(connection.clone(), vault_id.clone()).await?;
+        let vault_allowance_in_dot: u128 =
+            get_faucet_allowance(connection.clone(), "vault_allowance").await?;
+        let operational_collateral = substract_tx_fees(vault_allowance_in_dot)?;
+        _lock_additional_collateral(&arc_provider.clone(), operational_collateral)?;
     }
 
     if let Ok(vault) = arc_provider.clone().get_vault(vault_id.clone()).await {
