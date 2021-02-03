@@ -442,7 +442,6 @@ async fn test_cancellation_succeeds() {
 }
 
 #[tokio::test(threaded_scheduler)]
-#[ignore]
 async fn test_auction_replace_succeeds() {
     // register two vaults. Issue with old_vault at capacity. Change exchange rate such that new_vault
     // will auction_replace.
@@ -507,8 +506,9 @@ async fn test_auction_replace_succeeds() {
         async {
             let old_vault_id = old_vault_provider.get_account_id();
             let new_vault_id = new_vault_provider.get_account_id();
+            //  we need to go from 150% collateral to just below 120%. So increase dot-per-btc by just over 25%
             relayer_provider
-                .set_exchange_rate_info(FixedU128::saturating_from_rational(2u128, 100))
+                .set_exchange_rate_info(FixedU128::saturating_from_rational(126, 10000))
                 .await
                 .unwrap();
 
@@ -518,6 +518,7 @@ async fn test_auction_replace_succeeds() {
                 |e| &e.old_vault_id == old_vault_id,
             )
             .await;
+
             assert_event::<ExecuteReplaceEvent<PolkaBtcRuntime>, _>(
                 Duration::from_secs(30),
                 old_vault_provider.clone(),
@@ -525,6 +526,21 @@ async fn test_auction_replace_succeeds() {
             )
             .await;
         },
+    )
+    .await;
+
+    // check that the auctioned vault is still able to operate
+    let vault_collateral =
+        get_required_vault_collateral_for_issue(&old_vault_provider, issue_amount).await;
+    old_vault_provider
+        .lock_additional_collateral(vault_collateral)
+        .await
+        .unwrap();
+    assert_issue(
+        &user_provider,
+        &btc_rpc,
+        old_vault_provider.get_account_id(),
+        issue_amount,
     )
     .await;
 }

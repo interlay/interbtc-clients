@@ -9,6 +9,7 @@ use runtime::{
     pallets::replace::{
         AcceptReplaceEvent, AuctionReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent,
     },
+    pallets::vault_registry::VaultStatus,
     DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet, UtilFuncs,
     VaultRegistryPallet,
 };
@@ -244,7 +245,7 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi>(
         .get_all_vaults()
         .await?
         .into_iter()
-        .filter(|vault| vault.id != vault_id);
+        .filter(|vault| vault.id != vault_id && matches!(vault.status, VaultStatus::Active));
     for vault in vaults {
         trace!("Checking collateral of {}", vault.id);
         if provider
