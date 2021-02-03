@@ -1,3 +1,8 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+
+use crate::{BtcAddress, BtcRelayPallet, PolkaBtcProvider};
 use async_trait::async_trait;
 use bitcoin::{
     secp256k1::{rand::rngs::OsRng, PublicKey, Secp256k1, SecretKey},
@@ -6,7 +11,6 @@ use bitcoin::{
     Script, Transaction, TransactionMetadata, TxIn, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
 };
 use rand::{thread_rng, Rng};
-use runtime::{BtcAddress, BtcRelayPallet, PolkaBtcProvider};
 use sp_core::{H160, H256, U256};
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -47,6 +51,16 @@ impl MockBitcoinCore {
             .unwrap();
 
         ret
+    }
+
+    /// Creates a new instance, but does not initializes parachain's btc-relay
+    pub async fn new_uninitialized(provider: Arc<PolkaBtcProvider>) -> Self {
+        Self {
+            provider,
+            blocks: RwLock::new(vec![]),
+            mempool: RwLock::new(vec![]),
+            transaction_creation_lock: Arc::new(Mutex::new(())),
+        }
     }
 
     /// relay a given block to the parachain
@@ -195,7 +209,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
     ) -> Result<BlockHash, BitcoinError> {
         loop {
             let blocks = self.blocks.read().await;
-            if let Some(block) = blocks.get(height as usize) {
+            if let Some(block) = blocks.get(height as usize + 1) {
                 return Ok(block.header.block_hash());
             }
             drop(blocks); // release the lock
@@ -203,7 +217,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         }
     }
     async fn get_block_count(&self) -> Result<u64, BitcoinError> {
-        Ok(self.blocks.read().await.len().try_into().unwrap())
+        Ok((self.blocks.read().await.len() - 1).try_into().unwrap())
     }
     async fn get_raw_tx_for(
         &self,
