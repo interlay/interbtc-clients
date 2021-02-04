@@ -116,4 +116,6 @@ impl sudo::Sudo for PolkaBtcRuntime {}
 
 impl fee::Fee for PolkaBtcRuntime {}
 
+impl sla::Sla for PolkaBtcRuntime {}
+
 impl treasury::Treasury for PolkaBtcRuntime {}

@@ -20,8 +20,8 @@ use futures::channel::mpsc;
 use futures::SinkExt;
 use log::*;
 use runtime::{
-    BtcRelayPallet, Error as RuntimeError, PolkaBtcHeader, PolkaBtcProvider, UtilFuncs,
-    VaultRegistryPallet,
+    pallets::sla::UpdateVaultSLAEvent, BtcRelayPallet, Error as RuntimeError, PolkaBtcHeader,
+    PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -282,6 +282,7 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     // misc copies of variables to move into spawn closures
     let no_auto_auction = opts.no_auto_auction;
     let no_issue_execution = opts.no_issue_execution;
+    let sla_event_provider = arc_provider.clone();
 
     // starts all the tasks
     let result = tokio::try_join!(
@@ -293,6 +294,20 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
         tokio::spawn(async move {
             arc_provider
                 .on_event_error(|e| error!("Received error event: {}", e))
+                .await
+                .unwrap();
+        }),
+        tokio::spawn(async move {
+            let vault_id = sla_event_provider.get_account_id();
+            sla_event_provider
+                .on_event::<UpdateVaultSLAEvent<PolkaBtcRuntime>, _, _, _>(
+                    |event| async move {
+                        if &event.vault_id == vault_id {
+                            info!("Received event: new total SLA score = {:?}", event.new_sla);
+                        }
+                    },
+                    |err| error!("Error (UpdateVaultSLAEvent): {}", err.to_string()),
+                )
                 .await
                 .unwrap();
         }),
