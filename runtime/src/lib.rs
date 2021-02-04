@@ -37,6 +37,8 @@ pub use substrate_subxt;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, sudo, system, Runtime};
 
 pub const MINIMUM_STAKE: u64 = 100;
+pub const TX_FEES: u128 = 2000000000;
+pub const DOT_TO_PLANCK: u128 = 10000000000;
 
 pub type Balance = u128;
 

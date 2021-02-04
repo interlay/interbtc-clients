@@ -24,4 +24,6 @@ pub enum Error {
     FaucetOveruseError,
     #[error("Mathematical operation error")]
     MathError,
+    #[error("Failed to fetch element from HashMap")]
+    HashMapError,
 }

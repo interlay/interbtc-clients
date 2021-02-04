@@ -7,6 +7,7 @@ use jsonrpsee::{
     Client as RpcClient,
 };
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
+use module_staked_relayers::types::StakedRelayer;
 use sp_arithmetic::FixedU128;
 use sp_core::sr25519::Pair as KeyPair;
 use sp_core::H256;
@@ -45,6 +46,13 @@ pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
 
 pub type PolkaBtcVault =
     Vault<AccountId, <PolkaBtcRuntime as System>::BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC>;
+
+#[derive(Clone)]
+pub struct PolkaBtcStakedRelayer {
+    account_id: AccountId,
+    staked_relayer:
+        StakedRelayer<<PolkaBtcRuntime as Core>::Balance, <PolkaBtcRuntime as System>::BlockNumber>,
+}
 
 pub type PolkaBtcIssueRequest = IssueRequest<
     AccountId,
@@ -664,6 +672,10 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
 pub trait StakedRelayerPallet {
     async fn get_stake(&self) -> Result<u64, Error>;
 
+    async fn get_stake_by_id(&self, account_id: AccountId) -> Result<u64, Error>;
+
+    async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u64, Error>;
+
     async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error>;
 
     async fn deregister_staked_relayer(&self) -> Result<(), Error>;
@@ -712,8 +724,23 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// Get the stake registered for this staked relayer.
     async fn get_stake(&self) -> Result<u64, Error> {
         Ok(self
+            .get_stake_by_id(self.signer.read().await.account_id().clone())
+            .await?)
+    }
+
+    /// Get the stake registered for this staked relayer.
+    async fn get_stake_by_id(&self, account_id: AccountId) -> Result<u64, Error> {
+        Ok(self
             .ext_client
-            .active_staked_relayers(self.signer.read().await.account_id(), None)
+            .active_staked_relayers(&account_id, None)
+            .await?)
+    }
+
+    /// Get the stake registered for this inactive staked relayer.
+    async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u64, Error> {
+        Ok(self
+            .ext_client
+            .inactive_staked_relayers(&account_id, None)
             .await?)
     }
 

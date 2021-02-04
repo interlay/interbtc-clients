@@ -71,7 +71,7 @@ OPTIONS:
             generated address
 
         --auto-register-with-faucet-url <auto-register-with-faucet-url>
-            Automatically register the vault with the colletral received from the faucet and a newly
+            Automatically register the vault with the collateral received from the faucet and a newly
             generated address. The parameter is the URL of the faucet
 
         --bitcoin-rpc-pass <bitcoin-rpc-pass>                              [env: BITCOIN_RPC_PASS=]

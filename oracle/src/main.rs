@@ -7,7 +7,6 @@ use runtime::substrate_subxt::PairSigner;
 use runtime::{
     ExchangeRateOraclePallet, FixedPointNumber, FixedU128, PolkaBtcProvider, PolkaBtcRuntime,
 };
-use sp_keyring::AccountKeyring;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;

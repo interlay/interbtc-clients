@@ -105,6 +105,13 @@ pub struct ActiveStakedRelayersStore<'a, T: StakedRelayers> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct InactiveStakedRelayersStore<'a, T: StakedRelayers> {
+    #[store(returns = u64)]
+    pub _runtime: PhantomData<T>,
+    pub account_id: &'a T::AccountId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct ActiveStakedRelayersCountStore<T: StakedRelayers> {
     #[store(returns = u64)]
     pub _runtime: PhantomData<T>,

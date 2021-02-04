@@ -24,7 +24,8 @@ use log::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     pallets::sla::UpdateVaultSLAEvent, AccountId, BtcRelayPallet, Error as RuntimeError,
-    PolkaBtcHeader, PolkaBtcProvider, UtilFuncs, VaultRegistryPallet,
+    PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
+    DOT_TO_PLANCK, TX_FEES,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -53,8 +54,6 @@ pub mod service {
 pub use crate::cancellation::RequestEvent;
 pub use crate::issue::IssueRequests;
 use service::*;
-
-const DOT_TO_PLANCK: u128 = 10000000000;
 
 #[derive(Debug, Copy, Clone)]
 pub struct BitcoinNetwork(pub bitcoin::Network);
@@ -92,7 +91,7 @@ pub struct Opts {
     #[clap(long)]
     pub auto_register_with_collateral: Option<u128>,
 
-    /// Automatically register the vault with the colletral received from the faucet and a newly generated address.
+    /// Automatically register the vault with the collateral received from the faucet and a newly generated address.
     /// The parameter is the URL of the faucet
     #[clap(long)]
     pub auto_register_with_faucet_url: Option<String>,
@@ -164,21 +163,6 @@ async fn generate_btc_key_and_register<B: BitcoinCoreApi + Send + Sync + 'static
     Ok(())
 }
 
-fn substract_tx_fees(amount_in_dot: u128) -> Result<u128, Error> {
-    // subtract 0.2 DOT (estimated fees) from `amount`
-    let tx_fees = DOT_TO_PLANCK
-        .checked_mul(2)
-        .ok_or(Error::MathError)?
-        .checked_div(10)
-        .ok_or(Error::MathError)?;
-
-    amount_in_dot
-        .checked_mul(DOT_TO_PLANCK)
-        .ok_or(Error::MathError)?
-        .checked_sub(tx_fees)
-        .ok_or(Error::MathError)
-}
-
 fn _lock_additional_collateral(api: &Arc<PolkaBtcProvider>, amount: u128) -> Result<(), Error> {
     let result = block_on(api.lock_additional_collateral(amount));
     info!(
@@ -245,11 +229,16 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
 
     if let Some(faucet_url) = opts.auto_register_with_faucet_url {
         let connection = jsonrpc_http::connect::<TypedClient>(&faucet_url).await?;
+
+        // Receive user allowance from faucet
         get_funding(connection.clone(), vault_id.clone()).await?;
         let user_allowance_in_dot: u128 =
             get_faucet_allowance(connection.clone(), "user_allowance").await?;
-        println!("user_allowance_in_dot: {:?}", user_allowance_in_dot);
-        let registration_collateral = substract_tx_fees(user_allowance_in_dot)?;
+        let registration_collateral = user_allowance_in_dot
+            .checked_mul(DOT_TO_PLANCK)
+            .ok_or(Error::MathError)?
+            .checked_sub(TX_FEES)
+            .ok_or(Error::MathError)?;
         generate_btc_key_and_register(
             vault_id.clone(),
             registration_collateral,
@@ -257,10 +246,16 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
             btc_rpc.clone(),
         )
         .await?;
+
+        // Receive vault allowance from faucet
         get_funding(connection.clone(), vault_id.clone()).await?;
         let vault_allowance_in_dot: u128 =
             get_faucet_allowance(connection.clone(), "vault_allowance").await?;
-        let operational_collateral = substract_tx_fees(vault_allowance_in_dot)?;
+        let operational_collateral = vault_allowance_in_dot
+            .checked_mul(DOT_TO_PLANCK)
+            .ok_or(Error::MathError)?
+            .checked_sub(TX_FEES)
+            .ok_or(Error::MathError)?;
         _lock_additional_collateral(&arc_provider.clone(), operational_collateral)?;
     }
 

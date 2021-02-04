@@ -2,6 +2,7 @@ use crate::relay::Error as RelayError;
 use backoff::ExponentialBackoff;
 use bitcoin::BitcoinError as BitcoinCoreError;
 use bitcoin::Error as BitcoinError;
+use jsonrpc_core_client::RpcError;
 use jsonrpc_http_server::jsonrpc_core::Error as JsonRpcError;
 use parity_scale_codec::Error as CodecError;
 use relayer_core::Error as CoreError;
@@ -38,6 +39,10 @@ pub enum Error {
     BitcoinCoreError(#[from] BitcoinCoreError),
     #[error("JsonRpcError: {0}")]
     JsonRpcError(#[from] JsonRpcError),
+    #[error("RPC error: {0}")]
+    RpcError(#[from] RpcError),
+    #[error("Mathematical operation error")]
+    MathError,
 }
 
 /// Gets the default retrying policy
