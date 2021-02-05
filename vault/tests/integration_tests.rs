@@ -2,7 +2,7 @@ use bitcoin::BitcoinCoreApi;
 use futures::{
     channel::mpsc,
     future::{join, join3, join4, try_join},
-    SinkExt,
+    FutureExt, SinkExt,
 };
 use runtime::integration::*;
 use runtime::{
@@ -17,6 +17,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use vault;
 use vault::{IssueRequests, RequestEvent};
+
+const TIMEOUT: Duration = Duration::from_secs(45);
 
 #[tokio::test(threaded_scheduler)]
 async fn test_redeem_succeeds() {
@@ -63,7 +65,7 @@ async fn test_redeem_succeeds() {
                 .request_redeem(10000, address, vault_id)
                 .await
                 .unwrap();
-            assert_redeem_event(Duration::from_secs(30), user_provider, redeem_id).await;
+            assert_redeem_event(TIMEOUT, user_provider, redeem_id).await;
         },
     )
     .await;
@@ -135,13 +137,13 @@ async fn test_replace_succeeds() {
                 .unwrap();
 
             assert_event::<AcceptReplaceEvent<PolkaBtcRuntime>, _>(
-                Duration::from_secs(30),
+                TIMEOUT,
                 old_vault_provider.clone(),
                 |e| e.replace_id == replace_id,
             )
             .await;
             assert_event::<ExecuteReplaceEvent<PolkaBtcRuntime>, _>(
-                Duration::from_secs(30),
+                TIMEOUT,
                 old_vault_provider.clone(),
                 |e| e.replace_id == replace_id,
             )
@@ -196,7 +198,7 @@ async fn test_maintain_collateral_succeeds() {
                 .await
                 .unwrap();
             assert_event::<LockAdditionalCollateralEvent<PolkaBtcRuntime>, _>(
-                Duration::from_secs(30),
+                TIMEOUT,
                 vault_provider.clone(),
                 |e| {
                     assert_eq!(e.new_collateral, vault_collateral / 10);
@@ -253,24 +255,28 @@ async fn test_withdraw_replace_succeeds() {
     )
     .await;
 
-    let replace_id = old_vault_provider
-        .request_replace(issue_amount, 1000000)
-        .await
-        .unwrap();
-    assert_event::<RequestReplaceEvent<PolkaBtcRuntime>, _>(
-        Duration::from_secs(30),
-        old_vault_provider.clone(),
-        |e| e.replace_id == replace_id,
+    let (replace_id, event) = join(
+        old_vault_provider
+            .request_replace(issue_amount, 1000000)
+            .map(Result::unwrap),
+        assert_event::<RequestReplaceEvent<PolkaBtcRuntime>, _>(
+            TIMEOUT,
+            old_vault_provider.clone(),
+            |_| true,
+        ),
     )
     .await;
-    old_vault_provider
-        .withdraw_replace(replace_id)
-        .await
-        .unwrap();
-    assert_event::<WithdrawReplaceEvent<PolkaBtcRuntime>, _>(
-        Duration::from_secs(30),
-        old_vault_provider.clone(),
-        |e| e.replace_id == replace_id,
+    assert_eq!(replace_id, event.replace_id);
+
+    join(
+        old_vault_provider
+            .withdraw_replace(replace_id)
+            .map(Result::unwrap),
+        assert_event::<WithdrawReplaceEvent<PolkaBtcRuntime>, _>(
+            TIMEOUT,
+            old_vault_provider.clone(),
+            |e| e.request_id == replace_id,
+        ),
     )
     .await;
 
@@ -321,11 +327,6 @@ async fn test_cancellation_succeeds() {
         .await
         .unwrap();
 
-    // set low timeout periods
-    root_provider.set_issue_period(2).await.unwrap();
-    root_provider.set_replace_period(2).await.unwrap();
-    root_provider.set_redeem_period(2).await.unwrap();
-
     assert_issue(
         &user_provider,
         &btc_rpc,
@@ -333,6 +334,11 @@ async fn test_cancellation_succeeds() {
         issue_amount,
     )
     .await;
+
+    // set low timeout periods
+    root_provider.set_issue_period(1).await.unwrap();
+    root_provider.set_replace_period(1).await.unwrap();
+    root_provider.set_redeem_period(1).await.unwrap();
 
     let (issue_block_tx, issue_block_rx) = mpsc::channel::<PolkaBtcHeader>(16);
     let (replace_event_tx, replace_event_rx) = mpsc::channel::<RequestEvent>(16);
@@ -383,10 +389,10 @@ async fn test_cancellation_succeeds() {
 
     test_service(
         join4(
-            async { issue_canceller.await.unwrap() },
-            async { replace_canceller.await.unwrap() },
-            async { issue_request_listener.await.unwrap() },
-            async { block_listener.await },
+            issue_canceller.map(Result::unwrap),
+            replace_canceller.map(Result::unwrap),
+            issue_request_listener.map(Result::unwrap),
+            block_listener,
         ),
         async {
             let address = BtcAddress::P2PKH(H160::from_slice(&[2; 20]));
@@ -397,44 +403,50 @@ async fn test_cancellation_succeeds() {
                 .await
                 .unwrap();
 
-            // setup the to-be-cancelled replace
-            let replace_id = old_vault_provider
-                .request_replace(issue_amount / 2, 1000000)
-                .await
-                .unwrap();
-            new_vault_provider
-                .accept_replace(replace_id, 10000000, address)
-                .await
-                .unwrap();
-            replace_event_tx
-                .clone()
-                .send(RequestEvent::Opened)
-                .await
-                .unwrap();
+            let ((replace_id, issue_id), cancel_issue_event, cancel_replace_event) = join3(
+                async {
+                    // setup the to-be-cancelled replace
+                    let replace_id = old_vault_provider
+                        .request_replace(issue_amount / 2, 1000000)
+                        .await
+                        .unwrap();
+                    new_vault_provider
+                        .accept_replace(replace_id, 10000000, address)
+                        .await
+                        .unwrap();
+                    replace_event_tx
+                        .clone()
+                        .send(RequestEvent::Opened)
+                        .await
+                        .unwrap();
 
-            // setup the to-be-cancelled issue
-            let issue = user_provider
-                .request_issue(
-                    issue_amount,
-                    new_vault_provider.get_account_id().clone(),
-                    10000,
-                )
-                .await
-                .unwrap();
-
-            join(
+                    // setup the to-be-cancelled issue
+                    let issue = user_provider
+                        .request_issue(
+                            issue_amount,
+                            new_vault_provider.get_account_id().clone(),
+                            10000,
+                        )
+                        .await
+                        .unwrap();
+                    (replace_id, issue.issue_id)
+                },
                 assert_event::<CancelIssueEvent<PolkaBtcRuntime>, _>(
-                    Duration::from_secs(45),
+                    Duration::from_secs(60),
                     user_provider.clone(),
-                    |x| x.issue_id == issue.issue_id,
+                    |_| true,
                 ),
                 assert_event::<CancelReplaceEvent<PolkaBtcRuntime>, _>(
-                    Duration::from_secs(45),
+                    Duration::from_secs(60),
                     user_provider.clone(),
-                    |x| x.replace_id == replace_id,
+                    |_| true,
                 ),
             )
             .await;
+            assert_eq!(replace_id, cancel_replace_event.replace_id);
+            assert_eq!(issue_id, cancel_issue_event.issue_id);
+
+            // not make sure we can cancel the redeem
             user_provider.cancel_redeem(redeem_id, true).await.unwrap();
         },
     )
@@ -506,23 +518,22 @@ async fn test_auction_replace_succeeds() {
         async {
             let old_vault_id = old_vault_provider.get_account_id();
             let new_vault_id = new_vault_provider.get_account_id();
-            //  we need to go from 150% collateral to just below 120%. So increase dot-per-btc by just over 25%
-            relayer_provider
-                .set_exchange_rate_info(FixedU128::saturating_from_rational(126, 10000))
-                .await
-                .unwrap();
 
-            assert_event::<AuctionReplaceEvent<PolkaBtcRuntime>, _>(
-                Duration::from_secs(30),
-                old_vault_provider.clone(),
-                |e| &e.old_vault_id == old_vault_id,
-            )
-            .await;
-
-            assert_event::<ExecuteReplaceEvent<PolkaBtcRuntime>, _>(
-                Duration::from_secs(30),
-                old_vault_provider.clone(),
-                |e| &e.new_vault_id == new_vault_id,
+            join3(
+                //  we need to go from 150% collateral to just below 120%. So increase dot-per-btc by just over 25%
+                relayer_provider
+                    .set_exchange_rate_info(FixedU128::saturating_from_rational(126, 10000))
+                    .map(Result::unwrap),
+                assert_event::<AuctionReplaceEvent<PolkaBtcRuntime>, _>(
+                    TIMEOUT,
+                    old_vault_provider.clone(),
+                    |e| &e.old_vault_id == old_vault_id,
+                ),
+                assert_event::<ExecuteReplaceEvent<PolkaBtcRuntime>, _>(
+                    TIMEOUT,
+                    old_vault_provider.clone(),
+                    |e| &e.new_vault_id == new_vault_id,
+                ),
             )
             .await;
         },
@@ -590,45 +601,37 @@ async fn test_refund_succeeds() {
                 issue.vault_btc_address,
                 issue.amount_btc as u64 + over_payment,
                 None,
-                Duration::from_secs(30),
+                TIMEOUT,
                 0,
             )
             .await
             .unwrap();
 
-        let (refund_request, _) = join(
+        let (_, refund_request, refund_execution) = join3(
+            user_provider.execute_issue(
+                issue.issue_id,
+                metadata.txid.translate(),
+                metadata.proof,
+                metadata.raw_tx,
+            ),
             assert_event::<RequestRefundEvent<PolkaBtcRuntime>, _>(
-                Duration::from_secs(30),
+                TIMEOUT,
                 user_provider.clone(),
                 |x| x.vault_id == vault_id,
             ),
-            async {
-                user_provider
-                    .execute_issue(
-                        issue.issue_id,
-                        metadata.txid.translate(),
-                        metadata.proof,
-                        metadata.raw_tx,
-                    )
-                    .await
-                    .unwrap();
-            },
+            assert_event::<ExecuteRefundEvent<PolkaBtcRuntime>, _>(
+                TIMEOUT,
+                user_provider.clone(),
+                |_| true,
+            ),
         )
         .await;
 
-        assert_event::<ExecuteRefundEvent<PolkaBtcRuntime>, _>(
-            Duration::from_secs(30),
-            user_provider.clone(),
-            |x| {
-                if &x.refund_id == &refund_request.refund_id {
-                    assert_eq!(x.amount, (over_payment as f64 * 0.995) as u128);
-                    true
-                } else {
-                    false
-                }
-            },
-        )
-        .await;
+        assert_eq!(refund_request.refund_id, refund_execution.refund_id);
+        assert_eq!(
+            refund_execution.amount,
+            (over_payment as f64 * 0.995) as u128
+        );
     };
 
     test_service(refund_service, fut_user).await;
@@ -681,37 +684,30 @@ async fn test_issue_overpayment_succeeds() {
                 issue.vault_btc_address,
                 issue.amount_btc as u64 * over_payment_factor as u64,
                 None,
-                Duration::from_secs(30),
+                TIMEOUT,
                 0,
             )
             .await
             .unwrap();
 
         join(
-            assert_event::<MintEvent<PolkaBtcRuntime>, _>(
-                Duration::from_secs(30),
-                user_provider.clone(),
-                |x| {
-                    if &x.account_id == user_provider.get_account_id() {
-                        // allow rounding errors
-                        assert_eq!(x.amount, issue_amount * over_payment_factor);
-                        true
-                    } else {
-                        false
-                    }
-                },
-            ),
-            async {
-                user_provider
-                    .execute_issue(
-                        issue.issue_id,
-                        metadata.txid.translate(),
-                        metadata.proof,
-                        metadata.raw_tx,
-                    )
-                    .await
-                    .unwrap()
-            },
+            assert_event::<MintEvent<PolkaBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |x| {
+                if &x.account_id == user_provider.get_account_id() {
+                    // allow rounding errors
+                    assert_eq!(x.amount, issue_amount * over_payment_factor);
+                    true
+                } else {
+                    false
+                }
+            }),
+            user_provider
+                .execute_issue(
+                    issue.issue_id,
+                    metadata.txid.translate(),
+                    metadata.proof,
+                    metadata.raw_tx,
+                )
+                .map(Result::unwrap),
         )
         .await;
     };
@@ -766,20 +762,14 @@ async fn test_automatic_issue_execution_succeeds() {
             .unwrap();
 
         btc_rpc
-            .send_to_address(
-                issue.vault_btc_address,
-                issue.amount_btc as u64,
-                None,
-                Duration::from_secs(30),
-                0,
-            )
+            .send_to_address(issue.btc_address, issue.amount_btc as u64, None, TIMEOUT, 0)
             .await
             .unwrap();
 
         // wait for vault2 to execute this issue
         let vault_id = vault1_provider.get_account_id().clone();
         assert_event::<ExecuteIssueEvent<PolkaBtcRuntime>, _>(
-            Duration::from_secs(30),
+            TIMEOUT,
             user_provider.clone(),
             move |x| x.vault_id == vault_id,
         )
@@ -854,13 +844,7 @@ async fn test_execute_open_requests_succeeds() {
 
     // send btc for redeem 0
     btc_rpc
-        .send_to_address(
-            address,
-            10000,
-            Some(redeem_ids[0]),
-            Duration::from_secs(30),
-            0,
-        )
+        .send_to_address(address, 10000, Some(redeem_ids[0]), TIMEOUT, 0)
         .await
         .unwrap();
 
@@ -872,27 +856,16 @@ async fn test_execute_open_requests_succeeds() {
     btc_rpc.send_to_mempool(transaction).await;
 
     join3(
-        async {
-            vault::service::execute_open_requests(vault_provider, btc_rpc.clone(), 0)
-                .await
-                .unwrap()
-        },
-        assert_redeem_event(
-            Duration::from_secs(30),
-            user_provider.clone(),
-            redeem_ids[0],
-        ),
-        assert_redeem_event(
-            Duration::from_secs(30),
-            user_provider.clone(),
-            redeem_ids[2],
-        ),
+        vault::service::execute_open_requests(vault_provider, btc_rpc.clone(), 0)
+            .map(Result::unwrap),
+        assert_redeem_event(TIMEOUT, user_provider.clone(), redeem_ids[0]),
+        assert_redeem_event(TIMEOUT, user_provider.clone(), redeem_ids[2]),
     )
     .await;
 
     // now move from mempool into chain and await the remaining redeem
     btc_rpc.flush_mempool().await;
-    assert_redeem_event(Duration::from_secs(30), user_provider, redeem_ids[1]).await;
+    assert_redeem_event(TIMEOUT, user_provider, redeem_ids[1]).await;
 }
 
 async fn assert_redeem_event(
