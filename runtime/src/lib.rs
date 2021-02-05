@@ -6,6 +6,9 @@ mod rpc;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "testing-utils")]
+pub mod integration;
+
 pub use btc_relay::{
     BitcoinBlockHeight, BlockBuilder, BtcAddress, BtcPublicKey, Formattable, H256Le,
     RawBlockHeader, RichBlockHeader,
