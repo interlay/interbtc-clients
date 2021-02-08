@@ -14,6 +14,19 @@ use sp_core::crypto::Ss58Codec;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct RawBytes(#[serde(deserialize_with = "hex_to_buffer")] pub(crate) Vec<u8>);
+
+pub fn hex_to_buffer<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error;
+    String::deserialize(deserializer).and_then(|string| {
+        Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string()))
+    })
+}
+
 fn parse_params<T: Decode>(params: Params) -> Result<T, Error> {
     let raw: [RawBytes; 1] = params.parse()?;
     let req = Decode::decode(&mut &raw[0].0[..]).map_err(Error::CodecError)?;
@@ -25,19 +38,6 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
         Ok(data) => Ok(format!("0x{}", hex::encode(data.encode())).into()),
         Err(_) => Err(JsonRpcError::internal_error()),
     }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct RawBytes(#[serde(deserialize_with = "hex_to_buffer")] Vec<u8>);
-
-pub fn hex_to_buffer<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    use serde::de::Error;
-    String::deserialize(deserializer).and_then(|string| {
-        Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string()))
-    })
 }
 
 fn _system_health(api: &Arc<PolkaBtcProvider>) -> Result<(), Error> {

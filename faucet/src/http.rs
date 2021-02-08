@@ -95,14 +95,12 @@ async fn get_account_type(
     provider: &Arc<PolkaBtcProvider>,
     account_id: AccountId,
 ) -> Result<FundingRequestAccountType, Error> {
-    let is_vault = provider.get_vault(account_id.clone()).await.is_ok();
-    if is_vault {
+    if let Ok(_) = provider.get_vault(account_id.clone()).await {
         return Ok(FundingRequestAccountType::Vault);
     }
     let active_stake = provider.get_stake_by_id(account_id.clone()).await?;
     let inactive_stake = provider.get_inactive_stake_by_id(account_id).await?;
-    let is_staked_relayer = active_stake.gt(&0) || inactive_stake.gt(&0);
-    if is_staked_relayer {
+    if active_stake.gt(&0) || inactive_stake.gt(&0) {
         return Ok(FundingRequestAccountType::StakedRelayer);
     }
     Ok(FundingRequestAccountType::User)
@@ -200,7 +198,7 @@ async fn atomic_faucet_funding(
     )?;
     let amount = allowances
         .get(&account_type)
-        .ok_or(Error::HashMapError)?
+        .ok_or(Error::NoFaucetAllowance)?
         .checked_mul(DOT_TO_PLANCK)
         .ok_or(Error::MathError)?;
     provider.transfer_to(account_id, amount).await?;

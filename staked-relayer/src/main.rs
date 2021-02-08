@@ -1,4 +1,3 @@
-use jsonrpc_http_server::jsonrpc_core::Value;
 use staked_relayer::relay::{BitcoinClient, PolkaBtcClient};
 use staked_relayer::service::*;
 use staked_relayer::Error;
@@ -6,30 +5,14 @@ use staked_relayer::Vaults;
 
 use bitcoin::{BitcoinCore, BitcoinCoreApi as _};
 use clap::Clap;
-use hex::FromHex;
 use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use log::*;
-use parity_scale_codec::{Decode, Encode};
 use relayer_core::{Config, Runner};
 use runtime::pallets::sla::UpdateRelayerSLAEvent;
-use runtime::{substrate_subxt::PairSigner, AccountId, StakedRelayerPallet, UtilFuncs};
+use runtime::{substrate_subxt::PairSigner, StakedRelayerPallet, UtilFuncs};
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime, DOT_TO_PLANCK, TX_FEES};
-use serde::{Deserialize, Deserializer};
 use std::sync::Arc;
 use std::time::Duration;
-
-#[derive(Debug, Clone, Deserialize)]
-pub(crate) struct RawBytes(#[serde(deserialize_with = "hex_to_buffer")] pub(crate) Vec<u8>);
-
-pub fn hex_to_buffer<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    use serde::de::Error;
-    String::deserialize(deserializer).and_then(|string| {
-        Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string()))
-    })
-}
 
 /// The Staked Relayer client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
@@ -86,35 +69,6 @@ struct Opts {
     /// The parameter is the URL of the faucet
     #[clap(long)]
     auto_register_with_faucet_url: Option<String>,
-}
-
-#[derive(Encode, Decode, Debug, Clone, serde::Serialize)]
-struct FundAccountJsonRpcRequest {
-    pub account_id: AccountId,
-}
-
-async fn get_funding(
-    faucet_connection: TypedClient,
-    staked_relayer_id: AccountId,
-) -> Result<(), Error> {
-    let funding_request = FundAccountJsonRpcRequest {
-        account_id: staked_relayer_id,
-    };
-    let eq = format!("0x{}", hex::encode(funding_request.encode()));
-    faucet_connection
-        .call_method::<Vec<String>, Value>("fund_account", "", vec![eq.clone()])
-        .await?;
-    Ok(())
-}
-
-async fn get_faucet_allowance(
-    faucet_connection: TypedClient,
-    allowance_type: &str,
-) -> Result<u128, Error> {
-    let raw_allowance = faucet_connection
-        .call_method::<(), RawBytes>(&allowance_type, "", ())
-        .await?;
-    Ok(Decode::decode(&mut &raw_allowance.0[..])?)
 }
 
 #[tokio::main]

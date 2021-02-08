@@ -6,22 +6,21 @@ mod collateral;
 mod constants;
 mod error;
 mod execution;
+mod faucet;
 mod issue;
 mod redeem;
 mod refund;
 mod replace;
 
 use crate::collateral::lock_required_collateral;
-use crate::{constants::*, refund::*};
+use crate::{constants::*, faucet::*, refund::*};
 use bitcoin::BitcoinCoreApi;
 use clap::Clap;
 use core::str::FromStr;
 use futures::SinkExt;
 use futures::{channel::mpsc, executor::block_on};
-use jsonrpc_core::Value;
 use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use log::*;
-use parity_scale_codec::{Decode, Encode};
 use runtime::{
     pallets::sla::UpdateVaultSLAEvent, AccountId, BtcRelayPallet, Error as RuntimeError,
     PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
@@ -163,39 +162,13 @@ async fn generate_btc_key_and_register<B: BitcoinCoreApi + Send + Sync + 'static
     Ok(())
 }
 
-fn _lock_additional_collateral(api: &Arc<PolkaBtcProvider>, amount: u128) -> Result<(), Error> {
+fn lock_additional_collateral(api: &Arc<PolkaBtcProvider>, amount: u128) -> Result<(), Error> {
     let result = block_on(api.lock_additional_collateral(amount));
     info!(
         "Locking additional collateral; amount {}: {:?}",
         amount, result
     );
     Ok(result?)
-}
-
-async fn get_faucet_allowance(
-    faucet_connection: TypedClient,
-    allowance_type: &str,
-) -> Result<u128, Error> {
-    let raw_allowance = faucet_connection
-        .call_method::<(), api::RawBytes>(&allowance_type, "", ())
-        .await?;
-    Ok(Decode::decode(&mut &raw_allowance.0[..])?)
-}
-
-async fn get_funding(faucet_connection: TypedClient, vault_id: AccountId) -> Result<(), Error> {
-    let funding_request = FundAccountJsonRpcRequest {
-        account_id: vault_id,
-    };
-    let eq = format!("0x{}", hex::encode(funding_request.encode()));
-    faucet_connection
-        .call_method::<Vec<String>, Value>("fund_account", "", vec![eq.clone()])
-        .await?;
-    Ok(())
-}
-
-#[derive(Encode, Decode, Debug, Clone, serde::Serialize)]
-struct FundAccountJsonRpcRequest {
-    pub account_id: AccountId,
 }
 
 pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
@@ -256,7 +229,7 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
             .ok_or(Error::MathError)?
             .checked_sub(TX_FEES)
             .ok_or(Error::MathError)?;
-        _lock_additional_collateral(&arc_provider.clone(), operational_collateral)?;
+        lock_additional_collateral(&arc_provider.clone(), operational_collateral)?;
     }
 
     if let Ok(vault) = arc_provider.clone().get_vault(vault_id.clone()).await {

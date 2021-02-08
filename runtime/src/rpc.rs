@@ -47,13 +47,6 @@ pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
 pub type PolkaBtcVault =
     Vault<AccountId, <PolkaBtcRuntime as System>::BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC>;
 
-#[derive(Clone)]
-pub struct PolkaBtcStakedRelayer {
-    account_id: AccountId,
-    staked_relayer:
-        StakedRelayer<<PolkaBtcRuntime as Core>::Balance, <PolkaBtcRuntime as System>::BlockNumber>,
-}
-
 pub type PolkaBtcIssueRequest = IssueRequest<
     AccountId,
     <PolkaBtcRuntime as System>::BlockNumber,
@@ -723,9 +716,7 @@ pub trait StakedRelayerPallet {
 impl StakedRelayerPallet for PolkaBtcProvider {
     /// Get the stake registered for this staked relayer.
     async fn get_stake(&self) -> Result<u64, Error> {
-        Ok(self
-            .get_stake_by_id(self.signer.read().await.account_id().clone())
-            .await?)
+        Ok(self.get_stake_by_id(self.account_id.clone()).await?)
     }
 
     /// Get the stake registered for this staked relayer.

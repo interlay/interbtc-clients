@@ -24,6 +24,6 @@ pub enum Error {
     FaucetOveruseError,
     #[error("Mathematical operation error")]
     MathError,
-    #[error("Failed to fetch element from HashMap")]
-    HashMapError,
+    #[error("No faucet allowance set for account type")]
+    NoFaucetAllowance,
 }
