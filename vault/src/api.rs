@@ -50,9 +50,9 @@ struct AccountIdJsonRpcResponse {
     account_id: String,
 }
 
-fn _account_id(api: &Arc<PolkaBtcProvider>) -> Result<AccountIdJsonRpcResponse, Error> {
+fn _account_id(provider: &Arc<PolkaBtcProvider>) -> Result<AccountIdJsonRpcResponse, Error> {
     Ok(AccountIdJsonRpcResponse {
-        account_id: api.get_account_id().to_ss58check(),
+        account_id: provider.get_account_id().to_ss58check(),
     })
 }
 
@@ -61,13 +61,13 @@ struct ReplaceRequestJsonRpcRequest {
     amount: u128,
 }
 
-async fn _request_replace(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+async fn _request_replace(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
     let req = parse_params::<ReplaceRequestJsonRpcRequest>(params)?;
 
-    let amount_in_dot = api.btc_to_dots(req.amount).await?;
-    let griefing_collateral_percentage = api.get_replace_griefing_collateral().await?;
+    let amount_in_dot = provider.btc_to_dots(req.amount).await?;
+    let griefing_collateral_percentage = provider.get_replace_griefing_collateral().await?;
     let griefing_collateral = calculate_for(amount_in_dot, griefing_collateral_percentage)?;
-    let result = block_on(api.request_replace(req.amount, griefing_collateral));
+    let result = block_on(provider.request_replace(req.amount, griefing_collateral));
     info!(
         "Requesting replace for amount = {} with griefing_collateral = {}: {:?}",
         req.amount, griefing_collateral, result
@@ -103,13 +103,13 @@ struct RegisterVaultJsonRpcResponse {
 }
 
 fn _register_vault<B: BitcoinCoreApi>(
-    api: &Arc<PolkaBtcProvider>,
+    provider: &Arc<PolkaBtcProvider>,
     btc: &Arc<B>,
     params: Params,
 ) -> Result<RegisterVaultJsonRpcResponse, Error> {
     let req = parse_params::<RegisterVaultJsonRpcRequest>(params)?;
     let public_key: BtcPublicKey = block_on(btc.get_new_public_key())?;
-    let result = block_on(api.register_vault(req.collateral, public_key.clone()));
+    let result = block_on(provider.register_vault(req.collateral, public_key.clone()));
     info!(
         "Registering vault with bitcoind public_key {:?} and collateral = {}: {:?}",
         public_key, req.collateral, result
@@ -122,9 +122,12 @@ struct ChangeCollateralJsonRpcRequest {
     amount: u128,
 }
 
-fn _lock_additional_collateral(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+fn _lock_additional_collateral(
+    provider: &Arc<PolkaBtcProvider>,
+    params: Params,
+) -> Result<(), Error> {
     let req = parse_params::<ChangeCollateralJsonRpcRequest>(params)?;
-    let result = block_on(api.lock_additional_collateral(req.amount));
+    let result = block_on(provider.lock_additional_collateral(req.amount));
     info!(
         "Locking additional collateral; amount {}: {:?}",
         req.amount, result
@@ -132,9 +135,9 @@ fn _lock_additional_collateral(api: &Arc<PolkaBtcProvider>, params: Params) -> R
     Ok(result?)
 }
 
-fn _withdraw_collateral(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+fn _withdraw_collateral(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
     let req = parse_params::<ChangeCollateralJsonRpcRequest>(params)?;
-    let result = block_on(api.withdraw_collateral(req.amount));
+    let result = block_on(provider.withdraw_collateral(req.amount));
     info!(
         "Withdrawing collateral with amount {}: {:?}",
         req.amount, result
@@ -147,9 +150,9 @@ struct WithdrawReplaceJsonRpcRequest {
     replace_id: H256,
 }
 
-fn _withdraw_replace(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+fn _withdraw_replace(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
     let req = parse_params::<WithdrawReplaceJsonRpcRequest>(params)?;
-    let result = block_on(api.withdraw_replace(req.replace_id));
+    let result = block_on(provider.withdraw_replace(req.replace_id));
     info!(
         "Withdrawing replace request {}: {:?}",
         req.replace_id, result
@@ -158,46 +161,46 @@ fn _withdraw_replace(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), 
 }
 
 pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
-    api: Arc<PolkaBtcProvider>,
+    provider: Arc<PolkaBtcProvider>,
     btc: Arc<B>,
     addr: SocketAddr,
     origin: String,
 ) {
     let mut io = IoHandler::default();
     {
-        let api = api.clone();
-        io.add_sync_method("account_id", move |_| handle_resp(_account_id(&api)));
+        let provider = provider.clone();
+        io.add_sync_method("account_id", move |_| handle_resp(_account_id(&provider)));
     }
     {
-        let api = api.clone();
+        let provider = provider.clone();
         io.add_method("request_replace", move |params| {
-            let api = api.clone();
-            async move { handle_resp(_request_replace(&api, params).await) }
+            let provider = provider.clone();
+            async move { handle_resp(_request_replace(&provider, params).await) }
         });
     }
     {
-        let api = api.clone();
+        let provider = provider.clone();
         let btc = btc.clone();
         io.add_sync_method("register_vault", move |params| {
-            handle_resp(_register_vault(&api, &btc, params))
+            handle_resp(_register_vault(&provider, &btc, params))
         });
     }
     {
-        let api = api.clone();
+        let provider = provider.clone();
         io.add_sync_method("lock_additional_collateral", move |params| {
-            handle_resp(_lock_additional_collateral(&api, params))
+            handle_resp(_lock_additional_collateral(&provider, params))
         });
     }
     {
-        let api = api.clone();
+        let provider = provider.clone();
         io.add_sync_method("withdraw_collateral", move |params| {
-            handle_resp(_withdraw_collateral(&api, params))
+            handle_resp(_withdraw_collateral(&provider, params))
         });
     }
     {
-        let api = api.clone();
+        let provider = provider.clone();
         io.add_sync_method("withdraw_replace", move |params| {
-            handle_resp(_withdraw_replace(&api, params))
+            handle_resp(_withdraw_replace(&provider, params))
         });
     }
 

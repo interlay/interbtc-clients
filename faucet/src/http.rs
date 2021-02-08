@@ -11,7 +11,7 @@ use log::error;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     AccountId, DotBalancesPallet, PolkaBtcProvider, SecurityPallet, StakedRelayerPallet,
-    VaultRegistryPallet, DOT_TO_PLANCK,
+    VaultRegistryPallet, PLANCK_PER_DOT,
 };
 use serde::{Deserialize, Deserializer};
 use std::sync::Arc;
@@ -55,8 +55,8 @@ where
     })
 }
 
-fn _system_health(api: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
-    block_on(api.get_parachain_status())?;
+fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
+    block_on(provider.get_parachain_status())?;
     Ok(())
 }
 
@@ -73,7 +73,7 @@ enum FundingRequestAccountType {
 }
 
 async fn _fund_account_raw(
-    api: &Arc<PolkaBtcProvider>,
+    provider: &Arc<PolkaBtcProvider>,
     params: Params,
     store: Store,
     user_allowance: u128,
@@ -88,7 +88,7 @@ async fn _fund_account_raw(
         FundingRequestAccountType::StakedRelayer,
         staked_relayer_allowance,
     );
-    fund_account(api, req, store, allowances).await
+    fund_account(provider, req, store, allowances).await
 }
 
 async fn get_account_type(
@@ -199,19 +199,19 @@ async fn atomic_faucet_funding(
     let amount = allowances
         .get(&account_type)
         .ok_or(Error::NoFaucetAllowance)?
-        .checked_mul(DOT_TO_PLANCK)
+        .checked_mul(PLANCK_PER_DOT)
         .ok_or(Error::MathError)?;
     provider.transfer_to(account_id, amount).await?;
     Ok(())
 }
 
 async fn fund_account(
-    api: &Arc<PolkaBtcProvider>,
+    provider: &Arc<PolkaBtcProvider>,
     req: FundAccountJsonRpcRequest,
     store: Store,
     allowances: HashMap<FundingRequestAccountType, u128>,
 ) -> Result<(), Error> {
-    let provider = api.clone();
+    let provider = provider.clone();
     let kv = open_kv_store(store)?;
     block_on(atomic_faucet_funding(
         &provider,
@@ -223,7 +223,7 @@ async fn fund_account(
 }
 
 pub async fn start(
-    api: Arc<PolkaBtcProvider>,
+    provider: Arc<PolkaBtcProvider>,
     addr: SocketAddr,
     origin: String,
     user_allowance: u128,
@@ -236,21 +236,23 @@ pub async fn start(
     io.add_sync_method("staked_relayer_allowance", move |_| {
         handle_resp(Ok(staked_relayer_allowance))
     });
-    let api = api.clone();
+    let provider = provider.clone();
     {
-        let api = api.clone();
-        io.add_sync_method("system_health", move |_| handle_resp(_system_health(&api)));
+        let provider = provider.clone();
+        io.add_sync_method("system_health", move |_| {
+            handle_resp(_system_health(&provider))
+        });
     }
     {
-        let api = api.clone();
+        let provider = provider.clone();
 
         // an async closure is only FnOnce, so we need this workaround
         io.add_method("fund_account", move |params| {
-            let api = api.clone();
+            let provider = provider.clone();
             async move {
                 let store = Store::new(Config::new("./kv")).expect("Unable to open kv store");
                 let result = _fund_account_raw(
-                    &api.clone(),
+                    &provider.clone(),
                     params,
                     store,
                     user_allowance,
@@ -284,7 +286,7 @@ mod tests {
 
     use super::{
         fund_account, open_kv_store, DotBalancesPallet, FundAccountJsonRpcRequest,
-        FundingRequestAccountType, PolkaBtcProvider, DOT_TO_PLANCK,
+        FundingRequestAccountType, PolkaBtcProvider, PLANCK_PER_DOT,
     };
     use jsonrpsee::Client as JsonRpseeClient;
     use kv::{Config, Store};
@@ -346,7 +348,7 @@ mod tests {
     }
 
     fn dot_to_planck(dot: u128) -> u128 {
-        dot.checked_mul(DOT_TO_PLANCK).unwrap()
+        dot.checked_mul(PLANCK_PER_DOT).unwrap()
     }
 
     #[tokio::test]

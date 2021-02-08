@@ -7,7 +7,6 @@ use jsonrpsee::{
     Client as RpcClient,
 };
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
-use module_staked_relayers::types::StakedRelayer;
 use sp_arithmetic::FixedU128;
 use sp_core::sr25519::Pair as KeyPair;
 use sp_core::H256;

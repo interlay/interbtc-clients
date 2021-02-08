@@ -10,7 +10,7 @@ use log::*;
 use relayer_core::{Config, Runner};
 use runtime::pallets::sla::UpdateRelayerSLAEvent;
 use runtime::{substrate_subxt::PairSigner, StakedRelayerPallet, UtilFuncs};
-use runtime::{PolkaBtcProvider, PolkaBtcRuntime, DOT_TO_PLANCK, TX_FEES};
+use runtime::{PolkaBtcProvider, PolkaBtcRuntime, PLANCK_PER_DOT, TX_FEES};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -143,26 +143,34 @@ async fn main() -> Result<(), Error> {
         let connection = jsonrpc_http::connect::<TypedClient>(&faucet_url).await?;
 
         // Receive user allowance from faucet
-        get_funding(
+        match get_funding(
             connection.clone(),
             provider.clone().get_account_id().clone(),
         )
-        .await?;
-        let user_allowance_in_dot: u128 =
-            get_faucet_allowance(connection.clone(), "user_allowance").await?;
-        let registration_stake = user_allowance_in_dot
-            .checked_mul(DOT_TO_PLANCK)
-            .ok_or(Error::MathError)?
-            .checked_sub(TX_FEES)
-            .ok_or(Error::MathError)?;
-        provider.register_staked_relayer(registration_stake).await?;
+        .await
+        {
+            Ok(_) => {
+                let user_allowance_in_dot: u128 =
+                    get_faucet_allowance(connection.clone(), "user_allowance").await?;
+                let registration_stake = user_allowance_in_dot
+                    .checked_mul(PLANCK_PER_DOT)
+                    .ok_or(Error::MathError)?
+                    .checked_sub(TX_FEES)
+                    .ok_or(Error::MathError)?;
+                provider.register_staked_relayer(registration_stake).await?;
+            }
+            Err(e) => error!("Faucet error: {}", e.to_string()),
+        }
 
         // Receive staked relayer allowance from faucet
-        get_funding(
+        if let Err(e) = get_funding(
             connection.clone(),
             provider.clone().get_account_id().clone(),
         )
-        .await?;
+        .await
+        {
+            error!("Faucet error: {}", e.to_string())
+        };
     }
 
     let result = tokio::try_join!(

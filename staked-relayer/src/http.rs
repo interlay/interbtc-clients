@@ -40,8 +40,8 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
     }
 }
 
-fn _system_health(api: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
-    block_on(api.get_parachain_status())?;
+fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
+    block_on(provider.get_parachain_status())?;
     Ok(())
 }
 
@@ -50,9 +50,9 @@ struct AccountIdJsonRpcResponse {
     account_id: String,
 }
 
-fn _account_id(api: &Arc<PolkaBtcProvider>) -> Result<AccountIdJsonRpcResponse, Error> {
+fn _account_id(provider: &Arc<PolkaBtcProvider>) -> Result<AccountIdJsonRpcResponse, Error> {
     Ok(AccountIdJsonRpcResponse {
-        account_id: api.get_account_id().to_ss58check(),
+        account_id: provider.get_account_id().to_ss58check(),
     })
 }
 
@@ -61,13 +61,13 @@ struct RegisterStakedRelayerJsonRpcRequest {
     stake: u128,
 }
 
-fn _register_staked_relayer(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+fn _register_staked_relayer(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
     let req: RegisterStakedRelayerJsonRpcRequest = parse_params(params)?;
-    Ok(block_on(api.register_staked_relayer(req.stake))?)
+    Ok(block_on(provider.register_staked_relayer(req.stake))?)
 }
 
-fn _deregister_staked_relayer(api: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
-    Ok(block_on(api.deregister_staked_relayer())?)
+fn _deregister_staked_relayer(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
+    Ok(block_on(provider.deregister_staked_relayer())?)
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -80,9 +80,9 @@ struct SuggestStatusUpdateJsonRpcRequest {
     message: String,
 }
 
-fn _suggest_status_update(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+fn _suggest_status_update(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
     let req: SuggestStatusUpdateJsonRpcRequest = parse_params(params)?;
-    Ok(block_on(api.suggest_status_update(
+    Ok(block_on(provider.suggest_status_update(
         req.deposit,
         req.status_code,
         req.add_error,
@@ -98,45 +98,47 @@ struct VoteOnStatusUpdateJsonRpcRequest {
     pub approve: bool,
 }
 
-fn _vote_on_status_update(api: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+fn _vote_on_status_update(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
     let req: VoteOnStatusUpdateJsonRpcRequest = parse_params(params)?;
     Ok(block_on(
-        api.vote_on_status_update(req.status_update_id, req.approve),
+        provider.vote_on_status_update(req.status_update_id, req.approve),
     )?)
 }
 
-pub async fn start(api: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String) {
+pub async fn start(provider: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String) {
     let mut io = IoHandler::default();
     {
-        let api = api.clone();
-        io.add_method("system_health", move |_| handle_resp(_system_health(&api)));
+        let provider = provider.clone();
+        io.add_method("system_health", move |_| {
+            handle_resp(_system_health(&provider))
+        });
     }
     {
-        let api = api.clone();
-        io.add_method("account_id", move |_| handle_resp(_account_id(&api)));
+        let provider = provider.clone();
+        io.add_method("account_id", move |_| handle_resp(_account_id(&provider)));
     }
     {
-        let api = api.clone();
+        let provider = provider.clone();
         io.add_method("register_staked_relayer", move |params| {
-            handle_resp(_register_staked_relayer(&api, params))
+            handle_resp(_register_staked_relayer(&provider, params))
         });
     }
     {
-        let api = api.clone();
+        let provider = provider.clone();
         io.add_method("deregister_staked_relayer", move |_| {
-            handle_resp(_deregister_staked_relayer(&api))
+            handle_resp(_deregister_staked_relayer(&provider))
         });
     }
     {
-        let api = api.clone();
+        let provider = provider.clone();
         io.add_method("suggest_status_update", move |params| {
-            handle_resp(_suggest_status_update(&api, params))
+            handle_resp(_suggest_status_update(&provider, params))
         });
     }
     {
-        let api = api.clone();
+        let provider = provider.clone();
         io.add_method("vote_on_status_update", move |params| {
-            handle_resp(_vote_on_status_update(&api, params))
+            handle_resp(_vote_on_status_update(&provider, params))
         });
     }
 
