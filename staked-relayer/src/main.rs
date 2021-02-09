@@ -5,11 +5,12 @@ use staked_relayer::Vaults;
 
 use bitcoin::{BitcoinCore, BitcoinCoreApi as _};
 use clap::Clap;
+use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use log::*;
 use relayer_core::{Config, Runner};
 use runtime::pallets::sla::UpdateRelayerSLAEvent;
-use runtime::substrate_subxt::PairSigner;
-use runtime::{PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs};
+use runtime::{substrate_subxt::PairSigner, StakedRelayerPallet, UtilFuncs};
+use runtime::{PolkaBtcProvider, PolkaBtcRuntime, PLANCK_PER_DOT, TX_FEES};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -63,6 +64,11 @@ struct Opts {
     /// Connection settings for Bitcoin Core.
     #[clap(flatten)]
     bitcoin: bitcoin::cli::BitcoinOpts,
+
+    /// Automatically register the staked relayer with collateral received from the faucet and a newly generated address.
+    /// The parameter is the URL of the faucet
+    #[clap(long)]
+    auto_register_with_faucet_url: Option<String>,
 }
 
 #[tokio::main]
@@ -132,6 +138,40 @@ async fn main() -> Result<(), Error> {
     );
 
     let api = start_api(provider.clone(), http_addr, opts.rpc_cors_domain);
+
+    if let Some(faucet_url) = opts.auto_register_with_faucet_url {
+        let connection = jsonrpc_http::connect::<TypedClient>(&faucet_url).await?;
+
+        // Receive user allowance from faucet
+        match get_funding(
+            connection.clone(),
+            provider.clone().get_account_id().clone(),
+        )
+        .await
+        {
+            Ok(_) => {
+                let user_allowance_in_dot: u128 =
+                    get_faucet_allowance(connection.clone(), "user_allowance").await?;
+                let registration_stake = user_allowance_in_dot
+                    .checked_mul(PLANCK_PER_DOT)
+                    .ok_or(Error::MathError)?
+                    .checked_sub(TX_FEES)
+                    .ok_or(Error::MathError)?;
+                provider.register_staked_relayer(registration_stake).await?;
+            }
+            Err(e) => error!("Faucet error: {}", e.to_string()),
+        }
+
+        // Receive staked relayer allowance from faucet
+        if let Err(e) = get_funding(
+            connection.clone(),
+            provider.clone().get_account_id().clone(),
+        )
+        .await
+        {
+            error!("Faucet error: {}", e.to_string())
+        };
+    }
 
     let result = tokio::try_join!(
         tokio::spawn(async move {

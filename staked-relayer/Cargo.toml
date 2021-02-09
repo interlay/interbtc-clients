@@ -20,6 +20,7 @@ runtime = { path = "../runtime" }
 bitcoin = { path = "../bitcoin", features = ["cli"] }
 jsonrpc-http-server = "15.1.0"
 backoff = { version = "0.2.1", features = ["tokio"] }
+jsonrpc-core-client = { version = "16.0.0", features = ["http"] }
 
 # Substrate dependencies
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }

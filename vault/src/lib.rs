@@ -6,22 +6,25 @@ mod collateral;
 mod constants;
 mod error;
 mod execution;
+mod faucet;
 mod issue;
 mod redeem;
 mod refund;
 mod replace;
 
 use crate::collateral::lock_required_collateral;
-use crate::{constants::*, refund::*};
+use crate::{constants::*, faucet::*, refund::*};
 use bitcoin::BitcoinCoreApi;
 use clap::Clap;
 use core::str::FromStr;
 use futures::channel::mpsc;
 use futures::SinkExt;
+use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use log::*;
 use runtime::{
-    pallets::sla::UpdateVaultSLAEvent, BtcRelayPallet, Error as RuntimeError, PolkaBtcHeader,
-    PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
+    pallets::sla::UpdateVaultSLAEvent, AccountId, BtcRelayPallet, Error as RuntimeError,
+    PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
+    PLANCK_PER_DOT, TX_FEES,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -87,6 +90,11 @@ pub struct Opts {
     #[clap(long)]
     pub auto_register_with_collateral: Option<u128>,
 
+    /// Automatically register the vault with the collateral received from the faucet and a newly generated address.
+    /// The parameter is the URL of the faucet
+    #[clap(long)]
+    pub auto_register_with_faucet_url: Option<String>,
+
     /// Opt out of auctioning under-collateralized vaults.
     #[clap(long)]
     pub no_auto_auction: bool,
@@ -133,6 +141,39 @@ pub struct Opts {
     pub network: BitcoinNetwork,
 }
 
+async fn generate_btc_key_and_register<B: BitcoinCoreApi + Send + Sync + 'static>(
+    vault_id: AccountId,
+    collateral: u128,
+    arc_provider: Arc<PolkaBtcProvider>,
+    btc_rpc: Arc<B>,
+) -> Result<(), Error> {
+    match arc_provider.clone().get_vault(vault_id.clone()).await {
+        Ok(_) => info!("Not registering vault -- already registered"),
+        Err(RuntimeError::VaultNotFound) => {
+            let public_key = btc_rpc.get_new_public_key().await?;
+            arc_provider
+                .clone()
+                .register_vault(collateral, public_key)
+                .await?;
+            info!("Automatically registered vault");
+        }
+        Err(err) => return Err(err.into()),
+    };
+    Ok(())
+}
+
+async fn lock_additional_collateral(
+    api: &Arc<PolkaBtcProvider>,
+    amount: u128,
+) -> Result<(), Error> {
+    let result = api.lock_additional_collateral(amount).await;
+    info!(
+        "Locking additional collateral; amount {}: {:?}",
+        amount, result
+    );
+    Ok(result?)
+}
+
 pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     opts: Opts,
     arc_provider: Arc<PolkaBtcProvider>,
@@ -153,17 +194,52 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     info!("Using {} bitcoin confirmations", num_confirmations);
 
     if let Some(collateral) = opts.auto_register_with_collateral {
-        match arc_provider.clone().get_vault(vault_id.clone()).await {
-            Ok(_) => info!("Not registering vault -- already registered"),
-            Err(RuntimeError::VaultNotFound) => {
-                let public_key = btc_rpc.get_new_public_key().await?;
-                arc_provider
-                    .clone()
-                    .register_vault(collateral, public_key)
-                    .await?;
-                info!("Automatically registered vault");
+        generate_btc_key_and_register(
+            vault_id.clone(),
+            collateral,
+            arc_provider.clone(),
+            btc_rpc.clone(),
+        )
+        .await?
+    }
+
+    if let Some(faucet_url) = opts.auto_register_with_faucet_url {
+        let connection = jsonrpc_http::connect::<TypedClient>(&faucet_url).await?;
+
+        // Receive user allowance from faucet
+        match get_funding(connection.clone(), vault_id.clone()).await {
+            Ok(_) => {
+                let user_allowance_in_dot: u128 =
+                    get_faucet_allowance(connection.clone(), "user_allowance").await?;
+                let registration_collateral = user_allowance_in_dot
+                    .checked_mul(PLANCK_PER_DOT)
+                    .ok_or(Error::MathError)?
+                    .checked_sub(TX_FEES)
+                    .ok_or(Error::MathError)?;
+                generate_btc_key_and_register(
+                    vault_id.clone(),
+                    registration_collateral,
+                    arc_provider.clone(),
+                    btc_rpc.clone(),
+                )
+                .await?;
             }
-            Err(err) => return Err(err.into()),
+            Err(e) => error!("Faucet error: {}", e.to_string()),
+        }
+
+        // Receive vault allowance from faucet
+        match get_funding(connection.clone(), vault_id.clone()).await {
+            Ok(_) => {
+                let vault_allowance_in_dot: u128 =
+                    get_faucet_allowance(connection.clone(), "vault_allowance").await?;
+                let operational_collateral = vault_allowance_in_dot
+                    .checked_mul(PLANCK_PER_DOT)
+                    .ok_or(Error::MathError)?
+                    .checked_sub(TX_FEES)
+                    .ok_or(Error::MathError)?;
+                lock_additional_collateral(&arc_provider.clone(), operational_collateral).await?;
+            }
+            Err(e) => error!("Faucet error: {}", e.to_string()),
         }
     }
 

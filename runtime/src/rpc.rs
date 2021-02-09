@@ -664,6 +664,10 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
 pub trait StakedRelayerPallet {
     async fn get_stake(&self) -> Result<u64, Error>;
 
+    async fn get_stake_by_id(&self, account_id: AccountId) -> Result<u64, Error>;
+
+    async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u64, Error>;
+
     async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error>;
 
     async fn deregister_staked_relayer(&self) -> Result<(), Error>;
@@ -711,9 +715,22 @@ pub trait StakedRelayerPallet {
 impl StakedRelayerPallet for PolkaBtcProvider {
     /// Get the stake registered for this staked relayer.
     async fn get_stake(&self) -> Result<u64, Error> {
+        Ok(self.get_stake_by_id(self.account_id.clone()).await?)
+    }
+
+    /// Get the stake registered for this staked relayer.
+    async fn get_stake_by_id(&self, account_id: AccountId) -> Result<u64, Error> {
         Ok(self
             .ext_client
-            .active_staked_relayers(self.signer.read().await.account_id(), None)
+            .active_staked_relayers(&account_id, None)
+            .await?)
+    }
+
+    /// Get the stake registered for this inactive staked relayer.
+    async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u64, Error> {
+        Ok(self
+            .ext_client
+            .inactive_staked_relayers(&account_id, None)
             .await?)
     }
 

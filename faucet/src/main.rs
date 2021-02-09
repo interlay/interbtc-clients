@@ -34,6 +34,10 @@ struct Opts {
     /// DOT allowance per request for vaults.
     #[clap(long, default_value = "500")]
     vault_allowance: u128,
+
+    /// DOT allowance per request for vaults.
+    #[clap(long, default_value = "500")]
+    staked_relayer_allowance: u128,
 }
 
 #[tokio::main]
@@ -52,6 +56,7 @@ async fn main() -> Result<(), Error> {
         opts.rpc_cors_domain,
         opts.user_allowance,
         opts.vault_allowance,
+        opts.staked_relayer_allowance,
     )
     .await;
 

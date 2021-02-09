@@ -2989,7 +2989,25 @@ dependencies = [
  "failure",
  "futures 0.1.30",
  "jsonrpc-core 15.1.0",
- "jsonrpc-pubsub",
+ "jsonrpc-pubsub 15.1.0",
+ "log 0.4.14",
+ "serde",
+ "serde_json",
+ "url 1.7.2",
+]
+
+[[package]]
+name = "jsonrpc-client-transports"
+version = "16.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "320acafbc911d7ef8cc056fee6affbed348dc8aaf76709bfda83d3665d092ad4"
+dependencies = [
+ "derive_more",
+ "futures 0.1.30",
+ "futures 0.3.12",
+ "hyper 0.12.35",
+ "jsonrpc-core 16.0.0",
+ "jsonrpc-pubsub 16.0.0",
  "log 0.4.14",
  "serde",
  "serde_json",
@@ -3028,7 +3046,18 @@ version = "15.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f764902d7b891344a0acb65625f32f6f7c6db006952143bd650209fbe7d94db"
 dependencies = [
- "jsonrpc-client-transports",
+ "jsonrpc-client-transports 15.1.0",
+]
+
+[[package]]
+name = "jsonrpc-core-client"
+version = "16.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "289d049ac6a6c69e8d2023ad420934d236badda8375f1fd9960a2f67beedb42e"
+dependencies = [
+ "futures 0.1.30",
+ "futures 0.3.12",
+ "jsonrpc-client-transports 16.0.0",
 ]
 
 [[package]]
@@ -3098,6 +3127,21 @@ dependencies = [
  "jsonrpc-core 15.1.0",
  "log 0.4.14",
  "parking_lot 0.10.2",
+ "rand 0.7.3",
+ "serde",
+]
+
+[[package]]
+name = "jsonrpc-pubsub"
+version = "16.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a1132f6d03de286dd21bde88191af63b5189214574f7b9cbac8e0027c732394"
+dependencies = [
+ "futures 0.3.12",
+ "jsonrpc-core 16.0.0",
+ "lazy_static",
+ "log 0.4.14",
+ "parking_lot 0.11.1",
  "rand 0.7.3",
  "serde",
 ]
@@ -4098,7 +4142,7 @@ version = "0.5.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#a2fda3a75c33c3accd2300d68e15f2b9a27cc14e"
 dependencies = [
  "jsonrpc-core 15.1.0",
- "jsonrpc-core-client",
+ "jsonrpc-core-client 15.1.0",
  "jsonrpc-derive",
  "module-exchange-rate-oracle-rpc-runtime-api",
  "parity-scale-codec",
@@ -4126,7 +4170,7 @@ version = "0.5.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#a2fda3a75c33c3accd2300d68e15f2b9a27cc14e"
 dependencies = [
  "jsonrpc-core 15.1.0",
- "jsonrpc-core-client",
+ "jsonrpc-core-client 15.1.0",
  "jsonrpc-derive",
  "module-issue-rpc-runtime-api",
  "parity-scale-codec",
@@ -4153,7 +4197,7 @@ version = "0.5.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#a2fda3a75c33c3accd2300d68e15f2b9a27cc14e"
 dependencies = [
  "jsonrpc-core 15.1.0",
- "jsonrpc-core-client",
+ "jsonrpc-core-client 15.1.0",
  "jsonrpc-derive",
  "module-redeem-rpc-runtime-api",
  "parity-scale-codec",
@@ -4180,7 +4224,7 @@ version = "0.5.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#a2fda3a75c33c3accd2300d68e15f2b9a27cc14e"
 dependencies = [
  "jsonrpc-core 15.1.0",
- "jsonrpc-core-client",
+ "jsonrpc-core-client 15.1.0",
  "jsonrpc-derive",
  "module-refund-rpc-runtime-api",
  "parity-scale-codec",
@@ -4207,7 +4251,7 @@ version = "0.5.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#a2fda3a75c33c3accd2300d68e15f2b9a27cc14e"
 dependencies = [
  "jsonrpc-core 15.1.0",
- "jsonrpc-core-client",
+ "jsonrpc-core-client 15.1.0",
  "jsonrpc-derive",
  "module-replace-rpc-runtime-api",
  "parity-scale-codec",
@@ -4234,7 +4278,7 @@ version = "0.5.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#a2fda3a75c33c3accd2300d68e15f2b9a27cc14e"
 dependencies = [
  "jsonrpc-core 15.1.0",
- "jsonrpc-core-client",
+ "jsonrpc-core-client 15.1.0",
  "jsonrpc-derive",
  "module-exchange-rate-oracle-rpc-runtime-api",
  "module-sla-rpc-runtime-api",
@@ -4263,7 +4307,7 @@ version = "0.5.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#a2fda3a75c33c3accd2300d68e15f2b9a27cc14e"
 dependencies = [
  "jsonrpc-core 15.1.0",
- "jsonrpc-core-client",
+ "jsonrpc-core-client 15.1.0",
  "jsonrpc-derive",
  "module-staked-relayers-rpc-runtime-api",
  "parity-scale-codec",
@@ -4290,7 +4334,7 @@ version = "0.3.0"
 source = "git+https://gitlab.com/interlay/btc-parachain?branch=dev#a2fda3a75c33c3accd2300d68e15f2b9a27cc14e"
 dependencies = [
  "jsonrpc-core 15.1.0",
- "jsonrpc-core-client",
+ "jsonrpc-core-client 15.1.0",
  "jsonrpc-derive",
  "module-exchange-rate-oracle-rpc-runtime-api",
  "module-vault-registry-rpc-runtime-api",
@@ -4972,7 +5016,7 @@ version = "2.0.1"
 source = "git+https://github.com/paritytech/substrate?branch=rococo-v1#a0e44efcde6f1adbb4df17f068cfff52593063ad"
 dependencies = [
  "jsonrpc-core 15.1.0",
- "jsonrpc-core-client",
+ "jsonrpc-core-client 15.1.0",
  "jsonrpc-derive",
  "pallet-transaction-payment-rpc-runtime-api",
  "parity-scale-codec",
@@ -7199,7 +7243,7 @@ dependencies = [
  "futures 0.3.12",
  "hash-db",
  "jsonrpc-core 15.1.0",
- "jsonrpc-pubsub",
+ "jsonrpc-pubsub 15.1.0",
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.11.1",
@@ -7233,9 +7277,9 @@ dependencies = [
  "derive_more",
  "futures 0.3.12",
  "jsonrpc-core 15.1.0",
- "jsonrpc-core-client",
+ "jsonrpc-core-client 15.1.0",
  "jsonrpc-derive",
- "jsonrpc-pubsub",
+ "jsonrpc-pubsub 15.1.0",
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.11.1",
@@ -7258,7 +7302,7 @@ dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-http-server 15.1.0",
  "jsonrpc-ipc-server",
- "jsonrpc-pubsub",
+ "jsonrpc-pubsub 15.1.0",
  "jsonrpc-ws-server",
  "log 0.4.14",
  "serde",
@@ -7279,7 +7323,7 @@ dependencies = [
  "futures-timer 3.0.2",
  "hash-db",
  "jsonrpc-core 15.1.0",
- "jsonrpc-pubsub",
+ "jsonrpc-pubsub 15.1.0",
  "lazy_static",
  "log 0.4.14",
  "parity-scale-codec",
@@ -8612,6 +8656,7 @@ dependencies = [
  "frame-system",
  "futures 0.3.12",
  "hex 0.4.2",
+ "jsonrpc-core-client 16.0.0",
  "jsonrpc-http-server 15.1.0",
  "jsonrpsee",
  "log 0.4.14",
@@ -8782,7 +8827,7 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "futures 0.3.12",
  "jsonrpc-core 15.1.0",
- "jsonrpc-core-client",
+ "jsonrpc-core-client 15.1.0",
  "jsonrpc-derive",
  "log 0.4.14",
  "parity-scale-codec",
@@ -9758,6 +9803,8 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.3.12",
  "hex 0.4.2",
+ "jsonrpc-core 16.0.0",
+ "jsonrpc-core-client 16.0.0",
  "jsonrpc-http-server 16.0.0",
  "jsonrpsee",
  "log 0.4.14",

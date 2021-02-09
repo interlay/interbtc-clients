@@ -1,4 +1,6 @@
 use bitcoin::Error as BitcoinError;
+use hex::FromHexError;
+use jsonrpc_core_client::RpcError;
 use jsonrpc_http_server::jsonrpc_core::Error as JsonRpcError;
 use parity_scale_codec::Error as CodecError;
 use runtime::{substrate_subxt::Error as XtError, Error as RuntimeError};
@@ -25,6 +27,12 @@ pub enum Error {
     ArithmeticOverflow,
     #[error("Mathematical operation caused an underflow")]
     ArithmeticUnderflow,
+    #[error("Mathematical operation error")]
+    MathError,
+    #[error("RPC error: {0}")]
+    RpcError(#[from] RpcError),
+    #[error("Hex conversion error: {0}")]
+    FromHexError(#[from] FromHexError),
 
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),

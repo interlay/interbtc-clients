@@ -1,4 +1,5 @@
 mod error;
+mod faucet;
 mod http;
 mod oracle;
 pub mod relay;
@@ -10,6 +11,8 @@ pub use error::Error;
 pub use vault::Vaults;
 
 pub mod service {
+    pub use crate::faucet::get_faucet_allowance;
+    pub use crate::faucet::get_funding;
     pub use crate::http::start as start_api;
     pub use crate::oracle::report_offline_oracle;
     pub use crate::status::listen_for_blocks_stored;
