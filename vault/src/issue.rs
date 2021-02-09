@@ -209,7 +209,7 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static
                     let _ = event_channel.clone().send(RequestEvent::Opened).await;
 
                     if let Err(e) =
-                        add_new_deposit_key(btc_rpc, event.issue_id, event.public_key).await
+                        add_new_deposit_key(btc_rpc, event.issue_id, event.vault_public_key).await
                     {
                         error!(
                             "Failed to add new deposit key #{}: {}",
@@ -223,7 +223,7 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static
                     .0
                     .lock()
                     .await
-                    .insert(event.issue_id, event.btc_address);
+                    .insert(event.issue_id, event.vault_btc_address);
             },
             |error| error!("Error reading issue event: {}", error.to_string()),
         )

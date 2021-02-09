@@ -36,7 +36,7 @@ substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "c7168df", optional = true }
 tempdir = {version = "0.3.7", optional = true }
 btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"], optional = true }
-btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"], optional = true }
+btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.1", features = ["aura-grandpa"], optional = true }
 bitcoin = { path = "../bitcoin", optional = true }
 rand = { version = "0.7", optional = true }
 
