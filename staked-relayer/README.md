@@ -104,16 +104,18 @@ OPTIONS:
 
 ## Example
 
-First, ensure you have a running Bitcoin node and a `keyfile.json` as specified above. An example keyfile looks as follows:
+First, ensure you have a running Bitcoin node and a `keyfile.json` as specified above, denoting a Polkadot account. An example keyfile looks as follows:
 ```
 { 
     "relayer": "car timber smoke zone west involve board success norm inherit door road" 
 }
 ```
 
-Next, ensure the Polkadot account whose mnemonic you provided in `keyfile.json` is funded with enough DOT to pay for the activation transaction.
+To register your stake, you can either use your own DOT or request some from our faucet service.
 
-Then, run the staked relayer as in the example below:
+
+**Using your own DOT**
+First, run the staked relayer as in the example below:
 ```
 cargo run -- \
     --bitcoin-rpc-url http://localhost:18332 \
@@ -124,4 +126,17 @@ cargo run -- \
     --polka-btc-url 'wss://beta.polkabtc.io/api/parachain'
 ```
 
-Once the staked relayer is running, go to https://beta.polkabtc.io to the Relayer page and register by locking some DOT. The relayer client can contribute to the running of PolkaBTC without locking DOT, but interest is only earned if the relayer is registered. You can check its status on the Dashboard page.
+Then, once the staked relayer is running, go to https://beta.polkabtc.io to the Relayer page and register by locking some DOT. The relayer client can contribute to the running of PolkaBTC without locking DOT, but interest is only earned if the relayer is registered. You can check its status on the Dashboard page.
+
+**Using DOT from the faucet**
+With funding from the faucet, you can run the command below to register your staked relayer with ~1 DOT and also receive ~500DOT to pay for transaction fees:
+```
+cargo run -- \
+    --bitcoin-rpc-url http://localhost:18332 \
+    --bitcoin-rpc-user rpcuser \
+    --bitcoin-rpc-pass rpcpass \
+    --keyfile /path/to/keyfile.json \
+    --keyname relayer \
+    --polka-btc-url 'wss://beta.polkabtc.io/api/parachain'
+    --auto-register-with-faucet-url https://beta.polkabtc.io/api/faucet
+```

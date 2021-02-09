@@ -112,16 +112,18 @@ OPTIONS:
 
 ## Example
 
-First, ensure you have a running Bitcoin node and a `keyfile.json` as specified above. An example keyfile looks as follows:
+First, ensure you have a running Bitcoin node and a `keyfile.json` as specified above, denoting a Polkadot account. An example keyfile looks as follows:
 ```
 { 
     "vault": "car timber smoke zone west involve board success norm inherit door road" 
 }
 ```
 
-Next, ensure the Polkadot account whose mnemonic you provided in `keyfile.json` is funded with enough DOT to pay for the registration transaction.
+To register your collateral, you can either use your own DOT or request some from our faucet service.
 
-Then, run the vault and register it with the parachain as in the example below:
+
+**Using your own DOT**
+For example, to register 500 DOT collateral of your own, run the vault as in the example below:
 ```
 cargo run -- \
     --bitcoin-rpc-url http://localhost:18332 \
@@ -130,6 +132,20 @@ cargo run -- \
     --keyfile /path/to/keyfile.json \
     --keyname vault \
     --polka-btc-url 'wss://beta.polkabtc.io/api/parachain'
+    --auto-register-with-collateral 5000000000000
+```
+Once the vault is running, you can check its status on the Dashboard page.
+
+**Using DOT from the faucet**
+With funding from the faucet, the command becomes:
+```
+cargo run -- \
+    --bitcoin-rpc-url http://localhost:18332 \
+    --bitcoin-rpc-user rpcuser \
+    --bitcoin-rpc-pass rpcpass \
+    --keyfile /path/to/keyfile.json \
+    --keyname vault \
+    --polka-btc-url 'wss://beta.polkabtc.io/api/parachain'
+    --auto-register-with-faucet-url https://beta.polkabtc.io/api/faucet
 ```
 
-Once the vault is running, go to https://beta.polkabtc.io to the Vault page and register some collateral, so the vault you registered can start issuing. You can also check its status on the Dashboard page.
