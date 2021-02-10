@@ -98,8 +98,8 @@ pub async fn assert_issue(
 
     let metadata = btc_rpc
         .send_to_address(
-            issue.btc_address,
-            issue.amount as u64,
+            issue.vault_btc_address,
+            issue.amount_btc as u64,
             None,
             Duration::from_secs(30),
             0,

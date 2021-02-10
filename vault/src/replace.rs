@@ -55,7 +55,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Send + Sync + 'static
                     match result {
                         Ok(_) => info!(
                             "Successfully Executed replace #{} with amount {}",
-                            event.replace_id, event.btc_amount
+                            event.replace_id, event.amount_btc
                         ),
                         Err(e) => error!(
                             "Failed to process replace request #{}: {}",
@@ -149,7 +149,7 @@ pub async fn listen_for_replace_requests<B: BitcoinCoreApi>(
 
                 info!(
                     "Received replace request #{} from {} for amount {}",
-                    event.replace_id, event.old_vault_id, event.amount
+                    event.replace_id, event.old_vault_id, event.amount_btc
                 );
 
                 if accept_replace_requests {
@@ -184,7 +184,7 @@ pub async fn handle_replace_request<
     event: &RequestReplaceEvent<PolkaBtcRuntime>,
 ) -> Result<(), Error> {
     let required_collateral = provider
-        .get_required_collateral_for_polkabtc(event.amount)
+        .get_required_collateral_for_polkabtc(event.amount_btc)
         .await?;
 
     let free_balance = provider.get_free_dot_balance().await?;
@@ -510,9 +510,10 @@ mod tests {
         provider.expect_get_free_dot_balance().returning(|| Ok(50));
 
         let event = RequestReplaceEvent {
-            amount: Default::default(),
+            amount_btc: Default::default(),
             old_vault_id: Default::default(),
             replace_id: Default::default(),
+            griefing_collateral: Default::default(),
         };
         assert_err!(
             handle_replace_request(Arc::new(provider), Arc::new(bitcoin), &event).await,

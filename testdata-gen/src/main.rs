@@ -564,7 +564,7 @@ async fn main() -> Result<(), Error> {
                 issue::request_issue(&provider, info.issue_amount, griefing_collateral, vault_id)
                     .await?;
 
-            let vault_btc_address = request_data.btc_address;
+            let vault_btc_address = request_data.vault_btc_address;
 
             if info.no_execute {
                 println!("{}", hex::encode(request_data.issue_id.as_bytes()));
@@ -576,7 +576,7 @@ async fn main() -> Result<(), Error> {
                 &provider,
                 &btc_rpc,
                 request_data.issue_id,
-                request_data.amount,
+                request_data.amount_btc,
                 vault_btc_address,
             )
             .await?;

@@ -270,7 +270,7 @@ async fn test_withdraw_replace_succeeds() {
     assert_event::<WithdrawReplaceEvent<PolkaBtcRuntime>, _>(
         Duration::from_secs(30),
         old_vault_provider.clone(),
-        |e| e.request_id == replace_id,
+        |e| e.replace_id == replace_id,
     )
     .await;
 
@@ -587,8 +587,8 @@ async fn test_refund_succeeds() {
 
         let metadata = btc_rpc
             .send_to_address(
-                issue.btc_address,
-                issue.amount as u64 + over_payment,
+                issue.vault_btc_address,
+                issue.amount_btc as u64 + over_payment,
                 None,
                 Duration::from_secs(30),
                 0,
@@ -678,8 +678,8 @@ async fn test_issue_overpayment_succeeds() {
 
         let metadata = btc_rpc
             .send_to_address(
-                issue.btc_address,
-                issue.amount as u64 * over_payment_factor as u64,
+                issue.vault_btc_address,
+                issue.amount_btc as u64 * over_payment_factor as u64,
                 None,
                 Duration::from_secs(30),
                 0,
@@ -767,8 +767,8 @@ async fn test_automatic_issue_execution_succeeds() {
 
         btc_rpc
             .send_to_address(
-                issue.btc_address,
-                issue.amount as u64,
+                issue.vault_btc_address,
+                issue.amount_btc as u64,
                 None,
                 Duration::from_secs(30),
                 0,

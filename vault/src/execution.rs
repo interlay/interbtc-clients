@@ -79,7 +79,7 @@ impl Request {
     pub fn from_accept_replace_event(request: &AcceptReplaceEvent<PolkaBtcRuntime>) -> Request {
         Request {
             btc_address: request.btc_address,
-            amount: request.btc_amount,
+            amount: request.amount_btc,
             hash: request.replace_id,
             open_time: None,
             request_type: RequestType::Replace,
@@ -98,7 +98,7 @@ impl Request {
     /// Constructs a Request for the given RequestRedeemEvent
     pub fn from_redeem_request_event(request: &RequestRedeemEvent<PolkaBtcRuntime>) -> Request {
         Request {
-            btc_address: request.btc_address,
+            btc_address: request.user_btc_address,
             amount: request.amount_polka_btc,
             hash: request.redeem_id,
             open_time: None,

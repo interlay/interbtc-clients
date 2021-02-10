@@ -18,6 +18,7 @@ tokio = { version = "0.2.22", features = ["full"] }
 jsonrpsee = "0.1.0"
 futures = "0.3.5"
 clap = "3.0.0-beta.2"
+log = "0.4.0"
 
 # Substrate dependencies
 sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
@@ -29,14 +30,14 @@ frame-support = { git = "https://github.com/paritytech/substrate", branch = "roc
 frame-system = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 
 # Subxt dependencies
-substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "c7168df" }
-substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "c7168df" }
+substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "126581f" }
+substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "126581f" }
 
 # Dependencies for the testing utils for integration tests
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "c7168df", optional = true }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "126581f", optional = true }
 tempdir = {version = "0.3.7", optional = true }
 btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"], optional = true }
-btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"], optional = true }
+btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.1", features = ["aura-grandpa"], optional = true }
 bitcoin = { path = "../bitcoin", optional = true }
 rand = { version = "0.7", optional = true }
 
@@ -107,7 +108,7 @@ version = "0.5.0"
 package = "exchange-rate-oracle"
 
 [dev-dependencies]
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "c7168df" }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "126581f" }
 tempdir = "0.3.7"
 btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
 btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }

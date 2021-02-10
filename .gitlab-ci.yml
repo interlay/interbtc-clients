@@ -24,7 +24,7 @@ test-crates:
 
         - cargo fmt -- --check
         - cargo check --all
-        - cargo test --all
+        - cargo test -j1 --all
 
         - sccache -s
     cache:

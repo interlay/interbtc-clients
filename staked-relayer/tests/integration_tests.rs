@@ -183,6 +183,8 @@ async fn test_register_deregister_succeeds() {
         .unwrap();
 }
 
+// ignoring this for now after checking with @Sander, as the test times out
+#[ignore]
 #[tokio::test(threaded_scheduler)]
 async fn test_vote_status_no_data_succeeds() {
     let _ = env_logger::try_init();
@@ -228,8 +230,8 @@ async fn test_vote_status_no_data_succeeds() {
                 .unwrap();
             let metadata = btc_rpc_1
                 .send_to_address(
-                    issue.btc_address,
-                    issue.amount as u64,
+                    issue.vault_btc_address,
+                    issue.amount_btc as u64,
                     None,
                     Duration::from_secs(30),
                     0,

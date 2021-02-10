@@ -21,10 +21,12 @@ pub struct RequestIssueCall<T: Issue> {
 pub struct RequestIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,
-    pub amount: T::PolkaBTC,
+    pub amount_btc: T::PolkaBTC, //add _btc
+    pub fee_polkabtc: T::PolkaBTC,
+    pub griefing_collateral: T::DOT,
     pub vault_id: T::AccountId,
-    pub btc_address: T::BtcAddress,
-    pub public_key: T::BtcPublicKey,
+    pub vault_btc_address: T::BtcAddress,
+    pub vault_public_key: T::BtcPublicKey,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
@@ -40,6 +42,7 @@ pub struct ExecuteIssueCall<T: Issue> {
 pub struct ExecuteIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,
+    pub total_amount: T::PolkaBTC,
     pub vault_id: T::AccountId,
 }
 
@@ -53,6 +56,7 @@ pub struct CancelIssueCall<T: Issue> {
 pub struct CancelIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,
+    pub griefing_collateral: T::DOT,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]

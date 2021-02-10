@@ -21,8 +21,10 @@ pub struct RequestRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,
     pub amount_polka_btc: T::PolkaBTC,
+    pub fee_polka_btc: T::PolkaBTC,
+    pub premium_dot: T::DOT,
     pub vault_id: T::AccountId,
-    pub btc_address: T::BtcAddress,
+    pub user_btc_address: T::BtcAddress,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
@@ -38,6 +40,8 @@ pub struct ExecuteRedeemCall<T: Redeem> {
 pub struct ExecuteRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,
+    pub amount_polka_btc: T::PolkaBTC,
+    pub fee_polka_btc: T::PolkaBTC,
     pub vault_id: T::AccountId,
 }
 
@@ -52,6 +56,9 @@ pub struct CancelRedeemCall<T: Redeem> {
 pub struct CancelRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,
+    pub vault_id: T::AccountId,
+    pub slashing_amount_in_dot: T::DOT,
+    pub reimburse: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
