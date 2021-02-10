@@ -6772,6 +6772,7 @@ dependencies = [
  "futures 0.3.12",
  "issue",
  "jsonrpsee",
+ "log 0.4.14",
  "module-exchange-rate-oracle-rpc-runtime-api",
  "parity-scale-codec",
  "rand 0.7.3",
@@ -9200,8 +9201,8 @@ dependencies = [
 
 [[package]]
 name = "substrate-subxt"
-version = "0.13.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=c7168df#c7168df4c295ced29952fc58956feae90552a2fe"
+version = "0.14.0"
+source = "git+https://github.com/interlay/substrate-subxt?rev=126581f#126581fb59941b3c77664fc2853c0be1ecf730d3"
 dependencies = [
  "frame-metadata",
  "frame-support",
@@ -9228,8 +9229,8 @@ dependencies = [
 
 [[package]]
 name = "substrate-subxt-client"
-version = "0.5.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=c7168df#c7168df4c295ced29952fc58956feae90552a2fe"
+version = "0.6.0"
+source = "git+https://github.com/interlay/substrate-subxt?rev=126581f#126581fb59941b3c77664fc2853c0be1ecf730d3"
 dependencies = [
  "async-std",
  "futures 0.1.30",
@@ -9245,8 +9246,8 @@ dependencies = [
 
 [[package]]
 name = "substrate-subxt-proc-macro"
-version = "0.13.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=c7168df#c7168df4c295ced29952fc58956feae90552a2fe"
+version = "0.14.0"
+source = "git+https://github.com/interlay/substrate-subxt?rev=126581f#126581fb59941b3c77664fc2853c0be1ecf730d3"
 dependencies = [
  "heck",
  "proc-macro-crate",

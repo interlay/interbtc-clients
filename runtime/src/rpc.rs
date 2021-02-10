@@ -6,6 +6,7 @@ use jsonrpsee::{
     common::{to_value as to_json_value, Params},
     Client as RpcClient,
 };
+use log::trace;
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
 use sp_arithmetic::FixedU128;
 use sp_core::sr25519::Pair as KeyPair;
@@ -177,7 +178,7 @@ impl PolkaBtcProvider {
     /// * `on_error` - callback for decoding error, is not allowed to take too long
     pub async fn on_event<T, F, R, E>(&self, mut on_event: F, on_error: E) -> Result<(), Error>
     where
-        T: Event<PolkaBtcRuntime>,
+        T: Event<PolkaBtcRuntime> + core::fmt::Debug,
         F: FnMut(T) -> R,
         R: Future<Output = ()>,
         E: Fn(XtError),
@@ -199,9 +200,11 @@ impl PolkaBtcProvider {
                 let tx = &tx;
                 while let Some(result) = sub.next().await {
                     if let Ok(raw_event) = result {
+                        trace!("raw event: {:?}", raw_event);
                         let decoded = T::decode(&mut &raw_event.data[..]);
                         match decoded {
                             Ok(event) => {
+                                trace!("decoded event: {:?}", event);
                                 // send the event to the other task
                                 if tx.clone().send(event).await.is_err() {
                                     break;

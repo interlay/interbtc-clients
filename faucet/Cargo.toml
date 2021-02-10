@@ -28,7 +28,7 @@ sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1
 sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 
 [dev-dependencies]
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "c7168df" }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "126581f" }
 tempdir = "0.3.7"
 btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
 btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
