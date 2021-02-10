@@ -25,7 +25,7 @@ pipeline {
 
                     sh 'cargo fmt -- --check'
                     sh 'cargo check --workspace --release'
-                    sh 'cargo test --workspace --release'
+                    sh 'cargo test -j1 --workspace --release'
 
                     sh '/usr/local/bin/sccache -s'
                 }
