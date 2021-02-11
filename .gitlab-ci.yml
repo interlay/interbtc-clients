@@ -24,10 +24,10 @@ stages:
     script:
         - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
         - |
-            /kaniko/executor --context ${CI_PROJECT_DIR} \
+            /kaniko/executor -f ${CI_PROJECT_DIR}/.deploy/Dockerfile -c ${CI_PROJECT_DIR} \
                 --build-arg BINARY=${IMAGE} \
-                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
-                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:$CI_COMMIT_BRANCH
+                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_BRANCH}-${CI_COMMIT_SHORT_SHA} \
+                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_BRANCH}
 
 .only-refs: &only_refs
     only:
