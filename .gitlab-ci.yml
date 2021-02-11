@@ -14,17 +14,17 @@ test-crates:
         CARGO_HOME: $CI_PROJECT_DIR/.cargo
         RUSTC_WRAPPER: /usr/local/bin/sccache
         SCCACHE_GCS_RW_MODE: READ_WRITE
-    script:
+    before_script:
         - rustup show
         - rustc --version
         - rustfmt --version
         - cargo --version
         - SCCACHE_START_SERVER=1 SCCACHE_IDLE_TIMEOUT=0 sccache
         - sccache -s
-
+    script:
         - cargo fmt -- --check
         - cargo check --all
-        - cargo test -j1 --all
+        - cargo test --all
 
         - sccache -s
     cache:
