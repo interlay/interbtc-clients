@@ -28,8 +28,8 @@ stages:
                 --build-arg BINARY=${IMAGE} \
                 --context ${CI_PROJECT_DIR} \
                 --dockerfile ${CI_PROJECT_DIR}/.deploy/Dockerfile \
-                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_BRANCH}-${CI_COMMIT_SHORT_SHA} \
-                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_BRANCH}
+                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_SHORT_SHA} \
+                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_REF_SLUG}
 
 .only-refs: &only_refs
     only:
