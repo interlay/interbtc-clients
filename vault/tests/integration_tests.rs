@@ -85,7 +85,7 @@ async fn test_replace_succeeds() {
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
     relayer_provider
-        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
         .await
         .unwrap();
 
@@ -166,7 +166,7 @@ async fn test_maintain_collateral_succeeds() {
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
     relayer_provider
-        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
         .await
         .unwrap();
 
@@ -194,7 +194,7 @@ async fn test_maintain_collateral_succeeds() {
         async {
             // dot per btc increases by 10%
             relayer_provider
-                .set_exchange_rate_info(FixedU128::saturating_from_rational(110u128, 10000))
+                .set_exchange_rate_info(FixedU128::saturating_from_rational(110u128, 10000u128))
                 .await
                 .unwrap();
             assert_event::<LockAdditionalCollateralEvent<PolkaBtcRuntime>, _>(
@@ -225,7 +225,7 @@ async fn test_withdraw_replace_succeeds() {
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
     relayer_provider
-        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
         .await
         .unwrap();
 
@@ -275,7 +275,7 @@ async fn test_withdraw_replace_succeeds() {
         assert_event::<WithdrawReplaceEvent<PolkaBtcRuntime>, _>(
             TIMEOUT,
             old_vault_provider.clone(),
-            |e| e.request_id == replace_id,
+            |e| e.replace_id == replace_id,
         ),
     )
     .await;
@@ -305,7 +305,7 @@ async fn test_cancellation_succeeds() {
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
     relayer_provider
-        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
         .await
         .unwrap();
 
@@ -470,7 +470,7 @@ async fn test_auction_replace_succeeds() {
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
     relayer_provider
-        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
         .await
         .unwrap();
 
@@ -522,7 +522,7 @@ async fn test_auction_replace_succeeds() {
             join3(
                 //  we need to go from 150% collateral to just below 120%. So increase dot-per-btc by just over 25%
                 relayer_provider
-                    .set_exchange_rate_info(FixedU128::saturating_from_rational(126, 10000))
+                    .set_exchange_rate_info(FixedU128::saturating_from_rational(126u128, 10000u128))
                     .map(Result::unwrap),
                 assert_event::<AuctionReplaceEvent<PolkaBtcRuntime>, _>(
                     TIMEOUT,
@@ -569,7 +569,7 @@ async fn test_refund_succeeds() {
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
     relayer_provider
-        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
         .await
         .unwrap();
 
@@ -650,7 +650,7 @@ async fn test_issue_overpayment_succeeds() {
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
     relayer_provider
-        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
         .await
         .unwrap();
 
@@ -729,7 +729,7 @@ async fn test_automatic_issue_execution_succeeds() {
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
     relayer_provider
-        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
         .await
         .unwrap();
 
@@ -762,7 +762,13 @@ async fn test_automatic_issue_execution_succeeds() {
             .unwrap();
 
         btc_rpc
-            .send_to_address(issue.btc_address, issue.amount_btc as u64, None, TIMEOUT, 0)
+            .send_to_address(
+                issue.vault_btc_address,
+                issue.amount_btc as u64,
+                None,
+                TIMEOUT,
+                0,
+            )
             .await
             .unwrap();
 
@@ -809,7 +815,7 @@ async fn test_execute_open_requests_succeeds() {
     let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
 
     relayer_provider
-        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
         .await
         .unwrap();
 
