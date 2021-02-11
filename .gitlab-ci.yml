@@ -45,6 +45,7 @@ docker-publish-staked-relayer:
             --destination $CI_REGISTRY_IMAGE/staked-relayer:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
             --destination $CI_REGISTRY_IMAGE/staked-relayer:$CI_COMMIT_BRANCH
     only:
+        - tags
         - master
         - dev
         - kaniko # debug
@@ -62,6 +63,7 @@ docker-publish-oracle:
               --destination $CI_REGISTRY_IMAGE/oracle:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
               --destination $CI_REGISTRY_IMAGE/oracle:$CI_COMMIT_BRANCH
     only:
+        - tags
         - master
         - dev
         - kaniko # debug
@@ -79,6 +81,7 @@ docker-publish-vault:
               --destination $CI_REGISTRY_IMAGE/vault:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
               --destination $CI_REGISTRY_IMAGE/vault:$CI_COMMIT_BRANCH
     only:
+        - tags
         - master
         - dev
         - kaniko # debug
@@ -96,6 +99,7 @@ docker-publish-testdata-gen:
               --destination $CI_REGISTRY_IMAGE/testdata-gen:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
               --destination $CI_REGISTRY_IMAGE/testdata-gen:$CI_COMMIT_BRANCH
     only:
+        - tags
         - master
         - dev
         - kaniko # debug
@@ -113,6 +117,7 @@ docker-publish-faucet:
               --destination $CI_REGISTRY_IMAGE/faucet:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
               --destination $CI_REGISTRY_IMAGE/faucet:$CI_COMMIT_BRANCH
     only:
+        - tags
         - master
         - dev
         - kaniko # debug
