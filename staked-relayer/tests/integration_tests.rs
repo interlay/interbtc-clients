@@ -41,7 +41,7 @@ async fn test_report_vault_theft_succeeds() {
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
     relayer_provider
-        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
         .await
         .unwrap();
 
@@ -227,7 +227,13 @@ async fn test_vote_status_no_data_succeeds() {
                 .await
                 .unwrap();
             let metadata = btc_rpc_1
-                .send_to_address(issue.btc_address, issue.amount_btc as u64, None, TIMEOUT, 0)
+                .send_to_address(
+                    issue.vault_btc_address,
+                    issue.amount_btc as u64,
+                    None,
+                    TIMEOUT,
+                    0,
+                )
                 .await
                 .unwrap();
             let update = assert_event::<StatusUpdateSuggestedEvent<PolkaBtcRuntime>, _>(
