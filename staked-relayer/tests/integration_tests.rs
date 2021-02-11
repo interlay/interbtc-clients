@@ -27,6 +27,8 @@ use std::time::Duration;
 
 use tokio::time::timeout;
 
+const TIMEOUT: Duration = Duration::from_secs(45);
+
 #[tokio::test(threaded_scheduler)]
 async fn test_report_vault_theft_succeeds() {
     let _ = env_logger::try_init();
@@ -110,12 +112,8 @@ async fn test_report_vault_theft_succeeds() {
             // now perform the theft
             btc_rpc.send_transaction(transaction).await.unwrap();
 
-            assert_event::<VaultTheftEvent<PolkaBtcRuntime>, _>(
-                Duration::from_secs(30),
-                vault_provider,
-                |_| true,
-            )
-            .await;
+            assert_event::<VaultTheftEvent<PolkaBtcRuntime>, _>(TIMEOUT, vault_provider, |_| true)
+                .await;
         },
     )
     .await
@@ -143,7 +141,7 @@ async fn test_oracle_offline_succeeds() {
         ),
         async {
             assert_event::<ExecuteStatusUpdateEvent<PolkaBtcRuntime>, _>(
-                Duration::from_secs(30),
+                TIMEOUT,
                 relayer_provider.clone(),
                 |e| matches!(e.add_error, Some(runtime::ErrorCode::OracleOffline)),
             )
@@ -229,17 +227,11 @@ async fn test_vote_status_no_data_succeeds() {
                 .await
                 .unwrap();
             let metadata = btc_rpc_1
-                .send_to_address(
-                    issue.vault_btc_address,
-                    issue.amount_btc as u64,
-                    None,
-                    Duration::from_secs(30),
-                    0,
-                )
+                .send_to_address(issue.btc_address, issue.amount_btc as u64, None, TIMEOUT, 0)
                 .await
                 .unwrap();
             let update = assert_event::<StatusUpdateSuggestedEvent<PolkaBtcRuntime>, _>(
-                Duration::from_secs(30),
+                TIMEOUT,
                 vault_provider,
                 |_| true,
             )
