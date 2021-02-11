@@ -1,3 +1,5 @@
+def output_files = ['staked-relayer', 'oracle', 'vault', 'faucet', 'testdata-gen']
+
 pipeline {
     agent {
         kubernetes {
@@ -25,7 +27,7 @@ pipeline {
 
                     sh 'cargo fmt -- --check'
                     sh 'cargo check --workspace --release'
-                    sh 'cargo test -j1 --workspace --release'
+                    sh 'cargo test --workspace --release'
 
                     sh '/usr/local/bin/sccache -s'
                 }
@@ -56,9 +58,14 @@ pipeline {
 
                     sh 'cargo build --workspace --release'
 
-                    sh 'mkdir -p target/release/_artifacts && find target/release/ -type f -executable -exec mv {} target/release/_artifacts/ \\;'
-                    archiveArtifacts 'target/release/_artifacts/*'
-//                    stash(name: "btc-parachain-parachain", includes: 'Dockerfile_release, target/release/btc-parachain-parachain')
+                    script {
+                        def binaries = output_files.collect { "target/release/$it" }.join(',')
+                        archiveArtifacts binaries
+
+                        for (bin in output_files) {
+                            stash(name: bin, includes: ".deploy/Dockerfile, target/release/${bin}")
+                        }
+                    }
 
                     sh '/usr/local/bin/sccache -s'
                 }
@@ -78,6 +85,45 @@ pipeline {
                 }
             }
         }
+
+        stage('Build docker images') {
+            when {
+                anyOf {
+                    branch 'master'
+                    branch 'dev'
+                    branch 'jenkins'
+                    tag '*'
+                }
+            }
+            environment {
+                PATH        = "/busybox:$PATH"
+                REGISTRY    = 'registry.gitlab.com'
+                REPOSITORY  = 'interlay/polkabtc-clients'
+            }
+            steps {
+                script {
+                    for (bin in output_files) {
+                        withEnv(["IMAGE=${bin}"]) {
+                            container(name: 'kaniko', shell: '/busybox/sh') {
+                                dir('unstash') {
+                                    unstash(bin)
+                                    runKaniko()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
+def runKaniko() {
+    sh '''#!/busybox/sh
+    set -x
+    GIT_BRANCH_SLUG=$(echo $GIT_BRANCH | sed -e 's/\\//-/g')
+    /kaniko/executor -f `pwd`/.deploy/Dockerfile -c `pwd` --build-arg BINARY=${IMAGE} \
+        --destination=${REGISTRY}/${REPOSITORY}/${IMAGE}:${GIT_BRANCH_SLUG} \
+        --destination=${REGISTRY}/${REPOSITORY}/${IMAGE}:${GIT_BRANCH_SLUG}-${GIT_COMMIT:0:6}
+    '''
+}
