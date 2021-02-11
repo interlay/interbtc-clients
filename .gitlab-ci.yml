@@ -6,14 +6,9 @@ variables:
 stages:
     - test
     - build
+    - deploy
 
-test-crates:
-    stage: test
-
-    variables:
-        CARGO_HOME: $CI_PROJECT_DIR/.cargo
-        RUSTC_WRAPPER: /usr/local/bin/sccache
-        SCCACHE_GCS_RW_MODE: READ_WRITE
+.rust-before-script: &rustup_sscache
     before_script:
         - rustup show
         - rustc --version
@@ -21,6 +16,33 @@ test-crates:
         - cargo --version
         - SCCACHE_START_SERVER=1 SCCACHE_IDLE_TIMEOUT=0 sccache
         - sccache -s
+
+.docker-script: &build_docker
+    image:
+        name: gcr.io/kaniko-project/executor:debug
+        entrypoint: [""]
+    script:
+        - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+        - |
+            /kaniko/executor --context ${CI_PROJECT_DIR} \
+                --build-arg BINARY=${IMAGE} \
+                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
+                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:$CI_COMMIT_BRANCH
+
+.only-refs: &only_refs
+    only:
+        - tags
+        - master
+        - dev
+        - kaniko # debug
+
+test-clients:
+    stage: test
+    variables:
+        CARGO_HOME: $CI_PROJECT_DIR/.cargo
+        RUSTC_WRAPPER: /usr/local/bin/sccache
+        SCCACHE_GCS_RW_MODE: READ_WRITE
+    <<: *rustup_sscache
     script:
         - cargo fmt -- --check
         - cargo check --all
@@ -31,95 +53,62 @@ test-crates:
         key: cargo
         paths:
             - .cargo
+    only:
+        - merge_requests
+
+build-clients:
+    stage: build
+    variables:
+        CARGO_HOME: $CI_PROJECT_DIR/.cargo
+        RUSTC_WRAPPER: /usr/local/bin/sccache
+        SCCACHE_GCS_RW_MODE: READ_WRITE
+    <<: *rustup_sscache
+    <<: *only_refs
+    script:
+        - cargo build --workspace --release
+        - sccache -s
+    artifacts:
+        name: "${CI_COMMIT_REF_SLUG}"
+        paths:
+            - target/release/staked-relayer
+            - target/release/oracle
+            - target/release/vault
+            - target/release/testdata-gen
+            - target/release/faucet
+
 
 docker-publish-staked-relayer:
-    stage: build
-    image:
-        name: gcr.io/kaniko-project/executor:debug
-        entrypoint: [""]
-    script:
-        - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
-        - |
-            /kaniko/executor --context $CI_PROJECT_DIR \
-            --dockerfile $CI_PROJECT_DIR/staked-relayer/Dockerfile \
-            --destination $CI_REGISTRY_IMAGE/staked-relayer:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
-            --destination $CI_REGISTRY_IMAGE/staked-relayer:$CI_COMMIT_BRANCH
-    only:
-        - tags
-        - master
-        - dev
-        - kaniko # debug
+    stage: deploy
+    variables:
+        IMAGE: staked-relayer
+    <<: *build_docker
+    <<: *only_refs
 
 docker-publish-oracle:
-    stage: build
-    image:
-        name: gcr.io/kaniko-project/executor:debug
-        entrypoint: [""]
-    script:
-        - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
-        - |
-            /kaniko/executor --context $CI_PROJECT_DIR \
-              --dockerfile $CI_PROJECT_DIR/oracle/Dockerfile \
-              --destination $CI_REGISTRY_IMAGE/oracle:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
-              --destination $CI_REGISTRY_IMAGE/oracle:$CI_COMMIT_BRANCH
-    only:
-        - tags
-        - master
-        - dev
-        - kaniko # debug
+    stage: deploy
+    variables:
+        IMAGE: oracle
+    <<: *build_docker
+    <<: *only_refs
 
 docker-publish-vault:
-    stage: build
-    image:
-        name: gcr.io/kaniko-project/executor:debug
-        entrypoint: [""]
-    script:
-        - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
-        - |
-            /kaniko/executor --context $CI_PROJECT_DIR \
-              --dockerfile $CI_PROJECT_DIR/vault/Dockerfile \
-              --destination $CI_REGISTRY_IMAGE/vault:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
-              --destination $CI_REGISTRY_IMAGE/vault:$CI_COMMIT_BRANCH
-    only:
-        - tags
-        - master
-        - dev
-        - kaniko # debug
+    stage: deploy
+    variables:
+        IMAGE: vault
+    <<: *build_docker
+    <<: *only_refs
 
 docker-publish-testdata-gen:
-    stage: build
-    image:
-        name: gcr.io/kaniko-project/executor:debug
-        entrypoint: [""]
-    script:
-        - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
-        - |
-            /kaniko/executor --context $CI_PROJECT_DIR \
-              --dockerfile $CI_PROJECT_DIR/testdata-gen/Dockerfile \
-              --destination $CI_REGISTRY_IMAGE/testdata-gen:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
-              --destination $CI_REGISTRY_IMAGE/testdata-gen:$CI_COMMIT_BRANCH
-    only:
-        - tags
-        - master
-        - dev
-        - kaniko # debug
+    stage: deploy
+    variables:
+        IMAGE: testdata-gen
+    <<: *build_docker
+    <<: *only_refs
 
 docker-publish-faucet:
-    stage: build
-    image:
-        name: gcr.io/kaniko-project/executor:debug
-        entrypoint: [""]
-    script:
-        - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
-        - |
-            /kaniko/executor --context $CI_PROJECT_DIR \
-              --dockerfile $CI_PROJECT_DIR/faucet/Dockerfile \
-              --destination $CI_REGISTRY_IMAGE/faucet:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA \
-              --destination $CI_REGISTRY_IMAGE/faucet:$CI_COMMIT_BRANCH
-    only:
-        - tags
-        - master
-        - dev
-        - kaniko # debug
-
+    stage: deploy
+    variables:
+        IMAGE: faucet
+    <<: *build_docker
+    <<: *only_refs
 
