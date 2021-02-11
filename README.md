@@ -90,3 +90,11 @@ cargo run --bin vault
     <img src="media/web3_grants.png">
   </a>
 </p>
+
+## Troubleshooting
+
+**Too many open files**
+
+On `cargo test` the embedded parachain node in the integration tests can consume a lot of resources. Currently the best workaround is to increase the resource limits of the current user.
+
+Use `ulimit -a` to list the current resource limits. To increase the maximum number of files set `ulimit -n 4096` or some other reasonable limit. 
