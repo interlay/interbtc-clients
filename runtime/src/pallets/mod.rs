@@ -43,11 +43,10 @@ pub trait Core: System {
     type H160: Codec + EncodeLike + Member + Default;
     type BtcAddress: Codec + EncodeLike + Member + Default;
     type BtcPublicKey: Codec + EncodeLike + Member + Default;
-
     type ErrorCodes: Codec + EncodeLike + Member + Default;
     type ErrorCode: Codec + EncodeLike + Member + Default;
     type StatusCode: Codec + EncodeLike + Member + Default;
-
+    type StatusUpdateId: Codec + EncodeLike + Member + Default;
     type SignedFixedPoint: Codec + EncodeLike + Member + Default;
     type UnsignedFixedPoint: Codec + EncodeLike + Member + Default;
 }

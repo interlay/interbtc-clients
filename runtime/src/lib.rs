@@ -79,6 +79,7 @@ impl pallets::Core for PolkaBtcRuntime {
     type ErrorCode = ErrorCode;
     type ErrorCodes = BTreeSet<ErrorCode>;
     type StatusCode = StatusCode;
+    type StatusUpdateId = u64;
     type SignedFixedPoint = FixedI128;
     type UnsignedFixedPoint = FixedU128;
 }
