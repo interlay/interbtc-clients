@@ -36,7 +36,7 @@ use std::collections::BTreeSet;
 pub use substrate_subxt;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, sudo, system, Runtime};
 
-pub const MINIMUM_STAKE: u64 = 100;
+pub const MINIMUM_STAKE: u128 = 100;
 pub const TX_FEES: u128 = 2000000000;
 pub const PLANCK_PER_DOT: u128 = 10000000000;
 
