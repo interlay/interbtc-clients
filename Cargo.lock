@@ -9000,7 +9000,7 @@ dependencies = [
  "futures 0.3.12",
  "hex 0.4.2",
  "jsonrpc-core-client 16.0.0",
- "jsonrpc-http-server 15.1.0",
+ "jsonrpc-http-server 16.0.0",
  "jsonrpsee",
  "log 0.4.14",
  "mockall",

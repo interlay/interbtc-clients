@@ -3,7 +3,7 @@ use chrono::{DateTime, Duration, Utc};
 use futures::{self, executor::block_on};
 use hex::FromHex;
 use jsonrpc_http_server::jsonrpc_core::serde_json::Value;
-use jsonrpc_http_server::jsonrpc_core::Error as JsonRpcError;
+use jsonrpc_http_server::jsonrpc_core::{Error as JsonRpcError, ErrorCode as JsonRpcErrorCode};
 use jsonrpc_http_server::jsonrpc_core::{IoHandler, Params};
 use jsonrpc_http_server::{DomainsValidation, ServerBuilder};
 use kv::*;
@@ -35,10 +35,11 @@ fn parse_params<T: Decode>(params: Params) -> Result<T, Error> {
 fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError> {
     match resp {
         Ok(data) => Ok(format!("0x{}", hex::encode(data.encode())).into()),
-        Err(err) => {
-            error!("Error: {}", err.to_string());
-            Err(JsonRpcError::invalid_request())
-        }
+        Err(err) => Err(JsonRpcError {
+            code: JsonRpcErrorCode::InternalError,
+            message: err.to_string(),
+            data: None,
+        }),
     }
 }
 

@@ -2,7 +2,7 @@ use super::Error;
 use futures::executor::block_on;
 use hex::FromHex;
 use jsonrpc_http_server::jsonrpc_core::serde_json::Value;
-use jsonrpc_http_server::jsonrpc_core::Error as JsonRpcError;
+use jsonrpc_http_server::jsonrpc_core::{Error as JsonRpcError, ErrorCode as JsonRpcErrorCode};
 use jsonrpc_http_server::jsonrpc_core::{IoHandler, Params};
 use jsonrpc_http_server::{DomainsValidation, ServerBuilder};
 use parity_scale_codec::{Decode, Encode};
@@ -36,7 +36,11 @@ fn parse_params<T: Decode>(params: Params) -> Result<T, Error> {
 fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError> {
     match resp {
         Ok(data) => Ok(format!("0x{}", hex::encode(data.encode())).into()),
-        Err(_) => Err(JsonRpcError::internal_error()),
+        Err(err) => Err(JsonRpcError {
+            code: JsonRpcErrorCode::InternalError,
+            message: err.to_string(),
+            data: None,
+        }),
     }
 }
 
@@ -109,35 +113,35 @@ pub async fn start(provider: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: St
     let mut io = IoHandler::default();
     {
         let provider = provider.clone();
-        io.add_method("system_health", move |_| {
+        io.add_sync_method("system_health", move |_| {
             handle_resp(_system_health(&provider))
         });
     }
     {
         let provider = provider.clone();
-        io.add_method("account_id", move |_| handle_resp(_account_id(&provider)));
+        io.add_sync_method("account_id", move |_| handle_resp(_account_id(&provider)));
     }
     {
         let provider = provider.clone();
-        io.add_method("register_staked_relayer", move |params| {
+        io.add_sync_method("register_staked_relayer", move |params| {
             handle_resp(_register_staked_relayer(&provider, params))
         });
     }
     {
         let provider = provider.clone();
-        io.add_method("deregister_staked_relayer", move |_| {
+        io.add_sync_method("deregister_staked_relayer", move |_| {
             handle_resp(_deregister_staked_relayer(&provider))
         });
     }
     {
         let provider = provider.clone();
-        io.add_method("suggest_status_update", move |params| {
+        io.add_sync_method("suggest_status_update", move |params| {
             handle_resp(_suggest_status_update(&provider, params))
         });
     }
     {
         let provider = provider.clone();
-        io.add_method("vote_on_status_update", move |params| {
+        io.add_sync_method("vote_on_status_update", move |params| {
             handle_resp(_vote_on_status_update(&provider, params))
         });
     }
