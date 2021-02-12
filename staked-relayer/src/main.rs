@@ -65,10 +65,26 @@ struct Opts {
     #[clap(flatten)]
     bitcoin: bitcoin::cli::BitcoinOpts,
 
+    /// Automatically register the relayer with the given stake (in Planck).
+    #[clap(long)]
+    pub auto_register_with_stake: Option<u128>,
+
     /// Automatically register the staked relayer with collateral received from the faucet and a newly generated address.
     /// The parameter is the URL of the faucet
     #[clap(long)]
     auto_register_with_faucet_url: Option<String>,
+}
+
+async fn is_registered(provider: &Arc<PolkaBtcProvider>) -> Result<bool, Error> {
+    let account_id = provider.get_account_id();
+    // get stake returns 0 if not registered, so check that either active or inactive stake is non-zero
+    match provider.get_stake_by_id(account_id.clone()).await {
+        Ok(x) if x > 0 => Ok(true),
+        _ => Ok(provider
+            .get_inactive_stake_by_id(account_id.clone())
+            .await?
+            > 0),
+    }
 }
 
 #[tokio::main]
@@ -81,6 +97,15 @@ async fn main() -> Result<(), Error> {
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
     let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
+
+    if let Some(stake) = opts.auto_register_with_stake {
+        if !is_registered(&provider).await? {
+            provider.register_staked_relayer(stake).await?;
+            info!("Automatically registered staked relayer");
+        } else {
+            info!("Not registering staked relayer -- already registered");
+        }
+    }
 
     let dummy_network = bitcoin::Network::Regtest; // we don't make any transaction so this is not used
     let btc_rpc = Arc::new(BitcoinCore::new(

@@ -58,6 +58,9 @@ OPTIONS:
             Automatically register the staked relayer with collateral received from the faucet and a
             newly generated address. The parameter is the URL of the faucet
 
+        --auto-register-with-stake <auto-register-with-stake>
+            Automatically register the relayer with the given stake (in Planck)
+
         --bitcoin-rpc-pass <bitcoin-rpc-pass>              [env: BITCOIN_RPC_PASS=]
         --bitcoin-rpc-url <bitcoin-rpc-url>                [env: BITCOIN_RPC_URL=]
         --bitcoin-rpc-user <bitcoin-rpc-user>              [env: BITCOIN_RPC_USER=]
