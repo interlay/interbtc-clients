@@ -7,6 +7,16 @@ use std::fmt::Debug;
 use substrate_subxt::balances::{Balances, BalancesEventsDecoder};
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
+// TODO: use the type from module_staked_relayers when we no longer have
+// dependency conflicts
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
+pub struct StakedRelayer<Balance, BlockNumber> {
+    // total stake for this participant
+    pub stake: Balance,
+    // the height at which the participant bonded
+    pub height: BlockNumber,
+}
+
 #[module]
 pub trait StakedRelayers: Core + Balances {}
 
@@ -99,14 +109,14 @@ pub struct ExecuteStatusUpdateEvent<T: StakedRelayers> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct ActiveStakedRelayersStore<'a, T: StakedRelayers> {
-    #[store(returns = u64)]
+    #[store(returns = StakedRelayer<T::DOT, T::BlockNumber>)]
     pub _runtime: PhantomData<T>,
     pub account_id: &'a T::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct InactiveStakedRelayersStore<'a, T: StakedRelayers> {
-    #[store(returns = u64)]
+    #[store(returns = StakedRelayer<T::DOT, T::BlockNumber>)]
     pub _runtime: PhantomData<T>,
     pub account_id: &'a T::AccountId,
 }

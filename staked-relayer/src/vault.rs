@@ -251,9 +251,9 @@ mod tests {
 
         #[async_trait]
         trait StakedRelayerPallet {
-            async fn get_stake(&self) -> Result<u64, RuntimeError>;
-            async fn get_stake_by_id(&self, account_id: AccountId) -> Result<u64, RuntimeError>;
-            async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u64, RuntimeError>;
+            async fn get_stake(&self) -> Result<u128, RuntimeError>;
+            async fn get_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
+            async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
             async fn register_staked_relayer(&self, stake: u128) -> Result<(), RuntimeError>;
             async fn deregister_staked_relayer(&self) -> Result<(), RuntimeError>;
             async fn suggest_status_update(

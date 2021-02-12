@@ -102,9 +102,9 @@ mod tests {
 
         #[async_trait]
         trait StakedRelayerPallet {
-            async fn get_stake(&self) -> Result<u64, Error>;
-            async fn get_stake_by_id(&self, account_id: AccountId) -> Result<u64, Error>;
-            async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u64, Error>;
+            async fn get_stake(&self) -> Result<u128, Error>;
+            async fn get_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error>;
+            async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error>;
             async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error>;
             async fn deregister_staked_relayer(&self) -> Result<(), Error>;
             async fn suggest_status_update(
