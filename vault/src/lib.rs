@@ -252,6 +252,8 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
         }
     }
 
+    issue::add_keys_from_past_issue_request(&arc_provider, &btc_rpc).await?;
+
     let open_request_executor =
         execute_open_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
     tokio::spawn(async move {
