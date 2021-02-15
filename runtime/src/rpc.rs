@@ -18,7 +18,7 @@ use std::time::Duration;
 use substrate_subxt::Error as XtError;
 use substrate_subxt::{
     sudo::*, system::System, Call, Client, ClientBuilder, Event, EventSubscription, EventsDecoder,
-    PairSigner, Signer,
+    KeyIter, PairSigner, Signer,
 };
 use tokio::sync::RwLock;
 use tokio::time::delay_for;
@@ -966,6 +966,8 @@ pub trait IssuePallet {
     async fn get_issue_period(&self) -> Result<u32, Error>;
 
     async fn set_issue_period(&self, period: u32) -> Result<(), Error>;
+
+    async fn get_all_active_issues(&self) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, Error>;
 }
 
 #[async_trait]
@@ -1045,6 +1047,23 @@ impl IssuePallet for PolkaBtcProvider {
                 _runtime: PhantomData {},
             })
             .await?)
+    }
+
+    async fn get_all_active_issues(&self) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, Error> {
+        let current_height = self.get_current_chain_height().await?;
+        let issue_period = self.get_issue_period().await?;
+
+        let mut issue_requests = Vec::new();
+        let mut iter = self.ext_client.issue_requests_iter(None).await?;
+        while let Some((issue_id, request)) = iter.next().await? {
+            if !request.completed
+                && !request.cancelled
+                && request.opentime + issue_period > current_height
+            {
+                issue_requests.push((H256::from_slice(issue_id.0.as_slice()), request));
+            }
+        }
+        Ok(issue_requests)
     }
 }
 
