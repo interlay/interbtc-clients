@@ -1,21 +1,11 @@
 use super::{Core, CoreEventsDecoder};
 use core::marker::PhantomData;
-pub use module_staked_relayers::types::StatusUpdate;
+pub use module_staked_relayers::types::{StakedRelayer, StatusUpdate};
 pub use module_staked_relayers::Error as StakedRelayersError;
 use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
 use substrate_subxt::balances::{Balances, BalancesEventsDecoder};
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
-
-// TODO: use the type from module_staked_relayers when we no longer have
-// dependency conflicts
-#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
-pub struct StakedRelayer<Balance, BlockNumber> {
-    // total stake for this participant
-    pub stake: Balance,
-    // the height at which the participant bonded
-    pub height: BlockNumber,
-}
 
 #[module]
 pub trait StakedRelayers: Core + Balances {}

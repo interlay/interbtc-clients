@@ -1329,21 +1329,26 @@ impl BtcRelayPallet for PolkaBtcProvider {
         num_confirmations: u32,
     ) -> Result<(), Error> {
         loop {
-            let rich_block_header = match self.get_block_header(block_hash).await {
+            match self.get_block_header(block_hash).await {
                 // rpc returns zero-initialized storage items if not set, therefore
                 // a block header only exists if the height is non-zero
-                Ok(block_header) if block_header.block_height > 0 => block_header,
+                Ok(block_header)
+                    if block_header.block_height > 0
+                        && block_header.block_height + num_confirmations
+                            <= self.get_best_block_height().await? =>
+                {
+                    return Ok(());
+                }
                 _ => {
+                    trace!(
+                        "block {} not found or confirmed, waiting for {} seconds",
+                        block_hash,
+                        BLOCK_WAIT_TIMEOUT
+                    );
                     delay_for(Duration::from_secs(BLOCK_WAIT_TIMEOUT)).await;
                     continue;
                 }
             };
-
-            if rich_block_header.block_height + num_confirmations
-                <= self.get_best_block_height().await?
-            {
-                return Ok(());
-            }
         }
     }
 }
