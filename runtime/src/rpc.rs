@@ -18,7 +18,7 @@ use std::time::Duration;
 use substrate_subxt::Error as XtError;
 use substrate_subxt::{
     sudo::*, system::System, Call, Client, ClientBuilder, Event, EventSubscription, EventsDecoder,
-    KeyIter, PairSigner, Signer,
+    PairSigner, Signer,
 };
 use tokio::sync::RwLock;
 use tokio::time::delay_for;

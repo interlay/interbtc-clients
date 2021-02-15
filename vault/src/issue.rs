@@ -82,8 +82,8 @@ impl IssueRequests {
     }
 }
 
-// initialize `issue_set` with currently open issues, and return the blockheight from which to start
-// watching the bitcoin chain
+// initialize `issue_set` with currently open issues, and return the block height
+// from which to start watching the bitcoin chain
 async fn initialize_issue_set<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: &Arc<PolkaBtcProvider>,
     btc_rpc: &Arc<B>,
@@ -98,12 +98,13 @@ async fn initialize_issue_set<B: BitcoinCoreApi + Send + Sync + 'static>(
         None => btc_rpc.get_block_count().await? as u32, // no open issues, start at current height
     };
 
-    for (issue_id, request) in provider.get_all_active_issues().await?.into_iter() {
+    for (issue_id, request) in requests.into_iter() {
         issue_set.insert(issue_id, request.btc_address);
     }
 
     Ok(btc_start_height)
 }
+
 /// execute issue requests on best-effort (i.e. don't retry on error),
 /// returns `NoIncomingBlocks` if stream ends, otherwise runs forever
 pub async fn process_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
