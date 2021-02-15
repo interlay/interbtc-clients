@@ -115,7 +115,23 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     Err(Error::NoIncomingBlocks)
 }
 
-/// execute issue requests with a matching Bitcoin payment
+pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Send + Sync + 'static>(
+    provider: &Arc<PolkaBtcProvider>,
+    btc_rpc: &Arc<B>,
+) -> Result<(), Error> {
+    for (issue_id, request) in provider
+        .get_vault_issue_requests(provider.get_account_id().clone())
+        .await?
+        .into_iter()
+    {
+        if let Err(e) = add_new_deposit_key(btc_rpc, issue_id, request.btc_public_key).await {
+            error!("Failed to add deposit key #{}: {}", issue_id, e.to_string());
+        }
+    }
+    Ok(())
+}
+
+/// extract op_return output and check corresponding issue ids
 async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: &Arc<PolkaBtcProvider>,
     btc_rpc: &Arc<B>,
