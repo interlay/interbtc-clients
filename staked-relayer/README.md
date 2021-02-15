@@ -102,7 +102,7 @@ OPTIONS:
             chain tip
 
         --status-update-deposit <status-update-deposit>
-            Timeout in milliseconds to repeat oracle liveness check [default: 100]
+            Default deposit for all automated status proposals [default: 100]
 ```
 
 ## Example

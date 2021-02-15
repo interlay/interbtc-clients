@@ -3,7 +3,7 @@ use crate::Error;
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::channel::mpsc::Sender;
 use futures::{SinkExt, StreamExt};
-use log::{error, info};
+use log::{error, info, trace};
 use runtime::{
     pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
     BtcAddress, BtcPublicKey, BtcRelayPallet, H256Le, IssuePallet, PolkaBtcProvider,
@@ -115,7 +115,7 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     Err(Error::NoIncomingBlocks)
 }
 
-/// extract op_return output and check corresponding issue ids
+/// execute issue requests with a matching Bitcoin payment
 async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: &Arc<PolkaBtcProvider>,
     btc_rpc: &Arc<B>,
@@ -132,7 +132,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
     {
         // tx has output to address
         if let Some(issue_id) = issue_requests.remove_value(address) {
-            info!("Executing issue with id {}", issue_id);
+            info!("Found tx for issue with id {}", issue_id);
 
             // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
             // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
@@ -147,6 +147,8 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
             let txid = transaction.txid();
             let raw_tx = btc_rpc.get_raw_tx_for(&txid, &block_hash).await?;
             let proof = btc_rpc.get_proof_for(txid.clone(), &block_hash).await?;
+
+            info!("Executing issue with id {}", issue_id);
 
             // this will error if someone else executes the issue first
             provider
@@ -219,13 +221,15 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static
                     }
                 }
 
-                issue_set
-                    .0
-                    .lock()
-                    .await
-                    .insert(event.issue_id, event.vault_btc_address);
+                trace!(
+                    "watching issue #{} for payment to {}",
+                    event.issue_id,
+                    event.vault_btc_address
+                );
+                let mut issue_requests = issue_set.0.lock().await;
+                issue_requests.insert(event.issue_id, event.vault_btc_address);
             },
-            |error| error!("Error reading issue event: {}", error.to_string()),
+            |error| error!("Error reading request issue event: {}", error.to_string()),
         )
         .await
 }
@@ -258,9 +262,11 @@ pub async fn listen_for_issue_executes(
                         .send(RequestEvent::Executed(event.issue_id))
                         .await;
                 }
+
+                trace!("issue #{} executed, no longer watching", event.issue_id);
                 issue_set.0.lock().await.remove_key(&event.issue_id);
             },
-            |error| error!("Error reading issue event: {}", error.to_string()),
+            |error| error!("Error reading execute issue event: {}", error.to_string()),
         )
         .await
 }
@@ -279,9 +285,10 @@ pub async fn listen_for_issue_cancels(
     provider
         .on_event::<CancelIssueEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
+                trace!("issue #{} cancelled, no longer watching", event.issue_id);
                 issue_set.0.lock().await.remove_key(&event.issue_id);
             },
-            |error| error!("Error reading cancel event: {}", error.to_string()),
+            |error| error!("Error reading cancel issue event: {}", error.to_string()),
         )
         .await
 }
