@@ -236,15 +236,15 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
         .filter(|(_, request)| !request.completed)
         .map(|(hash, request)| Request::from_refund_request(hash, request));
 
-    // Place all redeems,replaces&refunds into a hashmap, indexed by their redeemid/replaceid
-    let mut hash_map = open_redeems
+    // Place all redeems, replaces & refunds into a hashmap, indexed by their redeemid/replaceid
+    let mut open_requests = open_redeems
         .chain(open_replaces)
         .chain(open_refunds)
         .map(|x| (x.hash, x))
         .collect::<HashMap<_, _>>();
 
     // find the height of bitcoin chain corresponding to the earliest open_time
-    let btc_start_height = match hash_map
+    let btc_start_height = match open_requests
         .iter()
         .map(|(_, request)| request.open_time.unwrap_or(u32::MAX))
         .min()
@@ -260,9 +260,9 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
         let tx = x?;
 
         // get the request this transaction corresponds to, if any
-        if let Some(request) = get_request_for_btc_tx(&tx, &hash_map) {
+        if let Some(request) = get_request_for_btc_tx(&tx, &open_requests) {
             // remove request from the hashmap
-            hash_map.retain(|&key, _| key != request.hash);
+            open_requests.retain(|&key, _| key != request.hash);
 
             info!(
                 "{:?} request #{} has valid bitcoin payment - processing...",
@@ -302,7 +302,8 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
 
     // All requests remaining in the hashmap did not have a bitcoin payment yet, so pay
     // and execute all of these
-    for (_, request) in hash_map {
+    for (_, request) in open_requests {
+        println!("{:?}", request);
         // there are potentially a large number of open requests - pay and execute each
         // in a separate task to ensure that awaiting confirmations does not significantly
         // delay other requests

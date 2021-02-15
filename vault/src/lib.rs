@@ -255,7 +255,7 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     let open_request_executor =
         execute_open_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
     tokio::spawn(async move {
-        info!("Checking for open replace/redeem requests..");
+        info!("Checking for open replace/redeem requests...");
         match open_request_executor.await {
             Ok(_) => info!("Done processing open replace/redeem requests"),
             Err(e) => error!("Failed to process open replace/redeem requests: {}", e),
@@ -278,12 +278,12 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
 
     // wait for a new block to arrive, to prevent processing an event that potentially
     // has been processed already prior to restarting
-    info!("Waiting for new block..");
+    info!("Waiting for new block...");
     let startup_height = arc_provider.get_current_chain_height().await?;
     while startup_height == arc_provider.get_current_chain_height().await? {
         delay_for(CHAIN_HEIGHT_POLLING_INTERVAL).await;
     }
-    info!("Starting to listen for events..");
+    info!("Starting to listen for events...");
 
     let (issue_block_tx, issue_block_rx) = mpsc::channel::<PolkaBtcHeader>(16);
     let (replace_block_tx, replace_block_rx) = mpsc::channel::<PolkaBtcHeader>(16);

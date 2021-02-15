@@ -49,7 +49,7 @@ struct Opts {
     #[clap(long, default_value = "5000")]
     oracle_timeout_ms: u64,
 
-    /// Timeout in milliseconds to repeat oracle liveness check.
+    /// Default deposit for all automated status proposals.
     #[clap(long, default_value = "100")]
     status_update_deposit: u128,
 

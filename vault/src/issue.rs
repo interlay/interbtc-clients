@@ -115,7 +115,7 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     Err(Error::NoIncomingBlocks)
 }
 
-/// extract op_return output and check corresponding issue ids
+/// execute issue requests with a matching Bitcoin payment
 async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: &Arc<PolkaBtcProvider>,
     btc_rpc: &Arc<B>,
@@ -132,7 +132,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
     {
         // tx has output to address
         if let Some(issue_id) = issue_requests.remove_value(address) {
-            info!("Executing issue with id {}", issue_id);
+            info!("Found tx for issue with id {}", issue_id);
 
             // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
             // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
@@ -147,6 +147,8 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
             let txid = transaction.txid();
             let raw_tx = btc_rpc.get_raw_tx_for(&txid, &block_hash).await?;
             let proof = btc_rpc.get_proof_for(txid.clone(), &block_hash).await?;
+
+            info!("Executing issue with id {}", issue_id);
 
             // this will error if someone else executes the issue first
             provider
