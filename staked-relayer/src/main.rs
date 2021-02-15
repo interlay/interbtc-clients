@@ -66,7 +66,7 @@ struct Opts {
     bitcoin: bitcoin::cli::BitcoinOpts,
 
     /// Automatically register the relayer with the given stake (in Planck).
-    #[clap(long)]
+    #[clap(long, conflicts_with("auto-register-with-faucet-url"))]
     pub auto_register_with_stake: Option<u128>,
 
     /// Automatically register the staked relayer with collateral received from the faucet and a newly generated address.
@@ -182,7 +182,9 @@ async fn main() -> Result<(), Error> {
                     .ok_or(Error::MathError)?
                     .checked_sub(TX_FEES)
                     .ok_or(Error::MathError)?;
-                provider.register_staked_relayer(registration_stake).await?;
+                if !is_registered(&provider).await? {
+                    provider.register_staked_relayer(registration_stake).await?;
+                }
             }
             Err(e) => error!("Faucet error: {}", e.to_string()),
         }
