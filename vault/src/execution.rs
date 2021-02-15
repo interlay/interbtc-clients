@@ -303,7 +303,6 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     // All requests remaining in the hashmap did not have a bitcoin payment yet, so pay
     // and execute all of these
     for (_, request) in open_requests {
-        println!("{:?}", request);
         // there are potentially a large number of open requests - pay and execute each
         // in a separate task to ensure that awaiting confirmations does not significantly
         // delay other requests

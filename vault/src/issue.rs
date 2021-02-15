@@ -221,11 +221,8 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static
                     }
                 }
 
-                issue_set
-                    .0
-                    .lock()
-                    .await
-                    .insert(event.issue_id, event.vault_btc_address);
+                let mut issue_requests = issue_set.0.lock().await;
+                issue_requests.insert(event.issue_id, event.vault_btc_address);
             },
             |error| error!("Error reading issue event: {}", error.to_string()),
         )

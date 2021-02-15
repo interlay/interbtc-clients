@@ -5,6 +5,7 @@ use bitcoincore_rpc::{
 };
 use futures::prelude::*;
 use futures::stream::StreamExt;
+use log::trace;
 use std::iter;
 use std::sync::Arc;
 use std::time::Duration;
@@ -171,6 +172,7 @@ pub async fn stream_blocks<T: BitcoinCoreApi>(
             {
                 Ok(block_hash) => match state.rpc.get_block(&block_hash).await {
                     Ok(block) => {
+                        trace!("found block {} at height {}", block_hash, height);
                         state.next_height += 1;
                         Some((Ok(block), state))
                     }

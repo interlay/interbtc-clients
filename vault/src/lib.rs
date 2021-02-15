@@ -291,7 +291,7 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
 
     // Issue handling
     let issue_set = Arc::new(IssueRequests::new());
-    let (issue_event_tx, issue_event_rx) = mpsc::channel::<RequestEvent>(16);
+    let (issue_event_tx, issue_event_rx) = mpsc::channel::<RequestEvent>(32);
     let mut issue_cancellation_scheduler =
         CancellationScheduler::new(arc_provider.clone(), vault_id.clone());
     let issue_request_listener = listen_for_issue_requests(

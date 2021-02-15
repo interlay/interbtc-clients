@@ -351,7 +351,8 @@ impl BitcoinCoreApi for BitcoinCore {
                 key: deposit_secret_key,
             },
             None,
-            None,
+            // rescan true by default
+            Some(false),
         )?;
         Ok(())
     }
