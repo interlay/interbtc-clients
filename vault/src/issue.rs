@@ -3,7 +3,7 @@ use crate::Error;
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::channel::mpsc::Sender;
 use futures::{SinkExt, StreamExt};
-use log::{error, info};
+use log::{error, info, trace};
 use runtime::{
     pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
     BtcAddress, BtcPublicKey, BtcRelayPallet, H256Le, IssuePallet, PolkaBtcProvider,
@@ -221,10 +221,15 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static
                     }
                 }
 
+                trace!(
+                    "watching issue #{} for payment to {}",
+                    event.issue_id,
+                    event.vault_btc_address
+                );
                 let mut issue_requests = issue_set.0.lock().await;
                 issue_requests.insert(event.issue_id, event.vault_btc_address);
             },
-            |error| error!("Error reading issue event: {}", error.to_string()),
+            |error| error!("Error reading request issue event: {}", error.to_string()),
         )
         .await
 }
@@ -257,9 +262,11 @@ pub async fn listen_for_issue_executes(
                         .send(RequestEvent::Executed(event.issue_id))
                         .await;
                 }
+
+                trace!("issue #{} executed, no longer watching", event.issue_id);
                 issue_set.0.lock().await.remove_key(&event.issue_id);
             },
-            |error| error!("Error reading issue event: {}", error.to_string()),
+            |error| error!("Error reading execute issue event: {}", error.to_string()),
         )
         .await
 }
@@ -278,9 +285,10 @@ pub async fn listen_for_issue_cancels(
     provider
         .on_event::<CancelIssueEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
+                trace!("issue #{} cancelled, no longer watching", event.issue_id);
                 issue_set.0.lock().await.remove_key(&event.issue_id);
             },
-            |error| error!("Error reading cancel event: {}", error.to_string()),
+            |error| error!("Error reading cancel issue event: {}", error.to_string()),
         )
         .await
 }
