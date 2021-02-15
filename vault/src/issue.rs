@@ -131,7 +131,7 @@ pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Send + Sync + 
     Ok(())
 }
 
-/// extract op_return output and check corresponding issue ids
+/// execute issue requests with a matching Bitcoin payment
 async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: &Arc<PolkaBtcProvider>,
     btc_rpc: &Arc<B>,
