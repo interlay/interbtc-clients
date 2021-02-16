@@ -1060,7 +1060,10 @@ impl IssuePallet for PolkaBtcProvider {
                 && !request.cancelled
                 && request.opentime + issue_period > current_height
             {
-                issue_requests.push((H256::from_slice(issue_id.0.as_slice()), request));
+                let key_hash = issue_id.0.as_slice();
+                // last bytes are the raw key
+                let key = &key_hash[key_hash.len() - 32..];
+                issue_requests.push((H256::from_slice(key), request));
             }
         }
         Ok(issue_requests)
