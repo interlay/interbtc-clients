@@ -967,6 +967,8 @@ pub trait IssuePallet {
     async fn get_issue_period(&self) -> Result<u32, Error>;
 
     async fn set_issue_period(&self, period: u32) -> Result<(), Error>;
+
+    async fn get_all_active_issues(&self) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, Error>;
 }
 
 #[async_trait]
@@ -1046,6 +1048,26 @@ impl IssuePallet for PolkaBtcProvider {
                 _runtime: PhantomData {},
             })
             .await?)
+    }
+
+    async fn get_all_active_issues(&self) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, Error> {
+        let current_height = self.get_current_chain_height().await?;
+        let issue_period = self.get_issue_period().await?;
+
+        let mut issue_requests = Vec::new();
+        let mut iter = self.ext_client.issue_requests_iter(None).await?;
+        while let Some((issue_id, request)) = iter.next().await? {
+            if !request.completed
+                && !request.cancelled
+                && request.opentime + issue_period > current_height
+            {
+                let key_hash = issue_id.0.as_slice();
+                // last bytes are the raw key
+                let key = &key_hash[key_hash.len() - 32..];
+                issue_requests.push((H256::from_slice(key), request));
+            }
+        }
+        Ok(issue_requests)
     }
 }
 
