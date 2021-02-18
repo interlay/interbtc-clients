@@ -51,8 +51,6 @@ pipeline {
         stage('Build binaries') {
             steps {
                 container('rust') {
-                    updateGitlabCommitStatus name: 'build-parachain', state: 'running'
-
                     sh 'SCCACHE_START_SERVER=1 SCCACHE_IDLE_TIMEOUT=0 /usr/local/bin/sccache'
                     sh '/usr/local/bin/sccache -s'
 
