@@ -1,4 +1,4 @@
-use super::{Core, CoreEventsDecoder};
+use super::Core;
 use core::marker::PhantomData;
 pub use module_bitcoin::types::H256Le;
 pub use module_replace::ReplaceRequest;

@@ -30,11 +30,11 @@ frame-support = { git = "https://github.com/paritytech/substrate", branch = "roc
 frame-system = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 
 # Subxt dependencies
-substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "8ad201e" }
-substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "8ad201e" }
+substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "9ef6ed9" }
+substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "9ef6ed9" }
 
 # Dependencies for the testing utils for integration tests
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "8ad201e", optional = true }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "9ef6ed9", optional = true }
 tempdir = {version = "0.3.7", optional = true }
 btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"], optional = true }
 btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.1", features = ["aura-grandpa"], optional = true }
@@ -108,7 +108,7 @@ version = "0.5.0"
 package = "exchange-rate-oracle"
 
 [dev-dependencies]
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "8ad201e" }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "9ef6ed9" }
 tempdir = "0.3.7"
 btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
 btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }

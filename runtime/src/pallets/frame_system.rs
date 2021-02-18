@@ -1,4 +1,4 @@
-use super::{Core, CoreEventsDecoder};
+use super::Core;
 use core::marker::PhantomData;
 use frame_system::AccountInfo;
 pub use module_bitcoin::types::H256Le;

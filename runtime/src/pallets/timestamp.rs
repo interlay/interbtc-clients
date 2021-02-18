@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 use parity_scale_codec::{Codec, Encode, EncodeLike};
 use sp_runtime::traits::{AtLeast32Bit, Member};
-use substrate_subxt::system::{System, SystemEventsDecoder};
+use substrate_subxt::system::System;
 use substrate_subxt_proc_macro::{module, Store};
 
 #[module]
