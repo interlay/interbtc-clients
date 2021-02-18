@@ -39,6 +39,7 @@ use crate::vault_registry::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
 use futures::{stream::StreamExt, SinkExt};
+use substrate_subxt::EventTypeRegistry;
 
 pub type PolkaBtcHeader = <PolkaBtcRuntime as System>::Header;
 
@@ -150,12 +151,12 @@ impl PolkaBtcProvider {
     /// * `on_error` - callback for decoding errors, is not allowed to take too long
     pub async fn on_event_error<E: Fn(XtError)>(&self, on_error: E) -> Result<(), Error> {
         let sub = self.ext_client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        // We would need with_core to be able to decode all types, but since
-        // it does not exist, instead use a random module that includes it:
-        decoder.with_vault_registry();
+        let decoder = EventsDecoder::<PolkaBtcRuntime>::new(
+            self.ext_client.metadata().clone(),
+            EventTypeRegistry::new(),
+        );
 
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, &decoder);
         loop {
             match sub.next().await {
                 Some(Err(err)) => on_error(err), // report error
@@ -184,12 +185,12 @@ impl PolkaBtcProvider {
         E: Fn(XtError),
     {
         let sub = self.ext_client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        // We would need with_core to be able to decode all types, but since
-        // it does not exist, instead use a random module that includes it:
-        decoder.with_vault_registry();
+        let decoder = EventsDecoder::<PolkaBtcRuntime>::new(
+            self.ext_client.metadata().clone(),
+            EventTypeRegistry::new(),
+        );
 
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, &decoder);
         sub.filter_event::<T>();
 
         let (tx, mut rx) = futures::channel::mpsc::channel::<T>(32);

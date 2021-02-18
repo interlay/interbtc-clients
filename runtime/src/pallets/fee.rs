@@ -1,4 +1,4 @@
-use super::{Core, CoreEventsDecoder};
+use super::Core;
 use core::marker::PhantomData;
 use parity_scale_codec::Encode;
 use std::fmt::Debug;

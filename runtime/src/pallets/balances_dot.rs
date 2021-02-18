@@ -4,7 +4,7 @@ use parity_scale_codec::{Codec, Decode, Encode};
 use sp_runtime::traits::{AtLeast32Bit, MaybeSerialize, Member};
 use std::fmt::Debug;
 use substrate_subxt::balances::AccountData;
-use substrate_subxt::system::{System, SystemEventsDecoder};
+use substrate_subxt::system::System;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
 #[module]

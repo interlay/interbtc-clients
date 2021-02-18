@@ -23,16 +23,11 @@ pub use security::{ErrorCode, StatusCode};
 use parity_scale_codec::{Codec, EncodeLike};
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::traits::Member;
-use substrate_subxt::system::{System, SystemEventsDecoder};
+use substrate_subxt::system::System;
 use substrate_subxt_proc_macro::module;
 
 #[module]
 pub trait Core: System {
-    #[allow(non_camel_case_types)]
-    type u64: Codec + EncodeLike + Member + Default;
-    #[allow(non_camel_case_types)]
-    type u128: Codec + EncodeLike + Member + Default;
-
     type DOT: Codec + EncodeLike + Member + Default + PartialOrd + Saturating;
     type Balance: Codec + EncodeLike + Member + Default;
     type BTCBalance: Codec + EncodeLike + Member + Default;

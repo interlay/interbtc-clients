@@ -34,6 +34,9 @@ use sp_runtime::{
 };
 use std::collections::BTreeSet;
 pub use substrate_subxt;
+use substrate_subxt::register_default_type_sizes;
+use substrate_subxt::system::SystemEventTypeRegistry;
+use substrate_subxt::EventTypeRegistry;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, sudo, system, Runtime};
 
 pub const MINIMUM_STAKE: u128 = 100;
@@ -48,6 +51,12 @@ pub struct PolkaBtcRuntime;
 impl Runtime for PolkaBtcRuntime {
     type Signature = MultiSignature;
     type Extra = DefaultExtra<Self>;
+
+    fn register_type_sizes(registry: &mut EventTypeRegistry<Self>) {
+        registry.with_core();
+        registry.with_system();
+        register_default_type_sizes(registry);
+    }
 }
 
 // TODO: use types from actual runtime
@@ -64,8 +73,6 @@ impl system::System for PolkaBtcRuntime {
 }
 
 impl pallets::Core for PolkaBtcRuntime {
-    type u64 = u64;
-    type u128 = u128;
     type Balance = Balance;
     type DOT = Balance;
     type PolkaBTC = Balance;

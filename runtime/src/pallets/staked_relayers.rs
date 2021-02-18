@@ -1,10 +1,10 @@
-use super::{Core, CoreEventsDecoder};
+use super::Core;
 use core::marker::PhantomData;
 pub use module_staked_relayers::types::{StakedRelayer, StatusUpdate};
 pub use module_staked_relayers::Error as StakedRelayersError;
 use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
-use substrate_subxt::balances::{Balances, BalancesEventsDecoder};
+use substrate_subxt::balances::Balances;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
 #[module]
