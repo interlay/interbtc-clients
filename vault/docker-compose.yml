@@ -1,0 +1,33 @@
+version: "3.8"
+services:
+    bitcoind:
+        image: "ruimarinho/bitcoin-core:0.20"
+        command:
+            - -testnet
+            - -server
+            - -prune=550
+            - -par=1
+            - -maxuploadtarget=200
+            - -blocksonly
+            - -rpcbind=0.0.0.0
+            - -rpcallowip=0.0.0.0/0
+            - -rpcuser=rpcuser
+            - -rpcpassword=rpcpassword
+            - -fallbackfee=0.0002
+        ports:
+            - "18332:18332"
+        volumes:
+            - ./cache:/home/bitcoin/.bitcoin/testnet3
+    vault:
+        image: "registry.gitlab.com/interlay/polkabtc-clients/vault:0-4-0"
+        command:
+            - /bin/sh
+            - -c
+            - |
+                echo "Sleeping..."
+                sleep 1
+                vault --bitcoin-rpc-url http://bitcoind:18332 --bitcoin-rpc-user rpcuser --bitcoin-rpc-pass rpcpassword --keyfile /keyring/keyfile.json --keyname polkabtcvault --network=testnet --auto-register-with-faucet-url 'http://beta.polkabtc.io/api/faucet' --polka-btc-url 'wss://beta.polkabtc.io/api/parachain' --http-addr '[::0]:3032'
+        ports:
+            - "3032:3032"
+        volumes:
+            - ./:/keyring
