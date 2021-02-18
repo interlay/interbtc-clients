@@ -26,7 +26,7 @@ services:
             - |
                 echo "Sleeping..."
                 sleep 1
-                vault --bitcoin-rpc-url http://bitcoind:18332 --bitcoin-rpc-user rpcuser --bitcoin-rpc-pass rpcpassword --keyfile /keyring/keyfile.json --keyname polkabtcvault --network=testnet --auto-register-with-faucet-url 'http://rococo.polkabtc.io/api/faucet' --polka-btc-url 'wss://rococo.polkabtc.io/api/parachain' --http-addr '[::0]:3032'
+                vault --bitcoin-rpc-url http://bitcoind:18332 --bitcoin-rpc-user rpcuser --bitcoin-rpc-pass rpcpassword --keyfile /keyring/keyfile.json --keyname polkabtcvault --network=testnet --auto-register-with-faucet-url 'http://beta.polkabtc.io/api/faucet' --polka-btc-url 'wss://beta.polkabtc.io/api/parachain' --http-addr '[::0]:3032'
         ports:
             - "3032:3032"
         volumes:
