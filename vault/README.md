@@ -4,15 +4,19 @@
 
 - Register
   - Lock DOT collateral in Vault Registry
-  - Submit current BTC address to Vault Registry
+  - Submit master public key to Vault Registry
+- Issue
+  - Detect and execute pending issue requests
 - Redeem
   - Listen for redeem events
   - Send BTC transaction to user
   - Get BTC transaction inclusion proof and raw tx
   - Execute redeem with corresponding redeem id, tx inclusion proof and raw tx
+- Refund
+  - Reimburse users who overpay on issue
 - Collateral balance
   - Observe collateralization rate in Vault Registry
-  - Withdraw/lock collateral to keep rate consistent
+  - Withdraw / lock collateral to keep rate consistent
 - Replace
   - Request Replace
   - Execute Replace
@@ -22,7 +26,7 @@
 Download and start [Bitcoin Core](https://bitcoin.org/en/bitcoin-core/):
 
 ```
-bitcoind -testnet -server
+bitcoind -regtest -server
 ```
 
 Build and run the [PolkaBTC Parachain](https://gitlab.com/interlay/btc-parachain):
@@ -44,7 +48,7 @@ cargo run
 
 ### Options
 
-When using cargo to run the vault, arguments to cargo and the vault are separated by `--`. For example, to pass `--help` to the vault to get a list of all command line options that is guaranteed to be up date, run:
+When using cargo to run this binary, arguments to cargo and the binary are separated by `--`. For example, to pass `--help` to the vault to get a list of all command line options that is guaranteed to be up date, run:
 
 ```
 cargo run -- --help
