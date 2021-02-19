@@ -14,20 +14,25 @@ _This project is currently under active development_.
 
 ## Prerequisites
 
-Before running the client software, please start Bitcoin Core and the PolkaBTC Parachain.
+Download and start [Bitcoin Core](https://bitcoin.org/en/bitcoin-core/):
 
-This repository contains a docker-compose file which starts PolkaBTC in `--dev` mode and
-a Bitcoin daemon in `-regtest` mode.
-
-```bash
-docker-compose up
+```
+bitcoind -regtest -server
 ```
 
-Run the following command to generate an address and mine some blocks:
+Build and run the [PolkaBTC Parachain](https://gitlab.com/interlay/btc-parachain):
+
+```
+git clone git@gitlab.com:interlay/btc-parachain.git
+cd btc-parachain
+cargo run --release -- --dev
+```
+
+Generate an address and mine some blocks:
 
 ```bash
 address=`bitcoin-cli -regtest getnewaddress`
-bitcoin-cli -regtest generatetoaddress 10 $address
+bitcoin-cli -regtest generatetoaddress 101 $address
 ```
 
 > Note: This may require `rpcuser` and `rpcpassword` to be set.

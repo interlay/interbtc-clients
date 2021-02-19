@@ -7,7 +7,6 @@
 - Register and stake DOT collateral
 - Participate in core governance procedures
 - Monitor the BTC addresses of vaults to report BTC thefts
-- Monitor and report under-collateralised vaults
 - Monitor and report when the Oracle is offline
 
 ## Prerequisites
@@ -15,7 +14,7 @@
 Download and start [Bitcoin Core](https://bitcoin.org/en/bitcoin-core/):
 
 ```
-bitcoind -testnet -server
+bitcoind -regtest -server
 ```
 
 Build and run the [PolkaBTC Parachain](https://gitlab.com/interlay/btc-parachain):
@@ -37,7 +36,7 @@ cargo run
 
 ### Options
 
-When using cargo to run the staked relayer, arguments to cargo and the staked relayer are separated by `--`. For example, to pass `--help` to the relayer to get a list of all command line options that is guaranteed to be up date, run:
+When using cargo to run this binary, arguments to cargo and the binary are separated by `--`. For example, to pass `--help` to the relayer to get a list of all command line options that is guaranteed to be up date, run:
 
 ```
 cargo run -- --help
