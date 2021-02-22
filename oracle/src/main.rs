@@ -73,13 +73,12 @@ async fn main() -> Result<(), Error> {
     loop {
         let exchange_rate = if opts.coingecko {
             match get_exchange_rate_from_coingecko().await {
-                Ok(exchange_rate) if FixedU128::checked_from_integer(exchange_rate).is_some() => {
-                    // already checked exchange_rate.is_some() so should be safe to unwrap
+                Ok(exchange_rate) => {
                     // exchange_rate given in BTC/DOT so there is no need to adjust
                     FixedU128::checked_from_integer(exchange_rate).unwrap()
                 }
-                _ => {
-                    error!("Could not get exchange rate from CoinGecko");
+                Err(err) => {
+                    error!("Could not get exchange rate from CoinGecko: {}", err);
                     delay_for(ERR_RETRY_WAIT).await;
                     continue;
                 }
