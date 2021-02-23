@@ -54,6 +54,7 @@ pub type PolkaBtcIssueRequest = IssueRequest<
     <PolkaBtcRuntime as Core>::PolkaBTC,
     <PolkaBtcRuntime as Core>::DOT,
 >;
+
 pub type PolkaBtcRequestIssueEvent = RequestIssueEvent<PolkaBtcRuntime>;
 
 pub type PolkaBtcRedeemRequest = RedeemRequest<
@@ -77,6 +78,8 @@ pub type PolkaBtcStatusUpdate = StatusUpdate<
     <PolkaBtcRuntime as System>::BlockNumber,
     <PolkaBtcRuntime as Core>::DOT,
 >;
+
+pub type PolkaBtcRichBlockHeader = RichBlockHeader<AccountId>;
 
 #[derive(Clone)]
 pub struct PolkaBtcProvider {
@@ -666,9 +669,9 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
 
 #[async_trait]
 pub trait StakedRelayerPallet {
-    async fn get_stake(&self) -> Result<u128, Error>;
+    async fn get_active_stake(&self) -> Result<u128, Error>;
 
-    async fn get_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error>;
+    async fn get_active_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error>;
 
     async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error>;
 
@@ -718,12 +721,12 @@ pub trait StakedRelayerPallet {
 #[async_trait]
 impl StakedRelayerPallet for PolkaBtcProvider {
     /// Get the stake registered for this staked relayer.
-    async fn get_stake(&self) -> Result<u128, Error> {
-        Ok(self.get_stake_by_id(self.account_id.clone()).await?)
+    async fn get_active_stake(&self) -> Result<u128, Error> {
+        Ok(self.get_active_stake_by_id(self.account_id.clone()).await?)
     }
 
     /// Get the stake registered for this staked relayer.
-    async fn get_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error> {
+    async fn get_active_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error> {
         Ok(self
             .ext_client
             .active_staked_relayers(&account_id, None)
@@ -1249,7 +1252,7 @@ pub trait BtcRelayPallet {
 
     async fn get_block_hash(&self, height: u32) -> Result<H256Le, Error>;
 
-    async fn get_block_header(&self, hash: H256Le) -> Result<RichBlockHeader, Error>;
+    async fn get_block_header(&self, hash: H256Le) -> Result<PolkaBtcRichBlockHeader, Error>;
 
     async fn initialize_btc_relay(
         &self,
@@ -1294,7 +1297,7 @@ impl BtcRelayPallet for PolkaBtcProvider {
     ///
     /// # Arguments
     /// * `hash` - little endian block hash
-    async fn get_block_header(&self, hash: H256Le) -> Result<RichBlockHeader, Error> {
+    async fn get_block_header(&self, hash: H256Le) -> Result<PolkaBtcRichBlockHeader, Error> {
         Ok(self.ext_client.block_headers(hash, None).await?)
     }
 

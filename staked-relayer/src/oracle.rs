@@ -3,7 +3,6 @@ use crate::utils;
 use log::info;
 use runtime::{
     ErrorCode, ExchangeRateOraclePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
-    MINIMUM_STAKE,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -46,7 +45,8 @@ impl<P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + Secur
     }
 
     pub async fn report_offline(&self) -> Result<(), Error> {
-        if self.rpc.get_stake().await? < MINIMUM_STAKE {
+        if !utils::is_active(&self.rpc).await? {
+            // not registered (active), ignore check
             return Ok(());
         }
 
@@ -72,7 +72,7 @@ mod tests {
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{
         AccountId, BtcTxFeesPerByte, Error, ErrorCode, FixedPointNumber, FixedU128, H256Le,
-        StatusCode,
+        StatusCode, MINIMUM_STAKE,
     };
     use std::collections::BTreeSet;
     use std::iter::FromIterator;
@@ -102,8 +102,8 @@ mod tests {
 
         #[async_trait]
         trait StakedRelayerPallet {
-            async fn get_stake(&self) -> Result<u128, Error>;
-            async fn get_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error>;
+            async fn get_active_stake(&self) -> Result<u128, Error>;
+            async fn get_active_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error>;
             async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error>;
             async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error>;
             async fn deregister_staked_relayer(&self) -> Result<(), Error>;
@@ -184,7 +184,7 @@ mod tests {
     async fn test_report_oracle_offline_not_reported() {
         let mut parachain = MockProvider::default();
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE));
 
@@ -214,7 +214,7 @@ mod tests {
     async fn test_report_oracle_offline_already_reported() {
         let mut parachain = MockProvider::default();
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE));
 

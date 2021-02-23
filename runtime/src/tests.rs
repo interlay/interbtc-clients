@@ -1,9 +1,9 @@
 use super::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime,
-    SecurityPallet, StatusCode, VaultRegistryPallet,
+    SecurityPallet, StakedRelayerPallet, StatusCode, VaultRegistryPallet, MINIMUM_STAKE,
 };
 use module_bitcoin::{
-    formatter::Formattable,
+    formatter::TryFormattable,
     types::{BlockBuilder, RawBlockHeader},
 };
 use sp_core::{H160, U256};
@@ -84,6 +84,11 @@ async fn test_register_vault() {
 #[tokio::test]
 async fn test_btc_relay() {
     let provider = test_client_with(AccountKeyring::Alice).await;
+    // must be authorized to submit blocks
+    provider
+        .register_staked_relayer(MINIMUM_STAKE)
+        .await
+        .unwrap();
 
     let address = BtcAddress::P2PKH(H160::zero());
     let mut height = 0;
@@ -92,10 +97,11 @@ async fn test_btc_relay() {
         .with_version(2)
         .with_coinbase(&address, 50, 3)
         .with_timestamp(1588813835)
-        .mine(U256::from(2).pow(254.into()));
+        .mine(U256::from(2).pow(254.into()))
+        .unwrap();
 
-    let mut block_hash = block.header.hash();
-    let block_header = RawBlockHeader::from_bytes(&block.header.format())
+    let mut block_hash = block.header.hash().unwrap();
+    let block_header = RawBlockHeader::from_bytes(&block.header.try_format().unwrap())
         .expect("could not serialize block header");
 
     provider
@@ -115,10 +121,11 @@ async fn test_btc_relay() {
             .with_version(2)
             .with_coinbase(&address, 50, height - 1)
             .with_timestamp(1588813835)
-            .mine(U256::from(2).pow(254.into()));
+            .mine(U256::from(2).pow(254.into()))
+            .unwrap();
 
-        block_hash = block.header.hash();
-        let block_header = RawBlockHeader::from_bytes(&block.header.format())
+        block_hash = block.header.hash().unwrap();
+        let block_header = RawBlockHeader::from_bytes(&block.header.try_format().unwrap())
             .expect("could not serialize block header");
 
         provider.store_block_header(block_header).await.unwrap();
