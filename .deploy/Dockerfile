@@ -3,6 +3,10 @@ FROM ubuntu:20.10
 ARG PROFILE=release
 ARG BINARY=btc-parachain
 
+RUN apt-get update && \
+    apt-get install -y ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY target/${PROFILE}/${BINARY} /usr/local/bin
 
 # Checks
