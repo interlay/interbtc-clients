@@ -113,14 +113,13 @@ async fn main() -> Result<(), Error> {
         dummy_network,
     ));
 
-    let current_height = btc_rpc.get_block_count().await? as u32;
-
-    let mut relayer = Runner::new(
+    let relayer = Runner::new(
         PolkaBtcClient::new(provider.clone()),
         BitcoinClient::new(opts.bitcoin.new_client(None)?),
         Config {
-            start_height: opts.relay_start_height.unwrap_or(current_height),
+            start_height: opts.relay_start_height,
             max_batch_size: opts.max_batch_size,
+            timeout: Some(Duration::from_secs(opts.scan_block_delay)),
         },
     )?;
 
@@ -144,7 +143,9 @@ async fn main() -> Result<(), Error> {
     // store vaults in Arc<RwLock>
     let vaults = Arc::new(Vaults::from(vaults));
     // scan from custom height or the current tip
-    let scan_start_height = opts.scan_start_height.unwrap_or(current_height + 1);
+    let scan_start_height = opts
+        .scan_start_height
+        .unwrap_or(btc_rpc.get_block_count().await? as u32 + 1);
     let vaults_monitor = report_vault_thefts(
         scan_start_height,
         btc_rpc.clone(),

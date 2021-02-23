@@ -1,4 +1,4 @@
-use super::{Core, CoreEventsDecoder};
+use super::Core;
 use core::marker::PhantomData;
 pub use module_bitcoin::{formatter::Formattable, types::*};
 pub use module_btc_relay::{BtcAddress, BtcPublicKey};

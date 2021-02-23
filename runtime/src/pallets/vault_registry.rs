@@ -1,4 +1,4 @@
-use super::{Core, CoreEventsDecoder};
+use super::Core;
 use core::marker::PhantomData;
 pub use module_vault_registry::{Vault, VaultStatus};
 use parity_scale_codec::{Decode, Encode};
@@ -54,7 +54,7 @@ pub struct VaultsStore<T: VaultRegistry> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct LiquidationCollateralThresholdStore<T: VaultRegistry> {
-    #[store(returns = T::u128)]
+    #[store(returns = u128)]
     pub _runtime: PhantomData<T>,
 }
 

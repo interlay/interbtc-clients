@@ -443,6 +443,7 @@ mod tests {
             ) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, RuntimeError>;
             async fn get_issue_period(&self) -> Result<u32, RuntimeError>;
             async fn set_issue_period(&self, period: u32) -> Result<(), RuntimeError>;
+            async fn get_all_active_issues(&self) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, RuntimeError>;
         }
 
         #[async_trait]

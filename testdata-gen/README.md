@@ -1,6 +1,6 @@
 # PolkaBTC Testdata
 
-Generate testdata for the BTC-Parachain with this handy toolkit.
+Generate testdata for the BTC-Parachain.
 
 ## Examples
 
@@ -12,7 +12,7 @@ cargo run -- --keyring bob api-call vault request-replace --amount 1000 --griefi
 
 ## Detailed Options
 
-When using cargo to run the vault, arguments to cargo and the vault are separated by `--`. For example, to pass `--help` to the tool to get a list of all command line options that is guaranteed to be up date, run:
+When using cargo to run this binary, arguments to cargo and the binary are separated by `--`. For example, to pass `--help` to the tool to get a list of all command line options that is guaranteed to be up date, run:
 
 ```
 cargo run -- --help

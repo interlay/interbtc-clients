@@ -39,6 +39,7 @@ use crate::vault_registry::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
 use futures::{stream::StreamExt, SinkExt};
+use substrate_subxt::EventTypeRegistry;
 
 pub type PolkaBtcHeader = <PolkaBtcRuntime as System>::Header;
 
@@ -150,12 +151,12 @@ impl PolkaBtcProvider {
     /// * `on_error` - callback for decoding errors, is not allowed to take too long
     pub async fn on_event_error<E: Fn(XtError)>(&self, on_error: E) -> Result<(), Error> {
         let sub = self.ext_client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        // We would need with_core to be able to decode all types, but since
-        // it does not exist, instead use a random module that includes it:
-        decoder.with_vault_registry();
+        let decoder = EventsDecoder::<PolkaBtcRuntime>::new(
+            self.ext_client.metadata().clone(),
+            EventTypeRegistry::new(),
+        );
 
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, &decoder);
         loop {
             match sub.next().await {
                 Some(Err(err)) => on_error(err), // report error
@@ -184,12 +185,12 @@ impl PolkaBtcProvider {
         E: Fn(XtError),
     {
         let sub = self.ext_client.subscribe_events().await?;
-        let mut decoder = EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone());
-        // We would need with_core to be able to decode all types, but since
-        // it does not exist, instead use a random module that includes it:
-        decoder.with_vault_registry();
+        let decoder = EventsDecoder::<PolkaBtcRuntime>::new(
+            self.ext_client.metadata().clone(),
+            EventTypeRegistry::new(),
+        );
 
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, decoder);
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, &decoder);
         sub.filter_event::<T>();
 
         let (tx, mut rx) = futures::channel::mpsc::channel::<T>(32);
@@ -966,6 +967,8 @@ pub trait IssuePallet {
     async fn get_issue_period(&self) -> Result<u32, Error>;
 
     async fn set_issue_period(&self, period: u32) -> Result<(), Error>;
+
+    async fn get_all_active_issues(&self) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, Error>;
 }
 
 #[async_trait]
@@ -1045,6 +1048,26 @@ impl IssuePallet for PolkaBtcProvider {
                 _runtime: PhantomData {},
             })
             .await?)
+    }
+
+    async fn get_all_active_issues(&self) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, Error> {
+        let current_height = self.get_current_chain_height().await?;
+        let issue_period = self.get_issue_period().await?;
+
+        let mut issue_requests = Vec::new();
+        let mut iter = self.ext_client.issue_requests_iter(None).await?;
+        while let Some((issue_id, request)) = iter.next().await? {
+            if !request.completed
+                && !request.cancelled
+                && request.opentime + issue_period > current_height
+            {
+                let key_hash = issue_id.0.as_slice();
+                // last bytes are the raw key
+                let key = &key_hash[key_hash.len() - 32..];
+                issue_requests.push((H256::from_slice(key), request));
+            }
+        }
+        Ok(issue_requests)
     }
 }
 

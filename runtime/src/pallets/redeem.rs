@@ -1,4 +1,4 @@
-use super::{Core, CoreEventsDecoder};
+use super::Core;
 use core::marker::PhantomData;
 pub use module_redeem::RedeemRequest;
 use parity_scale_codec::{Decode, Encode};

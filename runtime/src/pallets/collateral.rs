@@ -1,4 +1,4 @@
-use super::{Core, CoreEventsDecoder};
+use super::Core;
 use parity_scale_codec::Decode;
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Event};

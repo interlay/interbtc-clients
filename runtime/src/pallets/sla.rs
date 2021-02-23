@@ -1,4 +1,4 @@
-use super::{Core, CoreEventsDecoder};
+use super::Core;
 pub use module_refund::RefundRequest;
 use parity_scale_codec::Decode;
 use serde::Serialize;
