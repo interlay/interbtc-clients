@@ -7,7 +7,6 @@ use jsonrpc_http_server::jsonrpc_core::{Error as JsonRpcError, ErrorCode as Json
 use jsonrpc_http_server::jsonrpc_core::{IoHandler, Params};
 use jsonrpc_http_server::{DomainsValidation, ServerBuilder};
 use kv::*;
-use log::error;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     AccountId, DotBalancesPallet, PolkaBtcProvider, SecurityPallet, StakedRelayerPallet,
@@ -99,7 +98,7 @@ async fn get_account_type(
     if let Ok(_) = provider.get_vault(account_id.clone()).await {
         return Ok(FundingRequestAccountType::Vault);
     }
-    let active_stake = provider.get_stake_by_id(account_id.clone()).await?;
+    let active_stake = provider.get_active_stake_by_id(account_id.clone()).await?;
     let inactive_stake = provider.get_inactive_stake_by_id(account_id).await?;
     if active_stake.gt(&0) || inactive_stake.gt(&0) {
         return Ok(FundingRequestAccountType::StakedRelayer);

@@ -4,7 +4,7 @@ mod http;
 mod oracle;
 pub mod relay;
 mod status;
-mod utils;
+pub mod utils;
 mod vault;
 
 pub use error::Error;
