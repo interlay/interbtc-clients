@@ -19,7 +19,7 @@ services:
         volumes:
             - ./cache:/home/bitcoin/.bitcoin/testnet3
     vault:
-        image: "registry.gitlab.com/interlay/polkabtc-clients/vault:0.5.0"
+        image: "registry.gitlab.com/interlay/polkabtc-clients/vault:0.5.1"
         command:
             - /bin/sh
             - -c

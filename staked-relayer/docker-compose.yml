@@ -17,7 +17,7 @@ services:
         volumes:
             - ./cache:/home/bitcoin/.bitcoin/testnet3
     staked_relayer:
-        image: "registry.gitlab.com/interlay/polkabtc-clients/staked-relayer:0.5.0"
+        image: "registry.gitlab.com/interlay/polkabtc-clients/staked-relayer:0.5.1"
         command:
             - /bin/sh
             - -c
