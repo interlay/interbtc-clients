@@ -19,7 +19,7 @@ pub struct StatusUpdateMonitor<B: BitcoinCoreApi, P: StakedRelayerPallet> {
     polka_rpc: Arc<P>,
 }
 
-impl<B: BitcoinCoreApi, P: StakedRelayerPallet> StatusUpdateMonitor<B, P> {
+impl<B: BitcoinCoreApi, P: StakedRelayerPallet + UtilFuncs> StatusUpdateMonitor<B, P> {
     pub fn new(btc_rpc: Arc<B>, polka_rpc: Arc<P>) -> Self {
         Self { btc_rpc, polka_rpc }
     }
@@ -28,9 +28,11 @@ impl<B: BitcoinCoreApi, P: StakedRelayerPallet> StatusUpdateMonitor<B, P> {
         &self,
         event: PolkaBtcStatusUpdateSuggestedEvent,
     ) -> Result<(), Error> {
-        if !utils::is_registered(&self.polka_rpc).await {
+        if !utils::is_active(&self.polka_rpc).await? {
+            // not registered (active), ignore event
             return Ok(());
         }
+
         // we can only automate NO_DATA checks, all other suggestible
         // status updates can only be voted upon manually
         if let Some(ErrorCode::NoDataBTCRelay) = event.add_error {
@@ -118,12 +120,13 @@ impl<B: BitcoinCoreApi, P: StakedRelayerPallet> RelayMonitor<B, P> {
         height: u32,
         parachain_block_hash: H256Le,
     ) -> Result<(), Error> {
-        if !utils::is_registered(&self.polka_rpc).await {
+        if !utils::is_active(&self.polka_rpc).await? {
+            // not registered (active), ignore event
             return Ok(());
         }
-        info!("Block submission: {}", parachain_block_hash);
 
         // TODO: check if user submitted
+        info!("Block submission: {}", parachain_block_hash);
         match self.btc_rpc.get_block_hash_for(height).await {
             Ok(bitcoin_block_hash) => {
                 if bitcoin_block_hash.into_inner() != parachain_block_hash.to_bytes_le() {
@@ -230,9 +233,16 @@ mod tests {
         Provider {}
 
         #[async_trait]
+        pub trait UtilFuncs {
+            async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
+            async fn get_blockchain_height_at(&self, parachain_height: u32) -> Result<u32, RuntimeError>;
+            fn get_account_id(&self) -> &AccountId;
+        }
+
+        #[async_trait]
         trait StakedRelayerPallet {
-            async fn get_stake(&self) -> Result<u128, RuntimeError>;
-            async fn get_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
+            async fn get_active_stake(&self) -> Result<u128, RuntimeError>;
+            async fn get_active_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
             async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
             async fn register_staked_relayer(&self, stake: u128) -> Result<(), RuntimeError>;
             async fn deregister_staked_relayer(&self) -> Result<(), RuntimeError>;
@@ -339,7 +349,7 @@ mod tests {
             .never()
             .returning(|_, _, _, _, _, _| Ok(()));
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE));
 
@@ -363,7 +373,7 @@ mod tests {
             .once()
             .returning(|_, _, _, _, _, _| Ok(()));
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE));
 
@@ -380,7 +390,7 @@ mod tests {
         let bitcoin = MockBitcoin::default();
         let mut parachain = MockProvider::default();
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE - 1));
 
@@ -395,7 +405,7 @@ mod tests {
         let mut parachain = MockProvider::default();
         parachain.expect_vote_on_status_update().never();
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE));
 
@@ -421,7 +431,7 @@ mod tests {
         let mut parachain = MockProvider::default();
         parachain.expect_vote_on_status_update().never();
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE));
 
@@ -455,7 +465,7 @@ mod tests {
             .once()
             .returning(|_, _| Ok(()));
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE));
 
@@ -488,7 +498,7 @@ mod tests {
             .once()
             .returning(|_, _| Ok(()));
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE));
 
@@ -512,7 +522,7 @@ mod tests {
         let bitcoin = MockBitcoin::default();
         let mut parachain = MockProvider::default();
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE - 1));
 

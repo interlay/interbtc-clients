@@ -48,7 +48,7 @@ pub async fn report_vault_thefts<P: StakedRelayerPallet + BtcRelayPallet, B: Bit
     delay: Duration,
 ) -> Result<(), Error> {
     VaultTheftMonitor::new(btc_height, btc_rpc, vaults, polka_rpc, delay)
-        .scan()
+        .process_blocks()
         .await
 }
 
@@ -145,8 +145,8 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi> VaultTheftMonit
         Ok(())
     }
 
-    pub async fn scan(&mut self) -> Result<(), Error> {
-        utils::wait_until_registered(&self.polka_rpc, self.delay).await;
+    pub async fn process_blocks(&mut self) -> Result<(), Error> {
+        utils::wait_until_active(&self.polka_rpc, self.delay).await;
 
         let num_confirmations = self.polka_rpc.get_bitcoin_confirmations().await?;
 
@@ -242,7 +242,7 @@ mod tests {
     };
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
-    use runtime::{BitcoinBlockHeight, RawBlockHeader, RichBlockHeader};
+    use runtime::{BitcoinBlockHeight, PolkaBtcRichBlockHeader, RawBlockHeader};
     use sp_core::{H160, H256};
     use sp_keyring::AccountKeyring;
 
@@ -251,8 +251,8 @@ mod tests {
 
         #[async_trait]
         trait StakedRelayerPallet {
-            async fn get_stake(&self) -> Result<u128, RuntimeError>;
-            async fn get_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
+            async fn get_active_stake(&self) -> Result<u128, RuntimeError>;
+            async fn get_active_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
             async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
             async fn register_staked_relayer(&self, stake: u128) -> Result<(), RuntimeError>;
             async fn deregister_staked_relayer(&self) -> Result<(), RuntimeError>;
@@ -293,7 +293,7 @@ mod tests {
             async fn get_best_block(&self) -> Result<H256Le, RuntimeError>;
             async fn get_best_block_height(&self) -> Result<u32, RuntimeError>;
             async fn get_block_hash(&self, height: u32) -> Result<H256Le, RuntimeError>;
-            async fn get_block_header(&self, hash: H256Le) -> Result<RichBlockHeader, RuntimeError>;
+            async fn get_block_header(&self, hash: H256Le) -> Result<PolkaBtcRichBlockHeader, RuntimeError>;
             async fn initialize_btc_relay(
                 &self,
                 header: RawBlockHeader,

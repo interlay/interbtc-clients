@@ -15,12 +15,12 @@ futures = "0.3.5"
 clap = "3.0.0-beta.2"
 async-trait = "0.1.40"
 serde = "1.0.116"
-relayer-core = { git = "https://gitlab.com/interlay/relayer-core", rev = "7a99a32e" }
+relayer-core = { git = "https://gitlab.com/interlay/relayer-core", rev = "174fbc77" }
 runtime = { path = "../runtime" }
 bitcoin = { path = "../bitcoin", features = ["cli"] }
 jsonrpc-http-server = "16.0.0"
 backoff = { version = "0.2.1", features = ["tokio"] }
-jsonrpc-core-client = { version = "16.0.0", features = ["http"] }
+jsonrpc-core-client = { version = "16.0.0", features = ["http", "tls"] }
 
 # Substrate dependencies
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }

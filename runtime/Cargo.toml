@@ -1,6 +1,6 @@
 [package]
 name = "runtime"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 
@@ -32,6 +32,10 @@ frame-system = { git = "https://github.com/paritytech/substrate", branch = "roco
 # Subxt dependencies
 substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "9ef6ed9" }
 substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "9ef6ed9" }
+
+# Polkadot dependencies
+xcm = { git = "https://github.com/paritytech/polkadot", branch = "rococo-v1" }
+parachain = { package = "polkadot-parachain", git = "https://github.com/paritytech/polkadot", branch = "rococo-v1" }
 
 # Dependencies for the testing utils for integration tests
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "9ef6ed9", optional = true }

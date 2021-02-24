@@ -4,11 +4,12 @@ use futures::{
     future::{join, join3, join4, try_join},
     FutureExt, SinkExt,
 };
-use runtime::integration::*;
+use runtime::{integration::*, StakedRelayerPallet};
 use runtime::{
     pallets::{issue::*, redeem::*, refund::*, replace::*, treasury::*, vault_registry::*},
     BtcAddress, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, IssuePallet, PolkaBtcHeader,
     PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    MINIMUM_STAKE,
 };
 use sp_core::H160;
 use sp_core::H256;
@@ -27,6 +28,11 @@ async fn test_redeem_succeeds() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    relayer_provider
+        .register_staked_relayer(MINIMUM_STAKE)
+        .await
+        .unwrap();
+
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
@@ -78,6 +84,11 @@ async fn test_replace_succeeds() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    relayer_provider
+        .register_staked_relayer(MINIMUM_STAKE)
+        .await
+        .unwrap();
+
     let old_vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let new_vault_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
@@ -160,6 +171,11 @@ async fn test_maintain_collateral_succeeds() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    relayer_provider
+        .register_staked_relayer(MINIMUM_STAKE)
+        .await
+        .unwrap();
+
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
@@ -218,6 +234,11 @@ async fn test_withdraw_replace_succeeds() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    relayer_provider
+        .register_staked_relayer(MINIMUM_STAKE)
+        .await
+        .unwrap();
+
     let old_vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let new_vault_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
@@ -298,6 +319,11 @@ async fn test_cancellation_succeeds() {
     let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
 
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    relayer_provider
+        .register_staked_relayer(MINIMUM_STAKE)
+        .await
+        .unwrap();
+
     let old_vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let new_vault_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
@@ -463,6 +489,11 @@ async fn test_auction_replace_succeeds() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    relayer_provider
+        .register_staked_relayer(MINIMUM_STAKE)
+        .await
+        .unwrap();
+
     let old_vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let new_vault_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
@@ -563,6 +594,11 @@ async fn test_refund_succeeds() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    relayer_provider
+        .register_staked_relayer(MINIMUM_STAKE)
+        .await
+        .unwrap();
+
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
@@ -644,6 +680,11 @@ async fn test_issue_overpayment_succeeds() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    relayer_provider
+        .register_staked_relayer(MINIMUM_STAKE)
+        .await
+        .unwrap();
+
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
@@ -722,6 +763,11 @@ async fn test_automatic_issue_execution_succeeds() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    relayer_provider
+        .register_staked_relayer(MINIMUM_STAKE)
+        .await
+        .unwrap();
+
     let vault1_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let vault2_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
@@ -809,6 +855,11 @@ async fn test_execute_open_requests_succeeds() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    relayer_provider
+        .register_staked_relayer(MINIMUM_STAKE)
+        .await
+        .unwrap();
+
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 

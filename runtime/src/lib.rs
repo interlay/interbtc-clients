@@ -16,10 +16,10 @@ pub use btc_relay::{
 pub use error::{Error, XtError};
 use pallets::*;
 pub use rpc::{
-    AccountId, BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet, ExchangeRateOraclePallet,
-    FeePallet, IssuePallet, PolkaBtcHeader, PolkaBtcIssueRequest, PolkaBtcProvider,
-    PolkaBtcRedeemRequest, PolkaBtcRefundRequest, PolkaBtcReplaceRequest,
-    PolkaBtcRequestIssueEvent, PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, RefundPallet,
+    BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet, ExchangeRateOraclePallet, FeePallet,
+    IssuePallet, PolkaBtcHeader, PolkaBtcIssueRequest, PolkaBtcProvider, PolkaBtcRedeemRequest,
+    PolkaBtcRefundRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent,
+    PolkaBtcRichBlockHeader, PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, RefundPallet,
     ReplacePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet, UtilFuncs,
     VaultRegistryPallet,
 };
@@ -38,6 +38,9 @@ use substrate_subxt::register_default_type_sizes;
 use substrate_subxt::system::SystemEventTypeRegistry;
 use substrate_subxt::EventTypeRegistry;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, sudo, system, Runtime};
+
+use parachain::primitives::{Id as ParaId, RelayChainBlockNumber};
+use xcm::v0::{Error as XcmError, NetworkId};
 
 pub const MINIMUM_STAKE: u128 = 100;
 pub const TX_FEES: u128 = 2000000000;
@@ -59,13 +62,15 @@ impl Runtime for PolkaBtcRuntime {
     }
 }
 
+pub type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
+
 // TODO: use types from actual runtime
 impl system::System for PolkaBtcRuntime {
     type Index = u32;
     type BlockNumber = u32;
     type Hash = sp_core::H256;
     type Hashing = BlakeTwo256;
-    type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
+    type AccountId = AccountId;
     type Address = Self::AccountId;
     type Header = Header<Self::BlockNumber, BlakeTwo256>;
     type Extrinsic = OpaqueExtrinsic;
@@ -77,7 +82,7 @@ impl pallets::Core for PolkaBtcRuntime {
     type DOT = Balance;
     type PolkaBTC = Balance;
     type BTCBalance = Balance;
-    type RichBlockHeader = RichBlockHeader;
+    type RichBlockHeader = RichBlockHeader<AccountId>;
     type H256Le = H256Le;
     type H160 = H160;
     type H256 = H256;
@@ -89,6 +94,12 @@ impl pallets::Core for PolkaBtcRuntime {
     type StatusUpdateId = u64;
     type SignedFixedPoint = FixedI128;
     type UnsignedFixedPoint = FixedU128;
+
+    // cumulus / polkadot types
+    type XcmError = XcmError;
+    type NetworkId = NetworkId;
+    type RelayChainBlockNumber = RelayChainBlockNumber;
+    type ParaId = ParaId;
 }
 
 impl balances::Balances for PolkaBtcRuntime {
