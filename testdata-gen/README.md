@@ -24,60 +24,45 @@ This tool uses subcommands, e.g. `cargo run -- --keyring bob set-exchange-rate`,
 
 ```
 USAGE:
-    cargo run -- [OPTIONS] --bitcoin-rpc-url <bitcoin-rpc-url> --bitcoin-rpc-user <bitcoin-rpc-user> --bitcoin-rpc-pass <bitcoin-rpc-pass> <SUBCOMMAND>
+    testdata-gen [OPTIONS] --bitcoin-rpc-url <bitcoin-rpc-url> --bitcoin-rpc-user <bitcoin-rpc-user> --bitcoin-rpc-pass <bitcoin-rpc-pass> <SUBCOMMAND>
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
-        --bitcoin-rpc-pass <bitcoin-rpc-pass>    [env: BITCOIN_RPC_PASS=]
-        --bitcoin-rpc-url <bitcoin-rpc-url>      [env: BITCOIN_RPC_URL=]
-        --bitcoin-rpc-user <bitcoin-rpc-user>    [env: BITCOIN_RPC_USER=]
+        --bitcoin-rpc-pass <bitcoin-rpc-pass>    [env: BITCOIN_RPC_PASS=rpcpassword]
+        --bitcoin-rpc-url <bitcoin-rpc-url>      [env: BITCOIN_RPC_URL=http://localhost:18443]
+        --bitcoin-rpc-user <bitcoin-rpc-user>    [env: BITCOIN_RPC_USER=rpcuser]
         --keyfile <keyfile>
             Path to the json file containing key pairs in a map. Valid content of this file is e.g.
-            `{ "MyUser1": "<credentials>", "MyUser2": "<credentials>" }`. Credentials should be a
-            `0x`-prefixed 64-digit hex string, or a BIP-39 key phrase of 12, 15, 18, 21 or 24 words.
-            See `sp_core::from_string_with_seed` for more details
-        --keyname <keyname>
-            The name of the account from the keyfile to use
-        --keyring <keyring>
-            Keyring to use, mutually exclusive with keyfile [valid values: alice, bob, charlie,
-            dave, eve, ferdie]
+            `{ "MyUser1": "<Polkadot Account Mnemonic>", "MyUser2": "<Polkadot Account Mnemonic>" }`
+
+        --keyname <keyname>                      The name of the account from the keyfile to use
+        --keyring <keyring>                      Keyring to use, mutually exclusive with keyfile
         --polka-btc-url <polka-btc-url>
             Parachain URL, can be over WebSockets or HTTP [default: ws://127.0.0.1:9944]
 
 
 SUBCOMMANDS:
-    accept-replace       Accept replace request of another vault
-    api-call             Send a API request
-    ├── vault                         Send an API message to the vault
-    │   ├── lock-additional-collateral    Tell the vault to lock additional collateral
-    │   ├── register-vault                Tell the vault to register itself
-    │   ├── request-replace               Tell the vault to place a replace request
-    │   ├── update-btc-address            Tell the vault to update its BTC address
-    │   ├── withdraw-collateral           Tell the vault to withdraw collateral
-    │   └── withdraw-replace              Tell the vault to withdraw a replace request
-    └── relayer                       Send an API message to the staked relayer
-        ├── account-id                    Get the account id of the relayer
-        ├── deregister                    Tell the relayer to deregister itself
-        ├── register                      Tell the relayer to register itself
-        ├── suggest-status-update         Tell the relayer to issue a status update suggestion
-        ├── system-health                 Get the status of the parachain
-        └── vote-on-status-update         Tell the relayer to vote on a status update suggestion
-    execute-redeem       Send BTC to user, must be called by vault
-    execute-replace      Accept replace request of another vault
-    get-btc-tx-fees      Get the current estimated bitcoin transaction fees
-    get-current-time     Get the time as reported by the chain
-    get-exchange-rate    Get the current DOT to BTC exchange rate
-    register-vault       Register a new vault using the global keyring
-    request-issue        Request issuance of PolkaBTC and transfer to vault
-    request-redeem       Request that PolkaBTC be burned to redeem BTC
-    request-replace      Request another vault to takeover
-    send-bitcoin         Send BTC to an address
-    set-btc-tx-fees      Set the current estimated bitcoin transaction fees
-    set-exchange-rate    Set the DOT to BTC exchange rate
-    set-issue-period     Set the period after which issue requests expire.
-    set-redeem-period    Set the period after which redeem requests expire.
-    set-replace-period    Set the period after which replace requests expire.
+    accept-replace                 Accept replace request of another vault
+    api-call                       Send a API request
+    execute-redeem                 Send BTC to user, must be called by vault
+    execute-replace                Accept replace request of another vault
+    fund-accounts                  Transfer DOT collateral
+    get-btc-tx-fees                Get the current estimated bitcoin transaction fees
+    get-current-time               Get the time as reported by the chain
+    get-exchange-rate              Get the current DOT to BTC exchange rate
+    help                           Prints this message or the help of the given subcommand(s)
+    register-vault                 Register a new vault using the global keyring
+    request-issue                  Request issuance of PolkaBTC and transfer to vault
+    request-redeem                 Request that PolkaBTC be burned to redeem BTC
+    request-replace                Request another vault to takeover
+    send-bitcoin                   Send BTC to an address
+    set-btc-tx-fees                Set the current estimated bitcoin transaction fees
+    set-exchange-rate              Set the DOT to BTC exchange rate
+    set-issue-period               Set issue period
+    set-redeem-period              Set redeem period
+    set-relayer-maturity-period    Set relayer maturity period
+    set-replace-period             Set replace period
 ```

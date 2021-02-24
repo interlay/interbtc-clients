@@ -19,15 +19,26 @@ services:
         volumes:
             - ./cache:/home/bitcoin/.bitcoin/testnet3
     vault:
-        image: "registry.gitlab.com/interlay/polkabtc-clients/vault:0-4-0"
+        image: "registry.gitlab.com/interlay/polkabtc-clients/vault:0.5.0"
         command:
             - /bin/sh
             - -c
             - |
                 echo "Sleeping..."
-                sleep 1
-                vault --bitcoin-rpc-url http://bitcoind:18332 --bitcoin-rpc-user rpcuser --bitcoin-rpc-pass rpcpassword --keyfile /keyring/keyfile.json --keyname polkabtcvault --network=testnet --auto-register-with-faucet-url 'http://beta.polkabtc.io/api/faucet' --polka-btc-url 'wss://beta.polkabtc.io/api/parachain' --http-addr '[::0]:3032'
+                sleep 10
+                vault \
+                    --http-addr '[::0]:3032' \
+                    --bitcoin-rpc-url http://bitcoind:18332 \
+                    --bitcoin-rpc-user rpcuser \
+                    --bitcoin-rpc-pass rpcpassword \
+                    --network=testnet \
+                    --keyfile /keyfile.json \
+                    --keyname polkabtcvault \
+                    --auto-register-with-faucet-url 'https://beta.polkabtc.io/api/faucet' \
+                    --polka-btc-url 'wss://beta.polkabtc.io/api/parachain'
         ports:
             - "3032:3032"
         volumes:
-            - ./:/keyring
+            - type: bind
+              source: ./keyfile.json
+              target: /keyfile.json

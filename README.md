@@ -6,7 +6,7 @@
   <h2 align="center">PolkaBTC Clients</h2>
 
   <p align="center">
-    Oracle, Vault & Staked Relayer
+    Faucet, Oracle, Vault & Staked Relayer
   </p>
 </p>
 

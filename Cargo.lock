@@ -3023,6 +3023,19 @@ dependencies = [
 
 [[package]]
 name = "hyper-tls"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a800d6aa50af4b5850b2b0f659625ce9504df908e9733b635720483be26174f"
+dependencies = [
+ "bytes 0.4.12",
+ "futures 0.1.30",
+ "hyper 0.12.36",
+ "native-tls",
+ "tokio-io",
+]
+
+[[package]]
+name = "hyper-tls"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d979acc56dcb5b8dddba3917601745e877576475aa046df3226eabdecef78eed"
@@ -3302,6 +3315,7 @@ dependencies = [
  "futures 0.1.30",
  "futures 0.3.13",
  "hyper 0.12.36",
+ "hyper-tls 0.3.2",
  "jsonrpc-core 16.0.0",
  "jsonrpc-pubsub 16.0.0",
  "log 0.4.14",
@@ -6798,7 +6812,7 @@ dependencies = [
  "http 0.2.3",
  "http-body 0.3.1",
  "hyper 0.13.10",
- "hyper-tls",
+ "hyper-tls 0.4.3",
  "ipnet",
  "js-sys",
  "lazy_static",
