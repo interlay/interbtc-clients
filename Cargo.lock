@@ -6926,7 +6926,7 @@ dependencies = [
 
 [[package]]
 name = "runtime"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-trait",
  "bitcoin 0.2.0",
@@ -6944,6 +6944,7 @@ dependencies = [
  "log 0.4.14",
  "module-exchange-rate-oracle-rpc-runtime-api",
  "parity-scale-codec 2.0.0",
+ "polkadot-parachain",
  "rand 0.7.3",
  "redeem",
  "refund",
@@ -6963,6 +6964,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.25",
  "vault-registry",
+ "xcm",
 ]
 
 [[package]]
