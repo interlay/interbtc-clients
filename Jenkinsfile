@@ -12,7 +12,7 @@ pipeline {
 
     options {
         timestamps()
-        ansiColor('xterm') 
+        ansiColor('xterm')
     }
 
     stages {
@@ -81,6 +81,22 @@ pipeline {
                         }
                     }
                 }
+            }
+        }
+
+        stage('Create GitHub release') {
+            when {
+                anyOf {
+                    branch 'github'
+                    tag '*'
+                }
+            }
+            steps {
+                sh 'wget -O - https://github.com/cli/cli/releases/download/v1.6.2/gh_1.6.2_linux_amd64.tar.gz | tar xzf - && mv ./gh_1.6.2_linux_amd64/bin/gh /usr/local/bin'
+                sh 'gh auth status'
+                sh 'wget -O - https://github.com/git-chglog/git-chglog/releases/download/v0.10.0/git-chglog_0.10.0_linux_amd64.tar.gz | tar xzf -'
+                sh './git-chglog --output CHANGELOG.md'
+                sh 'gh release -R $GIT_URL create $TAG_NAME --title $TAG_NAME -F CHANGELOG.md -d ' + output_files.collect { "target/release/$it" }.join(' ')
             }
         }
     }
