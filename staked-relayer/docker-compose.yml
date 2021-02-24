@@ -17,15 +17,25 @@ services:
         volumes:
             - ./cache:/home/bitcoin/.bitcoin/testnet3
     staked_relayer:
-        image: "registry.gitlab.com/interlay/polkabtc-clients/staked-relayer:0-4-0"
+        image: "registry.gitlab.com/interlay/polkabtc-clients/staked-relayer:0.5.0"
         command:
             - /bin/sh
             - -c
             - |
                 echo "Sleeping..."
-                sleep 1
-                staked-relayer --http-addr '[::0]:3030' --bitcoin-rpc-url http://bitcoind:18332 --bitcoin-rpc-user rpcuser --bitcoin-rpc-pass rpcpassword --keyfile /keyring/keyfile.json --keyname polkabtcrelayer --auto-register-with-faucet-url 'http://beta.polkabtc.io/api/faucet' --polka-btc-url 'wss://beta.polkabtc.io/api/parachain'
+                sleep 30
+                staked-relayer \
+                    --http-addr '[::0]:3030' \
+                    --bitcoin-rpc-url http://bitcoind:18332 \
+                    --bitcoin-rpc-user rpcuser \
+                    --bitcoin-rpc-pass rpcpassword \
+                    --keyfile /keyfile.json \
+                    --keyname polkabtcrelayer \
+                    --auto-register-with-faucet-url 'https://beta.polkabtc.io/api/faucet' \
+                    --polka-btc-url 'wss://beta.polkabtc.io/api/parachain'
         ports:
             - "3030:3030"
         volumes:
-            - ./:/keyring
+            - type: bind
+              source: ./keyfile.json
+              target: /keyfile.json

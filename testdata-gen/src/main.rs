@@ -722,7 +722,6 @@ async fn main() -> Result<(), Error> {
             provider.set_maturity_period(info.period).await?;
         }
         SubCommand::FundAccounts(info) => {
-            println!("{:?}", info.accounts);
             let provider = &provider;
             let futures: Vec<_> = info
                 .accounts

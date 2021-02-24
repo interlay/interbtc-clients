@@ -31,16 +31,16 @@ struct Opts {
     /// Starting height for vault theft checks, if not defined
     /// automatically start from the chain tip.
     #[clap(long)]
-    bitcoin_start_height: Option<u32>,
+    bitcoin_theft_start_height: Option<u32>,
 
-    /// Delay for checking Bitcoin for new blocks (in seconds).
-    #[clap(long, default_value = "60")]
-    bitcoin_block_delay: u64,
+    /// Delay for checking Bitcoin for new blocks.
+    #[clap(long, default_value = "6000")]
+    bitcoin_timeout_ms: u64,
 
     /// Starting height to relay block headers, if not defined
     /// use the best height as reported by the relay module.
     #[clap(long)]
-    relay_start_height: Option<u32>,
+    bitcoin_relay_start_height: Option<u32>,
 
     /// Max batch size for combined block header submission.
     #[clap(long, default_value = "16")]
@@ -81,6 +81,7 @@ async fn main() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
     let http_addr = opts.http_addr.parse()?;
+    let bitcoin_timeout_ms = opts.bitcoin_timeout_ms;
     let oracle_timeout_ms = opts.oracle_timeout_ms;
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
@@ -106,9 +107,9 @@ async fn main() -> Result<(), Error> {
         BitcoinClient::new(opts.bitcoin.new_client(None)?),
         PolkaBtcClient::new(provider.clone()),
         Config {
-            start_height: opts.relay_start_height,
+            start_height: opts.bitcoin_relay_start_height,
             max_batch_size: opts.max_batch_size,
-            timeout: Some(Duration::from_secs(opts.bitcoin_block_delay)),
+            timeout: Some(Duration::from_millis(bitcoin_timeout_ms)),
         },
     );
     let relayer_provider = provider.clone();
@@ -133,15 +134,15 @@ async fn main() -> Result<(), Error> {
     // store vaults in Arc<RwLock>
     let vaults = Arc::new(Vaults::from(vaults));
     // scan from custom height or the current tip
-    let bitcoin_start_height = opts
-        .bitcoin_start_height
+    let bitcoin_theft_start_height = opts
+        .bitcoin_theft_start_height
         .unwrap_or(btc_rpc.get_block_count().await? as u32 + 1);
     let vaults_monitor = report_vault_thefts(
-        bitcoin_start_height,
+        bitcoin_theft_start_height,
         btc_rpc.clone(),
         vaults.clone(),
         provider.clone(),
-        Duration::from_secs(opts.bitcoin_block_delay),
+        Duration::from_millis(bitcoin_timeout_ms),
     );
 
     let wallet_update_listener = listen_for_wallet_updates(provider.clone(), vaults.clone());
