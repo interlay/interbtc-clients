@@ -39,6 +39,9 @@ use substrate_subxt::system::SystemEventTypeRegistry;
 use substrate_subxt::EventTypeRegistry;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, sudo, system, Runtime};
 
+use parachain::primitives::{Id as ParaId, RelayChainBlockNumber};
+use xcm::v0::{Error as XcmError, NetworkId};
+
 pub const MINIMUM_STAKE: u128 = 100;
 pub const TX_FEES: u128 = 2000000000;
 pub const PLANCK_PER_DOT: u128 = 10000000000;
@@ -91,6 +94,12 @@ impl pallets::Core for PolkaBtcRuntime {
     type StatusUpdateId = u64;
     type SignedFixedPoint = FixedI128;
     type UnsignedFixedPoint = FixedU128;
+
+    // cumulus / polkadot types
+    type XcmError = XcmError;
+    type NetworkId = NetworkId;
+    type RelayChainBlockNumber = RelayChainBlockNumber;
+    type ParaId = ParaId;
 }
 
 impl balances::Balances for PolkaBtcRuntime {
