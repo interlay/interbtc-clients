@@ -78,7 +78,7 @@ OPTIONS:
             chain tip
 
         --bitcoin-timeout-ms <bitcoin-timeout-ms>
-            Delay for checking Bitcoin for new blocks [default: 6000]
+            Timeout in milliseconds to poll Bitcoin [default: 6000]
 
         --http-addr <http-addr>
             Address to listen on for JSON-RPC requests [default: [::0]:3030]

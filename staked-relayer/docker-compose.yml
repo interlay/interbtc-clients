@@ -23,7 +23,7 @@ services:
             - -c
             - |
                 echo "Sleeping..."
-                sleep 30
+                sleep 10
                 staked-relayer \
                     --http-addr '[::0]:3030' \
                     --bitcoin-rpc-url http://bitcoind:18332 \
@@ -35,6 +35,8 @@ services:
                     --polka-btc-url 'wss://beta.polkabtc.io/api/parachain'
         ports:
             - "3030:3030"
+        environment:
+            RUST_LOG: info
         volumes:
             - type: bind
               source: ./keyfile.json

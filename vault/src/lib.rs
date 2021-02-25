@@ -139,6 +139,10 @@ pub struct Opts {
     /// Bitcoin network type for address encoding.
     #[clap(long, default_value = "regtest")]
     pub network: BitcoinNetwork,
+
+    /// Timeout in milliseconds to poll Bitcoin.
+    #[clap(long, default_value = "6000")]
+    pub bitcoin_timeout_ms: u64,
 }
 
 async fn generate_btc_key_and_register<B: BitcoinCoreApi + Send + Sync + 'static>(
