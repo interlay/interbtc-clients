@@ -451,4 +451,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
     {
         Ok(true)
     }
+    async fn wait_for_block_sync(&self, _timeout: Duration) -> Result<(), BitcoinError> {
+        Ok(())
+    }
 }

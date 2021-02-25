@@ -58,7 +58,7 @@ For convenience, a copy of this output is included below. Note that the bitcoin 
 
 ```
 USAGE:
-    cargo run -- [FLAGS] [OPTIONS] --bitcoin-rpc-url <bitcoin-rpc-url> --bitcoin-rpc-user <bitcoin-rpc-user> --bitcoin-rpc-pass <bitcoin-rpc-pass>
+    vault [FLAGS] [OPTIONS] --bitcoin-rpc-url <bitcoin-rpc-url> --bitcoin-rpc-user <bitcoin-rpc-user> --bitcoin-rpc-pass <bitcoin-rpc-pass>
 
 FLAGS:
     -h, --help                              Prints help information
@@ -75,12 +75,21 @@ OPTIONS:
             generated address
 
         --auto-register-with-faucet-url <auto-register-with-faucet-url>
-            Automatically register the vault with the collateral received from the faucet and a newly
-            generated address. The parameter is the URL of the faucet
+            Automatically register the vault with the collateral received from the faucet and a
+            newly generated address. The parameter is the URL of the faucet
 
-        --bitcoin-rpc-pass <bitcoin-rpc-pass>                              [env: BITCOIN_RPC_PASS=]
-        --bitcoin-rpc-url <bitcoin-rpc-url>                                [env: BITCOIN_RPC_URL=]
-        --bitcoin-rpc-user <bitcoin-rpc-user>                              [env: BITCOIN_RPC_USER=]
+        --bitcoin-rpc-pass <bitcoin-rpc-pass>
+            [env: BITCOIN_RPC_PASS=rpcpassword]
+
+        --bitcoin-rpc-url <bitcoin-rpc-url>
+            [env: BITCOIN_RPC_URL=http://localhost:18443]
+
+        --bitcoin-rpc-user <bitcoin-rpc-user>
+            [env: BITCOIN_RPC_USER=rpcuser]
+
+        --bitcoin-timeout-ms <bitcoin-timeout-ms>
+            Timeout in milliseconds to poll Bitcoin [default: 6000]
+
         --btc-confirmations <btc-confirmations>
             How many bitcoin confirmations to wait for. If not specified, the parachain settings
             will be used (recommended)

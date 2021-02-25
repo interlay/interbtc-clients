@@ -4,6 +4,7 @@ use log::*;
 use runtime::substrate_subxt::PairSigner;
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
 use std::sync::Arc;
+use std::time::Duration;
 use vault::{start, Error, Opts};
 
 #[tokio::main]
@@ -23,6 +24,11 @@ async fn main() -> Result<(), Error> {
         opts.bitcoin.new_client(Some(&wallet))?,
         opts.network.0,
     ));
+
+    info!("Waiting for bitcoin core to sync");
+    btc_rpc
+        .wait_for_block_sync(Duration::from_millis(opts.bitcoin_timeout_ms))
+        .await?;
 
     // load wallet. Exit on failure, since without wallet we can't do a lot
     btc_rpc

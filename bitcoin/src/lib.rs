@@ -31,6 +31,7 @@ pub use bitcoincore_rpc::{
 };
 pub use error::{BitcoinRpcError, ConversionError, Error};
 pub use iter::{get_transactions, stream_blocks, stream_in_chain_transactions};
+use log::trace;
 use sp_core::H256;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::{Mutex, OwnedMutexGuard};
@@ -134,6 +135,8 @@ pub trait BitcoinCoreApi {
             + Send
             + Sync
             + 'static;
+
+    async fn wait_for_block_sync(&self, timeout: Duration) -> Result<(), Error>;
 }
 
 pub struct LockedTransaction {
@@ -386,6 +389,7 @@ impl BitcoinCoreApi for BitcoinCore {
         });
         Ok(Box::new(iterator))
     }
+
     /// Waits for the required number of confirmations, and collects data about the
     /// transaction
     ///
@@ -591,6 +595,14 @@ impl BitcoinCoreApi for BitcoinCore {
         let address_info = self.rpc.get_address_info(&address)?;
         let wallet_pubkey = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
         Ok(P::from(wallet_pubkey.key.serialize()) == public_key)
+    }
+
+    async fn wait_for_block_sync(&self, timeout: Duration) -> Result<(), Error> {
+        while self.rpc.get_blockchain_info()?.initial_block_download {
+            trace!("Bitcoin not synced, sleeping for {:?}", timeout);
+            delay_for(timeout).await;
+        }
+        Ok(())
     }
 }
 

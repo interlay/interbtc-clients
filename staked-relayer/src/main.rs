@@ -33,7 +33,7 @@ struct Opts {
     #[clap(long)]
     bitcoin_theft_start_height: Option<u32>,
 
-    /// Delay for checking Bitcoin for new blocks.
+    /// Timeout in milliseconds to poll Bitcoin.
     #[clap(long, default_value = "6000")]
     bitcoin_timeout_ms: u64,
 
@@ -102,6 +102,11 @@ async fn main() -> Result<(), Error> {
         opts.bitcoin.new_client(None)?,
         dummy_network,
     ));
+
+    info!("Waiting for bitcoin core to sync");
+    btc_rpc
+        .wait_for_block_sync(Duration::from_millis(bitcoin_timeout_ms))
+        .await?;
 
     let relayer = Runner::new(
         BitcoinClient::new(opts.bitcoin.new_client(None)?),
