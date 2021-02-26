@@ -45,8 +45,12 @@ pub type PolkaBtcHeader = <PolkaBtcRuntime as System>::Header;
 
 pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
 
-pub type PolkaBtcVault =
-    Vault<AccountId, <PolkaBtcRuntime as System>::BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC>;
+pub type PolkaBtcVault = Vault<
+    AccountId,
+    <PolkaBtcRuntime as System>::BlockNumber,
+    <PolkaBtcRuntime as Core>::PolkaBTC,
+    <PolkaBtcRuntime as Core>::DOT,
+>;
 
 pub type PolkaBtcIssueRequest = IssueRequest<
     AccountId,
