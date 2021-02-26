@@ -61,6 +61,7 @@ pub struct InitializedEvent<T: BTCRelay> {
     pub _runtime: PhantomData<T>,
     pub block_height: BitcoinBlockHeight,
     pub block_header_hash: T::H256Le,
+    pub account_id: T::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
@@ -68,6 +69,7 @@ pub struct StoreMainChainHeaderEvent<T: BTCRelay> {
     pub _runtime: PhantomData<T>,
     pub block_height: BitcoinBlockHeight,
     pub block_header_hash: T::H256Le,
+    pub account_id: T::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
