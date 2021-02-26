@@ -44,6 +44,7 @@ pub trait Core: System {
     type StatusUpdateId: Codec + EncodeLike + Member + Default;
     type SignedFixedPoint: Codec + EncodeLike + Member + Default;
     type UnsignedFixedPoint: Codec + EncodeLike + Member + Default;
+    type VaultStatus: Codec + EncodeLike + Default + Send + Sync;
 
     // cumulus / polkadot types
     type XcmError: Codec + EncodeLike + Member;
