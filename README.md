@@ -20,7 +20,7 @@ Download and start [Bitcoin Core](https://bitcoin.org/en/bitcoin-core/):
 bitcoind -regtest -server
 ```
 
-Build and run the [PolkaBTC Parachain](https://gitlab.com/interlay/btc-parachain):
+Build and run the [PolkaBTC Parachain](https://github.com/interlay/btc-parachain):
 
 ```
 git clone git@gitlab.com:interlay/btc-parachain.git
