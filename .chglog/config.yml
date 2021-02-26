@@ -2,7 +2,7 @@ style: github
 template: CHANGELOG.tpl.md
 info:
   title: CHANGELOG
-  repository_url: https://gitlab.com/interlay/polkabtc-clients
+  repository_url: https://github.com/interlay/polkabtc-clients
 options:
   commits:
     # filters:
