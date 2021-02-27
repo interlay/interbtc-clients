@@ -84,19 +84,6 @@ async fn main() -> Result<(), Error> {
     let bitcoin_timeout_ms = opts.bitcoin_timeout_ms;
     let oracle_timeout_ms = opts.oracle_timeout_ms;
 
-    let (key_pair, _) = opts.account_info.get_key_pair()?;
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
-    let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
-
-    if let Some(stake) = opts.auto_register_with_stake {
-        if !is_registered(&provider).await? {
-            provider.register_staked_relayer(stake).await?;
-            info!("Automatically registered staked relayer");
-        } else {
-            info!("Not registering staked relayer -- already registered");
-        }
-    }
-
     let dummy_network = bitcoin::Network::Regtest; // we don't make any transaction so this is not used
     let btc_rpc = Arc::new(BitcoinCore::new(
         opts.bitcoin.new_client(None)?,
@@ -107,6 +94,20 @@ async fn main() -> Result<(), Error> {
     btc_rpc
         .wait_for_block_sync(Duration::from_millis(bitcoin_timeout_ms))
         .await?;
+
+    let (key_pair, _) = opts.account_info.get_key_pair()?;
+    let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
+    // only open connection to parachain after bitcoind sync to prevent timeout
+    let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
+
+    if let Some(stake) = opts.auto_register_with_stake {
+        if !is_registered(&provider).await? {
+            provider.register_staked_relayer(stake).await?;
+            info!("Automatically registered staked relayer");
+        } else {
+            info!("Not registering staked relayer -- already registered");
+        }
+    }
 
     let relayer = Runner::new(
         BitcoinClient::new(opts.bitcoin.new_client(None)?),
