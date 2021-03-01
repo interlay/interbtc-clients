@@ -74,6 +74,10 @@ struct Opts {
     /// The parameter is the URL of the faucet
     #[clap(long)]
     auto_register_with_faucet_url: Option<String>,
+
+    /// Number of confirmations a block needs to have before it is submitted.
+    #[clap(long, default_value = "0")]
+    required_btc_confirmations: u32,
 }
 
 #[tokio::main]
@@ -115,6 +119,7 @@ async fn main() -> Result<(), Error> {
             start_height: opts.bitcoin_relay_start_height,
             max_batch_size: opts.max_batch_size,
             timeout: Some(Duration::from_millis(bitcoin_timeout_ms)),
+            required_btc_confirmations: opts.required_btc_confirmations,
         },
     );
     let relayer_provider = provider.clone();
