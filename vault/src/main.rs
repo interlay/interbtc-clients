@@ -16,9 +16,6 @@ async fn main() -> Result<(), Error> {
     info!("Command line arguments: {:?}", opts.clone());
 
     let (pair, wallet) = opts.account_info.get_key_pair()?;
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);
-    let provider = PolkaBtcProvider::from_url(opts.polka_btc_url.clone(), signer).await?;
-    let arc_provider = Arc::new(provider.clone());
 
     let btc_rpc = Arc::new(BitcoinCore::new(
         opts.bitcoin.new_client(Some(&wallet))?,
@@ -35,6 +32,11 @@ async fn main() -> Result<(), Error> {
         .create_wallet(&wallet)
         .await
         .map_err(|e| Error::WalletInitializationFailure(e))?;
+
+    let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);
+    // only open connection to parachain after bitcoind sync to prevent timeout
+    let provider = PolkaBtcProvider::from_url(opts.polka_btc_url.clone(), signer).await?;
+    let arc_provider = Arc::new(provider.clone());
 
     start(intact_opts, arc_provider, btc_rpc).await
 }

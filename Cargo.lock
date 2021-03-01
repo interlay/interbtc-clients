@@ -9154,7 +9154,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "staked-relayer"
-version = "0.2.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "backoff",
@@ -10292,7 +10292,7 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "0.2.6"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "backoff",
