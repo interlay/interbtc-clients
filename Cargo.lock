@@ -6742,17 +6742,7 @@ dependencies = [
 [[package]]
 name = "relayer-core"
 version = "0.3.0"
-source = "git+https://gitlab.com/interlay/relayer-core?rev=174fbc77#174fbc7759070b56802a0d2b161e65bc98376ca6"
-dependencies = [
- "hex 0.4.2",
- "log 0.4.14",
- "thiserror",
-]
-
-[[package]]
-name = "relayer-core"
-version = "0.3.0"
-source = "git+https://gitlab.com/interlay/relayer-core?rev=49deea6c1219d3a0e682e35444a08055a238fed7#49deea6c1219d3a0e682e35444a08055a238fed7"
+source = "git+https://gitlab.com/interlay/relayer-core?rev=9043ce35a1e00bc5a65d4d3d0433c2535f679bc0#9043ce35a1e00bc5a65d4d3d0433c2535f679bc0"
 dependencies = [
  "hex 0.4.2",
  "log 0.4.14",
@@ -9181,7 +9171,7 @@ dependencies = [
  "mockall",
  "parity-scale-codec 2.0.0",
  "rand 0.7.3",
- "relayer-core 0.3.0 (git+https://gitlab.com/interlay/relayer-core?rev=174fbc77)",
+ "relayer-core",
  "runtime",
  "schnorrkel",
  "serde",
@@ -9551,7 +9541,7 @@ dependencies = [
  "log 0.4.14",
  "parity-scale-codec 2.0.0",
  "primitive-types 0.7.3",
- "relayer-core 0.3.0 (git+https://gitlab.com/interlay/relayer-core?rev=49deea6c1219d3a0e682e35444a08055a238fed7)",
+ "relayer-core",
  "reqwest",
  "runtime",
  "serde",

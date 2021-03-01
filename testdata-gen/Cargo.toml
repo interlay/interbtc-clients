@@ -9,7 +9,7 @@ tokio = { version = "0.2.22", features = ["full"] }
 parity-scale-codec = "2.0.0"
 primitive-types = { default-features = false, version = "0.7.2", features = ["codec"]}
 runtime = { path = "../runtime" }
-relayer-core = { git = "https://gitlab.com/interlay/relayer-core", rev = "49deea6c1219d3a0e682e35444a08055a238fed7" }
+relayer-core = { git = "https://gitlab.com/interlay/relayer-core", rev = "9043ce35a1e00bc5a65d4d3d0433c2535f679bc0" }
 thiserror = "1.0"
 bitcoin = { path = "../bitcoin", features = ["cli"] }
 clap = "3.0.0-beta.2"

@@ -107,6 +107,9 @@ OPTIONS:
 
         --status-update-deposit <status-update-deposit>
             Default deposit for all automated status proposals [default: 100]
+
+        --required-btc-confirmations: <required-btc-confirmations:>
+            Number of confirmations a block needs to have before it is submitted [default: 0]
 ```
 
 ## Example
