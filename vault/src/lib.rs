@@ -375,7 +375,7 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
         }),
         tokio::spawn(async move {
             arc_provider
-                .on_event_error(|e| error!("Received error event: {}", e))
+                .on_event_error(|e| debug!("Received error event: {}", e))
                 .await
                 .unwrap();
         }),
