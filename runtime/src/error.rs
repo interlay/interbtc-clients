@@ -1,12 +1,14 @@
-use jsonrpsee::{client::RequestError as JsonRPSeeError, transport::ws::WsNewDnsError};
+use jsonrpsee::client::RequestError as JsonRPSeeError;
+pub use jsonrpsee::transport::ws::{WsNewDnsError, WsNewError};
 use parity_scale_codec::Error as CodecError;
 use serde_json::Error as SerdeJsonError;
 use sp_core::crypto::SecretStringError;
 use std::array::TryFromSliceError;
-use std::io::Error as IoError;
+pub use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::num::TryFromIntError;
 pub use substrate_subxt::Error as XtError;
 use thiserror::Error;
+use tokio::time::Elapsed;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -44,6 +46,8 @@ pub enum Error {
     /// Occurs during websocket handshake
     #[error("Rpc error: {0}")]
     WsHandshake(#[from] WsNewDnsError),
+    #[error("Timeout: {0}")]
+    TimeElapsed(#[from] Elapsed),
 }
 
 #[derive(Error, Debug)]

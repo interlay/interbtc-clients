@@ -598,11 +598,15 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     async fn wait_for_block_sync(&self, timeout: Duration) -> Result<(), Error> {
-        while self.rpc.get_blockchain_info()?.initial_block_download {
+        loop {
+            let info = self.rpc.get_blockchain_info()?;
+            // NOTE: initial_block_download is always true on regtest
+            if !info.initial_block_download || info.verification_progress == 1.0 {
+                return Ok(());
+            }
             trace!("Bitcoin not synced, sleeping for {:?}", timeout);
             delay_for(timeout).await;
         }
-        Ok(())
     }
 }
 

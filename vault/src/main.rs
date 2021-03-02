@@ -33,12 +33,16 @@ async fn main() -> Result<(), Error> {
         .await
         .map_err(|e| Error::WalletInitializationFailure(e))?;
 
-    info!("Connecting to the btc-parachain");
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);
     // only open connection to parachain after bitcoind sync to prevent timeout
-    let provider = PolkaBtcProvider::from_url(opts.polka_btc_url.clone(), signer).await?;
-    let arc_provider = Arc::new(provider.clone());
-    info!("Connected, starting services...");
+    let provider = Arc::new(
+        PolkaBtcProvider::from_url_with_retry(
+            opts.polka_btc_url,
+            signer,
+            Duration::from_millis(opts.connection_timeout_ms),
+        )
+        .await?,
+    );
 
-    start(intact_opts, arc_provider, btc_rpc).await
+    start(intact_opts, provider, btc_rpc).await
 }

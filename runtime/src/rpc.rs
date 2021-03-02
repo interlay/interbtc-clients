@@ -6,7 +6,7 @@ use jsonrpsee::{
     common::{to_value as to_json_value, Params},
     Client as RpcClient,
 };
-use log::trace;
+use log::{info, trace};
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
 use sp_arithmetic::FixedU128;
 use sp_core::sr25519::Pair as KeyPair;
@@ -21,7 +21,7 @@ use substrate_subxt::{
     PairSigner, Signer,
 };
 use tokio::sync::RwLock;
-use tokio::time::delay_for;
+use tokio::time::{delay_for, timeout};
 
 use crate::balances_dot::*;
 use crate::btc_relay::*;
@@ -40,6 +40,10 @@ use crate::Error;
 use crate::PolkaBtcRuntime;
 use futures::{stream::StreamExt, SinkExt};
 use substrate_subxt::EventTypeRegistry;
+
+use crate::error::{IoErrorKind, WsNewDnsError, WsNewError};
+
+const RETRY_DURATION_MS: Duration = Duration::from_millis(1000);
 
 pub type PolkaBtcHeader = <PolkaBtcRuntime as System>::Header;
 
@@ -123,16 +127,43 @@ impl PolkaBtcProvider {
     }
 
     pub async fn from_url(
-        url: String,
+        url: &String,
         signer: PairSigner<PolkaBtcRuntime, KeyPair>,
     ) -> Result<Self, Error> {
         let rpc_client = if url.starts_with("ws://") || url.starts_with("wss://") {
-            jsonrpsee::ws_client(&url).await?
+            jsonrpsee::ws_client(url).await?
         } else {
-            jsonrpsee::http_client(&url)
+            jsonrpsee::http_client(url)
         };
 
         Self::new(rpc_client, signer).await
+    }
+
+    pub async fn from_url_with_retry(
+        url: String,
+        signer: PairSigner<PolkaBtcRuntime, KeyPair>,
+        timeout_duration: Duration,
+    ) -> Result<Self, Error> {
+        info!("Connecting to the btc-parachain...");
+        timeout(timeout_duration, async move {
+            loop {
+                match Self::from_url(&url, signer.clone()).await {
+                    Err(Error::WsHandshake(WsNewDnsError::Connect(WsNewError::Io(err))))
+                        if err.kind() == IoErrorKind::ConnectionRefused =>
+                    {
+                        trace!("could not connect to parachain");
+                        delay_for(RETRY_DURATION_MS).await;
+                        continue;
+                    }
+                    Ok(rpc) => {
+                        info!("Connected!");
+                        return Ok(rpc);
+                    }
+                    Err(err) => return Err(err),
+                }
+            }
+        })
+        .await?
     }
 
     /// Gets a copy of the signer with a unique nonce

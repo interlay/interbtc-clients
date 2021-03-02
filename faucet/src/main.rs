@@ -6,6 +6,7 @@ use error::Error;
 use runtime::substrate_subxt::PairSigner;
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
 use std::sync::Arc;
+use std::time::Duration;
 
 /// DOT faucet for enabling users to test PolkaBTC
 #[derive(Clap)]
@@ -38,6 +39,10 @@ struct Opts {
     /// DOT allowance per request for vaults.
     #[clap(long, default_value = "500")]
     staked_relayer_allowance: u128,
+
+    /// Timeout in milliseconds to wait for connection to btc-parachain.
+    #[clap(long, default_value = "60000")]
+    connection_timeout_ms: u64,
 }
 
 #[tokio::main]
@@ -47,7 +52,14 @@ async fn main() -> Result<(), Error> {
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
-    let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
+    let provider = Arc::new(
+        PolkaBtcProvider::from_url_with_retry(
+            opts.polka_btc_url,
+            signer,
+            Duration::from_millis(opts.connection_timeout_ms),
+        )
+        .await?,
+    );
 
     let http_addr = opts.http_addr.parse()?;
     http::start(

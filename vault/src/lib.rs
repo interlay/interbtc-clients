@@ -143,6 +143,10 @@ pub struct Opts {
     /// Timeout in milliseconds to poll Bitcoin.
     #[clap(long, default_value = "6000")]
     pub bitcoin_timeout_ms: u64,
+
+    /// Timeout in milliseconds to wait for connection to btc-parachain.
+    #[clap(long, default_value = "60000")]
+    pub connection_timeout_ms: u64,
 }
 
 async fn generate_btc_key_and_register<B: BitcoinCoreApi + Send + Sync + 'static>(
