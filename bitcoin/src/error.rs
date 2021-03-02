@@ -10,6 +10,7 @@ use bitcoincore_rpc::{
 use hex::FromHexError;
 use serde_json::Error as SerdeJsonError;
 use thiserror::Error;
+use tokio::time::Elapsed;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -27,6 +28,8 @@ pub enum Error {
     Secp256k1Error(#[from] Secp256k1Error),
     #[error("KeyError: {0}")]
     KeyError(#[from] KeyError),
+    #[error("Timeout: {0}")]
+    TimeElapsed(#[from] Elapsed),
 
     #[error("Could not confirm transaction")]
     ConfirmationError,
@@ -57,7 +60,7 @@ pub enum ConversionError {
 }
 
 // https://github.com/bitcoin/bitcoin/blob/be3af4f31089726267ce2dbdd6c9c153bb5aeae1/src/rpc/protocol.h#L43
-#[derive(Debug, FromPrimitive)]
+#[derive(Debug, FromPrimitive, PartialEq, Eq)]
 pub enum BitcoinRpcError {
     /// Standard JSON-RPC 2.0 errors
     RpcInvalidRequest = -32600,

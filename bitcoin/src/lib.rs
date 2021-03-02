@@ -30,17 +30,21 @@ pub use bitcoincore_rpc::{
     Auth, Client, Error as BitcoinError, RpcApi,
 };
 pub use error::{BitcoinRpcError, ConversionError, Error};
+use hyper::Error as HyperError;
 pub use iter::{get_transactions, stream_blocks, stream_in_chain_transactions};
-use log::trace;
+use log::{info, trace};
 use sp_core::H256;
+use std::io::ErrorKind as IoErrorKind;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::{Mutex, OwnedMutexGuard};
-use tokio::time::delay_for;
+use tokio::time::{delay_for, timeout};
 
 #[macro_use]
 extern crate num_derive;
 
 const NOT_IN_MEMPOOL_ERROR_CODE: i32 = BitcoinRpcError::RpcInvalidAddressOrKey as i32;
+
+const RETRY_DURATION_MS: Duration = Duration::from_millis(1000);
 
 #[derive(Debug, Clone)]
 pub struct TransactionMetadata {
@@ -135,8 +139,6 @@ pub trait BitcoinCoreApi {
             + Send
             + Sync
             + 'static;
-
-    async fn wait_for_block_sync(&self, timeout: Duration) -> Result<(), Error>;
 }
 
 pub struct LockedTransaction {
@@ -163,6 +165,67 @@ impl BitcoinCore {
             rpc,
             network,
             transaction_creation_lock: Arc::new(Mutex::new(())),
+        }
+    }
+
+    pub async fn new_with_retry(
+        rpc: Client,
+        network: Network,
+        timeout_duration: Duration,
+    ) -> Result<Self, Error> {
+        let core = Self::new(rpc, network);
+        core.connect(timeout_duration).await?;
+        core.sync().await?;
+        Ok(core)
+    }
+
+    /// Connect to a bitcoin-core full node or timeout.
+    ///
+    /// # Arguments
+    /// * `timeout_duration` - maximum duration before elapsing
+    async fn connect(&self, timeout_duration: Duration) -> Result<(), Error> {
+        info!("Connecting to bitcoin-core...");
+        timeout(timeout_duration, async move {
+            loop {
+                match self.rpc.get_blockchain_info() {
+                    Err(BitcoinError::JsonRpc(JsonRpcError::Hyper(HyperError::Io(err))))
+                        if err.kind() == IoErrorKind::ConnectionRefused =>
+                    {
+                        trace!("could not connect to bitcoin-core");
+                        delay_for(RETRY_DURATION_MS).await;
+                        continue;
+                    }
+                    Err(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
+                        if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcInWarmup =>
+                    {
+                        // may be loading block index or verifying wallet
+                        trace!("bitcoin-core still in warm up");
+                        delay_for(RETRY_DURATION_MS).await;
+                        continue;
+                    }
+                    Ok(_) => {
+                        info!("Connected!");
+                        return Ok(());
+                    }
+                    Err(err) => return Err(err.into()),
+                }
+            }
+        })
+        .await?
+    }
+
+    /// Wait indefinitely for the node to sync.
+    async fn sync(&self) -> Result<(), Error> {
+        info!("Waiting for bitcoin-core to sync...");
+        loop {
+            let info = self.rpc.get_blockchain_info()?;
+            // NOTE: initial_block_download is always true on regtest
+            if !info.initial_block_download || info.verification_progress == 1.0 {
+                info!("Synced!");
+                return Ok(());
+            }
+            trace!("bitcoin-core not synced");
+            delay_for(RETRY_DURATION_MS).await;
         }
     }
 
@@ -595,18 +658,6 @@ impl BitcoinCoreApi for BitcoinCore {
         let address_info = self.rpc.get_address_info(&address)?;
         let wallet_pubkey = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
         Ok(P::from(wallet_pubkey.key.serialize()) == public_key)
-    }
-
-    async fn wait_for_block_sync(&self, timeout: Duration) -> Result<(), Error> {
-        loop {
-            let info = self.rpc.get_blockchain_info()?;
-            // NOTE: initial_block_download is always true on regtest
-            if !info.initial_block_download || info.verification_progress == 1.0 {
-                return Ok(());
-            }
-            trace!("Bitcoin not synced, sleeping for {:?}", timeout);
-            delay_for(timeout).await;
-        }
     }
 }
 

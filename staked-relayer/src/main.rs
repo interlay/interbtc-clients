@@ -93,15 +93,14 @@ async fn main() -> Result<(), Error> {
     let oracle_timeout_ms = opts.oracle_timeout_ms;
 
     let dummy_network = bitcoin::Network::Regtest; // we don't make any transaction so this is not used
-    let btc_rpc = Arc::new(BitcoinCore::new(
-        opts.bitcoin.new_client(None)?,
-        dummy_network,
-    ));
-
-    info!("Waiting for bitcoin core to sync");
-    btc_rpc
-        .wait_for_block_sync(Duration::from_millis(bitcoin_timeout_ms))
-        .await?;
+    let btc_rpc = Arc::new(
+        BitcoinCore::new_with_retry(
+            opts.bitcoin.new_client(None)?,
+            dummy_network,
+            Duration::from_millis(opts.connection_timeout_ms),
+        )
+        .await?,
+    );
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
