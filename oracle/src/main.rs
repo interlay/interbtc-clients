@@ -55,6 +55,10 @@ struct Opts {
     /// Fetch the exchange rate from CoinGecko.
     #[clap(long, conflicts_with("exchange-rate"))]
     coingecko: bool,
+
+    /// Timeout in milliseconds to wait for connection to btc-parachain.
+    #[clap(long, default_value = "60000")]
+    connection_timeout_ms: u64,
 }
 
 #[tokio::main]
@@ -64,7 +68,14 @@ async fn main() -> Result<(), Error> {
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
-    let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
+    let provider = Arc::new(
+        PolkaBtcProvider::from_url_with_retry(
+            opts.polka_btc_url,
+            signer,
+            Duration::from_millis(opts.connection_timeout_ms),
+        )
+        .await?,
+    );
 
     let timeout = Duration::from_millis(opts.timeout_ms);
     let exchange_rate = FixedU128::checked_from_rational(opts.exchange_rate, 100_000)

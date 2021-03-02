@@ -78,6 +78,10 @@ struct Opts {
     /// Number of confirmations a block needs to have before it is submitted.
     #[clap(long, default_value = "0")]
     required_btc_confirmations: u32,
+
+    /// Timeout in milliseconds to wait for connection to btc-parachain.
+    #[clap(long, default_value = "60000")]
+    connection_timeout_ms: u64,
 }
 
 #[tokio::main]
@@ -99,12 +103,17 @@ async fn main() -> Result<(), Error> {
         .wait_for_block_sync(Duration::from_millis(bitcoin_timeout_ms))
         .await?;
 
-    info!("Connecting to the btc-parachain");
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
     // only open connection to parachain after bitcoind sync to prevent timeout
-    let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
-    info!("Connected, starting services...");
+    let provider = Arc::new(
+        PolkaBtcProvider::from_url_with_retry(
+            opts.polka_btc_url,
+            signer,
+            Duration::from_millis(opts.connection_timeout_ms),
+        )
+        .await?,
+    );
 
     if let Some(stake) = opts.auto_register_with_stake {
         if !is_registered(&provider).await? {
