@@ -7,6 +7,7 @@ use jsonrpc_http_server::jsonrpc_core::{Error as JsonRpcError, ErrorCode as Json
 use jsonrpc_http_server::jsonrpc_core::{IoHandler, Params};
 use jsonrpc_http_server::{DomainsValidation, ServerBuilder};
 use kv::*;
+use log::{debug, info, warn};
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     AccountId, DotBalancesPallet, PolkaBtcProvider, SecurityPallet, StakedRelayerPallet,
@@ -187,6 +188,7 @@ async fn atomic_faucet_funding(
     let last_request_json = kv.get(account_id.to_string())?;
     let account_type = get_account_type(&provider, account_id.clone()).await?;
     if !is_funding_allowed(last_request_json, account_type.clone())? {
+        warn!("{} already funded", account_id);
         return Err(Error::FaucetOveruseError);
     }
     // Replace the previous, expired claim datetime with the datetime of the current claim
@@ -201,6 +203,10 @@ async fn atomic_faucet_funding(
         .ok_or(Error::NoFaucetAllowance)?
         .checked_mul(PLANCK_PER_DOT)
         .ok_or(Error::MathError)?;
+    info!(
+        "AccountId: {}, Type: {:?}, Amount: {}",
+        account_id, account_type, amount
+    );
     provider.transfer_to(account_id, amount).await?;
     Ok(())
 }
@@ -260,6 +266,7 @@ pub async fn start(
                     staked_relayer_allowance,
                 )
                 .await;
+                debug!("Result: {:?}", result);
                 handle_resp(result)
             }
         });
