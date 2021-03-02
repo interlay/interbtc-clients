@@ -99,10 +99,12 @@ async fn main() -> Result<(), Error> {
         .wait_for_block_sync(Duration::from_millis(bitcoin_timeout_ms))
         .await?;
 
+    info!("Connecting to the btc-parachain");
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
     // only open connection to parachain after bitcoind sync to prevent timeout
     let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
+    info!("Connected, starting services...");
 
     if let Some(stake) = opts.auto_register_with_stake {
         if !is_registered(&provider).await? {
