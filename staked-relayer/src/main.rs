@@ -84,8 +84,7 @@ struct Opts {
     connection_timeout_ms: u64,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn start() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
     let http_addr = opts.http_addr.parse()?;
@@ -258,13 +257,21 @@ async fn main() -> Result<(), Error> {
         ))
     );
     match result {
-        Ok(res) => {
-            println!("{:?}", res);
-        }
+        Ok(_) => Ok(()),
         Err(err) => {
-            println!("Error: {}", err);
-            std::process::exit(1);
+            error!("{:?}", err);
+            Err(Error::InternalError)
         }
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    let exit_code = if let Err(err) = start().await {
+        eprintln!("Error: {}", err);
+        1
+    } else {
+        0
     };
-    Ok(())
+    std::process::exit(exit_code);
 }
