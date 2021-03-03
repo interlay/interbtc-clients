@@ -1,5 +1,5 @@
 use crate::Error;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration as ISO8601, Utc};
 use futures::{self, executor::block_on};
 use hex::FromHex;
 use jsonrpc_http_server::jsonrpc_core::serde_json::Value;
@@ -10,12 +10,16 @@ use kv::*;
 use log::{debug, info, warn};
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    AccountId, DotBalancesPallet, PolkaBtcProvider, SecurityPallet, StakedRelayerPallet,
+    AccountId, DotBalancesPallet, Error as RuntimeError, PolkaBtcProvider, StakedRelayerPallet,
     VaultRegistryPallet, PLANCK_PER_DOT,
 };
 use serde::{Deserialize, Deserializer};
 use std::sync::Arc;
+use std::time::Duration;
 use std::{collections::HashMap, net::SocketAddr};
+use tokio::time::timeout;
+
+const HEALTH_DURATION: Duration = Duration::from_millis(5000);
 
 const KV_STORE_NAME: &str = "store";
 const FAUCET_COOLDOWN_HOURS: i64 = 6;
@@ -24,6 +28,19 @@ const FAUCET_COOLDOWN_HOURS: i64 = 6;
 struct FaucetRequest {
     datetime: String,
     account_type: FundingRequestAccountType,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RawBytes(#[serde(deserialize_with = "hex_to_buffer")] Vec<u8>);
+
+pub fn hex_to_buffer<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error;
+    String::deserialize(deserializer).and_then(|string| {
+        Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string()))
+    })
 }
 
 fn parse_params<T: Decode>(params: Params) -> Result<T, Error> {
@@ -43,22 +60,11 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
-struct RawBytes(#[serde(deserialize_with = "hex_to_buffer")] Vec<u8>);
-
-pub fn hex_to_buffer<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    use serde::de::Error;
-    String::deserialize(deserializer).and_then(|string| {
-        Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string()))
-    })
-}
-
 fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
-    block_on(provider.get_parachain_status())?;
-    Ok(())
+    match block_on(timeout(HEALTH_DURATION, provider.get_latest_block_hash())) {
+        Err(err) => Err(Error::RuntimeError(RuntimeError::from(err))),
+        _ => Ok(()),
+    }
 }
 
 #[derive(Encode, Decode, Debug, Clone)]
@@ -165,7 +171,7 @@ fn is_funding_allowed(
     // Unless there's a bug in the std lib implementation of Utc::now() or a false reading from the
     // system clock, unwrap will never panic
     let cooldown_threshold = Utc::now()
-        .checked_sub_signed(Duration::hours(FAUCET_COOLDOWN_HOURS))
+        .checked_sub_signed(ISO8601::hours(FAUCET_COOLDOWN_HOURS))
         .ok_or(Error::MathError)?;
 
     Ok(match last_request_json {

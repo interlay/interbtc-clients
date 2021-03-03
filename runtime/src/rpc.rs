@@ -44,7 +44,7 @@ use crate::PolkaBtcRuntime;
 
 use crate::error::{IoErrorKind, WsNewDnsError, WsNewError};
 
-const RETRY_DURATION_MS: Duration = Duration::from_millis(1000);
+const RETRY_DURATION: Duration = Duration::from_millis(1000);
 
 #[derive(Clone)]
 pub struct PolkaBtcProvider {
@@ -109,7 +109,7 @@ impl PolkaBtcProvider {
                         if err.kind() == IoErrorKind::ConnectionRefused =>
                     {
                         trace!("could not connect to parachain");
-                        delay_for(RETRY_DURATION_MS).await;
+                        delay_for(RETRY_DURATION).await;
                         continue;
                     }
                     Ok(rpc) => {
@@ -125,11 +125,16 @@ impl PolkaBtcProvider {
 
     /// Gets a copy of the signer with a unique nonce
     async fn get_unique_signer(&self) -> PairSigner<PolkaBtcRuntime, KeyPair> {
+        // TODO: refresh from account store
         let mut signer = self.signer.write().await;
         // return the current value, increment afterwards
         let ret = signer.clone();
         signer.increment_nonce();
         ret
+    }
+
+    pub async fn get_latest_block_hash(&self) -> Result<Option<H256>, Error> {
+        Ok(self.ext_client.block_hash(None).await?)
     }
 
     /// Fetch all active vaults.

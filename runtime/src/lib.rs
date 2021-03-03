@@ -68,7 +68,7 @@ pub type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::Ac
 impl system::System for PolkaBtcRuntime {
     type Index = u32;
     type BlockNumber = u32;
-    type Hash = sp_core::H256;
+    type Hash = H256;
     type Hashing = BlakeTwo256;
     type AccountId = AccountId;
     type Address = Self::AccountId;

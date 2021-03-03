@@ -11,7 +11,7 @@ use jsonrpc_http_server::{
 use log::info;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    BtcPublicKey, ExchangeRateOraclePallet, FeePallet, FixedPointNumber,
+    BtcPublicKey, Error as RuntimeError, ExchangeRateOraclePallet, FeePallet, FixedPointNumber,
     FixedPointTraits::{CheckedAdd, CheckedMul},
     PolkaBtcProvider, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
@@ -19,7 +19,11 @@ use serde::{Deserialize, Deserializer};
 use sp_arithmetic::FixedU128;
 use sp_core::crypto::Ss58Codec;
 use sp_core::H256;
+use std::time::Duration;
 use std::{net::SocketAddr, sync::Arc};
+use tokio::time::timeout;
+
+const HEALTH_DURATION: Duration = Duration::from_millis(5000);
 
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct RawBytes(#[serde(deserialize_with = "hex_to_buffer")] pub(crate) Vec<u8>);
@@ -48,6 +52,13 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
             message: err.to_string(),
             data: None,
         }),
+    }
+}
+
+fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
+    match block_on(timeout(HEALTH_DURATION, provider.get_latest_block_hash())) {
+        Err(err) => Err(Error::RuntimeError(RuntimeError::from(err))),
+        _ => Ok(()),
     }
 }
 
@@ -175,6 +186,12 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     let mut io = IoHandler::default();
     {
         let provider = provider.clone();
+        io.add_sync_method("system_health", move |_| {
+            handle_resp(_system_health(&provider))
+        });
+    }
+    {
+        let provider = provider.clone();
         io.add_sync_method("account_id", move |_| handle_resp(_account_id(&provider)));
     }
     {
@@ -211,6 +228,7 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     }
 
     let server = ServerBuilder::new(io)
+        .health_api(("/health", "system_health"))
         .rest_api(jsonrpc_http_server::RestApi::Unsecure)
         .cors(DomainsValidation::AllowOnly(vec![origin.into()]))
         .start_http(&addr)
