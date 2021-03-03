@@ -128,7 +128,6 @@ fn update_kv_store(
         account_type,
     };
     kv.set(account_id.to_string(), Json(faucet_request))?;
-    kv.flush()?;
     Ok(())
 }
 
@@ -225,12 +224,7 @@ async fn fund_account(
 ) -> Result<(), Error> {
     let provider = provider.clone();
     let kv = open_kv_store(store)?;
-    block_on(atomic_faucet_funding(
-        &provider,
-        kv,
-        req.account_id.clone(),
-        allowances,
-    ))?;
+    atomic_faucet_funding(&provider, kv, req.account_id.clone(), allowances).await?;
     Ok(())
 }
 
@@ -243,6 +237,7 @@ pub async fn start(
     staked_relayer_allowance: u128,
 ) {
     let mut io = IoHandler::default();
+    let store = Store::new(Config::new("./kv")).expect("Unable to open kv store");
     io.add_sync_method("user_allowance", move |_| handle_resp(Ok(user_allowance)));
     io.add_sync_method("vault_allowance", move |_| handle_resp(Ok(vault_allowance)));
     io.add_sync_method("staked_relayer_allowance", move |_| {
@@ -257,12 +252,13 @@ pub async fn start(
     }
     {
         let provider = provider.clone();
+        let store = store.clone();
 
         // an async closure is only FnOnce, so we need this workaround
         io.add_method("fund_account", move |params| {
             let provider = provider.clone();
+            let store = store.clone();
             async move {
-                let store = Store::new(Config::new("./kv")).expect("Unable to open kv store");
                 let result = _fund_account_raw(
                     &provider.clone(),
                     params,
