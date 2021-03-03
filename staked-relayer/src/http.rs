@@ -8,11 +8,15 @@ use jsonrpc_http_server::{DomainsValidation, ServerBuilder};
 use parity_scale_codec::{Decode, Encode};
 use runtime::ErrorCode as PolkaBtcErrorCode;
 use runtime::StatusCode as PolkaBtcStatusCode;
-use runtime::{H256Le, PolkaBtcProvider, SecurityPallet, StakedRelayerPallet, UtilFuncs};
+use runtime::{Error as RuntimeError, H256Le, PolkaBtcProvider, StakedRelayerPallet, UtilFuncs};
 use serde::{Deserialize, Deserializer};
 use sp_core::crypto::Ss58Codec;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::timeout;
+
+const HEALTH_DURATION: Duration = Duration::from_millis(5000);
 
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct RawBytes(#[serde(deserialize_with = "hex_to_buffer")] pub(crate) Vec<u8>);
@@ -45,8 +49,10 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
 }
 
 fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
-    block_on(provider.get_parachain_status())?;
-    Ok(())
+    match block_on(timeout(HEALTH_DURATION, provider.get_latest_block_hash())) {
+        Err(err) => Err(Error::RuntimeError(RuntimeError::from(err))),
+        _ => Ok(()),
+    }
 }
 
 #[derive(Encode, Decode, Debug)]

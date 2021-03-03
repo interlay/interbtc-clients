@@ -44,7 +44,7 @@ extern crate num_derive;
 
 const NOT_IN_MEMPOOL_ERROR_CODE: i32 = BitcoinRpcError::RpcInvalidAddressOrKey as i32;
 
-const RETRY_DURATION_MS: Duration = Duration::from_millis(1000);
+const RETRY_DURATION: Duration = Duration::from_millis(1000);
 
 #[derive(Debug, Clone)]
 pub struct TransactionMetadata {
@@ -192,7 +192,7 @@ impl BitcoinCore {
                         if err.kind() == IoErrorKind::ConnectionRefused =>
                     {
                         trace!("could not connect to bitcoin-core");
-                        delay_for(RETRY_DURATION_MS).await;
+                        delay_for(RETRY_DURATION).await;
                         continue;
                     }
                     Err(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
@@ -200,7 +200,7 @@ impl BitcoinCore {
                     {
                         // may be loading block index or verifying wallet
                         trace!("bitcoin-core still in warm up");
-                        delay_for(RETRY_DURATION_MS).await;
+                        delay_for(RETRY_DURATION).await;
                         continue;
                     }
                     Ok(_) => {
@@ -225,7 +225,7 @@ impl BitcoinCore {
                 return Ok(());
             }
             trace!("bitcoin-core not synced");
-            delay_for(RETRY_DURATION_MS).await;
+            delay_for(RETRY_DURATION).await;
         }
     }
 

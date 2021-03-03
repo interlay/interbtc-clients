@@ -2,6 +2,7 @@ pub use module_exchange_rate_oracle::BtcTxFeesPerByte;
 
 use async_trait::async_trait;
 use core::marker::PhantomData;
+use futures::{stream::StreamExt, SinkExt};
 use jsonrpsee::{
     common::{to_value as to_json_value, Params},
     Client as RpcClient,
@@ -16,9 +17,10 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 use substrate_subxt::Error as XtError;
+use substrate_subxt::EventTypeRegistry;
 use substrate_subxt::{
-    sudo::*, system::System, Call, Client, ClientBuilder, Event, EventSubscription, EventsDecoder,
-    PairSigner, Signer,
+    sudo::*, Call, Client, ClientBuilder, Event, EventSubscription, EventsDecoder, PairSigner,
+    Signer,
 };
 use tokio::sync::RwLock;
 use tokio::time::{delay_for, timeout};
@@ -35,59 +37,14 @@ use crate::replace::*;
 use crate::security::*;
 use crate::staked_relayers::*;
 use crate::timestamp::*;
+use crate::types::*;
 use crate::vault_registry::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
-use futures::{stream::StreamExt, SinkExt};
-use substrate_subxt::EventTypeRegistry;
 
 use crate::error::{IoErrorKind, WsNewDnsError, WsNewError};
 
-const RETRY_DURATION_MS: Duration = Duration::from_millis(1000);
-
-pub type PolkaBtcHeader = <PolkaBtcRuntime as System>::Header;
-
-pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
-
-pub type PolkaBtcVault = Vault<
-    AccountId,
-    <PolkaBtcRuntime as System>::BlockNumber,
-    <PolkaBtcRuntime as Core>::PolkaBTC,
-    <PolkaBtcRuntime as Core>::DOT,
->;
-
-pub type PolkaBtcIssueRequest = IssueRequest<
-    AccountId,
-    <PolkaBtcRuntime as System>::BlockNumber,
-    <PolkaBtcRuntime as Core>::PolkaBTC,
-    <PolkaBtcRuntime as Core>::DOT,
->;
-
-pub type PolkaBtcRequestIssueEvent = RequestIssueEvent<PolkaBtcRuntime>;
-
-pub type PolkaBtcRedeemRequest = RedeemRequest<
-    AccountId,
-    <PolkaBtcRuntime as System>::BlockNumber,
-    <PolkaBtcRuntime as Core>::PolkaBTC,
-    <PolkaBtcRuntime as Core>::DOT,
->;
-
-pub type PolkaBtcRefundRequest = RefundRequest<AccountId, <PolkaBtcRuntime as Core>::PolkaBTC>;
-
-pub type PolkaBtcReplaceRequest = ReplaceRequest<
-    AccountId,
-    <PolkaBtcRuntime as System>::BlockNumber,
-    <PolkaBtcRuntime as Core>::PolkaBTC,
-    <PolkaBtcRuntime as Core>::DOT,
->;
-
-pub type PolkaBtcStatusUpdate = StatusUpdate<
-    AccountId,
-    <PolkaBtcRuntime as System>::BlockNumber,
-    <PolkaBtcRuntime as Core>::DOT,
->;
-
-pub type PolkaBtcRichBlockHeader = RichBlockHeader<AccountId>;
+const RETRY_DURATION: Duration = Duration::from_millis(1000);
 
 #[derive(Clone)]
 pub struct PolkaBtcProvider {
@@ -152,7 +109,7 @@ impl PolkaBtcProvider {
                         if err.kind() == IoErrorKind::ConnectionRefused =>
                     {
                         trace!("could not connect to parachain");
-                        delay_for(RETRY_DURATION_MS).await;
+                        delay_for(RETRY_DURATION).await;
                         continue;
                     }
                     Ok(rpc) => {
@@ -168,11 +125,16 @@ impl PolkaBtcProvider {
 
     /// Gets a copy of the signer with a unique nonce
     async fn get_unique_signer(&self) -> PairSigner<PolkaBtcRuntime, KeyPair> {
+        // TODO: refresh from account store
         let mut signer = self.signer.write().await;
         // return the current value, increment afterwards
         let ret = signer.clone();
         signer.increment_nonce();
         ret
+    }
+
+    pub async fn get_latest_block_hash(&self) -> Result<Option<H256>, Error> {
+        Ok(self.ext_client.block_hash(None).await?)
     }
 
     /// Fetch all active vaults.
