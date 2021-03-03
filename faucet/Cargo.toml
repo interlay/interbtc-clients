@@ -30,6 +30,6 @@ sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "rococo
 [dev-dependencies]
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "70f0321" }
 tempdir = "0.3.7"
-btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
-btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
+btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "hotfix/0.4.0", version = "0.5.0", features = ["aura-grandpa"] }
+btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "hotfix/0.4.0", version = "0.5.0", features = ["aura-grandpa"] }
 

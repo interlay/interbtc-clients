@@ -23,8 +23,8 @@ log = "0.4.0"
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 
 [dependencies.polkabtc-bitcoin]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "hotfix/0.4.0"
 version = "0.5.0"
 package = "bitcoin"
 optional = true

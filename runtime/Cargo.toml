@@ -36,79 +36,79 @@ substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "
 # Dependencies for the testing utils for integration tests
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "70f0321", optional = true }
 tempdir = {version = "0.3.7", optional = true }
-btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"], optional = true }
-btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.1", features = ["aura-grandpa"], optional = true }
+btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "hotfix/0.4.0", version = "0.5.0", features = ["aura-grandpa"], optional = true }
+btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "hotfix/0.4.0", version = "0.5.1", features = ["aura-grandpa"], optional = true }
 bitcoin = { path = "../bitcoin", optional = true }
 rand = { version = "0.7", optional = true }
 
 [dependencies.module-bitcoin]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "hotfix/0.4.0"
 version = "0.5.0"
 package = "bitcoin"
 
 [dependencies.module-refund]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "hotfix/0.4.0"
 version = "0.5.0"
 package = "refund"
 
 [dependencies.module-btc-relay]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "hotfix/0.4.0"
 version = "0.5.0"
 package = "btc-relay"
 
 [dependencies.module-security]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "hotfix/0.4.0"
 version = "0.5.0"
 package = "security"
 
 [dependencies.module-staked-relayers]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "hotfix/0.4.0"
 version = "0.5.0"
 package = "staked-relayers"
 
 [dependencies.module-vault-registry]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "hotfix/0.4.0"
 version = "0.5.0"
 package = "vault-registry"
 
 [dependencies.module-exchange-rate-oracle-rpc-runtime-api]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "hotfix/0.4.0"
 version = "0.5.0"
 package = "module-exchange-rate-oracle-rpc-runtime-api"
 
 [dependencies.module-issue]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "hotfix/0.4.0"
 version = "0.5.0"
 package = "issue"
 
 [dependencies.module-redeem]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "hotfix/0.4.0"
 version = "0.5.0"
 package = "redeem"
 
 [dependencies.module-replace]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "hotfix/0.4.0"
 version = "0.5.0"
 package = "replace"
 
 [dependencies.module-exchange-rate-oracle]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "hotfix/0.4.0"
 version = "0.5.0"
 package = "exchange-rate-oracle"
 
 [dev-dependencies]
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "70f0321" }
 tempdir = "0.3.7"
-btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
-btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
+btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "hotfix/0.4.0", version = "0.5.0", features = ["aura-grandpa"] }
+btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "hotfix/0.4.0", version = "0.5.0", features = ["aura-grandpa"] }
