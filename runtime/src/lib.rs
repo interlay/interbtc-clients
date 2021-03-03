@@ -2,6 +2,7 @@ pub mod cli;
 mod error;
 pub mod pallets;
 mod rpc;
+mod types;
 
 #[cfg(test)]
 mod tests;
@@ -17,11 +18,8 @@ pub use error::{Error, XtError};
 use pallets::*;
 pub use rpc::{
     BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet, ExchangeRateOraclePallet, FeePallet,
-    IssuePallet, PolkaBtcHeader, PolkaBtcIssueRequest, PolkaBtcProvider, PolkaBtcRedeemRequest,
-    PolkaBtcRefundRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent,
-    PolkaBtcRichBlockHeader, PolkaBtcStatusUpdate, PolkaBtcVault, RedeemPallet, RefundPallet,
-    ReplacePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet, UtilFuncs,
-    VaultRegistryPallet,
+    IssuePallet, PolkaBtcProvider, RedeemPallet, RefundPallet, ReplacePallet, SecurityPallet,
+    StakedRelayerPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
 };
 pub use security::{ErrorCode, StatusCode};
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
@@ -38,6 +36,7 @@ use substrate_subxt::register_default_type_sizes;
 use substrate_subxt::system::SystemEventTypeRegistry;
 use substrate_subxt::EventTypeRegistry;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, sudo, system, Runtime};
+pub use types::*;
 use vault_registry::VaultStatus;
 
 use parachain::primitives::{Id as ParaId, RelayChainBlockNumber};
