@@ -29,11 +29,13 @@ pub enum Error {
     ArithmeticUnderflow,
     #[error("Mathematical operation error")]
     MathError,
+    #[error("Vault has uncompleted redeem requests")]
+    UncompletedRedeemRequests,
+
     #[error("RPC error: {0}")]
     RpcError(#[from] RpcError),
     #[error("Hex conversion error: {0}")]
     FromHexError(#[from] FromHexError),
-
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
     #[error("RuntimeError: {0}")]

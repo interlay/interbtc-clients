@@ -1,3 +1,4 @@
+use sp_runtime::generic::{Block, SignedBlock};
 use substrate_subxt::system::System;
 
 use crate::pallets::{
@@ -9,6 +10,8 @@ use crate::PolkaBtcRuntime;
 pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
 
 pub type PolkaBtcHeader = <PolkaBtcRuntime as System>::Header;
+
+pub type PolkaBtcBlock = SignedBlock<Block<PolkaBtcHeader, <PolkaBtcRuntime as System>::Extrinsic>>;
 
 pub type PolkaBtcVault = Vault<
     AccountId,

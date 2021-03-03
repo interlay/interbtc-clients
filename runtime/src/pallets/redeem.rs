@@ -68,8 +68,14 @@ pub struct RedeemRequestsStore<T: Redeem> {
     pub redeem_id: T::H256,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct RedeemPeriodStore<T: Redeem> {
+    #[store(returns = T::BlockNumber)]
+    pub _runtime: PhantomData<T>,
+}
+
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct SetRedeemPeriodCall<T: Redeem> {
-    pub period: u32,
+    pub period: T::BlockNumber,
     pub _runtime: PhantomData<T>,
 }

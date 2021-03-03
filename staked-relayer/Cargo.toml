@@ -18,9 +18,9 @@ serde = "1.0.116"
 relayer-core = { git = "https://gitlab.com/interlay/relayer-core", rev = "9043ce35a1e00bc5a65d4d3d0433c2535f679bc0" }
 runtime = { path = "../runtime" }
 bitcoin = { path = "../bitcoin", features = ["cli"] }
-jsonrpc-http-server = "16.0.0"
+jsonrpc-http-server = "17.0.0"
 backoff = { version = "0.2.1", features = ["tokio"] }
-jsonrpc-core-client = { version = "16.0.0", features = ["http", "tls"] }
+jsonrpc-core-client = { version = "17.0.0", features = ["http", "tls"] }
 
 # Substrate dependencies
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }

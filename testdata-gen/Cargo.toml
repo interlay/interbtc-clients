@@ -19,7 +19,7 @@ hex = "0.4.2"
 serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.59"
 reqwest = {version = "0.10.9", features = ["json"] }
-jsonrpc-core = "16.0.0"
+jsonrpc-core = "17.0.0"
 futures = "0.3.5"
 
 # Substrate dependencies

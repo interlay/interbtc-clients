@@ -25,7 +25,6 @@ use substrate_subxt::{
 use tokio::sync::RwLock;
 use tokio::time::{delay_for, timeout};
 
-use crate::balances_dot::*;
 use crate::btc_relay::*;
 use crate::exchange_rate_oracle::*;
 use crate::fee::*;
@@ -41,6 +40,7 @@ use crate::types::*;
 use crate::vault_registry::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
+use crate::{balances_dot::*, BlockNumber};
 
 use crate::error::{IoErrorKind, WsNewDnsError, WsNewError};
 
@@ -135,6 +135,10 @@ impl PolkaBtcProvider {
 
     pub async fn get_latest_block_hash(&self) -> Result<Option<H256>, Error> {
         Ok(self.ext_client.block_hash(None).await?)
+    }
+
+    pub async fn get_latest_block(&self) -> Result<Option<PolkaBtcBlock>, Error> {
+        Ok(self.ext_client.block::<H256>(None).await?)
     }
 
     /// Fetch all active vaults.
@@ -1121,6 +1125,8 @@ pub trait RedeemPallet {
         account_id: AccountId,
     ) -> Result<Vec<(H256, PolkaBtcRedeemRequest)>, Error>;
 
+    async fn get_redeem_period(&self) -> Result<BlockNumber, Error>;
+
     async fn set_redeem_period(&self, period: u32) -> Result<(), Error>;
 }
 
@@ -1194,7 +1200,11 @@ impl RedeemPallet for PolkaBtcProvider {
         Ok(result)
     }
 
-    async fn set_redeem_period(&self, period: u32) -> Result<(), Error> {
+    async fn get_redeem_period(&self) -> Result<BlockNumber, Error> {
+        Ok(self.ext_client.redeem_period(None).await?)
+    }
+
+    async fn set_redeem_period(&self, period: BlockNumber) -> Result<(), Error> {
         Ok(self
             .sudo(SetRedeemPeriodCall {
                 period,
