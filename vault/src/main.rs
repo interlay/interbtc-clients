@@ -5,10 +5,9 @@ use runtime::substrate_subxt::PairSigner;
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
 use std::sync::Arc;
 use std::time::Duration;
-use vault::{start, Error, Opts};
+use vault::{Error, Opts};
 
-#[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn start() -> Result<(), Error> {
     env_logger::init();
     let opts: Opts = Opts::parse();
     let intact_opts = opts.clone();
@@ -43,5 +42,16 @@ async fn main() -> Result<(), Error> {
         .await?,
     );
 
-    start(intact_opts, provider, btc_rpc).await
+    vault::start(intact_opts, provider, btc_rpc).await
+}
+
+#[tokio::main]
+async fn main() {
+    let exit_code = if let Err(err) = start().await {
+        eprintln!("Error: {}", err);
+        1
+    } else {
+        0
+    };
+    std::process::exit(exit_code);
 }

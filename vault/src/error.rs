@@ -9,6 +9,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("Internal error")]
+    InternalError,
     #[error("Insufficient funds available")]
     InsufficientFunds,
     #[error("Open time inconsistent with chain height")]
