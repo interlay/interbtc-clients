@@ -476,14 +476,10 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
         }),
     );
     match result {
-        Ok(_) => {
-            println!("Done");
-        }
+        Ok(_) => Ok(()),
         Err(err) => {
-            println!("Error: {}", err);
-            std::process::exit(1);
+            error!("{:?}", err);
+            Err(Error::InternalError)
         }
-    };
-
-    Ok(())
+    }
 }
