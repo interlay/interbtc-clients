@@ -17,15 +17,14 @@ async fn main() -> Result<(), Error> {
 
     let (pair, wallet) = opts.account_info.get_key_pair()?;
 
-    let btc_rpc = Arc::new(BitcoinCore::new(
-        opts.bitcoin.new_client(Some(&wallet))?,
-        opts.network.0,
-    ));
-
-    info!("Waiting for bitcoin core to sync");
-    btc_rpc
-        .wait_for_block_sync(Duration::from_millis(opts.bitcoin_timeout_ms))
-        .await?;
+    let btc_rpc = Arc::new(
+        BitcoinCore::new_with_retry(
+            opts.bitcoin.new_client(Some(&wallet))?,
+            opts.network.0,
+            Duration::from_millis(opts.connection_timeout_ms),
+        )
+        .await?,
+    );
 
     // load wallet. Exit on failure, since without wallet we can't do a lot
     btc_rpc

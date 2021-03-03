@@ -413,7 +413,6 @@ mod tests {
             async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError>
                 where
                     P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
-            async fn wait_for_block_sync(&self, timeout: Duration) -> Result<(), BitcoinError>;
         }
     }
 
