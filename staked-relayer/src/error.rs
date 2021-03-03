@@ -14,6 +14,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("Internal error")]
+    InternalError,
     #[error("Could not verify that the oracle is offline")]
     CheckOracleOffline,
     #[error("Suggested status update does not contain block hash")]
