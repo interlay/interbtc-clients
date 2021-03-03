@@ -17,12 +17,12 @@ serde = "1.0.116"
 serde_json = { version = "1.0.57", features = ["raw_value"] }
 hex = "0.4.2"
 parity-scale-codec = "2.0.0"
-jsonrpc-http-server = "16.0.0"
-jsonrpc-core = "16.0.0"
+jsonrpc-http-server = "17.0.0"
+jsonrpc-core = "17.0.0"
 futures = "0.3.5"
 async-trait = "0.1.40"
 sha2 = "0.8.2"
-jsonrpc-core-client = { version = "16.0.0", features = ["http", "tls"] }
+jsonrpc-core-client = { version = "17.0.0", features = ["http", "tls"] }
 
 # Substrate dependencies
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }

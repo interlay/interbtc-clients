@@ -13,7 +13,7 @@ use parity_scale_codec::{Decode, Encode};
 use runtime::{
     BtcPublicKey, Error as RuntimeError, ExchangeRateOraclePallet, FeePallet, FixedPointNumber,
     FixedPointTraits::{CheckedAdd, CheckedMul},
-    PolkaBtcProvider, ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    PolkaBtcProvider, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet, HOURS,
 };
 use serde::{Deserialize, Deserializer};
 use sp_arithmetic::FixedU128;
@@ -55,10 +55,34 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
     }
 }
 
-fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
-    match block_on(timeout(HEALTH_DURATION, provider.get_latest_block_hash())) {
-        Err(err) => Err(Error::RuntimeError(RuntimeError::from(err))),
-        _ => Ok(()),
+async fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
+    let result = match timeout(HEALTH_DURATION, provider.get_latest_block()).await {
+        Ok(res) => res,
+        Err(err) => return Err(Error::RuntimeError(RuntimeError::from(err))),
+    };
+
+    let signed_block = result?.ok_or(Error::NoIncomingBlocks)?;
+    let current_height: u128 = signed_block.block.header.number.into();
+    let redeem_period = provider.get_redeem_period().await?;
+
+    // TODO: parameterize based on expiry
+    let has_uncompleted =
+        block_on(provider.get_vault_redeem_requests(provider.get_account_id().clone()))?
+            .iter()
+            .filter(|(_, request)| {
+                !request.completed
+                    && !request.cancelled
+                    // ensure not expired
+                    && Into::<u128>::into(request.opentime.saturating_add(redeem_period)) > current_height
+            })
+            .any(|(_, request)| {
+                Into::<u128>::into(request.opentime.saturating_add(HOURS)) > current_height
+            });
+
+    if has_uncompleted {
+        Err(Error::UncompletedRedeemRequests)
+    } else {
+        Ok(())
     }
 }
 
@@ -186,8 +210,9 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     let mut io = IoHandler::default();
     {
         let provider = provider.clone();
-        io.add_sync_method("system_health", move |_| {
-            handle_resp(_system_health(&provider))
+        io.add_method("system_health", move |_| {
+            let provider = provider.clone();
+            async move { handle_resp(_system_health(&provider).await) }
         });
     }
     {

@@ -46,6 +46,12 @@ pub const MINIMUM_STAKE: u128 = 100;
 pub const TX_FEES: u128 = 2000000000;
 pub const PLANCK_PER_DOT: u128 = 10000000000;
 
+pub const MILLISECS_PER_BLOCK: u64 = 6000;
+
+// These time units are defined in number of blocks.
+pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
+pub const HOURS: BlockNumber = MINUTES * 60;
+
 pub type Balance = u128;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -62,12 +68,16 @@ impl Runtime for PolkaBtcRuntime {
     }
 }
 
+/// An index to a block.
+pub type BlockNumber = u32;
+
+/// Some way of identifying an account on the chain.
 pub type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 
 // TODO: use types from actual runtime
 impl system::System for PolkaBtcRuntime {
     type Index = u32;
-    type BlockNumber = u32;
+    type BlockNumber = BlockNumber;
     type Hash = H256;
     type Hashing = BlakeTwo256;
     type AccountId = AccountId;

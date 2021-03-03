@@ -2007,7 +2007,7 @@ dependencies = [
  "env_logger 0.6.2",
  "futures 0.3.13",
  "hex 0.4.2",
- "jsonrpc-http-server 16.0.0",
+ "jsonrpc-http-server 17.0.0",
  "jsonrpsee",
  "kv",
  "log 0.4.14",
@@ -3024,19 +3024,6 @@ dependencies = [
 
 [[package]]
 name = "hyper-tls"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a800d6aa50af4b5850b2b0f659625ce9504df908e9733b635720483be26174f"
-dependencies = [
- "bytes 0.4.12",
- "futures 0.1.30",
- "hyper 0.12.36",
- "native-tls",
- "tokio-io",
-]
-
-[[package]]
-name = "hyper-tls"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d979acc56dcb5b8dddba3917601745e877576475aa046df3226eabdecef78eed"
@@ -3308,20 +3295,20 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-client-transports"
-version = "16.0.0"
+version = "17.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "320acafbc911d7ef8cc056fee6affbed348dc8aaf76709bfda83d3665d092ad4"
+checksum = "15b6c6ad01c7354d60de493148c30ac8a82b759e22ae678c8705e9b8e0c566a4"
 dependencies = [
  "derive_more",
- "futures 0.1.30",
  "futures 0.3.13",
- "hyper 0.12.36",
- "hyper-tls 0.3.2",
- "jsonrpc-core 16.0.0",
- "jsonrpc-pubsub 16.0.0",
+ "hyper 0.13.10",
+ "hyper-tls",
+ "jsonrpc-core 17.0.0",
+ "jsonrpc-pubsub 17.0.0",
  "log 0.4.14",
  "serde",
  "serde_json",
+ "tokio 0.2.25",
  "url 1.7.2",
 ]
 
@@ -3340,9 +3327,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-core"
-version = "16.0.0"
+version = "17.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a47c4c3ac843f9a4238943f97620619033dadef4b378cd1e8addd170de396b3"
+checksum = "07569945133257ff557eb37b015497104cea61a2c9edaf126c1cbd6e8332397f"
 dependencies = [
  "futures 0.3.13",
  "log 0.4.14",
@@ -3362,13 +3349,12 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-core-client"
-version = "16.0.0"
+version = "17.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "289d049ac6a6c69e8d2023ad420934d236badda8375f1fd9960a2f67beedb42e"
+checksum = "7ac9d56dc729912796637c30f475bbf834594607b27740dfea6e5fa7ba40d1f1"
 dependencies = [
- "futures 0.1.30",
  "futures 0.3.13",
- "jsonrpc-client-transports 16.0.0",
+ "jsonrpc-client-transports 17.0.0",
 ]
 
 [[package]]
@@ -3400,15 +3386,14 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-http-server"
-version = "16.0.0"
+version = "17.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baf0d9a2b5a7396ea4847b39c2f91504013eaeac8b49681efb5b4bcb0ab27651"
+checksum = "eff2303c4f0562afcbd2dae75e3e21815095f8994749a80fbcd365877e44ed64"
 dependencies = [
- "futures 0.1.30",
  "futures 0.3.13",
- "hyper 0.12.36",
- "jsonrpc-core 16.0.0",
- "jsonrpc-server-utils 16.0.0",
+ "hyper 0.13.10",
+ "jsonrpc-core 17.0.0",
+ "jsonrpc-server-utils 17.0.0",
  "log 0.4.14",
  "net2",
  "parking_lot 0.11.1",
@@ -3444,12 +3429,12 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-pubsub"
-version = "16.0.0"
+version = "17.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a1132f6d03de286dd21bde88191af63b5189214574f7b9cbac8e0027c732394"
+checksum = "0c48dbebce7a9c88ab272a4db7d6478aa4c6d9596e6c086366e89efc4e9ed89e"
 dependencies = [
  "futures 0.3.13",
- "jsonrpc-core 16.0.0",
+ "jsonrpc-core 17.0.0",
  "lazy_static",
  "log 0.4.14",
  "parking_lot 0.11.1",
@@ -3475,18 +3460,18 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-server-utils"
-version = "16.0.0"
+version = "17.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d199e3780083bd0798911be3cc0543515a57a98e97f6051957af36fb11852939"
+checksum = "f4207cce738bf713a82525065b750a008f28351324f438f56b33d698ada95bb4"
 dependencies = [
- "bytes 0.4.12",
- "futures 0.1.30",
+ "bytes 0.5.6",
+ "futures 0.3.13",
  "globset",
- "jsonrpc-core 16.0.0",
+ "jsonrpc-core 17.0.0",
  "lazy_static",
  "log 0.4.14",
- "tokio 0.1.22",
- "tokio-codec",
+ "tokio 0.2.25",
+ "tokio-util",
  "unicase 2.6.0",
 ]
 
@@ -6803,7 +6788,7 @@ dependencies = [
  "http 0.2.3",
  "http-body 0.3.1",
  "hyper 0.13.10",
- "hyper-tls 0.4.3",
+ "hyper-tls",
  "ipnet",
  "js-sys",
  "lazy_static",
@@ -9165,8 +9150,8 @@ dependencies = [
  "frame-system",
  "futures 0.3.13",
  "hex 0.4.2",
- "jsonrpc-core-client 16.0.0",
- "jsonrpc-http-server 16.0.0",
+ "jsonrpc-core-client 17.0.0",
+ "jsonrpc-http-server 17.0.0",
  "jsonrpsee",
  "log 0.4.14",
  "mockall",
@@ -9538,7 +9523,7 @@ dependencies = [
  "frame-system",
  "futures 0.3.13",
  "hex 0.4.2",
- "jsonrpc-core 16.0.0",
+ "jsonrpc-core 17.0.0",
  "log 0.4.14",
  "parity-scale-codec 2.0.0",
  "primitive-types 0.7.3",
@@ -10302,9 +10287,9 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.3.13",
  "hex 0.4.2",
- "jsonrpc-core 16.0.0",
- "jsonrpc-core-client 16.0.0",
- "jsonrpc-http-server 16.0.0",
+ "jsonrpc-core 17.0.0",
+ "jsonrpc-core-client 17.0.0",
+ "jsonrpc-http-server 17.0.0",
  "jsonrpsee",
  "log 0.4.14",
  "mockall",
