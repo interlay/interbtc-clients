@@ -1,3 +1,5 @@
+#![cfg(testing_utils)]
+
 mod bitcoin_simulator;
 
 use crate::rpc::FeePallet;
