@@ -174,7 +174,7 @@ async fn start() -> Result<(), Error> {
         opts.status_update_deposit,
     );
 
-    let api = start_api(provider.clone(), http_addr, opts.rpc_cors_domain);
+    let http_server = start_http(provider.clone(), http_addr, opts.rpc_cors_domain);
 
     if let Some(faucet_url) = opts.auto_register_with_faucet_url {
         let connection = jsonrpc_http::connect::<TypedClient>(&faucet_url).await?;
@@ -228,7 +228,7 @@ async fn start() -> Result<(), Error> {
                 .unwrap();
         }),
         // runs json-rpc server for incoming requests
-        tokio::spawn(async move { api.await }),
+        tokio::spawn(async move { http_server.await }),
         // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
         tokio::spawn(async move { vaults_listener.await.unwrap() }),
         // runs vault theft checks

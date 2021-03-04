@@ -1,4 +1,4 @@
-use crate::{api, error::Error};
+use crate::{error::Error, http};
 use jsonrpc_core::Value;
 use jsonrpc_core_client::TypedClient;
 use parity_scale_codec::{Decode, Encode};
@@ -14,7 +14,7 @@ pub async fn get_faucet_allowance(
     allowance_type: &str,
 ) -> Result<u128, Error> {
     let raw_allowance = faucet_connection
-        .call_method::<(), api::RawBytes>(&allowance_type, "", ())
+        .call_method::<(), http::RawBytes>(&allowance_type, "", ())
         .await?;
     Ok(Decode::decode(&mut &raw_allowance.0[..])?)
 }

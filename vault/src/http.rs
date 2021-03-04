@@ -1,6 +1,5 @@
 use super::Error;
 use bitcoin::BitcoinCoreApi;
-use futures::executor::block_on;
 use hex::FromHex;
 use jsonrpc_http_server::{
     jsonrpc_core::{
@@ -55,6 +54,8 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
     }
 }
 
+// NOTE: will return error on restart if vault doesn't have
+// enough time to process open redeem requests
 async fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
     let result = match timeout(HEALTH_DURATION, provider.get_latest_block()).await {
         Ok(res) => res,
@@ -67,7 +68,7 @@ async fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
 
     // TODO: parameterize based on expiry
     let has_uncompleted =
-        block_on(provider.get_vault_redeem_requests(provider.get_account_id().clone()))?
+        provider.get_vault_redeem_requests(provider.get_account_id().clone()).await?
             .iter()
             .filter(|(_, request)| {
                 !request.completed
@@ -108,7 +109,9 @@ async fn _request_replace(provider: &Arc<PolkaBtcProvider>, params: Params) -> R
     let amount_in_dot = provider.btc_to_dots(req.amount).await?;
     let griefing_collateral_percentage = provider.get_replace_griefing_collateral().await?;
     let griefing_collateral = calculate_for(amount_in_dot, griefing_collateral_percentage)?;
-    let result = block_on(provider.request_replace(req.amount, griefing_collateral));
+    let result = provider
+        .request_replace(req.amount, griefing_collateral)
+        .await;
     info!(
         "Requesting replace for amount = {} with griefing_collateral = {}: {:?}",
         req.amount, griefing_collateral, result
@@ -143,14 +146,16 @@ struct RegisterVaultJsonRpcResponse {
     public_key: BtcPublicKey,
 }
 
-fn _register_vault<B: BitcoinCoreApi>(
+async fn _register_vault<B: BitcoinCoreApi>(
     provider: &Arc<PolkaBtcProvider>,
     btc: &Arc<B>,
     params: Params,
 ) -> Result<RegisterVaultJsonRpcResponse, Error> {
     let req = parse_params::<RegisterVaultJsonRpcRequest>(params)?;
-    let public_key: BtcPublicKey = block_on(btc.get_new_public_key())?;
-    let result = block_on(provider.register_vault(req.collateral, public_key.clone()));
+    let public_key: BtcPublicKey = btc.get_new_public_key().await?;
+    let result = provider
+        .register_vault(req.collateral, public_key.clone())
+        .await;
     info!(
         "Registering vault with bitcoind public_key {:?} and collateral = {}: {:?}",
         public_key, req.collateral, result
@@ -163,12 +168,12 @@ struct ChangeCollateralJsonRpcRequest {
     amount: u128,
 }
 
-fn _lock_additional_collateral(
+async fn _lock_additional_collateral(
     provider: &Arc<PolkaBtcProvider>,
     params: Params,
 ) -> Result<(), Error> {
     let req = parse_params::<ChangeCollateralJsonRpcRequest>(params)?;
-    let result = block_on(provider.lock_additional_collateral(req.amount));
+    let result = provider.lock_additional_collateral(req.amount).await;
     info!(
         "Locking additional collateral; amount {}: {:?}",
         req.amount, result
@@ -176,9 +181,12 @@ fn _lock_additional_collateral(
     Ok(result?)
 }
 
-fn _withdraw_collateral(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+async fn _withdraw_collateral(
+    provider: &Arc<PolkaBtcProvider>,
+    params: Params,
+) -> Result<(), Error> {
     let req = parse_params::<ChangeCollateralJsonRpcRequest>(params)?;
-    let result = block_on(provider.withdraw_collateral(req.amount));
+    let result = provider.withdraw_collateral(req.amount).await;
     info!(
         "Withdrawing collateral with amount {}: {:?}",
         req.amount, result
@@ -191,9 +199,9 @@ struct WithdrawReplaceJsonRpcRequest {
     replace_id: H256,
 }
 
-fn _withdraw_replace(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+async fn _withdraw_replace(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
     let req = parse_params::<WithdrawReplaceJsonRpcRequest>(params)?;
-    let result = block_on(provider.withdraw_replace(req.replace_id));
+    let result = provider.withdraw_replace(req.replace_id).await;
     info!(
         "Withdrawing replace request {}: {:?}",
         req.replace_id, result
@@ -201,9 +209,9 @@ fn _withdraw_replace(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result
     Ok(result?)
 }
 
-pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
+pub async fn start_http<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: Arc<PolkaBtcProvider>,
-    btc: Arc<B>,
+    bitcoin_core: Arc<B>,
     addr: SocketAddr,
     origin: String,
 ) {
@@ -217,7 +225,10 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     }
     {
         let provider = provider.clone();
-        io.add_sync_method("account_id", move |_| handle_resp(_account_id(&provider)));
+        io.add_method("account_id", move |_| {
+            let provider = provider.clone();
+            async move { handle_resp(_account_id(&provider)) }
+        });
     }
     {
         let provider = provider.clone();
@@ -228,27 +239,32 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     }
     {
         let provider = provider.clone();
-        let btc = btc.clone();
-        io.add_sync_method("register_vault", move |params| {
-            handle_resp(_register_vault(&provider, &btc, params))
+        let bitcoin_core = bitcoin_core.clone();
+        io.add_method("register_vault", move |params| {
+            let provider = provider.clone();
+            let bitcoin_core = bitcoin_core.clone();
+            async move { handle_resp(_register_vault(&provider, &bitcoin_core, params).await) }
         });
     }
     {
         let provider = provider.clone();
-        io.add_sync_method("lock_additional_collateral", move |params| {
-            handle_resp(_lock_additional_collateral(&provider, params))
+        io.add_method("lock_additional_collateral", move |params| {
+            let provider = provider.clone();
+            async move { handle_resp(_lock_additional_collateral(&provider, params).await) }
         });
     }
     {
         let provider = provider.clone();
-        io.add_sync_method("withdraw_collateral", move |params| {
-            handle_resp(_withdraw_collateral(&provider, params))
+        io.add_method("withdraw_collateral", move |params| {
+            let provider = provider.clone();
+            async move { handle_resp(_withdraw_collateral(&provider, params).await) }
         });
     }
     {
         let provider = provider.clone();
-        io.add_sync_method("withdraw_replace", move |params| {
-            handle_resp(_withdraw_replace(&provider, params))
+        io.add_method("withdraw_replace", move |params| {
+            let provider = provider.clone();
+            async move { handle_resp(_withdraw_replace(&provider, params).await) }
         });
     }
 

@@ -1,5 +1,4 @@
 use super::Error;
-use futures::executor::block_on;
 use hex::FromHex;
 use jsonrpc_http_server::jsonrpc_core::serde_json::Value;
 use jsonrpc_http_server::jsonrpc_core::{Error as JsonRpcError, ErrorCode as JsonRpcErrorCode};
@@ -48,8 +47,8 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
     }
 }
 
-fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
-    match block_on(timeout(HEALTH_DURATION, provider.get_latest_block_hash())) {
+async fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
+    match timeout(HEALTH_DURATION, provider.get_latest_block_hash()).await {
         Err(err) => Err(Error::RuntimeError(RuntimeError::from(err))),
         _ => Ok(()),
     }
@@ -71,13 +70,16 @@ struct RegisterStakedRelayerJsonRpcRequest {
     stake: u128,
 }
 
-fn _register_staked_relayer(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+async fn _register_staked_relayer(
+    provider: &Arc<PolkaBtcProvider>,
+    params: Params,
+) -> Result<(), Error> {
     let req: RegisterStakedRelayerJsonRpcRequest = parse_params(params)?;
-    Ok(block_on(provider.register_staked_relayer(req.stake))?)
+    Ok(provider.register_staked_relayer(req.stake).await?)
 }
 
-fn _deregister_staked_relayer(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
-    Ok(block_on(provider.deregister_staked_relayer())?)
+async fn _deregister_staked_relayer(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
+    Ok(provider.deregister_staked_relayer().await?)
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -90,16 +92,21 @@ struct SuggestStatusUpdateJsonRpcRequest {
     message: String,
 }
 
-fn _suggest_status_update(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+async fn _suggest_status_update(
+    provider: &Arc<PolkaBtcProvider>,
+    params: Params,
+) -> Result<(), Error> {
     let req: SuggestStatusUpdateJsonRpcRequest = parse_params(params)?;
-    Ok(block_on(provider.suggest_status_update(
-        req.deposit,
-        req.status_code,
-        req.add_error,
-        req.remove_error,
-        req.block_hash,
-        req.message,
-    ))?)
+    Ok(provider
+        .suggest_status_update(
+            req.deposit,
+            req.status_code,
+            req.add_error,
+            req.remove_error,
+            req.block_hash,
+            req.message,
+        )
+        .await?)
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -108,47 +115,58 @@ struct VoteOnStatusUpdateJsonRpcRequest {
     pub approve: bool,
 }
 
-fn _vote_on_status_update(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+async fn _vote_on_status_update(
+    provider: &Arc<PolkaBtcProvider>,
+    params: Params,
+) -> Result<(), Error> {
     let req: VoteOnStatusUpdateJsonRpcRequest = parse_params(params)?;
-    Ok(block_on(
-        provider.vote_on_status_update(req.status_update_id, req.approve),
-    )?)
+    Ok(provider
+        .vote_on_status_update(req.status_update_id, req.approve)
+        .await?)
 }
 
-pub async fn start(provider: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String) {
+pub async fn start_http(provider: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String) {
     let mut io = IoHandler::default();
     {
         let provider = provider.clone();
-        io.add_sync_method("system_health", move |_| {
-            handle_resp(_system_health(&provider))
+        io.add_method("system_health", move |_| {
+            let provider = provider.clone();
+            async move { handle_resp(_system_health(&provider).await) }
         });
     }
     {
         let provider = provider.clone();
-        io.add_sync_method("account_id", move |_| handle_resp(_account_id(&provider)));
-    }
-    {
-        let provider = provider.clone();
-        io.add_sync_method("register_staked_relayer", move |params| {
-            handle_resp(_register_staked_relayer(&provider, params))
+        io.add_method("account_id", move |_| {
+            let provider = provider.clone();
+            async move { handle_resp(_account_id(&provider)) }
         });
     }
     {
         let provider = provider.clone();
-        io.add_sync_method("deregister_staked_relayer", move |_| {
-            handle_resp(_deregister_staked_relayer(&provider))
+        io.add_method("register_staked_relayer", move |params| {
+            let provider = provider.clone();
+            async move { handle_resp(_register_staked_relayer(&provider, params).await) }
         });
     }
     {
         let provider = provider.clone();
-        io.add_sync_method("suggest_status_update", move |params| {
-            handle_resp(_suggest_status_update(&provider, params))
+        io.add_method("deregister_staked_relayer", move |_| {
+            let provider = provider.clone();
+            async move { handle_resp(_deregister_staked_relayer(&provider).await) }
         });
     }
     {
         let provider = provider.clone();
-        io.add_sync_method("vote_on_status_update", move |params| {
-            handle_resp(_vote_on_status_update(&provider, params))
+        io.add_method("suggest_status_update", move |params| {
+            let provider = provider.clone();
+            async move { handle_resp(_suggest_status_update(&provider, params).await) }
+        });
+    }
+    {
+        let provider = provider.clone();
+        io.add_method("vote_on_status_update", move |params| {
+            let provider = provider.clone();
+            async move { handle_resp(_vote_on_status_update(&provider, params).await) }
         });
     }
 

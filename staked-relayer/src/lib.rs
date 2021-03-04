@@ -13,7 +13,7 @@ pub use vault::Vaults;
 pub mod service {
     pub use crate::faucet::get_faucet_allowance;
     pub use crate::faucet::get_funding;
-    pub use crate::http::start as start_api;
+    pub use crate::http::start_http;
     pub use crate::oracle::report_offline_oracle;
     pub use crate::status::listen_for_blocks_stored;
     pub use crate::status::listen_for_status_updates;

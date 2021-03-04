@@ -62,7 +62,7 @@ async fn main() -> Result<(), Error> {
     );
 
     let http_addr = opts.http_addr.parse()?;
-    http::start(
+    http::start_http(
         provider.clone(),
         http_addr,
         opts.rpc_cors_domain,
