@@ -10,4 +10,4 @@ members = [
 ]
 
 [patch.crates-io]
-jsonrpsee = { git = "https://github.com/interlay/jsonrpsee", rev = "5b35d10b5ae45a1776a8dcf761ecbe8d6e288646" }
+jsonrpsee = { git = "https://github.com/interlay/jsonrpsee", rev = "3e24bf06df258d94fbd7215b35536af2d5d68b0b" }
