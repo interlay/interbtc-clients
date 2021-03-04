@@ -1,12 +1,12 @@
 #![recursion_limit = "256"]
 
-mod api;
 mod cancellation;
 mod collateral;
 mod constants;
 mod error;
 mod execution;
 mod faucet;
+mod http;
 mod issue;
 mod redeem;
 mod refund;
@@ -354,10 +354,10 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     let refund_listener =
         listen_for_refund_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
 
-    let api_listener = if opts.no_api {
+    let http_server = if opts.no_api {
         None
     } else {
-        Some(api::start(
+        Some(http::start_http(
             arc_provider.clone(),
             btc_rpc.clone(),
             opts.http_addr.parse()?,
@@ -373,8 +373,8 @@ pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
     // starts all the tasks
     let result = tokio::try_join!(
         tokio::spawn(async move {
-            if let Some(api_listener) = api_listener {
-                api_listener.await;
+            if let Some(http_server) = http_server {
+                http_server.await;
             }
         }),
         tokio::spawn(async move {

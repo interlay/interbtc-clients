@@ -1,6 +1,5 @@
 use crate::Error;
 use chrono::{DateTime, Duration as ISO8601, Utc};
-use futures::{self, executor::block_on};
 use hex::FromHex;
 use jsonrpc_http_server::jsonrpc_core::serde_json::Value;
 use jsonrpc_http_server::jsonrpc_core::{Error as JsonRpcError, ErrorCode as JsonRpcErrorCode};
@@ -60,8 +59,8 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
     }
 }
 
-fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
-    match block_on(timeout(HEALTH_DURATION, provider.get_latest_block_hash())) {
+async fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
+    match timeout(HEALTH_DURATION, provider.get_latest_block_hash()).await {
         Err(err) => Err(Error::RuntimeError(RuntimeError::from(err))),
         _ => Ok(()),
     }
@@ -228,7 +227,7 @@ async fn fund_account(
     Ok(())
 }
 
-pub async fn start(
+pub async fn start_http(
     provider: Arc<PolkaBtcProvider>,
     addr: SocketAddr,
     origin: String,
@@ -243,11 +242,11 @@ pub async fn start(
     io.add_sync_method("staked_relayer_allowance", move |_| {
         handle_resp(Ok(staked_relayer_allowance))
     });
-    let provider = provider.clone();
     {
         let provider = provider.clone();
-        io.add_sync_method("system_health", move |_| {
-            handle_resp(_system_health(&provider))
+        io.add_method("system_health", move |_| {
+            let provider = provider.clone();
+            async move { handle_resp(_system_health(&provider).await) }
         });
     }
     {
