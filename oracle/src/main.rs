@@ -63,7 +63,10 @@ struct Opts {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    env_logger::init();
+    env_logger::init_from_env(env_logger::Env::default().filter_or(
+        env_logger::DEFAULT_FILTER_ENV,
+        log::LevelFilter::Info.as_str(),
+    ));
     let opts: Opts = Opts::parse();
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;

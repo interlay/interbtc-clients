@@ -85,7 +85,10 @@ struct Opts {
 }
 
 async fn start() -> Result<(), Error> {
-    env_logger::init();
+    env_logger::init_from_env(env_logger::Env::default().filter_or(
+        env_logger::DEFAULT_FILTER_ENV,
+        log::LevelFilter::Info.as_str(),
+    ));
     let opts: Opts = Opts::parse();
     let http_addr = opts.http_addr.parse()?;
     let bitcoin_timeout_ms = opts.bitcoin_timeout_ms;
