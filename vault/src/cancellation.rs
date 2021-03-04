@@ -22,12 +22,7 @@ pub struct CancellationScheduler<P: IssuePallet + ReplacePallet + UtilFuncs> {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-struct ActiveRequest {
-    id: H256,
-    end_time: u32,
-}
-
-pub struct UnconvertedOpenTime {
+pub struct OpenRequest {
     id: H256,
     open_time: u32,
 }
@@ -53,7 +48,7 @@ pub trait Canceller<P> {
     async fn get_open_requests(
         provider: Arc<P>,
         vault_id: AccountId,
-    ) -> Result<Vec<UnconvertedOpenTime>, Error>
+    ) -> Result<Vec<OpenRequest>, Error>
     where
         P: 'async_trait;
 
@@ -77,7 +72,7 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for IssueCancell
     async fn get_open_requests(
         provider: Arc<P>,
         vault_id: AccountId,
-    ) -> Result<Vec<UnconvertedOpenTime>, Error>
+    ) -> Result<Vec<OpenRequest>, Error>
     where
         P: 'async_trait,
     {
@@ -86,7 +81,7 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for IssueCancell
             .await?
             .iter()
             .filter(|(_, issue)| !issue.completed && !issue.cancelled)
-            .map(|(id, issue)| UnconvertedOpenTime {
+            .map(|(id, issue)| OpenRequest {
                 id: *id,
                 open_time: issue.opentime,
             })
@@ -118,7 +113,7 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for ReplaceCance
     async fn get_open_requests(
         provider: Arc<P>,
         vault_id: AccountId,
-    ) -> Result<Vec<UnconvertedOpenTime>, Error>
+    ) -> Result<Vec<OpenRequest>, Error>
     where
         P: 'async_trait,
     {
@@ -127,7 +122,7 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for ReplaceCance
             .await?
             .iter()
             .filter(|(_, replace)| !replace.completed && !replace.cancelled)
-            .map(|(id, replace)| UnconvertedOpenTime {
+            .map(|(id, replace)| OpenRequest {
                 id: *id,
                 open_time: replace.open_time,
             })
@@ -190,9 +185,13 @@ impl EventSelector for ProductionEventSelector {
 }
 
 // verbose drain_filter
-fn drain_expired(requests: &mut Vec<ActiveRequest>, current_height: u32) -> Vec<ActiveRequest> {
+fn drain_expired(
+    requests: &mut Vec<OpenRequest>,
+    period: u32,
+    current_height: u32,
+) -> Vec<OpenRequest> {
     let mut expired = Vec::new();
-    let has_expired = |request: &ActiveRequest| request.end_time < current_height;
+    let has_expired = |request: &OpenRequest| request.open_time + period < current_height;
     let mut i = 0;
     while i != requests.len() {
         if has_expired(&requests[i]) {
@@ -229,7 +228,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
         mut event_listener: Receiver<RequestEvent>,
     ) -> Result<(), Error> {
         let mut list_state = ListState::Invalid;
-        let mut active_requests: Vec<ActiveRequest> = vec![];
+        let mut active_requests: Vec<OpenRequest> = vec![];
 
         loop {
             list_state = self
@@ -250,7 +249,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
         &mut self,
         block_listener: &mut Receiver<PolkaBtcHeader>,
         event_listener: &mut Receiver<RequestEvent>,
-        active_requests: &mut Vec<ActiveRequest>,
+        active_requests: &mut Vec<OpenRequest>,
         list_state: ListState,
         selector: U,
     ) -> Result<ListState, Error> {
@@ -278,7 +277,10 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
                     T::TYPE_NAME
                 );
 
-                let cancellable_requests = drain_expired(active_requests, header.number);
+                // TODO: subscribe to period update event
+                let _ = self.update_cached_period::<T>().await;
+                let period = self.get_cached_period::<T>().await?;
+                let cancellable_requests = drain_expired(active_requests, period, header.number);
 
                 for request in cancellable_requests {
                     match T::cancel_request(self.provider.clone(), request.id).await {
@@ -306,7 +308,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
     }
 
     /// Gets a list of requests that have been requested from this vault
-    async fn get_open_requests<T: Canceller<P>>(&mut self) -> Result<Vec<ActiveRequest>, Error> {
+    async fn get_open_requests<T: Canceller<P>>(&mut self) -> Result<Vec<OpenRequest>, Error> {
         let open_requests =
             T::get_open_requests(self.provider.clone(), self.vault_id.clone()).await?;
 
@@ -316,32 +318,24 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
 
         // get current block height and request period
         let chain_height = self.provider.get_current_chain_height().await?;
-        let period = self.get_cached_period::<T>().await?;
 
         let mut ret = open_requests
             .iter()
-            .map(|UnconvertedOpenTime { id, open_time }| {
+            .map(|OpenRequest { id, open_time }| {
                 // invalid open_time. Return an error so we will retry the operation later
                 if *open_time > chain_height {
                     return Err(Error::InvalidOpenTime);
                 }
 
-                let deadline_block = open_time + period;
-
-                let end_time = if chain_height < deadline_block {
-                    deadline_block
-                } else {
-                    // deadline has already passed, should cancel ASAP
-                    // this branch can occur when e.g. the vault has been restarted
-                    0
-                };
-
-                Ok(ActiveRequest { id: *id, end_time })
+                Ok(OpenRequest {
+                    id: *id,
+                    open_time: *open_time,
+                })
             })
-            .collect::<Result<Vec<ActiveRequest>, Error>>()?;
+            .collect::<Result<Vec<OpenRequest>, Error>>()?;
 
         // sort by ascending duration
-        ret.sort_by(|a, b| a.end_time.partial_cmp(&b.end_time).unwrap());
+        ret.sort_by(|a, b| a.open_time.partial_cmp(&b.open_time).unwrap());
 
         Ok(ret)
     }
@@ -351,12 +345,14 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
     async fn get_cached_period<T: Canceller<P>>(&mut self) -> Result<u32, Error> {
         match self.period {
             Some(x) => Ok(x),
-            None => {
-                let ret = T::get_period(self.provider.clone()).await?;
-                self.period = Some(ret);
-                Ok(ret)
-            }
+            None => self.update_cached_period::<T>().await,
         }
+    }
+
+    async fn update_cached_period<T: Canceller<P>>(&mut self) -> Result<u32, Error> {
+        let ret = T::get_period(self.provider.clone()).await?;
+        self.period = Some(ret);
+        Ok(ret)
     }
 }
 
@@ -539,17 +535,17 @@ mod tests {
                 .await
                 .unwrap(),
             vec![
-                ActiveRequest {
+                OpenRequest {
                     id: H256::from_slice(&[2; 32]),
-                    end_time: 0
+                    open_time: 0
                 },
-                ActiveRequest {
+                OpenRequest {
                     id: H256::from_slice(&[3; 32]),
-                    end_time: 0
+                    open_time: 0
                 },
-                ActiveRequest {
+                OpenRequest {
                     id: H256::from_slice(&[1; 32]),
-                    end_time: 105
+                    open_time: 105
                 },
             ]
         );
@@ -613,7 +609,7 @@ mod tests {
 
         let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
         let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
-        let mut active_processes: Vec<ActiveRequest> = vec![];
+        let mut open_requests: Vec<OpenRequest> = vec![];
         let mut cancellation_scheduler =
             CancellationScheduler::new(Arc::new(provider), AccountId::default());
 
@@ -635,7 +631,7 @@ mod tests {
                 .wait_for_event::<IssueCanceller, _>(
                     &mut block_listener,
                     &mut event_listener,
-                    &mut active_processes,
+                    &mut open_requests,
                     ListState::Invalid,
                     selector
                 )
@@ -645,7 +641,7 @@ mod tests {
         );
 
         // issue should have been removed from the list after it has been canceled
-        assert!(active_processes.is_empty());
+        assert!(open_requests.is_empty());
     }
 
     #[tokio::test]
@@ -656,18 +652,18 @@ mod tests {
 
         let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
         let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
-        let mut active_processes: Vec<ActiveRequest> = vec![
-            ActiveRequest {
+        let mut open_requests: Vec<OpenRequest> = vec![
+            OpenRequest {
                 id: H256::from_slice(&[1; 32]),
-                end_time: 0,
+                open_time: 0,
             },
-            ActiveRequest {
+            OpenRequest {
                 id: H256::from_slice(&[2; 32]),
-                end_time: 0,
+                open_time: 0,
             },
-            ActiveRequest {
+            OpenRequest {
                 id: H256::from_slice(&[3; 32]),
-                end_time: 0,
+                open_time: 0,
             },
         ];
 
@@ -689,7 +685,7 @@ mod tests {
                 .wait_for_event::<IssueCanceller, _>(
                     &mut block_listener,
                     &mut event_listener,
-                    &mut active_processes,
+                    &mut open_requests,
                     ListState::Valid,
                     selector
                 )
@@ -700,7 +696,7 @@ mod tests {
 
         // check that the process with id 2 was removed
         assert_eq!(
-            active_processes
+            open_requests
                 .into_iter()
                 .map(|x| x.id)
                 .collect::<Vec<H256>>(),
@@ -733,7 +729,7 @@ mod tests {
 
         let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
         let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
-        let mut active_processes: Vec<ActiveRequest> = vec![];
+        let mut open_requests: Vec<OpenRequest> = vec![];
         let mut cancellation_scheduler =
             CancellationScheduler::new(Arc::new(provider), AccountId::default());
 
@@ -751,7 +747,7 @@ mod tests {
                 .wait_for_event::<IssueCanceller, _>(
                     &mut block_listener,
                     &mut event_listener,
-                    &mut active_processes,
+                    &mut open_requests,
                     ListState::Invalid,
                     selector
                 )
@@ -761,7 +757,7 @@ mod tests {
         );
 
         // issue should have been removed from the list
-        assert!(active_processes.is_empty());
+        assert!(open_requests.is_empty());
     }
 
     #[tokio::test]
@@ -775,7 +771,7 @@ mod tests {
 
         let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
         let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
-        let mut active_processes: Vec<ActiveRequest> = vec![];
+        let mut open_requests: Vec<OpenRequest> = vec![];
         let mut cancellation_scheduler =
             CancellationScheduler::new(Arc::new(provider), AccountId::default());
 
@@ -790,7 +786,7 @@ mod tests {
                 .wait_for_event::<IssueCanceller, _>(
                     &mut block_listener,
                     &mut event_listener,
-                    &mut active_processes,
+                    &mut open_requests,
                     ListState::Invalid,
                     selector
                 )
@@ -807,7 +803,7 @@ mod tests {
 
         let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
         let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
-        let mut active_processes: Vec<ActiveRequest> = vec![];
+        let mut open_requests: Vec<OpenRequest> = vec![];
         let mut cancellation_scheduler =
             CancellationScheduler::new(Arc::new(provider), AccountId::default());
 
@@ -821,7 +817,7 @@ mod tests {
                 .wait_for_event::<IssueCanceller, _>(
                     &mut block_listener,
                     &mut event_listener,
-                    &mut active_processes,
+                    &mut open_requests,
                     ListState::Valid,
                     selector
                 )
