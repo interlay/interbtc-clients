@@ -8,7 +8,6 @@ use runtime::{
     ExchangeRateOraclePallet, FixedPointNumber, FixedU128, PolkaBtcProvider, PolkaBtcRuntime,
 };
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::delay_for;
 
@@ -44,8 +43,8 @@ struct Opts {
     #[clap(long, default_value = "385523187")]
     exchange_rate: u128,
 
-    /// Timeout for exchange rate setter, default 30 minutes.
-    #[clap(long, default_value = "1800000")]
+    /// Timeout for exchange rate setter, default 25 minutes.
+    #[clap(long, default_value = "1500000")]
     timeout_ms: u64,
 
     /// keyring / keyfile options.
@@ -71,14 +70,6 @@ async fn main() -> Result<(), Error> {
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
-    let provider = Arc::new(
-        PolkaBtcProvider::from_url_with_retry(
-            opts.polka_btc_url,
-            signer,
-            Duration::from_millis(opts.connection_timeout_ms),
-        )
-        .await?,
-    );
 
     let timeout = Duration::from_millis(opts.timeout_ms);
     let exchange_rate = FixedU128::checked_from_rational(opts.exchange_rate, 100_000)
@@ -107,10 +98,19 @@ async fn main() -> Result<(), Error> {
             chrono::offset::Local::now()
         );
 
-        match provider.set_exchange_rate_info(exchange_rate).await {
-            Err(e) => error!("Error: {}", e.to_string()),
-            _ => (),
-        };
+        let result = PolkaBtcProvider::from_url_with_retry(
+            opts.polka_btc_url.clone(),
+            signer.clone(),
+            Duration::from_millis(opts.connection_timeout_ms),
+        )
+        .await?
+        .set_exchange_rate_info(exchange_rate)
+        .await;
+
+        if let Err(e) = result {
+            error!("Error: {}", e.to_string());
+        }
+
         delay_for(timeout).await;
     }
 }
