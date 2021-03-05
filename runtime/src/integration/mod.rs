@@ -1,3 +1,5 @@
+#![cfg(feature = "testing-utils")]
+
 mod bitcoin_simulator;
 
 use crate::rpc::FeePallet;
@@ -78,9 +80,10 @@ pub async fn default_provider_client(key: AccountKeyring) -> (JsonRpseeClient, T
 /// Create a new provider with the given keyring
 pub async fn setup_provider(client: JsonRpseeClient, key: AccountKeyring) -> Arc<PolkaBtcProvider> {
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key.pair());
-    let ret = PolkaBtcProvider::new(client, signer)
+    let mut ret = PolkaBtcProvider::new(client, signer)
         .await
         .expect("Error creating provider");
+    ret.relax_storage_finalization_requirement();
     Arc::new(ret)
 }
 

@@ -52,6 +52,7 @@ pub struct PolkaBtcProvider {
     ext_client: Client<PolkaBtcRuntime>,
     signer: Arc<RwLock<PairSigner<PolkaBtcRuntime, KeyPair>>>,
     account_id: AccountId,
+    only_read_finalized_storage: bool,
 }
 
 impl PolkaBtcProvider {
@@ -66,6 +67,8 @@ impl PolkaBtcProvider {
             .build()
             .await?;
 
+        // For getting the nonce, use latest, possibly non-finalized block.
+        // TODO: we might want to wait until the latest block is actually finalized
         // query account info in order to get the nonce value used for communication
         let account_info = crate::frame_system::AccountStoreExt::account(
             &ext_client,
@@ -80,6 +83,7 @@ impl PolkaBtcProvider {
             ext_client,
             signer: Arc::new(RwLock::new(signer)),
             account_id,
+            only_read_finalized_storage: true,
         })
     }
 
@@ -134,17 +138,23 @@ impl PolkaBtcProvider {
     }
 
     pub async fn get_latest_block_hash(&self) -> Result<Option<H256>, Error> {
-        Ok(self.ext_client.block_hash(None).await?)
+        if self.only_read_finalized_storage {
+            Ok(Some(self.ext_client.finalized_head().await?))
+        } else {
+            Ok(self.ext_client.block_hash(None).await?)
+        }
     }
 
     pub async fn get_latest_block(&self) -> Result<Option<PolkaBtcBlock>, Error> {
-        Ok(self.ext_client.block::<H256>(None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.block::<H256>(head).await?)
     }
 
     /// Fetch all active vaults.
     pub async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, Error> {
         let mut vaults = Vec::new();
-        let mut iter = self.ext_client.vaults_iter(None).await?;
+        let head = self.get_latest_block_hash().await?;
+        let mut iter = self.ext_client.vaults_iter(head).await?;
         while let Some((_, account)) = iter.next().await? {
             vaults.push(account);
         }
@@ -265,6 +275,12 @@ impl PolkaBtcProvider {
             .await?;
         Ok(())
     }
+
+    /// Read from latest block, even if it is not finalized yet
+    #[cfg(feature = "testing-utils")]
+    pub(crate) fn relax_storage_finalization_requirement(&mut self) {
+        self.only_read_finalized_storage = false;
+    }
 }
 
 #[async_trait]
@@ -281,7 +297,8 @@ pub trait UtilFuncs {
 #[async_trait]
 impl UtilFuncs for PolkaBtcProvider {
     async fn get_current_chain_height(&self) -> Result<u32, Error> {
-        let query_result = self.ext_client.block(Option::<H256>::None).await?;
+        let head = self.get_latest_block_hash().await?;
+        let query_result = self.ext_client.block(head).await?;
         match query_result {
             Some(x) => Ok(x.block.header.number),
             None => Err(Error::BlockNotFound),
@@ -325,13 +342,15 @@ impl DotBalancesPallet for PolkaBtcProvider {
         &self,
         id: AccountId,
     ) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
-        Ok(self.ext_client.account(id.clone(), None).await?.free)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.account(id.clone(), head).await?.free)
     }
 
     async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
+        let head = self.get_latest_block_hash().await?;
         Ok(self
             .ext_client
-            .account(self.account_id.clone(), None)
+            .account(self.account_id.clone(), head)
             .await?
             .reserved)
     }
@@ -566,7 +585,8 @@ impl ReplacePallet for PolkaBtcProvider {
     }
 
     async fn get_replace_period(&self) -> Result<u32, Error> {
-        Ok(self.ext_client.replace_period(None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.replace_period(head).await?)
     }
 
     async fn set_replace_period(&self, period: u32) -> Result<(), Error> {
@@ -579,7 +599,8 @@ impl ReplacePallet for PolkaBtcProvider {
     }
 
     async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, Error> {
-        Ok(self.ext_client.replace_requests(replace_id, None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.replace_requests(replace_id, head).await?)
     }
 }
 
@@ -592,7 +613,8 @@ pub trait TimestampPallet {
 impl TimestampPallet for PolkaBtcProvider {
     /// Get the current time as defined by the `timestamp` pallet.
     async fn get_time_now(&self) -> Result<u64, Error> {
-        Ok(self.ext_client.now(None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.now(head).await?)
     }
 }
 
@@ -616,9 +638,10 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
     /// Returns the last exchange rate in planck per satoshis, the time at which it was set
     /// and the configured max delay.
     async fn get_exchange_rate_info(&self) -> Result<(FixedU128, u64, u64), Error> {
-        let get_rate = self.ext_client.exchange_rate(None);
-        let get_time = self.ext_client.last_exchange_rate_time(None);
-        let get_delay = self.ext_client.max_delay(None);
+        let head = self.get_latest_block_hash().await?;
+        let get_rate = self.ext_client.exchange_rate(head);
+        let get_time = self.ext_client.last_exchange_rate_time(head);
+        let get_delay = self.ext_client.max_delay(head);
 
         match tokio::try_join!(get_rate, get_time, get_delay) {
             Ok((rate, time, delay)) => Ok((rate, time, delay)),
@@ -654,7 +677,8 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
     /// Gets the estimated Satoshis per bytes required to get a Bitcoin transaction included in
     /// in the next x blocks
     async fn get_btc_tx_fees_per_byte(&self) -> Result<BtcTxFeesPerByte, Error> {
-        Ok(self.ext_client.satoshi_per_bytes(None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.satoshi_per_bytes(head).await?)
     }
 
     /// Converts the amount in btc to dot, based on the current set exchange rate.
@@ -744,18 +768,20 @@ impl StakedRelayerPallet for PolkaBtcProvider {
 
     /// Get the stake registered for this staked relayer.
     async fn get_active_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error> {
+        let head = self.get_latest_block_hash().await?;
         Ok(self
             .ext_client
-            .active_staked_relayers(&account_id, None)
+            .active_staked_relayers(&account_id, head)
             .await?
             .stake)
     }
 
     /// Get the stake registered for this inactive staked relayer.
     async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error> {
+        let head = self.get_latest_block_hash().await?;
         Ok(self
             .ext_client
-            .inactive_staked_relayers(&account_id, None)
+            .inactive_staked_relayers(&account_id, head)
             .await?
             .stake)
     }
@@ -846,9 +872,10 @@ impl StakedRelayerPallet for PolkaBtcProvider {
         &self,
         status_update_id: u64,
     ) -> Result<PolkaBtcStatusUpdate, Error> {
+        let head = self.get_latest_block_hash().await?;
         Ok(self
             .ext_client
-            .active_status_updates(status_update_id, None)
+            .active_status_updates(status_update_id, head)
             .await?)
     }
 
@@ -951,11 +978,13 @@ impl SecurityPallet for PolkaBtcProvider {
     /// Get the current security status of the parachain.
     /// Should be one of; `Running`, `Error` or `Shutdown`.
     async fn get_parachain_status(&self) -> Result<StatusCode, Error> {
-        Ok(self.ext_client.parachain_status(None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.parachain_status(head).await?)
     }
     /// Return any `ErrorCode`s set in the security module.
     async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, Error> {
-        Ok(self.ext_client.errors(None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.errors(head).await?)
     }
 }
 
@@ -1043,7 +1072,8 @@ impl IssuePallet for PolkaBtcProvider {
     }
 
     async fn get_issue_request(&self, issue_id: H256) -> Result<PolkaBtcIssueRequest, Error> {
-        Ok(self.ext_client.issue_requests(issue_id, None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.issue_requests(issue_id, head).await?)
     }
 
     async fn get_vault_issue_requests(
@@ -1062,7 +1092,8 @@ impl IssuePallet for PolkaBtcProvider {
     }
 
     async fn get_issue_period(&self) -> Result<u32, Error> {
-        Ok(self.ext_client.issue_period(None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.issue_period(head).await?)
     }
 
     async fn set_issue_period(&self, period: u32) -> Result<(), Error> {
@@ -1079,7 +1110,8 @@ impl IssuePallet for PolkaBtcProvider {
         let issue_period = self.get_issue_period().await?;
 
         let mut issue_requests = Vec::new();
-        let mut iter = self.ext_client.issue_requests_iter(None).await?;
+        let head = self.get_latest_block_hash().await?;
+        let mut iter = self.ext_client.issue_requests_iter(head).await?;
         while let Some((issue_id, request)) = iter.next().await? {
             if !request.completed
                 && !request.cancelled
@@ -1182,7 +1214,8 @@ impl RedeemPallet for PolkaBtcProvider {
     }
 
     async fn get_redeem_request(&self, redeem_id: H256) -> Result<PolkaBtcRedeemRequest, Error> {
-        Ok(self.ext_client.redeem_requests(redeem_id, None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.redeem_requests(redeem_id, head).await?)
     }
 
     async fn get_vault_redeem_requests(
@@ -1201,7 +1234,8 @@ impl RedeemPallet for PolkaBtcProvider {
     }
 
     async fn get_redeem_period(&self) -> Result<BlockNumber, Error> {
-        Ok(self.ext_client.redeem_period(None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.redeem_period(head).await?)
     }
 
     async fn set_redeem_period(&self, period: BlockNumber) -> Result<(), Error> {
@@ -1304,12 +1338,14 @@ pub trait BtcRelayPallet {
 impl BtcRelayPallet for PolkaBtcProvider {
     /// Get the hash of the current best tip.
     async fn get_best_block(&self) -> Result<H256Le, Error> {
-        Ok(self.ext_client.best_block(None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.best_block(head).await?)
     }
 
     /// Get the current best known height.
     async fn get_best_block_height(&self) -> Result<u32, Error> {
-        Ok(self.ext_client.best_block_height(None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.best_block_height(head).await?)
     }
 
     /// Get the block hash for the main chain at the specified height.
@@ -1317,7 +1353,8 @@ impl BtcRelayPallet for PolkaBtcProvider {
     /// # Arguments
     /// * `height` - chain height
     async fn get_block_hash(&self, height: u32) -> Result<H256Le, Error> {
-        Ok(self.ext_client.chains_hashes(0, height, None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.chains_hashes(0, height, head).await?)
     }
 
     /// Get the corresponding block header for the given hash.
@@ -1325,7 +1362,8 @@ impl BtcRelayPallet for PolkaBtcProvider {
     /// # Arguments
     /// * `hash` - little endian block hash
     async fn get_block_header(&self, hash: H256Le) -> Result<PolkaBtcRichBlockHeader, Error> {
-        Ok(self.ext_client.block_headers(hash, None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.block_headers(hash, head).await?)
     }
 
     /// Initializes the relay with the provided block header and height,
@@ -1372,7 +1410,8 @@ impl BtcRelayPallet for PolkaBtcProvider {
 
     /// Get the global security parameter k for stable Bitcoin transactions
     async fn get_bitcoin_confirmations(&self) -> Result<u32, Error> {
-        Ok(self.ext_client.stable_bitcoin_confirmations(None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.stable_bitcoin_confirmations(head).await?)
     }
 
     /// Wait until Bitcoin block is submitted to the relay
@@ -1440,7 +1479,8 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     /// # Errors
     /// * `VaultNotFound` - if the rpc returned a default value rather than the vault we want
     async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, Error> {
-        let vault: PolkaBtcVault = self.ext_client.vaults(vault_id.clone(), None).await?;
+        let head = self.get_latest_block_hash().await?;
+        let vault: PolkaBtcVault = self.ext_client.vaults(vault_id.clone(), head).await?;
         if vault.id == vault_id {
             Ok(vault)
         } else {
@@ -1451,7 +1491,8 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     /// Fetch all active vaults.
     async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, Error> {
         let mut vaults = Vec::new();
-        let mut iter = self.ext_client.vaults_iter(None).await?;
+        let head = self.get_latest_block_hash().await?;
+        let mut iter = self.ext_client.vaults_iter(head).await?;
         while let Some((_, account)) = iter.next().await? {
             vaults.push(account);
         }
@@ -1580,14 +1621,17 @@ pub trait FeePallet {
 #[async_trait]
 impl FeePallet for PolkaBtcProvider {
     async fn get_issue_griefing_collateral(&self) -> Result<FixedU128, Error> {
-        Ok(self.ext_client.issue_griefing_collateral(None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.issue_griefing_collateral(head).await?)
     }
 
     async fn get_issue_fee(&self) -> Result<FixedU128, Error> {
-        Ok(self.ext_client.issue_fee(None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.issue_fee(head).await?)
     }
 
     async fn get_replace_griefing_collateral(&self) -> Result<FixedU128, Error> {
-        Ok(self.ext_client.replace_griefing_collateral(None).await?)
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.replace_griefing_collateral(head).await?)
     }
 }
