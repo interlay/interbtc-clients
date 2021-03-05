@@ -3,7 +3,7 @@ use crate::Error;
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::channel::mpsc::Sender;
 use futures::{SinkExt, StreamExt};
-use log::{error, info, trace};
+use log::*;
 use runtime::{
     pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
     BtcAddress, BtcPublicKey, BtcRelayPallet, H256Le, IssuePallet, PolkaBtcProvider,
@@ -63,13 +63,13 @@ where
         }
     }
 
-    /// Search the reversible map by value.
-    pub fn contains_value<Q: ?Sized>(&self, v: &Q) -> bool
+    /// Get the key associated with the value
+    pub fn get_key_for_value<Q: ?Sized>(&mut self, v: &Q) -> Option<&K>
     where
         V: Borrow<Q>,
         Q: Hash + Eq,
     {
-        self.0 .1.contains_key(v)
+        self.0 .1.get(v)
     }
 }
 
@@ -164,39 +164,65 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
 ) -> Result<(), Error> {
     let addresses = transaction.extract_output_addresses::<BtcAddress>();
     let mut issue_requests = issue_set.0.lock().await;
-    if let Some(address) = addresses
-        .iter()
-        .find(|&vout| issue_requests.contains_value(vout))
-    {
+    if let Some((issue_id, address)) = addresses.iter().find_map(|address| {
+        let issue_id = issue_requests.get_key_for_value(address)?;
+        Some((issue_id.clone(), address.clone()))
+    }) {
+        let issue = provider.get_issue_request(issue_id).await?;
         // tx has output to address
-        if let Some(issue_id) = issue_requests.remove_value(address) {
-            info!("Found tx for issue with id {}", issue_id);
+        match transaction.get_payment_amount_to(address) {
+            None => {
+                // this should never happen, so use WARN
+                warn!(
+                    "Could not extract payment amount for transaction {}",
+                    transaction.txid()
+                );
+                return Ok(());
+            }
+            Some(transferred) => {
+                let transferred = transferred as u128;
+                if transferred == issue.amount {
+                    info!("Found tx for issue with id {}", issue_id);
+                } else {
+                    info!(
+                        "Found tx for issue with id {}. Expected amount = {}, got {}",
+                        issue_id, issue.amount, transferred
+                    );
+                }
 
-            // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
-            // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
-            provider
-                .wait_for_block_in_relay(
-                    H256Le::from_bytes_le(&block_hash.to_vec()),
-                    num_confirmations,
-                )
-                .await?;
+                if transferred < issue.amount {
+                    // insufficient amount, don't execute
+                    return Ok(());
+                }
 
-            // found tx, submit proof
-            let txid = transaction.txid();
-            let raw_tx = btc_rpc.get_raw_tx_for(&txid, &block_hash).await?;
-            let proof = btc_rpc.get_proof_for(txid.clone(), &block_hash).await?;
+                issue_requests.remove_value(&address);
 
-            info!("Executing issue with id {}", issue_id);
+                // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
+                // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
+                provider
+                    .wait_for_block_in_relay(
+                        H256Le::from_bytes_le(&block_hash.to_vec()),
+                        num_confirmations,
+                    )
+                    .await?;
 
-            // this will error if someone else executes the issue first
-            provider
-                .execute_issue(
-                    issue_id,
-                    H256Le::from_bytes_le(&txid.as_hash()),
-                    proof,
-                    raw_tx,
-                )
-                .await?;
+                // found tx, submit proof
+                let txid = transaction.txid();
+                let raw_tx = btc_rpc.get_raw_tx_for(&txid, &block_hash).await?;
+                let proof = btc_rpc.get_proof_for(txid.clone(), &block_hash).await?;
+
+                info!("Executing issue with id {}", issue_id);
+
+                // this will error if someone else executes the issue first
+                provider
+                    .execute_issue(
+                        issue_id,
+                        H256Le::from_bytes_le(&txid.as_hash()),
+                        proof,
+                        raw_tx,
+                    )
+                    .await?;
+            }
         }
     }
 
