@@ -294,17 +294,12 @@ mod tests {
 
     use super::{
         fund_account, open_kv_store, DotBalancesPallet, FundAccountJsonRpcRequest,
-        FundingRequestAccountType, PolkaBtcProvider, PLANCK_PER_DOT,
+        FundingRequestAccountType, PLANCK_PER_DOT,
     };
-    use jsonrpsee::Client as JsonRpseeClient;
     use kv::{Config, Store};
-    use runtime::{substrate_subxt::PairSigner, StakedRelayerPallet};
-    use runtime::{AccountId, BtcPublicKey, PolkaBtcRuntime, VaultRegistryPallet};
+    use runtime::integration::*;
+    use runtime::{AccountId, BtcPublicKey, StakedRelayerPallet, VaultRegistryPallet};
     use sp_keyring::AccountKeyring;
-    use substrate_subxt_client::{
-        DatabaseConfig, KeystoreConfig, Role, SubxtClient, SubxtClientConfig,
-    };
-    use tempdir::TempDir;
 
     macro_rules! assert_err {
         ($result:expr, $err:pat) => {{
@@ -321,38 +316,6 @@ mod tests {
             2, 205, 114, 218, 156, 16, 235, 172, 106, 37, 18, 153, 202, 140, 176, 91, 207, 51, 187,
             55, 18, 45, 222, 180, 119, 54, 243, 97, 173, 150, 161, 169, 230,
         ])
-    }
-
-    async fn default_provider_client(key: AccountKeyring) -> (JsonRpseeClient, TempDir) {
-        let tmp = TempDir::new("btc-parachain-").expect("failed to create tempdir");
-        let config = SubxtClientConfig {
-            impl_name: "btc-parachain-full-client",
-            impl_version: "0.0.1",
-            author: "Interlay Ltd",
-            copyright_start_year: 2020,
-            db: DatabaseConfig::ParityDb {
-                path: tmp.path().join("db"),
-            },
-            keystore: KeystoreConfig::Path {
-                path: tmp.path().join("keystore"),
-                password: None,
-            },
-            chain_spec: btc_parachain::chain_spec::development_config(),
-            role: Role::Authority(key.clone()),
-            telemetry: None,
-        };
-
-        let client = SubxtClient::from_config(config, btc_parachain_service::new_full)
-            .expect("Error creating subxt client")
-            .into();
-        return (client, tmp);
-    }
-
-    async fn setup_provider(client: JsonRpseeClient, key: AccountKeyring) -> PolkaBtcProvider {
-        let signer = PairSigner::<PolkaBtcRuntime, _>::new(key.pair());
-        PolkaBtcProvider::new(client, signer)
-            .await
-            .expect("Error creating provider")
     }
 
     fn dot_to_planck(dot: u128) -> u128 {

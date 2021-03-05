@@ -32,4 +32,4 @@ substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", 
 tempdir = "0.3.7"
 btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
 btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
-
+runtime = { path = "../runtime", features = ["testing-utils"] }
