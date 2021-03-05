@@ -11,9 +11,9 @@ use runtime::{
         refund::RequestRefundEvent,
         replace::{AcceptReplaceEvent, AuctionReplaceEvent},
     },
-    BtcAddress, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcRefundRequest,
-    PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RefundPallet, ReplacePallet, UtilFuncs,
-    VaultRegistryPallet,
+    BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest,
+    PolkaBtcRefundRequest, PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RefundPallet,
+    ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H256;
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -285,12 +285,29 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
                     .await;
 
                 match tx_metadata {
-                    Ok(tx_metadata) => match request.execute(provider.clone(), tx_metadata).await {
-                        Ok(_) => {
-                            info!("Executed request #{}", request.hash);
+                    Ok(tx_metadata) => {
+                        // we have enough btc confirmations, now make sure they have been relayed before we continue
+                        if let Err(e) = provider
+                            .wait_for_block_in_relay(
+                                H256Le::from_bytes_le(&tx_metadata.block_hash.to_vec()),
+                                num_confirmations,
+                            )
+                            .await
+                        {
+                            error!(
+                                "Error while waiting for block inclusion for request #{}: {}",
+                                request.hash, e
+                            );
+                            // continue; try to execute anyway
                         }
-                        Err(e) => error!("Failed to execute request #{}: {}", request.hash, e),
-                    },
+
+                        match request.execute(provider.clone(), tx_metadata).await {
+                            Ok(_) => {
+                                info!("Executed request #{}", request.hash);
+                            }
+                            Err(e) => error!("Failed to execute request #{}: {}", request.hash, e),
+                        }
+                    }
                     Err(e) => error!(
                         "Failed to confirm bitcoin transaction for request {}: {}",
                         request.hash, e
