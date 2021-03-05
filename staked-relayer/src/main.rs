@@ -6,12 +6,11 @@ use staked_relayer::Vaults;
 
 use bitcoin::{BitcoinCore, BitcoinCoreApi as _};
 use clap::Clap;
-use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use log::*;
 use relayer_core::{Config, Runner};
 use runtime::pallets::sla::UpdateRelayerSLAEvent;
 use runtime::{substrate_subxt::PairSigner, StakedRelayerPallet, UtilFuncs};
-use runtime::{PolkaBtcProvider, PolkaBtcRuntime, PLANCK_PER_DOT, TX_FEES};
+use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -67,12 +66,12 @@ struct Opts {
     bitcoin: bitcoin::cli::BitcoinOpts,
 
     /// Automatically register the relayer with the given stake (in Planck).
-    #[clap(long, conflicts_with("auto-register-with-faucet-url"))]
+    #[clap(long)]
     pub auto_register_with_stake: Option<u128>,
 
     /// Automatically register the staked relayer with collateral received from the faucet and a newly generated address.
     /// The parameter is the URL of the faucet
-    #[clap(long)]
+    #[clap(long, conflicts_with("auto-register-with-stake"))]
     auto_register_with_faucet_url: Option<String>,
 
     /// Number of confirmations a block needs to have before it is submitted.
@@ -119,6 +118,13 @@ async fn start() -> Result<(), Error> {
     if let Some(stake) = opts.auto_register_with_stake {
         if !is_registered(&provider).await? {
             provider.register_staked_relayer(stake).await?;
+            info!("Automatically registered staked relayer");
+        } else {
+            info!("Not registering staked relayer -- already registered");
+        }
+    } else if let Some(faucet_url) = opts.auto_register_with_faucet_url {
+        if !is_registered(&provider).await? {
+            fund_and_register(&provider, faucet_url).await?;
             info!("Automatically registered staked relayer");
         } else {
             info!("Not registering staked relayer -- already registered");
@@ -178,42 +184,6 @@ async fn start() -> Result<(), Error> {
     );
 
     let http_server = start_http(provider.clone(), http_addr, opts.rpc_cors_domain);
-
-    if let Some(faucet_url) = opts.auto_register_with_faucet_url {
-        let connection = jsonrpc_http::connect::<TypedClient>(&faucet_url).await?;
-
-        // Receive user allowance from faucet
-        match get_funding(
-            connection.clone(),
-            provider.clone().get_account_id().clone(),
-        )
-        .await
-        {
-            Ok(_) => {
-                let user_allowance_in_dot: u128 =
-                    get_faucet_allowance(connection.clone(), "user_allowance").await?;
-                let registration_stake = user_allowance_in_dot
-                    .checked_mul(PLANCK_PER_DOT)
-                    .ok_or(Error::MathError)?
-                    .checked_sub(TX_FEES)
-                    .ok_or(Error::MathError)?;
-                if !is_registered(&provider).await? {
-                    provider.register_staked_relayer(registration_stake).await?;
-                }
-            }
-            Err(e) => error!("Faucet error: {}", e.to_string()),
-        }
-
-        // Receive staked relayer allowance from faucet
-        if let Err(e) = get_funding(
-            connection.clone(),
-            provider.clone().get_account_id().clone(),
-        )
-        .await
-        {
-            error!("Faucet error: {}", e.to_string())
-        };
-    }
 
     let result = tokio::try_join!(
         tokio::spawn(async move {
