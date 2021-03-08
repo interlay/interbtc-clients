@@ -36,23 +36,23 @@ impl<B: BitcoinCoreApi, P: StakedRelayerPallet + UtilFuncs> StatusUpdateMonitor<
         // we can only automate NO_DATA checks, all other suggestible
         // status updates can only be voted upon manually
         if let Some(ErrorCode::NoDataBTCRelay) = event.add_error {
-            match self
+            let found = self
                 .btc_rpc
                 .is_block_known(convert_block_hash(event.block_hash)?)
-                .await
-            {
-                Ok(true) => {
-                    self.polka_rpc
-                        .vote_on_status_update(event.status_update_id, false)
-                        .await?;
-                }
-                Ok(false) => {
-                    self.polka_rpc
-                        .vote_on_status_update(event.status_update_id, true)
-                        .await?;
-                }
-                Err(err) => error!("Error validating block: {}", err.to_string()),
-            }
+                .await?;
+            // approve to add error if block not found
+            self.polka_rpc
+                .vote_on_status_update(event.status_update_id, !found)
+                .await?;
+        } else if let Some(ErrorCode::NoDataBTCRelay) = event.remove_error {
+            let found = self
+                .btc_rpc
+                .is_block_known(convert_block_hash(event.block_hash)?)
+                .await?;
+            // approve to remove error if block found
+            self.polka_rpc
+                .vote_on_status_update(event.status_update_id, found)
+                .await?;
         }
 
         Ok(())
@@ -511,6 +511,72 @@ mod tests {
                     status_code: StatusCode::Error,
                     add_error: Some(ErrorCode::NoDataBTCRelay),
                     remove_error: None,
+                    block_hash: Some(H256Le::zero()),
+                })
+                .await
+        );
+    }
+
+    #[tokio::test]
+    async fn test_on_status_update_suggested_remove_error_block_unknown() {
+        let mut bitcoin = MockBitcoin::default();
+        bitcoin
+            .expect_is_block_known()
+            .once()
+            .returning(|_| Ok(false));
+        let mut parachain = MockProvider::default();
+        parachain
+            .expect_vote_on_status_update()
+            .withf(|_, approve| approve == &false)
+            .once()
+            .returning(|_, _| Ok(()));
+        parachain
+            .expect_get_active_stake()
+            .once()
+            .returning(|| Ok(MINIMUM_STAKE));
+
+        let monitor = StatusUpdateMonitor::new(Arc::new(bitcoin), Arc::new(parachain));
+        assert_ok!(
+            monitor
+                .on_status_update_suggested(PolkaBtcStatusUpdateSuggestedEvent {
+                    status_update_id: 0,
+                    account_id: AccountKeyring::Bob.to_account_id(),
+                    status_code: StatusCode::Error,
+                    add_error: None,
+                    remove_error: Some(ErrorCode::NoDataBTCRelay),
+                    block_hash: Some(H256Le::zero()),
+                })
+                .await
+        );
+    }
+
+    #[tokio::test]
+    async fn test_on_status_update_suggested_remove_error_block_known() {
+        let mut bitcoin = MockBitcoin::default();
+        bitcoin
+            .expect_is_block_known()
+            .once()
+            .returning(|_| Ok(true));
+        let mut parachain = MockProvider::default();
+        parachain
+            .expect_vote_on_status_update()
+            .withf(|_, approve| approve == &true)
+            .once()
+            .returning(|_, _| Ok(()));
+        parachain
+            .expect_get_active_stake()
+            .once()
+            .returning(|| Ok(MINIMUM_STAKE));
+
+        let monitor = StatusUpdateMonitor::new(Arc::new(bitcoin), Arc::new(parachain));
+        assert_ok!(
+            monitor
+                .on_status_update_suggested(PolkaBtcStatusUpdateSuggestedEvent {
+                    status_update_id: 0,
+                    account_id: AccountKeyring::Bob.to_account_id(),
+                    status_code: StatusCode::Error,
+                    add_error: None,
+                    remove_error: Some(ErrorCode::NoDataBTCRelay),
                     block_hash: Some(H256Le::zero()),
                 })
                 .await
