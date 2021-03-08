@@ -16,6 +16,7 @@ pub mod service {
     pub use crate::oracle::report_offline_oracle;
     pub use crate::status::listen_for_blocks_stored;
     pub use crate::status::listen_for_status_updates;
+    pub use crate::status::process_status_update;
     pub use crate::vault::listen_for_vaults_registered;
     pub use crate::vault::listen_for_wallet_updates;
     pub use crate::vault::report_vault_thefts;

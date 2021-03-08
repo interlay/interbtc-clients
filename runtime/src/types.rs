@@ -45,6 +45,8 @@ pub type PolkaBtcReplaceRequest = ReplaceRequest<
     <PolkaBtcRuntime as Core>::DOT,
 >;
 
+pub type PolkaBtcStatusUpdateId = u64;
+
 pub type PolkaBtcStatusUpdate = StatusUpdate<
     AccountId,
     <PolkaBtcRuntime as System>::BlockNumber,

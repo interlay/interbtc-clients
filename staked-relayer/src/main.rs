@@ -8,8 +8,10 @@ use bitcoin::{BitcoinCore, BitcoinCoreApi as _};
 use clap::Clap;
 use log::*;
 use relayer_core::{Config, Runner};
-use runtime::pallets::sla::UpdateRelayerSLAEvent;
-use runtime::{substrate_subxt::PairSigner, StakedRelayerPallet, UtilFuncs};
+use runtime::{
+    pallets::sla::UpdateRelayerSLAEvent, substrate_subxt::PairSigner, StakedRelayerPallet,
+    UtilFuncs, VaultRegistryPallet,
+};
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
 use std::sync::Arc;
 use std::time::Duration;
@@ -159,9 +161,19 @@ async fn start() -> Result<(), Error> {
                 .collect::<Vec<_>>()
         })
         .collect();
-
     // store vaults in Arc<RwLock>
     let vaults = Arc::new(Vaults::from(vaults));
+
+    if let Ok(status_updates) = provider.get_all_status_updates().await {
+        for (status_update_id, status_update) in status_updates {
+            if let Err(err) =
+                process_status_update(&btc_rpc, &provider, status_update_id, status_update).await
+            {
+                error!("Failed to process active status update: {}", err);
+            }
+        }
+    }
+
     // scan from custom height or the current tip
     let bitcoin_theft_start_height = opts
         .bitcoin_theft_start_height

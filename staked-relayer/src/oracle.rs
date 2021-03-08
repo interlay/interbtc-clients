@@ -72,7 +72,7 @@ mod tests {
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{
         AccountId, BtcTxFeesPerByte, Error, ErrorCode, FixedPointNumber, FixedU128, H256Le,
-        StatusCode, MINIMUM_STAKE,
+        PolkaBtcStatusUpdateId, StatusCode, MINIMUM_STAKE,
     };
     use std::collections::BTreeSet;
     use std::iter::FromIterator;
@@ -121,7 +121,10 @@ mod tests {
                 status_update_id: u64,
                 approve: bool,
             ) -> Result<(), Error>;
-            async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, Error>;
+            async fn get_status_update(&self, id: PolkaBtcStatusUpdateId) -> Result<PolkaBtcStatusUpdate, Error>;
+            async fn get_all_status_updates(
+                &self,
+            ) -> Result<Vec<(PolkaBtcStatusUpdateId, PolkaBtcStatusUpdate)>, Error>;
             async fn report_oracle_offline(&self) -> Result<(), Error>;
             async fn report_vault_theft(
                 &self,

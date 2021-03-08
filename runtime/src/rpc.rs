@@ -10,9 +10,10 @@ use jsonrpsee::{
 use log::{info, trace};
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
 use sp_arithmetic::FixedU128;
-use sp_core::sr25519::Pair as KeyPair;
 use sp_core::H256;
+use sp_core::{sr25519::Pair as KeyPair, storage::StorageKey};
 use std::collections::BTreeSet;
+use std::convert::TryInto;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -150,17 +151,6 @@ impl PolkaBtcProvider {
         Ok(self.ext_client.block::<H256>(head).await?)
     }
 
-    /// Fetch all active vaults.
-    pub async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, Error> {
-        let mut vaults = Vec::new();
-        let head = self.get_latest_block_hash().await?;
-        let mut iter = self.ext_client.vaults_iter(head).await?;
-        while let Some((_, account)) = iter.next().await? {
-            vaults.push(account);
-        }
-        Ok(vaults)
-    }
-
     /// Subscribe to new parachain blocks.
     pub async fn on_block<F, R>(&self, on_block: F) -> Result<(), Error>
     where
@@ -281,6 +271,12 @@ impl PolkaBtcProvider {
     pub(crate) fn relax_storage_finalization_requirement(&mut self) {
         self.only_read_finalized_storage = false;
     }
+}
+
+fn extract_key(from: StorageKey) -> Vec<u8> {
+    let key_hash = from.0.as_slice();
+    // last bytes are the raw key
+    key_hash[key_hash.len() - 32..].to_vec()
 }
 
 #[async_trait]
@@ -736,7 +732,14 @@ pub trait StakedRelayerPallet {
         approve: bool,
     ) -> Result<(), Error>;
 
-    async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, Error>;
+    async fn get_status_update(
+        &self,
+        id: PolkaBtcStatusUpdateId,
+    ) -> Result<PolkaBtcStatusUpdate, Error>;
+
+    async fn get_all_status_updates(
+        &self,
+    ) -> Result<Vec<(PolkaBtcStatusUpdateId, PolkaBtcStatusUpdate)>, Error>;
 
     async fn report_oracle_offline(&self) -> Result<(), Error>;
 
@@ -877,6 +880,20 @@ impl StakedRelayerPallet for PolkaBtcProvider {
             .ext_client
             .active_status_updates(status_update_id, head)
             .await?)
+    }
+
+    /// Fetch all ongoing proposals.
+    async fn get_all_status_updates(
+        &self,
+    ) -> Result<Vec<(PolkaBtcStatusUpdateId, PolkaBtcStatusUpdate)>, Error> {
+        let mut status_updates = Vec::new();
+        let head = self.get_latest_block_hash().await?;
+        let mut iter = self.ext_client.active_status_updates_iter(head).await?;
+        while let Some((status_update_id, status_update)) = iter.next().await? {
+            let key = extract_key(status_update_id);
+            status_updates.push((u64::from_le_bytes(key.try_into().unwrap()), status_update));
+        }
+        Ok(status_updates)
     }
 
     /// Submit extrinsic to report that the oracle is offline.
@@ -1117,9 +1134,7 @@ impl IssuePallet for PolkaBtcProvider {
                 && !request.cancelled
                 && request.opentime + issue_period > current_height
             {
-                let key_hash = issue_id.0.as_slice();
-                // last bytes are the raw key
-                let key = &key_hash[key_hash.len() - 32..];
+                let key = &extract_key(issue_id);
                 issue_requests.push((H256::from_slice(key), request));
             }
         }

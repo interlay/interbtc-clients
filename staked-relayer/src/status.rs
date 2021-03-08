@@ -8,11 +8,43 @@ use log::{error, info, warn};
 use runtime::{
     pallets::{btc_relay::StoreMainChainHeaderEvent, staked_relayers::StatusUpdateSuggestedEvent},
     Error as RuntimeError, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
-    StakedRelayerPallet, StatusCode, UtilFuncs,
+    PolkaBtcStatusUpdate, PolkaBtcStatusUpdateId, StakedRelayerPallet, StatusCode, UtilFuncs,
 };
 use std::sync::Arc;
 
 type PolkaBtcStatusUpdateSuggestedEvent = StatusUpdateSuggestedEvent<PolkaBtcRuntime>;
+
+pub async fn process_status_update<B: BitcoinCoreApi, P: StakedRelayerPallet>(
+    btc_rpc: &Arc<B>,
+    polka_rpc: &Arc<P>,
+    status_update_id: PolkaBtcStatusUpdateId,
+    status_update: PolkaBtcStatusUpdate,
+) -> Result<(), Error> {
+    if !utils::is_active(&self.polka_rpc).await? {
+        // not registered (active), ignore
+        return Ok(());
+    }
+
+    // TODO: return if already voted (need to pub tally)
+    if let Some(ErrorCode::NoDataBTCRelay) = status_update.add_error {
+        let found = btc_rpc
+            .is_block_known(convert_block_hash(status_update.btc_block_hash)?)
+            .await?;
+        // approve to add error if block not found
+        polka_rpc
+            .vote_on_status_update(status_update_id, !found)
+            .await?;
+    } else if let Some(ErrorCode::NoDataBTCRelay) = status_update.remove_error {
+        let found = btc_rpc
+            .is_block_known(convert_block_hash(status_update.btc_block_hash)?)
+            .await?;
+        // approve to remove error if block found
+        polka_rpc
+            .vote_on_status_update(status_update_id, found)
+            .await?;
+    }
+    Ok(())
+}
 
 pub struct StatusUpdateMonitor<B: BitcoinCoreApi, P: StakedRelayerPallet> {
     btc_rpc: Arc<B>,
@@ -192,8 +224,10 @@ mod tests {
         Block, GetBlockResult, LockedTransaction, PartialAddress, Transaction, TransactionMetadata,
         Txid, PUBLIC_KEY_SIZE,
     };
-    use runtime::PolkaBtcStatusUpdate;
-    use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode, MINIMUM_STAKE};
+    use runtime::{
+        AccountId, Error as RuntimeError, ErrorCode, H256Le, PolkaBtcStatusUpdate,
+        PolkaBtcStatusUpdateId, StatusCode, MINIMUM_STAKE,
+    };
     use sp_core::H256;
     use sp_keyring::AccountKeyring;
     use std::time::Duration;
@@ -260,7 +294,10 @@ mod tests {
                 status_update_id: u64,
                 approve: bool,
             ) -> Result<(), RuntimeError>;
-            async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, RuntimeError>;
+            async fn get_status_update(&self, id: PolkaBtcStatusUpdateId) -> Result<PolkaBtcStatusUpdate, RuntimeError>;
+            async fn get_all_status_updates(
+                &self,
+            ) -> Result<Vec<(PolkaBtcStatusUpdateId, PolkaBtcStatusUpdate)>, RuntimeError>;
             async fn report_oracle_offline(&self) -> Result<(), RuntimeError>;
             async fn report_vault_theft(
                 &self,

@@ -240,9 +240,11 @@ mod tests {
         Block, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress,
         Transaction, TransactionMetadata, PUBLIC_KEY_SIZE,
     };
-    use runtime::PolkaBtcStatusUpdate;
-    use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
-    use runtime::{BitcoinBlockHeight, PolkaBtcRichBlockHeader, RawBlockHeader};
+    use runtime::{
+        AccountId, BitcoinBlockHeight, Error as RuntimeError, ErrorCode, H256Le,
+        PolkaBtcRichBlockHeader, PolkaBtcStatusUpdate, PolkaBtcStatusUpdateId, RawBlockHeader,
+        StatusCode,
+    };
     use sp_core::{H160, H256};
     use sp_keyring::AccountKeyring;
 
@@ -270,7 +272,10 @@ mod tests {
                 status_update_id: u64,
                 approve: bool,
             ) -> Result<(), RuntimeError>;
-            async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, RuntimeError>;
+            async fn get_status_update(&self, id: PolkaBtcStatusUpdateId) -> Result<PolkaBtcStatusUpdate, RuntimeError>;
+            async fn get_all_status_updates(
+                &self,
+            ) -> Result<Vec<(PolkaBtcStatusUpdateId, PolkaBtcStatusUpdate)>, RuntimeError>;
             async fn report_oracle_offline(&self) -> Result<(), RuntimeError>;
             async fn report_vault_theft(
                 &self,
