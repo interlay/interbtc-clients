@@ -3,10 +3,9 @@ pub use module_exchange_rate_oracle::BtcTxFeesPerByte;
 use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures::{stream::StreamExt, SinkExt};
-use jsonrpsee::{
-    common::{to_value as to_json_value, Params},
-    Client as RpcClient,
-};
+use jsonrpsee_types::error::Error as JsonRpseeError;
+use jsonrpsee_types::jsonrpc::{to_value as to_json_value, Params};
+use jsonrpsee_ws_client::{WsClient, WsConfig};
 use log::{info, trace};
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
 use sp_arithmetic::FixedU128;
@@ -19,8 +18,8 @@ use std::time::Duration;
 use substrate_subxt::Error as XtError;
 use substrate_subxt::EventTypeRegistry;
 use substrate_subxt::{
-    sudo::*, Call, Client, ClientBuilder, Event, EventSubscription, EventsDecoder, PairSigner,
-    Signer,
+    sudo::*, Call, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Event,
+    EventSubscription, EventsDecoder, PairSigner, RpcClient, Signer,
 };
 use tokio::sync::RwLock;
 use tokio::time::{delay_for, timeout};
@@ -42,27 +41,24 @@ use crate::Error;
 use crate::PolkaBtcRuntime;
 use crate::{balances_dot::*, BlockNumber};
 
-use crate::error::{IoErrorKind, WsNewDnsError, WsNewError};
-
 const RETRY_DURATION: Duration = Duration::from_millis(1000);
 
 #[derive(Clone)]
 pub struct PolkaBtcProvider {
     rpc_client: RpcClient,
-    ext_client: Client<PolkaBtcRuntime>,
+    ext_client: SubxtClient<PolkaBtcRuntime>,
     signer: Arc<RwLock<PairSigner<PolkaBtcRuntime, KeyPair>>>,
     account_id: AccountId,
-    only_read_finalized_storage: bool,
 }
 
 impl PolkaBtcProvider {
-    pub async fn new<P: Into<jsonrpsee::Client>>(
+    pub async fn new<P: Into<RpcClient>>(
         rpc_client: P,
         mut signer: PairSigner<PolkaBtcRuntime, KeyPair>,
     ) -> Result<Self, Error> {
         let account_id = signer.account_id().clone();
         let rpc_client = rpc_client.into();
-        let ext_client = ClientBuilder::<PolkaBtcRuntime>::new()
+        let ext_client = SubxtClientBuilder::<PolkaBtcRuntime>::new()
             .set_client(rpc_client.clone())
             .build()
             .await?;
@@ -83,7 +79,6 @@ impl PolkaBtcProvider {
             ext_client,
             signer: Arc::new(RwLock::new(signer)),
             account_id,
-            only_read_finalized_storage: true,
         })
     }
 
@@ -91,13 +86,20 @@ impl PolkaBtcProvider {
         url: &String,
         signer: PairSigner<PolkaBtcRuntime, KeyPair>,
     ) -> Result<Self, Error> {
-        let rpc_client = if url.starts_with("ws://") || url.starts_with("wss://") {
-            jsonrpsee::ws_client(url).await?
-        } else {
-            jsonrpsee::http_client(url)
+        let parsed_url = url::Url::parse(url)?;
+        let path = parsed_url.path();
+        let config = WsConfig {
+            url,
+            max_request_body_size: 10 * 1024 * 1024,
+            request_timeout: None,
+            connection_timeout: Duration::from_secs(10),
+            origin: None,
+            handshake_url: path.into(),
+            max_concurrent_requests_capacity: 256,
+            max_notifs_per_subscription_capacity: 128,
         };
-
-        Self::new(rpc_client, signer).await
+        let client = WsClient::new(config).await?;
+        Self::new(client, signer).await
     }
 
     pub async fn from_url_with_retry(
@@ -109,10 +111,8 @@ impl PolkaBtcProvider {
         timeout(timeout_duration, async move {
             loop {
                 match Self::from_url(&url, signer.clone()).await {
-                    Err(Error::WsHandshake(WsNewDnsError::Connect(WsNewError::Io(err))))
-                        if err.kind() == IoErrorKind::ConnectionRefused =>
-                    {
-                        trace!("could not connect to parachain");
+                    Err(Error::JsonRpseeError(JsonRpseeError::TransportError(err))) => {
+                        trace!("could not connect to parachain: {}", err);
                         delay_for(RETRY_DURATION).await;
                         continue;
                     }
@@ -138,11 +138,7 @@ impl PolkaBtcProvider {
     }
 
     pub async fn get_latest_block_hash(&self) -> Result<Option<H256>, Error> {
-        if self.only_read_finalized_storage {
-            Ok(Some(self.ext_client.finalized_head().await?))
-        } else {
-            Ok(self.ext_client.block_hash(None).await?)
-        }
+        Ok(Some(self.ext_client.finalized_head().await?))
     }
 
     pub async fn get_latest_block(&self) -> Result<Option<PolkaBtcBlock>, Error> {
@@ -169,7 +165,7 @@ impl PolkaBtcProvider {
     {
         let mut sub = self.ext_client.subscribe_finalized_blocks().await?;
         loop {
-            on_block(sub.next().await).await?;
+            on_block(sub.next().await.ok_or(Error::ChannelClosed)?).await?;
         }
     }
 
@@ -180,13 +176,13 @@ impl PolkaBtcProvider {
     /// # Arguments
     /// * `on_error` - callback for decoding errors, is not allowed to take too long
     pub async fn on_event_error<E: Fn(XtError)>(&self, on_error: E) -> Result<(), Error> {
-        let sub = self.ext_client.subscribe_events().await?;
+        let sub = self.ext_client.subscribe_finalized_events().await?;
         let decoder = EventsDecoder::<PolkaBtcRuntime>::new(
             self.ext_client.metadata().clone(),
             EventTypeRegistry::new(),
         );
 
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, &decoder);
+        let mut sub = EventSubscription::<PolkaBtcRuntime, _>::new(sub, &decoder);
         loop {
             match sub.next().await {
                 Some(Err(err)) => on_error(err), // report error
@@ -214,13 +210,13 @@ impl PolkaBtcProvider {
         R: Future<Output = ()>,
         E: Fn(XtError),
     {
-        let sub = self.ext_client.subscribe_events().await?;
+        let sub = self.ext_client.subscribe_finalized_events().await?;
         let decoder = EventsDecoder::<PolkaBtcRuntime>::new(
             self.ext_client.metadata().clone(),
             EventTypeRegistry::new(),
         );
 
-        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, &decoder);
+        let mut sub = EventSubscription::<PolkaBtcRuntime, _>::new(sub, &decoder);
         sub.filter_event::<T>();
 
         let (tx, mut rx) = futures::channel::mpsc::channel::<T>(32);
@@ -274,12 +270,6 @@ impl PolkaBtcProvider {
             .sudo_and_watch(&self.get_unique_signer().await, &encoded)
             .await?;
         Ok(())
-    }
-
-    /// Read from latest block, even if it is not finalized yet
-    #[cfg(feature = "testing-utils")]
-    pub(crate) fn relax_storage_finalization_requirement(&mut self) {
-        self.only_read_finalized_storage = false;
     }
 }
 

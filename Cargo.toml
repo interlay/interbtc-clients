@@ -8,6 +8,3 @@ members = [
   "bitcoin",
   "faucet"
 ]
-
-[patch.crates-io]
-jsonrpsee = { git = "https://github.com/interlay/jsonrpsee", rev = "3e24bf06df258d94fbd7215b35536af2d5d68b0b" }

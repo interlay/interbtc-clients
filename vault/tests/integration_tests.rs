@@ -1,3 +1,5 @@
+#![cfg(feature = "integration")]
+
 use bitcoin::BitcoinCoreApi;
 use futures::{
     channel::mpsc,
@@ -19,7 +21,7 @@ use std::time::Duration;
 use vault;
 use vault::{IssueRequests, RequestEvent};
 
-const TIMEOUT: Duration = Duration::from_secs(45);
+const TIMEOUT: Duration = Duration::from_secs(60);
 
 #[tokio::test(threaded_scheduler)]
 async fn test_redeem_succeeds() {
@@ -551,7 +553,7 @@ async fn test_auction_replace_succeeds() {
             let new_vault_id = new_vault_provider.get_account_id();
 
             join3(
-                //  we need to go from 150% collateral to just below 120%. So increase dot-per-btc by just over 25%
+                // we need to go from 150% collateral to just below 120%. So increase dot-per-btc by just over 25%
                 relayer_provider
                     .set_exchange_rate_info(FixedU128::saturating_from_rational(126u128, 10000u128))
                     .map(Result::unwrap),
