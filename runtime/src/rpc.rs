@@ -95,8 +95,8 @@ impl PolkaBtcProvider {
             connection_timeout: Duration::from_secs(10),
             origin: None,
             handshake_url: path.into(),
-            max_concurrent_requests_capacity: 256,
-            max_notifs_per_subscription_capacity: 128,
+            max_concurrent_requests: 256,
+            max_notifs_per_subscription: 128,
         };
         let client = WsClient::new(config).await?;
         Self::new(client, signer).await
