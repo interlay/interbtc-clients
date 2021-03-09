@@ -37,7 +37,7 @@ use substrate_subxt::system::SystemEventTypeRegistry;
 use substrate_subxt::EventTypeRegistry;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, sudo, system, Runtime};
 pub use types::*;
-use vault_registry::VaultStatus;
+pub use vault_registry::VaultStatus;
 
 use parachain::primitives::{Id as ParaId, RelayChainBlockNumber};
 use xcm::v0::{Error as XcmError, NetworkId};

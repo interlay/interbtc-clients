@@ -25,6 +25,10 @@ pub enum Error {
     BlockNotFound,
     #[error("Could not get vault")]
     VaultNotFound,
+    #[error("Vault has been liquidated")]
+    VaultLiquidated,
+    #[error("Vault has stolen BTC")]
+    VaultCommittedTheft,
     #[error("Channel closed unexpectedly")]
     ChannelClosed,
 
