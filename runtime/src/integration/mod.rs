@@ -13,15 +13,13 @@ use bitcoin::BitcoinCoreApi;
 use bitcoin::BlockHash;
 use bitcoin::Txid;
 use futures::{future::Either, pin_mut, Future, FutureExt, SinkExt, StreamExt};
-use jsonrpsee::Client as JsonRpseeClient;
 use sp_keyring::AccountKeyring;
 use sp_runtime::FixedPointNumber;
 use std::sync::Arc;
 use std::time::Duration;
-use substrate_subxt::Event;
-use substrate_subxt::PairSigner;
+use substrate_subxt::{Event, PairSigner};
 use substrate_subxt_client::{
-    DatabaseConfig, KeystoreConfig, Role, SubxtClient, SubxtClientConfig,
+    DatabaseConfig, KeystoreConfig, Role, SubxtClient, SubxtClientConfig, WasmExecutionMethod,
 };
 use tempdir::TempDir;
 use tokio::time::timeout;
@@ -52,7 +50,7 @@ impl Translate for BlockHash {
 /// Start a new instance of the parachain. The second item in the returned tuple must remain in
 /// scope as long as the parachain is active, since dropping it will remove the temporary directory
 /// that the parachain uses
-pub async fn default_provider_client(key: AccountKeyring) -> (JsonRpseeClient, TempDir) {
+pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempDir) {
     let tmp = TempDir::new("btc-parachain-").expect("failed to create tempdir");
     let config = SubxtClientConfig {
         impl_name: "btc-parachain-full-client",
@@ -69,6 +67,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (JsonRpseeClient, T
         chain_spec: btc_parachain::chain_spec::development_config(),
         role: Role::Authority(key.clone()),
         telemetry: None,
+        wasm_method: WasmExecutionMethod::Compiled,
     };
 
     let client = SubxtClient::from_config(config, btc_parachain_service::new_full)
@@ -78,12 +77,11 @@ pub async fn default_provider_client(key: AccountKeyring) -> (JsonRpseeClient, T
 }
 
 /// Create a new provider with the given keyring
-pub async fn setup_provider(client: JsonRpseeClient, key: AccountKeyring) -> Arc<PolkaBtcProvider> {
+pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> Arc<PolkaBtcProvider> {
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key.pair());
-    let mut ret = PolkaBtcProvider::new(client, signer)
+    let ret = PolkaBtcProvider::new(client, signer)
         .await
         .expect("Error creating provider");
-    ret.relax_storage_finalization_requirement();
     Arc::new(ret)
 }
 
