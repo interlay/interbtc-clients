@@ -24,7 +24,7 @@ pub use refund::RefundRequest;
 pub use replace::ReplaceRequest;
 pub use security::{ErrorCode, StatusCode};
 pub use staked_relayers::StatusUpdate;
-pub use vault_registry::Vault;
+pub use vault_registry::{Vault, VaultStatus};
 
 use parity_scale_codec::{Codec, EncodeLike};
 use sp_arithmetic::traits::Saturating;

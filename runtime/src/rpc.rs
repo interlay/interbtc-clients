@@ -1468,13 +1468,22 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     ///
     /// # Errors
     /// * `VaultNotFound` - if the rpc returned a default value rather than the vault we want
+    /// * `VaultLiquidated` - if the vault is liquidated
+    /// * `VaultCommittedTheft` - if the vault is stole BTC
     async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, Error> {
         let head = self.get_latest_block_hash().await?;
-        let vault: PolkaBtcVault = self.ext_client.vaults(vault_id.clone(), head).await?;
-        if vault.id == vault_id {
-            Ok(vault)
-        } else {
-            Err(Error::VaultNotFound)
+        match self.ext_client.vaults(vault_id.clone(), head).await {
+            Ok(PolkaBtcVault {
+                status: VaultStatus::Liquidated,
+                ..
+            }) => Err(Error::VaultLiquidated),
+            Ok(PolkaBtcVault {
+                status: VaultStatus::CommittedTheft,
+                ..
+            }) => Err(Error::VaultCommittedTheft),
+            Ok(vault) if vault.id == vault_id => Ok(vault),
+            Ok(_) => Err(Error::VaultNotFound),
+            Err(err) => Err(err.into()),
         }
     }
 
