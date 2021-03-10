@@ -95,8 +95,8 @@ impl PolkaBtcProvider {
             connection_timeout: Duration::from_secs(10),
             origin: None,
             handshake_url: path.into(),
-            max_concurrent_requests_capacity: 256,
-            max_notifs_per_subscription_capacity: 128,
+            max_concurrent_requests: 256,
+            max_notifs_per_subscription: 128,
         };
         let client = WsClient::new(config).await?;
         Self::new(client, signer).await
@@ -182,7 +182,7 @@ impl PolkaBtcProvider {
             EventTypeRegistry::new(),
         );
 
-        let mut sub = EventSubscription::<PolkaBtcRuntime, _>::new(sub, &decoder);
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, &decoder);
         loop {
             match sub.next().await {
                 Some(Err(err)) => on_error(err), // report error
@@ -216,7 +216,7 @@ impl PolkaBtcProvider {
             EventTypeRegistry::new(),
         );
 
-        let mut sub = EventSubscription::<PolkaBtcRuntime, _>::new(sub, &decoder);
+        let mut sub = EventSubscription::<PolkaBtcRuntime>::new(sub, &decoder);
         sub.filter_event::<T>();
 
         let (tx, mut rx) = futures::channel::mpsc::channel::<T>(32);

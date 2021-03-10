@@ -3601,8 +3601,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-http-client"
-version = "0.2.0-alpha"
-source = "git+https://github.com/interlay/jsonrpsee?rev=b994da4#b994da48c591b1821d37f55060302d5c3ad4bb91"
+version = "0.2.0-alpha.2"
+source = "git+https://github.com/interlay/jsonrpsee?rev=0ee62c3#0ee62c32dc19724d11c1a7a1cd5fc1f158630671"
 dependencies = [
  "async-trait",
  "futures 0.3.13",
@@ -3631,8 +3631,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-types"
-version = "0.2.0-alpha"
-source = "git+https://github.com/interlay/jsonrpsee?rev=b994da4#b994da48c591b1821d37f55060302d5c3ad4bb91"
+version = "0.2.0-alpha.2"
+source = "git+https://github.com/interlay/jsonrpsee?rev=0ee62c3#0ee62c32dc19724d11c1a7a1cd5fc1f158630671"
 dependencies = [
  "async-trait",
  "futures 0.3.13",
@@ -3645,8 +3645,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-utils"
-version = "0.2.0-alpha"
-source = "git+https://github.com/interlay/jsonrpsee?rev=b994da4#b994da48c591b1821d37f55060302d5c3ad4bb91"
+version = "0.2.0-alpha.2"
+source = "git+https://github.com/interlay/jsonrpsee?rev=0ee62c3#0ee62c32dc19724d11c1a7a1cd5fc1f158630671"
 dependencies = [
  "futures 0.3.13",
  "globset",
@@ -3659,8 +3659,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-client"
-version = "0.2.0-alpha"
-source = "git+https://github.com/interlay/jsonrpsee?rev=b994da4#b994da48c591b1821d37f55060302d5c3ad4bb91"
+version = "0.2.0-alpha.2"
+source = "git+https://github.com/interlay/jsonrpsee?rev=0ee62c3#0ee62c32dc19724d11c1a7a1cd5fc1f158630671"
 dependencies = [
  "async-std",
  "async-tls 0.11.0",
@@ -9522,7 +9522,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.14.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=c300c6c#c300c6c4c542d2a2cb4d24f4d08fcf64bb72ea0b"
+source = "git+https://github.com/interlay/substrate-subxt?rev=b012f46#b012f46cafc67882127875828233130e43cb245d"
 dependencies = [
  "dyn-clone",
  "frame-metadata",
@@ -9555,7 +9555,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-client"
 version = "0.6.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=c300c6c#c300c6c4c542d2a2cb4d24f4d08fcf64bb72ea0b"
+source = "git+https://github.com/interlay/substrate-subxt?rev=b012f46#b012f46cafc67882127875828233130e43cb245d"
 dependencies = [
  "async-std",
  "futures 0.1.30",
@@ -9574,7 +9574,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.14.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=c300c6c#c300c6c4c542d2a2cb4d24f4d08fcf64bb72ea0b"
+source = "git+https://github.com/interlay/substrate-subxt?rev=b012f46#b012f46cafc67882127875828233130e43cb245d"
 dependencies = [
  "heck",
  "proc-macro-crate",
