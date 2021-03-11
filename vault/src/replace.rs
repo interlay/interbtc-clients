@@ -245,7 +245,7 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi>(
         .get_all_vaults()
         .await?
         .into_iter()
-        .filter(|vault| vault.id != vault_id && matches!(vault.status, VaultStatus::Active));
+        .filter(|vault| vault.id != vault_id);
     for vault in vaults {
         trace!("Checking collateral of {}", vault.id);
         if provider
@@ -275,7 +275,12 @@ async fn auction_replace<
     btc_rpc: &Arc<B>,
     vault: &PolkaBtcVault,
 ) -> Result<(), Error> {
-    let btc_amount = vault.issued_tokens;
+    let btc_amount = vault
+        .issued_tokens
+        .checked_sub(vault.to_be_redeemed_tokens)
+        .ok_or(Error::ArithmeticUnderflow)?
+        .checked_sub(vault.to_be_replaced_tokens)
+        .ok_or(Error::ArithmeticUnderflow)?;
     let collateral = provider
         .get_required_collateral_for_polkabtc(btc_amount)
         .await?;
