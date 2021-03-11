@@ -10,7 +10,7 @@ use log::*;
 use relayer_core::{Config, Runner};
 use runtime::pallets::sla::UpdateRelayerSLAEvent;
 use runtime::{substrate_subxt::PairSigner, StakedRelayerPallet, UtilFuncs};
-use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
+use runtime::{PolkaBtcProvider, PolkaBtcRuntime, VaultRegistryPallet};
 use std::sync::Arc;
 use std::time::Duration;
 

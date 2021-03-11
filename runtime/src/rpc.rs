@@ -146,17 +146,6 @@ impl PolkaBtcProvider {
         Ok(self.ext_client.block::<H256>(head).await?)
     }
 
-    /// Fetch all active vaults.
-    pub async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, Error> {
-        let mut vaults = Vec::new();
-        let head = self.get_latest_block_hash().await?;
-        let mut iter = self.ext_client.vaults_iter(head).await?;
-        while let Some((_, account)) = iter.next().await? {
-            vaults.push(account);
-        }
-        Ok(vaults)
-    }
-
     /// Subscribe to new parachain blocks.
     pub async fn on_block<F, R>(&self, on_block: F) -> Result<(), Error>
     where
@@ -1493,7 +1482,9 @@ impl VaultRegistryPallet for PolkaBtcProvider {
         let head = self.get_latest_block_hash().await?;
         let mut iter = self.ext_client.vaults_iter(head).await?;
         while let Some((_, account)) = iter.next().await? {
-            vaults.push(account);
+            if let VaultStatus::Active = account.status {
+                vaults.push(account);
+            }
         }
         Ok(vaults)
     }
