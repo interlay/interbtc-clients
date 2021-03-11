@@ -6,8 +6,10 @@ use log::{error, info};
 use runtime::substrate_subxt::PairSigner;
 use runtime::{
     ExchangeRateOraclePallet, FixedPointNumber, FixedU128, PolkaBtcProvider, PolkaBtcRuntime,
+    PolkaBtcSigner,
 };
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::delay_for;
 
@@ -69,7 +71,8 @@ async fn main() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
+    let signer: Arc<PolkaBtcSigner> =
+        Arc::new(PairSigner::<PolkaBtcRuntime, _>::new(key_pair).into());
 
     let timeout = Duration::from_millis(opts.timeout_ms);
     let exchange_rate = FixedU128::checked_from_rational(opts.exchange_rate, 100_000)

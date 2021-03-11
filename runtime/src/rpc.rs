@@ -24,7 +24,6 @@ use substrate_subxt::{
 use tokio::time::{delay_for, timeout};
 
 use crate::btc_relay::*;
-use crate::conn::Provider;
 use crate::exchange_rate_oracle::*;
 use crate::fee::*;
 use crate::issue::*;
@@ -39,6 +38,7 @@ use crate::types::*;
 use crate::vault_registry::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
+use crate::Provider;
 use crate::{balances_dot::*, BlockNumber};
 
 const RETRY_DURATION: Duration = Duration::from_millis(1000);

@@ -58,7 +58,7 @@ async fn main() -> Result<(), Error> {
     let provider = Arc::new(
         PolkaBtcProvider::from_url_with_retry(
             opts.polka_btc_url,
-            signer,
+            Arc::new(signer.into()),
             Duration::from_millis(opts.connection_timeout_ms),
         )
         .await?,

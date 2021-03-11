@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use log::{error, info};
 use runtime::{
-    conn::Service, pallets::sla::UpdateRelayerSLAEvent, Error as RuntimeError, PolkaBtcProvider,
-    PolkaBtcRuntime, UtilFuncs,
+    pallets::sla::UpdateRelayerSLAEvent, Error as RuntimeError, PolkaBtcProvider, PolkaBtcRuntime,
+    Service, UtilFuncs,
 };
 
 pub struct SlaUpdateService {

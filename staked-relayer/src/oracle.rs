@@ -3,8 +3,8 @@ use crate::Error;
 use async_trait::async_trait;
 use log::info;
 use runtime::{
-    conn::Service, Error as RuntimeError, ErrorCode, ExchangeRateOraclePallet, PolkaBtcProvider,
-    SecurityPallet, StakedRelayerPallet, TimestampPallet,
+    Error as RuntimeError, ErrorCode, ExchangeRateOraclePallet, PolkaBtcProvider, SecurityPallet,
+    Service, StakedRelayerPallet, TimestampPallet,
 };
 use std::time::Duration;
 

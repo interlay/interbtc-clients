@@ -9,7 +9,8 @@ use clap::Clap;
 use futures::executor::block_on;
 use log::*;
 use runtime::{
-    substrate_subxt::PairSigner, AccountId, BtcAddress, PolkaBtcSigner, StakedRelayerPallet,
+    substrate_subxt::PairSigner, AccountId, BtcAddress, ConnectionManager, PolkaBtcSigner,
+    StakedRelayerPallet,
 };
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime, VaultRegistryPallet};
 use std::time::Duration;
@@ -127,7 +128,7 @@ async fn start() -> Result<(), Error> {
         }
     }
 
-    let relayer_runner = runtime::conn::Manager::<_, _, RelayerService>::new(
+    let relayer_runner = ConnectionManager::<_, _, RelayerService>::new(
         opts.polka_btc_url.clone(),
         signer.clone(),
         RelayerServiceConfig {
@@ -162,7 +163,7 @@ async fn start() -> Result<(), Error> {
         .bitcoin_theft_start_height
         .unwrap_or(btc_rpc.get_block_count().await? as u32 + 1);
 
-    let oracle_listener = runtime::conn::Manager::<_, _, OracleService<_>>::new(
+    let oracle_listener = ConnectionManager::<_, _, OracleService<_>>::new(
         opts.polka_btc_url.clone(),
         signer.clone(),
         OracleServiceConfig {
@@ -170,7 +171,7 @@ async fn start() -> Result<(), Error> {
         },
     );
 
-    let vault_theft_listener = runtime::conn::Manager::<_, _, VaultTheftService<_, _>>::new(
+    let vault_theft_listener = ConnectionManager::<_, _, VaultTheftService<_, _>>::new(
         opts.polka_btc_url.clone(),
         signer.clone(),
         VaultTheftServiceConfig::<_> {
@@ -181,14 +182,14 @@ async fn start() -> Result<(), Error> {
         },
     );
 
-    let vault_wallet_update_listener = runtime::conn::Manager::<_, _, VaultUpdateService>::new(
+    let vault_wallet_update_listener = ConnectionManager::<_, _, VaultUpdateService>::new(
         opts.polka_btc_url.clone(),
         signer.clone(),
         VaultUpdateServiceConfig { vaults },
     );
 
     let sla_update_listener =
-        runtime::conn::Manager::<_, _, SlaUpdateService>::new(opts.polka_btc_url, signer, ());
+        ConnectionManager::<_, _, SlaUpdateService>::new(opts.polka_btc_url, signer, ());
 
     let http_server = start_http(provider.clone(), http_addr, opts.rpc_cors_domain);
 

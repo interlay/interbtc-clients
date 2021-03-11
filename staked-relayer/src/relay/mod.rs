@@ -12,7 +12,7 @@ use crate::core::{Config, Runner};
 use async_trait::async_trait;
 use backing::RPC;
 use log::error;
-use runtime::{conn::Service, Error as RuntimeError, PolkaBtcProvider};
+use runtime::{Error as RuntimeError, PolkaBtcProvider, Service};
 use std::sync::Arc;
 use std::time::Duration;
 

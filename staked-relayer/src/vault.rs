@@ -9,10 +9,9 @@ use futures::stream::iter;
 use futures::stream::StreamExt;
 use log::*;
 use runtime::{
-    conn::Service,
     pallets::vault_registry::{RegisterAddressEvent, RegisterVaultEvent},
     AccountId, BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, PolkaBtcProvider,
-    PolkaBtcRuntime, StakedRelayerPallet, VaultRegistryPallet,
+    PolkaBtcRuntime, Service, StakedRelayerPallet, VaultRegistryPallet,
 };
 use std::sync::Arc;
 use std::time::Duration;
