@@ -1,4 +1,4 @@
-use jsonrpsee_types::error::Error as JsonRpseeError;
+pub use jsonrpsee_types::error::Error as JsonRpseeError;
 use jsonrpsee_ws_client::transport::WsConnectError;
 use parity_scale_codec::Error as CodecError;
 use serde_json::Error as SerdeJsonError;

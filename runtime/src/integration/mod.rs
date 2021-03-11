@@ -79,7 +79,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
 /// Create a new provider with the given keyring
 pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> Arc<PolkaBtcProvider> {
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key.pair());
-    let ret = PolkaBtcProvider::new(client, signer)
+    let ret = PolkaBtcProvider::new(client, Arc::new(signer.into()))
         .await
         .expect("Error creating provider");
     Arc::new(ret)

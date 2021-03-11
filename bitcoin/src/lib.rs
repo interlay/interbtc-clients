@@ -153,14 +153,16 @@ impl LockedTransaction {
         }
     }
 }
+
+#[derive(Clone)]
 pub struct BitcoinCore {
-    rpc: Client,
+    rpc: Arc<Client>,
     transaction_creation_lock: Arc<Mutex<()>>,
     network: Network,
 }
 
 impl BitcoinCore {
-    pub fn new(rpc: Client, network: Network) -> Self {
+    pub fn new(rpc: Arc<Client>, network: Network) -> Self {
         Self {
             rpc,
             network,
@@ -169,7 +171,7 @@ impl BitcoinCore {
     }
 
     pub async fn new_with_retry(
-        rpc: Client,
+        rpc: Arc<Client>,
         network: Network,
         timeout_duration: Duration,
     ) -> Result<Self, Error> {

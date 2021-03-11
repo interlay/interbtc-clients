@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod conn;
 mod error;
 pub mod pallets;
 mod rpc;

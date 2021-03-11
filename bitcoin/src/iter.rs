@@ -5,7 +5,7 @@ use bitcoincore_rpc::{
 };
 use futures::prelude::*;
 use futures::stream::StreamExt;
-use log::trace;
+use log::{info, trace};
 use std::iter;
 use std::sync::Arc;
 use std::time::Duration;
@@ -111,8 +111,8 @@ pub async fn get_blocks<T: BitcoinCoreApi + Send + Sync + 'static>(
 ///
 /// * `rpc` - bitcoin rpc
 /// * `from_height` - height of the first block of the stream
-pub async fn stream_in_chain_transactions<T: BitcoinCoreApi>(
-    rpc: Arc<T>,
+pub async fn stream_in_chain_transactions<B: BitcoinCoreApi + Clone>(
+    rpc: B,
     from_height: u32,
     num_confirmations: u32,
 ) -> impl Stream<Item = Result<(BlockHash, Transaction), Error>> + Unpin {
@@ -120,6 +120,7 @@ pub async fn stream_in_chain_transactions<T: BitcoinCoreApi>(
         stream_blocks(rpc, from_height, num_confirmations)
             .await
             .flat_map(|result| {
+                info!("Streaming block: {:?}", result);
                 futures::stream::iter(result.map_or_else(
                     |err| vec![Err(err)],
                     |block| {
@@ -142,13 +143,13 @@ pub async fn stream_in_chain_transactions<T: BitcoinCoreApi>(
 ///
 /// * `rpc` - bitcoin rpc
 /// * `from_height` - height of the first block of the stream
-pub async fn stream_blocks<T: BitcoinCoreApi>(
-    rpc: Arc<T>,
+pub async fn stream_blocks<B: BitcoinCoreApi + Clone>(
+    rpc: B,
     from_height: u32,
     num_confirmations: u32,
 ) -> impl Stream<Item = Result<Block, Error>> + Unpin {
-    struct StreamState<T> {
-        rpc: Arc<T>,
+    struct StreamState<B> {
+        rpc: B,
         next_height: u32,
     }
 

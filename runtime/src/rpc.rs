@@ -19,12 +19,12 @@ use substrate_subxt::Error as XtError;
 use substrate_subxt::EventTypeRegistry;
 use substrate_subxt::{
     sudo::*, Call, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Event,
-    EventSubscription, EventsDecoder, PairSigner, RpcClient, Signer,
+    EventSubscription, EventsDecoder, PairSigner, RpcClient,
 };
-use tokio::sync::RwLock;
 use tokio::time::{delay_for, timeout};
 
 use crate::btc_relay::*;
+use crate::conn::Provider;
 use crate::exchange_rate_oracle::*;
 use crate::fee::*;
 use crate::issue::*;
@@ -47,16 +47,27 @@ const RETRY_DURATION: Duration = Duration::from_millis(1000);
 pub struct PolkaBtcProvider {
     rpc_client: RpcClient,
     ext_client: SubxtClient<PolkaBtcRuntime>,
-    signer: Arc<RwLock<PairSigner<PolkaBtcRuntime, KeyPair>>>,
+    signer: Arc<PolkaBtcSigner>,
     account_id: AccountId,
+}
+
+#[async_trait]
+impl Provider for PolkaBtcProvider {
+    async fn connect<T>(rpc_client: T, signer: Arc<PolkaBtcSigner>) -> Result<Self, Error>
+    where
+        Self: Sized,
+        T: Into<RpcClient> + Send,
+    {
+        Self::new(rpc_client, signer).await
+    }
 }
 
 impl PolkaBtcProvider {
     pub async fn new<P: Into<RpcClient>>(
         rpc_client: P,
-        mut signer: PairSigner<PolkaBtcRuntime, KeyPair>,
+        signer: Arc<PolkaBtcSigner>,
     ) -> Result<Self, Error> {
-        let account_id = signer.account_id().clone();
+        let account_id = signer.account_id().await;
         let rpc_client = rpc_client.into();
         let ext_client = SubxtClientBuilder::<PolkaBtcRuntime>::new()
             .set_client(rpc_client.clone())
@@ -72,20 +83,17 @@ impl PolkaBtcProvider {
             Option::<H256>::None,
         )
         .await?;
-        signer.set_nonce(account_info.nonce);
+        signer.set_nonce(account_info.nonce).await;
 
         Ok(Self {
             rpc_client,
             ext_client,
-            signer: Arc::new(RwLock::new(signer)),
+            signer,
             account_id,
         })
     }
 
-    pub async fn from_url(
-        url: &String,
-        signer: PairSigner<PolkaBtcRuntime, KeyPair>,
-    ) -> Result<Self, Error> {
+    pub async fn from_url(url: &String, signer: Arc<PolkaBtcSigner>) -> Result<Self, Error> {
         let parsed_url = url::Url::parse(url)?;
         let path = parsed_url.path();
         let config = WsConfig {
@@ -104,7 +112,7 @@ impl PolkaBtcProvider {
 
     pub async fn from_url_with_retry(
         url: String,
-        signer: PairSigner<PolkaBtcRuntime, KeyPair>,
+        signer: Arc<PolkaBtcSigner>,
         timeout_duration: Duration,
     ) -> Result<Self, Error> {
         info!("Connecting to the btc-parachain...");
@@ -130,7 +138,7 @@ impl PolkaBtcProvider {
     /// Gets a copy of the signer with a unique nonce
     async fn get_unique_signer(&self) -> PairSigner<PolkaBtcRuntime, KeyPair> {
         // TODO: refresh from account store
-        let mut signer = self.signer.write().await;
+        let mut signer = self.signer.0.write().await;
         // return the current value, increment afterwards
         let ret = signer.clone();
         signer.increment_nonce();
@@ -1346,7 +1354,7 @@ impl BtcRelayPallet for PolkaBtcProvider {
     }
 
     /// Initializes the relay with the provided block header and height,
-    /// should be called automatically by `relayer_core` subject to the
+    /// should be called automatically by the relayer subject to the
     /// result of `is_initialized`.
     ///
     /// # Arguments

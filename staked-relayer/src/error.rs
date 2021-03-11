@@ -1,3 +1,4 @@
+use crate::core::Error as CoreError;
 use crate::relay::Error as RelayError;
 use backoff::ExponentialBackoff;
 use bitcoin::BitcoinError as BitcoinCoreError;
@@ -5,7 +6,6 @@ use bitcoin::Error as BitcoinError;
 use jsonrpc_core_client::RpcError;
 use jsonrpc_http_server::jsonrpc_core::Error as JsonRpcError;
 use parity_scale_codec::Error as CodecError;
-use relayer_core::Error as CoreError;
 use runtime::substrate_subxt::Error as XtError;
 use runtime::Error as RuntimeError;
 use std::net::AddrParseError;

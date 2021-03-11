@@ -2042,7 +2042,7 @@ dependencies = [
  "serde_json",
  "sp-core",
  "sp-keyring",
- "substrate-subxt-client",
+ "substrate-subxt-client 0.6.0 (git+https://github.com/interlay/substrate-subxt?rev=b012f46)",
  "tempdir",
  "thiserror",
  "tokio 0.2.25",
@@ -3602,12 +3602,11 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-client"
 version = "0.2.0-alpha.2"
-source = "git+https://github.com/interlay/jsonrpsee?rev=0ee62c3#0ee62c32dc19724d11c1a7a1cd5fc1f158630671"
 dependencies = [
  "async-trait",
  "futures 0.3.13",
  "hyper 0.14.4",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.2.0-alpha.2",
  "jsonrpsee-utils",
  "log 0.4.14",
  "serde",
@@ -3644,14 +3643,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee-types"
+version = "0.2.0-alpha.2"
+dependencies = [
+ "async-trait",
+ "futures 0.3.13",
+ "log 0.4.14",
+ "serde",
+ "serde_json",
+ "smallvec 1.6.1",
+ "thiserror",
+]
+
+[[package]]
 name = "jsonrpsee-utils"
 version = "0.2.0-alpha.2"
-source = "git+https://github.com/interlay/jsonrpsee?rev=0ee62c3#0ee62c32dc19724d11c1a7a1cd5fc1f158630671"
 dependencies = [
  "futures 0.3.13",
  "globset",
  "hyper 0.14.4",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.2.0-alpha.2",
  "lazy_static",
  "log 0.4.14",
  "unicase 2.6.0",
@@ -3667,7 +3678,27 @@ dependencies = [
  "async-trait",
  "fnv",
  "futures 0.3.13",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.2.0-alpha.2 (git+https://github.com/interlay/jsonrpsee?rev=0ee62c3)",
+ "log 0.4.14",
+ "pin-project 1.0.5",
+ "serde",
+ "serde_json",
+ "soketto 0.4.2",
+ "thiserror",
+ "url 2.2.1",
+ "webpki",
+]
+
+[[package]]
+name = "jsonrpsee-ws-client"
+version = "0.2.0-alpha.2"
+dependencies = [
+ "async-std",
+ "async-tls 0.11.0",
+ "async-trait",
+ "fnv",
+ "futures 0.3.13",
+ "jsonrpsee-types 0.2.0-alpha.2",
  "log 0.4.14",
  "pin-project 1.0.5",
  "serde",
@@ -7098,8 +7129,8 @@ dependencies = [
  "frame-system",
  "futures 0.3.13",
  "issue",
- "jsonrpsee-types",
- "jsonrpsee-ws-client",
+ "jsonrpsee-types 0.2.0-alpha.2",
+ "jsonrpsee-ws-client 0.2.0-alpha.2",
  "log 0.4.14",
  "module-exchange-rate-oracle-rpc-runtime-api",
  "parity-scale-codec 2.0.0",
@@ -7117,7 +7148,7 @@ dependencies = [
  "sp-runtime",
  "staked-relayers",
  "substrate-subxt",
- "substrate-subxt-client",
+ "substrate-subxt-client 0.6.0",
  "substrate-subxt-proc-macro",
  "tempdir",
  "thiserror",
@@ -9327,7 +9358,6 @@ dependencies = [
  "mockall",
  "parity-scale-codec 2.0.0",
  "rand 0.7.3",
- "relayer-core",
  "runtime",
  "schnorrkel",
  "serde",
@@ -9522,7 +9552,6 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.14.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=b012f46#b012f46cafc67882127875828233130e43cb245d"
 dependencies = [
  "dyn-clone",
  "frame-metadata",
@@ -9531,8 +9560,8 @@ dependencies = [
  "futures 0.3.13",
  "hex 0.4.2",
  "jsonrpsee-http-client",
- "jsonrpsee-types",
- "jsonrpsee-ws-client",
+ "jsonrpsee-types 0.2.0-alpha.2",
+ "jsonrpsee-ws-client 0.2.0-alpha.2",
  "log 0.4.14",
  "num-traits",
  "pallet-indices",
@@ -9546,7 +9575,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sp-version",
- "substrate-subxt-client",
+ "substrate-subxt-client 0.6.0",
  "substrate-subxt-proc-macro",
  "thiserror",
  "url 2.2.1",
@@ -9560,8 +9589,26 @@ dependencies = [
  "async-std",
  "futures 0.1.30",
  "futures 0.3.13",
- "jsonrpsee-types",
- "jsonrpsee-ws-client",
+ "jsonrpsee-types 0.2.0-alpha.2 (git+https://github.com/interlay/jsonrpsee?rev=0ee62c3)",
+ "jsonrpsee-ws-client 0.2.0-alpha.2 (git+https://github.com/interlay/jsonrpsee?rev=0ee62c3)",
+ "log 0.4.14",
+ "sc-client-db",
+ "sc-network",
+ "sc-service",
+ "serde_json",
+ "sp-keyring",
+ "thiserror",
+]
+
+[[package]]
+name = "substrate-subxt-client"
+version = "0.6.0"
+dependencies = [
+ "async-std",
+ "futures 0.1.30",
+ "futures 0.3.13",
+ "jsonrpsee-types 0.2.0-alpha.2",
+ "jsonrpsee-ws-client 0.2.0-alpha.2",
  "log 0.4.14",
  "sc-client-db",
  "sc-network",
@@ -9574,7 +9621,6 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.14.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=b012f46#b012f46cafc67882127875828233130e43cb245d"
 dependencies = [
  "heck",
  "proc-macro-crate",

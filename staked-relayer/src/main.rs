@@ -6,13 +6,14 @@ use staked_relayer::Vaults;
 
 use bitcoin::{BitcoinCore, BitcoinCoreApi as _};
 use clap::Clap;
+use futures::executor::block_on;
 use log::*;
-use relayer_core::{Config, Runner};
-use runtime::pallets::sla::UpdateRelayerSLAEvent;
-use runtime::{substrate_subxt::PairSigner, StakedRelayerPallet, UtilFuncs};
+use runtime::{
+    substrate_subxt::PairSigner, AccountId, BtcAddress, PolkaBtcSigner, StakedRelayerPallet,
+};
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime, VaultRegistryPallet};
-use std::sync::Arc;
 use std::time::Duration;
+use std::{collections::HashMap, sync::Arc};
 
 /// The Staked Relayer client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
@@ -46,12 +47,8 @@ struct Opts {
     max_batch_size: u32,
 
     /// Timeout in milliseconds to repeat oracle liveness check.
-    #[clap(long, default_value = "5000")]
+    #[clap(long, default_value = "10000")]
     oracle_timeout_ms: u64,
-
-    /// Default deposit for all automated status proposals.
-    #[clap(long, default_value = "100")]
-    status_update_deposit: u128,
 
     /// Comma separated list of allowed origins.
     #[clap(long, default_value = "*")]
@@ -91,25 +88,24 @@ async fn start() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
     let http_addr = opts.http_addr.parse()?;
     let bitcoin_timeout_ms = opts.bitcoin_timeout_ms;
-    let oracle_timeout_ms = opts.oracle_timeout_ms;
 
     let dummy_network = bitcoin::Network::Regtest; // we don't make any transaction so this is not used
-    let btc_rpc = Arc::new(
-        BitcoinCore::new_with_retry(
-            opts.bitcoin.new_client(None)?,
-            dummy_network,
-            Duration::from_millis(opts.connection_timeout_ms),
-        )
-        .await?,
-    );
+    let btc_rpc = BitcoinCore::new_with_retry(
+        Arc::new(opts.bitcoin.new_client(None)?),
+        dummy_network,
+        Duration::from_millis(opts.connection_timeout_ms),
+    )
+    .await?;
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
+    let signer = Arc::new(PolkaBtcSigner::from(signer));
+
     // only open connection to parachain after bitcoind sync to prevent timeout
     let provider = Arc::new(
         PolkaBtcProvider::from_url_with_retry(
-            opts.polka_btc_url,
-            signer,
+            opts.polka_btc_url.clone(),
+            signer.clone(),
             Duration::from_millis(opts.connection_timeout_ms),
         )
         .await?,
@@ -131,21 +127,20 @@ async fn start() -> Result<(), Error> {
         }
     }
 
-    let relayer = Runner::new(
-        BitcoinClient::new(opts.bitcoin.new_client(None)?),
-        PolkaBtcClient::new(provider.clone()),
-        Config {
-            start_height: opts.bitcoin_relay_start_height,
+    let relayer_runner = runtime::conn::Manager::<_, _, RelayerService>::new(
+        opts.polka_btc_url.clone(),
+        signer.clone(),
+        RelayerServiceConfig {
+            bitcoin_core: Arc::new(opts.bitcoin.new_client(None)?),
+            bitcoin_relay_start_height: opts.bitcoin_relay_start_height,
             max_batch_size: opts.max_batch_size,
-            timeout: Some(Duration::from_millis(bitcoin_timeout_ms)),
             required_btc_confirmations: opts.required_btc_confirmations,
+            bitcoin_timeout: Duration::from_millis(bitcoin_timeout_ms),
+            parachain_timeout: Duration::from_secs(1),
         },
     );
-    let relayer_provider = provider.clone();
 
-    let oracle_monitor =
-        report_offline_oracle(provider.clone(), Duration::from_millis(oracle_timeout_ms));
-
+    // TODO: if disconnect, we need to refresh this
     let vaults = provider
         .get_all_vaults()
         .await?
@@ -158,7 +153,7 @@ async fn start() -> Result<(), Error> {
                 .map(|addr| (addr.clone(), vault.id.clone()))
                 .collect::<Vec<_>>()
         })
-        .collect();
+        .collect::<HashMap<BtcAddress, AccountId>>();
 
     // store vaults in Arc<RwLock>
     let vaults = Arc::new(Vaults::from(vaults));
@@ -166,75 +161,56 @@ async fn start() -> Result<(), Error> {
     let bitcoin_theft_start_height = opts
         .bitcoin_theft_start_height
         .unwrap_or(btc_rpc.get_block_count().await? as u32 + 1);
-    let vaults_monitor = report_vault_thefts(
-        bitcoin_theft_start_height,
-        btc_rpc.clone(),
-        vaults.clone(),
-        provider.clone(),
-        Duration::from_millis(bitcoin_timeout_ms),
+
+    let oracle_listener = runtime::conn::Manager::<_, _, OracleService<_>>::new(
+        opts.polka_btc_url.clone(),
+        signer.clone(),
+        OracleServiceConfig {
+            timeout: Duration::from_millis(opts.oracle_timeout_ms),
+        },
     );
 
-    let wallet_update_listener = listen_for_wallet_updates(provider.clone(), vaults.clone());
-    let vaults_listener = listen_for_vaults_registered(provider.clone(), vaults);
-    let status_update_listener = listen_for_status_updates(btc_rpc.clone(), provider.clone());
-    let relay_listener = listen_for_blocks_stored(
-        btc_rpc.clone(),
-        provider.clone(),
-        opts.status_update_deposit,
+    let vault_theft_listener = runtime::conn::Manager::<_, _, VaultTheftService<_, _>>::new(
+        opts.polka_btc_url.clone(),
+        signer.clone(),
+        VaultTheftServiceConfig::<_> {
+            btc_height: bitcoin_theft_start_height,
+            timeout: Duration::from_millis(opts.bitcoin_timeout_ms),
+            bitcoin_core: btc_rpc.clone(),
+            vaults: vaults.clone(),
+        },
     );
+
+    let vault_wallet_update_listener = runtime::conn::Manager::<_, _, VaultUpdateService>::new(
+        opts.polka_btc_url.clone(),
+        signer.clone(),
+        VaultUpdateServiceConfig { vaults },
+    );
+
+    let sla_update_listener =
+        runtime::conn::Manager::<_, _, SlaUpdateService>::new(opts.polka_btc_url, signer, ());
 
     let http_server = start_http(provider.clone(), http_addr, opts.rpc_cors_domain);
 
     let result = tokio::try_join!(
-        tokio::spawn(async move {
-            let relayer_id = provider.get_account_id();
-            provider
-                .on_event::<UpdateRelayerSLAEvent<PolkaBtcRuntime>, _, _, _>(
-                    |event| async move {
-                        if &event.relayer_id == relayer_id {
-                            info!("Received event: new total SLA score = {:?}", event.new_sla);
-                        }
-                    },
-                    |err| error!("Error (UpdateRelayerSLAEvent): {}", err.to_string()),
-                )
-                .await
-                .unwrap();
-        }),
         // runs json-rpc server for incoming requests
         tokio::spawn(async move { http_server.await }),
+        // listen for and report sla updates
+        tokio::spawn(async move { sla_update_listener.start().await.unwrap() }),
         // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
-        tokio::spawn(async move { vaults_listener.await.unwrap() }),
+        tokio::spawn(async move { vault_wallet_update_listener.start().await.unwrap() }),
         // runs vault theft checks
         tokio::spawn(async move {
-            vaults_monitor.await.unwrap();
-        }),
-        // keep vault wallets up-to-date
-        tokio::spawn(async move {
-            wallet_update_listener.await.unwrap();
+            vault_theft_listener.start().await.unwrap();
         }),
         // runs oracle liveness check
-        tokio::spawn(async move { oracle_monitor.await }),
-        // runs `NO_DATA` checks and submits status updates
-        tokio::spawn(async move {
-            relay_listener.await.unwrap();
-        }),
-        // runs subscription service for status updates
-        tokio::spawn(async move {
-            status_update_listener.await.unwrap();
-        }),
+        tokio::spawn(async move { oracle_listener.start().await }),
         // runs blocking relayer
-        tokio::task::spawn_blocking(move || run_relayer(
-            relayer,
-            relayer_provider,
-            Duration::from_secs(1)
-        ))
+        tokio::task::spawn_blocking(move || block_on(relayer_runner.start()).unwrap())
     );
     match result {
         Ok(_) => Ok(()),
-        Err(err) => {
-            error!("{:?}", err);
-            Err(Error::InternalError)
-        }
+        Err(_) => Err(Error::InternalError),
     }
 }
 

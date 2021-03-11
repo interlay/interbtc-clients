@@ -1,42 +1,52 @@
-use super::Error;
 use crate::utils;
+use crate::Error;
+use async_trait::async_trait;
 use log::info;
 use runtime::{
-    ErrorCode, ExchangeRateOraclePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
+    conn::Service, Error as RuntimeError, ErrorCode, ExchangeRateOraclePallet, PolkaBtcProvider,
+    SecurityPallet, StakedRelayerPallet, TimestampPallet,
 };
-use std::sync::Arc;
 use std::time::Duration;
 
-pub async fn report_offline_oracle<
-    P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet,
->(
-    rpc: Arc<P>,
-    checking_interval: Duration,
-) {
-    let monitor = OracleMonitor::new(rpc);
-    utils::check_every(checking_interval, || async {
-        monitor.report_offline().await
-    })
-    .await
+#[derive(Clone)]
+pub struct OracleServiceConfig {
+    pub timeout: Duration,
 }
 
-pub struct OracleMonitor<
-    P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet,
-> {
-    rpc: Arc<P>,
+pub struct OracleService<P> {
+    btc_parachain: P,
+    timeout: Duration,
 }
 
-impl<P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet>
-    OracleMonitor<P>
+#[async_trait]
+impl Service<OracleServiceConfig, PolkaBtcProvider> for OracleService<PolkaBtcProvider> {
+    async fn connect(
+        btc_parachain: PolkaBtcProvider,
+        config: OracleServiceConfig,
+    ) -> Result<(), RuntimeError> {
+        OracleService::<PolkaBtcProvider>::new(btc_parachain, config)
+            .run_service()
+            .await
+            .map_err(|_| RuntimeError::ChannelClosed)
+    }
+}
+
+impl<P> OracleService<P>
+where
+    P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet,
+    P: Clone,
 {
-    pub fn new(rpc: Arc<P>) -> Self {
-        Self { rpc }
+    pub fn new(btc_parachain: P, config: OracleServiceConfig) -> Self {
+        Self {
+            btc_parachain,
+            timeout: config.timeout,
+        }
     }
 
     /// Verify that the oracle is offline
-    pub async fn is_offline(&self) -> Result<bool, Error> {
-        let get_info = self.rpc.get_exchange_rate_info();
-        let get_time = self.rpc.get_time_now();
+    async fn is_offline(&self) -> Result<bool, Error> {
+        let get_info = self.btc_parachain.get_exchange_rate_info();
+        let get_time = self.btc_parachain.get_time_now();
         let result = tokio::try_join!(get_info, get_time);
         match result {
             Ok(((_rate, last, delay), now)) => Ok(last + delay < now),
@@ -44,24 +54,28 @@ impl<P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + Secur
         }
     }
 
-    pub async fn report_offline(&self) -> Result<(), Error> {
-        if !utils::is_active(&self.rpc).await? {
+    async fn maybe_report_offline(&self) -> Result<(), Error> {
+        if !utils::is_active(&self.btc_parachain).await? {
             // not registered (active), ignore check
             return Ok(());
         }
 
         if self.is_offline().await? {
-            if let Ok(error_codes) = self.rpc.get_error_codes().await {
+            if let Ok(error_codes) = self.btc_parachain.get_error_codes().await {
                 if error_codes.contains(&ErrorCode::OracleOffline) {
                     info!("Oracle already reported");
                     return Ok(());
                 }
             }
             info!("Oracle is offline");
-            self.rpc.report_oracle_offline().await?;
+            self.btc_parachain.report_oracle_offline().await?;
         };
 
         Ok(())
+    }
+
+    pub async fn run_service(&self) -> Result<(), Error> {
+        utils::check_every(self.timeout, || async { self.maybe_report_offline().await }).await
     }
 }
 
@@ -146,6 +160,12 @@ mod tests {
         }
     }
 
+    impl Clone for MockProvider {
+        fn clone(&self) -> Self {
+            Self::default()
+        }
+    }
+
     #[tokio::test]
     async fn test_is_oracle_offline_true() {
         let mut parachain = MockProvider::default();
@@ -155,10 +175,15 @@ mod tests {
         parachain.expect_get_time_now().returning(|| Ok(1));
 
         assert_eq!(
-            OracleMonitor::new(Arc::new(parachain))
-                .is_offline()
-                .await
-                .unwrap(),
+            OracleService::new(
+                parachain,
+                OracleServiceConfig {
+                    timeout: Duration::default()
+                }
+            )
+            .is_offline()
+            .await
+            .unwrap(),
             true
         );
     }
@@ -172,10 +197,15 @@ mod tests {
         parachain.expect_get_time_now().returning(|| Ok(2));
 
         assert_eq!(
-            OracleMonitor::new(Arc::new(parachain))
-                .is_offline()
-                .await
-                .unwrap(),
+            OracleService::new(
+                parachain,
+                OracleServiceConfig {
+                    timeout: Duration::default()
+                }
+            )
+            .is_offline()
+            .await
+            .unwrap(),
             false
         );
     }
@@ -204,10 +234,15 @@ mod tests {
             .once()
             .returning(|| Ok(()));
 
-        OracleMonitor::new(Arc::new(parachain))
-            .report_offline()
-            .await
-            .unwrap();
+        OracleService::new(
+            parachain,
+            OracleServiceConfig {
+                timeout: Duration::default(),
+            },
+        )
+        .maybe_report_offline()
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -234,9 +269,14 @@ mod tests {
             .never()
             .returning(|| Ok(()));
 
-        OracleMonitor::new(Arc::new(parachain))
-            .report_offline()
-            .await
-            .unwrap();
+        OracleService::new(
+            parachain,
+            OracleServiceConfig {
+                timeout: Duration::default(),
+            },
+        )
+        .maybe_report_offline()
+        .await
+        .unwrap();
     }
 }

@@ -1,5 +1,7 @@
+use sp_core::sr25519::Pair as KeyPair;
 use sp_runtime::generic::{Block, SignedBlock};
-use substrate_subxt::system::System;
+use substrate_subxt::{system::System, PairSigner, Signer};
+use tokio::sync::RwLock;
 
 use crate::pallets::{
     Core, IssueRequest, RedeemRequest, RefundRequest, ReplaceRequest, RequestIssueEvent,
@@ -8,6 +10,8 @@ use crate::pallets::{
 use crate::PolkaBtcRuntime;
 
 pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
+
+pub type Index = <PolkaBtcRuntime as System>::Index;
 
 pub type PolkaBtcHeader = <PolkaBtcRuntime as System>::Header;
 
@@ -52,3 +56,21 @@ pub type PolkaBtcStatusUpdate = StatusUpdate<
 >;
 
 pub type PolkaBtcRichBlockHeader = RichBlockHeader<AccountId>;
+
+pub struct PolkaBtcSigner(pub(crate) RwLock<PairSigner<PolkaBtcRuntime, KeyPair>>);
+
+impl PolkaBtcSigner {
+    pub async fn account_id(&self) -> AccountId {
+        self.0.read().await.account_id().clone()
+    }
+
+    pub(crate) async fn set_nonce(&self, nonce: Index) {
+        self.0.write().await.set_nonce(nonce);
+    }
+}
+
+impl From<PairSigner<PolkaBtcRuntime, KeyPair>> for PolkaBtcSigner {
+    fn from(signer: PairSigner<PolkaBtcRuntime, KeyPair>) -> Self {
+        Self(RwLock::new(signer))
+    }
+}
