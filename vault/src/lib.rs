@@ -170,10 +170,10 @@ pub(crate) async fn lock_additional_collateral(
     Ok(result?)
 }
 
-pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
+pub async fn start<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     opts: Opts,
     arc_provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+    btc_rpc: B,
 ) -> Result<(), Error> {
     let vault_id = arc_provider.clone().get_account_id().clone();
 

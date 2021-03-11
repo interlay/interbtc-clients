@@ -86,7 +86,7 @@ impl IssueRequests {
 // from which to start watching the bitcoin chain
 async fn initialize_issue_set<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: &Arc<PolkaBtcProvider>,
-    btc_rpc: &Arc<B>,
+    btc_rpc: &B,
     issue_set: &Arc<IssueRequests>,
 ) -> Result<u32, Error> {
     let mut issue_set = issue_set.0.lock().await;
@@ -107,9 +107,9 @@ async fn initialize_issue_set<B: BitcoinCoreApi + Send + Sync + 'static>(
 
 /// execute issue requests on best-effort (i.e. don't retry on error),
 /// returns `NoIncomingBlocks` if stream ends, otherwise runs forever
-pub async fn process_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
+pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     provider: &Arc<PolkaBtcProvider>,
-    btc_rpc: &Arc<B>,
+    btc_rpc: &B,
     issue_set: &Arc<IssueRequests>,
     num_confirmations: u32,
 ) -> Result<(), Error> {
@@ -138,15 +138,15 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
 }
 
 pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Send + Sync + 'static>(
-    provider: &Arc<PolkaBtcProvider>,
-    btc_rpc: &Arc<B>,
+    btc_parachain: &Arc<PolkaBtcProvider>,
+    bitcoin_core: &B,
 ) -> Result<(), Error> {
-    for (issue_id, request) in provider
-        .get_vault_issue_requests(provider.get_account_id().clone())
+    for (issue_id, request) in btc_parachain
+        .get_vault_issue_requests(btc_parachain.get_account_id().clone())
         .await?
         .into_iter()
     {
-        if let Err(e) = add_new_deposit_key(btc_rpc, issue_id, request.btc_public_key).await {
+        if let Err(e) = add_new_deposit_key(bitcoin_core, issue_id, request.btc_public_key).await {
             error!("Failed to add deposit key #{}: {}", issue_id, e.to_string());
         }
     }
@@ -156,7 +156,7 @@ pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Send + Sync + 
 /// execute issue requests with a matching Bitcoin payment
 async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: &Arc<PolkaBtcProvider>,
-    btc_rpc: &Arc<B>,
+    btc_rpc: &B,
     issue_set: &Arc<IssueRequests>,
     num_confirmations: u32,
     block_hash: BlockHash,
@@ -232,7 +232,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
 
 /// Import the deposit key using the on-chain key derivation scheme
 async fn add_new_deposit_key<B: BitcoinCoreApi + Send + Sync + 'static>(
-    btc_rpc: &Arc<B>,
+    btc_rpc: &B,
     secure_id: H256,
     public_key: BtcPublicKey,
 ) -> Result<(), Error> {
@@ -257,7 +257,7 @@ async fn add_new_deposit_key<B: BitcoinCoreApi + Send + Sync + 'static>(
 /// * `issue_set` - all issue ids observed since vault started
 pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+    btc_rpc: B,
     event_channel: Sender<RequestEvent>,
     issue_set: Arc<IssueRequests>,
 ) -> Result<(), runtime::Error> {

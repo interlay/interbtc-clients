@@ -13,9 +13,9 @@ use std::sync::Arc;
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
-pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
+pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+    btc_rpc: B,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     provider

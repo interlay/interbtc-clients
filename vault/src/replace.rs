@@ -25,9 +25,9 @@ use tokio::time::delay_for;
 /// * `provider` - the parachain RPC handle
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `num_confirmations` - the number of bitcoin confirmation to await
-pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Send + Sync + 'static>(
+pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+    btc_rpc: B,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     let provider = &provider;
@@ -78,9 +78,9 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Send + Sync + 'static
 /// * `provider` - the parachain RPC handle
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `num_confirmations` - the number of bitcoin confirmation to await
-pub async fn listen_for_auction_replace<B: BitcoinCoreApi + Send + Sync + 'static>(
+pub async fn listen_for_auction_replace<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+    btc_rpc: B,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     let provider = &provider;
@@ -130,9 +130,9 @@ pub async fn listen_for_auction_replace<B: BitcoinCoreApi + Send + Sync + 'stati
 /// * `provider` - the parachain RPC handle
 /// * `event_channel` - the channel over which to signal events
 /// * `accept_replace_requests` - if true, we attempt to accept replace requests
-pub async fn listen_for_replace_requests<B: BitcoinCoreApi>(
+pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone>(
     provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+    btc_rpc: B,
     event_channel: Sender<RequestEvent>,
     accept_replace_requests: bool,
 ) -> Result<(), runtime::Error> {
@@ -180,7 +180,7 @@ pub async fn handle_replace_request<
     P: DotBalancesPallet + ReplacePallet + VaultRegistryPallet,
 >(
     provider: Arc<P>,
-    btc_rpc: Arc<B>,
+    btc_rpc: B,
     event: &RequestReplaceEvent<PolkaBtcRuntime>,
 ) -> Result<(), Error> {
     let required_collateral = provider
@@ -213,7 +213,7 @@ pub async fn handle_replace_request<
 /// * `interval` - interval between checks
 pub async fn monitor_collateral_of_vaults<B: BitcoinCoreApi>(
     provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+    btc_rpc: B,
     mut event_channel: Sender<RequestEvent>,
     interval: Duration,
 ) -> Result<(), runtime::Error> {
@@ -230,6 +230,7 @@ pub async fn monitor_collateral_of_vaults<B: BitcoinCoreApi>(
         delay_for(interval).await
     }
 }
+
 /// Monitor the collateralization rate of all vaults and request auctions.
 ///
 /// # Arguments
@@ -237,7 +238,7 @@ pub async fn monitor_collateral_of_vaults<B: BitcoinCoreApi>(
 /// * `provider` - the parachain RPC handle
 pub async fn check_collateral_of_vaults<B: BitcoinCoreApi>(
     provider: &Arc<PolkaBtcProvider>,
-    btc_rpc: &Arc<B>,
+    btc_rpc: &B,
     event_channel: &mut Sender<RequestEvent>,
 ) -> Result<(), Error> {
     let vault_id = provider.get_account_id().clone();
@@ -253,7 +254,7 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi>(
             .await
             .unwrap_or(false)
         {
-            match auction_replace(&provider, &btc_rpc, &vault).await {
+            match auction_replace(&provider, btc_rpc, &vault).await {
                 Ok(_) => {
                     info!("Auction replace for vault {} submitted", vault.id);
                     // try to send the event, but ignore the returned result since
@@ -272,7 +273,7 @@ async fn auction_replace<
     P: DotBalancesPallet + ReplacePallet + VaultRegistryPallet,
 >(
     provider: &Arc<P>,
-    btc_rpc: &Arc<B>,
+    btc_rpc: &B,
     vault: &PolkaBtcVault,
 ) -> Result<(), Error> {
     let btc_amount = vault.issued_tokens;
@@ -380,7 +381,7 @@ mod tests {
             async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
             async fn get_mempool_transactions<'a>(
-                self: Arc<Self>,
+                self: Self,
             ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(
                 &self,

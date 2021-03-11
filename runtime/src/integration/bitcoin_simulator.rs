@@ -340,7 +340,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         })
     }
     async fn get_mempool_transactions<'a>(
-        self: Arc<Self>,
+        self: Self,
     ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>
     {
         let transactions = (*self.mempool.read().await).clone();

@@ -93,7 +93,7 @@ pub trait BitcoinCoreApi {
     async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
 
     async fn get_mempool_transactions<'a>(
-        self: Arc<Self>,
+        self: Self,
     ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + Send + 'a>, Error>;
 
     async fn wait_for_transaction_metadata(
@@ -440,7 +440,7 @@ impl BitcoinCoreApi for BitcoinCore {
     /// Get the transactions that are currently in the mempool. Since `impl trait` is not
     /// allowed within trait method, we have to use trait objects.
     async fn get_mempool_transactions<'a>(
-        self: Arc<Self>,
+        self: Self,
     ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + Send + 'a>, Error> {
         // get txids from the mempool
         let txids = self.rpc.get_raw_mempool()?;

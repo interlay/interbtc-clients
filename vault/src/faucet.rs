@@ -34,7 +34,7 @@ async fn get_funding(faucet_connection: TypedClient, vault_id: AccountId) -> Res
 
 pub async fn fund_and_register<B: BitcoinCoreApi>(
     provider: &Arc<PolkaBtcProvider>,
-    bitcoin_core: &Arc<B>,
+    bitcoin_core: &B,
     faucet_url: String,
     vault_id: AccountId,
 ) -> Result<(), Error> {

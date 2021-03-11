@@ -7,7 +7,6 @@ use futures::prelude::*;
 use futures::stream::StreamExt;
 use log::{info, trace};
 use std::iter;
-use std::sync::Arc;
 use std::time::Duration;
 
 const BLOCK_WAIT_TIMEOUT: u64 = 6;
@@ -20,8 +19,8 @@ const BLOCK_WAIT_TIMEOUT: u64 = 6;
 ///
 /// * `rpc` - bitcoin rpc
 /// * `stop_height` - height of the last block the iterator will return transactions from
-pub async fn get_transactions<T: BitcoinCoreApi + Send + Sync + 'static>(
-    rpc: Arc<T>,
+pub async fn get_transactions<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    rpc: B,
     stop_height: u32,
 ) -> Result<impl Stream<Item = Result<Transaction, Error>> + Unpin, Error> {
     let mempool_transactions = stream::iter(rpc.clone().get_mempool_transactions().await?);
@@ -35,8 +34,8 @@ pub async fn get_transactions<T: BitcoinCoreApi + Send + Sync + 'static>(
 ///
 /// * `rpc` - bitcoin rpc
 /// * `stop_height` - height of the last block the iterator will return transactions from
-pub async fn get_in_chain_transactions<T: BitcoinCoreApi + Send + Sync + 'static>(
-    rpc: Arc<T>,
+pub async fn get_in_chain_transactions<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    rpc: B,
     stop_height: u32,
 ) -> impl Stream<Item = Result<Transaction, Error>> + Send + Unpin {
     get_blocks(rpc, stop_height).await.flat_map(|block| {
@@ -50,10 +49,10 @@ pub async fn get_in_chain_transactions<T: BitcoinCoreApi + Send + Sync + 'static
     })
 }
 
-struct GetBlocksState<T> {
+struct GetBlocksState<B> {
     height: Option<usize>,
     prev_block: Option<Block>,
-    rpc: Arc<T>,
+    rpc: B,
     stop_height: u32,
 }
 
@@ -66,8 +65,8 @@ struct GetBlocksState<T> {
 ///
 /// * `rpc` - bitcoin rpc
 /// * `stop_height` - height of the last block the iterator will return
-pub async fn get_blocks<T: BitcoinCoreApi + Send + Sync + 'static>(
-    rpc: Arc<T>,
+pub async fn get_blocks<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    rpc: B,
     stop_height: u32,
 ) -> impl Stream<Item = Result<Block, Error>> + Unpin {
     let state = GetBlocksState {
@@ -188,7 +187,7 @@ pub async fn stream_blocks<B: BitcoinCoreApi + Clone>(
 
 /// small helper function for getting the block info of the best block. This simplifies
 /// error handling a little bit
-async fn get_best_block_info<T: BitcoinCoreApi>(rpc: Arc<T>) -> Result<GetBlockResult, Error> {
+async fn get_best_block_info<B: BitcoinCoreApi>(rpc: B) -> Result<GetBlockResult, Error> {
     let hash = rpc.get_best_block_hash().await?;
     rpc.get_block_info(&hash).await
 }
@@ -222,7 +221,7 @@ mod tests {
             async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
             async fn get_mempool_transactions<'a>(
-                self: Arc<Self>,
+                self: Self,
             ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + Send +'a>, Error>;
             async fn wait_for_transaction_metadata(
                 &self,

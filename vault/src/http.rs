@@ -148,7 +148,7 @@ struct RegisterVaultJsonRpcResponse {
 
 async fn _register_vault<B: BitcoinCoreApi>(
     provider: &Arc<PolkaBtcProvider>,
-    btc: &Arc<B>,
+    btc: &B,
     params: Params,
 ) -> Result<RegisterVaultJsonRpcResponse, Error> {
     let req = parse_params::<RegisterVaultJsonRpcRequest>(params)?;
@@ -209,9 +209,9 @@ async fn _withdraw_replace(provider: &Arc<PolkaBtcProvider>, params: Params) -> 
     Ok(result?)
 }
 
-pub async fn start_http<B: BitcoinCoreApi + Send + Sync + 'static>(
+pub async fn start_http<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     provider: Arc<PolkaBtcProvider>,
-    bitcoin_core: Arc<B>,
+    bitcoin_core: B,
     addr: SocketAddr,
     origin: String,
 ) {

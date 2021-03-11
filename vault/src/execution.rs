@@ -113,7 +113,7 @@ impl Request {
     >(
         &self,
         provider: Arc<P>,
-        btc_rpc: Arc<B>,
+        btc_rpc: B,
         num_confirmations: u32,
     ) -> Result<(), Error> {
         let tx_metadata = self
@@ -126,7 +126,7 @@ impl Request {
     async fn transfer_btc<B: BitcoinCoreApi, P: VaultRegistryPallet + UtilFuncs + Send + Sync>(
         &self,
         provider: Arc<P>,
-        btc_rpc: Arc<B>,
+        btc_rpc: B,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
         info!("Sending bitcoin to {}", self.btc_address);
@@ -209,9 +209,9 @@ impl Request {
 
 /// Queries the parachain for open requests/replaces and executes them. It checks the
 /// bitcoin blockchain to see if a payment has already been made.
-pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
+pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+    btc_rpc: B,
     num_confirmations: u32,
 ) -> Result<(), Error> {
     let vault_id = provider.get_account_id().clone();
@@ -352,9 +352,9 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
 }
 
 /// Execute open issue requests, retry if stream ends early.
-pub async fn execute_open_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
+pub async fn execute_open_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+    btc_rpc: B,
     issue_set: Arc<IssueRequests>,
     num_confirmations: u32,
 ) -> Result<(), Error> {
