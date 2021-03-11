@@ -2,7 +2,7 @@ use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use log::*;
 use runtime::substrate_subxt::PairSigner;
-use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
+use runtime::{PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcSigner};
 use std::sync::Arc;
 use std::time::Duration;
 use vault::{Error, Opts};
@@ -33,17 +33,17 @@ async fn start() -> Result<(), Error> {
         .map_err(|e| Error::WalletInitializationFailure(e))?;
 
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);
-    // only open connection to parachain after bitcoind sync to prevent timeout
-    let provider = Arc::new(
-        PolkaBtcProvider::from_url_with_retry(
-            opts.polka_btc_url,
-            Arc::new(signer.into()),
-            Duration::from_millis(opts.connection_timeout_ms),
-        )
-        .await?,
-    );
+    let signer = Arc::new(PolkaBtcSigner::from(signer));
 
-    vault::start(intact_opts, provider, btc_rpc).await
+    // only open connection to parachain after bitcoind sync to prevent timeout
+    let provider = PolkaBtcProvider::from_url_with_retry(
+        opts.polka_btc_url,
+        signer.clone(),
+        Duration::from_millis(opts.connection_timeout_ms),
+    )
+    .await?;
+
+    vault::start(provider, btc_rpc, signer, intact_opts).await
 }
 
 #[tokio::main]

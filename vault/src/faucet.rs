@@ -4,7 +4,6 @@ use jsonrpc_core::Value;
 use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use parity_scale_codec::{Decode, Encode};
 use runtime::{AccountId, PolkaBtcProvider, VaultRegistryPallet, PLANCK_PER_DOT, TX_FEES};
-use std::sync::Arc;
 
 #[derive(Encode, Decode, Debug, Clone, serde::Serialize)]
 struct FundAccountJsonRpcRequest {
@@ -33,7 +32,7 @@ async fn get_funding(faucet_connection: TypedClient, vault_id: AccountId) -> Res
 }
 
 pub async fn fund_and_register<B: BitcoinCoreApi>(
-    provider: &Arc<PolkaBtcProvider>,
+    btc_parachain: &PolkaBtcProvider,
     bitcoin_core: &B,
     faucet_url: String,
     vault_id: AccountId,
@@ -52,7 +51,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi>(
         .ok_or(Error::ArithmeticUnderflow)?;
 
     let public_key = bitcoin_core.get_new_public_key().await?;
-    provider
+    btc_parachain
         .register_vault(registration_collateral, public_key)
         .await?;
 
@@ -67,7 +66,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi>(
         .checked_sub(TX_FEES)
         .ok_or(Error::ArithmeticUnderflow)?;
 
-    lock_additional_collateral(&provider, operational_collateral).await?;
+    lock_additional_collateral(&btc_parachain, operational_collateral).await?;
 
     Ok(())
 }

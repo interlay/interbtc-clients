@@ -162,6 +162,8 @@ mod tests {
 
     impl Clone for MockProvider {
         fn clone(&self) -> Self {
+            // NOTE: if the mocked object is cloned it
+            // will lose its expectations
             Self::default()
         }
     }

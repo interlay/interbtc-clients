@@ -1,56 +1,38 @@
 #![recursion_limit = "256"]
 
-mod cancellation;
-mod collateral;
+mod cancellor;
+// mod collateral;
 mod constants;
 mod error;
 mod execution;
 mod faucet;
 mod http;
-mod issue;
-mod redeem;
-mod refund;
-mod replace;
+// mod issue;
+// mod redeem;
+// mod refund;
+// mod replace;
+mod types;
 
-use crate::collateral::lock_required_collateral;
-use crate::{constants::*, refund::*};
+mod services;
+
 use bitcoin::BitcoinCoreApi;
 use clap::Clap;
 use core::str::FromStr;
-use futures::channel::mpsc;
-use futures::SinkExt;
 use log::*;
 use runtime::{
-    pallets::sla::UpdateVaultSLAEvent, AccountId, BtcRelayPallet, Error as RuntimeError,
-    PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
+    AccountId, BtcRelayPallet, ConnectionManager, Error as RuntimeError, PolkaBtcProvider,
+    PolkaBtcSigner, UtilFuncs, VaultRegistryPallet,
 };
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::delay_for;
 
-pub use crate::error::Error;
+use crate::constants::*;
+use crate::services::*;
 
-pub mod service {
-    pub use crate::cancellation::CancellationScheduler;
-    pub use crate::cancellation::IssueCanceller;
-    pub use crate::cancellation::ReplaceCanceller;
-    pub use crate::collateral::maintain_collateralization_rate;
-    pub use crate::execution::execute_open_issue_requests;
-    pub use crate::execution::execute_open_requests;
-    pub use crate::issue::listen_for_issue_cancels;
-    pub use crate::issue::listen_for_issue_executes;
-    pub use crate::issue::listen_for_issue_requests;
-    pub use crate::redeem::listen_for_redeem_requests;
-    pub use crate::refund::listen_for_refund_requests;
-    pub use crate::replace::listen_for_accept_replace;
-    pub use crate::replace::listen_for_auction_replace;
-    pub use crate::replace::listen_for_execute_replace;
-    pub use crate::replace::listen_for_replace_requests;
-    pub use crate::replace::monitor_collateral_of_vaults;
-}
-pub use crate::cancellation::RequestEvent;
-pub use crate::issue::IssueRequests;
-use service::*;
+pub use crate::cancellor::RequestEvent;
+pub use crate::error::Error;
+pub use crate::types::IssueRequests;
 
 #[derive(Debug, Copy, Clone)]
 pub struct BitcoinNetwork(pub bitcoin::Network);
@@ -148,7 +130,7 @@ pub struct Opts {
 }
 
 pub(crate) async fn is_registered(
-    provider: &Arc<PolkaBtcProvider>,
+    provider: &PolkaBtcProvider,
     vault_id: AccountId,
 ) -> Result<bool, Error> {
     match provider.get_vault(vault_id).await {
@@ -159,10 +141,10 @@ pub(crate) async fn is_registered(
 }
 
 pub(crate) async fn lock_additional_collateral(
-    api: &Arc<PolkaBtcProvider>,
+    btc_parachain: &PolkaBtcProvider,
     amount: u128,
 ) -> Result<(), Error> {
-    let result = api.lock_additional_collateral(amount).await;
+    let result = btc_parachain.lock_additional_collateral(amount).await;
     info!(
         "Locking additional collateral; amount {}: {:?}",
         amount, result
@@ -171,16 +153,17 @@ pub(crate) async fn lock_additional_collateral(
 }
 
 pub async fn start<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    btc_parachain: PolkaBtcProvider,
+    bitcoin_core: B,
+    signer: Arc<PolkaBtcSigner>,
     opts: Opts,
-    arc_provider: Arc<PolkaBtcProvider>,
-    btc_rpc: B,
 ) -> Result<(), Error> {
-    let vault_id = arc_provider.clone().get_account_id().clone();
+    let vault_id = btc_parachain.clone().get_account_id().clone();
 
     let num_confirmations = match opts.btc_confirmations {
         Some(x) => x,
         None => {
-            arc_provider
+            btc_parachain
                 .clone()
                 .clone()
                 .get_bitcoin_confirmations()
@@ -190,246 +173,191 @@ pub async fn start<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     info!("Using {} bitcoin confirmations", num_confirmations);
 
     if let Some(collateral) = opts.auto_register_with_collateral {
-        if !is_registered(&arc_provider, vault_id.clone()).await? {
-            let public_key = btc_rpc.get_new_public_key().await?;
-            arc_provider.register_vault(collateral, public_key).await?;
+        if !is_registered(&btc_parachain, vault_id.clone()).await? {
+            let public_key = bitcoin_core.get_new_public_key().await?;
+            btc_parachain.register_vault(collateral, public_key).await?;
             info!("Automatically registered vault");
         } else {
             info!("Not registering vault -- already registered");
         }
     } else if let Some(faucet_url) = opts.auto_register_with_faucet_url {
-        if !is_registered(&arc_provider, vault_id.clone()).await? {
-            faucet::fund_and_register::<B>(&arc_provider, &btc_rpc, faucet_url, vault_id.clone())
-                .await?;
+        if !is_registered(&btc_parachain, vault_id.clone()).await? {
+            faucet::fund_and_register::<B>(
+                &btc_parachain,
+                &bitcoin_core,
+                faucet_url,
+                vault_id.clone(),
+            )
+            .await?;
             info!("Automatically registered vault");
         } else {
             info!("Not registering vault -- already registered");
         }
     }
 
-    if let Ok(vault) = arc_provider.clone().get_vault(vault_id.clone()).await {
-        if !btc_rpc
+    if let Ok(vault) = btc_parachain.clone().get_vault(vault_id.clone()).await {
+        if !bitcoin_core
             .wallet_has_public_key(vault.wallet.public_key)
             .await?
         {
             return Err(bitcoin::Error::MissingPublicKey.into());
         }
-    }
 
-    issue::add_keys_from_past_issue_request(&arc_provider, &btc_rpc).await?;
-
-    let open_request_executor =
-        execute_open_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
-    tokio::spawn(async move {
-        info!("Checking for open replace/redeem requests...");
-        match open_request_executor.await {
-            Ok(_) => info!("Done processing open replace/redeem requests"),
-            Err(e) => error!("Failed to process open replace/redeem requests: {}", e),
-        }
-    });
-
-    if !opts.no_startup_collateral_increase {
-        // check if the vault is registered
-        match lock_required_collateral(arc_provider.clone(), vault_id.clone(), opts.max_collateral)
+        if !opts.no_startup_collateral_increase {
+            // check if the vault is registered
+            match lock_required_collateral(
+                btc_parachain.clone(),
+                vault_id.clone(),
+                opts.max_collateral,
+            )
             .await
-        {
-            Err(Error::RuntimeError(runtime::Error::VaultNotFound)) => {} // not registered
-            Err(e) => error!("Failed to lock required additional collateral: {}", e),
-            _ => {} // collateral level now OK
-        };
+            {
+                Err(Error::RuntimeError(runtime::Error::VaultNotFound)) => {} // not registered
+                Err(e) => error!("Failed to lock required additional collateral: {}", e),
+                _ => {} // collateral level now OK
+            };
+        }
     }
-
-    let collateral_maintainer =
-        maintain_collateralization_rate(arc_provider.clone(), opts.max_collateral);
 
     // wait for a new block to arrive, to prevent processing an event that potentially
     // has been processed already prior to restarting
     info!("Waiting for new block...");
-    let startup_height = arc_provider.get_current_chain_height().await?;
-    while startup_height == arc_provider.get_current_chain_height().await? {
+    let startup_height = btc_parachain.get_current_chain_height().await?;
+    while startup_height == btc_parachain.get_current_chain_height().await? {
         delay_for(CHAIN_HEIGHT_POLLING_INTERVAL).await;
     }
-    info!("Starting to listen for events...");
-
-    let (issue_block_tx, issue_block_rx) = mpsc::channel::<PolkaBtcHeader>(16);
-    let (replace_block_tx, replace_block_rx) = mpsc::channel::<PolkaBtcHeader>(16);
-    let block_listener = arc_provider.clone();
-
-    // Issue handling
-    let issue_set = Arc::new(IssueRequests::new());
-    let (issue_event_tx, issue_event_rx) = mpsc::channel::<RequestEvent>(32);
-    let mut issue_cancellation_scheduler =
-        CancellationScheduler::new(arc_provider.clone(), vault_id.clone());
-    let issue_request_listener = listen_for_issue_requests(
-        arc_provider.clone(),
-        btc_rpc.clone(),
-        issue_event_tx.clone(),
-        issue_set.clone(),
-    );
-    let issue_execute_listener = listen_for_issue_executes(
-        arc_provider.clone(),
-        issue_event_tx.clone(),
-        issue_set.clone(),
-    );
-    let issue_cancel_listener = listen_for_issue_cancels(arc_provider.clone(), issue_set.clone());
-    let issue_executor = execute_open_issue_requests(
-        arc_provider.clone(),
-        btc_rpc.clone(),
-        issue_set.clone(),
-        num_confirmations,
-    );
-
-    // replace handling
-    let (replace_event_tx, replace_event_rx) = mpsc::channel::<RequestEvent>(16);
-    let mut replace_cancellation_scheduler =
-        CancellationScheduler::new(arc_provider.clone(), vault_id.clone());
-    let request_replace_listener = listen_for_replace_requests(
-        arc_provider.clone(),
-        btc_rpc.clone(),
-        replace_event_tx.clone(),
-        !opts.no_auto_replace,
-    );
-    let accept_replace_listener =
-        listen_for_accept_replace(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
-    let execute_replace_listener =
-        listen_for_execute_replace(arc_provider.clone(), replace_event_tx.clone());
-    let auction_replace_listener =
-        listen_for_auction_replace(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
-    let third_party_collateral_listener = monitor_collateral_of_vaults(
-        arc_provider.clone(),
-        btc_rpc.clone(),
-        replace_event_tx.clone(),
-        Duration::from_millis(opts.collateral_timeout_ms),
-    );
-
-    // redeem handling
-    let redeem_listener =
-        listen_for_redeem_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
-
-    // refund handling
-    let refund_listener =
-        listen_for_refund_requests(arc_provider.clone(), btc_rpc.clone(), num_confirmations);
 
     let http_server = if opts.no_api {
         None
     } else {
         Some(http::start_http(
-            arc_provider.clone(),
-            btc_rpc.clone(),
+            btc_parachain,
+            bitcoin_core.clone(),
             opts.http_addr.parse()?,
             opts.rpc_cors_domain,
         ))
     };
 
-    // misc copies of variables to move into spawn closures
-    let no_auto_auction = opts.no_auto_auction;
-    let no_issue_execution = opts.no_issue_execution;
-    let sla_event_provider = arc_provider.clone();
+    // Collateral handling
+    let collateral_listener = ConnectionManager::<_, _, CollateralService>::new(
+        opts.polka_btc_url.clone(),
+        signer.clone(),
+        CollateralServiceConfig {
+            maximum_collateral: opts.max_collateral,
+        },
+    );
+
+    // Issue handling
+    let issue_listener = ConnectionManager::<_, _, IssueService<_>>::new(
+        opts.polka_btc_url.clone(),
+        signer.clone(),
+        IssueServiceConfig {
+            bitcoin_core: bitcoin_core.clone(),
+        },
+    );
+
+    let issue_execution_listener = if opts.no_issue_execution {
+        None
+    } else {
+        Some(ConnectionManager::<_, _, IssueExecutionService<_>>::new(
+            opts.polka_btc_url.clone(),
+            signer.clone(),
+            IssueExecutionServiceConfig {
+                bitcoin_core: bitcoin_core.clone(),
+                num_confirmations,
+            },
+        ))
+    };
+
+    // Refund handling
+    let refund_listener = ConnectionManager::<_, _, RefundService<_>>::new(
+        opts.polka_btc_url.clone(),
+        signer.clone(),
+        RefundServiceConfig {
+            bitcoin_core: bitcoin_core.clone(),
+            num_confirmations,
+        },
+    );
+
+    // Redeem handling
+    let redeem_listener = ConnectionManager::<_, _, RedeemService<_>>::new(
+        opts.polka_btc_url.clone(),
+        signer.clone(),
+        RedeemServiceConfig {
+            bitcoin_core: bitcoin_core.clone(),
+            num_confirmations,
+        },
+    );
+
+    // Replace handling
+    let replace_listener = ConnectionManager::<_, _, ReplaceService<_>>::new(
+        opts.polka_btc_url.clone(),
+        signer.clone(),
+        ReplaceServiceConfig {
+            bitcoin_core: bitcoin_core.clone(),
+            num_confirmations,
+            accept_replace_requests: !opts.no_auto_replace,
+        },
+    );
+
+    let auction_listener = if opts.no_auto_auction {
+        None
+    } else {
+        Some(ConnectionManager::<_, _, AuctionService<_>>::new(
+            opts.polka_btc_url.clone(),
+            signer.clone(),
+            AuctionServiceConfig {
+                bitcoin_core: bitcoin_core.clone(),
+                timeout: Duration::from_millis(opts.collateral_timeout_ms),
+            },
+        ))
+    };
+
+    let system_listener = ConnectionManager::<_, _, SystemService<_>>::new(
+        opts.polka_btc_url.clone(),
+        signer.clone(),
+        SystemServiceConfig {
+            bitcoin_core: bitcoin_core.clone(),
+            num_confirmations,
+        },
+    );
+
+    let sla_update_listener =
+        ConnectionManager::<_, _, SlaUpdateService>::new(opts.polka_btc_url, signer, ());
 
     // starts all the tasks
+    info!("Starting services...");
     let result = tokio::try_join!(
         tokio::spawn(async move {
             if let Some(http_server) = http_server {
                 http_server.await;
             }
         }),
+        // listen and update the vault's collateral
+        tokio::spawn(async move { collateral_listener.start().await.unwrap() }),
+        // listen for and report sla updates
+        tokio::spawn(async move { sla_update_listener.start().await.unwrap() }),
+        // listen for all issue events
+        tokio::spawn(async move { issue_listener.start().await.unwrap() }),
+        // find and execute issue requests
         tokio::spawn(async move {
-            arc_provider
-                .on_event_error(|e| debug!("Received error event: {}", e))
-                .await
-                .unwrap();
-        }),
-        tokio::spawn(async move {
-            let vault_id = sla_event_provider.get_account_id();
-            sla_event_provider
-                .on_event::<UpdateVaultSLAEvent<PolkaBtcRuntime>, _, _, _>(
-                    |event| async move {
-                        if &event.vault_id == vault_id {
-                            info!("Received event: new total SLA score = {:?}", event.new_sla);
-                        }
-                    },
-                    |err| error!("Error (UpdateVaultSLAEvent): {}", err.to_string()),
-                )
-                .await
-                .unwrap();
-        }),
-        tokio::spawn(async move {
-            collateral_maintainer.await.unwrap();
-        }),
-        tokio::spawn(async move {
-            let issue_block_tx = &issue_block_tx;
-            let replace_block_tx = &replace_block_tx;
-
-            block_listener
-                .clone()
-                .on_block(move |header| async move {
-                    issue_block_tx
-                        .clone()
-                        .send(header.clone())
-                        .await
-                        .map_err(|_| RuntimeError::ChannelClosed)?;
-                    replace_block_tx
-                        .clone()
-                        .send(header.clone())
-                        .await
-                        .map_err(|_| RuntimeError::ChannelClosed)?;
-                    Ok(())
-                })
-                .await
-                .unwrap();
-        }),
-        tokio::spawn(async move {
-            issue_request_listener.await.unwrap();
-        }),
-        tokio::spawn(async move {
-            issue_execute_listener.await.unwrap();
-        }),
-        tokio::spawn(async move {
-            issue_cancellation_scheduler
-                .handle_cancellation::<IssueCanceller>(issue_block_rx, issue_event_rx)
-                .await
-                .unwrap();
-        }),
-        tokio::spawn(async move {
-            issue_cancel_listener.await.unwrap();
-        }),
-        tokio::spawn(async move {
-            if !no_issue_execution {
-                issue_executor.await.unwrap();
+            if let Some(issue_execution_listener) = issue_execution_listener {
+                issue_execution_listener.start().await.unwrap();
             }
         }),
-        // redeem handling
+        // listen for all refund events
+        tokio::spawn(async move { refund_listener.start().await.unwrap() }),
+        // listen for all redeem events
+        tokio::spawn(async move { redeem_listener.start().await.unwrap() }),
+        // listen for all replace events
+        tokio::spawn(async move { replace_listener.start().await.unwrap() }),
+        // monitor vaults for insufficient collateral and auction
         tokio::spawn(async move {
-            redeem_listener.await.unwrap();
-        }),
-        // refund handling
-        tokio::spawn(async move {
-            refund_listener.await.unwrap();
-        }),
-        // replace handling
-        tokio::spawn(async move {
-            request_replace_listener.await.unwrap();
-        }),
-        tokio::spawn(async move {
-            accept_replace_listener.await.unwrap();
-        }),
-        tokio::spawn(async move {
-            auction_replace_listener.await.unwrap();
-        }),
-        tokio::spawn(async move {
-            execute_replace_listener.await.unwrap();
-        }),
-        tokio::spawn(async move {
-            if !no_auto_auction {
-                third_party_collateral_listener.await.unwrap();
+            if let Some(auction_listener) = auction_listener {
+                auction_listener.start().await.unwrap();
             }
         }),
-        tokio::spawn(async move {
-            replace_cancellation_scheduler
-                .handle_cancellation::<ReplaceCanceller>(replace_block_rx, replace_event_rx)
-                .await
-                .unwrap();
-        }),
+        tokio::spawn(async move { system_listener.start().await.unwrap() }),
     );
     match result {
         Ok(_) => Ok(()),

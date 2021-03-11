@@ -10528,6 +10528,7 @@ dependencies = [
 name = "vault"
 version = "0.5.0"
 dependencies = [
+ "async-channel",
  "async-trait",
  "backoff",
  "bitcoin 0.2.0",

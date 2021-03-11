@@ -5,7 +5,7 @@ use bitcoincore_rpc::{
 };
 use futures::prelude::*;
 use futures::stream::StreamExt;
-use log::{info, trace};
+use log::{debug, trace};
 use std::iter;
 use std::time::Duration;
 
@@ -119,7 +119,7 @@ pub async fn stream_in_chain_transactions<B: BitcoinCoreApi + Clone>(
         stream_blocks(rpc, from_height, num_confirmations)
             .await
             .flat_map(|result| {
-                info!("Streaming block: {:?}", result);
+                debug!("Streaming block: {:?}", result);
                 futures::stream::iter(result.map_or_else(
                     |err| vec![Err(err)],
                     |block| {

@@ -1,12 +1,11 @@
 use super::Error;
+use async_channel as mpmc;
 use async_trait::async_trait;
-use futures::channel::mpsc::Receiver;
 use futures::*;
 use log::*;
 use runtime::{AccountId, IssuePallet, PolkaBtcHeader, ReplacePallet, UtilFuncs};
 use sp_core::H256;
 use std::marker::{Send, Sync};
-use std::sync::Arc;
 
 pub enum RequestEvent {
     /// new issue requested / replace accepted
@@ -16,7 +15,7 @@ pub enum RequestEvent {
 }
 
 pub struct CancellationScheduler<P: IssuePallet + ReplacePallet + UtilFuncs> {
-    provider: Arc<P>,
+    btc_parachain: P,
     vault_id: AccountId,
     period: Option<u32>,
 }
@@ -51,19 +50,19 @@ pub trait Canceller<P> {
 
     /// Gets a list of open replace/issue requests
     async fn get_open_requests(
-        provider: Arc<P>,
+        btc_parachain: &P,
         vault_id: AccountId,
     ) -> Result<Vec<UnconvertedOpenTime>, Error>
     where
         P: 'async_trait;
 
     /// Gets the timeout period in number of blocks
-    async fn get_period(provider: Arc<P>) -> Result<u32, Error>
+    async fn get_period(btc_parachain: &P) -> Result<u32, Error>
     where
         P: 'async_trait;
 
     /// Cancels the issue/replace
-    async fn cancel_request(provider: Arc<P>, request_id: H256) -> Result<(), Error>
+    async fn cancel_request(btc_parachain: &P, request_id: H256) -> Result<(), Error>
     where
         P: 'async_trait;
 }
@@ -75,13 +74,13 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for IssueCancell
     const TYPE_NAME: &'static str = "issue";
 
     async fn get_open_requests(
-        provider: Arc<P>,
+        btc_parachain: &P,
         vault_id: AccountId,
     ) -> Result<Vec<UnconvertedOpenTime>, Error>
     where
         P: 'async_trait,
     {
-        let ret = provider
+        let ret = btc_parachain
             .get_vault_issue_requests(vault_id)
             .await?
             .iter()
@@ -94,18 +93,18 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for IssueCancell
         Ok(ret)
     }
 
-    async fn get_period(provider: Arc<P>) -> Result<u32, Error>
+    async fn get_period(btc_parachain: &P) -> Result<u32, Error>
     where
         P: 'async_trait,
     {
-        Ok(provider.get_issue_period().await?)
+        Ok(btc_parachain.get_issue_period().await?)
     }
 
-    async fn cancel_request(provider: Arc<P>, request_id: H256) -> Result<(), Error>
+    async fn cancel_request(btc_parachain: &P, request_id: H256) -> Result<(), Error>
     where
         P: 'async_trait,
     {
-        Ok(provider.cancel_issue(request_id).await?)
+        Ok(btc_parachain.cancel_issue(request_id).await?)
     }
 }
 
@@ -116,13 +115,13 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for ReplaceCance
     const TYPE_NAME: &'static str = "replace";
 
     async fn get_open_requests(
-        provider: Arc<P>,
+        btc_parachain: &P,
         vault_id: AccountId,
     ) -> Result<Vec<UnconvertedOpenTime>, Error>
     where
         P: 'async_trait,
     {
-        let ret = provider
+        let ret = btc_parachain
             .get_new_vault_replace_requests(vault_id)
             .await?
             .iter()
@@ -135,18 +134,18 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for ReplaceCance
         Ok(ret)
     }
 
-    async fn get_period(provider: Arc<P>) -> Result<u32, Error>
+    async fn get_period(btc_parachain: &P) -> Result<u32, Error>
     where
         P: 'async_trait,
     {
-        Ok(provider.get_replace_period().await?)
+        Ok(btc_parachain.get_replace_period().await?)
     }
 
-    async fn cancel_request(provider: Arc<P>, request_id: H256) -> Result<(), Error>
+    async fn cancel_request(btc_parachain: &P, request_id: H256) -> Result<(), Error>
     where
         P: 'async_trait,
     {
-        Ok(provider.cancel_replace(request_id).await?)
+        Ok(btc_parachain.cancel_replace(request_id).await?)
     }
 }
 
@@ -157,8 +156,8 @@ trait EventSelector {
     /// which event woke us up
     async fn select_event(
         self,
-        block_listener: &mut Receiver<PolkaBtcHeader>,
-        event_listener: &mut Receiver<RequestEvent>,
+        block_listener: &mut mpmc::Receiver<PolkaBtcHeader>,
+        event_listener: &mut mpmc::Receiver<RequestEvent>,
     ) -> Result<BlockOrEvent, Error>;
 }
 
@@ -168,8 +167,8 @@ struct ProductionEventSelector;
 impl EventSelector for ProductionEventSelector {
     async fn select_event(
         self,
-        block_listener: &mut Receiver<PolkaBtcHeader>,
-        event_listener: &mut Receiver<RequestEvent>,
+        block_listener: &mut mpmc::Receiver<PolkaBtcHeader>,
+        event_listener: &mut mpmc::Receiver<RequestEvent>,
     ) -> Result<BlockOrEvent, Error> {
         // fuse and pin the tasks, required for select! macro
         let task_block = block_listener.next().fuse();
@@ -206,10 +205,10 @@ fn drain_expired(requests: &mut Vec<ActiveRequest>, current_height: u32) -> Vec<
 }
 
 /// The actual cancellation scheduling and handling
-impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
-    pub fn new(provider: Arc<P>, vault_id: AccountId) -> CancellationScheduler<P> {
+impl<P: Clone + IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
+    pub fn new(btc_parachain: P, vault_id: AccountId) -> CancellationScheduler<P> {
         CancellationScheduler {
-            provider,
+            btc_parachain,
             vault_id,
             period: None,
         }
@@ -225,8 +224,8 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
     /// *`event_listener`: channel that signals relevant events _for this vault_.
     pub async fn handle_cancellation<T: Canceller<P>>(
         &mut self,
-        mut block_listener: Receiver<PolkaBtcHeader>,
-        mut event_listener: Receiver<RequestEvent>,
+        mut block_listener: mpmc::Receiver<PolkaBtcHeader>,
+        mut event_listener: mpmc::Receiver<RequestEvent>,
     ) -> Result<(), Error> {
         let mut list_state = ListState::Invalid;
         let mut active_requests: Vec<ActiveRequest> = vec![];
@@ -248,8 +247,8 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
     /// testing purposes
     async fn wait_for_event<T: Canceller<P>, U: EventSelector>(
         &mut self,
-        block_listener: &mut Receiver<PolkaBtcHeader>,
-        event_listener: &mut Receiver<RequestEvent>,
+        block_listener: &mut mpmc::Receiver<PolkaBtcHeader>,
+        event_listener: &mut mpmc::Receiver<RequestEvent>,
         active_requests: &mut Vec<ActiveRequest>,
         list_state: ListState,
         selector: U,
@@ -281,7 +280,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
                 let cancellable_requests = drain_expired(active_requests, header.number);
 
                 for request in cancellable_requests {
-                    match T::cancel_request(self.provider.clone(), request.id).await {
+                    match T::cancel_request(&self.btc_parachain, request.id).await {
                         Ok(_) => info!("Canceled {} #{}", T::TYPE_NAME, request.id),
                         Err(e) => {
                             // failed to cancel; get up-to-date request list in next iteration
@@ -308,14 +307,14 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
     /// Gets a list of requests that have been requested from this vault
     async fn get_open_requests<T: Canceller<P>>(&mut self) -> Result<Vec<ActiveRequest>, Error> {
         let open_requests =
-            T::get_open_requests(self.provider.clone(), self.vault_id.clone()).await?;
+            T::get_open_requests(&self.btc_parachain, self.vault_id.clone()).await?;
 
         if open_requests.is_empty() {
             return Ok(vec![]);
         }
 
         // get current block height and request period
-        let chain_height = self.provider.get_current_chain_height().await?;
+        let chain_height = self.btc_parachain.get_current_chain_height().await?;
         let period = self.get_cached_period::<T>().await?;
 
         let mut ret = open_requests
@@ -352,7 +351,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
         match self.period {
             Some(x) => Ok(x),
             None => {
-                let ret = T::get_period(self.provider.clone()).await?;
+                let ret = T::get_period(&self.btc_parachain).await?;
                 self.period = Some(ret);
                 Ok(ret)
             }
@@ -364,7 +363,6 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs> CancellationScheduler<P> {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use futures::channel::mpsc;
     use runtime::{
         sp_runtime::{
             generic::Digest,
@@ -388,8 +386,8 @@ mod tests {
     struct TestEventSelector<F>
     where
         F: Fn(
-            &mut Receiver<PolkaBtcHeader>,
-            &mut Receiver<RequestEvent>,
+            &mut mpmc::Receiver<PolkaBtcHeader>,
+            &mut mpmc::Receiver<RequestEvent>,
         ) -> Result<BlockOrEvent, Error>,
     {
         on_event: F,
@@ -399,8 +397,8 @@ mod tests {
     impl<F> EventSelector for TestEventSelector<F>
     where
         F: Fn(
-                &mut Receiver<PolkaBtcHeader>,
-                &mut Receiver<RequestEvent>,
+                &mut mpmc::Receiver<PolkaBtcHeader>,
+                &mut mpmc::Receiver<RequestEvent>,
             ) -> Result<BlockOrEvent, Error>
             + std::marker::Send,
     {
@@ -408,8 +406,8 @@ mod tests {
         /// which event woke us up
         async fn select_event(
             self,
-            block_listener: &mut Receiver<PolkaBtcHeader>,
-            event_listener: &mut Receiver<RequestEvent>,
+            block_listener: &mut mpmc::Receiver<PolkaBtcHeader>,
+            event_listener: &mut mpmc::Receiver<RequestEvent>,
         ) -> Result<BlockOrEvent, Error> {
             (self.on_event)(block_listener, event_listener)
 
@@ -487,13 +485,21 @@ mod tests {
         }
     }
 
+    impl Clone for MockProvider {
+        fn clone(&self) -> Self {
+            // NOTE: if the mocked object is cloned it
+            // will lose its expectations
+            Self::default()
+        }
+    }
+
     #[tokio::test]
     async fn test_get_open_process_delays_succeeds() {
         // open_time = 95, current_block = 100, period = 10: remaining = 5 + margin
         // open_time = 10,  current_block = 100, period = 10: remaining = 0
         // open_time = 85,  current_block = 100, period = 10: remaining = -5 + margin
-        let mut provider = MockProvider::default();
-        provider
+        let mut btc_parachain = MockProvider::default();
+        btc_parachain
             .expect_get_vault_issue_requests()
             .times(1)
             .returning(|_| {
@@ -521,16 +527,16 @@ mod tests {
                     ),
                 ])
             });
-        provider
+        btc_parachain
             .expect_get_current_chain_height()
             .times(1)
             .returning(|| Ok(100));
-        provider
+        btc_parachain
             .expect_get_issue_period()
             .times(1)
             .returning(|| Ok(10));
 
-        let mut canceller = CancellationScheduler::new(Arc::new(provider), Default::default());
+        let mut canceller = CancellationScheduler::new(btc_parachain, Default::default());
 
         // checks that the delay is calculated correctly, and that the vec is sorted
         assert_eq!(
@@ -557,8 +563,8 @@ mod tests {
     #[tokio::test]
     async fn test_get_open_process_delays_with_invalid_opentime_fails() {
         // if current_block is 5 and the issue was open at 10, something went wrong...
-        let mut provider = MockProvider::default();
-        provider
+        let mut btc_parachain = MockProvider::default();
+        btc_parachain
             .expect_get_vault_issue_requests()
             .times(1)
             .returning(|_| {
@@ -570,13 +576,13 @@ mod tests {
                     },
                 )])
             });
-        provider
+        btc_parachain
             .expect_get_current_chain_height()
             .times(1)
             .returning(|| Ok(5));
-        provider.expect_get_issue_period().returning(|| Ok(10));
+        btc_parachain.expect_get_issue_period().returning(|| Ok(10));
 
-        let mut canceller = CancellationScheduler::new(Arc::new(provider), Default::default());
+        let mut canceller = CancellationScheduler::new(btc_parachain, Default::default());
         assert_err!(
             canceller.get_open_requests::<IssueCanceller>().await,
             Error::InvalidOpenTime
@@ -586,8 +592,8 @@ mod tests {
     #[tokio::test]
     async fn test_wait_for_event_succeeds() {
         // check that we actually cancel the issue when it expires
-        let mut provider = MockProvider::default();
-        provider
+        let mut btc_parachain = MockProvider::default();
+        btc_parachain
             .expect_get_vault_issue_requests()
             .times(1)
             .returning(|_| {
@@ -599,23 +605,23 @@ mod tests {
                     },
                 )])
             });
-        provider
+        btc_parachain
             .expect_get_current_chain_height()
             .times(1)
             .returning(|| Ok(15));
-        provider.expect_get_issue_period().returning(|| Ok(10));
+        btc_parachain.expect_get_issue_period().returning(|| Ok(10));
 
         // check that it cancels the issue
-        provider
+        btc_parachain
             .expect_cancel_issue()
             .times(1)
             .returning(|_| Ok(()));
 
-        let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
-        let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
+        let (_, mut block_listener) = mpmc::bounded::<PolkaBtcHeader>(16);
+        let (_, mut event_listener) = mpmc::bounded::<RequestEvent>(16);
         let mut active_processes: Vec<ActiveRequest> = vec![];
         let mut cancellation_scheduler =
-            CancellationScheduler::new(Arc::new(provider), AccountId::default());
+            CancellationScheduler::new(btc_parachain, AccountId::default());
 
         // simulate that we have a a new block
         let selector = TestEventSelector {
@@ -652,10 +658,10 @@ mod tests {
     async fn test_wait_for_event_remove_from_list() {
         // checks that we don't query for new issues, and that when the issue gets executed, it
         // is removed from the list
-        let provider = MockProvider::default();
+        let btc_parachain = MockProvider::default();
 
-        let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
-        let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
+        let (_, mut block_listener) = mpmc::bounded::<PolkaBtcHeader>(16);
+        let (_, mut event_listener) = mpmc::bounded::<RequestEvent>(16);
         let mut active_processes: Vec<ActiveRequest> = vec![
             ActiveRequest {
                 id: H256::from_slice(&[1; 32]),
@@ -672,7 +678,7 @@ mod tests {
         ];
 
         let mut cancellation_scheduler =
-            CancellationScheduler::new(Arc::new(provider), AccountId::default());
+            CancellationScheduler::new(btc_parachain, AccountId::default());
 
         // simulate that the issue gets executed
         let selector = TestEventSelector {
@@ -712,8 +718,8 @@ mod tests {
     async fn test_wait_for_event_get_new_list() {
         // checks that we query for new issues, and that when the issue gets executed, it
         // is removed from the list
-        let mut provider = MockProvider::default();
-        provider
+        let mut btc_parachain = MockProvider::default();
+        btc_parachain
             .expect_get_vault_issue_requests()
             .times(1)
             .returning(|_| {
@@ -725,17 +731,17 @@ mod tests {
                     },
                 )])
             });
-        provider
+        btc_parachain
             .expect_get_current_chain_height()
             .times(1)
             .returning(|| Ok(15));
-        provider.expect_get_issue_period().returning(|| Ok(10));
+        btc_parachain.expect_get_issue_period().returning(|| Ok(10));
 
-        let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
-        let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
+        let (_, mut block_listener) = mpmc::bounded::<PolkaBtcHeader>(16);
+        let (_, mut event_listener) = mpmc::bounded::<RequestEvent>(16);
         let mut active_processes: Vec<ActiveRequest> = vec![];
         let mut cancellation_scheduler =
-            CancellationScheduler::new(Arc::new(provider), AccountId::default());
+            CancellationScheduler::new(btc_parachain, AccountId::default());
 
         // simulate that the issue gets executed
         let selector = TestEventSelector {
@@ -767,17 +773,17 @@ mod tests {
     #[tokio::test]
     async fn test_wait_for_event_timeout() {
         // check that if we fail to get the issue list, we return Invalid, but not Err
-        let mut provider = MockProvider::default();
-        provider
+        let mut btc_parachain = MockProvider::default();
+        btc_parachain
             .expect_get_vault_issue_requests()
             .times(1)
             .returning(|_| Err(RuntimeError::BlockNotFound));
 
-        let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
-        let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
+        let (_, mut block_listener) = mpmc::bounded::<PolkaBtcHeader>(16);
+        let (_, mut event_listener) = mpmc::bounded::<RequestEvent>(16);
         let mut active_processes: Vec<ActiveRequest> = vec![];
         let mut cancellation_scheduler =
-            CancellationScheduler::new(Arc::new(provider), AccountId::default());
+            CancellationScheduler::new(btc_parachain, AccountId::default());
 
         // simulate that we have a timeout (new issue request opened)
         let selector = TestEventSelector {
@@ -803,13 +809,13 @@ mod tests {
     #[tokio::test]
     async fn test_wait_for_event_shutdown() {
         // check that if the selector fails, the error is propagated
-        let provider = MockProvider::default();
+        let btc_parachain = MockProvider::default();
 
-        let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
-        let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
+        let (_, mut block_listener) = mpmc::bounded::<PolkaBtcHeader>(16);
+        let (_, mut event_listener) = mpmc::bounded::<RequestEvent>(16);
         let mut active_processes: Vec<ActiveRequest> = vec![];
         let mut cancellation_scheduler =
-            CancellationScheduler::new(Arc::new(provider), AccountId::default());
+            CancellationScheduler::new(btc_parachain, AccountId::default());
 
         // simulate that we have a timeout
         let selector = TestEventSelector {

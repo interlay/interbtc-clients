@@ -28,6 +28,7 @@ pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber,
 pub use sp_runtime;
 pub use substrate_subxt;
 pub use types::*;
+pub use vault_registry::VaultStatus;
 
 use pallets::*;
 use sp_core::{H160, H256};
@@ -41,8 +42,6 @@ use substrate_subxt::register_default_type_sizes;
 use substrate_subxt::system::SystemEventTypeRegistry;
 use substrate_subxt::EventTypeRegistry;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, sudo, system, Runtime};
-pub use types::*;
-pub use vault_registry::VaultStatus;
 
 // cumulus / polkadot types
 use parachain::primitives::{Id as ParaId, RelayChainBlockNumber};

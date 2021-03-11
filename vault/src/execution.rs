@@ -1,7 +1,6 @@
 use crate::constants::*;
 use crate::error::Error;
-use crate::issue::{process_issue_requests, IssueRequests};
-use backoff::{future::FutureOperation as _, ExponentialBackoff};
+use backoff::future::FutureOperation as _;
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use futures::stream::StreamExt;
 use log::*;
@@ -16,7 +15,7 @@ use runtime::{
     ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H256;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 #[derive(Debug, Clone)]
 pub struct Request {
@@ -112,12 +111,12 @@ impl Request {
         P: ReplacePallet + RefundPallet + RedeemPallet + VaultRegistryPallet + UtilFuncs + Send + Sync,
     >(
         &self,
-        provider: Arc<P>,
-        btc_rpc: B,
+        provider: &P,
+        btc_rpc: &B,
         num_confirmations: u32,
     ) -> Result<(), Error> {
         let tx_metadata = self
-            .transfer_btc(provider.clone(), btc_rpc, num_confirmations)
+            .transfer_btc(provider, btc_rpc, num_confirmations)
             .await?;
         self.execute(provider, tx_metadata).await
     }
@@ -125,8 +124,8 @@ impl Request {
     /// Make a bitcoin transfer to fulfil the request
     async fn transfer_btc<B: BitcoinCoreApi, P: VaultRegistryPallet + UtilFuncs + Send + Sync>(
         &self,
-        provider: Arc<P>,
-        btc_rpc: B,
+        provider: &P,
+        btc_rpc: &B,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
         info!("Sending bitcoin to {}", self.btc_address);
@@ -169,7 +168,7 @@ impl Request {
     /// Executes the request. Upon failure it will retry
     async fn execute<P: ReplacePallet + RedeemPallet + RefundPallet>(
         &self,
-        provider: Arc<P>,
+        provider: &P,
         tx_metadata: TransactionMetadata,
     ) -> Result<(), Error> {
         // select the execute function based on request_type
@@ -183,7 +182,7 @@ impl Request {
         (|| async {
             // call the selected function
             (execute)(
-                &*provider,
+                provider,
                 self.hash,
                 H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
                 tx_metadata.proof.clone(),
@@ -210,7 +209,7 @@ impl Request {
 /// Queries the parachain for open requests/replaces and executes them. It checks the
 /// bitcoin blockchain to see if a payment has already been made.
 pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    provider: Arc<PolkaBtcProvider>,
+    provider: PolkaBtcProvider,
     btc_rpc: B,
     num_confirmations: u32,
 ) -> Result<(), Error> {
@@ -301,7 +300,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                             // continue; try to execute anyway
                         }
 
-                        match request.execute(provider.clone(), tx_metadata).await {
+                        match request.execute(&provider, tx_metadata).await {
                             Ok(_) => {
                                 info!("Executed request #{}", request.hash);
                             }
@@ -333,7 +332,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
             );
 
             match request
-                .pay_and_execute(provider, btc_rpc, num_confirmations)
+                .pay_and_execute(&provider, &btc_rpc, num_confirmations)
                 .await
             {
                 Ok(_) => info!(
@@ -348,25 +347,6 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         });
     }
 
-    Ok(())
-}
-
-/// Execute open issue requests, retry if stream ends early.
-pub async fn execute_open_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    provider: Arc<PolkaBtcProvider>,
-    btc_rpc: B,
-    issue_set: Arc<IssueRequests>,
-    num_confirmations: u32,
-) -> Result<(), Error> {
-    (|| async {
-        process_issue_requests(&provider, &btc_rpc, &issue_set, num_confirmations).await?;
-        Ok(())
-    })
-    .retry(ExponentialBackoff {
-        max_elapsed_time: None,
-        ..get_retry_policy()
-    })
-    .await?;
     Ok(())
 }
 
