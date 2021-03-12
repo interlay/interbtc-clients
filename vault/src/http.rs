@@ -18,8 +18,8 @@ use serde::{Deserialize, Deserializer};
 use sp_arithmetic::FixedU128;
 use sp_core::crypto::Ss58Codec;
 use sp_core::H256;
+use std::net::SocketAddr;
 use std::time::Duration;
-use std::{net::SocketAddr, sync::Arc};
 use tokio::time::timeout;
 
 const HEALTH_DURATION: Duration = Duration::from_millis(5000);
@@ -56,7 +56,7 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
 
 // NOTE: will return error on restart if vault doesn't have
 // enough time to process open redeem requests
-async fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
+async fn _system_health(provider: &PolkaBtcProvider) -> Result<(), Error> {
     let result = match timeout(HEALTH_DURATION, provider.get_latest_block()).await {
         Ok(res) => res,
         Err(err) => return Err(Error::RuntimeError(RuntimeError::from(err))),
@@ -92,7 +92,7 @@ struct AccountIdJsonRpcResponse {
     account_id: String,
 }
 
-fn _account_id(provider: &Arc<PolkaBtcProvider>) -> Result<AccountIdJsonRpcResponse, Error> {
+fn _account_id(provider: &PolkaBtcProvider) -> Result<AccountIdJsonRpcResponse, Error> {
     Ok(AccountIdJsonRpcResponse {
         account_id: provider.get_account_id().to_ss58check(),
     })
@@ -103,7 +103,7 @@ struct ReplaceRequestJsonRpcRequest {
     amount: u128,
 }
 
-async fn _request_replace(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+async fn _request_replace(provider: &PolkaBtcProvider, params: Params) -> Result<(), Error> {
     let req = parse_params::<ReplaceRequestJsonRpcRequest>(params)?;
 
     let amount_in_dot = provider.btc_to_dots(req.amount).await?;
@@ -146,9 +146,9 @@ struct RegisterVaultJsonRpcResponse {
     public_key: BtcPublicKey,
 }
 
-async fn _register_vault<B: BitcoinCoreApi>(
-    provider: &Arc<PolkaBtcProvider>,
-    btc: &Arc<B>,
+async fn _register_vault<B: BitcoinCoreApi + Clone>(
+    provider: &PolkaBtcProvider,
+    btc: &B,
     params: Params,
 ) -> Result<RegisterVaultJsonRpcResponse, Error> {
     let req = parse_params::<RegisterVaultJsonRpcRequest>(params)?;
@@ -169,7 +169,7 @@ struct ChangeCollateralJsonRpcRequest {
 }
 
 async fn _lock_additional_collateral(
-    provider: &Arc<PolkaBtcProvider>,
+    provider: &PolkaBtcProvider,
     params: Params,
 ) -> Result<(), Error> {
     let req = parse_params::<ChangeCollateralJsonRpcRequest>(params)?;
@@ -181,10 +181,7 @@ async fn _lock_additional_collateral(
     Ok(result?)
 }
 
-async fn _withdraw_collateral(
-    provider: &Arc<PolkaBtcProvider>,
-    params: Params,
-) -> Result<(), Error> {
+async fn _withdraw_collateral(provider: &PolkaBtcProvider, params: Params) -> Result<(), Error> {
     let req = parse_params::<ChangeCollateralJsonRpcRequest>(params)?;
     let result = provider.withdraw_collateral(req.amount).await;
     info!(
@@ -199,7 +196,7 @@ struct WithdrawReplaceJsonRpcRequest {
     replace_id: H256,
 }
 
-async fn _withdraw_replace(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+async fn _withdraw_replace(provider: &PolkaBtcProvider, params: Params) -> Result<(), Error> {
     let req = parse_params::<WithdrawReplaceJsonRpcRequest>(params)?;
     let result = provider.withdraw_replace(req.replace_id).await;
     info!(
@@ -209,9 +206,9 @@ async fn _withdraw_replace(provider: &Arc<PolkaBtcProvider>, params: Params) -> 
     Ok(result?)
 }
 
-pub async fn start_http<B: BitcoinCoreApi + Send + Sync + 'static>(
-    provider: Arc<PolkaBtcProvider>,
-    bitcoin_core: Arc<B>,
+pub async fn start_http<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    provider: PolkaBtcProvider,
+    bitcoin_core: B,
     addr: SocketAddr,
     origin: String,
 ) {

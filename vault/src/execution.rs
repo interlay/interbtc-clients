@@ -108,12 +108,19 @@ impl Request {
 
     /// Makes the bitcoin transfer and executes the request
     pub async fn pay_and_execute<
-        B: BitcoinCoreApi,
-        P: ReplacePallet + RefundPallet + RedeemPallet + VaultRegistryPallet + UtilFuncs + Send + Sync,
+        B: BitcoinCoreApi + Clone,
+        P: ReplacePallet
+            + RefundPallet
+            + RedeemPallet
+            + VaultRegistryPallet
+            + UtilFuncs
+            + Clone
+            + Send
+            + Sync,
     >(
         &self,
-        provider: Arc<P>,
-        btc_rpc: Arc<B>,
+        provider: P,
+        btc_rpc: B,
         num_confirmations: u32,
     ) -> Result<(), Error> {
         let tx_metadata = self
@@ -123,10 +130,13 @@ impl Request {
     }
 
     /// Make a bitcoin transfer to fulfil the request
-    async fn transfer_btc<B: BitcoinCoreApi, P: VaultRegistryPallet + UtilFuncs + Send + Sync>(
+    async fn transfer_btc<
+        B: BitcoinCoreApi + Clone,
+        P: VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
+    >(
         &self,
-        provider: Arc<P>,
-        btc_rpc: Arc<B>,
+        provider: P,
+        btc_rpc: B,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
         info!("Sending bitcoin to {}", self.btc_address);
@@ -169,7 +179,7 @@ impl Request {
     /// Executes the request. Upon failure it will retry
     async fn execute<P: ReplacePallet + RedeemPallet + RefundPallet>(
         &self,
-        provider: Arc<P>,
+        provider: P,
         tx_metadata: TransactionMetadata,
     ) -> Result<(), Error> {
         // select the execute function based on request_type
@@ -183,7 +193,7 @@ impl Request {
         (|| async {
             // call the selected function
             (execute)(
-                &*provider,
+                &provider,
                 self.hash,
                 H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
                 tx_metadata.proof.clone(),
@@ -209,9 +219,9 @@ impl Request {
 
 /// Queries the parachain for open requests/replaces and executes them. It checks the
 /// bitcoin blockchain to see if a payment has already been made.
-pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
-    provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    provider: PolkaBtcProvider,
+    btc_rpc: B,
     num_confirmations: u32,
 ) -> Result<(), Error> {
     let vault_id = provider.get_account_id().clone();
@@ -253,9 +263,8 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
         None => return Ok(()), // the iterator is empty so we have nothing to do
     };
 
-    // iterate through transactions..
-    let mut transaction_stream =
-        bitcoin::get_transactions(btc_rpc.clone(), btc_start_height).await?;
+    // iterate through transactions
+    let mut transaction_stream = bitcoin::get_transactions(&btc_rpc, btc_start_height).await?;
     while let Some(x) = transaction_stream.next().await {
         let tx = x?;
 
@@ -352,9 +361,9 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
 }
 
 /// Execute open issue requests, retry if stream ends early.
-pub async fn execute_open_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
-    provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+pub async fn execute_open_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    provider: PolkaBtcProvider,
+    btc_rpc: B,
     issue_set: Arc<IssueRequests>,
     num_confirmations: u32,
 ) -> Result<(), Error> {
@@ -510,7 +519,7 @@ mod tests {
     //             async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
     //             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
     //             async fn get_mempool_transactions<'a>(
-    //                 self: Arc<Self>,
+    //                 self: &'a Self,
     //             ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + 'a>, BitcoinError>;
     //             async fn wait_for_transaction_metadata(
     //                 &self,
@@ -579,7 +588,7 @@ mod tests {
 
     //     assert_ok!(
     //         request
-    //             .pay_and_execute(Arc::new(provider), Arc::new(btc_rpc), 6)
+    //             .pay_and_execute(provider, btc_rpc, 6)
     //             .await
     //     );
     // }
@@ -608,7 +617,7 @@ mod tests {
 
     //     assert_ok!(
     //         request
-    //             .pay_and_execute(Arc::new(provider), Arc::new(btc_rpc), 6)
+    //             .pay_and_execute(provider, btc_rpc, 6)
     //             .await
     //     );
     // }
@@ -632,7 +641,7 @@ mod tests {
 
     //     assert_err!(
     //         request
-    //             .pay_and_execute(Arc::new(provider), Arc::new(btc_rpc), 6)
+    //             .pay_and_execute(provider, btc_rpc, 6)
     //             .await,
     //         Error::BitcoinError(BitcoinError::ConfirmationError)
     //     );

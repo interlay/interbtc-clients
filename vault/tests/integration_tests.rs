@@ -38,7 +38,7 @@ async fn test_redeem_succeeds() {
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
+    let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
     relayer_provider
         .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))
@@ -95,7 +95,7 @@ async fn test_replace_succeeds() {
     let new_vault_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
+    let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
     relayer_provider
         .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
@@ -181,7 +181,7 @@ async fn test_maintain_collateral_succeeds() {
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
+    let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
     relayer_provider
         .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
@@ -245,7 +245,7 @@ async fn test_withdraw_replace_succeeds() {
     let new_vault_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
+    let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
     relayer_provider
         .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
@@ -330,7 +330,7 @@ async fn test_cancellation_succeeds() {
     let new_vault_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
+    let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
     relayer_provider
         .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
@@ -500,7 +500,7 @@ async fn test_auction_replace_succeeds() {
     let new_vault_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
+    let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
     relayer_provider
         .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
@@ -604,7 +604,7 @@ async fn test_refund_succeeds() {
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
+    let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
     relayer_provider
         .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
@@ -690,7 +690,7 @@ async fn test_issue_overpayment_succeeds() {
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
+    let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
     relayer_provider
         .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
@@ -774,7 +774,7 @@ async fn test_automatic_issue_execution_succeeds() {
     let vault2_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
+    let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
     relayer_provider
         .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
@@ -865,7 +865,7 @@ async fn test_execute_open_requests_succeeds() {
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
+    let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
     relayer_provider
         .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
@@ -929,7 +929,7 @@ async fn test_execute_open_requests_succeeds() {
 
 async fn assert_redeem_event(
     duration: Duration,
-    provider: Arc<PolkaBtcProvider>,
+    provider: PolkaBtcProvider,
     redeem_id: H256,
 ) -> ExecuteRedeemEvent<PolkaBtcRuntime> {
     assert_event::<ExecuteRedeemEvent<PolkaBtcRuntime>, _>(duration, provider, |x| {

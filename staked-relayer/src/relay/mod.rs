@@ -12,12 +12,11 @@ use futures::executor::block_on;
 use log::error;
 use relayer_core::Runner;
 use runtime::PolkaBtcProvider;
-use std::sync::Arc;
 use std::time::Duration;
 
 pub fn run_relayer(
     runner: Runner<Error, BitcoinClient, PolkaBtcClient>,
-    provider: Arc<PolkaBtcProvider>,
+    provider: PolkaBtcProvider,
     timeout: Duration,
 ) {
     loop {

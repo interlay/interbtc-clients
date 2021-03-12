@@ -2,7 +2,6 @@ use crate::execution::*;
 use bitcoin::BitcoinCoreApi;
 use log::{error, info};
 use runtime::{pallets::refund::RequestRefundEvent, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs};
-use std::sync::Arc;
 
 /// Listen for RequestRefundEvent directed at this vault; upon reception, transfer
 /// bitcoin and call execute_refund
@@ -13,9 +12,9 @@ use std::sync::Arc;
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
-pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
-    provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    provider: PolkaBtcProvider,
+    btc_rpc: B,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     provider

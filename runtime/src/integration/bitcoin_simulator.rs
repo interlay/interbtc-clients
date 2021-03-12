@@ -23,20 +23,21 @@ use tokio::time::delay_for;
 /// It does the minimum amount of work it can get away with, and the relayed data may
 /// be technically invalid. For example, all generated transactions share the same dummy
 /// input uxto.
+#[derive(Clone)]
 pub struct MockBitcoinCore {
-    provider: Arc<PolkaBtcProvider>,
-    blocks: RwLock<Vec<Block>>,
-    mempool: RwLock<Vec<Transaction>>,
+    provider: PolkaBtcProvider,
+    blocks: Arc<RwLock<Vec<Block>>>,
+    mempool: Arc<RwLock<Vec<Transaction>>>,
     transaction_creation_lock: Arc<Mutex<()>>,
 }
 
 impl MockBitcoinCore {
     /// Creates a new instance, and initializes parachain's btc-relay
-    pub async fn new(provider: Arc<PolkaBtcProvider>) -> Self {
+    pub async fn new(provider: PolkaBtcProvider) -> Self {
         let ret = Self {
             provider,
-            blocks: RwLock::new(vec![]),
-            mempool: RwLock::new(vec![]),
+            blocks: Arc::new(RwLock::new(vec![])),
+            mempool: Arc::new(RwLock::new(vec![])),
             transaction_creation_lock: Arc::new(Mutex::new(())),
         };
 
@@ -54,11 +55,11 @@ impl MockBitcoinCore {
     }
 
     /// Creates a new instance, but does not initializes parachain's btc-relay
-    pub async fn new_uninitialized(provider: Arc<PolkaBtcProvider>) -> Self {
+    pub async fn new_uninitialized(provider: PolkaBtcProvider) -> Self {
         Self {
             provider,
-            blocks: RwLock::new(vec![]),
-            mempool: RwLock::new(vec![]),
+            blocks: Arc::new(RwLock::new(vec![])),
+            mempool: Arc::new(RwLock::new(vec![])),
             transaction_creation_lock: Arc::new(Mutex::new(())),
         }
     }
@@ -340,7 +341,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         })
     }
     async fn get_mempool_transactions<'a>(
-        self: Arc<Self>,
+        self: &'a Self,
     ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>
     {
         let transactions = (*self.mempool.read().await).clone();

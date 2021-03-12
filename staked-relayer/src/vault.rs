@@ -40,11 +40,14 @@ impl Vaults {
     }
 }
 
-pub async fn report_vault_thefts<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi>(
+pub async fn report_vault_thefts<
+    P: StakedRelayerPallet + BtcRelayPallet,
+    B: BitcoinCoreApi + Clone,
+>(
     btc_height: u32,
-    btc_rpc: Arc<B>,
+    btc_rpc: B,
     vaults: Arc<Vaults>,
-    polka_rpc: Arc<P>,
+    polka_rpc: P,
     delay: Duration,
 ) -> Result<(), Error> {
     VaultTheftMonitor::new(btc_height, btc_rpc, vaults, polka_rpc, delay)
@@ -52,20 +55,20 @@ pub async fn report_vault_thefts<P: StakedRelayerPallet + BtcRelayPallet, B: Bit
         .await
 }
 
-pub struct VaultTheftMonitor<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi> {
+pub struct VaultTheftMonitor<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> {
     btc_height: u32,
-    btc_rpc: Arc<B>,
-    polka_rpc: Arc<P>,
+    btc_rpc: B,
+    polka_rpc: P,
     vaults: Arc<Vaults>,
     delay: Duration,
 }
 
-impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi> VaultTheftMonitor<P, B> {
+impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonitor<P, B> {
     pub fn new(
         btc_height: u32,
-        btc_rpc: Arc<B>,
+        btc_rpc: B,
         vaults: Arc<Vaults>,
-        polka_rpc: Arc<P>,
+        polka_rpc: P,
         delay: Duration,
     ) -> Self {
         Self {
@@ -187,7 +190,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi> VaultTheftMonit
 }
 
 pub async fn listen_for_wallet_updates(
-    polka_rpc: Arc<PolkaBtcProvider>,
+    polka_rpc: PolkaBtcProvider,
     vaults: Arc<Vaults>,
 ) -> Result<(), RuntimeError> {
     let vaults = &vaults;
@@ -206,7 +209,7 @@ pub async fn listen_for_wallet_updates(
 }
 
 pub async fn listen_for_vaults_registered(
-    polka_rpc: Arc<PolkaBtcProvider>,
+    polka_rpc: PolkaBtcProvider,
     vaults: Arc<Vaults>,
 ) -> Result<(), RuntimeError> {
     polka_rpc
@@ -310,6 +313,13 @@ mod tests {
         }
     }
 
+    impl Clone for MockProvider {
+        fn clone(&self) -> Self {
+            // NOTE: expectations dropped
+            Self::default()
+        }
+    }
+
     mockall::mock! {
         Bitcoin {}
 
@@ -332,7 +342,7 @@ mod tests {
             async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
             async fn get_mempool_transactions<'a>(
-                self: Arc<Self>,
+                self: &'a Self,
             ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send +'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(
                 &self,
@@ -365,6 +375,13 @@ mod tests {
             async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError>
                 where
                     P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
+        }
+    }
+
+    impl Clone for MockBitcoin {
+        fn clone(&self) -> Self {
+            // NOTE: expectations dropped
+            Self::default()
         }
     }
 
@@ -405,9 +422,9 @@ mod tests {
 
         let monitor = VaultTheftMonitor::new(
             0,
-            Arc::new(MockBitcoin::default()),
+            MockBitcoin::default(),
             Arc::new(Vaults::default()),
-            Arc::new(parachain),
+            parachain,
             Duration::from_millis(100),
         );
 
@@ -435,9 +452,9 @@ mod tests {
 
         let monitor = VaultTheftMonitor::new(
             0,
-            Arc::new(MockBitcoin::default()),
+            MockBitcoin::default(),
             Arc::new(Vaults::default()),
-            Arc::new(parachain),
+            parachain,
             Duration::from_millis(100),
         );
 

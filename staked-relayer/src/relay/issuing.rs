@@ -4,14 +4,13 @@ use log::error;
 use relayer_core::{Error as CoreError, Issuing};
 use runtime::PolkaBtcProvider;
 use runtime::{BtcRelayPallet, H256Le, RawBlockHeader};
-use std::sync::Arc;
 
 pub struct Client {
-    rpc: Arc<PolkaBtcProvider>,
+    rpc: PolkaBtcProvider,
 }
 
 impl Client {
-    pub fn new(rpc: Arc<PolkaBtcProvider>) -> Self {
+    pub fn new(rpc: PolkaBtcProvider) -> Self {
         Self { rpc }
     }
 }

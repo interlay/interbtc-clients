@@ -94,26 +94,22 @@ async fn start() -> Result<(), Error> {
     let oracle_timeout_ms = opts.oracle_timeout_ms;
 
     let dummy_network = bitcoin::Network::Regtest; // we don't make any transaction so this is not used
-    let btc_rpc = Arc::new(
-        BitcoinCore::new_with_retry(
-            opts.bitcoin.new_client(None)?,
-            dummy_network,
-            Duration::from_millis(opts.connection_timeout_ms),
-        )
-        .await?,
-    );
+    let btc_rpc = BitcoinCore::new_with_retry(
+        Arc::new(opts.bitcoin.new_client(None)?),
+        dummy_network,
+        Duration::from_millis(opts.connection_timeout_ms),
+    )
+    .await?;
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
     // only open connection to parachain after bitcoind sync to prevent timeout
-    let provider = Arc::new(
-        PolkaBtcProvider::from_url_with_retry(
-            opts.polka_btc_url,
-            signer,
-            Duration::from_millis(opts.connection_timeout_ms),
-        )
-        .await?,
-    );
+    let provider = PolkaBtcProvider::from_url_with_retry(
+        opts.polka_btc_url,
+        signer,
+        Duration::from_millis(opts.connection_timeout_ms),
+    )
+    .await?;
 
     if let Some(stake) = opts.auto_register_with_stake {
         if !is_registered(&provider).await? {

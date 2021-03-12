@@ -22,6 +22,7 @@ use sp_core::H256;
 use sp_keyring::AccountKeyring;
 use std::convert::TryInto;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Debug, Encode, Decode)]
@@ -495,7 +496,10 @@ async fn get_btc_rpc(
     bitcoin_opts: bitcoin::cli::BitcoinOpts,
     network: BitcoinNetwork,
 ) -> Result<BitcoinCore, Error> {
-    let btc_rpc = BitcoinCore::new(bitcoin_opts.new_client(Some(&wallet_name))?, network.0);
+    let btc_rpc = BitcoinCore::new(
+        Arc::new(bitcoin_opts.new_client(Some(&wallet_name))?),
+        network.0,
+    );
     btc_rpc.create_wallet(&wallet_name).await?;
     Ok(btc_rpc)
 }
