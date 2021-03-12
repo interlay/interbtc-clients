@@ -1,3 +1,4 @@
+mod core;
 mod error;
 mod faucet;
 mod http;
@@ -11,6 +12,7 @@ pub use error::Error;
 pub use vault::Vaults;
 
 pub mod service {
+    pub use crate::core::{Config, Runner};
     pub use crate::faucet::fund_and_register;
     pub use crate::http::start_http;
     pub use crate::oracle::report_offline_oracle;

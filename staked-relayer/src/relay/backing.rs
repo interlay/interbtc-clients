@@ -1,17 +1,21 @@
 use super::Error;
-use bitcoin::{serialize, Client as RPC, RpcApi};
-use relayer_core::{Backing, Error as CoreError};
+use crate::core::{Backing, Error as CoreError};
+use async_trait::async_trait;
+pub use bitcoin::Client as RPC;
+use bitcoin::{serialize, RpcApi};
+use std::sync::Arc;
 
 pub struct Client {
-    rpc: RPC,
+    rpc: Arc<RPC>,
 }
 
 impl Client {
-    pub fn new(rpc: RPC) -> Self {
+    pub fn new(rpc: Arc<RPC>) -> Self {
         Client { rpc }
     }
 }
 
+#[async_trait]
 impl Backing<Error> for Client {
     fn get_block_count(&self) -> Result<u32, CoreError<Error>> {
         let count = self

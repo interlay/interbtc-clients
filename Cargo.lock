@@ -9327,7 +9327,6 @@ dependencies = [
  "mockall",
  "parity-scale-codec 2.0.0",
  "rand 0.7.3",
- "relayer-core",
  "runtime",
  "schnorrkel",
  "serde",

@@ -1346,7 +1346,7 @@ impl BtcRelayPallet for PolkaBtcProvider {
     }
 
     /// Initializes the relay with the provided block header and height,
-    /// should be called automatically by `relayer_core` subject to the
+    /// should be called automatically by relayer subject to the
     /// result of `is_initialized`.
     ///
     /// # Arguments

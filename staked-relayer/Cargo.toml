@@ -15,7 +15,6 @@ futures = "0.3.5"
 clap = "3.0.0-beta.2"
 async-trait = "0.1.40"
 serde = "1.0.116"
-relayer-core = { git = "https://gitlab.com/interlay/relayer-core", rev = "9043ce35a1e00bc5a65d4d3d0433c2535f679bc0" }
 runtime = { path = "../runtime" }
 bitcoin = { path = "../bitcoin", features = ["cli"] }
 jsonrpc-http-server = "17.0.0"
