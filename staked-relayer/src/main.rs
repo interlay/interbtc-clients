@@ -6,8 +6,8 @@ use staked_relayer::Vaults;
 
 use bitcoin::{BitcoinCore, BitcoinCoreApi as _};
 use clap::Clap;
+use futures::executor::block_on;
 use log::*;
-use relayer_core::{Config, Runner};
 use runtime::pallets::sla::UpdateRelayerSLAEvent;
 use runtime::{substrate_subxt::PairSigner, StakedRelayerPallet, UtilFuncs};
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime, VaultRegistryPallet};
@@ -131,17 +131,20 @@ async fn start() -> Result<(), Error> {
         }
     }
 
-    let relayer = Runner::new(
-        BitcoinClient::new(opts.bitcoin.new_client(None)?),
-        PolkaBtcClient::new(provider.clone()),
-        Config {
-            start_height: opts.bitcoin_relay_start_height,
-            max_batch_size: opts.max_batch_size,
-            timeout: Some(Duration::from_millis(bitcoin_timeout_ms)),
-            required_btc_confirmations: opts.required_btc_confirmations,
-        },
+    let relayer = run_relayer(
+        Runner::new(
+            BitcoinClient::new(Arc::new(opts.bitcoin.new_client(None)?)),
+            PolkaBtcClient::new(provider.clone()),
+            Config {
+                start_height: opts.bitcoin_relay_start_height,
+                max_batch_size: opts.max_batch_size,
+                timeout: Some(Duration::from_millis(bitcoin_timeout_ms)),
+                required_btc_confirmations: opts.required_btc_confirmations,
+            },
+        ),
+        provider.clone(),
+        Duration::from_secs(1),
     );
-    let relayer_provider = provider.clone();
 
     let oracle_monitor =
         report_offline_oracle(provider.clone(), Duration::from_millis(oracle_timeout_ms));
@@ -223,11 +226,7 @@ async fn start() -> Result<(), Error> {
             status_update_listener.await.unwrap();
         }),
         // runs blocking relayer
-        tokio::task::spawn_blocking(move || run_relayer(
-            relayer,
-            relayer_provider,
-            Duration::from_secs(1)
-        ))
+        tokio::task::spawn_blocking(move || block_on(relayer))
     );
     match result {
         Ok(_) => Ok(()),
