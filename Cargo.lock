@@ -9521,7 +9521,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.14.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=b012f46#b012f46cafc67882127875828233130e43cb245d"
+source = "git+https://github.com/interlay/substrate-subxt?rev=428b78c#428b78c26c0ecc4ad88d260b618a012cdd84e0c0"
 dependencies = [
  "dyn-clone",
  "frame-metadata",
@@ -9554,7 +9554,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-client"
 version = "0.6.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=b012f46#b012f46cafc67882127875828233130e43cb245d"
+source = "git+https://github.com/interlay/substrate-subxt?rev=428b78c#428b78c26c0ecc4ad88d260b618a012cdd84e0c0"
 dependencies = [
  "async-std",
  "futures 0.1.30",
@@ -9573,7 +9573,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.14.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=b012f46#b012f46cafc67882127875828233130e43cb245d"
+source = "git+https://github.com/interlay/substrate-subxt?rev=428b78c#428b78c26c0ecc4ad88d260b618a012cdd84e0c0"
 dependencies = [
  "heck",
  "proc-macro-crate",

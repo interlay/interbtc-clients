@@ -40,15 +40,15 @@ frame-support = { git = "https://github.com/paritytech/substrate", branch = "roc
 frame-system = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 
 # Subxt dependencies
-substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "b012f46" }
-substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "b012f46" }
+substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "428b78c" }
+substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "428b78c" }
 
 # Polkadot dependencies
 xcm = { git = "https://github.com/paritytech/polkadot", branch = "rococo-v1" }
 parachain = { package = "polkadot-parachain", git = "https://github.com/paritytech/polkadot", branch = "rococo-v1" }
 
 # Dependencies for the testing utils for integration tests
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "b012f46", optional = true }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "428b78c", optional = true }
 tempdir = {version = "0.3.7", optional = true }
 btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"], optional = true }
 btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "dev", version = "0.5.1", features = ["aura-grandpa"], optional = true }
@@ -122,7 +122,7 @@ version = "0.5.0"
 package = "exchange-rate-oracle"
 
 [dev-dependencies]
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "b012f46" }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "428b78c" }
 tempdir = "0.3.7"
 btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
 btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }

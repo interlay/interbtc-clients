@@ -1,7 +1,6 @@
 use super::Error;
 use crate::core::{Error as CoreError, Issuing};
 use async_trait::async_trait;
-use log::error;
 use runtime::PolkaBtcProvider;
 use runtime::{BtcRelayPallet, H256Le, RawBlockHeader};
 
@@ -48,10 +47,7 @@ impl Issuing<Error> for Client {
         self.rpc
             .store_block_header(raw_block_header)
             .await
-            .map_err(|e| {
-                error!("Failed to submit block: {}", e);
-                CoreError::Issuing(Error::PolkaBtcError(e))
-            })
+            .map_err(|e| CoreError::Issuing(Error::PolkaBtcError(e)))
     }
 
     async fn submit_block_header_batch(
@@ -66,10 +62,7 @@ impl Issuing<Error> for Client {
                     .collect::<Result<Vec<_>, _>>()?,
             )
             .await
-            .map_err(|e| {
-                error!("Failed to submit blocks: {}", e);
-                CoreError::Issuing(Error::PolkaBtcError(e))
-            })
+            .map_err(|e| CoreError::Issuing(Error::PolkaBtcError(e)))
     }
 
     async fn get_best_height(&self) -> Result<u32, CoreError<Error>> {
