@@ -71,7 +71,7 @@ pub(crate) async fn new_websocket_client_with_retry(
     .await?
 }
 
-impl<C: Clone, P: Provider, S: Service<C, P>> Manager<C, P, S> {
+impl<C: Clone + Send + 'static, P: Provider + Send, S: Service<C, P>> Manager<C, P, S> {
     pub fn new(url: String, signer: Arc<PolkaBtcSigner>, config: C) -> Self {
         Self {
             url,
@@ -86,15 +86,16 @@ impl<C: Clone, P: Provider, S: Service<C, P>> Manager<C, P, S> {
             let (ws_client, background) =
                 new_websocket_client_with_retry(self.url.clone(), Duration::from_secs(10)).await?;
 
-            futures::future::select(
-                Box::pin(background),
-                Box::pin(async move {
-                    let provider = P::connect(ws_client, self.signer.clone()).await?;
-                    S::connect(provider, self.config.clone()).await?;
+            let signer = self.signer.clone();
+            let config = self.config.clone();
+            tokio::select! {
+                _ = background => (),
+                _ = tokio::task::spawn(async move {
+                    let provider = P::connect(ws_client, signer).await?;
+                    S::connect(provider, config).await?;
                     Ok::<(), Error>(())
-                }),
-            )
-            .await;
+                }) => ()
+            }
         }
     }
 }
