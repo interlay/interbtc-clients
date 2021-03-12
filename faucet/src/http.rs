@@ -13,7 +13,6 @@ use runtime::{
     VaultRegistryPallet, PLANCK_PER_DOT,
 };
 use serde::{Deserialize, Deserializer};
-use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, net::SocketAddr};
 use tokio::time::timeout;
@@ -59,7 +58,7 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
     }
 }
 
-async fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
+async fn _system_health(provider: &PolkaBtcProvider) -> Result<(), Error> {
     match timeout(HEALTH_DURATION, provider.get_latest_block_hash()).await {
         Err(err) => Err(Error::RuntimeError(RuntimeError::from(err))),
         _ => Ok(()),
@@ -79,7 +78,7 @@ enum FundingRequestAccountType {
 }
 
 async fn _fund_account_raw(
-    provider: &Arc<PolkaBtcProvider>,
+    provider: &PolkaBtcProvider,
     params: Params,
     store: Store,
     user_allowance: u128,
@@ -98,7 +97,7 @@ async fn _fund_account_raw(
 }
 
 async fn get_account_type(
-    provider: &Arc<PolkaBtcProvider>,
+    provider: &PolkaBtcProvider,
     account_id: AccountId,
 ) -> Result<FundingRequestAccountType, Error> {
     if let Ok(_) = provider.get_vault(account_id.clone()).await {
@@ -184,7 +183,7 @@ fn is_funding_allowed(
 }
 
 async fn atomic_faucet_funding(
-    provider: &Arc<PolkaBtcProvider>,
+    provider: &PolkaBtcProvider,
     kv: Bucket<'_, String, Json<FaucetRequest>>,
     account_id: AccountId,
     allowances: HashMap<FundingRequestAccountType, u128>,
@@ -216,7 +215,7 @@ async fn atomic_faucet_funding(
 }
 
 async fn fund_account(
-    provider: &Arc<PolkaBtcProvider>,
+    provider: &PolkaBtcProvider,
     req: FundAccountJsonRpcRequest,
     store: Store,
     allowances: HashMap<FundingRequestAccountType, u128>,
@@ -228,7 +227,7 @@ async fn fund_account(
 }
 
 pub async fn start_http(
-    provider: Arc<PolkaBtcProvider>,
+    provider: PolkaBtcProvider,
     addr: SocketAddr,
     origin: String,
     user_allowance: u128,

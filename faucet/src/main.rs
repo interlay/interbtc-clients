@@ -5,7 +5,6 @@ use clap::Clap;
 use error::Error;
 use runtime::substrate_subxt::PairSigner;
 use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
-use std::sync::Arc;
 use std::time::Duration;
 
 /// DOT faucet for enabling users to test PolkaBTC
@@ -55,18 +54,16 @@ async fn main() -> Result<(), Error> {
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
-    let provider = Arc::new(
-        PolkaBtcProvider::from_url_with_retry(
-            opts.polka_btc_url,
-            signer,
-            Duration::from_millis(opts.connection_timeout_ms),
-        )
-        .await?,
-    );
+    let provider = PolkaBtcProvider::from_url_with_retry(
+        opts.polka_btc_url,
+        signer,
+        Duration::from_millis(opts.connection_timeout_ms),
+    )
+    .await?;
 
     let http_addr = opts.http_addr.parse()?;
     http::start_http(
-        provider.clone(),
+        provider,
         http_addr,
         opts.rpc_cors_domain,
         opts.user_allowance,

@@ -19,14 +19,12 @@ async fn start() -> Result<(), Error> {
 
     let (pair, wallet) = opts.account_info.get_key_pair()?;
 
-    let btc_rpc = Arc::new(
-        BitcoinCore::new_with_retry(
-            opts.bitcoin.new_client(Some(&wallet))?,
-            opts.network.0,
-            Duration::from_millis(opts.connection_timeout_ms),
-        )
-        .await?,
-    );
+    let btc_rpc = BitcoinCore::new_with_retry(
+        Arc::new(opts.bitcoin.new_client(Some(&wallet))?),
+        opts.network.0,
+        Duration::from_millis(opts.connection_timeout_ms),
+    )
+    .await?;
 
     // load wallet. Exit on failure, since without wallet we can't do a lot
     btc_rpc
@@ -36,14 +34,12 @@ async fn start() -> Result<(), Error> {
 
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);
     // only open connection to parachain after bitcoind sync to prevent timeout
-    let provider = Arc::new(
-        PolkaBtcProvider::from_url_with_retry(
-            opts.polka_btc_url,
-            signer,
-            Duration::from_millis(opts.connection_timeout_ms),
-        )
-        .await?,
-    );
+    let provider = PolkaBtcProvider::from_url_with_retry(
+        opts.polka_btc_url,
+        signer,
+        Duration::from_millis(opts.connection_timeout_ms),
+    )
+    .await?;
 
     vault::start(intact_opts, provider, btc_rpc).await
 }

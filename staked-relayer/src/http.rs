@@ -11,7 +11,6 @@ use runtime::{Error as RuntimeError, H256Le, PolkaBtcProvider, StakedRelayerPall
 use serde::{Deserialize, Deserializer};
 use sp_core::crypto::Ss58Codec;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -47,7 +46,7 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
     }
 }
 
-async fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
+async fn _system_health(provider: &PolkaBtcProvider) -> Result<(), Error> {
     match timeout(HEALTH_DURATION, provider.get_latest_block_hash()).await {
         Err(err) => Err(Error::RuntimeError(RuntimeError::from(err))),
         _ => Ok(()),
@@ -59,7 +58,7 @@ struct AccountIdJsonRpcResponse {
     account_id: String,
 }
 
-fn _account_id(provider: &Arc<PolkaBtcProvider>) -> Result<AccountIdJsonRpcResponse, Error> {
+fn _account_id(provider: &PolkaBtcProvider) -> Result<AccountIdJsonRpcResponse, Error> {
     Ok(AccountIdJsonRpcResponse {
         account_id: provider.get_account_id().to_ss58check(),
     })
@@ -71,14 +70,14 @@ struct RegisterStakedRelayerJsonRpcRequest {
 }
 
 async fn _register_staked_relayer(
-    provider: &Arc<PolkaBtcProvider>,
+    provider: &PolkaBtcProvider,
     params: Params,
 ) -> Result<(), Error> {
     let req: RegisterStakedRelayerJsonRpcRequest = parse_params(params)?;
     Ok(provider.register_staked_relayer(req.stake).await?)
 }
 
-async fn _deregister_staked_relayer(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
+async fn _deregister_staked_relayer(provider: &PolkaBtcProvider) -> Result<(), Error> {
     Ok(provider.deregister_staked_relayer().await?)
 }
 
@@ -92,10 +91,7 @@ struct SuggestStatusUpdateJsonRpcRequest {
     message: String,
 }
 
-async fn _suggest_status_update(
-    provider: &Arc<PolkaBtcProvider>,
-    params: Params,
-) -> Result<(), Error> {
+async fn _suggest_status_update(provider: &PolkaBtcProvider, params: Params) -> Result<(), Error> {
     let req: SuggestStatusUpdateJsonRpcRequest = parse_params(params)?;
     Ok(provider
         .suggest_status_update(
@@ -115,17 +111,14 @@ struct VoteOnStatusUpdateJsonRpcRequest {
     pub approve: bool,
 }
 
-async fn _vote_on_status_update(
-    provider: &Arc<PolkaBtcProvider>,
-    params: Params,
-) -> Result<(), Error> {
+async fn _vote_on_status_update(provider: &PolkaBtcProvider, params: Params) -> Result<(), Error> {
     let req: VoteOnStatusUpdateJsonRpcRequest = parse_params(params)?;
     Ok(provider
         .vote_on_status_update(req.status_update_id, req.approve)
         .await?)
 }
 
-pub async fn start_http(provider: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String) {
+pub async fn start_http(provider: PolkaBtcProvider, addr: SocketAddr, origin: String) {
     let mut io = IoHandler::default();
     {
         let provider = provider.clone();

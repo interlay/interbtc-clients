@@ -4,13 +4,12 @@ use log::info;
 use runtime::{
     ErrorCode, ExchangeRateOraclePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
 };
-use std::sync::Arc;
 use std::time::Duration;
 
 pub async fn report_offline_oracle<
     P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet,
 >(
-    rpc: Arc<P>,
+    rpc: P,
     checking_interval: Duration,
 ) {
     let monitor = OracleMonitor::new(rpc);
@@ -23,13 +22,13 @@ pub async fn report_offline_oracle<
 pub struct OracleMonitor<
     P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet,
 > {
-    rpc: Arc<P>,
+    rpc: P,
 }
 
 impl<P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet>
     OracleMonitor<P>
 {
-    pub fn new(rpc: Arc<P>) -> Self {
+    pub fn new(rpc: P) -> Self {
         Self { rpc }
     }
 
@@ -146,6 +145,13 @@ mod tests {
         }
     }
 
+    impl Clone for MockProvider {
+        fn clone(&self) -> Self {
+            // NOTE: expectations dropped
+            Self::default()
+        }
+    }
+
     #[tokio::test]
     async fn test_is_oracle_offline_true() {
         let mut parachain = MockProvider::default();
@@ -155,10 +161,7 @@ mod tests {
         parachain.expect_get_time_now().returning(|| Ok(1));
 
         assert_eq!(
-            OracleMonitor::new(Arc::new(parachain))
-                .is_offline()
-                .await
-                .unwrap(),
+            OracleMonitor::new(parachain).is_offline().await.unwrap(),
             true
         );
     }
@@ -172,10 +175,7 @@ mod tests {
         parachain.expect_get_time_now().returning(|| Ok(2));
 
         assert_eq!(
-            OracleMonitor::new(Arc::new(parachain))
-                .is_offline()
-                .await
-                .unwrap(),
+            OracleMonitor::new(parachain).is_offline().await.unwrap(),
             false
         );
     }
@@ -204,7 +204,7 @@ mod tests {
             .once()
             .returning(|| Ok(()));
 
-        OracleMonitor::new(Arc::new(parachain))
+        OracleMonitor::new(parachain)
             .report_offline()
             .await
             .unwrap();
@@ -234,7 +234,7 @@ mod tests {
             .never()
             .returning(|| Ok(()));
 
-        OracleMonitor::new(Arc::new(parachain))
+        OracleMonitor::new(parachain)
             .report_offline()
             .await
             .unwrap();

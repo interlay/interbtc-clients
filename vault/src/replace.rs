@@ -9,11 +9,9 @@ use runtime::{
     pallets::replace::{
         AcceptReplaceEvent, AuctionReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent,
     },
-    pallets::vault_registry::VaultStatus,
     DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet, UtilFuncs,
     VaultRegistryPallet,
 };
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::delay_for;
 
@@ -25,9 +23,9 @@ use tokio::time::delay_for;
 /// * `provider` - the parachain RPC handle
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `num_confirmations` - the number of bitcoin confirmation to await
-pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Send + Sync + 'static>(
-    provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    provider: PolkaBtcProvider,
+    btc_rpc: B,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     let provider = &provider;
@@ -78,9 +76,9 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Send + Sync + 'static
 /// * `provider` - the parachain RPC handle
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `num_confirmations` - the number of bitcoin confirmation to await
-pub async fn listen_for_auction_replace<B: BitcoinCoreApi + Send + Sync + 'static>(
-    provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+pub async fn listen_for_auction_replace<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    provider: PolkaBtcProvider,
+    btc_rpc: B,
     num_confirmations: u32,
 ) -> Result<(), runtime::Error> {
     let provider = &provider;
@@ -130,9 +128,9 @@ pub async fn listen_for_auction_replace<B: BitcoinCoreApi + Send + Sync + 'stati
 /// * `provider` - the parachain RPC handle
 /// * `event_channel` - the channel over which to signal events
 /// * `accept_replace_requests` - if true, we attempt to accept replace requests
-pub async fn listen_for_replace_requests<B: BitcoinCoreApi>(
-    provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone>(
+    provider: PolkaBtcProvider,
+    btc_rpc: B,
     event_channel: Sender<RequestEvent>,
     accept_replace_requests: bool,
 ) -> Result<(), runtime::Error> {
@@ -176,11 +174,11 @@ pub async fn listen_for_replace_requests<B: BitcoinCoreApi>(
 /// Attempts to accept a replace request. Does not retry RPC calls upon
 /// failure, since nothing is at stake at this point
 pub async fn handle_replace_request<
-    B: BitcoinCoreApi,
+    B: BitcoinCoreApi + Clone,
     P: DotBalancesPallet + ReplacePallet + VaultRegistryPallet,
 >(
-    provider: Arc<P>,
-    btc_rpc: Arc<B>,
+    provider: P,
+    btc_rpc: B,
     event: &RequestReplaceEvent<PolkaBtcRuntime>,
 ) -> Result<(), Error> {
     let required_collateral = provider
@@ -211,9 +209,9 @@ pub async fn handle_replace_request<
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 /// * `interval` - interval between checks
-pub async fn monitor_collateral_of_vaults<B: BitcoinCoreApi>(
-    provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+pub async fn monitor_collateral_of_vaults<B: BitcoinCoreApi + Clone>(
+    provider: PolkaBtcProvider,
+    btc_rpc: B,
     mut event_channel: Sender<RequestEvent>,
     interval: Duration,
 ) -> Result<(), runtime::Error> {
@@ -235,9 +233,9 @@ pub async fn monitor_collateral_of_vaults<B: BitcoinCoreApi>(
 /// # Arguments
 ///
 /// * `provider` - the parachain RPC handle
-pub async fn check_collateral_of_vaults<B: BitcoinCoreApi>(
-    provider: &Arc<PolkaBtcProvider>,
-    btc_rpc: &Arc<B>,
+pub async fn check_collateral_of_vaults<B: BitcoinCoreApi + Clone>(
+    provider: &PolkaBtcProvider,
+    btc_rpc: &B,
     event_channel: &mut Sender<RequestEvent>,
 ) -> Result<(), Error> {
     let vault_id = provider.get_account_id().clone();
@@ -253,7 +251,7 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi>(
             .await
             .unwrap_or(false)
         {
-            match auction_replace(&provider, &btc_rpc, &vault).await {
+            match auction_replace(provider, btc_rpc, &vault).await {
                 Ok(_) => {
                     info!("Auction replace for vault {} submitted", vault.id);
                     // try to send the event, but ignore the returned result since
@@ -268,11 +266,11 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi>(
 }
 
 async fn auction_replace<
-    B: BitcoinCoreApi,
+    B: BitcoinCoreApi + Clone,
     P: DotBalancesPallet + ReplacePallet + VaultRegistryPallet,
 >(
-    provider: &Arc<P>,
-    btc_rpc: &Arc<B>,
+    provider: &P,
+    btc_rpc: &B,
     vault: &PolkaBtcVault,
 ) -> Result<(), Error> {
     let btc_amount = vault
@@ -315,7 +313,7 @@ async fn auction_replace<
 ///
 /// * `event_channel` - the channel over which to signal events
 pub async fn listen_for_execute_replace(
-    provider: Arc<PolkaBtcProvider>,
+    provider: PolkaBtcProvider,
     event_channel: Sender<RequestEvent>,
 ) -> Result<(), runtime::Error> {
     let event_channel = &event_channel;
@@ -385,7 +383,7 @@ mod tests {
             async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
             async fn get_mempool_transactions<'a>(
-                self: Arc<Self>,
+                self: &'a Self,
             ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(
                 &self,
@@ -418,6 +416,13 @@ mod tests {
             async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError>
                 where
                     P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
+        }
+    }
+
+    impl Clone for MockBitcoin {
+        fn clone(&self) -> Self {
+            // NOTE: expectations dropped
+            Self::default()
         }
     }
 
@@ -481,6 +486,13 @@ mod tests {
         }
     }
 
+    impl Clone for MockProvider {
+        fn clone(&self) -> Self {
+            // NOTE: expectations dropped
+            Self::default()
+        }
+    }
+
     #[tokio::test]
     async fn test_handle_auction_replace_with_insufficient_collateral() {
         let mut bitcoin = MockBitcoin::default();
@@ -496,7 +508,7 @@ mod tests {
 
         let vault = PolkaBtcVault::default();
         assert_err!(
-            auction_replace(&Arc::new(provider), &Arc::new(bitcoin), &vault).await,
+            auction_replace(&provider, &bitcoin, &vault).await,
             Error::InsufficientFunds
         );
     }
@@ -521,7 +533,7 @@ mod tests {
             griefing_collateral: Default::default(),
         };
         assert_err!(
-            handle_replace_request(Arc::new(provider), Arc::new(bitcoin), &event).await,
+            handle_replace_request(provider, bitcoin, &event).await,
             Error::InsufficientFunds
         );
     }

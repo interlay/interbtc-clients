@@ -84,9 +84,9 @@ impl IssueRequests {
 
 // initialize `issue_set` with currently open issues, and return the block height
 // from which to start watching the bitcoin chain
-async fn initialize_issue_set<B: BitcoinCoreApi + Send + Sync + 'static>(
-    provider: &Arc<PolkaBtcProvider>,
-    btc_rpc: &Arc<B>,
+async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    provider: &PolkaBtcProvider,
+    btc_rpc: &B,
     issue_set: &Arc<IssueRequests>,
 ) -> Result<u32, Error> {
     let mut issue_set = issue_set.0.lock().await;
@@ -107,9 +107,9 @@ async fn initialize_issue_set<B: BitcoinCoreApi + Send + Sync + 'static>(
 
 /// execute issue requests on best-effort (i.e. don't retry on error),
 /// returns `NoIncomingBlocks` if stream ends, otherwise runs forever
-pub async fn process_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
-    provider: &Arc<PolkaBtcProvider>,
-    btc_rpc: &Arc<B>,
+pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    provider: &PolkaBtcProvider,
+    btc_rpc: &B,
     issue_set: &Arc<IssueRequests>,
     num_confirmations: u32,
 ) -> Result<(), Error> {
@@ -137,9 +137,9 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
     Err(Error::NoIncomingBlocks)
 }
 
-pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Send + Sync + 'static>(
-    provider: &Arc<PolkaBtcProvider>,
-    btc_rpc: &Arc<B>,
+pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    provider: &PolkaBtcProvider,
+    btc_rpc: &B,
 ) -> Result<(), Error> {
     for (issue_id, request) in provider
         .get_vault_issue_requests(provider.get_account_id().clone())
@@ -154,9 +154,11 @@ pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Send + Sync + 
 }
 
 /// execute issue requests with a matching Bitcoin payment
-async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync + 'static>(
-    provider: &Arc<PolkaBtcProvider>,
-    btc_rpc: &Arc<B>,
+async fn process_transaction_and_execute_issue<
+    B: BitcoinCoreApi + Clone + Send + Sync + 'static,
+>(
+    provider: &PolkaBtcProvider,
+    btc_rpc: &B,
     issue_set: &Arc<IssueRequests>,
     num_confirmations: u32,
     block_hash: BlockHash,
@@ -231,8 +233,8 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Send + Sync +
 }
 
 /// Import the deposit key using the on-chain key derivation scheme
-async fn add_new_deposit_key<B: BitcoinCoreApi + Send + Sync + 'static>(
-    btc_rpc: &Arc<B>,
+async fn add_new_deposit_key<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    btc_rpc: &B,
     secure_id: H256,
     public_key: BtcPublicKey,
 ) -> Result<(), Error> {
@@ -255,9 +257,9 @@ async fn add_new_deposit_key<B: BitcoinCoreApi + Send + Sync + 'static>(
 /// * `provider` - the parachain RPC handle
 /// * `event_channel` - the channel over which to signal events
 /// * `issue_set` - all issue ids observed since vault started
-pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static>(
-    provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    provider: PolkaBtcProvider,
+    btc_rpc: B,
     event_channel: Sender<RequestEvent>,
     issue_set: Arc<IssueRequests>,
 ) -> Result<(), runtime::Error> {
@@ -307,7 +309,7 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Send + Sync + 'static
 /// * `event_channel` - the channel over which to signal events
 /// * `issue_set` - all issue ids observed since vault started
 pub async fn listen_for_issue_executes(
-    provider: Arc<PolkaBtcProvider>,
+    provider: PolkaBtcProvider,
     event_channel: Sender<RequestEvent>,
     issue_set: Arc<IssueRequests>,
 ) -> Result<(), runtime::Error> {
@@ -342,7 +344,7 @@ pub async fn listen_for_issue_executes(
 /// * `provider` - the parachain RPC handle
 /// * `issue_set` - all issue ids observed since vault started
 pub async fn listen_for_issue_cancels(
-    provider: Arc<PolkaBtcProvider>,
+    provider: PolkaBtcProvider,
     issue_set: Arc<IssueRequests>,
 ) -> Result<(), runtime::Error> {
     let issue_set = &issue_set;

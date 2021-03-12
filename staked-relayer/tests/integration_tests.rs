@@ -52,7 +52,7 @@ async fn test_report_vault_theft_succeeds() {
         .await
         .unwrap();
 
-    let btc_rpc = Arc::new(MockBitcoinCore::new(relayer_provider.clone()).await);
+    let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
     let issue_amount = 100000;
     let vault_collateral =
@@ -201,8 +201,8 @@ async fn test_vote_status_no_data_succeeds() {
     let relayer_1 = register_relayer(AccountKeyring::Bob, 10000000).await;
     let relayer_2 = register_relayer(AccountKeyring::Charlie, 10000000).await;
 
-    let btc_rpc_1 = Arc::new(MockBitcoinCore::new(relayer_1.clone()).await);
-    let btc_rpc_2 = Arc::new(MockBitcoinCore::new_uninitialized(relayer_2.clone()).await);
+    let btc_rpc_1 = MockBitcoinCore::new(relayer_1.clone()).await;
+    let btc_rpc_2 = MockBitcoinCore::new_uninitialized(relayer_2.clone()).await;
 
     relayer_1
         .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100))

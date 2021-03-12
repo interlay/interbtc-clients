@@ -15,7 +15,6 @@ use bitcoin::Txid;
 use futures::{future::Either, pin_mut, Future, FutureExt, SinkExt, StreamExt};
 use sp_keyring::AccountKeyring;
 use sp_runtime::FixedPointNumber;
-use std::sync::Arc;
 use std::time::Duration;
 use substrate_subxt::{Event, PairSigner};
 use substrate_subxt_client::{
@@ -77,12 +76,11 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
 }
 
 /// Create a new provider with the given keyring
-pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> Arc<PolkaBtcProvider> {
+pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> PolkaBtcProvider {
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key.pair());
-    let ret = PolkaBtcProvider::new(client, signer)
+    PolkaBtcProvider::new(client, signer)
         .await
-        .expect("Error creating provider");
-    Arc::new(ret)
+        .expect("Error creating provider")
 }
 
 /// request, pay and execute an issue
@@ -133,7 +131,7 @@ pub async fn get_required_vault_collateral_for_issue(
 }
 
 /// wait for an event to occur. After the specified error, this will panic. This returns the event.
-pub async fn assert_event<T, F>(duration: Duration, provider: Arc<PolkaBtcProvider>, f: F) -> T
+pub async fn assert_event<T, F>(duration: Duration, provider: PolkaBtcProvider, f: F) -> T
 where
     T: Event<PolkaBtcRuntime> + Clone + std::fmt::Debug,
     F: Fn(T) -> bool,

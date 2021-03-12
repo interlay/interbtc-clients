@@ -6,7 +6,6 @@ use parity_scale_codec::{Decode, Encode};
 use runtime::{
     AccountId, PolkaBtcProvider, StakedRelayerPallet, UtilFuncs, PLANCK_PER_DOT, TX_FEES,
 };
-use std::sync::Arc;
 
 #[derive(Encode, Decode, Debug, Clone, serde::Serialize)]
 struct FundAccountJsonRpcRequest {
@@ -38,7 +37,7 @@ async fn get_faucet_allowance(
 }
 
 pub async fn fund_and_register(
-    provider: &Arc<PolkaBtcProvider>,
+    provider: &PolkaBtcProvider,
     faucet_url: String,
 ) -> Result<(), Error> {
     let connection = jsonrpc_http::connect::<TypedClient>(&faucet_url).await?;

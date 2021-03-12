@@ -148,7 +148,7 @@ pub struct Opts {
 }
 
 pub(crate) async fn is_registered(
-    provider: &Arc<PolkaBtcProvider>,
+    provider: &PolkaBtcProvider,
     vault_id: AccountId,
 ) -> Result<bool, Error> {
     match provider.get_vault(vault_id).await {
@@ -159,7 +159,7 @@ pub(crate) async fn is_registered(
 }
 
 pub(crate) async fn lock_additional_collateral(
-    api: &Arc<PolkaBtcProvider>,
+    api: &PolkaBtcProvider,
     amount: u128,
 ) -> Result<(), Error> {
     let result = api.lock_additional_collateral(amount).await;
@@ -170,10 +170,10 @@ pub(crate) async fn lock_additional_collateral(
     Ok(result?)
 }
 
-pub async fn start<B: BitcoinCoreApi + Send + Sync + 'static>(
+pub async fn start<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     opts: Opts,
-    arc_provider: Arc<PolkaBtcProvider>,
-    btc_rpc: Arc<B>,
+    arc_provider: PolkaBtcProvider,
+    btc_rpc: B,
 ) -> Result<(), Error> {
     let vault_id = arc_provider.clone().get_account_id().clone();
 
