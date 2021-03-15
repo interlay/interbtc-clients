@@ -244,6 +244,7 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi + Clone>(
         .await?
         .into_iter()
         .filter(|vault| vault.id != vault_id);
+
     for vault in vaults {
         trace!("Checking collateral of {}", vault.id);
         if provider

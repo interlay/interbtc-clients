@@ -206,12 +206,13 @@ async fn _withdraw_replace(provider: &PolkaBtcProvider, params: Params) -> Resul
     Ok(result?)
 }
 
-pub async fn start_http<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub fn start_http<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     provider: PolkaBtcProvider,
     bitcoin_core: B,
     addr: SocketAddr,
     origin: String,
-) {
+    handle: tokio::runtime::Handle,
+) -> jsonrpc_http_server::CloseHandle {
     let mut io = IoHandler::default();
     {
         let provider = provider.clone();
@@ -266,15 +267,19 @@ pub async fn start_http<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     }
 
     let server = ServerBuilder::new(io)
+        .event_loop_executor(handle.clone())
         .health_api(("/health", "system_health"))
         .rest_api(jsonrpc_http_server::RestApi::Unsecure)
         .cors(DomainsValidation::AllowOnly(vec![origin.into()]))
         .start_http(&addr)
         .expect("Unable to start RPC server");
 
-    tokio::task::spawn_blocking(move || {
+    let close_handle = server.close_handle();
+
+    handle.spawn_blocking(move || {
+        info!("Starting http server...");
         server.wait();
-    })
-    .await
-    .unwrap();
+    });
+
+    close_handle
 }
