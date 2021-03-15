@@ -1,11 +1,13 @@
 mod error;
 mod http;
+mod system;
 
 use clap::Clap;
 use error::Error;
 use runtime::substrate_subxt::PairSigner;
-use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
+use runtime::{ConnectionManager, ConnectionManagerConfig, PolkaBtcRuntime, RestartPolicy};
 use std::time::Duration;
+use system::{FaucetService, FaucetServiceConfig};
 
 /// DOT faucet for enabling users to test PolkaBTC
 #[derive(Clap)]
@@ -42,6 +44,10 @@ struct Opts {
     /// Timeout in milliseconds to wait for connection to btc-parachain.
     #[clap(long, default_value = "60000")]
     connection_timeout_ms: u64,
+
+    /// What to do if the connection to the btc-parachain drops.
+    #[clap(long, default_value = "always")]
+    restart_policy: RestartPolicy,
 }
 
 #[tokio::main]
@@ -54,23 +60,25 @@ async fn main() -> Result<(), Error> {
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
-    let provider = PolkaBtcProvider::from_url_with_retry(
-        opts.polka_btc_url,
-        signer,
-        Duration::from_millis(opts.connection_timeout_ms),
-    )
-    .await?;
 
-    let http_addr = opts.http_addr.parse()?;
-    http::start_http(
-        provider,
-        http_addr,
-        opts.rpc_cors_domain,
-        opts.user_allowance,
-        opts.vault_allowance,
-        opts.staked_relayer_allowance,
+    ConnectionManager::<_, _, FaucetService>::new(
+        opts.polka_btc_url.clone(),
+        signer.clone(),
+        FaucetServiceConfig {
+            http_addr: opts.http_addr.parse()?,
+            rpc_cors_domain: opts.rpc_cors_domain,
+            user_allowance: opts.user_allowance,
+            vault_allowance: opts.vault_allowance,
+            staked_relayer_allowance: opts.staked_relayer_allowance,
+        },
+        ConnectionManagerConfig {
+            retry_timeout: Duration::from_millis(opts.connection_timeout_ms),
+            restart_policy: opts.restart_policy,
+        },
+        tokio::runtime::Handle::current(),
     )
-    .await;
+    .start()
+    .await?;
 
     Ok(())
 }

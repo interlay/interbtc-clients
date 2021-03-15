@@ -2032,6 +2032,7 @@ dependencies = [
 name = "faucet"
 version = "0.2.0"
 dependencies = [
+ "async-trait",
  "bitcoin 0.2.0",
  "btc-parachain",
  "btc-parachain-service",
