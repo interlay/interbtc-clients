@@ -1210,7 +1210,7 @@ impl RedeemPallet for PolkaBtcProvider {
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, PolkaBtcRedeemRequest)>, Error> {
-        let result: Vec<(H256, PolkaBtcRedeemRequest)> = self
+        let requests: Vec<(H256, PolkaBtcRedeemRequest)> = self
             .rpc_client
             .request(
                 "redeem_getVaultRedeemRequests",
@@ -1218,7 +1218,7 @@ impl RedeemPallet for PolkaBtcProvider {
             )
             .await?;
 
-        Ok(result)
+        Ok(requests)
     }
 
     async fn get_redeem_period(&self) -> Result<BlockNumber, Error> {
