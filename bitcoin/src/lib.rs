@@ -70,7 +70,7 @@ pub trait BitcoinCoreApi {
 
     async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
 
-    async fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error>;
+    async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
 
     async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
 
@@ -89,6 +89,8 @@ pub trait BitcoinCoreApi {
     async fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
 
     async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
+
+    async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error>;
 
     async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
 
@@ -350,7 +352,7 @@ impl BitcoinCoreApi for BitcoinCore {
     ///
     /// # Arguments
     /// * `height` - block height
-    async fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error> {
+    async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error> {
         match self.rpc.get_block_hash(height.into()) {
             Ok(block_hash) => Ok(block_hash),
             Err(e) => Err(
@@ -431,6 +433,10 @@ impl BitcoinCoreApi for BitcoinCore {
 
     async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error> {
         Ok(self.rpc.get_block(hash)?)
+    }
+
+    async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error> {
+        Ok(self.rpc.get_block_header(hash)?)
     }
 
     async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error> {

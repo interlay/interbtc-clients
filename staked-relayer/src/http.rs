@@ -4,6 +4,7 @@ use jsonrpc_http_server::jsonrpc_core::serde_json::Value;
 use jsonrpc_http_server::jsonrpc_core::{Error as JsonRpcError, ErrorCode as JsonRpcErrorCode};
 use jsonrpc_http_server::jsonrpc_core::{IoHandler, Params};
 use jsonrpc_http_server::{DomainsValidation, ServerBuilder};
+use log::info;
 use parity_scale_codec::{Decode, Encode};
 use runtime::ErrorCode as PolkaBtcErrorCode;
 use runtime::StatusCode as PolkaBtcStatusCode;
@@ -118,7 +119,12 @@ async fn _vote_on_status_update(provider: &PolkaBtcProvider, params: Params) -> 
         .await?)
 }
 
-pub async fn start_http(provider: PolkaBtcProvider, addr: SocketAddr, origin: String) {
+pub fn start_http(
+    provider: PolkaBtcProvider,
+    addr: SocketAddr,
+    origin: String,
+    handle: tokio::runtime::Handle,
+) -> jsonrpc_http_server::CloseHandle {
     let mut io = IoHandler::default();
     {
         let provider = provider.clone();
@@ -164,15 +170,19 @@ pub async fn start_http(provider: PolkaBtcProvider, addr: SocketAddr, origin: St
     }
 
     let server = ServerBuilder::new(io)
+        .event_loop_executor(handle.clone())
         .health_api(("/health", "system_health"))
         .rest_api(jsonrpc_http_server::RestApi::Unsecure)
         .cors(DomainsValidation::AllowOnly(vec![origin.into()]))
         .start_http(&addr)
         .expect("Unable to start RPC server");
 
-    tokio::task::spawn_blocking(move || {
+    let close_handle = server.close_handle();
+
+    handle.spawn_blocking(move || {
+        info!("Starting http server...");
         server.wait();
-    })
-    .await
-    .unwrap();
+    });
+
+    close_handle
 }

@@ -207,7 +207,7 @@ mod tests {
             async fn get_block_count(&self) -> Result<u64, Error>;
             async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
             async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
-            async fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error>;
+            async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
             async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
             async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error>;
@@ -218,6 +218,7 @@ mod tests {
             ) -> Result<(), Error>;
             async fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
             async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
+            async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error>;
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
             async fn get_mempool_transactions<'a>(
                 self: &'a Self,

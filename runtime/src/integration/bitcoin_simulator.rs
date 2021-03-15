@@ -257,7 +257,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
 
         Ok(proof)
     }
-    async fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError> {
+    async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError> {
         let blocks = self.blocks.read().await;
         let block = blocks
             .get(height as usize)
@@ -309,6 +309,14 @@ impl BitcoinCoreApi for MockBitcoinCore {
             .find(|x| &x.block_hash() == hash)
             .ok_or(BitcoinError::InvalidBitcoinHeight)?;
         Ok(block.clone())
+    }
+    async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, BitcoinError> {
+        let blocks = self.blocks.read().await;
+        let block = blocks
+            .iter()
+            .find(|x| &x.block_hash() == hash)
+            .ok_or(BitcoinError::InvalidBitcoinHeight)?;
+        Ok(block.header.clone())
     }
     async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError> {
         let blocks = self.blocks.read().await;

@@ -5,18 +5,19 @@ use runtime::{
     ErrorCode, ExchangeRateOraclePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
 };
 use std::time::Duration;
+use tokio::time::delay_for;
 
 pub async fn report_offline_oracle<
     P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet,
 >(
     rpc: P,
-    checking_interval: Duration,
-) {
+    duration: Duration,
+) -> Result<(), Error> {
     let monitor = OracleMonitor::new(rpc);
-    utils::check_every(checking_interval, || async {
-        monitor.report_offline().await
-    })
-    .await
+    loop {
+        delay_for(duration).await;
+        monitor.report_offline().await?;
+    }
 }
 
 pub struct OracleMonitor<

@@ -1,21 +1,7 @@
 use crate::Error;
-use log::error;
 use runtime::{StakedRelayerPallet, UtilFuncs, MINIMUM_STAKE};
-use std::future::Future;
 use std::time::Duration;
 use tokio::time::delay_for;
-
-pub async fn check_every<F>(duration: Duration, check: impl Fn() -> F)
-where
-    F: Future<Output = Result<(), Error>>,
-{
-    loop {
-        delay_for(duration).await;
-        if let Err(e) = check().await {
-            error!("Error: {}", e.to_string());
-        }
-    }
-}
 
 pub async fn is_registered<P: StakedRelayerPallet + UtilFuncs>(
     provider: &P,

@@ -38,9 +38,9 @@ async fn get_faucet_allowance(
 
 pub async fn fund_and_register(
     provider: &PolkaBtcProvider,
-    faucet_url: String,
+    faucet_url: &String,
 ) -> Result<(), Error> {
-    let connection = jsonrpc_http::connect::<TypedClient>(&faucet_url).await?;
+    let connection = jsonrpc_http::connect::<TypedClient>(faucet_url).await?;
 
     // Receive user allowance from faucet
     get_funding(connection.clone(), provider.get_account_id().clone()).await?;

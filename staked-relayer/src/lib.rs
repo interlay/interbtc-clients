@@ -3,10 +3,12 @@ mod error;
 mod faucet;
 mod http;
 mod oracle;
-pub mod relay;
 mod status;
-pub mod utils;
 mod vault;
+
+pub mod relay;
+pub mod system;
+pub mod utils;
 
 pub use error::Error;
 pub use vault::Vaults;
