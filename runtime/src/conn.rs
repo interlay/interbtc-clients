@@ -72,6 +72,7 @@ pub(crate) async fn new_websocket_client_with_retry(
     .await?
 }
 
+#[derive(Clone, Debug)]
 pub enum RestartPolicy {
     Never,
     Always,
