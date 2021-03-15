@@ -126,7 +126,7 @@ impl<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet> RelayMonitor<B, P> {
 
         // TODO: check if user submitted
         info!("Block submission: {}", parachain_block_hash);
-        match self.btc_rpc.get_block_hash_for(height).await {
+        match self.btc_rpc.get_block_hash(height).await {
             Ok(bitcoin_block_hash) => {
                 if bitcoin_block_hash.into_inner() != parachain_block_hash.to_bytes_le() {
                     warn!("Block does not match at height {}", height);
@@ -147,7 +147,7 @@ impl<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet> RelayMonitor<B, P> {
                 )
                 .await?;
             }
-            Err(e) => error!("Got error on get_block_hash_for({}): {}", height, e),
+            Err(e) => error!("Got error on get_block_hash({}): {}", height, e),
         }
 
         Ok(())
@@ -188,8 +188,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, GetBlockResult, LockedTransaction, PartialAddress, Transaction, TransactionMetadata,
-        Txid, PUBLIC_KEY_SIZE,
+        Block, BlockHeader, GetBlockResult, LockedTransaction, PartialAddress, Transaction,
+        TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::PolkaBtcStatusUpdate;
     use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode, MINIMUM_STAKE};
@@ -294,7 +294,7 @@ mod tests {
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
-           async  fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
+            async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError>;
             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
             async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError>;
             async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, BitcoinError>;
@@ -305,6 +305,7 @@ mod tests {
             ) -> Result<(), BitcoinError>;
             async fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
             async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
+            async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, BitcoinError>;
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
             async fn get_mempool_transactions<'a>(
                 self: &'a Self,
@@ -354,7 +355,7 @@ mod tests {
     async fn test_on_store_block_exists() {
         let mut bitcoin = MockBitcoin::default();
         bitcoin
-            .expect_get_block_hash_for()
+            .expect_get_block_hash()
             .returning(|_| Ok(BlockHash::from_slice(&[1; 32]).unwrap()));
         let mut parachain = MockProvider::default();
         parachain
@@ -378,7 +379,7 @@ mod tests {
     async fn test_on_store_block_not_exists() {
         let mut bitcoin = MockBitcoin::default();
         bitcoin
-            .expect_get_block_hash_for()
+            .expect_get_block_hash()
             .returning(|_| Err(BitcoinError::InvalidBitcoinHeight.into()));
         let mut parachain = MockProvider::default();
         parachain

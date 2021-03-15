@@ -5,21 +5,21 @@ use std::error::Error as StdError;
 #[async_trait]
 pub trait Backing<E: StdError> {
     /// Returns the height of the longest chain
-    fn get_block_count(&self) -> Result<u32, Error<E>>;
+    async fn get_block_count(&self) -> Result<u32, Error<E>>;
 
     /// Returns the raw header of a block in storage
     ///
     /// # Arguments
     ///
     /// * `height` - The height of the block to fetch
-    fn get_block_header(&self, height: u32) -> Result<Option<Vec<u8>>, Error<E>>;
+    async fn get_block_header(&self, height: u32) -> Result<Option<Vec<u8>>, Error<E>>;
 
     /// Returns the (little endian) hash of a block
     ///
     /// # Arguments
     ///
     /// * `height` - The height of the block to fetch
-    fn get_block_hash(&self, height: u32) -> Result<Vec<u8>, Error<E>>;
+    async fn get_block_hash(&self, height: u32) -> Result<Vec<u8>, Error<E>>;
 }
 
 #[async_trait]

@@ -1,32 +1,32 @@
 use super::Error;
 use crate::core::{Backing, Error as CoreError};
 use async_trait::async_trait;
-pub use bitcoin::Client as RPC;
-use bitcoin::{serialize, RpcApi};
-use std::sync::Arc;
+use bitcoin::serialize;
+pub use bitcoin::{BitcoinCore, BitcoinCoreApi};
 
 pub struct Client {
-    rpc: Arc<RPC>,
+    bitcoin_core: BitcoinCore,
 }
 
 impl Client {
-    pub fn new(rpc: Arc<RPC>) -> Self {
-        Client { rpc }
+    pub fn new(bitcoin_core: BitcoinCore) -> Self {
+        Client { bitcoin_core }
     }
 }
 
 #[async_trait]
 impl Backing<Error> for Client {
-    fn get_block_count(&self) -> Result<u32, CoreError<Error>> {
+    async fn get_block_count(&self) -> Result<u32, CoreError<Error>> {
         let count = self
-            .rpc
+            .bitcoin_core
             .get_block_count()
+            .await
             .map_err(|e| CoreError::Backing(Error::BitcoinError(e)))?;
         return Ok(count as u32);
     }
 
-    fn get_block_header(&self, height: u32) -> Result<Option<Vec<u8>>, CoreError<Error>> {
-        let block_hash = match self.rpc.get_block_hash(height as u64) {
+    async fn get_block_header(&self, height: u32) -> Result<Option<Vec<u8>>, CoreError<Error>> {
+        let block_hash = match self.bitcoin_core.get_block_hash(height).await {
             Ok(h) => h,
             Err(_) => {
                 // TODO: match error
@@ -34,16 +34,18 @@ impl Backing<Error> for Client {
             }
         };
         let block_header = self
-            .rpc
+            .bitcoin_core
             .get_block_header(&block_hash)
+            .await
             .map_err(|e| CoreError::Backing(Error::BitcoinError(e)))?;
         Ok(Some(serialize(&block_header)))
     }
 
-    fn get_block_hash(&self, height: u32) -> Result<Vec<u8>, CoreError<Error>> {
+    async fn get_block_hash(&self, height: u32) -> Result<Vec<u8>, CoreError<Error>> {
         let block_hash = self
-            .rpc
-            .get_block_hash(height as u64)
+            .bitcoin_core
+            .get_block_hash(height)
+            .await
             .map(|hash| serialize(&hash))
             .map_err(|e| CoreError::Backing(Error::BitcoinError(e)))?;
         Ok(block_hash)

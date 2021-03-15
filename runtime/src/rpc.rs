@@ -2,6 +2,7 @@ pub use module_exchange_rate_oracle::BtcTxFeesPerByte;
 
 use async_trait::async_trait;
 use core::marker::PhantomData;
+use futures::FutureExt;
 use futures::{stream::StreamExt, SinkExt};
 use jsonrpsee_types::error::Error as JsonRpseeError;
 use jsonrpsee_types::jsonrpc::{to_value as to_json_value, Params};
@@ -9,7 +10,6 @@ use jsonrpsee_ws_client::{WsClient, WsConfig};
 use log::{info, trace};
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
 use sp_arithmetic::FixedU128;
-use sp_core::sr25519::Pair as KeyPair;
 use sp_core::H256;
 use std::collections::BTreeSet;
 use std::future::Future;
@@ -19,7 +19,7 @@ use substrate_subxt::Error as XtError;
 use substrate_subxt::EventTypeRegistry;
 use substrate_subxt::{
     sudo::*, Call, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Event,
-    EventSubscription, EventsDecoder, PairSigner, RpcClient, Signer,
+    EventSubscription, EventsDecoder, RpcClient, Signer,
 };
 use tokio::sync::RwLock;
 use tokio::time::{delay_for, timeout};
@@ -39,6 +39,7 @@ use crate::types::*;
 use crate::vault_registry::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
+use crate::Provider;
 use crate::{balances_dot::*, BlockNumber};
 
 const RETRY_DURATION: Duration = Duration::from_millis(1000);
@@ -47,14 +48,14 @@ const RETRY_DURATION: Duration = Duration::from_millis(1000);
 pub struct PolkaBtcProvider {
     rpc_client: RpcClient,
     ext_client: SubxtClient<PolkaBtcRuntime>,
-    signer: Arc<RwLock<PairSigner<PolkaBtcRuntime, KeyPair>>>,
+    signer: Arc<RwLock<PolkaBtcSigner>>,
     account_id: AccountId,
 }
 
 impl PolkaBtcProvider {
     pub async fn new<P: Into<RpcClient>>(
         rpc_client: P,
-        mut signer: PairSigner<PolkaBtcRuntime, KeyPair>,
+        mut signer: PolkaBtcSigner,
     ) -> Result<Self, Error> {
         let account_id = signer.account_id().clone();
         let rpc_client = rpc_client.into();
@@ -82,10 +83,7 @@ impl PolkaBtcProvider {
         })
     }
 
-    pub async fn from_url(
-        url: &String,
-        signer: PairSigner<PolkaBtcRuntime, KeyPair>,
-    ) -> Result<Self, Error> {
+    pub async fn from_url(url: &String, signer: PolkaBtcSigner) -> Result<Self, Error> {
         let parsed_url = url::Url::parse(url)?;
         let path = parsed_url.path();
         let config = WsConfig {
@@ -104,7 +102,7 @@ impl PolkaBtcProvider {
 
     pub async fn from_url_with_retry(
         url: String,
-        signer: PairSigner<PolkaBtcRuntime, KeyPair>,
+        signer: PolkaBtcSigner,
         timeout_duration: Duration,
     ) -> Result<Self, Error> {
         info!("Connecting to the btc-parachain...");
@@ -128,7 +126,7 @@ impl PolkaBtcProvider {
     }
 
     /// Gets a copy of the signer with a unique nonce
-    async fn get_unique_signer(&self) -> PairSigner<PolkaBtcRuntime, KeyPair> {
+    async fn get_unique_signer(&self) -> PolkaBtcSigner {
         // TODO: refresh from account store
         let mut signer = self.signer.write().await;
         // return the current value, increment afterwards
@@ -214,7 +212,7 @@ impl PolkaBtcProvider {
         futures::future::try_join(
             async move {
                 let tx = &tx;
-                while let Some(result) = sub.next().await {
+                while let Some(result) = sub.next().fuse().await {
                     if let Ok(raw_event) = result {
                         trace!("raw event: {:?}", raw_event);
                         let decoded = T::decode(&mut &raw_event.data[..]);
@@ -237,7 +235,7 @@ impl PolkaBtcProvider {
             async move {
                 loop {
                     // block until we receive an event from the other task
-                    match rx.next().await {
+                    match rx.next().fuse().await {
                         Some(event) => {
                             on_event(event).await;
                         }
@@ -259,6 +257,17 @@ impl PolkaBtcProvider {
             .sudo_and_watch(&self.get_unique_signer().await, &encoded)
             .await?;
         Ok(())
+    }
+}
+
+#[async_trait]
+impl Provider for PolkaBtcProvider {
+    async fn connect<T>(rpc_client: T, signer: PolkaBtcSigner) -> Result<Self, Error>
+    where
+        Self: Sized,
+        T: Into<RpcClient> + Send,
+    {
+        Self::new(rpc_client, signer).await
     }
 }
 

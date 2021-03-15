@@ -1527,6 +1527,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ct-logs"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1a816186fa68d9e426e3cb4ae4dff1fcd8e4a2c34b781bf7a822574a0d0aac8"
+dependencies = [
+ "sct",
+]
+
+[[package]]
 name = "ctor"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3088,14 +3097,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37743cc83e8ee85eacfce90f2f4102030d9ff0a95244098d781e9bee4a90abb6"
 dependencies = [
  "bytes 0.5.6",
- "ct-logs",
+ "ct-logs 0.7.0",
  "futures-util",
  "hyper 0.13.10",
  "log 0.4.14",
  "rustls 0.18.1",
- "rustls-native-certs",
+ "rustls-native-certs 0.4.0",
  "tokio 0.2.25",
- "tokio-rustls",
+ "tokio-rustls 0.14.1",
+ "webpki",
+]
+
+[[package]]
+name = "hyper-rustls"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f9f7a97316d44c0af9b0301e65010573a853a9fc97046d7331d7f6bc0fd5a64"
+dependencies = [
+ "ct-logs 0.8.0",
+ "futures-util",
+ "hyper 0.14.4",
+ "log 0.4.14",
+ "rustls 0.19.0",
+ "rustls-native-certs 0.5.0",
+ "tokio 1.2.0",
+ "tokio-rustls 0.22.0",
  "webpki",
 ]
 
@@ -3602,11 +3628,12 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-client"
 version = "0.2.0-alpha.2"
-source = "git+https://github.com/interlay/jsonrpsee?rev=0ee62c3#0ee62c32dc19724d11c1a7a1cd5fc1f158630671"
+source = "git+https://github.com/interlay/jsonrpsee?rev=d6aa842#d6aa842bb8893c41f76384e73c22d72161855273"
 dependencies = [
  "async-trait",
  "futures 0.3.13",
  "hyper 0.14.4",
+ "hyper-rustls 0.22.1",
  "jsonrpsee-types",
  "jsonrpsee-utils",
  "log 0.4.14",
@@ -3632,7 +3659,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.2.0-alpha.2"
-source = "git+https://github.com/interlay/jsonrpsee?rev=0ee62c3#0ee62c32dc19724d11c1a7a1cd5fc1f158630671"
+source = "git+https://github.com/interlay/jsonrpsee?rev=d6aa842#d6aa842bb8893c41f76384e73c22d72161855273"
 dependencies = [
  "async-trait",
  "futures 0.3.13",
@@ -3646,7 +3673,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-utils"
 version = "0.2.0-alpha.2"
-source = "git+https://github.com/interlay/jsonrpsee?rev=0ee62c3#0ee62c32dc19724d11c1a7a1cd5fc1f158630671"
+source = "git+https://github.com/interlay/jsonrpsee?rev=d6aa842#d6aa842bb8893c41f76384e73c22d72161855273"
 dependencies = [
  "futures 0.3.13",
  "globset",
@@ -3660,7 +3687,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.2.0-alpha.2"
-source = "git+https://github.com/interlay/jsonrpsee?rev=0ee62c3#0ee62c32dc19724d11c1a7a1cd5fc1f158630671"
+source = "git+https://github.com/interlay/jsonrpsee?rev=d6aa842#d6aa842bb8893c41f76384e73c22d72161855273"
 dependencies = [
  "async-std",
  "async-tls 0.11.0",
@@ -7218,6 +7245,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustls-native-certs"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a07b7c1885bd8ed3831c289b7870b13ef46fe0e856d288c30d9cc17d75a2092"
+dependencies = [
+ "openssl-probe",
+ "rustls 0.19.0",
+ "schannel",
+ "security-framework 2.0.0",
+]
+
+[[package]]
 name = "rustversion"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7842,7 +7881,7 @@ dependencies = [
  "futures 0.3.13",
  "futures-timer 3.0.2",
  "hyper 0.13.10",
- "hyper-rustls",
+ "hyper-rustls 0.21.0",
  "log 0.4.14",
  "num_cpus",
  "parity-scale-codec 2.0.0",
@@ -9521,7 +9560,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.14.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=428b78c#428b78c26c0ecc4ad88d260b618a012cdd84e0c0"
+source = "git+https://github.com/interlay/substrate-subxt?rev=b9b0413#b9b04130d72aa8c8bf8ac8196a4fef0174427da8"
 dependencies = [
  "dyn-clone",
  "frame-metadata",
@@ -9554,7 +9593,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-client"
 version = "0.6.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=428b78c#428b78c26c0ecc4ad88d260b618a012cdd84e0c0"
+source = "git+https://github.com/interlay/substrate-subxt?rev=b9b0413#b9b04130d72aa8c8bf8ac8196a4fef0174427da8"
 dependencies = [
  "async-std",
  "futures 0.1.30",
@@ -9573,7 +9612,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.14.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=428b78c#428b78c26c0ecc4ad88d260b618a012cdd84e0c0"
+source = "git+https://github.com/interlay/substrate-subxt?rev=b9b0413#b9b04130d72aa8c8bf8ac8196a4fef0174427da8"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -9998,6 +10037,17 @@ dependencies = [
  "futures-core",
  "rustls 0.18.1",
  "tokio 0.2.25",
+ "webpki",
+]
+
+[[package]]
+name = "tokio-rustls"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
+dependencies = [
+ "rustls 0.19.0",
+ "tokio 1.2.0",
  "webpki",
 ]
 

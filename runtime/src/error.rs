@@ -1,4 +1,6 @@
-use jsonrpsee_types::error::Error as JsonRpseeError;
+pub use jsonrpsee_types::error::Error as JsonRpseeError;
+pub use substrate_subxt::Error as XtError;
+
 use jsonrpsee_ws_client::transport::WsConnectError;
 use parity_scale_codec::Error as CodecError;
 use serde_json::Error as SerdeJsonError;
@@ -6,7 +8,6 @@ use sp_core::crypto::SecretStringError;
 use std::array::TryFromSliceError;
 use std::io::Error as IoError;
 use std::num::TryFromIntError;
-pub use substrate_subxt::Error as XtError;
 use thiserror::Error;
 use tokio::time::Elapsed;
 use url::ParseError as UrlParseError;

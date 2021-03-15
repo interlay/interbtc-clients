@@ -1,6 +1,8 @@
 pub mod cli;
-mod error;
 pub mod pallets;
+
+mod conn;
+mod error;
 mod rpc;
 mod types;
 
@@ -10,12 +12,16 @@ mod tests;
 #[cfg(feature = "testing-utils")]
 pub mod integration;
 
+pub use conn::{
+    on_shutdown, wait_or_shutdown, Manager as ConnectionManager,
+    ManagerConfig as ConnectionManagerConfig, Provider, RestartPolicy, Service, ShutdownReceiver,
+};
+
 pub use btc_relay::{
     BitcoinBlockHeight, BlockBuilder, BtcAddress, BtcPublicKey, Formattable, H256Le,
     RawBlockHeader, RichBlockHeader,
 };
 pub use error::{Error, XtError};
-use pallets::*;
 pub use rpc::{
     BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet, ExchangeRateOraclePallet, FeePallet,
     IssuePallet, PolkaBtcProvider, RedeemPallet, RefundPallet, ReplacePallet, SecurityPallet,
@@ -23,22 +29,25 @@ pub use rpc::{
 };
 pub use security::{ErrorCode, StatusCode};
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
-use sp_core::{H160, H256};
 pub use sp_runtime;
+pub use substrate_subxt;
+pub use types::*;
+pub use vault_registry::VaultStatus;
+
+use pallets::*;
+use sp_core::{H160, H256};
 use sp_runtime::{
     generic::Header,
     traits::{BlakeTwo256, IdentifyAccount, Verify},
     MultiSignature, OpaqueExtrinsic,
 };
 use std::collections::BTreeSet;
-pub use substrate_subxt;
 use substrate_subxt::register_default_type_sizes;
 use substrate_subxt::system::SystemEventTypeRegistry;
 use substrate_subxt::EventTypeRegistry;
 use substrate_subxt::{balances, extrinsic::DefaultExtra, sudo, system, Runtime};
-pub use types::*;
-pub use vault_registry::VaultStatus;
 
+// cumulus / polkadot types
 use parachain::primitives::{Id as ParaId, RelayChainBlockNumber};
 use xcm::v0::{Error as XcmError, NetworkId};
 

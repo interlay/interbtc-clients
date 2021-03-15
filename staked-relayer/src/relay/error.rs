@@ -1,4 +1,4 @@
-use bitcoin::BitcoinError;
+use bitcoin::Error as BitcoinError;
 use runtime::Error as PolkaBtcError;
 use thiserror::Error;
 

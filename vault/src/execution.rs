@@ -512,7 +512,7 @@ mod tests {
     //             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
     //             async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
     //             async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
-    //            async  fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
+    //            async  fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError>;
     //             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
     //             async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError>;
     //             async fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;

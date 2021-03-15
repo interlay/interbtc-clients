@@ -1,8 +1,8 @@
-use log::{debug, info, trace};
+use log::{info, trace};
 use std::error::Error as StdError;
 use std::marker::PhantomData;
-use std::thread::sleep;
 use std::time::Duration;
+use tokio::time::delay_for;
 
 mod error;
 mod types;
@@ -14,14 +14,20 @@ pub use types::{Backing, Issuing};
 const SLEEP_TIME: u64 = 600;
 
 /// Retrieves `batch` blocks starting at block `height` from the backing blockchain
-fn collect_headers<E: StdError>(
+async fn collect_headers<E: StdError>(
     height: u32,
     batch: u32,
     cli: &impl Backing<E>,
 ) -> Result<Vec<Vec<u8>>, Error<E>> {
-    (height..height + batch)
-        .map(|height| cli.get_block_header(height).map(|header| header.unwrap()))
-        .collect::<Result<Vec<_>, _>>()
+    let mut headers = Vec::new();
+    for h in height..height + batch {
+        headers.push(
+            cli.get_block_header(h)
+                .await
+                .map(|header| header.unwrap())?,
+        );
+    }
+    Ok(headers)
 }
 
 /// Computes the height at which the relayer should start to submit blocks.
@@ -35,18 +41,18 @@ async fn compute_start_height<E: StdError>(
 
     // check backing for discrepancy
     let mut relay_hash = issuing.get_block_hash(start_height).await?;
-    let mut btc_hash = backing.get_block_hash(start_height)?;
+    let mut btc_hash = backing.get_block_hash(start_height).await?;
 
     // backwards pass
     while relay_hash != btc_hash {
         start_height = start_height.checked_sub(1).ok_or(Error::NotInitialized)?;
         relay_hash = issuing.get_block_hash(start_height).await?;
-        btc_hash = backing.get_block_hash(start_height)?;
+        btc_hash = backing.get_block_hash(start_height).await?;
     }
 
     // forward pass (possible forks)
     loop {
-        match backing.get_block_hash(start_height) {
+        match backing.get_block_hash(start_height).await {
             Ok(h) if issuing.is_block_stored(h.clone()).await? => {
                 start_height = start_height.saturating_add(1);
             }
@@ -95,9 +101,9 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
     }
 
     /// Returns the block header at `height`
-    fn get_block_header(&self, height: u32) -> Result<Vec<u8>, Error<E>> {
+    async fn get_block_header(&self, height: u32) -> Result<Vec<u8>, Error<E>> {
         loop {
-            match self.backing.get_block_header(height)? {
+            match self.backing.get_block_header(height).await? {
                 Some(header) => return Ok(header),
                 None => {
                     trace!(
@@ -105,16 +111,17 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
                         height,
                         self.timeout
                     );
-                    sleep(self.timeout)
+                    delay_for(self.timeout).await
                 }
             };
         }
     }
 
-    fn get_num_confirmed_blocks(&self) -> Result<u32, Error<E>> {
+    async fn get_num_confirmed_blocks(&self) -> Result<u32, Error<E>> {
         Ok(self
             .backing
-            .get_block_count()?
+            .get_block_count()
+            .await?
             .saturating_sub(self.required_btc_confirmations))
     }
 
@@ -124,17 +131,17 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
         if !self.issuing.is_initialized().await? {
             let start_height = self
                 .start_height
-                .unwrap_or(self.get_num_confirmed_blocks()?);
+                .unwrap_or(self.get_num_confirmed_blocks().await?);
             info!("initializing: {}", start_height);
             self.issuing
                 .initialize(
-                    self.backing.get_block_header(start_height)?.unwrap(),
+                    self.backing.get_block_header(start_height).await?.unwrap(),
                     start_height,
                 )
                 .await?;
         }
 
-        let max_height = self.get_num_confirmed_blocks()?;
+        let max_height = self.get_num_confirmed_blocks().await?;
         trace!("backing height: {}", max_height);
         let current_height = compute_start_height(&self.backing, &self.issuing).await?;
         trace!("issuing height: {}", current_height);
@@ -147,30 +154,32 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
 
         match batch_size {
             0 => {
-                // nothing to submit right now. Wait a little while to prevent
-                sleep(self.timeout);
+                // nothing to submit right now. Wait a little while
+                info!("Waiting for the next Bitcoin block...");
+                delay_for(self.timeout).await;
             }
             1 => {
                 // submit a single block header
-                debug!("processing {}", current_height);
-                let header = self.get_block_header(current_height)?;
+                info!("Processing block at height {}", current_height);
+                let header = self.get_block_header(current_height).await?;
                 // TODO: check if block already stored
                 self.issuing.submit_block_header(header).await?;
-                info!("submitted {}", current_height);
+                info!("Submitted block at height {}", current_height);
             }
             _ => {
-                debug!(
-                    "processing: {} -> {} [{}]",
+                info!(
+                    "Processing blocks {} -> {} [{}]",
                     current_height,
                     current_height + batch_size,
                     batch_size
                 );
-                let headers = collect_headers(current_height, batch_size, &self.backing)?;
+                let headers = collect_headers(current_height, batch_size, &self.backing).await?;
                 self.issuing.submit_block_header_batch(headers).await?;
                 info!(
-                    "submitted {} -> {}",
+                    "Submitted blocks {} -> {} [{}]",
                     current_height,
-                    current_height + batch_size
+                    current_height + batch_size,
+                    batch_size
                 );
             }
         }
@@ -293,7 +302,7 @@ mod tests {
 
     #[async_trait]
     impl Backing<DummyError> for DummyBacking {
-        fn get_block_count(&self) -> Result<u32, Error<DummyError>> {
+        async fn get_block_count(&self) -> Result<u32, Error<DummyError>> {
             self.hashes
                 .keys()
                 .max()
@@ -301,11 +310,14 @@ mod tests {
                 .ok_or(Error::CannotFetchBestHeight)
         }
 
-        fn get_block_header(&self, height: u32) -> Result<Option<Vec<u8>>, Error<DummyError>> {
+        async fn get_block_header(
+            &self,
+            height: u32,
+        ) -> Result<Option<Vec<u8>>, Error<DummyError>> {
             Ok(self.hashes.get(&height).map(|v| v.clone()))
         }
 
-        fn get_block_hash(&self, height: u32) -> Result<Vec<u8>, Error<DummyError>> {
+        async fn get_block_hash(&self, height: u32) -> Result<Vec<u8>, Error<DummyError>> {
             self.hashes
                 .get(&height)
                 .map(|v| v.clone())
@@ -417,7 +429,7 @@ mod tests {
         let height_after = runner.issuing.get_best_height().await?;
         assert_eq!(height_after, 6);
 
-        let best_height = runner.backing.get_block_count()?;
+        let best_height = runner.backing.get_block_count().await?;
         assert_eq!(height_after, best_height);
 
         assert!(runner.issuing.is_block_stored(make_hash("c")).await?);
