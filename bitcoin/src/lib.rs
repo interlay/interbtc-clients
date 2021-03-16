@@ -677,7 +677,7 @@ impl TransactionExt for Transaction {
     }
 }
 
-// https://github.com/interlay/btc-parachain/-/blob/dev/crates/bitcoin/src/parser.rs#L264
+// https://github.com/interlay/btc-parachain/blob/cc5c16b28ef705e0774654dd94b813d9d35e12ec/crates/bitcoin/src/parser.rs#L277
 fn parse_compact_uint(varint: &[u8]) -> Result<(u64, usize), Error> {
     match varint.get(0).ok_or(Error::ParsingError)? {
         0xfd => {

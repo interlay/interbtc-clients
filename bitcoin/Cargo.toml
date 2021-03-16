@@ -32,7 +32,7 @@ sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1
 
 [dependencies.polkabtc-bitcoin]
 git = "https://github.com/interlay/btc-parachain"
-branch = "dev"
+branch = "master"
 version = "0.5.0"
 package = "bitcoin"
 optional = true
