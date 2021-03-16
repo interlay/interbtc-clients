@@ -240,6 +240,7 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi + Clone>(
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel.send(RequestEvent::Opened).await;
                 }
+                Err(Error::InsufficientFunds) => debug!("Not auctioning vault {}", vault.id),
                 Err(e) => error!("Failed to auction vault {}: {}", vault.id, e.to_string()),
             };
         }
