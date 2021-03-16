@@ -1,8 +1,4 @@
-use crate::{
-    constants::*,
-    error::Error,
-    issue::{process_issue_requests, IssueRequests},
-};
+use crate::{constants::*, error::Error, issue::process_issue_requests, IssueRequests};
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use futures::stream::StreamExt;
@@ -212,7 +208,7 @@ impl Request {
     }
 }
 
-/// Queries the parachain for open requests/replaces and executes them. It checks the
+/// Queries the parachain for open requests and executes them. It checks the
 /// bitcoin blockchain to see if a payment has already been made.
 pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     provider: PolkaBtcProvider,
