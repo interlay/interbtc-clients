@@ -1,6 +1,6 @@
 [package]
 name = "faucet"
-version = "0.2.0"
+version = "0.5.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 
@@ -10,27 +10,22 @@ env_logger = "0.6.1"
 clap = "3.0.0-beta.2"
 chrono = "0.4.19"
 tokio = { version = "0.2.22", features = ["full"] }
-runtime = { path = "../runtime" }
-bitcoin = { path = "../bitcoin", features = ["cli"] }
 thiserror = "1.0"
 jsonrpc-http-server = "17.0.0"
-jsonrpsee = "0.1.0"
 parity-scale-codec = "2.0.0"
 serde_json = "1.0.57"
 serde = "1.0.116"
-futures = "0.3.5"
 hex = "0.4.2"
 kv = { version = "0.22.0", features = ["json-value"] }
-pin-project-lite = "0.2.4"
 async-trait = "0.1.40"
 
-# Substrate dependencies
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
+# Workspace dependencies
+runtime = { path = "../runtime" }
 
 [dev-dependencies]
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "b9b0413" }
-tempdir = "0.3.7"
-btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
-btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
+
+# Workspace dependencies
 runtime = { path = "../runtime", features = ["testing-utils"] }
+
+# Substrate dependencies
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }

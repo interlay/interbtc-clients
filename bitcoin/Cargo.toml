@@ -1,8 +1,15 @@
 [package]
 name = "bitcoin"
-version = "0.2.0"
+version = "0.5.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
+
+[features]
+default = ["polkabtc"]
+regtest-mine-on-tx = []
+regtest-manual-mining = []
+cli = ["clap"]
+polkabtc = ["polkabtc-bitcoin"]
 
 [dependencies]
 thiserror = "1.0"
@@ -32,10 +39,3 @@ optional = true
 
 [dev-dependencies]
 mockall = "0.8.1"
-
-[features]
-default = ["polkabtc"]
-regtest-mine-on-tx = []
-regtest-manual-mining = []
-cli = ["clap"]
-polkabtc = ["polkabtc-bitcoin"]

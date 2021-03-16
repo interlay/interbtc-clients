@@ -10,7 +10,6 @@ use futures::{
     future::{join, Either},
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
-use jsonrpsee::Client as JsonRpseeClient;
 use log::*;
 use runtime::{
     pallets::staked_relayers::*,
@@ -24,7 +23,6 @@ use sp_keyring::AccountKeyring;
 use staked_relayer;
 use std::sync::Arc;
 use std::time::Duration;
-
 use tokio::time::timeout;
 
 const TIMEOUT: Duration = Duration::from_secs(45);

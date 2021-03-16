@@ -1,6 +1,6 @@
 [package]
 name = "runtime"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 
@@ -23,8 +23,6 @@ thiserror = "1.0"
 serde_json = "1.0.57"
 serde = "1.0.116"
 tokio = { version = "0.2.22", features = ["full"] }
-jsonrpsee-types = { git = "https://github.com/interlay/jsonrpsee", rev = "d6aa842" }
-jsonrpsee-ws-client = { git = "https://github.com/interlay/jsonrpsee", rev = "d6aa842" }
 futures = "0.3.5"
 clap = "3.0.0-beta.2"
 log = "0.4.0"
@@ -42,6 +40,9 @@ frame-system = { git = "https://github.com/paritytech/substrate", branch = "roco
 # Subxt dependencies
 substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "b9b0413" }
 substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "b9b0413" }
+
+jsonrpsee-types = { git = "https://github.com/interlay/jsonrpsee", rev = "d6aa842" }
+jsonrpsee-ws-client = { git = "https://github.com/interlay/jsonrpsee", rev = "d6aa842" }
 
 # Polkadot dependencies
 xcm = { git = "https://github.com/paritytech/polkadot", branch = "rococo-v1" }
@@ -123,6 +124,6 @@ package = "exchange-rate-oracle"
 
 [dev-dependencies]
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "b9b0413" }
-tempdir = "0.3.7"
 btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
 btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
+tempdir = "0.3.7"

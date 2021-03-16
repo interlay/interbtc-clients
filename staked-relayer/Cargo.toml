@@ -9,27 +9,27 @@ log = "0.4.0"
 env_logger = "0.7.1"
 parity-scale-codec = "2.0.0"
 tokio = { version = "0.2.22", features = ["full"] }
+backoff = { version = "0.2.1", features = ["tokio"] }
 hex = "0.4.2"
 thiserror = "1.0"
 futures = "0.3.5"
 clap = "3.0.0-beta.2"
 async-trait = "0.1.40"
 serde = "1.0.116"
-runtime = { path = "../runtime" }
-bitcoin = { path = "../bitcoin", features = ["cli"] }
+
 jsonrpc-http-server = "17.0.0"
-backoff = { version = "0.2.1", features = ["tokio"] }
 jsonrpc-core-client = { version = "17.0.0", features = ["http", "tls"] }
+
+# Workspace dependencies
+bitcoin = { path = "../bitcoin", features = ["cli"] }
+runtime = { path = "../runtime" }
 
 # Substrate dependencies
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 
-frame-system = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
-
 [dev-dependencies]
 mockall = "0.8.1"
-rand = "0.7"
-schnorrkel = "0.9.1"
-jsonrpsee = "0.1.0"
+
+# Workspace dependencies
 runtime = { path = "../runtime", features = ["testing-utils"] }
