@@ -12,6 +12,10 @@ pub struct BitcoinOpts {
 
     #[clap(long, env = "BITCOIN_RPC_PASS")]
     pub bitcoin_rpc_pass: String,
+
+    /// Timeout in milliseconds to wait for connection to bitcoin-core.
+    #[clap(long, default_value = "60000")]
+    pub bitcoin_connection_timeout_ms: u64,
 }
 
 impl BitcoinOpts {

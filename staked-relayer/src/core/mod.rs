@@ -132,7 +132,7 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
             let start_height = self
                 .start_height
                 .unwrap_or(self.get_num_confirmed_blocks().await?);
-            info!("initializing: {}", start_height);
+            info!("Initializing at height {}", start_height);
             self.issuing
                 .initialize(
                     self.backing.get_block_header(start_height).await?.unwrap(),
@@ -142,9 +142,9 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
         }
 
         let max_height = self.get_num_confirmed_blocks().await?;
-        trace!("backing height: {}", max_height);
+        trace!("Backing height: {}", max_height);
         let current_height = compute_start_height(&self.backing, &self.issuing).await?;
-        trace!("issuing height: {}", current_height);
+        trace!("Issuing height: {}", current_height);
 
         let batch_size = if current_height.saturating_add(self.max_batch_size) > max_height {
             max_height.saturating_add(1).saturating_sub(current_height)
@@ -155,7 +155,7 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
         match batch_size {
             0 => {
                 // nothing to submit right now. Wait a little while
-                info!("Waiting for the next Bitcoin block...");
+                trace!("Waiting for the next Bitcoin block...");
                 delay_for(self.timeout).await;
             }
             1 => {

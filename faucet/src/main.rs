@@ -5,25 +5,24 @@ mod system;
 use clap::Clap;
 use error::Error;
 use runtime::substrate_subxt::PairSigner;
-use runtime::{ConnectionManager, ConnectionManagerConfig, PolkaBtcRuntime, RestartPolicy};
-use std::time::Duration;
+use runtime::{ConnectionManager, PolkaBtcRuntime};
 use system::{FaucetService, FaucetServiceConfig};
 
 /// DOT faucet for enabling users to test PolkaBTC
 #[derive(Clap)]
-#[clap(version = "0.1", author = "Interlay <contact@interlay.io>")]
+#[clap(version = "0.2", author = "Interlay <contact@interlay.io>")]
 struct Opts {
-    /// Parachain URL, can be over WebSockets or HTTP.
-    #[clap(long, default_value = "ws://127.0.0.1:9944")]
-    polka_btc_url: String,
+    /// Keyring / keyfile options.
+    #[clap(flatten)]
+    account_info: runtime::cli::ProviderUserOpts,
+
+    /// Connection settings for the BTC-Parachain.
+    #[clap(flatten)]
+    parachain: runtime::cli::ConnectionOpts,
 
     /// Address to listen on for JSON-RPC requests.
     #[clap(long, default_value = "[::0]:3033")]
     http_addr: String,
-
-    /// keyring / keyfile options.
-    #[clap(flatten)]
-    account_info: runtime::cli::ProviderUserOpts,
 
     /// Comma separated list of allowed origins.
     #[clap(long, default_value = "*")]
@@ -40,14 +39,6 @@ struct Opts {
     /// DOT allowance per request for vaults.
     #[clap(long, default_value = "500")]
     staked_relayer_allowance: u128,
-
-    /// Timeout in milliseconds to wait for connection to btc-parachain.
-    #[clap(long, default_value = "60000")]
-    connection_timeout_ms: u64,
-
-    /// What to do if the connection to the btc-parachain drops.
-    #[clap(long, default_value = "always")]
-    restart_policy: RestartPolicy,
 }
 
 #[tokio::main]
@@ -62,7 +53,7 @@ async fn main() -> Result<(), Error> {
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
 
     ConnectionManager::<_, _, FaucetService>::new(
-        opts.polka_btc_url.clone(),
+        opts.parachain.polka_btc_url.clone(),
         signer.clone(),
         FaucetServiceConfig {
             http_addr: opts.http_addr.parse()?,
@@ -71,10 +62,7 @@ async fn main() -> Result<(), Error> {
             vault_allowance: opts.vault_allowance,
             staked_relayer_allowance: opts.staked_relayer_allowance,
         },
-        ConnectionManagerConfig {
-            retry_timeout: Duration::from_millis(opts.connection_timeout_ms),
-            restart_policy: opts.restart_policy,
-        },
+        opts.parachain.into(),
         tokio::runtime::Handle::current(),
     )
     .start()

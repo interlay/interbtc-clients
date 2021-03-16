@@ -4,20 +4,26 @@ use staked_relayer::Error;
 use bitcoin::BitcoinCore;
 use clap::Clap;
 use runtime::PolkaBtcRuntime;
-use runtime::{
-    substrate_subxt::PairSigner, ConnectionManager, ConnectionManagerConfig, RestartPolicy,
-};
+use runtime::{substrate_subxt::PairSigner, ConnectionManager};
 use std::sync::Arc;
 use std::time::Duration;
 
 /// The Staked Relayer client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
 #[derive(Clap)]
-#[clap(version = "0.1", author = "Interlay <contact@interlay.io>")]
+#[clap(version = "0.2", author = "Interlay <contact@interlay.io>")]
 struct Opts {
-    /// Parachain URL, can be over WebSockets or HTTP.
-    #[clap(long, default_value = "ws://127.0.0.1:9944")]
-    polka_btc_url: String,
+    /// Keyring / keyfile options.
+    #[clap(flatten)]
+    account_info: runtime::cli::ProviderUserOpts,
+
+    /// Connection settings for the BTC-Parachain.
+    #[clap(flatten)]
+    parachain: runtime::cli::ConnectionOpts,
+
+    /// Connection settings for Bitcoin Core.
+    #[clap(flatten)]
+    bitcoin: bitcoin::cli::BitcoinOpts,
 
     /// Address to listen on for JSON-RPC requests.
     #[clap(long, default_value = "[::0]:3030")]
@@ -30,7 +36,7 @@ struct Opts {
 
     /// Timeout in milliseconds to poll Bitcoin.
     #[clap(long, default_value = "6000")]
-    bitcoin_timeout_ms: u64,
+    bitcoin_poll_timeout_ms: u64,
 
     /// Starting height to relay block headers, if not defined
     /// use the best height as reported by the relay module.
@@ -53,17 +59,9 @@ struct Opts {
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
 
-    /// keyring / keyfile options.
-    #[clap(flatten)]
-    account_info: runtime::cli::ProviderUserOpts,
-
-    /// Connection settings for Bitcoin Core.
-    #[clap(flatten)]
-    bitcoin: bitcoin::cli::BitcoinOpts,
-
     /// Automatically register the relayer with the given stake (in Planck).
     #[clap(long)]
-    pub auto_register_with_stake: Option<u128>,
+    auto_register_with_stake: Option<u128>,
 
     /// Automatically register the staked relayer with collateral received from the faucet and a newly generated address.
     /// The parameter is the URL of the faucet
@@ -73,14 +71,6 @@ struct Opts {
     /// Number of confirmations a block needs to have before it is submitted.
     #[clap(long, default_value = "0")]
     required_btc_confirmations: u32,
-
-    /// Timeout in milliseconds to wait for connection to btc-parachain.
-    #[clap(long, default_value = "60000")]
-    connection_timeout_ms: u64,
-
-    /// What to do if the connection to the btc-parachain drops.
-    #[clap(long, default_value = "always")]
-    restart_policy: RestartPolicy,
 }
 
 async fn start() -> Result<(), Error> {
@@ -94,7 +84,7 @@ async fn start() -> Result<(), Error> {
     let bitcoin_core = BitcoinCore::new_with_retry(
         Arc::new(opts.bitcoin.new_client(None)?),
         dummy_network,
-        Duration::from_millis(opts.connection_timeout_ms),
+        Duration::from_millis(opts.bitcoin.bitcoin_connection_timeout_ms),
     )
     .await?;
 
@@ -103,7 +93,7 @@ async fn start() -> Result<(), Error> {
 
     // only open connection to parachain after bitcoind sync to prevent timeout
     ConnectionManager::<_, _, RelayerService>::new(
-        opts.polka_btc_url.clone(),
+        opts.parachain.polka_btc_url.clone(),
         signer.clone(),
         RelayerServiceConfig {
             bitcoin_core,
@@ -112,17 +102,14 @@ async fn start() -> Result<(), Error> {
             bitcoin_theft_start_height: opts.bitcoin_theft_start_height,
             bitcoin_relay_start_height: opts.bitcoin_relay_start_height,
             max_batch_size: opts.max_batch_size,
-            bitcoin_timeout: Duration::from_millis(opts.bitcoin_timeout_ms),
+            bitcoin_timeout: Duration::from_millis(opts.bitcoin_poll_timeout_ms),
             oracle_timeout: Duration::from_millis(opts.oracle_timeout_ms),
             required_btc_confirmations: opts.required_btc_confirmations,
             status_update_deposit: opts.status_update_deposit,
             http_addr: opts.http_addr.parse()?,
             rpc_cors_domain: opts.rpc_cors_domain,
         },
-        ConnectionManagerConfig {
-            retry_timeout: Duration::from_millis(opts.connection_timeout_ms),
-            restart_policy: opts.restart_policy,
-        },
+        opts.parachain.into(),
         tokio::runtime::Handle::current(),
     )
     .start()
