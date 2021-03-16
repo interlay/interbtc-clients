@@ -4,7 +4,9 @@ use futures::{channel::mpsc::Sender, SinkExt, StreamExt};
 use log::*;
 use runtime::{
     pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
-    BtcAddress, BtcPublicKey, BtcRelayPallet, H256Le, IssuePallet, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs,
+    substrate_subxt::{Error as SubxtError, ModuleError as SubxtModuleError, RuntimeError as SubxtRuntimeError},
+    BtcAddress, BtcPublicKey, BtcRelayPallet, Error as RuntimeError, H256Le, IssuePallet, PolkaBtcProvider,
+    PolkaBtcRuntime, UtilFuncs, ISSUE_COMPLETED_ERROR, ISSUE_MODULE,
 };
 use sha2::{Digest, Sha256};
 use sp_core::H256;
@@ -201,11 +203,21 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
                 let proof = btc_rpc.get_proof_for(txid.clone(), &block_hash).await?;
 
                 info!("Executing issue with id {}", issue_id);
-
-                // this will error if someone else executes the issue first
-                provider
+                match provider
                     .execute_issue(issue_id, H256Le::from_bytes_le(&txid.as_hash()), proof, raw_tx)
-                    .await?;
+                    .await
+                {
+                    Ok(_) => (),
+                    Err(RuntimeError::XtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
+                        ref module,
+                        ref error,
+                    }))))
+                        if module == ISSUE_MODULE && error == ISSUE_COMPLETED_ERROR =>
+                    {
+                        info!("Issue {} has already been completed", issue_id);
+                    }
+                    Err(err) => return Err(err.into()),
+                };
             }
         }
     }

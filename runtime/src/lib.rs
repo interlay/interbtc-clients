@@ -12,13 +12,12 @@ mod tests;
 #[cfg(feature = "testing-utils")]
 pub mod integration;
 
+pub use btc_relay::{
+    BitcoinBlockHeight, BlockBuilder, BtcAddress, BtcPublicKey, Formattable, H256Le, RawBlockHeader, RichBlockHeader,
+};
 pub use conn::{
     on_shutdown, wait_or_shutdown, Manager as ConnectionManager, ManagerConfig as ConnectionManagerConfig, Provider,
     RestartPolicy, Service, ShutdownReceiver,
-};
-
-pub use btc_relay::{
-    BitcoinBlockHeight, BlockBuilder, BtcAddress, BtcPublicKey, Formattable, H256Le, RawBlockHeader, RichBlockHeader,
 };
 pub use error::{Error, XtError};
 pub use rpc::{
@@ -162,3 +161,9 @@ impl fee::Fee for PolkaBtcRuntime {}
 impl sla::Sla for PolkaBtcRuntime {}
 
 impl treasury::Treasury for PolkaBtcRuntime {}
+
+pub const BTC_RELAY_MODULE: &str = "BTCRelay";
+pub const ISSUE_MODULE: &str = "Issue";
+
+pub const DUPLICATE_BLOCK_ERROR: &str = "DuplicateBlock";
+pub const ISSUE_COMPLETED_ERROR: &str = "IssueCompleted";
