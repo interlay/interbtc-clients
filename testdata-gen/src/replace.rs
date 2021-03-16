@@ -3,11 +3,9 @@
 use crate::{utils, Error};
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
-use runtime::pallets::btc_relay::H256Le;
-use runtime::{BtcAddress, PolkaBtcProvider, ReplacePallet, UtilFuncs};
+use runtime::{pallets::btc_relay::H256Le, BtcAddress, PolkaBtcProvider, ReplacePallet, UtilFuncs};
 use sp_core::H256;
-use std::convert::TryInto;
-use std::time::Duration;
+use std::{convert::TryInto, time::Duration};
 
 /// Request redeem of PolkaBTC
 pub async fn request_replace(
@@ -15,9 +13,7 @@ pub async fn request_replace(
     amount: u128,
     griefing_collateral: u128,
 ) -> Result<H256, Error> {
-    let replace_id = replace_prov
-        .request_replace(amount, griefing_collateral)
-        .await?;
+    let replace_id = replace_prov.request_replace(amount, griefing_collateral).await?;
 
     info!(
         "Requested {:?} to replace {:?} PolkaBTC",
@@ -36,9 +32,7 @@ pub async fn accept_replace(
 ) -> Result<(), Error> {
     info!("Collateral: {}", collateral);
     let address = btc_rpc.get_new_address().await?;
-    replace_prov
-        .accept_replace(replace_id, collateral, address)
-        .await?;
+    replace_prov.accept_replace(replace_id, collateral, address).await?;
     Ok(())
 }
 

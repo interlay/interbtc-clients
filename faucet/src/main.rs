@@ -1,27 +1,27 @@
 mod error;
 mod http;
+mod system;
 
 use clap::Clap;
 use error::Error;
-use runtime::substrate_subxt::PairSigner;
-use runtime::{PolkaBtcProvider, PolkaBtcRuntime};
-use std::sync::Arc;
+use runtime::{substrate_subxt::PairSigner, ConnectionManager, PolkaBtcRuntime};
+use system::{FaucetService, FaucetServiceConfig};
 
 /// DOT faucet for enabling users to test PolkaBTC
 #[derive(Clap)]
-#[clap(version = "0.1", author = "Interlay <contact@interlay.io>")]
+#[clap(version = "0.2", author = "Interlay <contact@interlay.io>")]
 struct Opts {
-    /// Parachain URL, can be over WebSockets or HTTP.
-    #[clap(long, default_value = "ws://127.0.0.1:9944")]
-    polka_btc_url: String,
+    /// Keyring / keyfile options.
+    #[clap(flatten)]
+    account_info: runtime::cli::ProviderUserOpts,
+
+    /// Connection settings for the BTC-Parachain.
+    #[clap(flatten)]
+    parachain: runtime::cli::ConnectionOpts,
 
     /// Address to listen on for JSON-RPC requests.
     #[clap(long, default_value = "[::0]:3033")]
     http_addr: String,
-
-    /// keyring / keyfile options.
-    #[clap(flatten)]
-    account_info: runtime::cli::ProviderUserOpts,
 
     /// Comma separated list of allowed origins.
     #[clap(long, default_value = "*")]
@@ -42,23 +42,29 @@ struct Opts {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    env_logger::init();
+    env_logger::init_from_env(
+        env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, log::LevelFilter::Info.as_str()),
+    );
     let opts: Opts = Opts::parse();
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
-    let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
 
-    let http_addr = opts.http_addr.parse()?;
-    http::start(
-        provider.clone(),
-        http_addr,
-        opts.rpc_cors_domain,
-        opts.user_allowance,
-        opts.vault_allowance,
-        opts.staked_relayer_allowance,
+    ConnectionManager::<_, _, FaucetService>::new(
+        opts.parachain.polka_btc_url.clone(),
+        signer.clone(),
+        FaucetServiceConfig {
+            http_addr: opts.http_addr.parse()?,
+            rpc_cors_domain: opts.rpc_cors_domain,
+            user_allowance: opts.user_allowance,
+            vault_allowance: opts.vault_allowance,
+            staked_relayer_allowance: opts.staked_relayer_allowance,
+        },
+        opts.parachain.into(),
+        tokio::runtime::Handle::current(),
     )
-    .await;
+    .start()
+    .await?;
 
     Ok(())
 }

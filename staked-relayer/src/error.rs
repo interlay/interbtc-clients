@@ -1,19 +1,17 @@
-use crate::relay::Error as RelayError;
+use crate::{core::Error as CoreError, relay::Error as RelayError};
 use backoff::ExponentialBackoff;
-use bitcoin::BitcoinError as BitcoinCoreError;
-use bitcoin::Error as BitcoinError;
+use bitcoin::{BitcoinError as BitcoinCoreError, Error as BitcoinError};
 use jsonrpc_core_client::RpcError;
 use jsonrpc_http_server::jsonrpc_core::Error as JsonRpcError;
 use parity_scale_codec::Error as CodecError;
-use relayer_core::Error as CoreError;
-use runtime::substrate_subxt::Error as XtError;
-use runtime::Error as RuntimeError;
-use std::net::AddrParseError;
-use std::time::Duration;
+use runtime::{substrate_subxt::Error as XtError, Error as RuntimeError};
+use std::{net::AddrParseError, time::Duration};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("Internal error")]
+    InternalError,
     #[error("Could not verify that the oracle is offline")]
     CheckOracleOffline,
     #[error("Suggested status update does not contain block hash")]

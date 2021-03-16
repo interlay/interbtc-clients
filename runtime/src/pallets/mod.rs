@@ -15,10 +15,14 @@ pub mod timestamp;
 pub mod treasury;
 pub mod vault_registry;
 
-pub use btc_relay::{
-    BitcoinBlockHeight, BtcAddress, BtcPublicKey, H256Le, RawBlockHeader, RichBlockHeader,
-};
+pub use btc_relay::{BitcoinBlockHeight, BtcAddress, BtcPublicKey, H256Le, RawBlockHeader, RichBlockHeader};
+pub use issue::{IssueRequest, RequestIssueEvent};
+pub use redeem::RedeemRequest;
+pub use refund::RefundRequest;
+pub use replace::ReplaceRequest;
 pub use security::{ErrorCode, StatusCode};
+pub use staked_relayers::StatusUpdate;
+pub use vault_registry::{Vault, VaultStatus};
 
 use parity_scale_codec::{Codec, EncodeLike};
 use sp_arithmetic::traits::Saturating;
@@ -44,4 +48,11 @@ pub trait Core: System {
     type StatusUpdateId: Codec + EncodeLike + Member + Default;
     type SignedFixedPoint: Codec + EncodeLike + Member + Default;
     type UnsignedFixedPoint: Codec + EncodeLike + Member + Default;
+    type VaultStatus: Codec + EncodeLike + Default + Send + Sync;
+
+    // cumulus / polkadot types
+    type XcmError: Codec + EncodeLike + Member;
+    type NetworkId: Codec + EncodeLike + Member;
+    type RelayChainBlockNumber: Codec + EncodeLike + Member + Default;
+    type ParaId: Codec + EncodeLike + Member + Default;
 }

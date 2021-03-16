@@ -1,7 +1,7 @@
 use super::Core;
 use core::marker::PhantomData;
 pub use module_bitcoin::{formatter::Formattable, types::*};
-pub use module_btc_relay::{BtcAddress, BtcPublicKey};
+pub use module_btc_relay::{BtcAddress, BtcPublicKey, RichBlockHeader};
 use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
@@ -61,6 +61,7 @@ pub struct InitializedEvent<T: BTCRelay> {
     pub _runtime: PhantomData<T>,
     pub block_height: BitcoinBlockHeight,
     pub block_header_hash: T::H256Le,
+    pub account_id: T::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
@@ -68,6 +69,7 @@ pub struct StoreMainChainHeaderEvent<T: BTCRelay> {
     pub _runtime: PhantomData<T>,
     pub block_height: BitcoinBlockHeight,
     pub block_header_hash: T::H256Le,
+    pub account_id: T::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]

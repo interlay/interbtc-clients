@@ -10,36 +10,38 @@ use async_trait::async_trait;
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
 pub use bitcoincore_rpc::{
     bitcoin::{
-        blockdata::opcodes::all as opcodes,
-        blockdata::script::Builder,
+        blockdata::{opcodes::all as opcodes, script::Builder},
         consensus::encode::{deserialize, serialize},
         hash_types::BlockHash,
         hashes::{hex::ToHex, Hash},
         secp256k1,
-        secp256k1::constants::PUBLIC_KEY_SIZE,
-        secp256k1::SecretKey,
-        util::uint::Uint256,
-        util::{address::Payload, key, merkleblock::PartialMerkleTree, psbt::serialize::Serialize},
-        Address, Amount, Block, BlockHeader, Network, OutPoint, PrivateKey, PubkeyHash, PublicKey,
-        Script, ScriptHash, Transaction, TxIn, TxMerkleNode, TxOut, Txid, WPubkeyHash,
+        secp256k1::{constants::PUBLIC_KEY_SIZE, SecretKey},
+        util::{address::Payload, key, merkleblock::PartialMerkleTree, psbt::serialize::Serialize, uint::Uint256},
+        Address, Amount, Block, BlockHeader, Network, OutPoint, PrivateKey, PubkeyHash, PublicKey, Script, ScriptHash,
+        Transaction, TxIn, TxMerkleNode, TxOut, Txid, WPubkeyHash,
     },
     bitcoincore_rpc_json::{CreateRawTransactionInput, GetTransactionResult, WalletTxInfo},
     json::{self, AddressType, GetBlockResult},
-    jsonrpc::error::RpcError,
-    jsonrpc::Error as JsonRpcError,
+    jsonrpc::{error::RpcError, Error as JsonRpcError},
     Auth, Client, Error as BitcoinError, RpcApi,
 };
 pub use error::{BitcoinRpcError, ConversionError, Error};
+use hyper::Error as HyperError;
 pub use iter::{get_transactions, stream_blocks, stream_in_chain_transactions};
+use log::{info, trace};
 use sp_core::H256;
-use std::{sync::Arc, time::Duration};
-use tokio::sync::{Mutex, OwnedMutexGuard};
-use tokio::time::delay_for;
+use std::{io::ErrorKind as IoErrorKind, sync::Arc, time::Duration};
+use tokio::{
+    sync::{Mutex, OwnedMutexGuard},
+    time::{delay_for, timeout},
+};
 
 #[macro_use]
 extern crate num_derive;
 
 const NOT_IN_MEMPOOL_ERROR_CODE: i32 = BitcoinRpcError::RpcInvalidAddressOrKey as i32;
+
+const RETRY_DURATION: Duration = Duration::from_millis(1000);
 
 #[derive(Debug, Clone)]
 pub struct TransactionMetadata {
@@ -52,12 +54,7 @@ pub struct TransactionMetadata {
 
 #[async_trait]
 pub trait BitcoinCoreApi {
-    async fn wait_for_block(
-        &self,
-        height: u32,
-        delay: Duration,
-        num_confirmations: u32,
-    ) -> Result<BlockHash, Error>;
+    async fn wait_for_block(&self, height: u32, delay: Duration, num_confirmations: u32) -> Result<BlockHash, Error>;
 
     async fn get_block_count(&self) -> Result<u64, Error>;
 
@@ -65,15 +62,13 @@ pub trait BitcoinCoreApi {
 
     async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
 
-    async fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error>;
+    async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
 
     async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
 
     async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
 
-    async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(
-        &self,
-    ) -> Result<P, Error>;
+    async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error>;
 
     async fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
         &self,
@@ -85,10 +80,12 @@ pub trait BitcoinCoreApi {
 
     async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
 
+    async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error>;
+
     async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
 
     async fn get_mempool_transactions<'a>(
-        self: Arc<Self>,
+        self: &'a Self,
     ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + Send + 'a>, Error>;
 
     async fn wait_for_transaction_metadata(
@@ -127,39 +124,97 @@ pub trait BitcoinCoreApi {
 
     async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
     where
-        P: Into<[u8; PUBLIC_KEY_SIZE]>
-            + From<[u8; PUBLIC_KEY_SIZE]>
-            + Clone
-            + PartialEq
-            + Send
-            + Sync
-            + 'static;
+        P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
 }
 
 pub struct LockedTransaction {
     pub transaction: Transaction,
-    _lock: OwnedMutexGuard<()>,
+    _lock: Option<OwnedMutexGuard<()>>,
 }
+
 impl LockedTransaction {
-    pub fn new(transaction: Transaction, lock: OwnedMutexGuard<()>) -> Self {
+    pub fn new(transaction: Transaction, lock: Option<OwnedMutexGuard<()>>) -> Self {
         LockedTransaction {
             transaction,
             _lock: lock,
         }
     }
 }
+
+#[derive(Clone)]
 pub struct BitcoinCore {
-    rpc: Client,
+    rpc: Arc<Client>,
     transaction_creation_lock: Arc<Mutex<()>>,
     network: Network,
 }
 
 impl BitcoinCore {
-    pub fn new(rpc: Client, network: Network) -> Self {
+    pub fn new(rpc: Arc<Client>, network: Network) -> Self {
         Self {
             rpc,
             network,
             transaction_creation_lock: Arc::new(Mutex::new(())),
+        }
+    }
+
+    pub async fn new_with_retry(
+        rpc: Arc<Client>,
+        network: Network,
+        connection_timeout: Duration,
+    ) -> Result<Self, Error> {
+        let core = Self::new(rpc, network);
+        core.connect(connection_timeout).await?;
+        core.sync().await?;
+        Ok(core)
+    }
+
+    /// Connect to a bitcoin-core full node or timeout.
+    ///
+    /// # Arguments
+    /// * `connection_timeout` - maximum duration before elapsing
+    async fn connect(&self, connection_timeout: Duration) -> Result<(), Error> {
+        info!("Connecting to bitcoin-core...");
+        timeout(connection_timeout, async move {
+            loop {
+                match self.rpc.get_blockchain_info() {
+                    Err(BitcoinError::JsonRpc(JsonRpcError::Hyper(HyperError::Io(err))))
+                        if err.kind() == IoErrorKind::ConnectionRefused =>
+                    {
+                        trace!("could not connect to bitcoin-core");
+                        delay_for(RETRY_DURATION).await;
+                        continue;
+                    }
+                    Err(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
+                        if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcInWarmup =>
+                    {
+                        // may be loading block index or verifying wallet
+                        trace!("bitcoin-core still in warm up");
+                        delay_for(RETRY_DURATION).await;
+                        continue;
+                    }
+                    Ok(_) => {
+                        info!("Connected!");
+                        return Ok(());
+                    }
+                    Err(err) => return Err(err.into()),
+                }
+            }
+        })
+        .await?
+    }
+
+    /// Wait indefinitely for the node to sync.
+    async fn sync(&self) -> Result<(), Error> {
+        info!("Waiting for bitcoin-core to sync...");
+        loop {
+            let info = self.rpc.get_blockchain_info()?;
+            // NOTE: initial_block_download is always true on regtest
+            if !info.initial_block_download || info.verification_progress == 1.0 {
+                info!("Synced!");
+                return Ok(());
+            }
+            trace!("bitcoin-core not synced");
+            delay_for(RETRY_DURATION).await;
         }
     }
 
@@ -176,10 +231,7 @@ impl BitcoinCore {
 
         if let Some(request_id) = request_id {
             // add the op_return data - bitcoind will add op_return and the length automatically
-            outputs.insert(
-                "data".to_string(),
-                serde_json::Value::from(request_id.to_hex()),
-            );
+            outputs.insert("data".to_string(), serde_json::Value::from(request_id.to_hex()));
         }
 
         let args = [
@@ -191,10 +243,8 @@ impl BitcoinCore {
 
     #[cfg(feature = "regtest-manual-mining")]
     pub fn mine_block(&self) -> Result<(), Error> {
-        self.rpc.generate_to_address(
-            1,
-            &self.rpc.get_new_address(None, Some(AddressType::Bech32))?,
-        )?;
+        self.rpc
+            .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
         Ok(())
     }
 }
@@ -218,12 +268,7 @@ impl BitcoinCoreApi for BitcoinCore {
     /// # Arguments
     /// * `height` - block height to fetch
     /// * `delay` - wait period before re-checking
-    async fn wait_for_block(
-        &self,
-        height: u32,
-        delay: Duration,
-        num_confirmations: u32,
-    ) -> Result<BlockHash, Error> {
+    async fn wait_for_block(&self, height: u32, delay: Duration, num_confirmations: u32) -> Result<BlockHash, Error> {
         loop {
             match self.rpc.get_block_hash(height.into()) {
                 Ok(hash) => {
@@ -264,9 +309,7 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `txid` - transaction ID
     /// * `block_hash` - hash of the block tx is stored in
     async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
-        Ok(serialize(
-            &self.rpc.get_raw_transaction(txid, Some(block_hash))?,
-        ))
+        Ok(serialize(&self.rpc.get_raw_transaction(txid, Some(block_hash))?))
     }
 
     /// Get the merkle proof which can be used to validate transaction inclusion.
@@ -282,20 +325,18 @@ impl BitcoinCoreApi for BitcoinCore {
     ///
     /// # Arguments
     /// * `height` - block height
-    async fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, Error> {
+    async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error> {
         match self.rpc.get_block_hash(height.into()) {
             Ok(block_hash) => Ok(block_hash),
-            Err(e) => Err(
-                if let BitcoinError::JsonRpc(JsonRpcError::Rpc(rpc_error)) = &e {
-                    match BitcoinRpcError::from(rpc_error.clone()) {
-                        // block does not exist yet
-                        BitcoinRpcError::RpcInvalidParameter => Error::InvalidBitcoinHeight,
-                        _ => e.into(),
-                    }
-                } else {
-                    e.into()
-                },
-            ),
+            Err(e) => Err(if let BitcoinError::JsonRpc(JsonRpcError::Rpc(rpc_error)) = &e {
+                match BitcoinRpcError::from(rpc_error.clone()) {
+                    // block does not exist yet
+                    BitcoinRpcError::RpcInvalidParameter => Error::InvalidBitcoinHeight,
+                    _ => e.into(),
+                }
+            } else {
+                e.into()
+            }),
         }
     }
 
@@ -322,9 +363,7 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     /// Gets a new public key for an address in the wallet
-    async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(
-        &self,
-    ) -> Result<P, Error> {
+    async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error> {
         let address = self.rpc.get_new_address(None, Some(AddressType::Bech32))?;
         let address_info = self.rpc.get_address_info(&address)?;
         let public_key = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
@@ -340,10 +379,8 @@ impl BitcoinCoreApi for BitcoinCore {
         let address = Address::p2wpkh(&PublicKey::from_slice(&public_key.into())?, self.network)
             .map_err(|err| ConversionError::from(err))?;
         let private_key = self.rpc.dump_private_key(&address)?;
-        let deposit_secret_key = addr::calculate_deposit_secret_key(
-            private_key.key,
-            SecretKey::from_slice(&secret_key)?,
-        )?;
+        let deposit_secret_key =
+            addr::calculate_deposit_secret_key(private_key.key, SecretKey::from_slice(&secret_key)?)?;
         self.rpc.import_private_key(
             &PrivateKey {
                 compressed: private_key.compressed,
@@ -365,6 +402,10 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(self.rpc.get_block(hash)?)
     }
 
+    async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error> {
+        Ok(self.rpc.get_block_header(hash)?)
+    }
+
     async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error> {
         Ok(self.rpc.get_block_info(hash)?)
     }
@@ -372,7 +413,7 @@ impl BitcoinCoreApi for BitcoinCore {
     /// Get the transactions that are currently in the mempool. Since `impl trait` is not
     /// allowed within trait method, we have to use trait objects.
     async fn get_mempool_transactions<'a>(
-        self: Arc<Self>,
+        self: &'a Self,
     ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + Send + 'a>, Error> {
         // get txids from the mempool
         let txids = self.rpc.get_raw_mempool()?;
@@ -386,6 +427,7 @@ impl BitcoinCoreApi for BitcoinCore {
         });
         Ok(Box::new(iterator))
     }
+
     /// Waits for the required number of confirmations, and collects data about the
     /// transaction
     ///
@@ -421,9 +463,7 @@ impl BitcoinCoreApi for BitcoinCore {
                             ..
                         },
                     ..
-                }) if confirmations >= 0 && confirmations as u32 >= num_confirmations => {
-                    Ok((height, hash))
-                }
+                }) if confirmations >= 0 && confirmations as u32 >= num_confirmations => Ok((height, hash)),
                 Ok(_) => Err(Error::ConfirmationError),
                 Err(e) => Err(e.into()),
             }?)
@@ -468,8 +508,7 @@ impl BitcoinCoreApi for BitcoinCore {
         // this function would be to call create_raw_transaction (without the _hex suffix), and
         // to add the op_return afterwards. However, this function fails if no inputs are
         // specified, as is the case for us prior to calling fund_raw_transaction.
-        let raw_tx =
-            self.create_raw_transaction_hex(address_string, Amount::from_sat(sat), request_id)?;
+        let raw_tx = self.create_raw_transaction_hex(address_string, Amount::from_sat(sat), request_id)?;
 
         // ensure no other fund_raw_transaction calls are made until we submitted the
         // transaction to the bitcoind. If we don't do this, the same uxto may be used
@@ -491,7 +530,7 @@ impl BitcoinCoreApi for BitcoinCore {
 
         let transaction = signed_funded_raw_tx.transaction()?;
 
-        Ok(LockedTransaction::new(transaction, lock))
+        Ok(LockedTransaction::new(transaction, Some(lock)))
     }
 
     /// Submits a transaction to the mempool
@@ -540,15 +579,11 @@ impl BitcoinCoreApi for BitcoinCore {
         op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
-        let txid = self
-            .create_and_send_transaction(address, sat, request_id)
-            .await?;
+        let txid = self.create_and_send_transaction(address, sat, request_id).await?;
 
         #[cfg(feature = "regtest-mine-on-tx")]
-        self.rpc.generate_to_address(
-            1,
-            &self.rpc.get_new_address(None, Some(AddressType::Bech32))?,
-        )?;
+        self.rpc
+            .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
 
         Ok(self
             .wait_for_transaction_metadata(txid, op_timeout, num_confirmations)
@@ -575,19 +610,10 @@ impl BitcoinCoreApi for BitcoinCore {
 
     async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
     where
-        P: Into<[u8; PUBLIC_KEY_SIZE]>
-            + From<[u8; PUBLIC_KEY_SIZE]>
-            + Clone
-            + PartialEq
-            + Send
-            + Sync
-            + 'static,
+        P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static,
     {
-        let address = Address::p2wpkh(
-            &PublicKey::from_slice(&public_key.clone().into())?,
-            self.network,
-        )
-        .map_err(|err| ConversionError::from(err))?;
+        let address = Address::p2wpkh(&PublicKey::from_slice(&public_key.clone().into())?, self.network)
+            .map_err(|err| ConversionError::from(err))?;
         let address_info = self.rpc.get_address_info(&address)?;
         let wallet_pubkey = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
         Ok(P::from(wallet_pubkey.key.serialize()) == public_key)
@@ -651,7 +677,7 @@ impl TransactionExt for Transaction {
     }
 }
 
-// https://gitlab.com/interlay/btc-parachain/-/blob/dev/crates/bitcoin/src/parser.rs#L264
+// https://github.com/interlay/btc-parachain/blob/cc5c16b28ef705e0774654dd94b813d9d35e12ec/crates/bitcoin/src/parser.rs#L277
 fn parse_compact_uint(varint: &[u8]) -> Result<(u64, usize), Error> {
     match varint.get(0).ok_or(Error::ParsingError)? {
         0xfd => {
@@ -693,15 +719,13 @@ fn vin_to_address<A: PartialAddress>(vin: TxIn) -> Result<A, Error> {
 
         // TODO: reuse logic from bitcoin crate
         let last = std::cmp::min(pos + 3, input_script.len());
-        let (size, len) =
-            parse_compact_uint(input_script.get(pos..last).ok_or(Error::ParsingError)?)?;
+        let (size, len) = parse_compact_uint(input_script.get(pos..last).ok_or(Error::ParsingError)?)?;
         pos += len;
         // skip sigs
         pos += size as usize;
         // parse redeem_script or compressed public_key
         let last = std::cmp::min(pos + 3, input_script.len());
-        let (_size, len) =
-            parse_compact_uint(input_script.get(pos..last).ok_or(Error::ParsingError)?)?;
+        let (_size, len) = parse_compact_uint(input_script.get(pos..last).ok_or(Error::ParsingError)?)?;
         pos += len;
 
         let bytes = input_script.get(pos..).ok_or(Error::ParsingError)?;

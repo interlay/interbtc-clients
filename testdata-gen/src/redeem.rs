@@ -3,11 +3,9 @@
 use crate::{utils, Error};
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
-use runtime::pallets::btc_relay::H256Le;
-use runtime::{AccountId, BtcAddress, PolkaBtcProvider, RedeemPallet, UtilFuncs};
+use runtime::{pallets::btc_relay::H256Le, AccountId, BtcAddress, PolkaBtcProvider, RedeemPallet, UtilFuncs};
 use sp_core::H256;
-use std::convert::TryInto;
-use std::time::Duration;
+use std::{convert::TryInto, time::Duration};
 
 /// Request redeem of PolkaBTC
 pub async fn request_redeem(

@@ -1,8 +1,15 @@
 [package]
 name = "bitcoin"
-version = "0.2.0"
+version = "0.5.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
+
+[features]
+default = ["polkabtc"]
+regtest-mine-on-tx = []
+regtest-manual-mining = []
+cli = ["clap"]
+polkabtc = ["polkabtc-bitcoin"]
 
 [dependencies]
 thiserror = "1.0"
@@ -18,23 +25,17 @@ num-derive = "0.3"
 futures = "0.3.5"
 serde_json = "1"
 log = "0.4.0"
+hyper = "0.10"
 
 # Substrate dependencies
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 
 [dependencies.polkabtc-bitcoin]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "master"
 version = "0.5.0"
 package = "bitcoin"
 optional = true
 
 [dev-dependencies]
 mockall = "0.8.1"
-
-[features]
-default = ["polkabtc"]
-regtest-mine-on-tx = []
-regtest-manual-mining = []
-cli = ["clap"]
-polkabtc = ["polkabtc-bitcoin"]

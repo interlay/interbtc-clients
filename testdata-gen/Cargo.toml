@@ -1,17 +1,16 @@
 [package]
 name = "testdata-gen"
-version = "0.1.0"
+version = "0.5.0"
 authors = ["Interlay <dev@interlay.io>"]
 edition = "2018"
+
+[features]
+default = ["bitcoin/regtest-mine-on-tx"]
 
 [dependencies]
 tokio = { version = "0.2.22", features = ["full"] }
 parity-scale-codec = "2.0.0"
-primitive-types = { default-features = false, version = "0.7.2", features = ["codec"]}
-runtime = { path = "../runtime" }
-relayer-core = { git = "https://gitlab.com/interlay/relayer-core", rev = "49deea6c1219d3a0e682e35444a08055a238fed7" }
 thiserror = "1.0"
-bitcoin = { path = "../bitcoin", features = ["cli"] }
 clap = "3.0.0-beta.2"
 log = "0.4.0"
 env_logger = "0.7.1"
@@ -19,13 +18,13 @@ hex = "0.4.2"
 serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.59"
 reqwest = {version = "0.10.9", features = ["json"] }
-jsonrpc-core = "16.0.0"
+jsonrpc-core = "17.0.0"
+futures = "0.3.5"
+
+# Workspace dependencies
+bitcoin = { path = "../bitcoin", features = ["cli"] }
+runtime = { path = "../runtime" }
 
 # Substrate dependencies
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
-
-frame-system = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
-
-[features]
-default = ["bitcoin/regtest-mine-on-tx"]

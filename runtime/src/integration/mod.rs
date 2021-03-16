@@ -1,25 +1,19 @@
+#![cfg(feature = "testing-utils")]
+
 mod bitcoin_simulator;
 
-use crate::rpc::FeePallet;
-use crate::rpc::IssuePallet;
-use crate::rpc::VaultRegistryPallet;
-use crate::AccountId;
-use crate::H256Le;
-use crate::PolkaBtcProvider;
-use crate::PolkaBtcRuntime;
-use bitcoin::BitcoinCoreApi;
-use bitcoin::BlockHash;
-use bitcoin::Txid;
+use crate::{
+    rpc::{FeePallet, IssuePallet, VaultRegistryPallet},
+    AccountId, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
+};
+use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
 use futures::{future::Either, pin_mut, Future, FutureExt, SinkExt, StreamExt};
-use jsonrpsee::Client as JsonRpseeClient;
 use sp_keyring::AccountKeyring;
 use sp_runtime::FixedPointNumber;
-use std::sync::Arc;
 use std::time::Duration;
-use substrate_subxt::Event;
-use substrate_subxt::PairSigner;
+use substrate_subxt::{Event, PairSigner};
 use substrate_subxt_client::{
-    DatabaseConfig, KeystoreConfig, Role, SubxtClient, SubxtClientConfig,
+    DatabaseConfig, KeystoreConfig, Role, SubxtClient, SubxtClientConfig, WasmExecutionMethod,
 };
 use tempdir::TempDir;
 use tokio::time::timeout;
@@ -50,7 +44,7 @@ impl Translate for BlockHash {
 /// Start a new instance of the parachain. The second item in the returned tuple must remain in
 /// scope as long as the parachain is active, since dropping it will remove the temporary directory
 /// that the parachain uses
-pub async fn default_provider_client(key: AccountKeyring) -> (JsonRpseeClient, TempDir) {
+pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempDir) {
     let tmp = TempDir::new("btc-parachain-").expect("failed to create tempdir");
     let config = SubxtClientConfig {
         impl_name: "btc-parachain-full-client",
@@ -67,6 +61,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (JsonRpseeClient, T
         chain_spec: btc_parachain::chain_spec::development_config(),
         role: Role::Authority(key.clone()),
         telemetry: None,
+        wasm_method: WasmExecutionMethod::Compiled,
     };
 
     let client = SubxtClient::from_config(config, btc_parachain_service::new_full)
@@ -76,25 +71,16 @@ pub async fn default_provider_client(key: AccountKeyring) -> (JsonRpseeClient, T
 }
 
 /// Create a new provider with the given keyring
-pub async fn setup_provider(client: JsonRpseeClient, key: AccountKeyring) -> Arc<PolkaBtcProvider> {
+pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> PolkaBtcProvider {
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key.pair());
-    let ret = PolkaBtcProvider::new(client, signer)
+    PolkaBtcProvider::new(client, signer)
         .await
-        .expect("Error creating provider");
-    Arc::new(ret)
+        .expect("Error creating provider")
 }
 
 /// request, pay and execute an issue
-pub async fn assert_issue(
-    provider: &PolkaBtcProvider,
-    btc_rpc: &MockBitcoinCore,
-    vault_id: &AccountId,
-    amount: u128,
-) {
-    let issue = provider
-        .request_issue(amount, vault_id.clone(), 10000)
-        .await
-        .unwrap();
+pub async fn assert_issue(provider: &PolkaBtcProvider, btc_rpc: &MockBitcoinCore, vault_id: &AccountId, amount: u128) {
+    let issue = provider.request_issue(amount, vault_id.clone(), 10000).await.unwrap();
 
     let metadata = btc_rpc
         .send_to_address(
@@ -119,10 +105,7 @@ pub async fn assert_issue(
 }
 
 /// calculate how much collateral the vault requires to accept an issue of the given size
-pub async fn get_required_vault_collateral_for_issue(
-    provider: &PolkaBtcProvider,
-    amount: u128,
-) -> u128 {
+pub async fn get_required_vault_collateral_for_issue(provider: &PolkaBtcProvider, amount: u128) -> u128 {
     let fee = provider.get_issue_fee().await.unwrap();
     let amount_btc_including_fee = amount + fee.checked_mul_int(amount).unwrap();
     provider
@@ -132,7 +115,7 @@ pub async fn get_required_vault_collateral_for_issue(
 }
 
 /// wait for an event to occur. After the specified error, this will panic. This returns the event.
-pub async fn assert_event<T, F>(duration: Duration, provider: Arc<PolkaBtcProvider>, f: F) -> T
+pub async fn assert_event<T, F>(duration: Duration, provider: PolkaBtcProvider, f: F) -> T
 where
     T: Event<PolkaBtcRuntime> + Clone + std::fmt::Debug,
     F: Fn(T) -> bool,

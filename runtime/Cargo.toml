@@ -1,12 +1,20 @@
 [package]
 name = "runtime"
-version = "0.3.0"
+version = "0.5.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 
 [features]
 default = []
-testing-utils = ["substrate-subxt-client", "tempdir", "btc-parachain", "btc-parachain-service", "bitcoin", "rand"]
+testing-utils = [
+    "substrate-subxt/client",
+    "substrate-subxt-client",
+    "tempdir",
+    "btc-parachain",
+    "btc-parachain-service",
+    "bitcoin",
+    "rand",
+]
 
 [dependencies]
 parity-scale-codec = "2.0.0"
@@ -15,10 +23,10 @@ thiserror = "1.0"
 serde_json = "1.0.57"
 serde = "1.0.116"
 tokio = { version = "0.2.22", features = ["full"] }
-jsonrpsee = "0.1.0"
 futures = "0.3.5"
 clap = "3.0.0-beta.2"
 log = "0.4.0"
+url = "2"
 
 # Substrate dependencies
 sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
@@ -30,85 +38,92 @@ frame-support = { git = "https://github.com/paritytech/substrate", branch = "roc
 frame-system = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 
 # Subxt dependencies
-substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "9ef6ed9" }
-substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "9ef6ed9" }
+substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "0283aa0" }
+substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "0283aa0" }
+
+jsonrpsee-types = { git = "https://github.com/interlay/jsonrpsee", rev = "1c2ba33" }
+jsonrpsee-ws-client = { git = "https://github.com/interlay/jsonrpsee", rev = "1c2ba33" }
+
+# Polkadot dependencies
+xcm = { git = "https://github.com/paritytech/polkadot", branch = "rococo-v1" }
+parachain = { package = "polkadot-parachain", git = "https://github.com/paritytech/polkadot", branch = "rococo-v1" }
 
 # Dependencies for the testing utils for integration tests
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "9ef6ed9", optional = true }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "0283aa0", optional = true }
 tempdir = {version = "0.3.7", optional = true }
-btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"], optional = true }
-btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.1", features = ["aura-grandpa"], optional = true }
+btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "master", version = "0.5.0", features = ["aura-grandpa"], optional = true }
+btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "master", version = "0.5.1", features = ["aura-grandpa"], optional = true }
 bitcoin = { path = "../bitcoin", optional = true }
 rand = { version = "0.7", optional = true }
 
 [dependencies.module-bitcoin]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "master"
 version = "0.5.0"
 package = "bitcoin"
 
 [dependencies.module-refund]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "master"
 version = "0.5.0"
 package = "refund"
 
 [dependencies.module-btc-relay]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "master"
 version = "0.5.0"
 package = "btc-relay"
 
 [dependencies.module-security]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "master"
 version = "0.5.0"
 package = "security"
 
 [dependencies.module-staked-relayers]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "master"
 version = "0.5.0"
 package = "staked-relayers"
 
 [dependencies.module-vault-registry]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "master"
 version = "0.5.0"
 package = "vault-registry"
 
 [dependencies.module-exchange-rate-oracle-rpc-runtime-api]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "master"
 version = "0.5.0"
 package = "module-exchange-rate-oracle-rpc-runtime-api"
 
 [dependencies.module-issue]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "master"
 version = "0.5.0"
 package = "issue"
 
 [dependencies.module-redeem]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "master"
 version = "0.5.0"
 package = "redeem"
 
 [dependencies.module-replace]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "master"
 version = "0.5.0"
 package = "replace"
 
 [dependencies.module-exchange-rate-oracle]
-git = "https://gitlab.com/interlay/btc-parachain"
-branch = "dev"
+git = "https://github.com/interlay/btc-parachain"
+branch = "master"
 version = "0.5.0"
 package = "exchange-rate-oracle"
 
 [dev-dependencies]
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "9ef6ed9" }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "0283aa0" }
+btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "master", version = "0.5.0", features = ["aura-grandpa"] }
+btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "master", version = "0.5.0", features = ["aura-grandpa"] }
 tempdir = "0.3.7"
-btc-parachain = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }
-btc-parachain-service = { git = "https://gitlab.com/interlay/btc-parachain", branch = "dev", version = "0.5.0", features = ["aura-grandpa"] }

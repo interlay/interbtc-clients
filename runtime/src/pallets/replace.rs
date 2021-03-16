@@ -103,7 +103,7 @@ pub struct CancelReplaceEvent<T: Replace> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct ReplacePeriodStore<T: Replace> {
-    #[store(returns = u32)]
+    #[store(returns = T::BlockNumber)]
     pub _runtime: PhantomData<T>,
 }
 
@@ -116,6 +116,6 @@ pub struct ReplaceRequestsStore<T: Replace> {
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct SetReplacePeriodCall<T: Replace> {
-    pub period: u32,
+    pub period: T::BlockNumber,
     pub _runtime: PhantomData<T>,
 }

@@ -8,19 +8,19 @@ pipeline {
     }
     environment {
         RUSTC_WRAPPER = '/usr/local/bin/sccache'
+        CI = 'true'
+        GITHUB_TOKEN = credentials('ns212-github-token')
     }
 
     options {
-        gitLabConnection 'Gitlab-Interlay'
-        gitlabBuilds(builds: ['test', 'build'])
+        timestamps()
+        ansiColor('xterm')
     }
 
     stages {
         stage('Test') {
             steps {
                 container('rust') {
-                    updateGitlabCommitStatus name: 'test', state: 'running'
-
                     sh 'rustc --version'
                     sh 'SCCACHE_START_SERVER=1 SCCACHE_IDLE_TIMEOUT=0 /usr/local/bin/sccache'
                     sh '/usr/local/bin/sccache -s'
@@ -30,20 +30,6 @@ pipeline {
                     sh 'cargo test --workspace --release'
 
                     sh '/usr/local/bin/sccache -s'
-                }
-            }
-            post {
-                success {
-                    updateGitlabCommitStatus name: 'test', state: 'success'
-                }
-                failure {
-                    updateGitlabCommitStatus name: 'test', state: 'failed'
-                }
-                unstable {
-                    updateGitlabCommitStatus name: 'test', state: 'failed'
-                }
-                aborted {
-                    updateGitlabCommitStatus name: 'test', state: 'canceled'
                 }
             }
         }
@@ -68,28 +54,12 @@ pipeline {
                     sh '/usr/local/bin/sccache -s'
                 }
             }
-            post {
-                success {
-                    updateGitlabCommitStatus name: 'build', state: 'success'
-                }
-                failure {
-                    updateGitlabCommitStatus name: 'build', state: 'failed'
-                }
-                unstable {
-                    updateGitlabCommitStatus name: 'build', state: 'failed'
-                }
-                aborted {
-                    updateGitlabCommitStatus name: 'build', state: 'canceled'
-                }
-            }
         }
 
         stage('Build docker images') {
             when {
                 anyOf {
                     branch 'master'
-                    branch 'dev'
-                    branch 'jenkins'
                     tag '*'
                 }
             }
@@ -111,6 +81,26 @@ pipeline {
                         }
                     }
                 }
+            }
+        }
+
+        stage('Create GitHub release') {
+            when {
+                anyOf {
+                    branch 'github'
+                    tag '*'
+                }
+            }
+            steps {
+                sh '''
+                    wget -q -O - https://github.com/cli/cli/releases/download/v1.6.2/gh_1.6.2_linux_amd64.tar.gz | tar xzf -
+                    ./gh_1.6.2_linux_amd64/bin/gh auth status
+                    wget -q -O - https://github.com/git-chglog/git-chglog/releases/download/v0.10.0/git-chglog_0.10.0_linux_amd64.tar.gz | tar xzf -
+                    #export PREV_TAG=$(git describe --abbrev=0 --tags `git rev-list --tags --skip=1 --max-count=1`)
+                    #export TAG_NAME=$(git describe --abbrev=0 --tags `git rev-list --tags --skip=0 --max-count=1`)
+                    ./git-chglog --output CHANGELOG.md $TAG_NAME
+                '''
+                sh './gh_1.6.2_linux_amd64/bin/gh release -R $GIT_URL create $TAG_NAME --title $TAG_NAME -F CHANGELOG.md -d ' + output_files.collect { "target/release/$it" }.join(' ')
             }
         }
     }

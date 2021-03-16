@@ -1,44 +1,35 @@
 use super::Error;
 use crate::utils;
-use bitcoin::{
-    BitcoinCoreApi, BlockHash, ConversionError as BitcoinConversionError, Error as BitcoinError,
-    Hash,
-};
+use bitcoin::{BitcoinCoreApi, BlockHash, ConversionError as BitcoinConversionError, Error as BitcoinError, Hash};
 use log::{error, info, warn};
 use runtime::{
     pallets::{btc_relay::StoreMainChainHeaderEvent, staked_relayers::StatusUpdateSuggestedEvent},
-    Error as RuntimeError, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
-    StakedRelayerPallet, StatusCode, UtilFuncs,
+    Error as RuntimeError, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcRuntime, StakedRelayerPallet, StatusCode,
+    UtilFuncs,
 };
-use std::sync::Arc;
 
 type PolkaBtcStatusUpdateSuggestedEvent = StatusUpdateSuggestedEvent<PolkaBtcRuntime>;
 
-pub struct StatusUpdateMonitor<B: BitcoinCoreApi, P: StakedRelayerPallet> {
-    btc_rpc: Arc<B>,
-    polka_rpc: Arc<P>,
+pub struct StatusUpdateMonitor<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet> {
+    btc_rpc: B,
+    polka_rpc: P,
 }
 
-impl<B: BitcoinCoreApi, P: StakedRelayerPallet> StatusUpdateMonitor<B, P> {
-    pub fn new(btc_rpc: Arc<B>, polka_rpc: Arc<P>) -> Self {
+impl<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet + UtilFuncs> StatusUpdateMonitor<B, P> {
+    pub fn new(btc_rpc: B, polka_rpc: P) -> Self {
         Self { btc_rpc, polka_rpc }
     }
 
-    async fn on_status_update_suggested(
-        &self,
-        event: PolkaBtcStatusUpdateSuggestedEvent,
-    ) -> Result<(), Error> {
-        if !utils::is_registered(&self.polka_rpc).await {
+    async fn on_status_update_suggested(&self, event: PolkaBtcStatusUpdateSuggestedEvent) -> Result<(), Error> {
+        if !utils::is_active(&self.polka_rpc).await? {
+            // not registered (active), ignore event
             return Ok(());
         }
+
         // we can only automate NO_DATA checks, all other suggestible
         // status updates can only be voted upon manually
         if let Some(ErrorCode::NoDataBTCRelay) = event.add_error {
-            match self
-                .btc_rpc
-                .is_block_known(convert_block_hash(event.block_hash)?)
-                .await
-            {
+            match self.btc_rpc.is_block_known(convert_block_hash(event.block_hash)?).await {
                 Ok(true) => {
                     self.polka_rpc
                         .vote_on_status_update(event.status_update_id, false)
@@ -57,9 +48,9 @@ impl<B: BitcoinCoreApi, P: StakedRelayerPallet> StatusUpdateMonitor<B, P> {
     }
 }
 
-pub async fn listen_for_status_updates<B: BitcoinCoreApi>(
-    btc_rpc: Arc<B>,
-    polka_rpc: Arc<PolkaBtcProvider>,
+pub async fn listen_for_status_updates<B: BitcoinCoreApi + Clone>(
+    btc_rpc: B,
+    polka_rpc: PolkaBtcProvider,
 ) -> Result<(), RuntimeError> {
     let monitor = &StatusUpdateMonitor::new(btc_rpc, polka_rpc.clone());
 
@@ -81,14 +72,14 @@ pub async fn listen_for_status_updates<B: BitcoinCoreApi>(
         .await
 }
 
-pub struct RelayMonitor<B: BitcoinCoreApi, P: StakedRelayerPallet> {
-    btc_rpc: Arc<B>,
-    polka_rpc: Arc<P>,
+pub struct RelayMonitor<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet> {
+    btc_rpc: B,
+    polka_rpc: P,
     status_update_deposit: u128,
 }
 
 async fn report_no_data_btc_relay<P: StakedRelayerPallet>(
-    rpc: &Arc<P>,
+    rpc: &P,
     deposit: u128,
     block_hash: H256Le,
 ) -> Result<(), Error> {
@@ -104,8 +95,8 @@ async fn report_no_data_btc_relay<P: StakedRelayerPallet>(
         .await?)
 }
 
-impl<B: BitcoinCoreApi, P: StakedRelayerPallet> RelayMonitor<B, P> {
-    pub fn new(btc_rpc: Arc<B>, polka_rpc: Arc<P>, status_update_deposit: u128) -> Self {
+impl<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet> RelayMonitor<B, P> {
+    pub fn new(btc_rpc: B, polka_rpc: P, status_update_deposit: u128) -> Self {
         Self {
             btc_rpc,
             polka_rpc,
@@ -113,48 +104,35 @@ impl<B: BitcoinCoreApi, P: StakedRelayerPallet> RelayMonitor<B, P> {
         }
     }
 
-    pub async fn on_store_block(
-        &self,
-        height: u32,
-        parachain_block_hash: H256Le,
-    ) -> Result<(), Error> {
-        if !utils::is_registered(&self.polka_rpc).await {
+    pub async fn on_store_block(&self, height: u32, parachain_block_hash: H256Le) -> Result<(), Error> {
+        if !utils::is_active(&self.polka_rpc).await? {
+            // not registered (active), ignore event
             return Ok(());
         }
-        info!("Block submission: {}", parachain_block_hash);
 
         // TODO: check if user submitted
-        match self.btc_rpc.get_block_hash_for(height).await {
+        info!("Block submission: {}", parachain_block_hash);
+        match self.btc_rpc.get_block_hash(height).await {
             Ok(bitcoin_block_hash) => {
                 if bitcoin_block_hash.into_inner() != parachain_block_hash.to_bytes_le() {
                     warn!("Block does not match at height {}", height);
-                    report_no_data_btc_relay(
-                        &self.polka_rpc,
-                        self.status_update_deposit,
-                        parachain_block_hash,
-                    )
-                    .await?;
+                    report_no_data_btc_relay(&self.polka_rpc, self.status_update_deposit, parachain_block_hash).await?;
                 }
             }
             Err(BitcoinError::InvalidBitcoinHeight) => {
                 warn!("Block does not exist at height {}", height);
-                report_no_data_btc_relay(
-                    &self.polka_rpc,
-                    self.status_update_deposit,
-                    parachain_block_hash,
-                )
-                .await?;
+                report_no_data_btc_relay(&self.polka_rpc, self.status_update_deposit, parachain_block_hash).await?;
             }
-            Err(e) => error!("Got error on get_block_hash_for({}): {}", height, e),
+            Err(e) => error!("Got error on get_block_hash({}): {}", height, e),
         }
 
         Ok(())
     }
 }
 
-pub async fn listen_for_blocks_stored<B: BitcoinCoreApi>(
-    btc_rpc: Arc<B>,
-    polka_rpc: Arc<PolkaBtcProvider>,
+pub async fn listen_for_blocks_stored<B: BitcoinCoreApi + Clone>(
+    btc_rpc: B,
+    polka_rpc: PolkaBtcProvider,
     status_update_deposit: u128,
 ) -> Result<(), RuntimeError> {
     let monitor = &RelayMonitor::new(btc_rpc, polka_rpc.clone(), status_update_deposit);
@@ -186,11 +164,12 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, GetBlockResult, LockedTransaction, PartialAddress, Transaction, TransactionMetadata,
-        Txid, PUBLIC_KEY_SIZE,
+        Block, BlockHeader, GetBlockResult, LockedTransaction, PartialAddress, Transaction, TransactionMetadata, Txid,
+        PUBLIC_KEY_SIZE,
     };
-    use runtime::PolkaBtcStatusUpdate;
-    use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode, MINIMUM_STAKE};
+    use runtime::{
+        AccountId, Error as RuntimeError, ErrorCode, H256Le, PolkaBtcStatusUpdate, StatusCode, MINIMUM_STAKE,
+    };
     use sp_core::H256;
     use sp_keyring::AccountKeyring;
     use std::time::Duration;
@@ -230,9 +209,16 @@ mod tests {
         Provider {}
 
         #[async_trait]
+        pub trait UtilFuncs {
+            async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
+            async fn get_blockchain_height_at(&self, parachain_height: u32) -> Result<u32, RuntimeError>;
+            fn get_account_id(&self) -> &AccountId;
+        }
+
+        #[async_trait]
         trait StakedRelayerPallet {
-            async fn get_stake(&self) -> Result<u128, RuntimeError>;
-            async fn get_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
+            async fn get_active_stake(&self) -> Result<u128, RuntimeError>;
+            async fn get_active_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
             async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
             async fn register_staked_relayer(&self, stake: u128) -> Result<(), RuntimeError>;
             async fn deregister_staked_relayer(&self) -> Result<(), RuntimeError>;
@@ -269,6 +255,13 @@ mod tests {
         }
     }
 
+    impl Clone for MockProvider {
+        fn clone(&self) -> Self {
+            // NOTE: expectations dropped
+            Self::default()
+        }
+    }
+
     mockall::mock! {
         Bitcoin {}
 
@@ -278,7 +271,7 @@ mod tests {
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
-           async  fn get_block_hash_for(&self, height: u32) -> Result<BlockHash, BitcoinError>;
+            async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError>;
             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
             async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError>;
             async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, BitcoinError>;
@@ -289,9 +282,10 @@ mod tests {
             ) -> Result<(), BitcoinError>;
             async fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
             async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
+            async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, BitcoinError>;
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
             async fn get_mempool_transactions<'a>(
-                self: Arc<Self>,
+                self: &'a Self,
             ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(
                 &self,
@@ -327,11 +321,18 @@ mod tests {
         }
     }
 
+    impl Clone for MockBitcoin {
+        fn clone(&self) -> Self {
+            // NOTE: expectations dropped
+            Self::default()
+        }
+    }
+
     #[tokio::test]
     async fn test_on_store_block_exists() {
         let mut bitcoin = MockBitcoin::default();
         bitcoin
-            .expect_get_block_hash_for()
+            .expect_get_block_hash()
             .returning(|_| Ok(BlockHash::from_slice(&[1; 32]).unwrap()));
         let mut parachain = MockProvider::default();
         parachain
@@ -339,23 +340,19 @@ mod tests {
             .never()
             .returning(|_, _, _, _, _, _| Ok(()));
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE));
 
-        let monitor = RelayMonitor::new(Arc::new(bitcoin), Arc::new(parachain), 100);
-        assert_ok!(
-            monitor
-                .on_store_block(123, H256Le::from_bytes_le(&[1; 32]))
-                .await
-        );
+        let monitor = RelayMonitor::new(bitcoin, parachain, 100);
+        assert_ok!(monitor.on_store_block(123, H256Le::from_bytes_le(&[1; 32])).await);
     }
 
     #[tokio::test]
     async fn test_on_store_block_not_exists() {
         let mut bitcoin = MockBitcoin::default();
         bitcoin
-            .expect_get_block_hash_for()
+            .expect_get_block_hash()
             .returning(|_| Err(BitcoinError::InvalidBitcoinHeight.into()));
         let mut parachain = MockProvider::default();
         parachain
@@ -363,16 +360,12 @@ mod tests {
             .once()
             .returning(|_, _, _, _, _, _| Ok(()));
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE));
 
-        let monitor = RelayMonitor::new(Arc::new(bitcoin), Arc::new(parachain), 100);
-        assert_ok!(
-            monitor
-                .on_store_block(123, H256Le::from_bytes_le(&[1; 32]))
-                .await
-        );
+        let monitor = RelayMonitor::new(bitcoin, parachain, 100);
+        assert_ok!(monitor.on_store_block(123, H256Le::from_bytes_le(&[1; 32])).await);
     }
 
     #[tokio::test]
@@ -380,11 +373,11 @@ mod tests {
         let bitcoin = MockBitcoin::default();
         let mut parachain = MockProvider::default();
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE - 1));
 
-        let monitor = RelayMonitor::new(Arc::new(bitcoin), Arc::new(parachain), 100);
+        let monitor = RelayMonitor::new(bitcoin, parachain, 100);
         assert_ok!(monitor.on_store_block(0, H256Le::zero()).await);
     }
 
@@ -395,11 +388,11 @@ mod tests {
         let mut parachain = MockProvider::default();
         parachain.expect_vote_on_status_update().never();
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE));
 
-        let monitor = StatusUpdateMonitor::new(Arc::new(bitcoin), Arc::new(parachain));
+        let monitor = StatusUpdateMonitor::new(bitcoin, parachain);
         assert_ok!(
             monitor
                 .on_status_update_suggested(PolkaBtcStatusUpdateSuggestedEvent {
@@ -421,11 +414,11 @@ mod tests {
         let mut parachain = MockProvider::default();
         parachain.expect_vote_on_status_update().never();
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE));
 
-        let monitor = StatusUpdateMonitor::new(Arc::new(bitcoin), Arc::new(parachain));
+        let monitor = StatusUpdateMonitor::new(bitcoin, parachain);
         assert_err!(
             monitor
                 .on_status_update_suggested(PolkaBtcStatusUpdateSuggestedEvent {
@@ -444,10 +437,7 @@ mod tests {
     #[tokio::test]
     async fn test_on_status_update_suggested_add_error_block_unknown() {
         let mut bitcoin = MockBitcoin::default();
-        bitcoin
-            .expect_is_block_known()
-            .once()
-            .returning(|_| Ok(false));
+        bitcoin.expect_is_block_known().once().returning(|_| Ok(false));
         let mut parachain = MockProvider::default();
         parachain
             .expect_vote_on_status_update()
@@ -455,11 +445,11 @@ mod tests {
             .once()
             .returning(|_, _| Ok(()));
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE));
 
-        let monitor = StatusUpdateMonitor::new(Arc::new(bitcoin), Arc::new(parachain));
+        let monitor = StatusUpdateMonitor::new(bitcoin, parachain);
         assert_ok!(
             monitor
                 .on_status_update_suggested(PolkaBtcStatusUpdateSuggestedEvent {
@@ -477,10 +467,7 @@ mod tests {
     #[tokio::test]
     async fn test_on_status_update_suggested_add_error_block_known() {
         let mut bitcoin = MockBitcoin::default();
-        bitcoin
-            .expect_is_block_known()
-            .once()
-            .returning(|_| Ok(true));
+        bitcoin.expect_is_block_known().once().returning(|_| Ok(true));
         let mut parachain = MockProvider::default();
         parachain
             .expect_vote_on_status_update()
@@ -488,11 +475,11 @@ mod tests {
             .once()
             .returning(|_, _| Ok(()));
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE));
 
-        let monitor = StatusUpdateMonitor::new(Arc::new(bitcoin), Arc::new(parachain));
+        let monitor = StatusUpdateMonitor::new(bitcoin, parachain);
         assert_ok!(
             monitor
                 .on_status_update_suggested(PolkaBtcStatusUpdateSuggestedEvent {
@@ -512,11 +499,11 @@ mod tests {
         let bitcoin = MockBitcoin::default();
         let mut parachain = MockProvider::default();
         parachain
-            .expect_get_stake()
+            .expect_get_active_stake()
             .once()
             .returning(|| Ok(MINIMUM_STAKE - 1));
 
-        let monitor = StatusUpdateMonitor::new(Arc::new(bitcoin), Arc::new(parachain));
+        let monitor = StatusUpdateMonitor::new(bitcoin, parachain);
         assert_ok!(
             monitor
                 .on_status_update_suggested(PolkaBtcStatusUpdateSuggestedEvent {

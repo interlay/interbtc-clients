@@ -9,19 +9,17 @@ mod vault;
 use bitcoin::{BitcoinCore, BitcoinCoreApi, ConversionError, PartialAddress};
 use clap::Clap;
 use error::Error;
+use futures::future::try_join_all;
 use log::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    substrate_subxt::PairSigner, BtcAddress, ErrorCode as PolkaBtcErrorCode,
-    ExchangeRateOraclePallet, FeePallet, FixedPointNumber, FixedPointTraits::*, FixedU128, H256Le,
-    PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, StakedRelayerPallet,
-    StatusCode as PolkaBtcStatusCode, TimestampPallet,
+    substrate_subxt::PairSigner, AccountId, BtcAddress, DotBalancesPallet, ErrorCode as PolkaBtcErrorCode,
+    ExchangeRateOraclePallet, FeePallet, FixedPointNumber, FixedPointTraits::*, FixedU128, H256Le, PolkaBtcProvider,
+    PolkaBtcRuntime, RedeemPallet, StakedRelayerPallet, StatusCode as PolkaBtcStatusCode, TimestampPallet,
 };
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
-use std::convert::TryInto;
-use std::str::FromStr;
-use std::time::Duration;
+use std::{convert::TryInto, str::FromStr, sync::Arc, time::Duration};
 
 #[derive(Debug, Encode, Decode)]
 struct BtcAddressFromStr(BtcAddress);
@@ -89,6 +87,10 @@ struct Opts {
 
     #[clap(subcommand)]
     subcmd: SubCommand,
+
+    /// Timeout in milliseconds to wait for connection to btc-parachain.
+    #[clap(long, default_value = "60000")]
+    connection_timeout_ms: u64,
 }
 
 #[derive(Clap)]
@@ -129,6 +131,8 @@ enum SubCommand {
     SetReplacePeriod(SetReplacePeriodInfo),
     /// Set relayer maturity period.
     SetRelayerMaturityPeriod(SetRelayerMaturityPeriodInfo),
+    /// Transfer DOT collateral
+    FundAccounts(FundAccountsInfo),
 }
 
 #[derive(Clap)]
@@ -472,12 +476,23 @@ struct VoteOnStatusUpdateJsonRpcRequest {
     pub approve: bool,
 }
 
+#[derive(Clap, Encode, Decode, Debug)]
+struct FundAccountsInfo {
+    /// Accounts to fund
+    #[clap(long)]
+    pub accounts: Vec<AccountId>,
+
+    /// DOT amount
+    #[clap(long)]
+    pub amount: u128,
+}
+
 async fn get_btc_rpc(
     wallet_name: String,
     bitcoin_opts: bitcoin::cli::BitcoinOpts,
     network: BitcoinNetwork,
 ) -> Result<BitcoinCore, Error> {
-    let btc_rpc = BitcoinCore::new(bitcoin_opts.new_client(Some(&wallet_name))?, network.0);
+    let btc_rpc = BitcoinCore::new(Arc::new(bitcoin_opts.new_client(Some(&wallet_name))?), network.0);
     btc_rpc.create_wallet(&wallet_name).await?;
     Ok(btc_rpc)
 }
@@ -490,7 +505,12 @@ async fn main() -> Result<(), Error> {
 
     let (key_pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
-    let provider = PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?;
+    let provider = PolkaBtcProvider::from_url_with_retry(
+        &opts.polka_btc_url,
+        signer,
+        Duration::from_millis(opts.connection_timeout_ms),
+    )
+    .await?;
 
     match opts.subcmd {
         SubCommand::SetExchangeRate(info) => {
@@ -521,12 +541,7 @@ async fn main() -> Result<(), Error> {
         }
         SubCommand::RegisterVault(info) => {
             let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
-            vault::register_vault(
-                provider,
-                btc_rpc.get_new_public_key().await?,
-                info.collateral,
-            )
-            .await?;
+            vault::register_vault(provider, btc_rpc.get_new_public_key().await?, info.collateral).await?;
         }
         SubCommand::RequestIssue(info) => {
             let vault_id = info.vault.to_account_id();
@@ -536,8 +551,7 @@ async fn main() -> Result<(), Error> {
                 None => {
                     // calculate required amount
                     let amount_in_dot = provider.btc_to_dots(info.issue_amount).await?;
-                    let required_griefing_collateral_rate =
-                        provider.get_issue_griefing_collateral().await?;
+                    let required_griefing_collateral_rate = provider.get_issue_griefing_collateral().await?;
 
                     // we add 0.5 before we do the final integer division to round the result we return.
                     // note that unwrapping is safe because we use a constant
@@ -552,17 +566,13 @@ async fn main() -> Result<(), Error> {
                     };
 
                     let griefing_collateral = calc_griefing_collateral().ok_or(Error::MathError)?;
-                    info!(
-                        "Griefing collateral not set; defaulting to {}",
-                        griefing_collateral
-                    );
+                    info!("Griefing collateral not set; defaulting to {}", griefing_collateral);
                     griefing_collateral
                 }
             };
 
             let request_data =
-                issue::request_issue(&provider, info.issue_amount, griefing_collateral, vault_id)
-                    .await?;
+                issue::request_issue(&provider, info.issue_amount, griefing_collateral, vault_id).await?;
 
             let vault_btc_address = request_data.vault_btc_address;
 
@@ -591,10 +601,7 @@ async fn main() -> Result<(), Error> {
                     return Err(Error::IssueCancelled);
                 }
 
-                (
-                    issue_request.btc_address,
-                    issue_request.amount + issue_request.fee,
-                )
+                (issue_request.btc_address, issue_request.amount + issue_request.fee)
             } else {
                 // expects cli configuration
                 let btc_address = info.btc_address.ok_or(Error::ExpectedBitcoinAddress)?.0;
@@ -639,9 +646,7 @@ async fn main() -> Result<(), Error> {
             .await?;
         }
         SubCommand::RequestReplace(info) => {
-            let replace_id =
-                replace::request_replace(&provider, info.replace_amount, info.griefing_collateral)
-                    .await?;
+            let replace_id = replace::request_replace(&provider, info.replace_amount, info.griefing_collateral).await?;
             println!("{}", hex::encode(replace_id.as_bytes()));
         }
         SubCommand::AcceptReplace(info) => {
@@ -706,6 +711,17 @@ async fn main() -> Result<(), Error> {
         }
         SubCommand::SetRelayerMaturityPeriod(info) => {
             provider.set_maturity_period(info.period).await?;
+        }
+        SubCommand::FundAccounts(info) => {
+            let provider = &provider;
+            let futures: Vec<_> = info
+                .accounts
+                .iter()
+                .map(|account_id| (account_id, info.amount))
+                .map(|(account_id, amount)| async move { provider.transfer_to(account_id.clone(), amount).await })
+                .collect();
+
+            try_join_all(futures).await?;
         }
     }
 

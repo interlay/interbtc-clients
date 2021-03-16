@@ -1,18 +1,21 @@
 use super::Error;
-use futures::executor::block_on;
 use hex::FromHex;
-use jsonrpc_http_server::jsonrpc_core::serde_json::Value;
-use jsonrpc_http_server::jsonrpc_core::{Error as JsonRpcError, ErrorCode as JsonRpcErrorCode};
-use jsonrpc_http_server::jsonrpc_core::{IoHandler, Params};
-use jsonrpc_http_server::{DomainsValidation, ServerBuilder};
+use jsonrpc_http_server::{
+    jsonrpc_core::{serde_json::Value, Error as JsonRpcError, ErrorCode as JsonRpcErrorCode, IoHandler, Params},
+    DomainsValidation, ServerBuilder,
+};
+use log::info;
 use parity_scale_codec::{Decode, Encode};
-use runtime::ErrorCode as PolkaBtcErrorCode;
-use runtime::StatusCode as PolkaBtcStatusCode;
-use runtime::{H256Le, PolkaBtcProvider, SecurityPallet, StakedRelayerPallet, UtilFuncs};
+use runtime::{
+    Error as RuntimeError, ErrorCode as PolkaBtcErrorCode, H256Le, PolkaBtcProvider, StakedRelayerPallet,
+    StatusCode as PolkaBtcStatusCode, UtilFuncs,
+};
 use serde::{Deserialize, Deserializer};
 use sp_core::crypto::Ss58Codec;
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{net::SocketAddr, time::Duration};
+use tokio::time::timeout;
+
+const HEALTH_DURATION: Duration = Duration::from_millis(5000);
 
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct RawBytes(#[serde(deserialize_with = "hex_to_buffer")] pub(crate) Vec<u8>);
@@ -22,9 +25,8 @@ where
     D: Deserializer<'de>,
 {
     use serde::de::Error;
-    String::deserialize(deserializer).and_then(|string| {
-        Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string()))
-    })
+    String::deserialize(deserializer)
+        .and_then(|string| Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string())))
 }
 
 fn parse_params<T: Decode>(params: Params) -> Result<T, Error> {
@@ -44,9 +46,11 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
     }
 }
 
-fn _system_health(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
-    block_on(provider.get_parachain_status())?;
-    Ok(())
+async fn _system_health(provider: &PolkaBtcProvider) -> Result<(), Error> {
+    match timeout(HEALTH_DURATION, provider.get_latest_block_hash()).await {
+        Err(err) => Err(Error::RuntimeError(RuntimeError::from(err))),
+        _ => Ok(()),
+    }
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -54,7 +58,7 @@ struct AccountIdJsonRpcResponse {
     account_id: String,
 }
 
-fn _account_id(provider: &Arc<PolkaBtcProvider>) -> Result<AccountIdJsonRpcResponse, Error> {
+fn _account_id(provider: &PolkaBtcProvider) -> Result<AccountIdJsonRpcResponse, Error> {
     Ok(AccountIdJsonRpcResponse {
         account_id: provider.get_account_id().to_ss58check(),
     })
@@ -65,13 +69,13 @@ struct RegisterStakedRelayerJsonRpcRequest {
     stake: u128,
 }
 
-fn _register_staked_relayer(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+async fn _register_staked_relayer(provider: &PolkaBtcProvider, params: Params) -> Result<(), Error> {
     let req: RegisterStakedRelayerJsonRpcRequest = parse_params(params)?;
-    Ok(block_on(provider.register_staked_relayer(req.stake))?)
+    Ok(provider.register_staked_relayer(req.stake).await?)
 }
 
-fn _deregister_staked_relayer(provider: &Arc<PolkaBtcProvider>) -> Result<(), Error> {
-    Ok(block_on(provider.deregister_staked_relayer())?)
+async fn _deregister_staked_relayer(provider: &PolkaBtcProvider) -> Result<(), Error> {
+    Ok(provider.deregister_staked_relayer().await?)
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -84,16 +88,18 @@ struct SuggestStatusUpdateJsonRpcRequest {
     message: String,
 }
 
-fn _suggest_status_update(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+async fn _suggest_status_update(provider: &PolkaBtcProvider, params: Params) -> Result<(), Error> {
     let req: SuggestStatusUpdateJsonRpcRequest = parse_params(params)?;
-    Ok(block_on(provider.suggest_status_update(
-        req.deposit,
-        req.status_code,
-        req.add_error,
-        req.remove_error,
-        req.block_hash,
-        req.message,
-    ))?)
+    Ok(provider
+        .suggest_status_update(
+            req.deposit,
+            req.status_code,
+            req.add_error,
+            req.remove_error,
+            req.block_hash,
+            req.message,
+        )
+        .await?)
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -102,60 +108,77 @@ struct VoteOnStatusUpdateJsonRpcRequest {
     pub approve: bool,
 }
 
-fn _vote_on_status_update(provider: &Arc<PolkaBtcProvider>, params: Params) -> Result<(), Error> {
+async fn _vote_on_status_update(provider: &PolkaBtcProvider, params: Params) -> Result<(), Error> {
     let req: VoteOnStatusUpdateJsonRpcRequest = parse_params(params)?;
-    Ok(block_on(
-        provider.vote_on_status_update(req.status_update_id, req.approve),
-    )?)
+    Ok(provider
+        .vote_on_status_update(req.status_update_id, req.approve)
+        .await?)
 }
 
-pub async fn start(provider: Arc<PolkaBtcProvider>, addr: SocketAddr, origin: String) {
+pub fn start_http(
+    provider: PolkaBtcProvider,
+    addr: SocketAddr,
+    origin: String,
+    handle: tokio::runtime::Handle,
+) -> jsonrpc_http_server::CloseHandle {
     let mut io = IoHandler::default();
     {
         let provider = provider.clone();
-        io.add_sync_method("system_health", move |_| {
-            handle_resp(_system_health(&provider))
+        io.add_method("system_health", move |_| {
+            let provider = provider.clone();
+            async move { handle_resp(_system_health(&provider).await) }
         });
     }
     {
         let provider = provider.clone();
-        io.add_sync_method("account_id", move |_| handle_resp(_account_id(&provider)));
-    }
-    {
-        let provider = provider.clone();
-        io.add_sync_method("register_staked_relayer", move |params| {
-            handle_resp(_register_staked_relayer(&provider, params))
+        io.add_method("account_id", move |_| {
+            let provider = provider.clone();
+            async move { handle_resp(_account_id(&provider)) }
         });
     }
     {
         let provider = provider.clone();
-        io.add_sync_method("deregister_staked_relayer", move |_| {
-            handle_resp(_deregister_staked_relayer(&provider))
+        io.add_method("register_staked_relayer", move |params| {
+            let provider = provider.clone();
+            async move { handle_resp(_register_staked_relayer(&provider, params).await) }
         });
     }
     {
         let provider = provider.clone();
-        io.add_sync_method("suggest_status_update", move |params| {
-            handle_resp(_suggest_status_update(&provider, params))
+        io.add_method("deregister_staked_relayer", move |_| {
+            let provider = provider.clone();
+            async move { handle_resp(_deregister_staked_relayer(&provider).await) }
         });
     }
     {
         let provider = provider.clone();
-        io.add_sync_method("vote_on_status_update", move |params| {
-            handle_resp(_vote_on_status_update(&provider, params))
+        io.add_method("suggest_status_update", move |params| {
+            let provider = provider.clone();
+            async move { handle_resp(_suggest_status_update(&provider, params).await) }
+        });
+    }
+    {
+        let provider = provider.clone();
+        io.add_method("vote_on_status_update", move |params| {
+            let provider = provider.clone();
+            async move { handle_resp(_vote_on_status_update(&provider, params).await) }
         });
     }
 
     let server = ServerBuilder::new(io)
+        .event_loop_executor(handle.clone())
         .health_api(("/health", "system_health"))
         .rest_api(jsonrpc_http_server::RestApi::Unsecure)
         .cors(DomainsValidation::AllowOnly(vec![origin.into()]))
         .start_http(&addr)
         .expect("Unable to start RPC server");
 
-    tokio::task::spawn_blocking(move || {
+    let close_handle = server.close_handle();
+
+    handle.spawn_blocking(move || {
+        info!("Starting http server...");
         server.wait();
-    })
-    .await
-    .unwrap();
+    });
+
+    close_handle
 }

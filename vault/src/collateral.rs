@@ -1,14 +1,12 @@
 use crate::error::Error;
 use log::*;
 use runtime::{
-    pallets::exchange_rate_oracle::SetExchangeRateEvent, pallets::vault_registry::VaultStatus,
-    AccountId, DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs,
-    VaultRegistryPallet,
+    pallets::{exchange_rate_oracle::SetExchangeRateEvent, vault_registry::VaultStatus},
+    AccountId, DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
 };
-use std::sync::Arc;
 
 pub async fn maintain_collateralization_rate(
-    provider: Arc<PolkaBtcProvider>,
+    provider: PolkaBtcProvider,
     maximum_collateral: u128,
 ) -> Result<(), runtime::Error> {
     let provider = &provider;
@@ -18,12 +16,8 @@ pub async fn maintain_collateralization_rate(
                 info!("Received SetExchangeRateEvent");
                 // todo: implement retrying
 
-                match lock_required_collateral(
-                    provider.clone(),
-                    provider.get_account_id().clone(),
-                    maximum_collateral,
-                )
-                .await
+                match lock_required_collateral(provider.clone(), provider.get_account_id().clone(), maximum_collateral)
+                    .await
                 {
                     // vault not being registered is ok, no need to log it
                     Err(Error::RuntimeError(runtime::Error::VaultNotFound)) => {}
@@ -50,7 +44,7 @@ pub async fn maintain_collateralization_rate(
 /// * `vault_id` - the id of this vault
 /// * `maximum_collateral` - the upperbound of total collateral that is allowed to be placed
 pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet>(
-    provider: Arc<P>,
+    provider: P,
     vault_id: AccountId,
     maximum_collateral: u128,
 ) -> Result<(), Error> {
@@ -60,9 +54,7 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet
         return Err(Error::RuntimeError(runtime::Error::VaultNotFound));
     }
 
-    let required_collateral = provider
-        .get_required_collateral_for_vault(vault_id.clone())
-        .await?;
+    let required_collateral = provider.get_required_collateral_for_vault(vault_id.clone()).await?;
     let actual_collateral = provider.get_reserved_dot_balance().await?;
 
     // we have 6 possible orderings of (required, actual, limit):
@@ -97,9 +89,7 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet
         // cases 5 & 6
         let amount_to_increase = target_collateral - actual_collateral;
         info!("Locking additional collateral");
-        provider
-            .lock_additional_collateral(amount_to_increase)
-            .await?;
+        provider.lock_additional_collateral(amount_to_increase).await?;
     }
 
     // if we were unable to add the required amount, return error
@@ -116,8 +106,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use runtime::{
-        pallets::Core, AccountId, BtcAddress, BtcPublicKey, Error as RuntimeError, PolkaBtcRuntime,
-        PolkaBtcVault,
+        pallets::Core, AccountId, BtcAddress, BtcPublicKey, Error as RuntimeError, PolkaBtcRuntime, PolkaBtcVault,
     };
 
     macro_rules! assert_ok {
@@ -169,6 +158,13 @@ mod tests {
         }
     }
 
+    impl Clone for MockProvider {
+        fn clone(&self) -> Self {
+            // NOTE: expectations dropped
+            Self::default()
+        }
+    }
+
     #[tokio::test]
     async fn test_lock_required_collateral_case_1() {
         // case 1: required <= actual <= limit -- do nothing (already enough)
@@ -185,12 +181,10 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(50));
-        provider
-            .expect_get_reserved_dot_balance()
-            .returning(|| Ok(75));
+        provider.expect_get_reserved_dot_balance().returning(|| Ok(75));
 
         let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(Arc::new(provider), vault_id, 100).await);
+        assert_ok!(lock_required_collateral(provider, vault_id, 100).await);
     }
 
     #[tokio::test]
@@ -209,12 +203,10 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider
-            .expect_get_reserved_dot_balance()
-            .returning(|| Ok(200));
+        provider.expect_get_reserved_dot_balance().returning(|| Ok(200));
 
         let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(Arc::new(provider), vault_id, 150).await);
+        assert_ok!(lock_required_collateral(provider, vault_id, 150).await);
     }
 
     #[tokio::test]
@@ -233,12 +225,10 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider
-            .expect_get_reserved_dot_balance()
-            .returning(|| Ok(150));
+        provider.expect_get_reserved_dot_balance().returning(|| Ok(150));
 
         let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(Arc::new(provider), vault_id, 75).await);
+        assert_ok!(lock_required_collateral(provider, vault_id, 75).await);
     }
 
     #[tokio::test]
@@ -257,13 +247,11 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider
-            .expect_get_reserved_dot_balance()
-            .returning(|| Ok(75));
+        provider.expect_get_reserved_dot_balance().returning(|| Ok(75));
 
         let vault_id = AccountId::default();
         assert_err!(
-            lock_required_collateral(Arc::new(provider), vault_id, 50).await,
+            lock_required_collateral(provider, vault_id, 50).await,
             Error::InsufficientFunds
         );
     }
@@ -283,9 +271,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider
-            .expect_get_reserved_dot_balance()
-            .returning(|| Ok(25));
+        provider.expect_get_reserved_dot_balance().returning(|| Ok(25));
         provider
             .expect_lock_additional_collateral()
             .withf(|&amount| amount == 50)
@@ -294,7 +280,7 @@ mod tests {
 
         let vault_id = AccountId::default();
         assert_err!(
-            lock_required_collateral(Arc::new(provider), vault_id, 75).await,
+            lock_required_collateral(provider, vault_id, 75).await,
             Error::InsufficientFunds
         );
     }
@@ -313,9 +299,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider
-            .expect_get_reserved_dot_balance()
-            .returning(|| Ok(25));
+        provider.expect_get_reserved_dot_balance().returning(|| Ok(25));
         provider
             .expect_lock_additional_collateral()
             .withf(|&amount| amount == 75)
@@ -323,7 +307,7 @@ mod tests {
             .returning(|_| Ok(()));
 
         let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(Arc::new(provider), vault_id, 200).await);
+        assert_ok!(lock_required_collateral(provider, vault_id, 200).await);
     }
 
     #[tokio::test]
@@ -341,13 +325,11 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider
-            .expect_get_reserved_dot_balance()
-            .returning(|| Ok(25));
+        provider.expect_get_reserved_dot_balance().returning(|| Ok(25));
 
         let vault_id = AccountId::default();
         assert_err!(
-            lock_required_collateral(Arc::new(provider), vault_id, 25).await,
+            lock_required_collateral(provider, vault_id, 25).await,
             Error::InsufficientFunds
         );
     }
@@ -367,12 +349,10 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider
-            .expect_get_reserved_dot_balance()
-            .returning(|| Ok(100));
+        provider.expect_get_reserved_dot_balance().returning(|| Ok(100));
 
         let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(Arc::new(provider), vault_id, 200).await);
+        assert_ok!(lock_required_collateral(provider, vault_id, 200).await);
     }
 
     #[tokio::test]
@@ -388,7 +368,7 @@ mod tests {
 
         let vault_id = AccountId::default();
         assert_err!(
-            lock_required_collateral(Arc::new(provider), vault_id, 75).await,
+            lock_required_collateral(provider, vault_id, 75).await,
             Error::RuntimeError(runtime::Error::VaultNotFound)
         );
     }

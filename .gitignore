@@ -2,3 +2,4 @@
 **.tgz
 **/.vscode/
 event-logs
+faucet/kv

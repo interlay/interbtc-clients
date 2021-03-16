@@ -3,24 +3,21 @@ mod error;
 use clap::Clap;
 use error::Error;
 use log::{error, info};
-use runtime::substrate_subxt::PairSigner;
 use runtime::{
-    ExchangeRateOraclePallet, FixedPointNumber, FixedU128, PolkaBtcProvider, PolkaBtcRuntime,
+    substrate_subxt::PairSigner, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, PolkaBtcProvider,
+    PolkaBtcRuntime,
 };
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 use tokio::time::delay_for;
 
 const ERR_RETRY_WAIT: Duration = Duration::from_secs(10);
 
 async fn get_exchange_rate_from_coingecko() -> Result<u128, Error> {
     // https://www.coingecko.com/api/documentations/v3
-    let resp =
-        reqwest::get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=dot")
-            .await?
-            .json::<HashMap<String, HashMap<String, u128>>>()
-            .await?;
+    let resp = reqwest::get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=dot")
+        .await?
+        .json::<HashMap<String, HashMap<String, u128>>>()
+        .await?;
 
     Ok(*resp
         .get("bitcoin")
@@ -44,8 +41,8 @@ struct Opts {
     #[clap(long, default_value = "385523187")]
     exchange_rate: u128,
 
-    /// Timeout for exchange rate setter, default 30 minutes.
-    #[clap(long, default_value = "1800000")]
+    /// Timeout for exchange rate setter, default 25 minutes.
+    #[clap(long, default_value = "1500000")]
     timeout_ms: u64,
 
     /// keyring / keyfile options.
@@ -55,20 +52,25 @@ struct Opts {
     /// Fetch the exchange rate from CoinGecko.
     #[clap(long, conflicts_with("exchange-rate"))]
     coingecko: bool,
+
+    /// Timeout in milliseconds to wait for connection to btc-parachain.
+    #[clap(long, default_value = "60000")]
+    connection_timeout_ms: u64,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    env_logger::init();
+    env_logger::init_from_env(
+        env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, log::LevelFilter::Info.as_str()),
+    );
     let opts: Opts = Opts::parse();
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
-    let provider = Arc::new(PolkaBtcProvider::from_url(opts.polka_btc_url, signer).await?);
 
     let timeout = Duration::from_millis(opts.timeout_ms);
-    let exchange_rate = FixedU128::checked_from_rational(opts.exchange_rate, 100_000)
-        .ok_or(Error::InvalidExchangeRate)?;
+    let exchange_rate =
+        FixedU128::checked_from_rational(opts.exchange_rate, 100_000).ok_or(Error::InvalidExchangeRate)?;
 
     loop {
         let exchange_rate = if opts.coingecko {
@@ -93,10 +95,19 @@ async fn main() -> Result<(), Error> {
             chrono::offset::Local::now()
         );
 
-        match provider.set_exchange_rate_info(exchange_rate).await {
-            Err(e) => error!("Error: {}", e.to_string()),
-            _ => (),
-        };
+        let result = PolkaBtcProvider::from_url_with_retry(
+            &opts.polka_btc_url.clone(),
+            signer.clone(),
+            Duration::from_millis(opts.connection_timeout_ms),
+        )
+        .await?
+        .set_exchange_rate_info(exchange_rate)
+        .await;
+
+        if let Err(e) = result {
+            error!("Error: {}", e.to_string());
+        }
+
         delay_for(timeout).await;
     }
 }

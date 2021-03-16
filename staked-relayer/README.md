@@ -17,7 +17,7 @@ Download and start [Bitcoin Core](https://bitcoin.org/en/bitcoin-core/):
 bitcoind -regtest -server
 ```
 
-Build and run the [PolkaBTC Parachain](https://gitlab.com/interlay/btc-parachain):
+Build and run the [PolkaBTC Parachain](https://github.com/interlay/btc-parachain):
 
 ```
 git clone git@gitlab.com:interlay/btc-parachain.git
@@ -46,7 +46,7 @@ For convenience, a copy of this output is included below. Note that the bitcoin 
 
 ```
 USAGE:
-    cargo run -- [OPTIONS] --bitcoin-rpc-url <bitcoin-rpc-url> --bitcoin-rpc-user <bitcoin-rpc-user> --bitcoin-rpc-pass <bitcoin-rpc-pass>
+    staked-relayer [OPTIONS] --bitcoin-rpc-url <bitcoin-rpc-url> --bitcoin-rpc-user <bitcoin-rpc-user> --bitcoin-rpc-pass <bitcoin-rpc-pass>
 
 FLAGS:
     -h, --help       Prints help information
@@ -60,9 +60,26 @@ OPTIONS:
         --auto-register-with-stake <auto-register-with-stake>
             Automatically register the relayer with the given stake (in Planck)
 
-        --bitcoin-rpc-pass <bitcoin-rpc-pass>              [env: BITCOIN_RPC_PASS=]
-        --bitcoin-rpc-url <bitcoin-rpc-url>                [env: BITCOIN_RPC_URL=]
-        --bitcoin-rpc-user <bitcoin-rpc-user>              [env: BITCOIN_RPC_USER=]
+        --bitcoin-relay-start-height <bitcoin-relay-start-height>
+            Starting height to relay block headers, if not defined use the best height as reported
+            by the relay module
+
+        --bitcoin-rpc-pass <bitcoin-rpc-pass>
+            [env: BITCOIN_RPC_PASS=rpcpassword]
+
+        --bitcoin-rpc-url <bitcoin-rpc-url>
+            [env: BITCOIN_RPC_URL=http://localhost:18443]
+
+        --bitcoin-rpc-user <bitcoin-rpc-user>
+            [env: BITCOIN_RPC_USER=rpcuser]
+
+        --bitcoin-theft-start-height <bitcoin-theft-start-height>
+            Starting height for vault theft checks, if not defined automatically start from the
+            chain tip
+
+        --bitcoin-timeout-ms <bitcoin-timeout-ms>
+            Timeout in milliseconds to poll Bitcoin [default: 6000]
+
         --http-addr <http-addr>
             Address to listen on for JSON-RPC requests [default: [::0]:3030]
 
@@ -74,11 +91,10 @@ OPTIONS:
             The name of the account from the keyfile to use
 
         --keyring <keyring>
-            Keyring to use, mutually exclusive with keyfile [valid values: alice, bob, charlie,
-            dave, eve, ferdie]
+            Keyring to use, mutually exclusive with keyfile
 
         --max-batch-size <max-batch-size>
-            Max batch size for combined block header submission. [default: 16]
+            Max batch size for combined block header submission [default: 16]
 
         --oracle-timeout-ms <oracle-timeout-ms>
             Timeout in milliseconds to repeat oracle liveness check [default: 5000]
@@ -86,22 +102,14 @@ OPTIONS:
         --polka-btc-url <polka-btc-url>
             Parachain URL, can be over WebSockets or HTTP [default: ws://127.0.0.1:9944]
 
-        --relay-start-height <relay-start-height>
-            Starting height to relay block headers, if not defined use the best height as reported
-            by the relay module
-
         --rpc-cors-domain <rpc-cors-domain>
             Comma separated list of allowed origins [default: *]
 
-        --scan-block-delay <scan-block-delay>
-            Delay for checking Bitcoin for new blocks (in seconds) [default: 60]
-
-        --scan-start-height <scan-start-height>
-            Starting height for vault theft checks, if not defined automatically start from the
-            chain tip
-
         --status-update-deposit <status-update-deposit>
             Default deposit for all automated status proposals [default: 100]
+
+        --required-btc-confirmations: <required-btc-confirmations:>
+            Number of confirmations a block needs to have before it is submitted [default: 0]
 ```
 
 ## Example
