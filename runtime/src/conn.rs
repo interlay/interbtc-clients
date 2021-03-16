@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use futures::{Future, FutureExt};
 use jsonrpsee_ws_client::{WsClient, WsConfig};
 use log::{info, trace};
-use std::{marker::PhantomData, str::FromStr, time::Duration};
+use std::{marker::PhantomData, str::FromStr, sync::Arc, time::Duration};
 use substrate_subxt::RpcClient;
 use tokio::{
     runtime::Handle,
@@ -139,6 +139,7 @@ impl<C: Clone + Send + 'static, P: Provider + Send, S: Service<C, P>> Manager<C,
                 self.manager_config.connection_timeout,
             )
             .await?;
+            let ws_client = Arc::new(ws_client);
 
             let signer = self.signer.clone();
             let config = self.service_config.clone();
@@ -173,8 +174,8 @@ impl<C: Clone + Send + 'static, P: Provider + Send, S: Service<C, P>> Manager<C,
     }
 }
 
-async fn is_connected(client: WsClient) {
-    while client.is_connected().await {
+async fn is_connected(client: Arc<WsClient>) {
+    while client.is_connected() {
         delay_for(Duration::from_millis(500)).await;
     }
 }
