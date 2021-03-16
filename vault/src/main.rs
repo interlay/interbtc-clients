@@ -38,10 +38,6 @@ pub struct Opts {
     #[clap(flatten)]
     pub bitcoin: bitcoin::cli::BitcoinOpts,
 
-    /// Address to listen on for JSON-RPC requests.
-    #[clap(long, default_value = "[::0]:3031")]
-    pub http_addr: String,
-
     /// Comma separated list of allowed origins.
     #[clap(long, default_value = "*")]
     pub rpc_cors_domain: String,
@@ -132,7 +128,6 @@ async fn start() -> Result<(), Error> {
             no_auto_auction: opts.no_auto_auction,
             no_issue_execution: opts.no_issue_execution,
             collateral_timeout: Duration::from_millis(opts.collateral_timeout_ms),
-            http_addr: opts.http_addr.parse()?,
             rpc_cors_domain: opts.rpc_cors_domain,
         },
         opts.parachain.into(),

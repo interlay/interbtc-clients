@@ -22,10 +22,6 @@ struct Opts {
     #[clap(flatten)]
     bitcoin: bitcoin::cli::BitcoinOpts,
 
-    /// Address to listen on for JSON-RPC requests.
-    #[clap(long, default_value = "[::0]:3030")]
-    http_addr: String,
-
     /// Starting height for vault theft checks, if not defined
     /// automatically start from the chain tip.
     #[clap(long)]
@@ -102,7 +98,6 @@ async fn start() -> Result<(), Error> {
             oracle_timeout: Duration::from_millis(opts.oracle_timeout_ms),
             required_btc_confirmations: opts.required_btc_confirmations,
             status_update_deposit: opts.status_update_deposit,
-            http_addr: opts.http_addr.parse()?,
             rpc_cors_domain: opts.rpc_cors_domain,
         },
         opts.parachain.into(),

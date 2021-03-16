@@ -1,9 +1,23 @@
-use crate::{error::Error, http, lock_additional_collateral};
+use crate::{error::Error, lock_additional_collateral};
 use bitcoin::BitcoinCoreApi;
+use hex::FromHex;
 use jsonrpc_core::Value;
 use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use parity_scale_codec::{Decode, Encode};
 use runtime::{AccountId, PolkaBtcProvider, VaultRegistryPallet, PLANCK_PER_DOT, TX_FEES};
+use serde::{Deserialize, Deserializer};
+
+#[derive(Debug, Clone, Deserialize)]
+struct RawBytes(#[serde(deserialize_with = "hex_to_buffer")] Vec<u8>);
+
+pub fn hex_to_buffer<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error;
+    String::deserialize(deserializer)
+        .and_then(|string| Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string())))
+}
 
 #[derive(Encode, Decode, Debug, Clone, serde::Serialize)]
 struct FundAccountJsonRpcRequest {
@@ -12,7 +26,7 @@ struct FundAccountJsonRpcRequest {
 
 async fn get_faucet_allowance(faucet_connection: TypedClient, allowance_type: &str) -> Result<u128, Error> {
     let raw_allowance = faucet_connection
-        .call_method::<(), http::RawBytes>(&allowance_type, "", ())
+        .call_method::<(), RawBytes>(&allowance_type, "", ())
         .await?;
     Ok(Decode::decode(&mut &raw_allowance.0[..])?)
 }

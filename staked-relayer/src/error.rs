@@ -2,7 +2,6 @@ use crate::{core::Error as CoreError, relay::Error as RelayError};
 use backoff::ExponentialBackoff;
 use bitcoin::{BitcoinError as BitcoinCoreError, Error as BitcoinError};
 use jsonrpc_core_client::RpcError;
-use jsonrpc_http_server::jsonrpc_core::Error as JsonRpcError;
 use parity_scale_codec::Error as CodecError;
 use runtime::{substrate_subxt::Error as XtError, Error as RuntimeError};
 use std::{net::AddrParseError, time::Duration};
@@ -35,8 +34,6 @@ pub enum Error {
     BitcoinError(#[from] BitcoinError),
     #[error("BitcoinCoreError: {0}")]
     BitcoinCoreError(#[from] BitcoinCoreError),
-    #[error("JsonRpcError: {0}")]
-    JsonRpcError(#[from] JsonRpcError),
     #[error("RPC error: {0}")]
     RpcError(#[from] RpcError),
     #[error("Mathematical operation error")]

@@ -53,7 +53,6 @@ for i in $(seq 1 $NUM_RELAYERS); do
     ${RELAYER_CLIENT_BIN} \
         --polka-btc-url ${BTC_PARACHAIN_RPC} \
         --auto-register-with-stake ${RELAYER_STAKE} \
-        --http-addr "[::0]:304$i" \
         --keyfile $keyFile \
         --keyname ${RELAYER_NAME} &
 

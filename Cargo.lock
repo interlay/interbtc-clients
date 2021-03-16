@@ -5913,7 +5913,7 @@ checksum = "feb3b2b1033b8a60b4da6ee470325f887758c95d5320f52f9ce0df055a55940e"
 [[package]]
 name = "polkadot-core-primitives"
 version = "0.7.30"
-source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#bf7aa8921c1ccc2638c9465224b9b18bef33e35e"
+source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#2f7b975015d5c3f50199cda82b9b84e38726d001"
 dependencies = [
  "parity-scale-codec",
  "parity-util-mem",
@@ -5925,7 +5925,7 @@ dependencies = [
 [[package]]
 name = "polkadot-parachain"
 version = "0.8.29"
-source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#bf7aa8921c1ccc2638c9465224b9b18bef33e35e"
+source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#2f7b975015d5c3f50199cda82b9b84e38726d001"
 dependencies = [
  "derive_more",
  "futures 0.3.13",
@@ -5952,7 +5952,7 @@ dependencies = [
 [[package]]
 name = "polkadot-primitives"
 version = "0.8.29"
-source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#bf7aa8921c1ccc2638c9465224b9b18bef33e35e"
+source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#2f7b975015d5c3f50199cda82b9b84e38726d001"
 dependencies = [
  "bitvec",
  "frame-system",
@@ -5980,7 +5980,7 @@ dependencies = [
 [[package]]
 name = "polkadot-runtime-common"
 version = "0.8.29"
-source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#bf7aa8921c1ccc2638c9465224b9b18bef33e35e"
+source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#2f7b975015d5c3f50199cda82b9b84e38726d001"
 dependencies = [
  "bitvec",
  "frame-support",
@@ -6016,7 +6016,7 @@ dependencies = [
 [[package]]
 name = "polkadot-runtime-parachains"
 version = "0.8.0"
-source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#bf7aa8921c1ccc2638c9465224b9b18bef33e35e"
+source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#2f7b975015d5c3f50199cda82b9b84e38726d001"
 dependencies = [
  "bitvec",
  "derive_more",
@@ -6888,7 +6888,7 @@ dependencies = [
 [[package]]
 name = "rococo-runtime"
 version = "0.8.29"
-source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#bf7aa8921c1ccc2638c9465224b9b18bef33e35e"
+source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#2f7b975015d5c3f50199cda82b9b84e38726d001"
 dependencies = [
  "frame-executive",
  "frame-support",
@@ -9165,8 +9165,8 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.3.13",
  "hex 0.4.3",
+ "jsonrpc-core 17.0.0",
  "jsonrpc-core-client 17.0.0",
- "jsonrpc-http-server 17.0.0",
  "log 0.4.14",
  "mockall",
  "parity-scale-codec",
@@ -10328,7 +10328,6 @@ dependencies = [
  "hex 0.4.3",
  "jsonrpc-core 17.0.0",
  "jsonrpc-core-client 17.0.0",
- "jsonrpc-http-server 17.0.0",
  "log 0.4.14",
  "mockall",
  "parity-scale-codec",
@@ -10923,7 +10922,7 @@ dependencies = [
 [[package]]
 name = "xcm"
 version = "0.8.22"
-source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#bf7aa8921c1ccc2638c9465224b9b18bef33e35e"
+source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#2f7b975015d5c3f50199cda82b9b84e38726d001"
 dependencies = [
  "parity-scale-codec",
 ]
@@ -10931,7 +10930,7 @@ dependencies = [
 [[package]]
 name = "xcm-builder"
 version = "0.8.22"
-source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#bf7aa8921c1ccc2638c9465224b9b18bef33e35e"
+source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#2f7b975015d5c3f50199cda82b9b84e38726d001"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -10947,7 +10946,7 @@ dependencies = [
 [[package]]
 name = "xcm-executor"
 version = "0.8.22"
-source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#bf7aa8921c1ccc2638c9465224b9b18bef33e35e"
+source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#2f7b975015d5c3f50199cda82b9b84e38726d001"
 dependencies = [
  "frame-support",
  "impl-trait-for-tuples",

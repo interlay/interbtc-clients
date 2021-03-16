@@ -53,7 +53,6 @@ for i in $(seq 1 $NUM_VAULTS); do
     ${VAULT_CLIENT_BIN} \
         --polka-btc-url ${BTC_PARACHAIN_RPC} \
         --auto-register-with-collateral ${VAULT_COLLATERAL} \
-        --http-addr "[::0]:303$i" \
         --keyfile $keyFile \
         --keyname ${VAULT_NAME} \
         --network regtest &
