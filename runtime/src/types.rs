@@ -2,11 +2,13 @@ use sp_core::sr25519::Pair as KeyPair;
 use sp_runtime::generic::{Block, SignedBlock};
 use substrate_subxt::{system::System, PairSigner};
 
-use crate::pallets::{
-    Core, IssueRequest, RedeemRequest, RefundRequest, ReplaceRequest, RequestIssueEvent,
-    RichBlockHeader, StatusUpdate, Vault,
+use crate::{
+    pallets::{
+        Core, IssueRequest, RedeemRequest, RefundRequest, ReplaceRequest, RequestIssueEvent, RichBlockHeader,
+        StatusUpdate, Vault,
+    },
+    PolkaBtcRuntime,
 };
-use crate::PolkaBtcRuntime;
 
 pub type AccountId = <PolkaBtcRuntime as System>::AccountId;
 
@@ -46,11 +48,8 @@ pub type PolkaBtcReplaceRequest = ReplaceRequest<
     <PolkaBtcRuntime as Core>::DOT,
 >;
 
-pub type PolkaBtcStatusUpdate = StatusUpdate<
-    AccountId,
-    <PolkaBtcRuntime as System>::BlockNumber,
-    <PolkaBtcRuntime as Core>::DOT,
->;
+pub type PolkaBtcStatusUpdate =
+    StatusUpdate<AccountId, <PolkaBtcRuntime as System>::BlockNumber, <PolkaBtcRuntime as Core>::DOT>;
 
 pub type PolkaBtcRichBlockHeader = RichBlockHeader<AccountId>;
 

@@ -1,9 +1,10 @@
 use crate::BitcoinError;
 use bitcoincore_rpc::{
     bitcoin::{
-        consensus::encode::Error as BitcoinEncodeError, hashes::Error as HashesError,
-        secp256k1::Error as Secp256k1Error, util::address::Error as AddressError,
-        util::key::Error as KeyError,
+        consensus::encode::Error as BitcoinEncodeError,
+        hashes::Error as HashesError,
+        secp256k1::Error as Secp256k1Error,
+        util::{address::Error as AddressError, key::Error as KeyError},
     },
     jsonrpc::error::RpcError,
 };

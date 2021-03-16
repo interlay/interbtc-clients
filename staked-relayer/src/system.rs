@@ -1,20 +1,13 @@
-use crate::relay::*;
-use crate::service::*;
-use crate::utils::*;
-use crate::Error;
-use crate::Vaults;
+use crate::{relay::*, service::*, utils::*, Error, Vaults};
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use futures::executor::block_on;
 use log::*;
-use runtime::pallets::sla::UpdateRelayerSLAEvent;
 use runtime::{
-    on_shutdown, wait_or_shutdown, Error as RuntimeError, PolkaBtcProvider, PolkaBtcRuntime,
-    Service, ShutdownReceiver, StakedRelayerPallet, UtilFuncs, VaultRegistryPallet,
+    on_shutdown, pallets::sla::UpdateRelayerSLAEvent, wait_or_shutdown, Error as RuntimeError, PolkaBtcProvider,
+    PolkaBtcRuntime, Service, ShutdownReceiver, StakedRelayerPallet, UtilFuncs, VaultRegistryPallet,
 };
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 #[derive(Clone)]
 pub struct RelayerServiceConfig {

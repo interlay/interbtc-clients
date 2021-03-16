@@ -1,14 +1,10 @@
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use log::*;
-use runtime::substrate_subxt::PairSigner;
-use runtime::{ConnectionManager, PolkaBtcRuntime};
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
+use runtime::{substrate_subxt::PairSigner, ConnectionManager, PolkaBtcRuntime};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
-use vault::Error;
-use vault::{VaultService, VaultServiceConfig};
+use vault::{Error, VaultService, VaultServiceConfig};
 
 #[derive(Debug, Copy, Clone)]
 pub struct BitcoinNetwork(pub bitcoin::Network);
@@ -98,10 +94,9 @@ pub struct Opts {
 }
 
 async fn start() -> Result<(), Error> {
-    env_logger::init_from_env(env_logger::Env::default().filter_or(
-        env_logger::DEFAULT_FILTER_ENV,
-        log::LevelFilter::Info.as_str(),
-    ));
+    env_logger::init_from_env(
+        env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, log::LevelFilter::Info.as_str()),
+    );
     let opts: Opts = Opts::parse();
 
     info!("Command line arguments: {:?}", opts.clone());

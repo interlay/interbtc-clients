@@ -1,12 +1,9 @@
-use staked_relayer::system::*;
-use staked_relayer::Error;
+use staked_relayer::{system::*, Error};
 
 use bitcoin::BitcoinCore;
 use clap::Clap;
-use runtime::PolkaBtcRuntime;
-use runtime::{substrate_subxt::PairSigner, ConnectionManager};
-use std::sync::Arc;
-use std::time::Duration;
+use runtime::{substrate_subxt::PairSigner, ConnectionManager, PolkaBtcRuntime};
+use std::{sync::Arc, time::Duration};
 
 /// The Staked Relayer client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
@@ -63,8 +60,8 @@ struct Opts {
     #[clap(long)]
     auto_register_with_stake: Option<u128>,
 
-    /// Automatically register the staked relayer with collateral received from the faucet and a newly generated address.
-    /// The parameter is the URL of the faucet
+    /// Automatically register the staked relayer with collateral received from the faucet and a newly generated
+    /// address. The parameter is the URL of the faucet
     #[clap(long, conflicts_with("auto-register-with-stake"))]
     auto_register_with_faucet_url: Option<String>,
 
@@ -74,10 +71,9 @@ struct Opts {
 }
 
 async fn start() -> Result<(), Error> {
-    env_logger::init_from_env(env_logger::Env::default().filter_or(
-        env_logger::DEFAULT_FILTER_ENV,
-        log::LevelFilter::Info.as_str(),
-    ));
+    env_logger::init_from_env(
+        env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, log::LevelFilter::Info.as_str()),
+    );
     let opts: Opts = Opts::parse();
 
     let dummy_network = bitcoin::Network::Regtest; // we don't make any transaction so this is not used

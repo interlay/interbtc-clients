@@ -3,24 +3,15 @@ use runtime::{StakedRelayerPallet, UtilFuncs, MINIMUM_STAKE};
 use std::time::Duration;
 use tokio::time::delay_for;
 
-pub async fn is_registered<P: StakedRelayerPallet + UtilFuncs>(
-    provider: &P,
-) -> Result<bool, Error> {
+pub async fn is_registered<P: StakedRelayerPallet + UtilFuncs>(provider: &P) -> Result<bool, Error> {
     let account_id = provider.get_account_id();
     // get stake returns 0 if not registered, so check that either active or inactive stake is non-zero
     let mut total_stake = provider.get_active_stake_by_id(account_id.clone()).await?;
-    total_stake = total_stake.saturating_add(
-        provider
-            .get_inactive_stake_by_id(account_id.clone())
-            .await?,
-    );
+    total_stake = total_stake.saturating_add(provider.get_inactive_stake_by_id(account_id.clone()).await?);
     Ok(total_stake >= MINIMUM_STAKE)
 }
 
-pub async fn wait_until_registered<P: StakedRelayerPallet + UtilFuncs>(
-    provider: &P,
-    delay: Duration,
-) {
+pub async fn wait_until_registered<P: StakedRelayerPallet + UtilFuncs>(provider: &P, delay: Duration) {
     // TODO: listen for register event
     loop {
         if is_registered(provider).await.unwrap_or(false) {

@@ -1,14 +1,14 @@
 use crate::{error::JsonRpseeError, Error, PolkaBtcSigner};
 use async_trait::async_trait;
-use futures::Future;
-use futures::FutureExt;
+use futures::{Future, FutureExt};
 use jsonrpsee_ws_client::{WsClient, WsConfig};
 use log::{info, trace};
-use std::time::Duration;
-use std::{marker::PhantomData, str::FromStr};
+use std::{marker::PhantomData, str::FromStr, time::Duration};
 use substrate_subxt::RpcClient;
-use tokio::runtime::Handle;
-use tokio::time::{delay_for, timeout};
+use tokio::{
+    runtime::Handle,
+    time::{delay_for, timeout},
+};
 
 const RETRY_TIMEOUT: Duration = Duration::from_millis(1000);
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
@@ -25,12 +25,7 @@ pub trait Provider {
 
 #[async_trait]
 pub trait Service<C, P: Provider> {
-    async fn start(
-        provider: P,
-        config: C,
-        handle: Handle,
-        shutdown: ShutdownReceiver,
-    ) -> Result<(), Error>;
+    async fn start(provider: P, config: C, handle: Handle, shutdown: ShutdownReceiver) -> Result<(), Error>;
 }
 
 pub(crate) async fn new_websocket_client(
@@ -62,9 +57,7 @@ pub(crate) async fn new_websocket_client_with_retry(
     info!("Connecting to the btc-parachain...");
     timeout(connection_timeout, async move {
         loop {
-            match new_websocket_client(url, max_concurrent_requests, max_notifs_per_subscription)
-                .await
-            {
+            match new_websocket_client(url, max_concurrent_requests, max_notifs_per_subscription).await {
                 Err(Error::JsonRpseeError(JsonRpseeError::TransportError(err))) => {
                     trace!("could not connect to parachain: {}", err);
                     delay_for(RETRY_TIMEOUT).await;

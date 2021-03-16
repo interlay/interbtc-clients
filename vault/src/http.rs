@@ -2,9 +2,7 @@ use super::Error;
 use bitcoin::BitcoinCoreApi;
 use hex::FromHex;
 use jsonrpc_http_server::{
-    jsonrpc_core::{
-        serde_json::Value, Error as JsonRpcError, ErrorCode as JsonRpcErrorCode, IoHandler, Params,
-    },
+    jsonrpc_core::{serde_json::Value, Error as JsonRpcError, ErrorCode as JsonRpcErrorCode, IoHandler, Params},
     DomainsValidation, ServerBuilder,
 };
 use log::info;
@@ -16,10 +14,8 @@ use runtime::{
 };
 use serde::{Deserialize, Deserializer};
 use sp_arithmetic::FixedU128;
-use sp_core::crypto::Ss58Codec;
-use sp_core::H256;
-use std::net::SocketAddr;
-use std::time::Duration;
+use sp_core::{crypto::Ss58Codec, H256};
+use std::{net::SocketAddr, time::Duration};
 use tokio::time::timeout;
 
 const HEALTH_DURATION: Duration = Duration::from_millis(5000);
@@ -32,9 +28,8 @@ where
     D: Deserializer<'de>,
 {
     use serde::de::Error;
-    String::deserialize(deserializer).and_then(|string| {
-        Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string()))
-    })
+    String::deserialize(deserializer)
+        .and_then(|string| Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string())))
 }
 
 fn parse_params<T: Decode>(params: Params) -> Result<T, Error> {
@@ -67,18 +62,17 @@ async fn _system_health(provider: &PolkaBtcProvider) -> Result<(), Error> {
     let redeem_period = provider.get_redeem_period().await?;
 
     // TODO: parameterize based on expiry
-    let has_uncompleted =
-        provider.get_vault_redeem_requests(provider.get_account_id().clone()).await?
-            .iter()
-            .filter(|(_, request)| {
-                !request.completed
+    let has_uncompleted = provider
+        .get_vault_redeem_requests(provider.get_account_id().clone())
+        .await?
+        .iter()
+        .filter(|(_, request)| {
+            !request.completed
                     && !request.cancelled
                     // ensure not expired
                     && Into::<u128>::into(request.opentime.saturating_add(redeem_period)) > current_height
-            })
-            .any(|(_, request)| {
-                Into::<u128>::into(request.opentime.saturating_add(HOURS)) > current_height
-            });
+        })
+        .any(|(_, request)| Into::<u128>::into(request.opentime.saturating_add(HOURS)) > current_height);
 
     if has_uncompleted {
         Err(Error::UncompletedRedeemRequests)
@@ -109,9 +103,7 @@ async fn _request_replace(provider: &PolkaBtcProvider, params: Params) -> Result
     let amount_in_dot = provider.btc_to_dots(req.amount).await?;
     let griefing_collateral_percentage = provider.get_replace_griefing_collateral().await?;
     let griefing_collateral = calculate_for(amount_in_dot, griefing_collateral_percentage)?;
-    let result = provider
-        .request_replace(req.amount, griefing_collateral)
-        .await;
+    let result = provider.request_replace(req.amount, griefing_collateral).await;
     info!(
         "Requesting replace for amount = {} with griefing_collateral = {}: {:?}",
         req.amount, griefing_collateral, result
@@ -153,9 +145,7 @@ async fn _register_vault<B: BitcoinCoreApi + Clone>(
 ) -> Result<RegisterVaultJsonRpcResponse, Error> {
     let req = parse_params::<RegisterVaultJsonRpcRequest>(params)?;
     let public_key: BtcPublicKey = btc.get_new_public_key().await?;
-    let result = provider
-        .register_vault(req.collateral, public_key.clone())
-        .await;
+    let result = provider.register_vault(req.collateral, public_key.clone()).await;
     info!(
         "Registering vault with bitcoind public_key {:?} and collateral = {}: {:?}",
         public_key, req.collateral, result
@@ -168,26 +158,17 @@ struct ChangeCollateralJsonRpcRequest {
     amount: u128,
 }
 
-async fn _lock_additional_collateral(
-    provider: &PolkaBtcProvider,
-    params: Params,
-) -> Result<(), Error> {
+async fn _lock_additional_collateral(provider: &PolkaBtcProvider, params: Params) -> Result<(), Error> {
     let req = parse_params::<ChangeCollateralJsonRpcRequest>(params)?;
     let result = provider.lock_additional_collateral(req.amount).await;
-    info!(
-        "Locking additional collateral; amount {}: {:?}",
-        req.amount, result
-    );
+    info!("Locking additional collateral; amount {}: {:?}", req.amount, result);
     Ok(result?)
 }
 
 async fn _withdraw_collateral(provider: &PolkaBtcProvider, params: Params) -> Result<(), Error> {
     let req = parse_params::<ChangeCollateralJsonRpcRequest>(params)?;
     let result = provider.withdraw_collateral(req.amount).await;
-    info!(
-        "Withdrawing collateral with amount {}: {:?}",
-        req.amount, result
-    );
+    info!("Withdrawing collateral with amount {}: {:?}", req.amount, result);
     Ok(result?)
 }
 
@@ -199,10 +180,7 @@ struct WithdrawReplaceJsonRpcRequest {
 async fn _withdraw_replace(provider: &PolkaBtcProvider, params: Params) -> Result<(), Error> {
     let req = parse_params::<WithdrawReplaceJsonRpcRequest>(params)?;
     let result = provider.withdraw_replace(req.replace_id).await;
-    info!(
-        "Withdrawing replace request {}: {:?}",
-        req.replace_id, result
-    );
+    info!("Withdrawing replace request {}: {:?}", req.replace_id, result);
     Ok(result?)
 }
 

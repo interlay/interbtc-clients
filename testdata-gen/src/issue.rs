@@ -4,18 +4,14 @@ use crate::{utils, Error};
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
 use runtime::{
-    pallets::btc_relay::H256Le, AccountId, BtcAddress, IssuePallet, PolkaBtcIssueRequest,
-    PolkaBtcProvider, PolkaBtcRequestIssueEvent, UtilFuncs,
+    pallets::btc_relay::H256Le, AccountId, BtcAddress, IssuePallet, PolkaBtcIssueRequest, PolkaBtcProvider,
+    PolkaBtcRequestIssueEvent, UtilFuncs,
 };
 use sp_core::H256;
-use std::convert::TryInto;
-use std::time::Duration;
+use std::{convert::TryInto, time::Duration};
 
 /// Fetch an issue request by it's ID
-pub async fn get_issue_by_id(
-    issue_prov: &PolkaBtcProvider,
-    issue_id: H256,
-) -> Result<PolkaBtcIssueRequest, Error> {
+pub async fn get_issue_by_id(issue_prov: &PolkaBtcProvider, issue_id: H256) -> Result<PolkaBtcIssueRequest, Error> {
     let issue_request = issue_prov.get_issue_request(issue_id).await?;
 
     Ok(issue_request)

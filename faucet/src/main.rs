@@ -4,8 +4,7 @@ mod system;
 
 use clap::Clap;
 use error::Error;
-use runtime::substrate_subxt::PairSigner;
-use runtime::{ConnectionManager, PolkaBtcRuntime};
+use runtime::{substrate_subxt::PairSigner, ConnectionManager, PolkaBtcRuntime};
 use system::{FaucetService, FaucetServiceConfig};
 
 /// DOT faucet for enabling users to test PolkaBTC
@@ -43,10 +42,9 @@ struct Opts {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    env_logger::init_from_env(env_logger::Env::default().filter_or(
-        env_logger::DEFAULT_FILTER_ENV,
-        log::LevelFilter::Info.as_str(),
-    ));
+    env_logger::init_from_env(
+        env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, log::LevelFilter::Info.as_str()),
+    );
     let opts: Opts = Opts::parse();
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;

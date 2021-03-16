@@ -1,9 +1,7 @@
 use super::Error;
 use crate::utils;
 use log::info;
-use runtime::{
-    ErrorCode, ExchangeRateOraclePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
-};
+use runtime::{ErrorCode, ExchangeRateOraclePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet};
 use std::time::Duration;
 use tokio::time::delay_for;
 
@@ -20,15 +18,11 @@ pub async fn report_offline_oracle<
     }
 }
 
-pub struct OracleMonitor<
-    P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet,
-> {
+pub struct OracleMonitor<P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet> {
     rpc: P,
 }
 
-impl<P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet>
-    OracleMonitor<P>
-{
+impl<P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + SecurityPallet> OracleMonitor<P> {
     pub fn new(rpc: P) -> Self {
         Self { rpc }
     }
@@ -69,13 +63,11 @@ impl<P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + Secur
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use runtime::PolkaBtcStatusUpdate;
     use runtime::{
-        AccountId, BtcTxFeesPerByte, Error, ErrorCode, FixedPointNumber, FixedU128, H256Le,
+        AccountId, BtcTxFeesPerByte, Error, ErrorCode, FixedPointNumber, FixedU128, H256Le, PolkaBtcStatusUpdate,
         StatusCode, MINIMUM_STAKE,
     };
-    use std::collections::BTreeSet;
-    use std::iter::FromIterator;
+    use std::{collections::BTreeSet, iter::FromIterator};
 
     mockall::mock! {
         Provider {}
@@ -161,10 +153,7 @@ mod tests {
             .returning(|| Ok((FixedU128::one(), 0, 0)));
         parachain.expect_get_time_now().returning(|| Ok(1));
 
-        assert_eq!(
-            OracleMonitor::new(parachain).is_offline().await.unwrap(),
-            true
-        );
+        assert_eq!(OracleMonitor::new(parachain).is_offline().await.unwrap(), true);
     }
 
     #[tokio::test]
@@ -175,10 +164,7 @@ mod tests {
             .returning(|| Ok((FixedU128::one(), 1, 3)));
         parachain.expect_get_time_now().returning(|| Ok(2));
 
-        assert_eq!(
-            OracleMonitor::new(parachain).is_offline().await.unwrap(),
-            false
-        );
+        assert_eq!(OracleMonitor::new(parachain).is_offline().await.unwrap(), false);
     }
 
     #[tokio::test]
@@ -200,15 +186,9 @@ mod tests {
             .expect_get_error_codes()
             .once()
             .returning(|| Ok(BTreeSet::new()));
-        parachain
-            .expect_report_oracle_offline()
-            .once()
-            .returning(|| Ok(()));
+        parachain.expect_report_oracle_offline().once().returning(|| Ok(()));
 
-        OracleMonitor::new(parachain)
-            .report_offline()
-            .await
-            .unwrap();
+        OracleMonitor::new(parachain).report_offline().await.unwrap();
     }
 
     #[tokio::test]
@@ -230,14 +210,8 @@ mod tests {
             .expect_get_error_codes()
             .once()
             .returning(|| Ok(BTreeSet::from_iter(vec![ErrorCode::OracleOffline])));
-        parachain
-            .expect_report_oracle_offline()
-            .never()
-            .returning(|| Ok(()));
+        parachain.expect_report_oracle_offline().never().returning(|| Ok(()));
 
-        OracleMonitor::new(parachain)
-            .report_offline()
-            .await
-            .unwrap();
+        OracleMonitor::new(parachain).report_offline().await.unwrap();
     }
 }

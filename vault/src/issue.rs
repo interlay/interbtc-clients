@@ -1,20 +1,14 @@
-use crate::cancellation::RequestEvent;
-use crate::Error;
+use crate::{cancellation::RequestEvent, Error};
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
-use futures::channel::mpsc::Sender;
-use futures::{SinkExt, StreamExt};
+use futures::{channel::mpsc::Sender, SinkExt, StreamExt};
 use log::*;
 use runtime::{
     pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
-    BtcAddress, BtcPublicKey, BtcRelayPallet, H256Le, IssuePallet, PolkaBtcProvider,
-    PolkaBtcRuntime, UtilFuncs,
+    BtcAddress, BtcPublicKey, BtcRelayPallet, H256Le, IssuePallet, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs,
 };
 use sha2::{Digest, Sha256};
 use sp_core::H256;
-use std::borrow::Borrow;
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::sync::Arc;
+use std::{borrow::Borrow, collections::HashMap, hash::Hash, sync::Arc};
 use tokio::sync::Mutex;
 
 #[derive(Debug, Default)]
@@ -115,9 +109,7 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
 ) -> Result<(), Error> {
     let btc_start_height = initialize_issue_set(provider, btc_rpc, issue_set).await?;
 
-    let mut stream =
-        bitcoin::stream_in_chain_transactions(btc_rpc.clone(), btc_start_height, num_confirmations)
-            .await;
+    let mut stream = bitcoin::stream_in_chain_transactions(btc_rpc.clone(), btc_start_height, num_confirmations).await;
 
     while let Some(Ok((block_hash, transaction))) = stream.next().await {
         if let Err(e) = process_transaction_and_execute_issue(
@@ -154,9 +146,7 @@ pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send +
 }
 
 /// execute issue requests with a matching Bitcoin payment
-async fn process_transaction_and_execute_issue<
-    B: BitcoinCoreApi + Clone + Send + Sync + 'static,
->(
+async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     provider: &PolkaBtcProvider,
     btc_rpc: &B,
     issue_set: &Arc<IssueRequests>,
@@ -202,10 +192,7 @@ async fn process_transaction_and_execute_issue<
                 // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
                 // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
                 provider
-                    .wait_for_block_in_relay(
-                        H256Le::from_bytes_le(&block_hash.to_vec()),
-                        num_confirmations,
-                    )
+                    .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash.to_vec()), num_confirmations)
                     .await?;
 
                 // found tx, submit proof
@@ -217,12 +204,7 @@ async fn process_transaction_and_execute_issue<
 
                 // this will error if someone else executes the issue first
                 provider
-                    .execute_issue(
-                        issue_id,
-                        H256Le::from_bytes_le(&txid.as_hash()),
-                        proof,
-                        raw_tx,
-                    )
+                    .execute_issue(issue_id, H256Le::from_bytes_le(&txid.as_hash()), proof, raw_tx)
                     .await?;
             }
         }
@@ -276,14 +258,8 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel.clone().send(RequestEvent::Opened).await;
 
-                    if let Err(e) =
-                        add_new_deposit_key(btc_rpc, event.issue_id, event.vault_public_key).await
-                    {
-                        error!(
-                            "Failed to add new deposit key #{}: {}",
-                            event.issue_id,
-                            e.to_string()
-                        );
+                    if let Err(e) = add_new_deposit_key(btc_rpc, event.issue_id, event.vault_public_key).await {
+                        error!("Failed to add new deposit key #{}: {}", event.issue_id, e.to_string());
                     }
                 }
 
@@ -323,10 +299,7 @@ pub async fn listen_for_issue_executes(
                     info!("Received execute issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
-                    let _ = event_channel
-                        .clone()
-                        .send(RequestEvent::Executed(event.issue_id))
-                        .await;
+                    let _ = event_channel.clone().send(RequestEvent::Executed(event.issue_id)).await;
                 }
 
                 trace!("issue #{} executed, no longer watching", event.issue_id);

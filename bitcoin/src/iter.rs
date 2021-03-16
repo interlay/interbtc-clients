@@ -3,11 +3,9 @@ use bitcoincore_rpc::{
     bitcoin::{Block, BlockHash, Transaction},
     json::GetBlockResult,
 };
-use futures::prelude::*;
-use futures::stream::StreamExt;
+use futures::{prelude::*, stream::StreamExt};
 use log::trace;
-use std::iter;
-use std::time::Duration;
+use std::{iter, time::Duration};
 
 const BLOCK_WAIT_TIMEOUT: u64 = 6;
 
@@ -123,11 +121,7 @@ pub async fn stream_in_chain_transactions<B: BitcoinCoreApi + Clone>(
                     |err| vec![Err(err)],
                     |block| {
                         let block_hash = block.block_hash();
-                        block
-                            .txdata
-                            .into_iter()
-                            .map(|tx| Ok((block_hash, tx)))
-                            .collect()
+                        block.txdata.into_iter().map(|tx| Ok((block_hash, tx))).collect()
                     },
                 ))
             }),
@@ -162,11 +156,7 @@ pub async fn stream_blocks<B: BitcoinCoreApi + Clone>(
             let height = state.next_height;
             match state
                 .rpc
-                .wait_for_block(
-                    height,
-                    Duration::from_secs(BLOCK_WAIT_TIMEOUT),
-                    num_confirmations,
-                )
+                .wait_for_block(height, Duration::from_secs(BLOCK_WAIT_TIMEOUT), num_confirmations)
                 .await
             {
                 Ok(block_hash) => match state.rpc.get_block(&block_hash).await {
@@ -324,9 +314,7 @@ mod tests {
             .expect_get_mempool_transactions()
             .times(1)
             .returning(|| Ok(Box::new(vec![Ok(dummy_tx(0))].into_iter())));
-        bitcoin
-            .expect_get_best_block_hash()
-            .returning(|| Ok(dummy_hash(1)));
+        bitcoin.expect_get_best_block_hash().returning(|| Ok(dummy_hash(1)));
         bitcoin
             .expect_get_block()
             .withf(|&x| x == dummy_hash(1))
@@ -364,9 +352,7 @@ mod tests {
             .expect_get_mempool_transactions()
             .times(1)
             .returning(|| Ok(Box::new(vec![].into_iter())));
-        bitcoin
-            .expect_get_best_block_hash()
-            .returning(|| Ok(dummy_hash(1)));
+        bitcoin.expect_get_best_block_hash().returning(|| Ok(dummy_hash(1)));
         bitcoin
             .expect_get_block()
             .withf(|&x| x == dummy_hash(1))
@@ -410,9 +396,7 @@ mod tests {
             .expect_get_mempool_transactions()
             .times(1)
             .returning(|| Ok(Box::new(vec![].into_iter())));
-        bitcoin
-            .expect_get_best_block_hash()
-            .returning(|| Ok(dummy_hash(1)));
+        bitcoin.expect_get_best_block_hash().returning(|| Ok(dummy_hash(1)));
         bitcoin
             .expect_get_block_info()
             .times(1)
@@ -432,9 +416,7 @@ mod tests {
             .expect_get_mempool_transactions()
             .times(1)
             .returning(|| Ok(Box::new(vec![Ok(dummy_tx(1)), Ok(dummy_tx(2))].into_iter())));
-        bitcoin
-            .expect_get_best_block_hash()
-            .returning(|| Ok(dummy_hash(1)));
+        bitcoin.expect_get_best_block_hash().returning(|| Ok(dummy_hash(1)));
         bitcoin
             .expect_get_block_info()
             .times(1)
@@ -456,9 +438,7 @@ mod tests {
             .expect_get_mempool_transactions()
             .times(1)
             .returning(|| Ok(Box::new(vec![].into_iter())));
-        bitcoin
-            .expect_get_best_block_hash()
-            .returning(|| Ok(dummy_hash(1)));
+        bitcoin.expect_get_best_block_hash().returning(|| Ok(dummy_hash(1)));
         bitcoin
             .expect_get_block()
             .withf(|&x| x == dummy_hash(1))

@@ -15,9 +15,7 @@ pub mod timestamp;
 pub mod treasury;
 pub mod vault_registry;
 
-pub use btc_relay::{
-    BitcoinBlockHeight, BtcAddress, BtcPublicKey, H256Le, RawBlockHeader, RichBlockHeader,
-};
+pub use btc_relay::{BitcoinBlockHeight, BtcAddress, BtcPublicKey, H256Le, RawBlockHeader, RichBlockHeader};
 pub use issue::{IssueRequest, RequestIssueEvent};
 pub use redeem::RedeemRequest;
 pub use refund::RefundRequest;

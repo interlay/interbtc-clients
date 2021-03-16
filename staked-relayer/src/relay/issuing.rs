@@ -1,8 +1,7 @@
 use super::Error;
 use crate::core::{Error as CoreError, Issuing};
 use async_trait::async_trait;
-use runtime::PolkaBtcProvider;
-use runtime::{BtcRelayPallet, H256Le, RawBlockHeader};
+use runtime::{BtcRelayPallet, H256Le, PolkaBtcProvider, RawBlockHeader};
 
 pub struct Client {
     rpc: PolkaBtcProvider,
@@ -50,10 +49,7 @@ impl Issuing<Error> for Client {
             .map_err(|e| CoreError::Issuing(Error::PolkaBtcError(e)))
     }
 
-    async fn submit_block_header_batch(
-        &self,
-        headers: Vec<Vec<u8>>,
-    ) -> Result<(), CoreError<Error>> {
+    async fn submit_block_header_batch(&self, headers: Vec<Vec<u8>>) -> Result<(), CoreError<Error>> {
         self.rpc
             .store_block_headers(
                 headers

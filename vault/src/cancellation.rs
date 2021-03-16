@@ -1,7 +1,6 @@
 use super::Error;
 use async_trait::async_trait;
-use futures::channel::mpsc::Receiver;
-use futures::*;
+use futures::{channel::mpsc::Receiver, *};
 use log::*;
 use runtime::{AccountId, IssuePallet, PolkaBtcHeader, ReplacePallet, UtilFuncs};
 use sp_core::H256;
@@ -49,10 +48,7 @@ pub trait Canceller<P> {
     const TYPE_NAME: &'static str;
 
     /// Gets a list of open replace/issue requests
-    async fn get_open_requests(
-        provider: &P,
-        vault_id: AccountId,
-    ) -> Result<Vec<UnconvertedOpenTime>, Error>
+    async fn get_open_requests(provider: &P, vault_id: AccountId) -> Result<Vec<UnconvertedOpenTime>, Error>
     where
         P: 'async_trait;
 
@@ -73,10 +69,7 @@ pub struct IssueCanceller;
 impl<P: IssuePallet + ReplacePallet + Clone + Send + Sync> Canceller<P> for IssueCanceller {
     const TYPE_NAME: &'static str = "issue";
 
-    async fn get_open_requests(
-        provider: &P,
-        vault_id: AccountId,
-    ) -> Result<Vec<UnconvertedOpenTime>, Error>
+    async fn get_open_requests(provider: &P, vault_id: AccountId) -> Result<Vec<UnconvertedOpenTime>, Error>
     where
         P: 'async_trait,
     {
@@ -114,10 +107,7 @@ pub struct ReplaceCanceller;
 impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for ReplaceCanceller {
     const TYPE_NAME: &'static str = "replace";
 
-    async fn get_open_requests(
-        provider: &P,
-        vault_id: AccountId,
-    ) -> Result<Vec<UnconvertedOpenTime>, Error>
+    async fn get_open_requests(provider: &P, vault_id: AccountId) -> Result<Vec<UnconvertedOpenTime>, Error>
     where
         P: 'async_trait,
     {
@@ -266,10 +256,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + Clone> CancellationScheduler<P
             }
         }
 
-        match selector
-            .select_event(block_listener, event_listener)
-            .await?
-        {
+        match selector.select_event(block_listener, event_listener).await? {
             BlockOrEvent::Block(header) => {
                 debug!(
                     "Received parachain block at height {} for {}",
@@ -368,8 +355,8 @@ mod tests {
             generic::Digest,
             traits::{BlakeTwo256, Hash},
         },
-        AccountId, BtcAddress, Error as RuntimeError, H256Le, PolkaBtcIssueRequest,
-        PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent,
+        AccountId, BtcAddress, Error as RuntimeError, H256Le, PolkaBtcIssueRequest, PolkaBtcReplaceRequest,
+        PolkaBtcRequestIssueEvent,
     };
     use sp_core::H256;
 
@@ -385,10 +372,7 @@ mod tests {
 
     struct TestEventSelector<F>
     where
-        F: Fn(
-            &mut Receiver<PolkaBtcHeader>,
-            &mut Receiver<RequestEvent>,
-        ) -> Result<BlockOrEvent, Error>,
+        F: Fn(&mut Receiver<PolkaBtcHeader>, &mut Receiver<RequestEvent>) -> Result<BlockOrEvent, Error>,
     {
         on_event: F,
     }
@@ -396,10 +380,7 @@ mod tests {
     #[async_trait]
     impl<F> EventSelector for TestEventSelector<F>
     where
-        F: Fn(
-                &mut Receiver<PolkaBtcHeader>,
-                &mut Receiver<RequestEvent>,
-            ) -> Result<BlockOrEvent, Error>
+        F: Fn(&mut Receiver<PolkaBtcHeader>, &mut Receiver<RequestEvent>) -> Result<BlockOrEvent, Error>
             + std::marker::Send,
     {
         /// Sleep until either the timeout has occured or an event has been received, and return
@@ -499,51 +480,42 @@ mod tests {
         // open_time = 10,  current_block = 100, period = 10: remaining = 0
         // open_time = 85,  current_block = 100, period = 10: remaining = -5 + margin
         let mut provider = MockProvider::default();
-        provider
-            .expect_get_vault_issue_requests()
-            .times(1)
-            .returning(|_| {
-                Ok(vec![
-                    (
-                        H256::from_slice(&[1; 32]),
-                        PolkaBtcIssueRequest {
-                            opentime: 95,
-                            ..Default::default()
-                        },
-                    ),
-                    (
-                        H256::from_slice(&[2; 32]),
-                        PolkaBtcIssueRequest {
-                            opentime: 10,
-                            ..Default::default()
-                        },
-                    ),
-                    (
-                        H256::from_slice(&[3; 32]),
-                        PolkaBtcIssueRequest {
-                            opentime: 85,
-                            ..Default::default()
-                        },
-                    ),
-                ])
-            });
+        provider.expect_get_vault_issue_requests().times(1).returning(|_| {
+            Ok(vec![
+                (
+                    H256::from_slice(&[1; 32]),
+                    PolkaBtcIssueRequest {
+                        opentime: 95,
+                        ..Default::default()
+                    },
+                ),
+                (
+                    H256::from_slice(&[2; 32]),
+                    PolkaBtcIssueRequest {
+                        opentime: 10,
+                        ..Default::default()
+                    },
+                ),
+                (
+                    H256::from_slice(&[3; 32]),
+                    PolkaBtcIssueRequest {
+                        opentime: 85,
+                        ..Default::default()
+                    },
+                ),
+            ])
+        });
         provider
             .expect_get_current_chain_height()
             .times(1)
             .returning(|| Ok(100));
-        provider
-            .expect_get_issue_period()
-            .times(1)
-            .returning(|| Ok(10));
+        provider.expect_get_issue_period().times(1).returning(|| Ok(10));
 
         let mut canceller = CancellationScheduler::new(provider, Default::default());
 
         // checks that the delay is calculated correctly, and that the vec is sorted
         assert_eq!(
-            canceller
-                .get_open_requests::<IssueCanceller>()
-                .await
-                .unwrap(),
+            canceller.get_open_requests::<IssueCanceller>().await.unwrap(),
             vec![
                 ActiveRequest {
                     id: H256::from_slice(&[2; 32]),
@@ -564,22 +536,16 @@ mod tests {
     async fn test_get_open_process_delays_with_invalid_opentime_fails() {
         // if current_block is 5 and the issue was open at 10, something went wrong...
         let mut provider = MockProvider::default();
-        provider
-            .expect_get_vault_issue_requests()
-            .times(1)
-            .returning(|_| {
-                Ok(vec![(
-                    H256::from_slice(&[1; 32]),
-                    PolkaBtcIssueRequest {
-                        opentime: 10,
-                        ..Default::default()
-                    },
-                )])
-            });
-        provider
-            .expect_get_current_chain_height()
-            .times(1)
-            .returning(|| Ok(5));
+        provider.expect_get_vault_issue_requests().times(1).returning(|_| {
+            Ok(vec![(
+                H256::from_slice(&[1; 32]),
+                PolkaBtcIssueRequest {
+                    opentime: 10,
+                    ..Default::default()
+                },
+            )])
+        });
+        provider.expect_get_current_chain_height().times(1).returning(|| Ok(5));
         provider.expect_get_issue_period().returning(|| Ok(10));
 
         let mut canceller = CancellationScheduler::new(provider, Default::default());
@@ -593,29 +559,20 @@ mod tests {
     async fn test_wait_for_event_succeeds() {
         // check that we actually cancel the issue when it expires
         let mut provider = MockProvider::default();
-        provider
-            .expect_get_vault_issue_requests()
-            .times(1)
-            .returning(|_| {
-                Ok(vec![(
-                    H256::from_slice(&[1; 32]),
-                    PolkaBtcIssueRequest {
-                        opentime: 10,
-                        ..Default::default()
-                    },
-                )])
-            });
-        provider
-            .expect_get_current_chain_height()
-            .times(1)
-            .returning(|| Ok(15));
+        provider.expect_get_vault_issue_requests().times(1).returning(|_| {
+            Ok(vec![(
+                H256::from_slice(&[1; 32]),
+                PolkaBtcIssueRequest {
+                    opentime: 10,
+                    ..Default::default()
+                },
+            )])
+        });
+        provider.expect_get_current_chain_height().times(1).returning(|| Ok(15));
         provider.expect_get_issue_period().returning(|| Ok(10));
 
         // check that it cancels the issue
-        provider
-            .expect_cancel_issue()
-            .times(1)
-            .returning(|_| Ok(()));
+        provider.expect_cancel_issue().times(1).returning(|_| Ok(()));
 
         let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
         let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
@@ -680,11 +637,7 @@ mod tests {
 
         // simulate that the issue gets executed
         let selector = TestEventSelector {
-            on_event: |_, _| {
-                Ok(BlockOrEvent::Event(RequestEvent::Executed(
-                    H256::from_slice(&[2; 32]),
-                )))
-            },
+            on_event: |_, _| Ok(BlockOrEvent::Event(RequestEvent::Executed(H256::from_slice(&[2; 32])))),
         };
 
         // simulate that the issue gets executed
@@ -704,10 +657,7 @@ mod tests {
 
         // check that the process with id 2 was removed
         assert_eq!(
-            active_processes
-                .into_iter()
-                .map(|x| x.id)
-                .collect::<Vec<H256>>(),
+            active_processes.into_iter().map(|x| x.id).collect::<Vec<H256>>(),
             vec![H256::from_slice(&[1; 32]), H256::from_slice(&[3; 32])]
         );
     }
@@ -717,22 +667,16 @@ mod tests {
         // checks that we query for new issues, and that when the issue gets executed, it
         // is removed from the list
         let mut provider = MockProvider::default();
-        provider
-            .expect_get_vault_issue_requests()
-            .times(1)
-            .returning(|_| {
-                Ok(vec![(
-                    H256::from_slice(&[1; 32]),
-                    PolkaBtcIssueRequest {
-                        opentime: 10,
-                        ..Default::default()
-                    },
-                )])
-            });
-        provider
-            .expect_get_current_chain_height()
-            .times(1)
-            .returning(|| Ok(15));
+        provider.expect_get_vault_issue_requests().times(1).returning(|_| {
+            Ok(vec![(
+                H256::from_slice(&[1; 32]),
+                PolkaBtcIssueRequest {
+                    opentime: 10,
+                    ..Default::default()
+                },
+            )])
+        });
+        provider.expect_get_current_chain_height().times(1).returning(|| Ok(15));
         provider.expect_get_issue_period().returning(|| Ok(10));
 
         let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
@@ -742,11 +686,7 @@ mod tests {
 
         // simulate that the issue gets executed
         let selector = TestEventSelector {
-            on_event: |_, _| {
-                Ok(BlockOrEvent::Event(RequestEvent::Executed(
-                    H256::from_slice(&[1; 32]),
-                )))
-            },
+            on_event: |_, _| Ok(BlockOrEvent::Event(RequestEvent::Executed(H256::from_slice(&[1; 32])))),
         };
 
         assert_eq!(

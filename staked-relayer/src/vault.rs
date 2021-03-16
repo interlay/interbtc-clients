@@ -1,18 +1,17 @@
-use crate::error::{get_retry_policy, Error};
-use crate::utils;
+use crate::{
+    error::{get_retry_policy, Error},
+    utils,
+};
 use backoff::backoff::Backoff;
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _, Txid};
-use futures::stream::iter;
-use futures::stream::StreamExt;
+use futures::stream::{iter, StreamExt};
 use log::*;
 use runtime::{
     pallets::vault_registry::{RegisterAddressEvent, RegisterVaultEvent},
-    AccountId, BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, PolkaBtcProvider,
-    PolkaBtcRuntime, PolkaBtcVault, StakedRelayerPallet, VaultRegistryPallet,
+    AccountId, BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
+    PolkaBtcVault, StakedRelayerPallet, VaultRegistryPallet,
 };
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 
 #[derive(Default)]
@@ -40,10 +39,7 @@ impl Vaults {
     }
 }
 
-pub async fn report_vault_thefts<
-    P: StakedRelayerPallet + BtcRelayPallet,
-    B: BitcoinCoreApi + Clone,
->(
+pub async fn report_vault_thefts<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone>(
     btc_height: u32,
     btc_rpc: B,
     vaults: Arc<Vaults>,
@@ -64,13 +60,7 @@ pub struct VaultTheftMonitor<P: StakedRelayerPallet + BtcRelayPallet, B: Bitcoin
 }
 
 impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonitor<P, B> {
-    pub fn new(
-        btc_height: u32,
-        btc_rpc: B,
-        vaults: Arc<Vaults>,
-        polka_rpc: P,
-        delay: Duration,
-    ) -> Self {
+    pub fn new(btc_height: u32, btc_rpc: B, vaults: Arc<Vaults>, polka_rpc: P, delay: Duration) -> Self {
         Self {
             btc_height,
             btc_rpc,
@@ -80,11 +70,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         }
     }
 
-    async fn get_raw_tx_and_proof(
-        &self,
-        tx_id: Txid,
-        hash: &BlockHash,
-    ) -> Result<(Vec<u8>, Vec<u8>), Error> {
+    async fn get_raw_tx_and_proof(&self, tx_id: Txid, hash: &BlockHash) -> Result<(Vec<u8>, Vec<u8>), Error> {
         let raw_tx = self.btc_rpc.get_raw_tx_for(&tx_id, hash).await?;
         let proof = self.btc_rpc.get_proof_for(tx_id, hash).await?;
         Ok((raw_tx, proof))
@@ -106,12 +92,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         {
             info!("Transaction is invalid");
             self.polka_rpc
-                .report_vault_theft(
-                    vault_id,
-                    H256Le::from_bytes_le(&tx_id.as_hash()),
-                    proof,
-                    raw_tx,
-                )
+                .report_vault_theft(vault_id, H256Le::from_bytes_le(&tx_id.as_hash()), proof, raw_tx)
                 .await?;
         }
 
@@ -127,10 +108,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
         // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
         self.polka_rpc
-            .wait_for_block_in_relay(
-                H256Le::from_bytes_le(&block_hash.to_vec()),
-                num_confirmations,
-            )
+            .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash.to_vec()), num_confirmations)
             .await?;
 
         let tx_id = tx.txid();
@@ -155,19 +133,12 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
 
         let mut backoff = get_retry_policy();
 
-        let mut stream = bitcoin::stream_in_chain_transactions(
-            self.btc_rpc.clone(),
-            self.btc_height,
-            num_confirmations,
-        )
-        .await;
+        let mut stream =
+            bitcoin::stream_in_chain_transactions(self.btc_rpc.clone(), self.btc_height, num_confirmations).await;
 
         loop {
             match stream.next().await.unwrap() {
-                Ok((block_hash, tx)) => match self
-                    .check_transaction(tx, block_hash, num_confirmations)
-                    .await
-                {
+                Ok((block_hash, tx)) => match self.check_transaction(tx, block_hash, num_confirmations).await {
                     Ok(_) => {
                         backoff.reset();
                         continue; // don't execute the delay below
@@ -189,10 +160,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
     }
 }
 
-pub async fn listen_for_wallet_updates(
-    polka_rpc: PolkaBtcProvider,
-    vaults: Arc<Vaults>,
-) -> Result<(), RuntimeError> {
+pub async fn listen_for_wallet_updates(polka_rpc: PolkaBtcProvider, vaults: Arc<Vaults>) -> Result<(), RuntimeError> {
     let vaults = &vaults;
     polka_rpc
         .on_event::<RegisterAddressEvent<PolkaBtcRuntime>, _, _, _>(
@@ -240,12 +208,13 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction,
-        PartialAddress, Transaction, TransactionMetadata, PUBLIC_KEY_SIZE,
+        Block, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress, Transaction,
+        TransactionMetadata, PUBLIC_KEY_SIZE,
     };
-    use runtime::PolkaBtcStatusUpdate;
-    use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode};
-    use runtime::{BitcoinBlockHeight, PolkaBtcRichBlockHeader, RawBlockHeader};
+    use runtime::{
+        AccountId, BitcoinBlockHeight, Error as RuntimeError, ErrorCode, H256Le, PolkaBtcRichBlockHeader,
+        PolkaBtcStatusUpdate, RawBlockHeader, StatusCode,
+    };
     use sp_core::{H160, H256};
     use sp_keyring::AccountKeyring;
 
@@ -398,14 +367,12 @@ mod tests {
         );
 
         assert_eq!(
-            filter_matching_vaults(vec![BtcAddress::P2PKH(H160::from_slice(&[0; 20]))], &vaults)
-                .await,
+            filter_matching_vaults(vec![BtcAddress::P2PKH(H160::from_slice(&[0; 20]))], &vaults).await,
             vec![AccountKeyring::Bob.to_account_id()],
         );
 
         assert_eq!(
-            filter_matching_vaults(vec![BtcAddress::P2PKH(H160::from_slice(&[1; 20]))], &vaults)
-                .await,
+            filter_matching_vaults(vec![BtcAddress::P2PKH(H160::from_slice(&[1; 20]))], &vaults).await,
             vec![],
         );
     }
@@ -413,9 +380,7 @@ mod tests {
     #[tokio::test]
     async fn test_report_valid_transaction() {
         let mut parachain = MockProvider::default();
-        parachain
-            .expect_is_transaction_invalid()
-            .returning(|_, _| Ok(false));
+        parachain.expect_is_transaction_invalid().returning(|_, _| Ok(false));
         parachain
             .expect_report_vault_theft()
             .never()
@@ -430,12 +395,7 @@ mod tests {
         );
 
         monitor
-            .report_invalid(
-                AccountKeyring::Bob.to_account_id(),
-                &Txid::default(),
-                vec![],
-                vec![],
-            )
+            .report_invalid(AccountKeyring::Bob.to_account_id(), &Txid::default(), vec![], vec![])
             .await
             .unwrap();
     }
@@ -443,9 +403,7 @@ mod tests {
     #[tokio::test]
     async fn test_report_invalid_transaction() {
         let mut parachain = MockProvider::default();
-        parachain
-            .expect_is_transaction_invalid()
-            .returning(|_, _| Ok(true));
+        parachain.expect_is_transaction_invalid().returning(|_, _| Ok(true));
         parachain
             .expect_report_vault_theft()
             .once()
@@ -460,12 +418,7 @@ mod tests {
         );
 
         monitor
-            .report_invalid(
-                AccountKeyring::Bob.to_account_id(),
-                &Txid::default(),
-                vec![],
-                vec![],
-            )
+            .report_invalid(AccountKeyring::Bob.to_account_id(), &Txid::default(), vec![], vec![])
             .await
             .unwrap();
     }

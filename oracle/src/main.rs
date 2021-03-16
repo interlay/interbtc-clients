@@ -3,23 +3,21 @@ mod error;
 use clap::Clap;
 use error::Error;
 use log::{error, info};
-use runtime::substrate_subxt::PairSigner;
 use runtime::{
-    ExchangeRateOraclePallet, FixedPointNumber, FixedU128, PolkaBtcProvider, PolkaBtcRuntime,
+    substrate_subxt::PairSigner, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, PolkaBtcProvider,
+    PolkaBtcRuntime,
 };
-use std::collections::HashMap;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 use tokio::time::delay_for;
 
 const ERR_RETRY_WAIT: Duration = Duration::from_secs(10);
 
 async fn get_exchange_rate_from_coingecko() -> Result<u128, Error> {
     // https://www.coingecko.com/api/documentations/v3
-    let resp =
-        reqwest::get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=dot")
-            .await?
-            .json::<HashMap<String, HashMap<String, u128>>>()
-            .await?;
+    let resp = reqwest::get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=dot")
+        .await?
+        .json::<HashMap<String, HashMap<String, u128>>>()
+        .await?;
 
     Ok(*resp
         .get("bitcoin")
@@ -62,18 +60,17 @@ struct Opts {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    env_logger::init_from_env(env_logger::Env::default().filter_or(
-        env_logger::DEFAULT_FILTER_ENV,
-        log::LevelFilter::Info.as_str(),
-    ));
+    env_logger::init_from_env(
+        env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, log::LevelFilter::Info.as_str()),
+    );
     let opts: Opts = Opts::parse();
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
 
     let timeout = Duration::from_millis(opts.timeout_ms);
-    let exchange_rate = FixedU128::checked_from_rational(opts.exchange_rate, 100_000)
-        .ok_or(Error::InvalidExchangeRate)?;
+    let exchange_rate =
+        FixedU128::checked_from_rational(opts.exchange_rate, 100_000).ok_or(Error::InvalidExchangeRate)?;
 
     loop {
         let exchange_rate = if opts.coingecko {
