@@ -3,8 +3,8 @@
 use crate::integration::*;
 
 use super::{
-    BtcAddress, BtcPublicKey, BtcRelayPallet, DotBalancesPallet, SecurityPallet,
-    StakedRelayerPallet, StatusCode, VaultRegistryPallet, MINIMUM_STAKE,
+    BtcAddress, BtcPublicKey, BtcRelayPallet, DotBalancesPallet, SecurityPallet, StakedRelayerPallet, StatusCode,
+    VaultRegistryPallet, MINIMUM_STAKE,
 };
 use module_bitcoin::{
     formatter::TryFormattable,
@@ -15,8 +15,8 @@ use sp_keyring::AccountKeyring;
 
 fn dummy_public_key() -> BtcPublicKey {
     BtcPublicKey([
-        2, 205, 114, 218, 156, 16, 235, 172, 106, 37, 18, 153, 202, 140, 176, 91, 207, 51, 187, 55,
-        18, 45, 222, 180, 119, 54, 243, 97, 173, 150, 161, 169, 230,
+        2, 205, 114, 218, 156, 16, 235, 172, 106, 37, 18, 153, 202, 140, 176, 91, 207, 51, 187, 55, 18, 45, 222, 180,
+        119, 54, 243, 97, 173, 150, 161, 169, 230,
     ])
 }
 
@@ -43,14 +43,8 @@ async fn test_register_vault() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
 
-    provider
-        .register_vault(100, dummy_public_key())
-        .await
-        .unwrap();
-    let vault = provider
-        .get_vault(AccountKeyring::Alice.to_account_id())
-        .await
-        .unwrap();
+    provider.register_vault(100, dummy_public_key()).await.unwrap();
+    let vault = provider.get_vault(AccountKeyring::Alice.to_account_id()).await.unwrap();
     assert_eq!(vault.wallet.public_key, dummy_public_key());
 }
 
@@ -60,10 +54,7 @@ async fn test_btc_relay() {
     let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
 
     // must be authorized to submit blocks
-    provider
-        .register_staked_relayer(MINIMUM_STAKE)
-        .await
-        .unwrap();
+    provider.register_staked_relayer(MINIMUM_STAKE).await.unwrap();
 
     let address = BtcAddress::P2PKH(H160::zero());
     let mut height = 0;
@@ -76,13 +67,10 @@ async fn test_btc_relay() {
         .unwrap();
 
     let mut block_hash = block.header.hash().unwrap();
-    let block_header = RawBlockHeader::from_bytes(&block.header.try_format().unwrap())
-        .expect("could not serialize block header");
+    let block_header =
+        RawBlockHeader::from_bytes(&block.header.try_format().unwrap()).expect("could not serialize block header");
 
-    provider
-        .initialize_btc_relay(block_header, height)
-        .await
-        .unwrap();
+    provider.initialize_btc_relay(block_header, height).await.unwrap();
 
     assert_eq!(provider.get_best_block().await.unwrap(), block_hash);
     assert_eq!(provider.get_best_block_height().await.unwrap(), height);
@@ -100,8 +88,8 @@ async fn test_btc_relay() {
             .unwrap();
 
         block_hash = block.header.hash().unwrap();
-        let block_header = RawBlockHeader::from_bytes(&block.header.try_format().unwrap())
-            .expect("could not serialize block header");
+        let block_header =
+            RawBlockHeader::from_bytes(&block.header.try_format().unwrap()).expect("could not serialize block header");
 
         provider.store_block_header(block_header).await.unwrap();
 

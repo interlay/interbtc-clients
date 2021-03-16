@@ -2,16 +2,11 @@
 
 mod bitcoin_simulator;
 
-use crate::rpc::FeePallet;
-use crate::rpc::IssuePallet;
-use crate::rpc::VaultRegistryPallet;
-use crate::AccountId;
-use crate::H256Le;
-use crate::PolkaBtcProvider;
-use crate::PolkaBtcRuntime;
-use bitcoin::BitcoinCoreApi;
-use bitcoin::BlockHash;
-use bitcoin::Txid;
+use crate::{
+    rpc::{FeePallet, IssuePallet, VaultRegistryPallet},
+    AccountId, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
+};
+use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
 use futures::{future::Either, pin_mut, Future, FutureExt, SinkExt, StreamExt};
 use sp_keyring::AccountKeyring;
 use sp_runtime::FixedPointNumber;
@@ -84,16 +79,8 @@ pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> PolkaBt
 }
 
 /// request, pay and execute an issue
-pub async fn assert_issue(
-    provider: &PolkaBtcProvider,
-    btc_rpc: &MockBitcoinCore,
-    vault_id: &AccountId,
-    amount: u128,
-) {
-    let issue = provider
-        .request_issue(amount, vault_id.clone(), 10000)
-        .await
-        .unwrap();
+pub async fn assert_issue(provider: &PolkaBtcProvider, btc_rpc: &MockBitcoinCore, vault_id: &AccountId, amount: u128) {
+    let issue = provider.request_issue(amount, vault_id.clone(), 10000).await.unwrap();
 
     let metadata = btc_rpc
         .send_to_address(
@@ -118,10 +105,7 @@ pub async fn assert_issue(
 }
 
 /// calculate how much collateral the vault requires to accept an issue of the given size
-pub async fn get_required_vault_collateral_for_issue(
-    provider: &PolkaBtcProvider,
-    amount: u128,
-) -> u128 {
+pub async fn get_required_vault_collateral_for_issue(provider: &PolkaBtcProvider, amount: u128) -> u128 {
     let fee = provider.get_issue_fee().await.unwrap();
     let amount_btc_including_fee = amount + fee.checked_mul_int(amount).unwrap();
     provider

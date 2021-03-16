@@ -13,19 +13,18 @@ mod tests;
 pub mod integration;
 
 pub use conn::{
-    on_shutdown, wait_or_shutdown, Manager as ConnectionManager,
-    ManagerConfig as ConnectionManagerConfig, Provider, RestartPolicy, Service, ShutdownReceiver,
+    on_shutdown, wait_or_shutdown, Manager as ConnectionManager, ManagerConfig as ConnectionManagerConfig, Provider,
+    RestartPolicy, Service, ShutdownReceiver,
 };
 
 pub use btc_relay::{
-    BitcoinBlockHeight, BlockBuilder, BtcAddress, BtcPublicKey, Formattable, H256Le,
-    RawBlockHeader, RichBlockHeader,
+    BitcoinBlockHeight, BlockBuilder, BtcAddress, BtcPublicKey, Formattable, H256Le, RawBlockHeader, RichBlockHeader,
 };
 pub use error::{Error, XtError};
 pub use rpc::{
-    BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet, ExchangeRateOraclePallet, FeePallet,
-    IssuePallet, PolkaBtcProvider, RedeemPallet, RefundPallet, ReplacePallet, SecurityPallet,
-    StakedRelayerPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
+    BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet, ExchangeRateOraclePallet, FeePallet, IssuePallet,
+    PolkaBtcProvider, RedeemPallet, RefundPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
+    UtilFuncs, VaultRegistryPallet,
 };
 pub use security::{ErrorCode, StatusCode};
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
@@ -42,10 +41,10 @@ use sp_runtime::{
     MultiSignature, OpaqueExtrinsic,
 };
 use std::collections::BTreeSet;
-use substrate_subxt::register_default_type_sizes;
-use substrate_subxt::system::SystemEventTypeRegistry;
-use substrate_subxt::EventTypeRegistry;
-use substrate_subxt::{balances, extrinsic::DefaultExtra, sudo, system, Runtime};
+use substrate_subxt::{
+    balances, extrinsic::DefaultExtra, register_default_type_sizes, sudo, system, system::SystemEventTypeRegistry,
+    EventTypeRegistry, Runtime,
+};
 
 // cumulus / polkadot types
 use parachain::primitives::{Id as ParaId, RelayChainBlockNumber};

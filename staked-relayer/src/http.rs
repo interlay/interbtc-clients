@@ -1,18 +1,18 @@
 use super::Error;
 use hex::FromHex;
-use jsonrpc_http_server::jsonrpc_core::serde_json::Value;
-use jsonrpc_http_server::jsonrpc_core::{Error as JsonRpcError, ErrorCode as JsonRpcErrorCode};
-use jsonrpc_http_server::jsonrpc_core::{IoHandler, Params};
-use jsonrpc_http_server::{DomainsValidation, ServerBuilder};
+use jsonrpc_http_server::{
+    jsonrpc_core::{serde_json::Value, Error as JsonRpcError, ErrorCode as JsonRpcErrorCode, IoHandler, Params},
+    DomainsValidation, ServerBuilder,
+};
 use log::info;
 use parity_scale_codec::{Decode, Encode};
-use runtime::ErrorCode as PolkaBtcErrorCode;
-use runtime::StatusCode as PolkaBtcStatusCode;
-use runtime::{Error as RuntimeError, H256Le, PolkaBtcProvider, StakedRelayerPallet, UtilFuncs};
+use runtime::{
+    Error as RuntimeError, ErrorCode as PolkaBtcErrorCode, H256Le, PolkaBtcProvider, StakedRelayerPallet,
+    StatusCode as PolkaBtcStatusCode, UtilFuncs,
+};
 use serde::{Deserialize, Deserializer};
 use sp_core::crypto::Ss58Codec;
-use std::net::SocketAddr;
-use std::time::Duration;
+use std::{net::SocketAddr, time::Duration};
 use tokio::time::timeout;
 
 const HEALTH_DURATION: Duration = Duration::from_millis(5000);
@@ -25,9 +25,8 @@ where
     D: Deserializer<'de>,
 {
     use serde::de::Error;
-    String::deserialize(deserializer).and_then(|string| {
-        Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string()))
-    })
+    String::deserialize(deserializer)
+        .and_then(|string| Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string())))
 }
 
 fn parse_params<T: Decode>(params: Params) -> Result<T, Error> {
@@ -70,10 +69,7 @@ struct RegisterStakedRelayerJsonRpcRequest {
     stake: u128,
 }
 
-async fn _register_staked_relayer(
-    provider: &PolkaBtcProvider,
-    params: Params,
-) -> Result<(), Error> {
+async fn _register_staked_relayer(provider: &PolkaBtcProvider, params: Params) -> Result<(), Error> {
     let req: RegisterStakedRelayerJsonRpcRequest = parse_params(params)?;
     Ok(provider.register_staked_relayer(req.stake).await?)
 }

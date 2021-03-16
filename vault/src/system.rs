@@ -1,22 +1,16 @@
-use crate::constants::*;
 use crate::{
-    collateral::lock_required_collateral, faucet, http::start_http, issue, service::*, Error,
+    collateral::lock_required_collateral, constants::*, faucet, http::start_http, issue, service::*, Error,
     IssueRequests, RequestEvent,
 };
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
-use futures::channel::mpsc;
-use futures::SinkExt;
+use futures::{channel::mpsc, SinkExt};
 use log::*;
-use runtime::pallets::sla::UpdateVaultSLAEvent;
 use runtime::{
-    on_shutdown, wait_or_shutdown, AccountId, BtcRelayPallet, Error as RuntimeError,
-    PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, Service, ShutdownReceiver, UtilFuncs,
-    VaultRegistryPallet,
+    on_shutdown, pallets::sla::UpdateVaultSLAEvent, wait_or_shutdown, AccountId, BtcRelayPallet, Error as RuntimeError,
+    PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, Service, ShutdownReceiver, UtilFuncs, VaultRegistryPallet,
 };
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::time::delay_for;
 
 #[derive(Clone)]
@@ -88,22 +82,14 @@ impl VaultService {
         if let Some(collateral) = self.config.auto_register_with_collateral {
             if !is_registered(&self.btc_parachain, vault_id.clone()).await? {
                 let public_key = bitcoin_core.get_new_public_key().await?;
-                self.btc_parachain
-                    .register_vault(collateral, public_key)
-                    .await?;
+                self.btc_parachain.register_vault(collateral, public_key).await?;
                 info!("Automatically registered vault");
             } else {
                 info!("Not registering vault -- already registered");
             }
         } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
             if !is_registered(&self.btc_parachain, vault_id.clone()).await? {
-                faucet::fund_and_register(
-                    &self.btc_parachain,
-                    &bitcoin_core,
-                    faucet_url,
-                    vault_id.clone(),
-                )
-                .await?;
+                faucet::fund_and_register(&self.btc_parachain, &bitcoin_core, faucet_url, vault_id.clone()).await?;
                 info!("Automatically registered vault");
             } else {
                 info!("Not registering vault -- already registered");
@@ -111,21 +97,15 @@ impl VaultService {
         }
 
         if let Ok(vault) = self.btc_parachain.get_vault(vault_id.clone()).await {
-            if !bitcoin_core
-                .wallet_has_public_key(vault.wallet.public_key)
-                .await?
-            {
+            if !bitcoin_core.wallet_has_public_key(vault.wallet.public_key).await? {
                 return Err(bitcoin::Error::MissingPublicKey.into());
             }
         }
 
         issue::add_keys_from_past_issue_request(&self.btc_parachain, &bitcoin_core).await?;
 
-        let open_request_executor = execute_open_requests(
-            self.btc_parachain.clone(),
-            bitcoin_core.clone(),
-            num_confirmations,
-        );
+        let open_request_executor =
+            execute_open_requests(self.btc_parachain.clone(), bitcoin_core.clone(), num_confirmations);
         handle.spawn(async move {
             info!("Checking for open replace/redeem requests...");
             match open_request_executor.await {
@@ -136,12 +116,8 @@ impl VaultService {
 
         if !self.config.no_startup_collateral_increase {
             // check if the vault is registered
-            match lock_required_collateral(
-                self.btc_parachain.clone(),
-                vault_id.clone(),
-                self.config.max_collateral,
-            )
-            .await
+            match lock_required_collateral(self.btc_parachain.clone(), vault_id.clone(), self.config.max_collateral)
+                .await
             {
                 Err(Error::RuntimeError(runtime::Error::VaultNotFound)) => {} // not registered
                 Err(e) => error!("Failed to lock required additional collateral: {}", e),
@@ -192,11 +168,7 @@ impl VaultService {
 
         let issue_execute_listener = wait_or_shutdown(
             self.shutdown.clone(),
-            listen_for_issue_executes(
-                self.btc_parachain.clone(),
-                issue_event_tx.clone(),
-                issue_set.clone(),
-            ),
+            listen_for_issue_executes(self.btc_parachain.clone(), issue_event_tx.clone(), issue_set.clone()),
         );
 
         let issue_cancel_listener = wait_or_shutdown(
@@ -204,8 +176,7 @@ impl VaultService {
             listen_for_issue_cancels(self.btc_parachain.clone(), issue_set.clone()),
         );
 
-        let mut issue_cancellation_scheduler =
-            CancellationScheduler::new(self.btc_parachain.clone(), vault_id.clone());
+        let mut issue_cancellation_scheduler = CancellationScheduler::new(self.btc_parachain.clone(), vault_id.clone());
 
         let issue_block_provider = self.btc_parachain.clone();
         let issue_block_listener = wait_or_shutdown(self.shutdown.clone(), async move {
@@ -254,11 +225,7 @@ impl VaultService {
 
         let accept_replace_listener = wait_or_shutdown(
             self.shutdown.clone(),
-            listen_for_accept_replace(
-                self.btc_parachain.clone(),
-                bitcoin_core.clone(),
-                num_confirmations,
-            ),
+            listen_for_accept_replace(self.btc_parachain.clone(), bitcoin_core.clone(), num_confirmations),
         );
 
         let execute_replace_listener = wait_or_shutdown(
@@ -268,11 +235,7 @@ impl VaultService {
 
         let auction_replace_listener = wait_or_shutdown(
             self.shutdown.clone(),
-            listen_for_auction_replace(
-                self.btc_parachain.clone(),
-                bitcoin_core.clone(),
-                num_confirmations,
-            ),
+            listen_for_auction_replace(self.btc_parachain.clone(), bitcoin_core.clone(), num_confirmations),
         );
 
         let mut replace_cancellation_scheduler =
@@ -312,21 +275,13 @@ impl VaultService {
         // redeem handling
         let redeem_listener = wait_or_shutdown(
             self.shutdown.clone(),
-            listen_for_redeem_requests(
-                self.btc_parachain.clone(),
-                bitcoin_core.clone(),
-                num_confirmations,
-            ),
+            listen_for_redeem_requests(self.btc_parachain.clone(), bitcoin_core.clone(), num_confirmations),
         );
 
         // refund handling
         let refund_listener = wait_or_shutdown(
             self.shutdown.clone(),
-            listen_for_refund_requests(
-                self.btc_parachain.clone(),
-                bitcoin_core.clone(),
-                num_confirmations,
-            ),
+            listen_for_refund_requests(self.btc_parachain.clone(), bitcoin_core.clone(), num_confirmations),
         );
 
         let sla_provider = self.btc_parachain.clone();
@@ -400,10 +355,7 @@ impl VaultService {
     }
 }
 
-pub(crate) async fn is_registered(
-    provider: &PolkaBtcProvider,
-    vault_id: AccountId,
-) -> Result<bool, Error> {
+pub(crate) async fn is_registered(provider: &PolkaBtcProvider, vault_id: AccountId) -> Result<bool, Error> {
     match provider.get_vault(vault_id).await {
         Ok(_) => Ok(true),
         Err(RuntimeError::VaultNotFound) => Ok(false),

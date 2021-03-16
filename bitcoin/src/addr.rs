@@ -1,6 +1,6 @@
 use crate::{
-    secp256k1::SecretKey, Address, ConversionError, Error, Hash, Network, Payload, PubkeyHash,
-    Script, ScriptHash, WPubkeyHash,
+    secp256k1::SecretKey, Address, ConversionError, Error, Hash, Network, Payload, PubkeyHash, Script, ScriptHash,
+    WPubkeyHash,
 };
 use sp_core::H160;
 use std::str::FromStr;
@@ -31,10 +31,7 @@ impl PartialAddress for polkabtc_bitcoin::Address {
         match payload {
             Payload::PubkeyHash(hash) => Ok(Self::P2PKH(H160::from(hash.as_hash().into_inner()))),
             Payload::ScriptHash(hash) => Ok(Self::P2SH(H160::from(hash.as_hash().into_inner()))),
-            Payload::WitnessProgram {
-                version: _,
-                program,
-            } => {
+            Payload::WitnessProgram { version: _, program } => {
                 if program.len() == 20 {
                     Ok(Self::P2WPKHv0(H160::from_slice(program.as_slice())))
                 } else {
@@ -81,10 +78,7 @@ impl PartialAddress for Payload {
     }
 }
 
-pub fn calculate_deposit_secret_key(
-    vault_key: SecretKey,
-    issue_key: SecretKey,
-) -> Result<SecretKey, Error> {
+pub fn calculate_deposit_secret_key(vault_key: SecretKey, issue_key: SecretKey) -> Result<SecretKey, Error> {
     let mut deposit_key = vault_key.clone();
     deposit_key.mul_assign(&issue_key[..])?;
     Ok(deposit_key)
@@ -94,8 +88,7 @@ pub fn calculate_deposit_secret_key(
 mod tests {
     use super::*;
     use crate::secp256k1;
-    use secp256k1::rand::rngs::OsRng;
-    use secp256k1::{PublicKey, Secp256k1, SecretKey};
+    use secp256k1::{rand::rngs::OsRng, PublicKey, Secp256k1, SecretKey};
     use sp_core::H256;
 
     #[test]
@@ -103,10 +96,7 @@ mod tests {
         let addr = "bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f";
         assert_eq!(
             addr,
-            Payload::decode_str(addr)
-                .unwrap()
-                .encode_str(Network::Regtest)
-                .unwrap()
+            Payload::decode_str(addr).unwrap().encode_str(Network::Regtest).unwrap()
         );
     }
 
@@ -126,13 +116,10 @@ mod tests {
 
         // D = V * c
         let mut deposit_public_key = vault_public_key.clone();
-        deposit_public_key
-            .mul_assign(&secp, &secret_key[..])
-            .unwrap();
+        deposit_public_key.mul_assign(&secp, &secret_key[..]).unwrap();
 
         // d = v * c
-        let deposit_secret_key =
-            calculate_deposit_secret_key(vault_secret_key, secret_key).unwrap();
+        let deposit_secret_key = calculate_deposit_secret_key(vault_secret_key, secret_key).unwrap();
 
         assert_eq!(
             deposit_public_key,

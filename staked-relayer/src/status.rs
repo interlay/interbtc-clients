@@ -1,14 +1,11 @@
 use super::Error;
 use crate::utils;
-use bitcoin::{
-    BitcoinCoreApi, BlockHash, ConversionError as BitcoinConversionError, Error as BitcoinError,
-    Hash,
-};
+use bitcoin::{BitcoinCoreApi, BlockHash, ConversionError as BitcoinConversionError, Error as BitcoinError, Hash};
 use log::{error, info, warn};
 use runtime::{
     pallets::{btc_relay::StoreMainChainHeaderEvent, staked_relayers::StatusUpdateSuggestedEvent},
-    Error as RuntimeError, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
-    StakedRelayerPallet, StatusCode, UtilFuncs,
+    Error as RuntimeError, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcRuntime, StakedRelayerPallet, StatusCode,
+    UtilFuncs,
 };
 
 type PolkaBtcStatusUpdateSuggestedEvent = StatusUpdateSuggestedEvent<PolkaBtcRuntime>;
@@ -23,10 +20,7 @@ impl<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet + UtilFuncs> StatusUpdate
         Self { btc_rpc, polka_rpc }
     }
 
-    async fn on_status_update_suggested(
-        &self,
-        event: PolkaBtcStatusUpdateSuggestedEvent,
-    ) -> Result<(), Error> {
+    async fn on_status_update_suggested(&self, event: PolkaBtcStatusUpdateSuggestedEvent) -> Result<(), Error> {
         if !utils::is_active(&self.polka_rpc).await? {
             // not registered (active), ignore event
             return Ok(());
@@ -35,11 +29,7 @@ impl<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet + UtilFuncs> StatusUpdate
         // we can only automate NO_DATA checks, all other suggestible
         // status updates can only be voted upon manually
         if let Some(ErrorCode::NoDataBTCRelay) = event.add_error {
-            match self
-                .btc_rpc
-                .is_block_known(convert_block_hash(event.block_hash)?)
-                .await
-            {
+            match self.btc_rpc.is_block_known(convert_block_hash(event.block_hash)?).await {
                 Ok(true) => {
                     self.polka_rpc
                         .vote_on_status_update(event.status_update_id, false)
@@ -114,11 +104,7 @@ impl<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet> RelayMonitor<B, P> {
         }
     }
 
-    pub async fn on_store_block(
-        &self,
-        height: u32,
-        parachain_block_hash: H256Le,
-    ) -> Result<(), Error> {
+    pub async fn on_store_block(&self, height: u32, parachain_block_hash: H256Le) -> Result<(), Error> {
         if !utils::is_active(&self.polka_rpc).await? {
             // not registered (active), ignore event
             return Ok(());
@@ -130,22 +116,12 @@ impl<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet> RelayMonitor<B, P> {
             Ok(bitcoin_block_hash) => {
                 if bitcoin_block_hash.into_inner() != parachain_block_hash.to_bytes_le() {
                     warn!("Block does not match at height {}", height);
-                    report_no_data_btc_relay(
-                        &self.polka_rpc,
-                        self.status_update_deposit,
-                        parachain_block_hash,
-                    )
-                    .await?;
+                    report_no_data_btc_relay(&self.polka_rpc, self.status_update_deposit, parachain_block_hash).await?;
                 }
             }
             Err(BitcoinError::InvalidBitcoinHeight) => {
                 warn!("Block does not exist at height {}", height);
-                report_no_data_btc_relay(
-                    &self.polka_rpc,
-                    self.status_update_deposit,
-                    parachain_block_hash,
-                )
-                .await?;
+                report_no_data_btc_relay(&self.polka_rpc, self.status_update_deposit, parachain_block_hash).await?;
             }
             Err(e) => error!("Got error on get_block_hash({}): {}", height, e),
         }
@@ -188,11 +164,12 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, BlockHeader, GetBlockResult, LockedTransaction, PartialAddress, Transaction,
-        TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        Block, BlockHeader, GetBlockResult, LockedTransaction, PartialAddress, Transaction, TransactionMetadata, Txid,
+        PUBLIC_KEY_SIZE,
     };
-    use runtime::PolkaBtcStatusUpdate;
-    use runtime::{AccountId, Error as RuntimeError, ErrorCode, H256Le, StatusCode, MINIMUM_STAKE};
+    use runtime::{
+        AccountId, Error as RuntimeError, ErrorCode, H256Le, PolkaBtcStatusUpdate, StatusCode, MINIMUM_STAKE,
+    };
     use sp_core::H256;
     use sp_keyring::AccountKeyring;
     use std::time::Duration;
@@ -368,11 +345,7 @@ mod tests {
             .returning(|| Ok(MINIMUM_STAKE));
 
         let monitor = RelayMonitor::new(bitcoin, parachain, 100);
-        assert_ok!(
-            monitor
-                .on_store_block(123, H256Le::from_bytes_le(&[1; 32]))
-                .await
-        );
+        assert_ok!(monitor.on_store_block(123, H256Le::from_bytes_le(&[1; 32])).await);
     }
 
     #[tokio::test]
@@ -392,11 +365,7 @@ mod tests {
             .returning(|| Ok(MINIMUM_STAKE));
 
         let monitor = RelayMonitor::new(bitcoin, parachain, 100);
-        assert_ok!(
-            monitor
-                .on_store_block(123, H256Le::from_bytes_le(&[1; 32]))
-                .await
-        );
+        assert_ok!(monitor.on_store_block(123, H256Le::from_bytes_le(&[1; 32])).await);
     }
 
     #[tokio::test]
@@ -468,10 +437,7 @@ mod tests {
     #[tokio::test]
     async fn test_on_status_update_suggested_add_error_block_unknown() {
         let mut bitcoin = MockBitcoin::default();
-        bitcoin
-            .expect_is_block_known()
-            .once()
-            .returning(|_| Ok(false));
+        bitcoin.expect_is_block_known().once().returning(|_| Ok(false));
         let mut parachain = MockProvider::default();
         parachain
             .expect_vote_on_status_update()
@@ -501,10 +467,7 @@ mod tests {
     #[tokio::test]
     async fn test_on_status_update_suggested_add_error_block_known() {
         let mut bitcoin = MockBitcoin::default();
-        bitcoin
-            .expect_is_block_known()
-            .once()
-            .returning(|_| Ok(true));
+        bitcoin.expect_is_block_known().once().returning(|_| Ok(true));
         let mut parachain = MockProvider::default();
         parachain
             .expect_vote_on_status_update()

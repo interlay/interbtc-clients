@@ -1,16 +1,10 @@
-use crate::cancellation::RequestEvent;
-use crate::error::Error;
-use crate::execution::Request;
+use crate::{cancellation::RequestEvent, error::Error, execution::Request};
 use bitcoin::BitcoinCoreApi;
-use futures::channel::mpsc::Sender;
-use futures::SinkExt;
+use futures::{channel::mpsc::Sender, SinkExt};
 use log::*;
 use runtime::{
-    pallets::replace::{
-        AcceptReplaceEvent, AuctionReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent,
-    },
-    DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet, UtilFuncs,
-    VaultRegistryPallet,
+    pallets::replace::{AcceptReplaceEvent, AuctionReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent},
+    DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use std::time::Duration;
 use tokio::time::delay_for;
@@ -46,9 +40,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                 // Spawn a new task so that we handle these events concurrently
                 tokio::spawn(async move {
                     let request = Request::from_accept_replace_event(&event);
-                    let result = request
-                        .pay_and_execute(provider, btc_rpc, num_confirmations)
-                        .await;
+                    let result = request.pay_and_execute(provider, btc_rpc, num_confirmations).await;
 
                     match result {
                         Ok(_) => info!(
@@ -99,9 +91,7 @@ pub async fn listen_for_auction_replace<B: BitcoinCoreApi + Clone + Send + Sync 
                 // Spawn a new task so that we handle these events concurrently
                 tokio::spawn(async move {
                     let request = Request::from_auction_replace_event(&event);
-                    let result = request
-                        .pay_and_execute(provider, btc_rpc, num_confirmations)
-                        .await;
+                    let result = request.pay_and_execute(provider, btc_rpc, num_confirmations).await;
 
                     match result {
                         Ok(_) => info!(
@@ -181,9 +171,7 @@ pub async fn handle_replace_request<
     btc_rpc: B,
     event: &RequestReplaceEvent<PolkaBtcRuntime>,
 ) -> Result<(), Error> {
-    let required_collateral = provider
-        .get_required_collateral_for_polkabtc(event.amount_btc)
-        .await?;
+    let required_collateral = provider.get_required_collateral_for_polkabtc(event.amount_btc).await?;
 
     let free_balance = provider.get_free_dot_balance().await?;
 
@@ -191,11 +179,7 @@ pub async fn handle_replace_request<
         Err(Error::InsufficientFunds)
     } else {
         Ok(provider
-            .accept_replace(
-                event.replace_id,
-                required_collateral,
-                btc_rpc.get_new_address().await?,
-            )
+            .accept_replace(event.replace_id, required_collateral, btc_rpc.get_new_address().await?)
             .await?)
     }
 }
@@ -220,10 +204,7 @@ pub async fn monitor_collateral_of_vaults<B: BitcoinCoreApi + Clone>(
     // polling is easier for now
     loop {
         if let Err(e) = check_collateral_of_vaults(&provider, &btc_rpc, &mut event_channel).await {
-            error!(
-                "Error while monitoring collateral of vaults: {}",
-                e.to_string()
-            );
+            error!("Error while monitoring collateral of vaults: {}", e.to_string());
         }
         delay_for(interval).await
     }
@@ -266,10 +247,7 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi + Clone>(
     Ok(())
 }
 
-async fn auction_replace<
-    B: BitcoinCoreApi + Clone,
-    P: DotBalancesPallet + ReplacePallet + VaultRegistryPallet,
->(
+async fn auction_replace<B: BitcoinCoreApi + Clone, P: DotBalancesPallet + ReplacePallet + VaultRegistryPallet>(
     provider: &P,
     btc_rpc: &B,
     vault: &PolkaBtcVault,
@@ -280,9 +258,7 @@ async fn auction_replace<
         .ok_or(Error::ArithmeticUnderflow)?
         .checked_sub(vault.to_be_replaced_tokens)
         .ok_or(Error::ArithmeticUnderflow)?;
-    let collateral = provider
-        .get_required_collateral_for_polkabtc(btc_amount)
-        .await?;
+    let collateral = provider.get_required_collateral_for_polkabtc(btc_amount).await?;
 
     // don't auction vault if we can't afford to replace it
     if collateral > provider.get_free_dot_balance().await? {
@@ -342,12 +318,12 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction,
-        PartialAddress, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress,
+        Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
-        pallets::Core, AccountId, BtcAddress, BtcPublicKey, Error as RuntimeError, H256Le,
-        PolkaBtcReplaceRequest, PolkaBtcRuntime, PolkaBtcVault,
+        pallets::Core, AccountId, BtcAddress, BtcPublicKey, Error as RuntimeError, H256Le, PolkaBtcReplaceRequest,
+        PolkaBtcRuntime, PolkaBtcVault,
     };
     use sp_core::H256;
     use std::time::Duration;
@@ -498,9 +474,7 @@ mod tests {
     #[tokio::test]
     async fn test_handle_auction_replace_with_insufficient_collateral() {
         let mut bitcoin = MockBitcoin::default();
-        bitcoin
-            .expect_get_new_address()
-            .returning(|| Ok(BtcAddress::default()));
+        bitcoin.expect_get_new_address().returning(|| Ok(BtcAddress::default()));
 
         let mut provider = MockProvider::default();
         provider
@@ -518,9 +492,7 @@ mod tests {
     #[tokio::test]
     async fn test_handle_replace_request_with_insufficient_balance() {
         let mut bitcoin = MockBitcoin::default();
-        bitcoin
-            .expect_get_new_address()
-            .returning(|| Ok(BtcAddress::default()));
+        bitcoin.expect_get_new_address().returning(|| Ok(BtcAddress::default()));
 
         let mut provider = MockProvider::default();
         provider

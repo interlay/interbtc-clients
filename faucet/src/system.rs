@@ -1,5 +1,4 @@
-use crate::http;
-use crate::Error;
+use crate::{http, Error};
 use async_trait::async_trait;
 use runtime::{on_shutdown, Error as RuntimeError, PolkaBtcProvider, Service, ShutdownReceiver};
 use std::net::SocketAddr;

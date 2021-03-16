@@ -1,7 +1,5 @@
 use log::{info, trace};
-use std::error::Error as StdError;
-use std::marker::PhantomData;
-use std::time::Duration;
+use std::{error::Error as StdError, marker::PhantomData, time::Duration};
 use tokio::time::delay_for;
 
 mod error;
@@ -21,11 +19,7 @@ async fn collect_headers<E: StdError>(
 ) -> Result<Vec<Vec<u8>>, Error<E>> {
     let mut headers = Vec::new();
     for h in height..height + batch {
-        headers.push(
-            cli.get_block_header(h)
-                .await
-                .map(|header| header.unwrap())?,
-        );
+        headers.push(cli.get_block_header(h).await.map(|header| header.unwrap())?);
     }
     Ok(headers)
 }
@@ -106,11 +100,7 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
             match self.backing.get_block_header(height).await? {
                 Some(header) => return Ok(header),
                 None => {
-                    trace!(
-                        "No block found at height {}, sleeping for {:?}",
-                        height,
-                        self.timeout
-                    );
+                    trace!("No block found at height {}, sleeping for {:?}", height, self.timeout);
                     delay_for(self.timeout).await
                 }
             };
@@ -129,9 +119,7 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
     /// may submit up to `max_batch_size` blocks at a time
     pub async fn submit_next(&self) -> Result<(), Error<E>> {
         if !self.issuing.is_initialized().await? {
-            let start_height = self
-                .start_height
-                .unwrap_or(self.get_num_confirmed_blocks().await?);
+            let start_height = self.start_height.unwrap_or(self.get_num_confirmed_blocks().await?);
             info!("Initializing at height {}", start_height);
             self.issuing
                 .initialize(
@@ -192,9 +180,11 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use std::cell::{Ref, RefCell, RefMut};
-    use std::collections::HashMap;
-    use std::rc::Rc;
+    use std::{
+        cell::{Ref, RefCell, RefMut},
+        collections::HashMap,
+        rc::Rc,
+    };
 
     #[derive(Debug, PartialEq)]
     struct DummyError();
@@ -256,10 +246,7 @@ mod tests {
             }
         }
 
-        async fn submit_block_header_batch(
-            &self,
-            headers: Vec<Vec<u8>>,
-        ) -> Result<(), Error<DummyError>> {
+        async fn submit_block_header_batch(&self, headers: Vec<Vec<u8>>) -> Result<(), Error<DummyError>> {
             for header in headers {
                 self.submit_block_header(header.to_vec()).await?;
             }
@@ -282,11 +269,7 @@ mod tests {
         }
 
         async fn is_block_stored(&self, hash: Vec<u8>) -> Result<bool, Error<DummyError>> {
-            Ok(self
-                .get_headers()
-                .iter()
-                .find(|&(_, h)| &h[..] == &hash[..])
-                .is_some())
+            Ok(self.get_headers().iter().find(|&(_, h)| &h[..] == &hash[..]).is_some())
         }
     }
 
@@ -303,17 +286,10 @@ mod tests {
     #[async_trait]
     impl Backing<DummyError> for DummyBacking {
         async fn get_block_count(&self) -> Result<u32, Error<DummyError>> {
-            self.hashes
-                .keys()
-                .max()
-                .map(|v| *v)
-                .ok_or(Error::CannotFetchBestHeight)
+            self.hashes.keys().max().map(|v| *v).ok_or(Error::CannotFetchBestHeight)
         }
 
-        async fn get_block_header(
-            &self,
-            height: u32,
-        ) -> Result<Option<Vec<u8>>, Error<DummyError>> {
+        async fn get_block_header(&self, height: u32) -> Result<Option<Vec<u8>>, Error<DummyError>> {
             Ok(self.hashes.get(&height).map(|v| v.clone()))
         }
 
@@ -344,10 +320,7 @@ mod tests {
         );
         assert_eq!(issuing.get_best_height().await, Ok(4));
         assert_eq!(issuing.get_block_hash(2).await, Ok(make_hash("a")));
-        assert_eq!(
-            issuing.get_block_hash(5).await,
-            Err(Error::BlockHashNotFound)
-        );
+        assert_eq!(issuing.get_block_hash(5).await, Err(Error::BlockHashNotFound));
         assert_eq!(issuing.is_block_stored(make_hash("a")).await, Ok(true));
         assert_eq!(issuing.is_block_stored(make_hash("x")).await, Ok(false));
         assert_eq!(
@@ -468,8 +441,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn submit_next_with_1_confirmation_batch_submission_succeeds(
-    ) -> Result<(), Error<DummyError>> {
+    async fn submit_next_with_1_confirmation_batch_submission_succeeds() -> Result<(), Error<DummyError>> {
         let backing_hashes = make_hashes(vec![(2, "a"), (3, "b"), (4, "c"), (5, "d")]);
         let issuing_hashes = make_hashes(vec![(2, "a")]);
         let backing = DummyBacking::new(backing_hashes);
@@ -501,8 +473,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn submit_next_with_1_confirmation_single_submission_succeeds(
-    ) -> Result<(), Error<DummyError>> {
+    async fn submit_next_with_1_confirmation_single_submission_succeeds() -> Result<(), Error<DummyError>> {
         let backing_hashes = make_hashes(vec![(2, "a"), (3, "b"), (4, "c"), (5, "d")]);
         let issuing_hashes = make_hashes(vec![(2, "a")]);
         let backing = DummyBacking::new(backing_hashes);

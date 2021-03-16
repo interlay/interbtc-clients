@@ -18,35 +18,27 @@ use runtime::{PolkaBtcProvider, VaultRegistryPallet};
 
 pub use crate::error::Error;
 pub mod service {
-    pub use crate::cancellation::CancellationScheduler;
-    pub use crate::cancellation::IssueCanceller;
-    pub use crate::cancellation::ReplaceCanceller;
-    pub use crate::collateral::maintain_collateralization_rate;
-    pub use crate::execution::execute_open_issue_requests;
-    pub use crate::execution::execute_open_requests;
-    pub use crate::issue::listen_for_issue_cancels;
-    pub use crate::issue::listen_for_issue_executes;
-    pub use crate::issue::listen_for_issue_requests;
-    pub use crate::redeem::listen_for_redeem_requests;
-    pub use crate::refund::listen_for_refund_requests;
-    pub use crate::replace::listen_for_accept_replace;
-    pub use crate::replace::listen_for_auction_replace;
-    pub use crate::replace::listen_for_execute_replace;
-    pub use crate::replace::listen_for_replace_requests;
-    pub use crate::replace::monitor_collateral_of_vaults;
+    pub use crate::{
+        cancellation::{CancellationScheduler, IssueCanceller, ReplaceCanceller},
+        collateral::maintain_collateralization_rate,
+        execution::{execute_open_issue_requests, execute_open_requests},
+        issue::{listen_for_issue_cancels, listen_for_issue_executes, listen_for_issue_requests},
+        redeem::listen_for_redeem_requests,
+        refund::listen_for_refund_requests,
+        replace::{
+            listen_for_accept_replace, listen_for_auction_replace, listen_for_execute_replace,
+            listen_for_replace_requests, monitor_collateral_of_vaults,
+        },
+    };
 }
-pub use crate::cancellation::RequestEvent;
-pub use crate::issue::IssueRequests;
-pub use crate::system::{VaultService, VaultServiceConfig};
+pub use crate::{
+    cancellation::RequestEvent,
+    issue::IssueRequests,
+    system::{VaultService, VaultServiceConfig},
+};
 
-pub(crate) async fn lock_additional_collateral(
-    api: &PolkaBtcProvider,
-    amount: u128,
-) -> Result<(), Error> {
+pub(crate) async fn lock_additional_collateral(api: &PolkaBtcProvider, amount: u128) -> Result<(), Error> {
     let result = api.lock_additional_collateral(amount).await;
-    info!(
-        "Locking additional collateral; amount {}: {:?}",
-        amount, result
-    );
+    info!("Locking additional collateral; amount {}: {:?}", amount, result);
     Ok(result?)
 }

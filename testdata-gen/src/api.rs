@@ -20,9 +20,8 @@ where
     D: Deserializer<'de>,
 {
     use serde::de::Error;
-    String::deserialize(deserializer).and_then(|string| {
-        Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string()))
-    })
+    String::deserialize(deserializer)
+        .and_then(|string| Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string())))
 }
 
 #[derive(serde::Deserialize)]

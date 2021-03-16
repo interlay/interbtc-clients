@@ -4,8 +4,7 @@ use jsonrpc_core::error::Error as JsonRpcError;
 use parity_scale_codec::Error as CodecError;
 use runtime::Error as RuntimeError;
 use serde_json::Error as SerdeJsonError;
-use std::array::TryFromSliceError;
-use std::io::Error as IoError;
+use std::{array::TryFromSliceError, io::Error as IoError};
 use thiserror::Error;
 
 #[derive(Error, Debug)]

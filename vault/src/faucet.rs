@@ -10,10 +10,7 @@ struct FundAccountJsonRpcRequest {
     pub account_id: AccountId,
 }
 
-async fn get_faucet_allowance(
-    faucet_connection: TypedClient,
-    allowance_type: &str,
-) -> Result<u128, Error> {
+async fn get_faucet_allowance(faucet_connection: TypedClient, allowance_type: &str) -> Result<u128, Error> {
     let raw_allowance = faucet_connection
         .call_method::<(), http::RawBytes>(&allowance_type, "", ())
         .await?;
@@ -21,9 +18,7 @@ async fn get_faucet_allowance(
 }
 
 async fn get_funding(faucet_connection: TypedClient, vault_id: AccountId) -> Result<(), Error> {
-    let funding_request = FundAccountJsonRpcRequest {
-        account_id: vault_id,
-    };
+    let funding_request = FundAccountJsonRpcRequest { account_id: vault_id };
     let eq = format!("0x{}", hex::encode(funding_request.encode()));
     faucet_connection
         .call_method::<Vec<String>, Value>("fund_account", "", vec![eq.clone()])
@@ -42,8 +37,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
     // Receive user allowance from faucet
     get_funding(connection.clone(), vault_id.clone()).await?;
 
-    let user_allowance_in_dot: u128 =
-        get_faucet_allowance(connection.clone(), "user_allowance").await?;
+    let user_allowance_in_dot: u128 = get_faucet_allowance(connection.clone(), "user_allowance").await?;
     let registration_collateral = user_allowance_in_dot
         .checked_mul(PLANCK_PER_DOT)
         .ok_or(Error::ArithmeticOverflow)?
@@ -51,15 +45,12 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
         .ok_or(Error::ArithmeticUnderflow)?;
 
     let public_key = bitcoin_core.get_new_public_key().await?;
-    provider
-        .register_vault(registration_collateral, public_key)
-        .await?;
+    provider.register_vault(registration_collateral, public_key).await?;
 
     // Receive vault allowance from faucet
     get_funding(connection.clone(), vault_id).await?;
 
-    let vault_allowance_in_dot: u128 =
-        get_faucet_allowance(connection.clone(), "vault_allowance").await?;
+    let vault_allowance_in_dot: u128 = get_faucet_allowance(connection.clone(), "vault_allowance").await?;
     let operational_collateral = vault_allowance_in_dot
         .checked_mul(PLANCK_PER_DOT)
         .ok_or(Error::ArithmeticOverflow)?

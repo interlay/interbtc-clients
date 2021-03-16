@@ -1,6 +1,8 @@
-use crate::constants::*;
-use crate::error::Error;
-use crate::issue::{process_issue_requests, IssueRequests};
+use crate::{
+    constants::*,
+    error::Error,
+    issue::{process_issue_requests, IssueRequests},
+};
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use futures::stream::StreamExt;
@@ -11,9 +13,8 @@ use runtime::{
         refund::RequestRefundEvent,
         replace::{AcceptReplaceEvent, AuctionReplaceEvent},
     },
-    BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest,
-    PolkaBtcRefundRequest, PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RefundPallet,
-    ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcRefundRequest,
+    PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RefundPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H256;
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -115,31 +116,19 @@ impl Request {
     /// Makes the bitcoin transfer and executes the request
     pub async fn pay_and_execute<
         B: BitcoinCoreApi + Clone,
-        P: ReplacePallet
-            + RefundPallet
-            + RedeemPallet
-            + VaultRegistryPallet
-            + UtilFuncs
-            + Clone
-            + Send
-            + Sync,
+        P: ReplacePallet + RefundPallet + RedeemPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
     >(
         &self,
         provider: P,
         btc_rpc: B,
         num_confirmations: u32,
     ) -> Result<(), Error> {
-        let tx_metadata = self
-            .transfer_btc(&provider, btc_rpc, num_confirmations)
-            .await?;
+        let tx_metadata = self.transfer_btc(&provider, btc_rpc, num_confirmations).await?;
         self.execute(provider, tx_metadata).await
     }
 
     /// Make a bitcoin transfer to fulfil the request
-    async fn transfer_btc<
-        B: BitcoinCoreApi + Clone,
-        P: VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
-    >(
+    async fn transfer_btc<B: BitcoinCoreApi + Clone, P: VaultRegistryPallet + UtilFuncs + Clone + Send + Sync>(
         &self,
         provider: &P,
         btc_rpc: B,
@@ -295,11 +284,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                 // Payment has been made, but it might not have been confirmed enough times yet
                 let tx_metadata = btc_rpc
                     .clone()
-                    .wait_for_transaction_metadata(
-                        tx.txid(),
-                        BITCOIN_MAX_RETRYING_TIME,
-                        num_confirmations,
-                    )
+                    .wait_for_transaction_metadata(tx.txid(), BITCOIN_MAX_RETRYING_TIME, num_confirmations)
                     .await;
 
                 match tx_metadata {
@@ -350,10 +335,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                 request.request_type, request.hash
             );
 
-            match request
-                .pay_and_execute(provider, btc_rpc, num_confirmations)
-                .await
-            {
+            match request.pay_and_execute(provider, btc_rpc, num_confirmations).await {
                 Ok(_) => info!(
                     "{:?} request #{} successfully executed",
                     request.request_type, request.hash
@@ -406,8 +388,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction,
-        PartialAddress, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress,
+        Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{AccountId, BlockNumber, BtcPublicKey, Error as RuntimeError, PolkaBtcVault};
     use sp_core::H160;
@@ -601,41 +583,32 @@ mod tests {
     #[tokio::test]
     async fn should_pay_and_execute_redeem() {
         let mut provider = MockProvider::default();
-        provider
-            .expect_execute_redeem()
-            .times(1)
-            .returning(|_, _, _, _| Ok(()));
+        provider.expect_execute_redeem().times(1).returning(|_, _, _, _| Ok(()));
 
         let mut btc_rpc = MockBitcoin::default();
-        btc_rpc
-            .expect_create_transaction::<BtcAddress>()
-            .returning(|_, _, _| {
-                Ok(LockedTransaction::new(
-                    Transaction {
-                        version: 0,
-                        lock_time: 0,
-                        input: vec![],
-                        output: vec![],
-                    },
-                    None,
-                ))
-            });
+        btc_rpc.expect_create_transaction::<BtcAddress>().returning(|_, _, _| {
+            Ok(LockedTransaction::new(
+                Transaction {
+                    version: 0,
+                    lock_time: 0,
+                    input: vec![],
+                    output: vec![],
+                },
+                None,
+            ))
+        });
 
-        btc_rpc
-            .expect_send_transaction()
-            .returning(|_| Ok(Txid::default()));
+        btc_rpc.expect_send_transaction().returning(|_| Ok(Txid::default()));
 
-        btc_rpc
-            .expect_wait_for_transaction_metadata()
-            .returning(|_, _, _| {
-                Ok(TransactionMetadata {
-                    txid: Txid::default(),
-                    proof: vec![],
-                    raw_tx: vec![],
-                    block_height: 0,
-                    block_hash: BlockHash::default(),
-                })
-            });
+        btc_rpc.expect_wait_for_transaction_metadata().returning(|_, _, _| {
+            Ok(TransactionMetadata {
+                txid: Txid::default(),
+                proof: vec![],
+                raw_tx: vec![],
+                block_height: 0,
+                block_hash: BlockHash::default(),
+            })
+        });
 
         let request = Request {
             amount: 100,
@@ -657,35 +630,29 @@ mod tests {
             .returning(|_, _, _, _| Ok(()));
 
         let mut btc_rpc = MockBitcoin::default();
-        btc_rpc
-            .expect_create_transaction::<BtcAddress>()
-            .returning(|_, _, _| {
-                Ok(LockedTransaction::new(
-                    Transaction {
-                        version: 0,
-                        lock_time: 0,
-                        input: vec![],
-                        output: vec![],
-                    },
-                    None,
-                ))
-            });
+        btc_rpc.expect_create_transaction::<BtcAddress>().returning(|_, _, _| {
+            Ok(LockedTransaction::new(
+                Transaction {
+                    version: 0,
+                    lock_time: 0,
+                    input: vec![],
+                    output: vec![],
+                },
+                None,
+            ))
+        });
 
-        btc_rpc
-            .expect_send_transaction()
-            .returning(|_| Ok(Txid::default()));
+        btc_rpc.expect_send_transaction().returning(|_| Ok(Txid::default()));
 
-        btc_rpc
-            .expect_wait_for_transaction_metadata()
-            .returning(|_, _, _| {
-                Ok(TransactionMetadata {
-                    txid: Txid::default(),
-                    proof: vec![],
-                    raw_tx: vec![],
-                    block_height: 0,
-                    block_hash: BlockHash::default(),
-                })
-            });
+        btc_rpc.expect_wait_for_transaction_metadata().returning(|_, _, _| {
+            Ok(TransactionMetadata {
+                txid: Txid::default(),
+                proof: vec![],
+                raw_tx: vec![],
+                block_height: 0,
+                block_hash: BlockHash::default(),
+            })
+        });
 
         let request = Request {
             amount: 100,

@@ -1,12 +1,12 @@
-use crate::error::{Error, KeyLoadingError};
-use crate::{ConnectionManagerConfig, RestartPolicy};
+use crate::{
+    error::{Error, KeyLoadingError},
+    ConnectionManagerConfig, RestartPolicy,
+};
 
 use clap::Clap;
-use sp_core::sr25519::Pair;
-use sp_core::Pair as _;
+use sp_core::{sr25519::Pair, Pair as _};
 use sp_keyring::AccountKeyring;
-use std::collections::HashMap;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 #[derive(Clap, Debug, Clone)]
 pub struct ProviderUserOpts {
@@ -29,12 +29,10 @@ impl ProviderUserOpts {
     /// Get the key pair and the username, the latter of which is used for wallet selection.
     pub fn get_key_pair(&self) -> Result<(Pair, String), Error> {
         // load parachain credentials
-        let (pair, user_name) = match (self.keyfile.as_ref(), self.keyname.as_ref(), &self.keyring)
-        {
-            (Some(file_path), Some(keyname), None) => (
-                get_credentials_from_file(&file_path, &keyname)?,
-                keyname.to_string(),
-            ),
+        let (pair, user_name) = match (self.keyfile.as_ref(), self.keyname.as_ref(), &self.keyring) {
+            (Some(file_path), Some(keyname), None) => {
+                (get_credentials_from_file(&file_path, &keyname)?, keyname.to_string())
+            }
             (None, None, Some(keyring)) => (keyring.pair(), format!("{}", keyring)),
             _ => panic!("Invalid arguments"), // should never occur, due to clap constraints
         };
@@ -53,8 +51,7 @@ fn get_credentials_from_file(file_path: &str, keyname: &str) -> Result<Pair, Key
     let reader = std::io::BufReader::new(file);
     let map: HashMap<String, String> = serde_json::from_reader(reader)?;
     let pair_str = map.get(keyname).ok_or(KeyLoadingError::KeyNotFound)?;
-    let pair =
-        Pair::from_string(pair_str, None).map_err(|e| KeyLoadingError::SecretStringError(e))?;
+    let pair = Pair::from_string(pair_str, None).map_err(|e| KeyLoadingError::SecretStringError(e))?;
     Ok(pair)
 }
 
