@@ -407,7 +407,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
 
         Ok(LockedTransaction::new(
             transaction,
-            self.transaction_creation_lock.clone().lock_owned().await,
+            Some(self.transaction_creation_lock.clone().lock_owned().await),
         ))
     }
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError> {

@@ -145,10 +145,11 @@ pub trait BitcoinCoreApi {
 
 pub struct LockedTransaction {
     pub transaction: Transaction,
-    _lock: OwnedMutexGuard<()>,
+    _lock: Option<OwnedMutexGuard<()>>,
 }
+
 impl LockedTransaction {
-    pub fn new(transaction: Transaction, lock: OwnedMutexGuard<()>) -> Self {
+    pub fn new(transaction: Transaction, lock: Option<OwnedMutexGuard<()>>) -> Self {
         LockedTransaction {
             transaction,
             _lock: lock,
@@ -566,7 +567,7 @@ impl BitcoinCoreApi for BitcoinCore {
 
         let transaction = signed_funded_raw_tx.transaction()?;
 
-        Ok(LockedTransaction::new(transaction, lock))
+        Ok(LockedTransaction::new(transaction, Some(lock)))
     }
 
     /// Submits a transaction to the mempool
