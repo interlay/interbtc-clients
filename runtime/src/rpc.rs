@@ -4,10 +4,8 @@ use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures::FutureExt;
 use futures::{stream::StreamExt, SinkExt};
-use jsonrpsee_types::error::Error as JsonRpseeError;
 use jsonrpsee_types::jsonrpc::{to_value as to_json_value, Params};
-use jsonrpsee_ws_client::{WsClient, WsConfig};
-use log::{info, trace};
+use log::trace;
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
 use sp_arithmetic::FixedU128;
 use sp_core::H256;
@@ -22,9 +20,10 @@ use substrate_subxt::{
     EventSubscription, EventsDecoder, RpcClient, Signer,
 };
 use tokio::sync::RwLock;
-use tokio::time::{delay_for, timeout};
+use tokio::time::delay_for;
 
 use crate::btc_relay::*;
+use crate::conn::*;
 use crate::exchange_rate_oracle::*;
 use crate::fee::*;
 use crate::issue::*;
@@ -39,10 +38,7 @@ use crate::types::*;
 use crate::vault_registry::*;
 use crate::Error;
 use crate::PolkaBtcRuntime;
-use crate::Provider;
 use crate::{balances_dot::*, BlockNumber};
-
-const RETRY_DURATION: Duration = Duration::from_millis(1000);
 
 #[derive(Clone)]
 pub struct PolkaBtcProvider {
@@ -84,45 +80,18 @@ impl PolkaBtcProvider {
     }
 
     pub async fn from_url(url: &String, signer: PolkaBtcSigner) -> Result<Self, Error> {
-        let parsed_url = url::Url::parse(url)?;
-        let path = parsed_url.path();
-        let config = WsConfig {
-            url,
-            max_request_body_size: 10 * 1024 * 1024,
-            request_timeout: None,
-            connection_timeout: Duration::from_secs(10),
-            origin: None,
-            handshake_url: path.into(),
-            max_concurrent_requests: 1024,
-            max_notifs_per_subscription: 128,
-        };
-        let client = WsClient::new(config).await?;
-        Self::new(client, signer).await
+        let ws_client = new_websocket_client(url, None, None).await?;
+        Self::new(ws_client, signer).await
     }
 
     pub async fn from_url_with_retry(
-        url: String,
+        url: &String,
         signer: PolkaBtcSigner,
-        timeout_duration: Duration,
+        connection_timeout: Duration,
     ) -> Result<Self, Error> {
-        info!("Connecting to the btc-parachain...");
-        timeout(timeout_duration, async move {
-            loop {
-                match Self::from_url(&url, signer.clone()).await {
-                    Err(Error::JsonRpseeError(JsonRpseeError::TransportError(err))) => {
-                        trace!("could not connect to parachain: {}", err);
-                        delay_for(RETRY_DURATION).await;
-                        continue;
-                    }
-                    Ok(rpc) => {
-                        info!("Connected!");
-                        return Ok(rpc);
-                    }
-                    Err(err) => return Err(err),
-                }
-            }
-        })
-        .await?
+        let ws_client =
+            new_websocket_client_with_retry(url, None, None, connection_timeout).await?;
+        Self::new(ws_client, signer).await
     }
 
     /// Gets a copy of the signer with a unique nonce

@@ -99,7 +99,7 @@ async fn main() -> Result<(), Error> {
         );
 
         let result = PolkaBtcProvider::from_url_with_retry(
-            opts.polka_btc_url.clone(),
+            &opts.polka_btc_url.clone(),
             signer.clone(),
             Duration::from_millis(opts.connection_timeout_ms),
         )

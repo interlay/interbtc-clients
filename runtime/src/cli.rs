@@ -1,10 +1,12 @@
 use crate::error::{Error, KeyLoadingError};
-use clap::Clap;
+use crate::{ConnectionManagerConfig, RestartPolicy};
 
+use clap::Clap;
 use sp_core::sr25519::Pair;
 use sp_core::Pair as _;
 use sp_keyring::AccountKeyring;
 use std::collections::HashMap;
+use std::time::Duration;
 
 #[derive(Clap, Debug, Clone)]
 pub struct ProviderUserOpts {
@@ -54,4 +56,38 @@ fn get_credentials_from_file(file_path: &str, keyname: &str) -> Result<Pair, Key
     let pair =
         Pair::from_string(pair_str, None).map_err(|e| KeyLoadingError::SecretStringError(e))?;
     Ok(pair)
+}
+
+#[derive(Clap, Debug, Clone)]
+pub struct ConnectionOpts {
+    /// Parachain websocket URL.
+    #[clap(long, default_value = "ws://127.0.0.1:9944")]
+    pub polka_btc_url: String,
+
+    /// Timeout in milliseconds to wait for connection to btc-parachain.
+    #[clap(long, default_value = "60000")]
+    pub polka_btc_connection_timeout_ms: u64,
+
+    /// What to do if the connection to the btc-parachain drops.
+    #[clap(long, default_value = "always")]
+    pub restart_policy: RestartPolicy,
+
+    /// Maximum number of concurrent requests
+    #[clap(long)]
+    pub max_concurrent_requests: Option<usize>,
+
+    /// Maximum notification capacity for each subscription
+    #[clap(long)]
+    pub max_notifs_per_subscription: Option<usize>,
+}
+
+impl Into<ConnectionManagerConfig> for ConnectionOpts {
+    fn into(self) -> ConnectionManagerConfig {
+        ConnectionManagerConfig {
+            connection_timeout: Duration::from_millis(self.polka_btc_connection_timeout_ms),
+            restart_policy: self.restart_policy,
+            max_concurrent_requests: self.max_concurrent_requests,
+            max_notifs_per_subscription: self.max_notifs_per_subscription,
+        }
+    }
 }

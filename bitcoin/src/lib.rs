@@ -175,10 +175,10 @@ impl BitcoinCore {
     pub async fn new_with_retry(
         rpc: Arc<Client>,
         network: Network,
-        timeout_duration: Duration,
+        connection_timeout: Duration,
     ) -> Result<Self, Error> {
         let core = Self::new(rpc, network);
-        core.connect(timeout_duration).await?;
+        core.connect(connection_timeout).await?;
         core.sync().await?;
         Ok(core)
     }
@@ -186,10 +186,10 @@ impl BitcoinCore {
     /// Connect to a bitcoin-core full node or timeout.
     ///
     /// # Arguments
-    /// * `timeout_duration` - maximum duration before elapsing
-    async fn connect(&self, timeout_duration: Duration) -> Result<(), Error> {
+    /// * `connection_timeout` - maximum duration before elapsing
+    async fn connect(&self, connection_timeout: Duration) -> Result<(), Error> {
         info!("Connecting to bitcoin-core...");
-        timeout(timeout_duration, async move {
+        timeout(connection_timeout, async move {
             loop {
                 match self.rpc.get_blockchain_info() {
                     Err(BitcoinError::JsonRpc(JsonRpcError::Hyper(HyperError::Io(err))))

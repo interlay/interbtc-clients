@@ -10,7 +10,8 @@ use substrate_subxt::RpcClient;
 use tokio::runtime::Handle;
 use tokio::time::{delay_for, timeout};
 
-const RETRY_DURATION: Duration = Duration::from_millis(1000);
+const RETRY_TIMEOUT: Duration = Duration::from_millis(1000);
+const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub type ShutdownReceiver = tokio::sync::watch::Receiver<Option<()>>;
 
@@ -32,33 +33,41 @@ pub trait Service<C, P: Provider> {
     ) -> Result<(), Error>;
 }
 
-pub(crate) async fn new_websocket_client(url: String) -> Result<WsClient, Error> {
+pub(crate) async fn new_websocket_client(
+    url: &String,
+    max_concurrent_requests: Option<usize>,
+    max_notifs_per_subscription: Option<usize>,
+) -> Result<WsClient, Error> {
     let parsed_url = url::Url::parse(&url)?;
     let path = parsed_url.path();
     let config = WsConfig {
-        url: &url,
+        url,
         max_request_body_size: 10 * 1024 * 1024,
         request_timeout: None,
-        connection_timeout: Duration::from_secs(10),
+        connection_timeout: CONNECTION_TIMEOUT,
         origin: None,
         handshake_url: path.into(),
-        max_concurrent_requests: 256,
-        max_notifs_per_subscription: 128,
+        max_concurrent_requests: max_concurrent_requests.unwrap_or(256),
+        max_notifs_per_subscription: max_notifs_per_subscription.unwrap_or(128),
     };
     Ok(WsClient::new(config).await?)
 }
 
 pub(crate) async fn new_websocket_client_with_retry(
-    url: String,
-    duration: Duration,
+    url: &String,
+    max_concurrent_requests: Option<usize>,
+    max_notifs_per_subscription: Option<usize>,
+    connection_timeout: Duration,
 ) -> Result<WsClient, Error> {
     info!("Connecting to the btc-parachain...");
-    timeout(duration, async move {
+    timeout(connection_timeout, async move {
         loop {
-            match new_websocket_client(url.clone()).await {
+            match new_websocket_client(url, max_concurrent_requests, max_notifs_per_subscription)
+                .await
+            {
                 Err(Error::JsonRpseeError(JsonRpseeError::TransportError(err))) => {
                     trace!("could not connect to parachain: {}", err);
-                    delay_for(RETRY_DURATION).await;
+                    delay_for(RETRY_TIMEOUT).await;
                     continue;
                 }
                 Ok(rpc) => {
@@ -89,9 +98,16 @@ impl FromStr for RestartPolicy {
     }
 }
 
+/// Connection settings for the service
 pub struct ManagerConfig {
-    pub retry_timeout: Duration,
+    /// Fail to connect to server if elapsed
+    pub connection_timeout: Duration,
+    /// Whether to restart the client
     pub restart_policy: RestartPolicy,
+    /// Maximum number of concurrent requests
+    pub max_concurrent_requests: Option<usize>,
+    /// Maximum notification capacity for each subscription
+    pub max_notifs_per_subscription: Option<usize>,
 }
 
 pub struct Manager<C: Clone, P: Provider, S: Service<C, P>> {
@@ -124,8 +140,10 @@ impl<C: Clone + Send + 'static, P: Provider + Send, S: Service<C, P>> Manager<C,
     pub async fn start(&self) -> Result<(), Error> {
         loop {
             let ws_client = new_websocket_client_with_retry(
-                self.url.clone(),
-                self.manager_config.retry_timeout,
+                &self.url,
+                self.manager_config.max_concurrent_requests,
+                self.manager_config.max_notifs_per_subscription,
+                self.manager_config.connection_timeout,
             )
             .await?;
 

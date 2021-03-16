@@ -513,7 +513,7 @@ async fn main() -> Result<(), Error> {
     let (key_pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
     let provider = PolkaBtcProvider::from_url_with_retry(
-        opts.polka_btc_url,
+        &opts.polka_btc_url,
         signer,
         Duration::from_millis(opts.connection_timeout_ms),
     )

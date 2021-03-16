@@ -2,7 +2,7 @@ use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use log::*;
 use runtime::substrate_subxt::PairSigner;
-use runtime::{ConnectionManager, ConnectionManagerConfig, PolkaBtcRuntime, RestartPolicy};
+use runtime::{ConnectionManager, PolkaBtcRuntime};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,11 +28,19 @@ impl FromStr for BitcoinNetwork {
 /// The Vault client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
 #[derive(Clap, Debug, Clone)]
-#[clap(version = "0.1", author = "Interlay <contact@interlay.io>")]
+#[clap(version = "0.2", author = "Interlay <contact@interlay.io>")]
 pub struct Opts {
-    /// Parachain URL, can be over WebSockets or HTTP.
-    #[clap(long, default_value = "ws://127.0.0.1:9944")]
-    pub polka_btc_url: String,
+    /// Keyring / keyfile options.
+    #[clap(flatten)]
+    pub account_info: runtime::cli::ProviderUserOpts,
+
+    /// Connection settings for the BTC-Parachain.
+    #[clap(flatten)]
+    pub parachain: runtime::cli::ConnectionOpts,
+
+    /// Connection settings for Bitcoin Core.
+    #[clap(flatten)]
+    pub bitcoin: bitcoin::cli::BitcoinOpts,
 
     /// Address to listen on for JSON-RPC requests.
     #[clap(long, default_value = "[::0]:3031")]
@@ -84,29 +92,9 @@ pub struct Opts {
     #[clap(long)]
     pub btc_confirmations: Option<u32>,
 
-    /// keyring / keyfile options.
-    #[clap(flatten)]
-    pub account_info: runtime::cli::ProviderUserOpts,
-
-    /// Connection settings for Bitcoin Core.
-    #[clap(flatten)]
-    pub bitcoin: bitcoin::cli::BitcoinOpts,
-
     /// Bitcoin network type for address encoding.
     #[clap(long, default_value = "regtest")]
     pub network: BitcoinNetwork,
-
-    /// Timeout in milliseconds to poll Bitcoin.
-    #[clap(long, default_value = "6000")]
-    pub bitcoin_timeout_ms: u64,
-
-    /// Timeout in milliseconds to wait for connection to btc-parachain.
-    #[clap(long, default_value = "60000")]
-    pub connection_timeout_ms: u64,
-
-    /// What to do if the connection to the btc-parachain drops.
-    #[clap(long, default_value = "always")]
-    pub restart_policy: RestartPolicy,
 }
 
 async fn start() -> Result<(), Error> {
@@ -124,7 +112,7 @@ async fn start() -> Result<(), Error> {
     let bitcoin_core = BitcoinCore::new_with_retry(
         Arc::new(opts.bitcoin.new_client(Some(&wallet))?),
         opts.network.0,
-        Duration::from_millis(opts.connection_timeout_ms),
+        Duration::from_millis(opts.bitcoin.bitcoin_connection_timeout_ms),
     )
     .await?;
 
@@ -136,7 +124,7 @@ async fn start() -> Result<(), Error> {
 
     // only open connection to parachain after bitcoind sync to prevent timeout
     ConnectionManager::<_, _, VaultService>::new(
-        opts.polka_btc_url.clone(),
+        opts.parachain.polka_btc_url.clone(),
         signer.clone(),
         VaultServiceConfig {
             bitcoin_core,
@@ -149,14 +137,10 @@ async fn start() -> Result<(), Error> {
             no_auto_auction: opts.no_auto_auction,
             no_issue_execution: opts.no_issue_execution,
             collateral_timeout: Duration::from_millis(opts.collateral_timeout_ms),
-
             http_addr: opts.http_addr.parse()?,
             rpc_cors_domain: opts.rpc_cors_domain,
         },
-        ConnectionManagerConfig {
-            retry_timeout: Duration::from_millis(opts.connection_timeout_ms),
-            restart_policy: opts.restart_policy,
-        },
+        opts.parachain.into(),
         tokio::runtime::Handle::current(),
     )
     .start()
