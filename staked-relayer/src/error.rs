@@ -3,7 +3,7 @@ use backoff::ExponentialBackoff;
 use bitcoin::{BitcoinError as BitcoinCoreError, Error as BitcoinError};
 use jsonrpc_core_client::RpcError;
 use parity_scale_codec::Error as CodecError;
-use runtime::{substrate_subxt::Error as XtError, Error as RuntimeError};
+use runtime::{substrate_subxt::Error as SubxtError, Error as RuntimeError};
 use std::time::Duration;
 use thiserror::Error;
 
@@ -24,8 +24,8 @@ pub enum Error {
     RuntimeError(#[from] RuntimeError),
     #[error("RelayError: {0}")]
     RelayError(#[from] RelayError),
-    #[error("SubXtError: {0}")]
-    SubXtError(#[from] XtError),
+    #[error("SubxtError: {0}")]
+    SubxtError(#[from] SubxtError),
     #[error("CoreError: {0}")]
     CoreError(#[from] CoreError<RelayError>),
     #[error("CodecError: {0}")]

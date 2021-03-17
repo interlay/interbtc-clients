@@ -10,10 +10,7 @@ pub use issuing::Client as PolkaBtcClient;
 
 use crate::core::{Error as CoreError, Runner};
 use log::{error, info};
-use runtime::{
-    substrate_subxt::{Error as SubxtError, ModuleError as SubxtModuleError, RuntimeError as SubxtRuntimeError},
-    Error as RuntimeError, PolkaBtcProvider, BTC_RELAY_MODULE, DUPLICATE_BLOCK_ERROR,
-};
+use runtime::PolkaBtcProvider;
 use std::time::Duration;
 
 pub async fn run_relayer(
@@ -25,11 +22,7 @@ pub async fn run_relayer(
         super::utils::wait_until_registered(&provider, timeout).await;
         match runner.submit_next().await {
             Ok(_) => (),
-            Err(CoreError::Issuing(Error::PolkaBtcError(RuntimeError::XtError(SubxtError::Runtime(
-                SubxtRuntimeError::Module(SubxtModuleError { ref module, ref error }),
-            )))))
-                if module == BTC_RELAY_MODULE && error == DUPLICATE_BLOCK_ERROR =>
-            {
+            Err(CoreError::Issuing(Error::PolkaBtcError(ref err))) if err.is_duplicate_block() => {
                 info!("Attempted to submit block that already exists")
             }
             Err(err) => {

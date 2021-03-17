@@ -10,7 +10,7 @@ use sp_arithmetic::FixedU128;
 use sp_core::H256;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 use substrate_subxt::{
-    sudo::*, Call, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Error as XtError, Event,
+    sudo::*, Call, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Error as SubxtError, Event,
     EventSubscription, EventTypeRegistry, EventsDecoder, RpcClient, Signer,
 };
 use tokio::{sync::RwLock, time::delay_for};
@@ -105,7 +105,7 @@ impl PolkaBtcProvider {
     ///
     /// # Arguments
     /// * `on_error` - callback for decoding errors, is not allowed to take too long
-    pub async fn on_event_error<E: Fn(XtError)>(&self, on_error: E) -> Result<(), Error> {
+    pub async fn on_event_error<E: Fn(SubxtError)>(&self, on_error: E) -> Result<(), Error> {
         let sub = self.ext_client.subscribe_finalized_events().await?;
         let decoder =
             EventsDecoder::<PolkaBtcRuntime>::new(self.ext_client.metadata().clone(), EventTypeRegistry::new());
@@ -136,7 +136,7 @@ impl PolkaBtcProvider {
         T: Event<PolkaBtcRuntime> + core::fmt::Debug,
         F: FnMut(T) -> R,
         R: Future<Output = ()>,
-        E: Fn(XtError),
+        E: Fn(SubxtError),
     {
         let sub = self.ext_client.subscribe_finalized_events().await?;
         let decoder =
