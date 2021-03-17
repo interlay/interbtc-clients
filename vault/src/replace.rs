@@ -220,6 +220,7 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi + Clone>(
     event_channel: &mut Sender<RequestEvent>,
 ) -> Result<(), Error> {
     let vault_id = provider.get_account_id().clone();
+    let dust_amount = provider.get_replace_dust_amount().await?;
     let vaults = provider
         .get_all_vaults()
         .await?
@@ -233,14 +234,16 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi + Clone>(
             .await
             .unwrap_or(false)
         {
-            match auction_replace(provider, btc_rpc, &vault).await {
+            match auction_replace(provider, btc_rpc, &vault, dust_amount).await {
                 Ok(_) => {
                     info!("Auction replace for vault {} submitted", vault.id);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel.send(RequestEvent::Opened).await;
                 }
-                Err(Error::InsufficientFunds) => debug!("Not auctioning vault {}", vault.id),
+                Err(Error::InsufficientFunds) | Err(Error::BelowDustAmount) => {
+                    debug!("Not auctioning vault {}", vault.id)
+                }
                 Err(e) => error!("Failed to auction vault {}: {}", vault.id, e.to_string()),
             };
         }
@@ -252,6 +255,7 @@ async fn auction_replace<B: BitcoinCoreApi + Clone, P: DotBalancesPallet + Repla
     provider: &P,
     btc_rpc: &B,
     vault: &PolkaBtcVault,
+    dust_amount: u128,
 ) -> Result<(), Error> {
     let btc_amount = vault
         .issued_tokens
@@ -259,6 +263,12 @@ async fn auction_replace<B: BitcoinCoreApi + Clone, P: DotBalancesPallet + Repla
         .ok_or(Error::ArithmeticUnderflow)?
         .checked_sub(vault.to_be_replaced_tokens)
         .ok_or(Error::ArithmeticUnderflow)?;
+
+    // Amounts below the dust value would be rejected, so don't create a useless transaction
+    if btc_amount < dust_amount {
+        return Err(Error::BelowDustAmount);
+    }
+
     let collateral = provider.get_required_collateral_for_polkabtc(btc_amount).await?;
 
     // don't auction vault if we can't afford to replace it
@@ -454,6 +464,7 @@ mod tests {
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
             async fn set_replace_period(&self, period: u32) -> Result<(), RuntimeError>;
             async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, RuntimeError>;
+            async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;
         }
 
         #[async_trait]
