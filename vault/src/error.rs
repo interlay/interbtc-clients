@@ -3,13 +3,10 @@ use hex::FromHexError;
 use jsonrpc_core_client::RpcError;
 use parity_scale_codec::Error as CodecError;
 use runtime::{substrate_subxt::Error as XtError, Error as RuntimeError};
-use std::net::AddrParseError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Internal error")]
-    InternalError,
     #[error("Insufficient funds available")]
     InsufficientFunds,
     #[error("Value below dust amount")]
@@ -30,10 +27,6 @@ pub enum Error {
     ArithmeticOverflow,
     #[error("Mathematical operation caused an underflow")]
     ArithmeticUnderflow,
-    #[error("Mathematical operation error")]
-    MathError,
-    #[error("Vault has uncompleted redeem requests")]
-    UncompletedRedeemRequests,
 
     #[error("RPC error: {0}")]
     RpcError(#[from] RpcError),
@@ -47,6 +40,4 @@ pub enum Error {
     SubXtError(#[from] XtError),
     #[error("CodecError: {0}")]
     CodecError(#[from] CodecError),
-    #[error("AddrParseError: {0}")]
-    AddrParseError(#[from] AddrParseError),
 }

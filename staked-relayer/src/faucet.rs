@@ -50,9 +50,9 @@ pub async fn fund_and_register(provider: &PolkaBtcProvider, faucet_url: &String)
     let user_allowance_in_dot: u128 = get_faucet_allowance(connection.clone(), "user_allowance").await?;
     let registration_stake = user_allowance_in_dot
         .checked_mul(PLANCK_PER_DOT)
-        .ok_or(Error::MathError)?
+        .ok_or(Error::ArithmeticOverflow)?
         .checked_sub(TX_FEES)
-        .ok_or(Error::MathError)?;
+        .ok_or(Error::ArithmeticUnderflow)?;
     provider.register_staked_relayer(registration_stake).await?;
 
     // Receive staked relayer allowance from faucet

@@ -34,16 +34,21 @@ pub struct RelayerService {
 
 #[async_trait]
 impl Service<RelayerServiceConfig, PolkaBtcProvider> for RelayerService {
-    async fn start(
+    fn new_service(
         btc_parachain: PolkaBtcProvider,
         config: RelayerServiceConfig,
         handle: tokio::runtime::Handle,
         shutdown: ShutdownReceiver,
-    ) -> Result<(), RuntimeError> {
+    ) -> Self {
         RelayerService::new(btc_parachain, config, handle, shutdown)
-            .run_service()
-            .await
-            .map_err(|_| RuntimeError::ChannelClosed)
+    }
+
+    async fn start(&self) -> Result<(), RuntimeError> {
+        match self.run_service().await {
+            Ok(_) => Ok(()),
+            Err(Error::RuntimeError(err)) => Err(err),
+            Err(err) => Err(RuntimeError::Other(err.to_string())),
+        }
     }
 }
 

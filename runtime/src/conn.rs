@@ -17,7 +17,7 @@ pub type ShutdownReceiver = tokio::sync::watch::Receiver<Option<()>>;
 
 #[async_trait]
 pub trait Provider {
-    async fn connect<T>(rpc_client: T, signer: PolkaBtcSigner) -> Result<Self, Error>
+    async fn new_provider<T>(rpc_client: T, signer: PolkaBtcSigner) -> Result<Self, Error>
     where
         Self: Sized,
         T: Into<RpcClient> + Send;
@@ -25,7 +25,8 @@ pub trait Provider {
 
 #[async_trait]
 pub trait Service<C, P: Provider> {
-    async fn start(provider: P, config: C, handle: Handle, shutdown: ShutdownReceiver) -> Result<(), Error>;
+    fn new_service(provider: P, config: C, handle: Handle, shutdown: ShutdownReceiver) -> Self;
+    async fn start(&self) -> Result<(), Error>;
 }
 
 pub(crate) async fn new_websocket_client(
@@ -148,26 +149,28 @@ impl<C: Clone + Send + 'static, P: Provider + Send, S: Service<C, P>> Manager<C,
             let (shutdown_sender, shutdown_receiver) = tokio::sync::watch::channel(None);
             let wait_for_shutdown = is_connected(ws_client.clone());
 
+            let provider = P::new_provider(ws_client, signer).await?;
+            let service = S::new_service(provider, config, handle, shutdown_receiver);
+
             // run service and shutdown listener to terminate child
             // processes if the websocket client disconnects
-            let _ = tokio::join! {
+            match tokio::try_join! {
                 async move {
                     // TODO: propogate shutdown signal from children
                     wait_for_shutdown.await;
                     // signal shutdown to child processes
                     let _ = shutdown_sender.broadcast(Some(()));
-                },
-                async move {
-                    let provider = P::connect(ws_client, signer).await?;
-                    let _ = S::start(provider, config, handle, shutdown_receiver).await;
                     Ok::<(), Error>(())
-                }
-            };
+                },
+                service.start()
+            } {
+                Ok(_) => (),
+                Err(err) => return Err(err),
+            }
 
             info!("Disconnected");
-
             match self.manager_config.restart_policy {
-                RestartPolicy::Never => return Err(Error::ChannelClosed),
+                RestartPolicy::Never => return Err(Error::ClientShutdown),
                 RestartPolicy::Always => continue,
             };
         }
