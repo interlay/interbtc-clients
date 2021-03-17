@@ -1,4 +1,4 @@
-use crate::{cancellation::RequestEvent, Error};
+use crate::{Error, IssueRequests, RequestEvent};
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, SinkExt, StreamExt};
 use log::*;
@@ -10,73 +10,7 @@ use runtime::{
 };
 use sha2::{Digest, Sha256};
 use sp_core::H256;
-use std::{borrow::Borrow, collections::HashMap, hash::Hash, sync::Arc};
-use tokio::sync::Mutex;
-
-#[derive(Debug, Default)]
-pub struct ReversibleHashMap<K, V>((HashMap<K, V>, HashMap<V, K>));
-
-impl<K, V> ReversibleHashMap<K, V>
-where
-    K: Hash + Eq + Copy + Default,
-    V: Hash + Eq + Copy + Default,
-{
-    pub fn new() -> ReversibleHashMap<K, V> {
-        Default::default()
-    }
-
-    pub fn insert(&mut self, k: K, v: V) -> (Option<K>, Option<V>) {
-        let k1 = self.0 .0.insert(k, v);
-        let k2 = self.0 .1.insert(v, k);
-        (k2, k1)
-    }
-
-    /// Remove the from the reversible map by the key.
-    pub fn remove_key<Q: ?Sized>(&mut self, k: &Q) -> Option<V>
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq,
-    {
-        if let Some(v) = self.0 .0.remove(k) {
-            self.0 .1.remove(&v);
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    /// Remove the from the reversible map by the value.
-    pub fn remove_value<Q: ?Sized>(&mut self, v: &Q) -> Option<K>
-    where
-        V: Borrow<Q>,
-        Q: Hash + Eq,
-    {
-        if let Some(k) = self.0 .1.remove(v) {
-            self.0 .0.remove(&k);
-            Some(k)
-        } else {
-            None
-        }
-    }
-
-    /// Get the key associated with the value
-    pub fn get_key_for_value<Q: ?Sized>(&mut self, v: &Q) -> Option<&K>
-    where
-        V: Borrow<Q>,
-        Q: Hash + Eq,
-    {
-        self.0 .1.get(v)
-    }
-}
-
-pub struct IssueRequests(Mutex<ReversibleHashMap<H256, BtcAddress>>);
-
-impl IssueRequests {
-    pub fn new() -> Self {
-        // TODO: fetch active issue ids from storage
-        IssueRequests(Mutex::new(ReversibleHashMap::new()))
-    }
-}
+use std::sync::Arc;
 
 // initialize `issue_set` with currently open issues, and return the block height
 // from which to start watching the bitcoin chain
@@ -85,7 +19,7 @@ async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync + 'static>
     btc_rpc: &B,
     issue_set: &Arc<IssueRequests>,
 ) -> Result<u32, Error> {
-    let mut issue_set = issue_set.0.lock().await;
+    let mut issue_set = issue_set.lock().await;
 
     let requests = provider.get_all_active_issues().await?;
     // find the height of bitcoin chain corresponding to the earliest open_time
@@ -157,7 +91,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
     transaction: Transaction,
 ) -> Result<(), Error> {
     let addresses = transaction.extract_output_addresses::<BtcAddress>();
-    let mut issue_requests = issue_set.0.lock().await;
+    let mut issue_requests = issue_set.lock().await;
     if let Some((issue_id, address)) = addresses.iter().find_map(|address| {
         let issue_id = issue_requests.get_key_for_value(address)?;
         Some((issue_id.clone(), address.clone()))
@@ -280,8 +214,7 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
                     event.issue_id,
                     event.vault_btc_address
                 );
-                let mut issue_requests = issue_set.0.lock().await;
-                issue_requests.insert(event.issue_id, event.vault_btc_address);
+                issue_set.insert(event.issue_id, event.vault_btc_address).await;
             },
             |error| error!("Error reading request issue event: {}", error.to_string()),
         )
@@ -315,7 +248,7 @@ pub async fn listen_for_issue_executes(
                 }
 
                 trace!("issue #{} executed, no longer watching", event.issue_id);
-                issue_set.0.lock().await.remove_key(&event.issue_id);
+                issue_set.remove(&event.issue_id).await;
             },
             |error| error!("Error reading execute issue event: {}", error.to_string()),
         )
@@ -337,7 +270,7 @@ pub async fn listen_for_issue_cancels(
         .on_event::<CancelIssueEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
                 trace!("issue #{} cancelled, no longer watching", event.issue_id);
-                issue_set.0.lock().await.remove_key(&event.issue_id);
+                issue_set.remove(&event.issue_id).await;
             },
             |error| error!("Error reading cancel issue event: {}", error.to_string()),
         )

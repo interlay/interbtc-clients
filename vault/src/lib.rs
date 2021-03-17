@@ -11,11 +11,11 @@ mod redeem;
 mod refund;
 mod replace;
 mod system;
+mod types;
 
 use log::*;
 use runtime::{PolkaBtcProvider, VaultRegistryPallet};
 
-pub use crate::error::Error;
 pub mod service {
     pub use crate::{
         cancellation::{CancellationScheduler, IssueCanceller, ReplaceCanceller},
@@ -32,8 +32,9 @@ pub mod service {
 }
 pub use crate::{
     cancellation::RequestEvent,
-    issue::IssueRequests,
+    error::Error,
     system::{VaultService, VaultServiceConfig},
+    types::IssueRequests,
 };
 
 pub(crate) async fn lock_additional_collateral(api: &PolkaBtcProvider, amount: u128) -> Result<(), Error> {
