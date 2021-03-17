@@ -30,9 +30,9 @@ pub enum Error {
     VaultCommittedTheft,
     #[error("Channel closed unexpectedly")]
     ChannelClosed,
+    #[error("Client has shutdown unexpectedly")]
+    ClientShutdown,
 
-    #[error("Callback error: {0}")]
-    CallbackError(Box<dyn std::error::Error + Send + Sync>),
     #[error("Failed to load credentials from file: {0}")]
     KeyLoadingFailure(#[from] KeyLoadingError),
     #[error("Error serializing: {0}")]
@@ -54,6 +54,10 @@ pub enum Error {
     TimeElapsed(#[from] Elapsed),
     #[error("UrlParseError: {0}")]
     UrlParseError(#[from] UrlParseError),
+
+    /// Other error
+    #[error("Other: {0}")]
+    Other(String),
 }
 
 #[derive(Error, Debug)]

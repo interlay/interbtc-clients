@@ -4,19 +4,21 @@ use bitcoin::{BitcoinError as BitcoinCoreError, Error as BitcoinError};
 use jsonrpc_core_client::RpcError;
 use parity_scale_codec::Error as CodecError;
 use runtime::{substrate_subxt::Error as XtError, Error as RuntimeError};
-use std::{net::AddrParseError, time::Duration};
+use std::time::Duration;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Internal error")]
-    InternalError,
     #[error("Could not verify that the oracle is offline")]
     CheckOracleOffline,
     #[error("Suggested status update does not contain block hash")]
     EventNoBlockHash,
     #[error("Error fetching transaction")]
     TransactionFetchingError,
+    #[error("Mathematical operation caused an overflow")]
+    ArithmeticOverflow,
+    #[error("Mathematical operation caused an underflow")]
+    ArithmeticUnderflow,
 
     #[error("RuntimeError: {0}")]
     RuntimeError(#[from] RuntimeError),
@@ -26,8 +28,6 @@ pub enum Error {
     SubXtError(#[from] XtError),
     #[error("CoreError: {0}")]
     CoreError(#[from] CoreError<RelayError>),
-    #[error("AddrParseError: {0}")]
-    AddrParseError(#[from] AddrParseError),
     #[error("CodecError: {0}")]
     CodecError(#[from] CodecError),
     #[error("BitcoinError: {0}")]
@@ -36,8 +36,6 @@ pub enum Error {
     BitcoinCoreError(#[from] BitcoinCoreError),
     #[error("RPC error: {0}")]
     RpcError(#[from] RpcError),
-    #[error("Mathematical operation error")]
-    MathError,
 }
 
 /// Gets the default retrying policy
