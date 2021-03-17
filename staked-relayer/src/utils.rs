@@ -1,4 +1,5 @@
 use crate::Error;
+use futures::future;
 use runtime::{StakedRelayerPallet, UtilFuncs, MINIMUM_STAKE};
 use std::time::Duration;
 use tokio::time::delay_for;
@@ -6,8 +7,12 @@ use tokio::time::delay_for;
 pub async fn is_registered<P: StakedRelayerPallet + UtilFuncs>(provider: &P) -> Result<bool, Error> {
     let account_id = provider.get_account_id();
     // get stake returns 0 if not registered, so check that either active or inactive stake is non-zero
-    let mut total_stake = provider.get_active_stake_by_id(account_id.clone()).await?;
-    total_stake = total_stake.saturating_add(provider.get_inactive_stake_by_id(account_id.clone()).await?);
+    let (active_stake, inactive_stake) = future::try_join(
+        provider.get_active_stake_by_id(account_id.clone()),
+        provider.get_inactive_stake_by_id(account_id.clone()),
+    )
+    .await?;
+    let total_stake = active_stake.saturating_add(inactive_stake);
     Ok(total_stake >= MINIMUM_STAKE)
 }
 

@@ -1,6 +1,6 @@
 use crate::{Error, IssueRequests, RequestEvent};
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
-use futures::{channel::mpsc::Sender, SinkExt, StreamExt};
+use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt};
 use log::*;
 use runtime::{
     pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
@@ -19,9 +19,9 @@ async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync + 'static>
     btc_rpc: &B,
     issue_set: &Arc<IssueRequests>,
 ) -> Result<u32, Error> {
-    let mut issue_set = issue_set.lock().await;
+    let (mut issue_set, requests) = future::join(issue_set.lock(), provider.get_all_active_issues()).await;
+    let requests = requests?;
 
-    let requests = provider.get_all_active_issues().await?;
     // find the height of bitcoin chain corresponding to the earliest open_time
     let btc_start_height = match requests.iter().map(|(_, request)| request.opentime).min() {
         Some(x) => provider.clone().get_blockchain_height_at(x).await?,
@@ -133,6 +133,8 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
 
                 // found tx, submit proof
                 let txid = transaction.txid();
+
+                // bitcoin core is currently blocking, no need to try_join
                 let raw_tx = btc_rpc.get_raw_tx_for(&txid, &block_hash).await?;
                 let proof = btc_rpc.get_proof_for(txid.clone(), &block_hash).await?;
 

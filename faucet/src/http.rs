@@ -1,5 +1,6 @@
 use crate::Error;
 use chrono::{DateTime, Duration as ISO8601, Utc};
+use futures::future;
 use hex::FromHex;
 use jsonrpc_http_server::{
     jsonrpc_core::{serde_json::Value, Error as JsonRpcError, ErrorCode as JsonRpcErrorCode, IoHandler, Params},
@@ -98,8 +99,11 @@ async fn get_account_type(
     if let Ok(_) = provider.get_vault(account_id.clone()).await {
         return Ok(FundingRequestAccountType::Vault);
     }
-    let active_stake = provider.get_active_stake_by_id(account_id.clone()).await?;
-    let inactive_stake = provider.get_inactive_stake_by_id(account_id).await?;
+    let (active_stake, inactive_stake) = future::try_join(
+        provider.get_active_stake_by_id(account_id.clone()),
+        provider.get_inactive_stake_by_id(account_id),
+    )
+    .await?;
     if active_stake.gt(&0) || inactive_stake.gt(&0) {
         return Ok(FundingRequestAccountType::StakedRelayer);
     }

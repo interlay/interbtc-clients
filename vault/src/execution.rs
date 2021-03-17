@@ -1,7 +1,7 @@
 use crate::{constants::*, error::Error, issue::process_issue_requests, IssueRequests};
 use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
-use futures::stream::StreamExt;
+use futures::{future, stream::StreamExt};
 use log::*;
 use runtime::{
     pallets::{
@@ -217,30 +217,30 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
 ) -> Result<(), Error> {
     let vault_id = provider.get_account_id().clone();
 
-    // get all open redeem/replaces and map them to the shared Request type
-    let open_redeems = provider
-        .clone()
-        .get_vault_redeem_requests(vault_id.clone())
-        .await?
+    // get all redeem, replace and refund requests
+    let (redeem_requests, replace_requests, refund_requests) = future::try_join3(
+        provider.get_vault_redeem_requests(vault_id.clone()),
+        provider.get_old_vault_replace_requests(vault_id.clone()),
+        provider.get_vault_refund_requests(vault_id),
+    )
+    .await?;
+
+    let open_redeems = redeem_requests
         .into_iter()
         .filter(|(_, request)| !request.completed && !request.cancelled)
         .map(|(hash, request)| Request::from_redeem_request(hash, request));
 
-    let open_replaces = provider
-        .get_old_vault_replace_requests(vault_id.clone())
-        .await?
+    let open_replaces = replace_requests
         .into_iter()
         .filter(|(_, request)| !request.completed && !request.cancelled)
         .filter_map(|(hash, request)| Request::from_replace_request(hash, request));
 
-    let open_refunds = provider
-        .get_vault_refund_requests(vault_id)
-        .await?
+    let open_refunds = refund_requests
         .into_iter()
         .filter(|(_, request)| !request.completed)
         .map(|(hash, request)| Request::from_refund_request(hash, request));
 
-    // Place all redeems, replaces & refunds into a hashmap, indexed by their redeemid/replaceid
+    // collect all requests into a hashmap, indexed by their id
     let mut open_requests = open_redeems
         .chain(open_replaces)
         .chain(open_refunds)

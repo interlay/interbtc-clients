@@ -258,7 +258,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + Clone> CancellationScheduler<P
 
         match selector.select_event(block_listener, event_listener).await? {
             BlockOrEvent::Block(header) => {
-                debug!(
+                trace!(
                     "Received parachain block at height {} for {}",
                     header.number,
                     T::TYPE_NAME
