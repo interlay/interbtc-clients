@@ -3,8 +3,8 @@
 use crate::integration::*;
 
 use super::{
-    BtcAddress, BtcPublicKey, BtcRelayPallet, DotBalancesPallet, SecurityPallet, StakedRelayerPallet, StatusCode,
-    VaultRegistryPallet, MINIMUM_STAKE,
+    BtcAddress, BtcPublicKey, BtcRelayPallet, DotBalancesPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet,
+    StatusCode, VaultRegistryPallet, MINIMUM_STAKE,
 };
 use module_bitcoin::{
     formatter::TryFormattable,
@@ -21,21 +21,13 @@ fn dummy_public_key() -> BtcPublicKey {
 }
 
 #[tokio::test]
-async fn test_get_free_dot_balance() {
+async fn test_getters() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
 
-    let balance = provider.get_free_dot_balance().await.unwrap();
-    assert_eq!(balance, 1 << 60);
-}
-
-#[tokio::test]
-async fn test_parachain_status() {
-    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-    let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
-
-    let status = provider.get_parachain_status().await.unwrap();
-    assert_eq!(status, StatusCode::Running);
+    assert_eq!(provider.get_free_dot_balance().await.unwrap(), 1 << 60);
+    assert_eq!(provider.get_parachain_status().await.unwrap(), StatusCode::Running);
+    assert!(provider.get_replace_dust_amount().await.unwrap() > 0);
 }
 
 #[tokio::test]
