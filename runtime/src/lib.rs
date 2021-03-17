@@ -19,7 +19,7 @@ pub use conn::{
     on_shutdown, wait_or_shutdown, Manager as ConnectionManager, ManagerConfig as ConnectionManagerConfig, Provider,
     RestartPolicy, Service, ShutdownReceiver,
 };
-pub use error::{Error, XtError};
+pub use error::{Error, SubxtError};
 pub use rpc::{
     BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet, ExchangeRateOraclePallet, FeePallet, IssuePallet,
     PolkaBtcProvider, RedeemPallet, RefundPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,

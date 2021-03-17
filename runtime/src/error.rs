@@ -1,11 +1,13 @@
 pub use jsonrpsee_types::error::Error as JsonRpseeError;
-pub use substrate_subxt::Error as XtError;
+pub use substrate_subxt::Error as SubxtError;
 
+use crate::{BTC_RELAY_MODULE, DUPLICATE_BLOCK_ERROR, ISSUE_COMPLETED_ERROR, ISSUE_MODULE};
 use jsonrpsee_ws_client::transport::WsConnectError;
 use parity_scale_codec::Error as CodecError;
 use serde_json::Error as SerdeJsonError;
 use sp_core::crypto::SecretStringError;
 use std::{array::TryFromSliceError, io::Error as IoError, num::TryFromIntError};
+use substrate_subxt::{ModuleError as SubxtModuleError, RuntimeError as SubxtRuntimeError};
 use thiserror::Error;
 use tokio::time::Elapsed;
 use url::ParseError as UrlParseError;
@@ -40,7 +42,7 @@ pub enum Error {
     #[error("Error converting: {0}")]
     Convert(#[from] TryFromIntError),
     #[error("Error communicating with parachain: {0}")]
-    XtError(#[from] XtError),
+    SubxtError(#[from] SubxtError),
     #[error("Error decoding: {0}")]
     CodecError(#[from] CodecError),
     #[error("Error encoding json data: {0}")]
@@ -58,6 +60,28 @@ pub enum Error {
     /// Other error
     #[error("Other: {0}")]
     Other(String),
+}
+
+impl Error {
+    pub fn is_issue_completed(&self) -> bool {
+        match self {
+            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
+                ref module,
+                ref error,
+            }))) if module == ISSUE_MODULE && error == ISSUE_COMPLETED_ERROR => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_duplicate_block(&self) -> bool {
+        match self {
+            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
+                ref module,
+                ref error,
+            }))) if module == BTC_RELAY_MODULE && error == DUPLICATE_BLOCK_ERROR => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Error, Debug)]

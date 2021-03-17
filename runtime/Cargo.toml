@@ -33,9 +33,7 @@ sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "rococo
 sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
-
 frame-support = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
-frame-system = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 
 # Subxt dependencies
 substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "0283aa0" }

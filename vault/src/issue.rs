@@ -4,9 +4,8 @@ use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt};
 use log::*;
 use runtime::{
     pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
-    substrate_subxt::{Error as SubxtError, ModuleError as SubxtModuleError, RuntimeError as SubxtRuntimeError},
     BtcAddress, BtcPublicKey, BtcRelayPallet, Error as RuntimeError, H256Le, IssuePallet, PolkaBtcProvider,
-    PolkaBtcRuntime, UtilFuncs, ISSUE_COMPLETED_ERROR, ISSUE_MODULE,
+    PolkaBtcRuntime, UtilFuncs,
 };
 use sha2::{Digest, Sha256};
 use sp_core::H256;
@@ -144,12 +143,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
                     .await
                 {
                     Ok(_) => (),
-                    Err(RuntimeError::XtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
-                        ref module,
-                        ref error,
-                    }))))
-                        if module == ISSUE_MODULE && error == ISSUE_COMPLETED_ERROR =>
-                    {
+                    Err(err) if err.is_issue_completed() => {
                         info!("Issue {} has already been completed", issue_id);
                     }
                     Err(err) => return Err(err.into()),

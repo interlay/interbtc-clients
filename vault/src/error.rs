@@ -2,7 +2,7 @@ use bitcoin::Error as BitcoinError;
 use hex::FromHexError;
 use jsonrpc_core_client::RpcError;
 use parity_scale_codec::Error as CodecError;
-use runtime::{substrate_subxt::Error as XtError, Error as RuntimeError};
+use runtime::{substrate_subxt::Error as SubxtError, Error as RuntimeError};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -36,8 +36,8 @@ pub enum Error {
     BitcoinError(#[from] BitcoinError),
     #[error("RuntimeError: {0}")]
     RuntimeError(#[from] RuntimeError),
-    #[error("SubXtError: {0}")]
-    SubXtError(#[from] XtError),
+    #[error("SubxtError: {0}")]
+    SubxtError(#[from] SubxtError),
     #[error("CodecError: {0}")]
     CodecError(#[from] CodecError),
 }
