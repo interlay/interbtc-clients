@@ -4,10 +4,10 @@ use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use futures::executor::block_on;
 use log::*;
 use runtime::{
-    on_shutdown, pallets::sla::UpdateRelayerSLAEvent, wait_or_shutdown, Error as RuntimeError, PolkaBtcProvider,
-    PolkaBtcRuntime, Service, ShutdownReceiver, StakedRelayerPallet, UtilFuncs, VaultRegistryPallet,
+    pallets::sla::UpdateRelayerSLAEvent, wait_or_shutdown, Error as RuntimeError, PolkaBtcProvider, PolkaBtcRuntime,
+    Service, ShutdownReceiver, StakedRelayerPallet, UtilFuncs, VaultRegistryPallet,
 };
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 #[derive(Clone)]
 pub struct RelayerServiceConfig {
@@ -22,7 +22,6 @@ pub struct RelayerServiceConfig {
     pub oracle_timeout: Duration,
     pub required_btc_confirmations: u32,
     pub status_update_deposit: u128,
-    pub http_addr: SocketAddr,
     pub rpc_cors_domain: String,
 }
 
@@ -81,17 +80,6 @@ impl RelayerService {
                 info!("Not registering staked relayer -- already registered");
             }
         }
-
-        let close_handle = start_http(
-            self.btc_parachain.clone(),
-            self.config.http_addr,
-            self.config.rpc_cors_domain.clone(),
-            self.handle.clone(),
-        );
-
-        let http_server = on_shutdown(self.shutdown.clone(), async move {
-            close_handle.close();
-        });
 
         info!("Fetching all active vaults...");
         let vaults = self
@@ -195,8 +183,6 @@ impl RelayerService {
 
         info!("Starting system services...");
         let _ = tokio::join!(
-            // runs json-rpc server for incoming requests
-            handle.spawn(async move { http_server.await }),
             // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
             handle.spawn(async move { vaults_registration_listener.await }),
             // keep vault wallets up-to-date

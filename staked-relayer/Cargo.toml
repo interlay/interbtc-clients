@@ -17,7 +17,7 @@ clap = "3.0.0-beta.2"
 async-trait = "0.1.40"
 serde = "1.0.116"
 
-jsonrpc-http-server = "17.0.0"
+jsonrpc-core = "17.0.0"
 jsonrpc-core-client = { version = "17.0.0", features = ["http", "tls"] }
 
 # Workspace dependencies

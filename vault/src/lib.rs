@@ -6,7 +6,6 @@ mod constants;
 mod error;
 mod execution;
 mod faucet;
-mod http;
 mod issue;
 mod redeem;
 mod refund;

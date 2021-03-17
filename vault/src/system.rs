@@ -1,16 +1,15 @@
 use crate::{
-    collateral::lock_required_collateral, constants::*, faucet, http::start_http, issue, service::*, Error,
-    IssueRequests, RequestEvent,
+    collateral::lock_required_collateral, constants::*, faucet, issue, service::*, Error, IssueRequests, RequestEvent,
 };
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use futures::{channel::mpsc, SinkExt};
 use log::*;
 use runtime::{
-    on_shutdown, pallets::sla::UpdateVaultSLAEvent, wait_or_shutdown, AccountId, BtcRelayPallet, Error as RuntimeError,
+    pallets::sla::UpdateVaultSLAEvent, wait_or_shutdown, AccountId, BtcRelayPallet, Error as RuntimeError,
     PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, Service, ShutdownReceiver, UtilFuncs, VaultRegistryPallet,
 };
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
 
 #[derive(Clone)]
@@ -19,7 +18,6 @@ pub struct VaultServiceConfig {
     pub bitcoin_core: BitcoinCore,
     pub auto_register_with_collateral: Option<u128>,
     pub auto_register_with_faucet_url: Option<String>,
-    pub http_addr: SocketAddr,
     pub rpc_cors_domain: String,
     pub no_startup_collateral_increase: bool,
     pub btc_confirmations: Option<u32>,
@@ -124,18 +122,6 @@ impl VaultService {
                 _ => {} // collateral level now OK
             };
         }
-
-        let close_handle = start_http(
-            self.btc_parachain.clone(),
-            bitcoin_core.clone(),
-            self.config.http_addr,
-            self.config.rpc_cors_domain.clone(),
-            self.handle.clone(),
-        );
-
-        let http_server = on_shutdown(self.shutdown.clone(), async move {
-            close_handle.close();
-        });
 
         let collateral_maintainer = wait_or_shutdown(
             self.shutdown.clone(),
@@ -312,8 +298,6 @@ impl VaultService {
 
         // starts all the tasks
         let _ = tokio::join!(
-            // runs json-rpc server for incoming requests
-            handle.spawn(async move { http_server.await }),
             // runs error listener to log errors
             handle.spawn(async move { err_listener.await }),
             // runs sla listener to log events

@@ -1,8 +1,22 @@
-use crate::{error::Error, http::RawBytes};
+use crate::error::Error;
+use hex::FromHex;
+use jsonrpc_core::Value;
 use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
-use jsonrpc_http_server::jsonrpc_core::Value;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{AccountId, PolkaBtcProvider, StakedRelayerPallet, UtilFuncs, PLANCK_PER_DOT, TX_FEES};
+use serde::{Deserialize, Deserializer};
+
+#[derive(Debug, Clone, Deserialize)]
+struct RawBytes(#[serde(deserialize_with = "hex_to_buffer")] Vec<u8>);
+
+pub fn hex_to_buffer<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error;
+    String::deserialize(deserializer)
+        .and_then(|string| Vec::from_hex(&string[2..]).map_err(|err| Error::custom(err.to_string())))
+}
 
 #[derive(Encode, Decode, Debug, Clone, serde::Serialize)]
 struct FundAccountJsonRpcRequest {
