@@ -494,10 +494,36 @@ mod tests {
             .returning(|_| Ok(100));
         provider.expect_get_free_dot_balance().returning(|| Ok(50));
 
-        let vault = PolkaBtcVault::default();
+        let vault = PolkaBtcVault {
+            issued_tokens: 10_000,
+            ..Default::default()
+        };
         assert_err!(
-            auction_replace(&provider, &bitcoin, &vault).await,
+            auction_replace(&provider, &bitcoin, &vault, 1000).await,
             Error::InsufficientFunds
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_auction_replace_below_dust_amount() {
+        let mut bitcoin = MockBitcoin::default();
+        bitcoin.expect_get_new_address().returning(|| Ok(BtcAddress::default()));
+
+        let mut provider = MockProvider::default();
+        provider
+            .expect_get_required_collateral_for_polkabtc()
+            .returning(|_| Ok(100));
+        provider.expect_get_free_dot_balance().returning(|| Ok(50));
+
+        let vault = PolkaBtcVault {
+            issued_tokens: 10_000,
+            to_be_redeemed_tokens: 4600,
+            to_be_replaced_tokens: 4600,
+            ..Default::default()
+        };
+        assert_err!(
+            auction_replace(&provider, &bitcoin, &vault, 1000).await,
+            BelowDustAmount
         );
     }
 
