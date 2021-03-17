@@ -79,6 +79,7 @@ impl VaultService {
 
         if let Some(collateral) = self.config.auto_register_with_collateral {
             if !is_registered(&self.btc_parachain, vault_id.clone()).await? {
+                // bitcoin core is currently blocking, no need to try_join
                 let public_key = bitcoin_core.get_new_public_key().await?;
                 self.btc_parachain.register_vault(collateral, public_key).await?;
                 info!("Automatically registered vault");

@@ -1,4 +1,5 @@
 use crate::error::Error;
+use futures::future;
 use log::*;
 use runtime::{
     pallets::{exchange_rate_oracle::SetExchangeRateEvent, vault_registry::VaultStatus},
@@ -54,8 +55,11 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet
         return Err(Error::RuntimeError(runtime::Error::VaultNotFound));
     }
 
-    let required_collateral = provider.get_required_collateral_for_vault(vault_id.clone()).await?;
-    let actual_collateral = provider.get_reserved_dot_balance().await?;
+    let (required_collateral, actual_collateral) = future::try_join(
+        provider.get_required_collateral_for_vault(vault_id),
+        provider.get_reserved_dot_balance(),
+    )
+    .await?;
 
     // we have 6 possible orderings of (required, actual, limit):
     // case 1: required <= actual <= limit // do nothing (already enough)

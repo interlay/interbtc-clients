@@ -1992,6 +1992,7 @@ dependencies = [
  "chrono",
  "clap 3.0.0-beta.2",
  "env_logger 0.6.2",
+ "futures 0.3.13",
  "hex 0.4.3",
  "jsonrpc-http-server 17.0.0",
  "kv",
