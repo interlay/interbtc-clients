@@ -12,6 +12,8 @@ pub enum Error {
     InternalError,
     #[error("Insufficient funds available")]
     InsufficientFunds,
+    #[error("Value below dust amount")]
+    BelowDustAmount,
     #[error("Open time inconsistent with chain height")]
     InvalidOpenTime,
     #[error("Channel unexpectedly closed")]

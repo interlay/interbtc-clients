@@ -108,6 +108,12 @@ pub struct ReplacePeriodStore<T: Replace> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct ReplaceBtcDustValueStore<T: Replace> {
+    #[store(returns = T::PolkaBTC)]
+    pub _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct ReplaceRequestsStore<T: Replace> {
     #[store(returns = ReplaceRequest<T::AccountId, T::BlockNumber, T::PolkaBTC, T::DOT>)]
     pub _runtime: PhantomData<T>,

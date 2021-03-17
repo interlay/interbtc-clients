@@ -457,6 +457,7 @@ mod tests {
             ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
             async fn set_replace_period(&self, period: u32) -> Result<(), RuntimeError>;
+            async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;
         }
 
         #[async_trait]

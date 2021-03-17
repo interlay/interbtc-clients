@@ -370,6 +370,9 @@ pub trait ReplacePallet {
 
     /// Get a replace request from storage
     async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, Error>;
+
+    /// Gets the minimum btc amount for replace requests/auctions
+    async fn get_replace_dust_amount(&self) -> Result<u128, Error>;
 }
 
 #[async_trait]
@@ -489,6 +492,11 @@ impl ReplacePallet for PolkaBtcProvider {
     async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, Error> {
         let head = self.get_latest_block_hash().await?;
         Ok(self.ext_client.replace_requests(replace_id, head).await?)
+    }
+
+    async fn get_replace_dust_amount(&self) -> Result<u128, Error> {
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.replace_btc_dust_value(head).await?)
     }
 }
 
