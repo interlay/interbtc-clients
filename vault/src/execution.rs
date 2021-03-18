@@ -366,7 +366,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::{
         Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress,
-        Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{AccountId, BlockNumber, BtcPublicKey, Error as RuntimeError, PolkaBtcVault};
     use sp_core::H160;
@@ -548,6 +548,7 @@ mod tests {
             async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError>
                 where
                     P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
+            async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), BitcoinError>;
         }
     }
 

@@ -10,6 +10,7 @@ regtest-mine-on-tx = []
 regtest-manual-mining = []
 cli = ["clap"]
 polkabtc = ["polkabtc-bitcoin"]
+uses-bitcoind = []
 
 [dependencies]
 thiserror = "1.0"
@@ -39,3 +40,4 @@ optional = true
 
 [dev-dependencies]
 mockall = "0.8.1"
+regex = "1.4.3"

@@ -14,7 +14,6 @@ spec:
                 values:
                   - build-pool
   containers:
-    - name: jnlp
     - name: rust
       image: registry.gitlab.com/interlay/containers/rust-base:nightly-2021-01-25
       imagePullPolicy: Always
@@ -38,6 +37,14 @@ spec:
       volumeMounts:
         - name: jenkins-docker-cfg
           mountPath: /kaniko/.docker
+    - name: bitcoind
+      image: ruimarinho/bitcoin-core:0.20
+      imagePullPolicy: Always
+      command:
+        - bitcoind
+        - -regtest
+        - -rpcuser=rpcuser
+        - -rpcpassword=rpcpassword
   imagePullSecrets:
     - name: gitlab-rust-base-registry
   volumes:
