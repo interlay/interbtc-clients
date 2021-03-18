@@ -7,8 +7,8 @@ use async_trait::async_trait;
 use bitcoin::{
     secp256k1::{rand::rngs::OsRng, PublicKey, Secp256k1, SecretKey},
     serialize, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, Hash,
-    LockedTransaction, Network, OutPoint, PartialAddress, PartialMerkleTree, Script, Transaction, TransactionMetadata,
-    TxIn, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
+    LockedTransaction, Network, OutPoint, PartialAddress, PartialMerkleTree, PrivateKey, Script, Transaction,
+    TransactionMetadata, TxIn, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
 };
 use rand::{thread_rng, Rng};
 use sp_core::{H160, H256, U256};
@@ -419,5 +419,8 @@ impl BitcoinCoreApi for MockBitcoinCore {
         P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static,
     {
         Ok(true)
+    }
+    async fn import_private_key(&self, _privkey: PrivateKey) -> Result<(), BitcoinError> {
+        Ok(())
     }
 }

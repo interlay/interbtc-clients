@@ -534,6 +534,7 @@ dependencies = [
  "num",
  "num-derive",
  "num-traits",
+ "regex",
  "serde_json",
  "sp-core",
  "thiserror",

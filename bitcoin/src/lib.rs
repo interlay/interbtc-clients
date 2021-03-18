@@ -125,6 +125,8 @@ pub trait BitcoinCoreApi {
     async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
     where
         P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
+
+    async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error>;
 }
 
 pub struct LockedTransaction {
@@ -617,6 +619,10 @@ impl BitcoinCoreApi for BitcoinCore {
         let address_info = self.rpc.get_address_info(&address)?;
         let wallet_pubkey = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
         Ok(P::from(wallet_pubkey.key.serialize()) == public_key)
+    }
+
+    async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error> {
+        Ok(self.rpc.import_private_key(&privkey, None, None)?)
     }
 }
 

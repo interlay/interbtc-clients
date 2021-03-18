@@ -19,6 +19,11 @@ pipeline {
 
     stages {
         stage('Test') {
+            environment {
+                BITCOIN_RPC_URL  = "http://localhost:18443"
+                BITCOIN_RPC_USER = "rpcuser"
+                BITCOIN_RPC_PASS = "rpcpassword"
+            }
             steps {
                 container('rust') {
                     sh 'rustc --version'
@@ -28,6 +33,8 @@ pipeline {
                     sh 'cargo fmt -- --check'
                     sh 'cargo check --workspace --release'
                     sh 'cargo test --workspace --release'
+
+                    sh 'cargo test --manifest-path bitcoin/Cargo.toml --test "*" --features uses-bitcoind -- --test-threads=1'
 
                     sh '/usr/local/bin/sccache -s'
                 }
