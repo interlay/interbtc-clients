@@ -7,7 +7,7 @@ use futures::{channel::mpsc, SinkExt};
 use log::*;
 use runtime::{
     pallets::sla::UpdateVaultSLAEvent, wait_or_shutdown, AccountId, BtcRelayPallet, Error as RuntimeError,
-    PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, Service, ShutdownReceiver, UtilFuncs, VaultRegistryPallet,
+    PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, Service, ShutdownSender, UtilFuncs, VaultRegistryPallet,
 };
 use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
@@ -31,19 +31,13 @@ pub struct VaultServiceConfig {
 pub struct VaultService {
     btc_parachain: PolkaBtcProvider,
     config: VaultServiceConfig,
-    handle: tokio::runtime::Handle,
-    shutdown: ShutdownReceiver,
+    shutdown: ShutdownSender,
 }
 
 #[async_trait]
 impl Service<VaultServiceConfig, PolkaBtcProvider> for VaultService {
-    fn new_service(
-        btc_parachain: PolkaBtcProvider,
-        config: VaultServiceConfig,
-        handle: tokio::runtime::Handle,
-        shutdown: ShutdownReceiver,
-    ) -> Self {
-        VaultService::new(btc_parachain, config, handle, shutdown)
+    fn new_service(btc_parachain: PolkaBtcProvider, config: VaultServiceConfig, shutdown: ShutdownSender) -> Self {
+        VaultService::new(btc_parachain, config, shutdown)
     }
 
     async fn start(&self) -> Result<(), RuntimeError> {
@@ -56,23 +50,16 @@ impl Service<VaultServiceConfig, PolkaBtcProvider> for VaultService {
 }
 
 impl VaultService {
-    fn new(
-        btc_parachain: PolkaBtcProvider,
-        config: VaultServiceConfig,
-        handle: tokio::runtime::Handle,
-        shutdown: ShutdownReceiver,
-    ) -> Self {
+    fn new(btc_parachain: PolkaBtcProvider, config: VaultServiceConfig, shutdown: ShutdownSender) -> Self {
         Self {
             btc_parachain,
             config,
-            handle,
             shutdown,
         }
     }
 
     async fn run_service(&self) -> Result<(), Error> {
         let bitcoin_core = self.config.bitcoin_core.clone();
-        let handle = self.handle.clone();
 
         let vault_id = self.btc_parachain.get_account_id().clone();
 
@@ -110,7 +97,7 @@ impl VaultService {
 
         let open_request_executor =
             execute_open_requests(self.btc_parachain.clone(), bitcoin_core.clone(), num_confirmations);
-        handle.spawn(async move {
+        tokio::spawn(async move {
             info!("Checking for open replace/redeem requests...");
             match open_request_executor.await {
                 Ok(_) => info!("Done processing open replace/redeem requests"),
@@ -141,10 +128,11 @@ impl VaultService {
         while startup_height == self.btc_parachain.get_current_chain_height().await? {
             delay_for(CHAIN_HEIGHT_POLLING_INTERVAL).await;
         }
-        info!("Starting to listen for events...");
 
         // issue handling
         let issue_set = Arc::new(IssueRequests::new());
+        let btc_start_height = issue::initialize_issue_set(&self.btc_parachain, &bitcoin_core, &issue_set).await?;
+
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<RequestEvent>(32);
         let (issue_block_tx, issue_block_rx) = mpsc::channel::<PolkaBtcHeader>(16);
 
@@ -193,10 +181,11 @@ impl VaultService {
 
         let issue_executor = wait_or_shutdown(
             self.shutdown.clone(),
-            execute_open_issue_requests(
+            issue::process_issue_requests(
                 self.btc_parachain.clone(),
                 bitcoin_core.clone(),
                 issue_set.clone(),
+                btc_start_height,
                 num_confirmations,
             ),
         );
@@ -303,42 +292,43 @@ impl VaultService {
         let no_issue_execution = self.config.no_issue_execution;
 
         // starts all the tasks
+        info!("Starting to listen for events...");
         let _ = tokio::join!(
             // runs error listener to log errors
-            handle.spawn(async move { err_listener.await }),
+            tokio::spawn(async move { err_listener.await }),
             // runs sla listener to log events
-            handle.spawn(async move { sla_listener.await }),
+            tokio::spawn(async move { sla_listener.await }),
             // maintain collateralization rate
-            handle.spawn(async move {
+            tokio::spawn(async move {
                 collateral_maintainer.await;
             }),
             // issue handling
-            handle.spawn(async move { issue_request_listener.await }),
-            handle.spawn(async move { issue_execute_listener.await }),
-            handle.spawn(async move { issue_cancel_listener.await }),
-            handle.spawn(async move { issue_block_listener.await }),
-            handle.spawn(async move { issue_cancel_scheduler.await }),
-            handle.spawn(async move {
+            tokio::spawn(async move { issue_request_listener.await }),
+            tokio::spawn(async move { issue_execute_listener.await }),
+            tokio::spawn(async move { issue_cancel_listener.await }),
+            tokio::spawn(async move { issue_block_listener.await }),
+            tokio::spawn(async move { issue_cancel_scheduler.await }),
+            tokio::spawn(async move {
                 if !no_issue_execution {
                     let _ = issue_executor.await;
                 }
             }),
             // replace handling
-            handle.spawn(async move { request_replace_listener.await }),
-            handle.spawn(async move { accept_replace_listener.await }),
-            handle.spawn(async move { execute_replace_listener.await }),
-            handle.spawn(async move { auction_replace_listener.await }),
-            handle.spawn(async move { replace_block_listener.await }),
-            handle.spawn(async move { replace_cancel_scheduler.await }),
-            handle.spawn(async move {
+            tokio::spawn(async move { request_replace_listener.await }),
+            tokio::spawn(async move { accept_replace_listener.await }),
+            tokio::spawn(async move { execute_replace_listener.await }),
+            tokio::spawn(async move { auction_replace_listener.await }),
+            tokio::spawn(async move { replace_block_listener.await }),
+            tokio::spawn(async move { replace_cancel_scheduler.await }),
+            tokio::spawn(async move {
                 if !no_auto_auction {
                     let _ = third_party_collateral_listener.await;
                 }
             }),
             // redeem handling
-            handle.spawn(async move { redeem_listener.await }),
+            tokio::spawn(async move { redeem_listener.await }),
             // refund handling
-            handle.spawn(async move { refund_listener.await }),
+            tokio::spawn(async move { refund_listener.await }),
         );
 
         Ok(())

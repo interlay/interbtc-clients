@@ -226,7 +226,6 @@ pub async fn start_http(
     user_allowance: u128,
     vault_allowance: u128,
     staked_relayer_allowance: u128,
-    handle: tokio::runtime::Handle,
 ) -> jsonrpc_http_server::CloseHandle {
     let mut io = IoHandler::default();
     let store = Store::new(Config::new("./kv")).expect("Unable to open kv store");
@@ -266,8 +265,9 @@ pub async fn start_http(
         });
     };
 
+    let handle = tokio::runtime::Handle::current();
     let server = ServerBuilder::new(io)
-        .event_loop_executor(handle.clone())
+        .event_loop_executor(handle)
         .health_api(("/health", "system_health"))
         .rest_api(jsonrpc_http_server::RestApi::Unsecure)
         .cors(DomainsValidation::AllowOnly(vec![origin.into()]))
@@ -276,7 +276,7 @@ pub async fn start_http(
 
     let close_handle = server.close_handle();
 
-    handle.spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         info!("Starting http server...");
         server.wait();
     });

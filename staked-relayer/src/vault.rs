@@ -45,10 +45,15 @@ pub async fn report_vault_thefts<P: StakedRelayerPallet + BtcRelayPallet, B: Bit
     vaults: Arc<Vaults>,
     polka_rpc: P,
     delay: Duration,
-) -> Result<(), Error> {
-    VaultTheftMonitor::new(btc_height, btc_rpc, vaults, polka_rpc, delay)
+) -> Result<(), RuntimeError> {
+    match VaultTheftMonitor::new(btc_height, btc_rpc, vaults, polka_rpc, delay)
         .process_blocks()
         .await
+    {
+        Ok(_) => Ok(()),
+        Err(Error::RuntimeError(err)) => Err(err),
+        Err(err) => Err(RuntimeError::Other(err.to_string())),
+    }
 }
 
 pub struct VaultTheftMonitor<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> {
