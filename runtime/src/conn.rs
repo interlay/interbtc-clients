@@ -43,8 +43,8 @@ pub(crate) async fn new_websocket_client(
         connection_timeout: CONNECTION_TIMEOUT,
         origin: None,
         handshake_url: path.into(),
-        max_concurrent_requests: max_concurrent_requests.unwrap_or(256),
-        max_notifs_per_subscription: max_notifs_per_subscription.unwrap_or(128),
+        max_concurrent_requests: max_concurrent_requests.unwrap_or(1024),
+        max_notifs_per_subscription: max_notifs_per_subscription.unwrap_or(256),
     };
     Ok(WsClient::new(config).await?)
 }
