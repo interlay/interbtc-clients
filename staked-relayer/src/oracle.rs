@@ -1,7 +1,9 @@
-use super::Error;
 use crate::utils;
+use futures::future;
 use log::info;
-use runtime::{ErrorCode, ExchangeRateOraclePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet};
+use runtime::{
+    Error as RuntimeError, ErrorCode, ExchangeRateOraclePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
+};
 use std::time::Duration;
 use tokio::time::delay_for;
 
@@ -10,7 +12,7 @@ pub async fn report_offline_oracle<
 >(
     rpc: P,
     duration: Duration,
-) -> Result<(), Error> {
+) -> Result<(), RuntimeError> {
     let monitor = OracleMonitor::new(rpc);
     loop {
         delay_for(duration).await;
@@ -28,17 +30,13 @@ impl<P: TimestampPallet + ExchangeRateOraclePallet + StakedRelayerPallet + Secur
     }
 
     /// Verify that the oracle is offline
-    pub async fn is_offline(&self) -> Result<bool, Error> {
-        let get_info = self.rpc.get_exchange_rate_info();
-        let get_time = self.rpc.get_time_now();
-        let result = tokio::try_join!(get_info, get_time);
-        match result {
-            Ok(((_rate, last, delay), now)) => Ok(last + delay < now),
-            Err(_) => Err(Error::CheckOracleOffline),
-        }
+    pub async fn is_offline(&self) -> Result<bool, RuntimeError> {
+        let ((_rate, last, delay), now) =
+            future::try_join(self.rpc.get_exchange_rate_info(), self.rpc.get_time_now()).await?;
+        Ok(last + delay < now)
     }
 
-    pub async fn report_offline(&self) -> Result<(), Error> {
+    pub async fn report_offline(&self) -> Result<(), RuntimeError> {
         if !utils::is_active(&self.rpc).await? {
             // not registered (active), ignore check
             return Ok(());
@@ -64,8 +62,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use runtime::{
-        AccountId, BtcTxFeesPerByte, Error, ErrorCode, FixedPointNumber, FixedU128, H256Le, PolkaBtcStatusUpdate,
-        StatusCode, MINIMUM_STAKE,
+        AccountId, BtcTxFeesPerByte, ErrorCode, FixedPointNumber, FixedU128, H256Le, PolkaBtcStatusUpdate, StatusCode,
+        MINIMUM_STAKE,
     };
     use std::{collections::BTreeSet, iter::FromIterator};
 
@@ -74,31 +72,31 @@ mod tests {
 
         #[async_trait]
         trait TimestampPallet {
-            async fn get_time_now(&self) -> Result<u64, Error>;
+            async fn get_time_now(&self) -> Result<u64, RuntimeError>;
         }
 
         #[async_trait]
         trait ExchangeRateOraclePallet {
-            async fn get_exchange_rate_info(&self) -> Result<(FixedU128, u64, u64), Error>;
+            async fn get_exchange_rate_info(&self) -> Result<(FixedU128, u64, u64), RuntimeError>;
 
-            async fn set_exchange_rate_info(&self, dot_per_btc: FixedU128) -> Result<(), Error>;
+            async fn set_exchange_rate_info(&self, dot_per_btc: FixedU128) -> Result<(), RuntimeError>;
 
-            async fn set_btc_tx_fees_per_byte(&self, fast: u32, half: u32, hour: u32) -> Result<(), Error>;
+            async fn set_btc_tx_fees_per_byte(&self, fast: u32, half: u32, hour: u32) -> Result<(), RuntimeError>;
 
-            async fn get_btc_tx_fees_per_byte(&self) -> Result<BtcTxFeesPerByte, Error>;
+            async fn get_btc_tx_fees_per_byte(&self) -> Result<BtcTxFeesPerByte, RuntimeError>;
 
-            async fn btc_to_dots(&self, amount: u128) -> Result<u128, Error>;
+            async fn btc_to_dots(&self, amount: u128) -> Result<u128, RuntimeError>;
 
-            async fn dots_to_btc(&self, amount: u128) -> Result<u128, Error>;
+            async fn dots_to_btc(&self, amount: u128) -> Result<u128, RuntimeError>;
         }
 
         #[async_trait]
         trait StakedRelayerPallet {
-            async fn get_active_stake(&self) -> Result<u128, Error>;
-            async fn get_active_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error>;
-            async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error>;
-            async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error>;
-            async fn deregister_staked_relayer(&self) -> Result<(), Error>;
+            async fn get_active_stake(&self) -> Result<u128, RuntimeError>;
+            async fn get_active_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
+            async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
+            async fn register_staked_relayer(&self, stake: u128) -> Result<(), RuntimeError>;
+            async fn deregister_staked_relayer(&self) -> Result<(), RuntimeError>;
             async fn suggest_status_update(
                 &self,
                 deposit: u128,
@@ -107,34 +105,34 @@ mod tests {
                 remove_error: Option<ErrorCode>,
                 block_hash: Option<H256Le>,
                 message: String,
-            ) -> Result<(), Error>;
+            ) -> Result<(), RuntimeError>;
             async fn vote_on_status_update(
                 &self,
                 status_update_id: u64,
                 approve: bool,
-            ) -> Result<(), Error>;
-            async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, Error>;
-            async fn report_oracle_offline(&self) -> Result<(), Error>;
+            ) -> Result<(), RuntimeError>;
+            async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, RuntimeError>;
+            async fn report_oracle_offline(&self) -> Result<(), RuntimeError>;
             async fn report_vault_theft(
                 &self,
                 vault_id: AccountId,
                 tx_id: H256Le,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
-            ) -> Result<(), Error>;
+            ) -> Result<(), RuntimeError>;
             async fn is_transaction_invalid(
                 &self,
                 vault_id: AccountId,
                 raw_tx: Vec<u8>,
-            ) -> Result<bool, Error>;
-            async fn set_maturity_period(&self, period: u32) -> Result<(), Error>;
-            async fn evaluate_status_update(&self, status_update_id: u64) -> Result<(), Error>;
+            ) -> Result<bool, RuntimeError>;
+            async fn set_maturity_period(&self, period: u32) -> Result<(), RuntimeError>;
+            async fn evaluate_status_update(&self, status_update_id: u64) -> Result<(), RuntimeError>;
         }
 
         #[async_trait]
         trait SecurityPallet {
-            async fn get_parachain_status(&self) -> Result<StatusCode, Error>;
-            async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, Error>;
+            async fn get_parachain_status(&self) -> Result<StatusCode, RuntimeError>;
+            async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, RuntimeError>;
         }
     }
 

@@ -1,6 +1,6 @@
 use crate::{error::JsonRpseeError, Error, PolkaBtcSigner};
 use async_trait::async_trait;
-use futures::{Future, FutureExt};
+use futures::{future::Either, Future, FutureExt};
 use jsonrpsee_ws_client::{WsClient, WsConfig};
 use log::{info, trace};
 use std::{marker::PhantomData, str::FromStr, sync::Arc, time::Duration};
@@ -13,7 +13,7 @@ use tokio::{
 const RETRY_TIMEOUT: Duration = Duration::from_millis(1000);
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub type ShutdownReceiver = tokio::sync::watch::Receiver<Option<()>>;
+pub type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
 
 #[async_trait]
 pub trait Provider {
@@ -25,7 +25,7 @@ pub trait Provider {
 
 #[async_trait]
 pub trait Service<C, P: Provider> {
-    fn new_service(provider: P, config: C, handle: Handle, shutdown: ShutdownReceiver) -> Self;
+    fn new_service(provider: P, config: C, handle: Handle, shutdown: ShutdownSender) -> Self;
     async fn start(&self) -> Result<(), Error>;
 }
 
@@ -146,27 +146,11 @@ impl<C: Clone + Send + 'static, P: Provider + Send, S: Service<C, P>> Manager<C,
             let config = self.service_config.clone();
             let handle = self.handle.clone();
 
-            let (shutdown_sender, shutdown_receiver) = tokio::sync::watch::channel(None);
-            let wait_for_shutdown = is_connected(ws_client.clone());
+            let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
 
             let provider = P::new_provider(ws_client, signer).await?;
-            let service = S::new_service(provider, config, handle, shutdown_receiver);
-
-            // run service and shutdown listener to terminate child
-            // processes if the websocket client disconnects
-            match tokio::try_join! {
-                async move {
-                    // TODO: propogate shutdown signal from children
-                    wait_for_shutdown.await;
-                    // signal shutdown to child processes
-                    let _ = shutdown_sender.broadcast(Some(()));
-                    Ok::<(), Error>(())
-                },
-                service.start()
-            } {
-                Ok(_) => (),
-                Err(err) => return Err(err),
-            }
+            let service = S::new_service(provider, config, handle, shutdown_tx);
+            service.start().await?;
 
             info!("Disconnected");
             match self.manager_config.restart_policy {
@@ -177,28 +161,34 @@ impl<C: Clone + Send + 'static, P: Provider + Send, S: Service<C, P>> Manager<C,
     }
 }
 
-async fn is_connected(client: Arc<WsClient>) {
-    while client.is_connected() {
-        delay_for(Duration::from_millis(500)).await;
-    }
-}
+pub async fn wait_or_shutdown<F>(shutdown_tx: ShutdownSender, future2: F)
+where
+    F: Future<Output = Result<(), Error>>,
+{
+    let mut shutdown_rx = shutdown_tx.subscribe();
 
-pub async fn wait_or_shutdown(mut shutdown: ShutdownReceiver, future2: impl Future) {
-    let future1 = async move { while let Some(None) = shutdown.recv().await {} }.fuse();
+    let future1 = shutdown_rx.recv().fuse();
     let future2 = future2.fuse();
 
     futures::pin_mut!(future1);
     futures::pin_mut!(future2);
 
-    let _ = futures::select! {
-        _ = future1 => (),
-        _ = future2 => (),
+    match futures::future::select(future1, future2).await {
+        Either::Left((_, _)) => {
+            trace!("Received shutdown signal");
+        }
+        Either::Right((_, _)) => {
+            trace!("Sending shutdown signal");
+            // TODO: shutdown signal should be error
+            let _ = shutdown_tx.send(Some(()));
+        }
     };
 }
 
-pub async fn on_shutdown(mut shutdown: ShutdownReceiver, future2: impl Future) {
-    let future1 = async move { while let Some(None) = shutdown.recv().await {} }.fuse();
+pub async fn on_shutdown(shutdown_tx: ShutdownSender, future2: impl Future) {
+    let mut shutdown_rx = shutdown_tx.subscribe();
+    let future1 = shutdown_rx.recv().fuse();
 
-    future1.await;
+    let _ = future1.await;
     future2.await;
 }

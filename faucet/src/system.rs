@@ -1,6 +1,8 @@
 use crate::{http, Error};
 use async_trait::async_trait;
-use runtime::{on_shutdown, Error as RuntimeError, PolkaBtcProvider, Service, ShutdownReceiver};
+use futures::future;
+use log::debug;
+use runtime::{on_shutdown, wait_or_shutdown, Error as RuntimeError, PolkaBtcProvider, Service, ShutdownSender};
 use std::net::SocketAddr;
 
 #[derive(Clone)]
@@ -16,7 +18,7 @@ pub struct FaucetService {
     btc_parachain: PolkaBtcProvider,
     config: FaucetServiceConfig,
     handle: tokio::runtime::Handle,
-    shutdown: ShutdownReceiver,
+    shutdown: ShutdownSender,
 }
 
 #[async_trait]
@@ -25,7 +27,7 @@ impl Service<FaucetServiceConfig, PolkaBtcProvider> for FaucetService {
         btc_parachain: PolkaBtcProvider,
         config: FaucetServiceConfig,
         handle: tokio::runtime::Handle,
-        shutdown: ShutdownReceiver,
+        shutdown: ShutdownSender,
     ) -> Self {
         FaucetService::new(btc_parachain, config, handle, shutdown)
     }
@@ -44,7 +46,7 @@ impl FaucetService {
         btc_parachain: PolkaBtcProvider,
         config: FaucetServiceConfig,
         handle: tokio::runtime::Handle,
-        shutdown: ShutdownReceiver,
+        shutdown: ShutdownSender,
     ) -> Self {
         Self {
             btc_parachain,
@@ -66,10 +68,22 @@ impl FaucetService {
         )
         .await;
 
-        on_shutdown(self.shutdown.clone(), async move {
+        let provider = self.btc_parachain.clone();
+        // run block listener to restart faucet on disconnect
+        let block_listener = wait_or_shutdown(self.shutdown.clone(), async move {
+            provider
+                .on_block(move |header| async move {
+                    debug!("Got block {:?}", header);
+                    Ok(())
+                })
+                .await
+        });
+
+        let http_server = on_shutdown(self.shutdown.clone(), async move {
             close_handle.close();
-        })
-        .await;
+        });
+
+        let _ = future::join(block_listener, http_server).await;
 
         Ok(())
     }

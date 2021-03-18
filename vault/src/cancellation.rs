@@ -2,7 +2,7 @@ use super::Error;
 use async_trait::async_trait;
 use futures::{channel::mpsc::Receiver, *};
 use log::*;
-use runtime::{AccountId, IssuePallet, PolkaBtcHeader, ReplacePallet, UtilFuncs};
+use runtime::{AccountId, Error as RuntimeError, IssuePallet, PolkaBtcHeader, ReplacePallet, UtilFuncs};
 use sp_core::H256;
 use std::marker::{Send, Sync};
 
@@ -148,7 +148,7 @@ trait EventSelector {
         self,
         block_listener: &mut Receiver<PolkaBtcHeader>,
         event_listener: &mut Receiver<RequestEvent>,
-    ) -> Result<BlockOrEvent, Error>;
+    ) -> Result<BlockOrEvent, RuntimeError>;
 }
 
 struct ProductionEventSelector;
@@ -159,7 +159,7 @@ impl EventSelector for ProductionEventSelector {
         self,
         block_listener: &mut Receiver<PolkaBtcHeader>,
         event_listener: &mut Receiver<RequestEvent>,
-    ) -> Result<BlockOrEvent, Error> {
+    ) -> Result<BlockOrEvent, RuntimeError> {
         // fuse and pin the tasks, required for select! macro
         let task_block = block_listener.next().fuse();
         let task_event = event_listener.next().fuse();
@@ -168,11 +168,11 @@ impl EventSelector for ProductionEventSelector {
         select! {
             h = task_block => match h {
                 Some(block) => Ok(BlockOrEvent::Block(block)),
-                _ => Err(Error::ChannelClosed)
+                _ => Err(RuntimeError::ChannelClosed)
             },
             e = task_event => match e {
                 Some(event) => Ok(BlockOrEvent::Event(event)),
-                _ => Err(Error::ChannelClosed)
+                _ => Err(RuntimeError::ChannelClosed)
             }
         }
     }
@@ -216,7 +216,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + Clone> CancellationScheduler<P
         &mut self,
         mut block_listener: Receiver<PolkaBtcHeader>,
         mut event_listener: Receiver<RequestEvent>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), RuntimeError> {
         let mut list_state = ListState::Invalid;
         let mut active_requests: Vec<ActiveRequest> = vec![];
 
@@ -242,7 +242,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + Clone> CancellationScheduler<P
         active_requests: &mut Vec<ActiveRequest>,
         list_state: ListState,
         selector: U,
-    ) -> Result<ListState, Error> {
+    ) -> Result<ListState, RuntimeError> {
         // try to get an up-to-date list of requests if we don't have it yet
         if let ListState::Invalid = list_state {
             match self.get_open_requests::<T>().await {
@@ -355,8 +355,7 @@ mod tests {
             generic::Digest,
             traits::{BlakeTwo256, Hash},
         },
-        AccountId, BtcAddress, Error as RuntimeError, H256Le, PolkaBtcIssueRequest, PolkaBtcReplaceRequest,
-        PolkaBtcRequestIssueEvent,
+        AccountId, BtcAddress, H256Le, PolkaBtcIssueRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent,
     };
     use sp_core::H256;
 
@@ -372,7 +371,7 @@ mod tests {
 
     struct TestEventSelector<F>
     where
-        F: Fn(&mut Receiver<PolkaBtcHeader>, &mut Receiver<RequestEvent>) -> Result<BlockOrEvent, Error>,
+        F: Fn(&mut Receiver<PolkaBtcHeader>, &mut Receiver<RequestEvent>) -> Result<BlockOrEvent, RuntimeError>,
     {
         on_event: F,
     }
@@ -380,7 +379,7 @@ mod tests {
     #[async_trait]
     impl<F> EventSelector for TestEventSelector<F>
     where
-        F: Fn(&mut Receiver<PolkaBtcHeader>, &mut Receiver<RequestEvent>) -> Result<BlockOrEvent, Error>
+        F: Fn(&mut Receiver<PolkaBtcHeader>, &mut Receiver<RequestEvent>) -> Result<BlockOrEvent, RuntimeError>
             + std::marker::Send,
     {
         /// Sleep until either the timeout has occured or an event has been received, and return
@@ -389,10 +388,8 @@ mod tests {
             self,
             block_listener: &mut Receiver<PolkaBtcHeader>,
             event_listener: &mut Receiver<RequestEvent>,
-        ) -> Result<BlockOrEvent, Error> {
+        ) -> Result<BlockOrEvent, RuntimeError> {
             (self.on_event)(block_listener, event_listener)
-
-            // Err(Error::ChannelClosed)
         }
     }
 
@@ -755,7 +752,7 @@ mod tests {
 
         // simulate that we have a timeout
         let selector = TestEventSelector {
-            on_event: |_, _| Err(Error::ChannelClosed),
+            on_event: |_, _| Err(RuntimeError::ChannelClosed),
         };
 
         assert_err!(
@@ -768,7 +765,7 @@ mod tests {
                     selector
                 )
                 .await,
-            Error::ChannelClosed
+            RuntimeError::ChannelClosed
         );
     }
 }

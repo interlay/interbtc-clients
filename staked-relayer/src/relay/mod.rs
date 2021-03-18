@@ -10,14 +10,14 @@ pub use issuing::Client as PolkaBtcClient;
 
 use crate::core::{Error as CoreError, Runner};
 use log::{error, info};
-use runtime::PolkaBtcProvider;
+use runtime::{Error as RuntimeError, PolkaBtcProvider};
 use std::time::Duration;
 
 pub async fn run_relayer(
     runner: Runner<Error, BitcoinClient, PolkaBtcClient>,
     provider: PolkaBtcProvider,
     timeout: Duration,
-) {
+) -> Result<(), RuntimeError> {
     loop {
         super::utils::wait_until_registered(&provider, timeout).await;
         match runner.submit_next().await {

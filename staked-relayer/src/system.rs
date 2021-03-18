@@ -5,7 +5,7 @@ use futures::executor::block_on;
 use log::*;
 use runtime::{
     pallets::sla::UpdateRelayerSLAEvent, wait_or_shutdown, Error as RuntimeError, PolkaBtcProvider, PolkaBtcRuntime,
-    Service, ShutdownReceiver, StakedRelayerPallet, UtilFuncs, VaultRegistryPallet,
+    Service, ShutdownSender, StakedRelayerPallet, UtilFuncs, VaultRegistryPallet,
 };
 use std::{sync::Arc, time::Duration};
 
@@ -29,7 +29,7 @@ pub struct RelayerService {
     btc_parachain: PolkaBtcProvider,
     config: RelayerServiceConfig,
     handle: tokio::runtime::Handle,
-    shutdown: ShutdownReceiver,
+    shutdown: ShutdownSender,
 }
 
 #[async_trait]
@@ -38,7 +38,7 @@ impl Service<RelayerServiceConfig, PolkaBtcProvider> for RelayerService {
         btc_parachain: PolkaBtcProvider,
         config: RelayerServiceConfig,
         handle: tokio::runtime::Handle,
-        shutdown: ShutdownReceiver,
+        shutdown: ShutdownSender,
     ) -> Self {
         RelayerService::new(btc_parachain, config, handle, shutdown)
     }
@@ -57,7 +57,7 @@ impl RelayerService {
         btc_parachain: PolkaBtcProvider,
         config: RelayerServiceConfig,
         handle: tokio::runtime::Handle,
-        shutdown: ShutdownReceiver,
+        shutdown: ShutdownSender,
     ) -> Self {
         Self {
             btc_parachain,

@@ -7,7 +7,7 @@ use futures::{channel::mpsc, SinkExt};
 use log::*;
 use runtime::{
     pallets::sla::UpdateVaultSLAEvent, wait_or_shutdown, AccountId, BtcRelayPallet, Error as RuntimeError,
-    PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, Service, ShutdownReceiver, UtilFuncs, VaultRegistryPallet,
+    PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, Service, ShutdownSender, UtilFuncs, VaultRegistryPallet,
 };
 use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
@@ -32,7 +32,7 @@ pub struct VaultService {
     btc_parachain: PolkaBtcProvider,
     config: VaultServiceConfig,
     handle: tokio::runtime::Handle,
-    shutdown: ShutdownReceiver,
+    shutdown: ShutdownSender,
 }
 
 #[async_trait]
@@ -41,7 +41,7 @@ impl Service<VaultServiceConfig, PolkaBtcProvider> for VaultService {
         btc_parachain: PolkaBtcProvider,
         config: VaultServiceConfig,
         handle: tokio::runtime::Handle,
-        shutdown: ShutdownReceiver,
+        shutdown: ShutdownSender,
     ) -> Self {
         VaultService::new(btc_parachain, config, handle, shutdown)
     }
@@ -60,7 +60,7 @@ impl VaultService {
         btc_parachain: PolkaBtcProvider,
         config: VaultServiceConfig,
         handle: tokio::runtime::Handle,
-        shutdown: ShutdownReceiver,
+        shutdown: ShutdownSender,
     ) -> Self {
         Self {
             btc_parachain,
@@ -141,10 +141,11 @@ impl VaultService {
         while startup_height == self.btc_parachain.get_current_chain_height().await? {
             delay_for(CHAIN_HEIGHT_POLLING_INTERVAL).await;
         }
-        info!("Starting to listen for events...");
 
         // issue handling
         let issue_set = Arc::new(IssueRequests::new());
+        let btc_start_height = issue::initialize_issue_set(&self.btc_parachain, &bitcoin_core, &issue_set).await?;
+
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<RequestEvent>(32);
         let (issue_block_tx, issue_block_rx) = mpsc::channel::<PolkaBtcHeader>(16);
 
@@ -193,10 +194,11 @@ impl VaultService {
 
         let issue_executor = wait_or_shutdown(
             self.shutdown.clone(),
-            execute_open_issue_requests(
+            issue::process_issue_requests(
                 self.btc_parachain.clone(),
                 bitcoin_core.clone(),
                 issue_set.clone(),
+                btc_start_height,
                 num_confirmations,
             ),
         );
@@ -303,6 +305,7 @@ impl VaultService {
         let no_issue_execution = self.config.no_issue_execution;
 
         // starts all the tasks
+        info!("Starting to listen for events...");
         let _ = tokio::join!(
             // runs error listener to log errors
             handle.spawn(async move { err_listener.await }),

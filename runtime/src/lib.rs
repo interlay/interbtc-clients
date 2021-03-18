@@ -17,7 +17,7 @@ pub use btc_relay::{
 };
 pub use conn::{
     on_shutdown, wait_or_shutdown, Manager as ConnectionManager, ManagerConfig as ConnectionManagerConfig, Provider,
-    RestartPolicy, Service, ShutdownReceiver,
+    RestartPolicy, Service, ShutdownSender,
 };
 pub use error::{Error, SubxtError};
 pub use rpc::{

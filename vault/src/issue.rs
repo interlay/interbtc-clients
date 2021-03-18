@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 // initialize `issue_set` with currently open issues, and return the block height
 // from which to start watching the bitcoin chain
-async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub(crate) async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     provider: &PolkaBtcProvider,
     btc_rpc: &B,
     issue_set: &Arc<IssueRequests>,
@@ -37,20 +37,19 @@ async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync + 'static>
 /// execute issue requests on best-effort (i.e. don't retry on error),
 /// returns `NoIncomingBlocks` if stream ends, otherwise runs forever
 pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    provider: &PolkaBtcProvider,
-    btc_rpc: &B,
-    issue_set: &Arc<IssueRequests>,
+    provider: PolkaBtcProvider,
+    btc_rpc: B,
+    issue_set: Arc<IssueRequests>,
+    btc_start_height: u32,
     num_confirmations: u32,
-) -> Result<(), Error> {
-    let btc_start_height = initialize_issue_set(provider, btc_rpc, issue_set).await?;
-
+) -> Result<(), RuntimeError> {
     let mut stream = bitcoin::stream_in_chain_transactions(btc_rpc.clone(), btc_start_height, num_confirmations).await;
 
     while let Some(Ok((block_hash, transaction))) = stream.next().await {
         if let Err(e) = process_transaction_and_execute_issue(
-            provider,
-            btc_rpc,
-            issue_set,
+            &provider,
+            &btc_rpc,
+            &issue_set,
             num_confirmations,
             block_hash,
             transaction,
@@ -61,7 +60,7 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
         }
     }
 
-    Err(Error::NoIncomingBlocks)
+    Err(RuntimeError::Other(Error::NoIncomingBlocks.to_string()))
 }
 
 pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(

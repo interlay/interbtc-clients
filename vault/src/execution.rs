@@ -1,5 +1,5 @@
-use crate::{constants::*, error::Error, issue::process_issue_requests, IssueRequests};
-use backoff::{future::FutureOperation as _, ExponentialBackoff};
+use crate::{constants::*, error::Error};
+use backoff::future::FutureOperation as _;
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use futures::{future, stream::StreamExt};
 use log::*;
@@ -13,7 +13,7 @@ use runtime::{
     PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RefundPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H256;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 #[derive(Debug, Clone)]
 pub struct Request {
@@ -344,25 +344,6 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         });
     }
 
-    Ok(())
-}
-
-/// Execute open issue requests, retry if stream ends early.
-pub async fn execute_open_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    provider: PolkaBtcProvider,
-    btc_rpc: B,
-    issue_set: Arc<IssueRequests>,
-    num_confirmations: u32,
-) -> Result<(), Error> {
-    (|| async {
-        process_issue_requests(&provider, &btc_rpc, &issue_set, num_confirmations).await?;
-        Ok(())
-    })
-    .retry(ExponentialBackoff {
-        max_elapsed_time: None,
-        ..get_retry_policy()
-    })
-    .await?;
     Ok(())
 }
 
