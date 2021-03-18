@@ -61,7 +61,6 @@ async fn main() -> Result<(), Error> {
             staked_relayer_allowance: opts.staked_relayer_allowance,
         },
         opts.parachain.into(),
-        tokio::runtime::Handle::current(),
     )
     .start()
     .await?;

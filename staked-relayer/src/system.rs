@@ -28,19 +28,13 @@ pub struct RelayerServiceConfig {
 pub struct RelayerService {
     btc_parachain: PolkaBtcProvider,
     config: RelayerServiceConfig,
-    handle: tokio::runtime::Handle,
     shutdown: ShutdownSender,
 }
 
 #[async_trait]
 impl Service<RelayerServiceConfig, PolkaBtcProvider> for RelayerService {
-    fn new_service(
-        btc_parachain: PolkaBtcProvider,
-        config: RelayerServiceConfig,
-        handle: tokio::runtime::Handle,
-        shutdown: ShutdownSender,
-    ) -> Self {
-        RelayerService::new(btc_parachain, config, handle, shutdown)
+    fn new_service(btc_parachain: PolkaBtcProvider, config: RelayerServiceConfig, shutdown: ShutdownSender) -> Self {
+        RelayerService::new(btc_parachain, config, shutdown)
     }
 
     async fn start(&self) -> Result<(), RuntimeError> {
@@ -53,16 +47,10 @@ impl Service<RelayerServiceConfig, PolkaBtcProvider> for RelayerService {
 }
 
 impl RelayerService {
-    fn new(
-        btc_parachain: PolkaBtcProvider,
-        config: RelayerServiceConfig,
-        handle: tokio::runtime::Handle,
-        shutdown: ShutdownSender,
-    ) -> Self {
+    fn new(btc_parachain: PolkaBtcProvider, config: RelayerServiceConfig, shutdown: ShutdownSender) -> Self {
         Self {
             btc_parachain,
             config,
-            handle,
             shutdown,
         }
     }
@@ -184,26 +172,24 @@ impl RelayerService {
             report_offline_oracle(self.btc_parachain.clone(), self.config.oracle_timeout),
         );
 
-        let handle = self.handle.clone();
-
         info!("Starting system services...");
         let _ = tokio::join!(
             // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
-            handle.spawn(async move { vaults_registration_listener.await }),
+            tokio::spawn(async move { vaults_registration_listener.await }),
             // keep vault wallets up-to-date
-            handle.spawn(async move { wallet_update_listener.await }),
+            tokio::spawn(async move { wallet_update_listener.await }),
             // runs vault theft checks
-            handle.spawn(async move { vaults_listener.await }),
+            tokio::spawn(async move { vaults_listener.await }),
             // runs sla listener to log events
-            handle.spawn(async move { sla_listener.await }),
+            tokio::spawn(async move { sla_listener.await }),
             // runs oracle liveness check
-            handle.spawn(async move { oracle_listener.await }),
+            tokio::spawn(async move { oracle_listener.await }),
             // runs `NO_DATA` checks and submits status updates
-            handle.spawn(async move { relay_listener.await }),
+            tokio::spawn(async move { relay_listener.await }),
             // runs subscription service for status updates
-            handle.spawn(async move { status_update_listener.await }),
+            tokio::spawn(async move { status_update_listener.await }),
             // runs blocking relayer
-            handle.spawn_blocking(move || block_on(relayer))
+            tokio::task::spawn_blocking(move || block_on(relayer))
         );
 
         Ok(())

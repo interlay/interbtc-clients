@@ -101,7 +101,6 @@ async fn start() -> Result<(), Error> {
             rpc_cors_domain: opts.rpc_cors_domain,
         },
         opts.parachain.into(),
-        tokio::runtime::Handle::current(),
     )
     .start()
     .await?;

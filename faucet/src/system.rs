@@ -17,19 +17,13 @@ pub struct FaucetServiceConfig {
 pub struct FaucetService {
     btc_parachain: PolkaBtcProvider,
     config: FaucetServiceConfig,
-    handle: tokio::runtime::Handle,
     shutdown: ShutdownSender,
 }
 
 #[async_trait]
 impl Service<FaucetServiceConfig, PolkaBtcProvider> for FaucetService {
-    fn new_service(
-        btc_parachain: PolkaBtcProvider,
-        config: FaucetServiceConfig,
-        handle: tokio::runtime::Handle,
-        shutdown: ShutdownSender,
-    ) -> Self {
-        FaucetService::new(btc_parachain, config, handle, shutdown)
+    fn new_service(btc_parachain: PolkaBtcProvider, config: FaucetServiceConfig, shutdown: ShutdownSender) -> Self {
+        FaucetService::new(btc_parachain, config, shutdown)
     }
 
     async fn start(&self) -> Result<(), RuntimeError> {
@@ -42,16 +36,10 @@ impl Service<FaucetServiceConfig, PolkaBtcProvider> for FaucetService {
 }
 
 impl FaucetService {
-    fn new(
-        btc_parachain: PolkaBtcProvider,
-        config: FaucetServiceConfig,
-        handle: tokio::runtime::Handle,
-        shutdown: ShutdownSender,
-    ) -> Self {
+    fn new(btc_parachain: PolkaBtcProvider, config: FaucetServiceConfig, shutdown: ShutdownSender) -> Self {
         Self {
             btc_parachain,
             config,
-            handle,
             shutdown,
         }
     }
@@ -64,7 +52,6 @@ impl FaucetService {
             self.config.user_allowance,
             self.config.vault_allowance,
             self.config.staked_relayer_allowance,
-            self.handle.clone(),
         )
         .await;
 

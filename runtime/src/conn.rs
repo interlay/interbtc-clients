@@ -5,10 +5,7 @@ use jsonrpsee_ws_client::{WsClient, WsConfig};
 use log::{info, trace};
 use std::{marker::PhantomData, str::FromStr, sync::Arc, time::Duration};
 use substrate_subxt::RpcClient;
-use tokio::{
-    runtime::Handle,
-    time::{delay_for, timeout},
-};
+use tokio::time::{delay_for, timeout};
 
 const RETRY_TIMEOUT: Duration = Duration::from_millis(1000);
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
@@ -25,7 +22,7 @@ pub trait Provider {
 
 #[async_trait]
 pub trait Service<C, P: Provider> {
-    fn new_service(provider: P, config: C, handle: Handle, shutdown: ShutdownSender) -> Self;
+    fn new_service(provider: P, config: C, shutdown: ShutdownSender) -> Self;
     async fn start(&self) -> Result<(), Error>;
 }
 
@@ -109,24 +106,16 @@ pub struct Manager<C: Clone, P: Provider, S: Service<C, P>> {
     signer: PolkaBtcSigner,
     service_config: C,
     manager_config: ManagerConfig,
-    handle: Handle,
     _marker: PhantomData<(P, S)>,
 }
 
 impl<C: Clone + Send + 'static, P: Provider + Send, S: Service<C, P>> Manager<C, P, S> {
-    pub fn new(
-        url: String,
-        signer: PolkaBtcSigner,
-        service_config: C,
-        manager_config: ManagerConfig,
-        handle: Handle,
-    ) -> Self {
+    pub fn new(url: String, signer: PolkaBtcSigner, service_config: C, manager_config: ManagerConfig) -> Self {
         Self {
             url,
             signer,
             service_config,
             manager_config,
-            handle,
             _marker: PhantomData::default(),
         }
     }
@@ -144,12 +133,11 @@ impl<C: Clone + Send + 'static, P: Provider + Send, S: Service<C, P>> Manager<C,
 
             let signer = self.signer.clone();
             let config = self.service_config.clone();
-            let handle = self.handle.clone();
 
             let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
 
             let provider = P::new_provider(ws_client, signer).await?;
-            let service = S::new_service(provider, config, handle, shutdown_tx);
+            let service = S::new_service(provider, config, shutdown_tx);
             service.start().await?;
 
             info!("Disconnected");
