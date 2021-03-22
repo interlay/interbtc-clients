@@ -1,27 +1,28 @@
-#![cfg(feature = "uses-bitcoind")]
+// #![cfg(feature = "uses-bitcoind")]
 
 use bitcoin::{
-    Auth, BitcoinCore, BitcoinCoreApi, Client, Error, Network, PartialAddress, Payload, PrivateKey, PUBLIC_KEY_SIZE,
+    Auth, BitcoinCore, BitcoinCoreApi, Error, Network, PartialAddress, Payload, PrivateKey, PUBLIC_KEY_SIZE,
 };
 use regex::Regex;
-use std::{env::var, sync::Arc};
+use std::env::var;
 
-fn new_bitcoin_core() -> Result<BitcoinCore, Error> {
+fn new_bitcoin_core(wallet: Option<String>) -> Result<BitcoinCore, Error> {
     Ok(BitcoinCore::new(
-        Arc::new(Client::new(
-            var("BITCOIN_RPC_URL").expect("BITCOIN_RPC_URL not set"),
-            Auth::UserPass(
-                var("BITCOIN_RPC_USER").expect("BITCOIN_RPC_USER not set"),
-                var("BITCOIN_RPC_PASS").expect("BITCOIN_RPC_PASS not set"),
-            ),
-        )?),
+        var("BITCOIN_RPC_URL").expect("BITCOIN_RPC_URL not set"),
+        Auth::UserPass(
+            var("BITCOIN_RPC_USER").expect("BITCOIN_RPC_USER not set"),
+            var("BITCOIN_RPC_PASS").expect("BITCOIN_RPC_PASS not set"),
+        ),
+        wallet,
         Network::Regtest,
-    ))
+        Default::default(),
+    )?)
 }
 
 #[tokio::test]
 async fn should_get_new_address() -> Result<(), Error> {
-    let btc_rpc = new_bitcoin_core()?;
+    let btc_rpc = new_bitcoin_core(Some("Alice".to_string()))?;
+    btc_rpc.create_or_load_wallet().await?;
 
     let re = Regex::new("^(bcrt1|[13])[a-zA-HJ-NP-Z0-9]{25,39}$").unwrap();
     let address: Payload = btc_rpc.get_new_address().await?;
@@ -47,7 +48,8 @@ impl Into<[u8; PUBLIC_KEY_SIZE]> for TestPublicKey {
 
 #[tokio::test]
 async fn should_get_new_public_key() -> Result<(), Error> {
-    let btc_rpc = new_bitcoin_core()?;
+    let btc_rpc = new_bitcoin_core(Some("Bob".to_string()))?;
+    btc_rpc.create_or_load_wallet().await?;
 
     let public_key: TestPublicKey = btc_rpc.get_new_public_key().await?;
     assert!(btc_rpc.wallet_has_public_key(public_key).await?);
@@ -57,7 +59,8 @@ async fn should_get_new_public_key() -> Result<(), Error> {
 
 #[tokio::test]
 async fn should_add_new_deposit_key() -> Result<(), Error> {
-    let btc_rpc = new_bitcoin_core()?;
+    let btc_rpc = new_bitcoin_core(Some("Charlie".to_string()))?;
+    btc_rpc.create_or_load_wallet().await?;
 
     btc_rpc
         .import_private_key(PrivateKey::from_wif(

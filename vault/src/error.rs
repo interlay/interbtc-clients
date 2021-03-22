@@ -15,8 +15,6 @@ pub enum Error {
     InvalidOpenTime,
     #[error("Channel unexpectedly closed")]
     ChannelClosed,
-    #[error("Invalid Bitcoin network")]
-    InvalidBitcoinNetwork,
     #[error("Expected blocks but got none")]
     NoIncomingBlocks,
     #[error("Failed to load or create bitcoin wallet: {0}")]

@@ -201,7 +201,7 @@ impl PolkaBtcProvider {
 
 #[async_trait]
 impl Provider for PolkaBtcProvider {
-    async fn new_provider<T>(rpc_client: T, signer: PolkaBtcSigner) -> Result<Self, Error>
+    async fn connect_provider<T>(rpc_client: T, signer: PolkaBtcSigner) -> Result<Self, Error>
     where
         Self: Sized,
         T: Into<RpcClient> + Send,

@@ -1,9 +1,8 @@
 use staked_relayer::{system::*, Error};
 
-use bitcoin::BitcoinCore;
 use clap::Clap;
 use runtime::{substrate_subxt::PairSigner, ConnectionManager, PolkaBtcRuntime};
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 /// The Staked Relayer client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
@@ -72,18 +71,11 @@ async fn start() -> Result<(), Error> {
     );
     let opts: Opts = Opts::parse();
 
-    let dummy_network = bitcoin::Network::Regtest; // we don't make any transaction so this is not used
-    let bitcoin_core = BitcoinCore::new_with_retry(
-        Arc::new(opts.bitcoin.new_client(None)?),
-        dummy_network,
-        Duration::from_millis(opts.bitcoin.bitcoin_connection_timeout_ms),
-    )
-    .await?;
-
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
 
-    // only open connection to parachain after bitcoind sync to prevent timeout
+    let bitcoin_core = opts.bitcoin.new_client(None)?;
+
     ConnectionManager::<_, _, RelayerService>::new(
         opts.parachain.polka_btc_url.clone(),
         signer.clone(),

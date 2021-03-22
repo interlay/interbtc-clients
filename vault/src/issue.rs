@@ -14,17 +14,17 @@ use std::sync::Arc;
 // initialize `issue_set` with currently open issues, and return the block height
 // from which to start watching the bitcoin chain
 pub(crate) async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    provider: &PolkaBtcProvider,
-    btc_rpc: &B,
+    bitcoin_core: &B,
+    btc_parachain: &PolkaBtcProvider,
     issue_set: &Arc<IssueRequests>,
 ) -> Result<u32, Error> {
-    let (mut issue_set, requests) = future::join(issue_set.lock(), provider.get_all_active_issues()).await;
+    let (mut issue_set, requests) = future::join(issue_set.lock(), btc_parachain.get_all_active_issues()).await;
     let requests = requests?;
 
     // find the height of bitcoin chain corresponding to the earliest open_time
     let btc_start_height = match requests.iter().map(|(_, request)| request.opentime).min() {
-        Some(x) => provider.clone().get_blockchain_height_at(x).await?,
-        None => btc_rpc.get_block_count().await? as u32, // no open issues, start at current height
+        Some(x) => btc_parachain.get_blockchain_height_at(x).await?,
+        None => bitcoin_core.get_block_count().await? as u32, // no open issues, start at current height
     };
 
     for (issue_id, request) in requests.into_iter() {
@@ -37,18 +37,19 @@ pub(crate) async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync
 /// execute issue requests on best-effort (i.e. don't retry on error),
 /// returns `NoIncomingBlocks` if stream ends, otherwise runs forever
 pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    provider: PolkaBtcProvider,
-    btc_rpc: B,
+    bitcoin_core: B,
+    btc_parachain: PolkaBtcProvider,
     issue_set: Arc<IssueRequests>,
     btc_start_height: u32,
     num_confirmations: u32,
 ) -> Result<(), RuntimeError> {
-    let mut stream = bitcoin::stream_in_chain_transactions(btc_rpc.clone(), btc_start_height, num_confirmations).await;
+    let mut stream =
+        bitcoin::stream_in_chain_transactions(bitcoin_core.clone(), btc_start_height, num_confirmations).await;
 
     while let Some(Ok((block_hash, transaction))) = stream.next().await {
         if let Err(e) = process_transaction_and_execute_issue(
-            &provider,
-            &btc_rpc,
+            &bitcoin_core,
+            &btc_parachain,
             &issue_set,
             num_confirmations,
             block_hash,
@@ -60,19 +61,20 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
         }
     }
 
-    Err(RuntimeError::Other(Error::NoIncomingBlocks.to_string()))
+    // stream closed, restart client
+    Err(RuntimeError::ClientShutdown)
 }
 
 pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    provider: &PolkaBtcProvider,
-    btc_rpc: &B,
+    bitcoin_core: &B,
+    btc_parachain: &PolkaBtcProvider,
 ) -> Result<(), Error> {
-    for (issue_id, request) in provider
-        .get_vault_issue_requests(provider.get_account_id().clone())
+    for (issue_id, request) in btc_parachain
+        .get_vault_issue_requests(btc_parachain.get_account_id().clone())
         .await?
         .into_iter()
     {
-        if let Err(e) = add_new_deposit_key(btc_rpc, issue_id, request.btc_public_key).await {
+        if let Err(e) = add_new_deposit_key(bitcoin_core, issue_id, request.btc_public_key).await {
             error!("Failed to add deposit key #{}: {}", issue_id, e.to_string());
         }
     }
@@ -81,8 +83,8 @@ pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send +
 
 /// execute issue requests with a matching Bitcoin payment
 async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    provider: &PolkaBtcProvider,
-    btc_rpc: &B,
+    bitcoin_core: &B,
+    btc_parachain: &PolkaBtcProvider,
     issue_set: &Arc<IssueRequests>,
     num_confirmations: u32,
     block_hash: BlockHash,
@@ -94,7 +96,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
         let issue_id = issue_requests.get_key_for_value(address)?;
         Some((issue_id.clone(), address.clone()))
     }) {
-        let issue = provider.get_issue_request(issue_id).await?;
+        let issue = btc_parachain.get_issue_request(issue_id).await?;
         // tx has output to address
         match transaction.get_payment_amount_to(address) {
             None => {
@@ -125,7 +127,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
 
                 // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
                 // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
-                provider
+                btc_parachain
                     .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash.to_vec()), num_confirmations)
                     .await?;
 
@@ -133,11 +135,11 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
                 let txid = transaction.txid();
 
                 // bitcoin core is currently blocking, no need to try_join
-                let raw_tx = btc_rpc.get_raw_tx_for(&txid, &block_hash).await?;
-                let proof = btc_rpc.get_proof_for(txid.clone(), &block_hash).await?;
+                let raw_tx = bitcoin_core.get_raw_tx(&txid, &block_hash).await?;
+                let proof = bitcoin_core.get_proof(txid.clone(), &block_hash).await?;
 
                 info!("Executing issue with id {}", issue_id);
-                match provider
+                match btc_parachain
                     .execute_issue(issue_id, H256Le::from_bytes_le(&txid.as_hash()), proof, raw_tx)
                     .await
                 {
@@ -157,7 +159,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
 
 /// Import the deposit key using the on-chain key derivation scheme
 async fn add_new_deposit_key<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    btc_rpc: &B,
+    bitcoin_core: &B,
     secure_id: H256,
     public_key: BtcPublicKey,
 ) -> Result<(), Error> {
@@ -166,7 +168,7 @@ async fn add_new_deposit_key<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     hasher.input(public_key.0.to_vec());
     // input issue id
     hasher.input(secure_id.as_bytes());
-    btc_rpc
+    bitcoin_core
         .add_new_deposit_key(public_key, hasher.result().as_slice().to_vec())
         .await?;
     Ok(())
@@ -177,29 +179,30 @@ async fn add_new_deposit_key<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
 ///
 /// # Arguments
 ///
-/// * `provider` - the parachain RPC handle
+/// * `bitcoin_core` - the bitcoin core RPC handle
+/// * `btc_parachain` - the parachain RPC handle
 /// * `event_channel` - the channel over which to signal events
 /// * `issue_set` - all issue ids observed since vault started
 pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    provider: PolkaBtcProvider,
-    btc_rpc: B,
+    bitcoin_core: B,
+    btc_parachain: PolkaBtcProvider,
     event_channel: Sender<RequestEvent>,
     issue_set: Arc<IssueRequests>,
 ) -> Result<(), runtime::Error> {
+    let bitcoin_core = &bitcoin_core;
+    let btc_parachain = &btc_parachain;
     let event_channel = &event_channel;
     let issue_set = &issue_set;
-    let provider = &provider;
-    let btc_rpc = &btc_rpc;
-    provider
+    btc_parachain
         .on_event::<RequestIssueEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
-                if &event.vault_id == provider.get_account_id() {
+                if &event.vault_id == btc_parachain.get_account_id() {
                     info!("Received request issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel.clone().send(RequestEvent::Opened).await;
 
-                    if let Err(e) = add_new_deposit_key(btc_rpc, event.issue_id, event.vault_public_key).await {
+                    if let Err(e) = add_new_deposit_key(bitcoin_core, event.issue_id, event.vault_public_key).await {
                         error!("Failed to add new deposit key #{}: {}", event.issue_id, e.to_string());
                     }
                 }
@@ -221,21 +224,21 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
 ///
 /// # Arguments
 ///
-/// * `provider` - the parachain RPC handle
+/// * `btc_parachain` - the parachain RPC handle
 /// * `event_channel` - the channel over which to signal events
 /// * `issue_set` - all issue ids observed since vault started
 pub async fn listen_for_issue_executes(
-    provider: PolkaBtcProvider,
+    btc_parachain: PolkaBtcProvider,
     event_channel: Sender<RequestEvent>,
     issue_set: Arc<IssueRequests>,
 ) -> Result<(), runtime::Error> {
+    let btc_parachain = &btc_parachain;
     let event_channel = &event_channel;
     let issue_set = &issue_set;
-    let provider = &provider;
-    provider
+    btc_parachain
         .on_event::<ExecuteIssueEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
-                if &event.vault_id == provider.get_account_id() {
+                if &event.vault_id == btc_parachain.get_account_id() {
                     info!("Received execute issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
@@ -254,14 +257,14 @@ pub async fn listen_for_issue_executes(
 ///
 /// # Arguments
 ///
-/// * `provider` - the parachain RPC handle
+/// * `btc_parachain` - the parachain RPC handle
 /// * `issue_set` - all issue ids observed since vault started
 pub async fn listen_for_issue_cancels(
-    provider: PolkaBtcProvider,
+    btc_parachain: PolkaBtcProvider,
     issue_set: Arc<IssueRequests>,
 ) -> Result<(), runtime::Error> {
     let issue_set = &issue_set;
-    provider
+    btc_parachain
         .on_event::<CancelIssueEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
                 trace!("issue #{} cancelled, no longer watching", event.issue_id);

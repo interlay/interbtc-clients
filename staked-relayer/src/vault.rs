@@ -1,8 +1,4 @@
-use crate::{
-    error::{get_retry_policy, Error},
-    utils,
-};
-use backoff::backoff::Backoff;
+use crate::{error::Error, utils};
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _, Txid};
 use futures::stream::{iter, StreamExt};
 use log::*;
@@ -40,13 +36,13 @@ impl Vaults {
 }
 
 pub async fn report_vault_thefts<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone>(
+    bitcoin_core: B,
+    btc_parachain: P,
     btc_height: u32,
-    btc_rpc: B,
     vaults: Arc<Vaults>,
-    polka_rpc: P,
     delay: Duration,
 ) -> Result<(), RuntimeError> {
-    match VaultTheftMonitor::new(btc_height, btc_rpc, vaults, polka_rpc, delay)
+    match VaultTheftMonitor::new(bitcoin_core, btc_parachain, btc_height, vaults, delay)
         .process_blocks()
         .await
     {
@@ -57,28 +53,22 @@ pub async fn report_vault_thefts<P: StakedRelayerPallet + BtcRelayPallet, B: Bit
 }
 
 pub struct VaultTheftMonitor<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> {
+    bitcoin_core: B,
+    btc_parachain: P,
     btc_height: u32,
-    btc_rpc: B,
-    polka_rpc: P,
     vaults: Arc<Vaults>,
     delay: Duration,
 }
 
 impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonitor<P, B> {
-    pub fn new(btc_height: u32, btc_rpc: B, vaults: Arc<Vaults>, polka_rpc: P, delay: Duration) -> Self {
+    pub fn new(bitcoin_core: B, btc_parachain: P, btc_height: u32, vaults: Arc<Vaults>, delay: Duration) -> Self {
         Self {
+            bitcoin_core,
+            btc_parachain,
             btc_height,
-            btc_rpc,
-            polka_rpc,
             vaults,
             delay,
         }
-    }
-
-    async fn get_raw_tx_and_proof(&self, tx_id: Txid, hash: &BlockHash) -> Result<(Vec<u8>, Vec<u8>), Error> {
-        let raw_tx = self.btc_rpc.get_raw_tx_for(&tx_id, hash).await?;
-        let proof = self.btc_rpc.get_proof_for(tx_id, hash).await?;
-        Ok((raw_tx, proof))
     }
 
     async fn report_invalid(
@@ -91,12 +81,12 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         info!("Found tx from vault {}", vault_id);
         // check if matching redeem or replace request
         if self
-            .polka_rpc
+            .btc_parachain
             .is_transaction_invalid(vault_id.clone(), raw_tx.clone())
             .await?
         {
             info!("Transaction is invalid");
-            self.polka_rpc
+            self.btc_parachain
                 .report_vault_theft(vault_id, H256Le::from_bytes_le(&tx_id.as_hash()), proof, raw_tx)
                 .await?;
         }
@@ -112,13 +102,14 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
     ) -> Result<(), Error> {
         // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
         // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
-        self.polka_rpc
+        self.btc_parachain
             .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash.to_vec()), num_confirmations)
             .await?;
 
         let tx_id = tx.txid();
 
-        let (raw_tx, proof) = self.get_raw_tx_and_proof(tx_id, &block_hash).await?;
+        let raw_tx = self.bitcoin_core.get_raw_tx(&tx_id, &block_hash).await?;
+        let proof = self.bitcoin_core.get_proof(tx_id, &block_hash).await?;
 
         let addresses = tx.extract_input_addresses();
         let vault_ids = filter_matching_vaults(addresses, &self.vaults).await;
@@ -132,42 +123,30 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
     }
 
     pub async fn process_blocks(&mut self) -> Result<(), Error> {
-        utils::wait_until_active(&self.polka_rpc, self.delay).await;
+        utils::wait_until_active(&self.btc_parachain, self.delay).await;
 
-        let num_confirmations = self.polka_rpc.get_bitcoin_confirmations().await?;
-
-        let mut backoff = get_retry_policy();
+        let num_confirmations = self.btc_parachain.get_bitcoin_confirmations().await?;
 
         let mut stream =
-            bitcoin::stream_in_chain_transactions(self.btc_rpc.clone(), self.btc_height, num_confirmations).await;
+            bitcoin::stream_in_chain_transactions(self.bitcoin_core.clone(), self.btc_height, num_confirmations).await;
 
-        loop {
-            match stream.next().await.unwrap() {
-                Ok((block_hash, tx)) => match self.check_transaction(tx, block_hash, num_confirmations).await {
-                    Ok(_) => {
-                        backoff.reset();
-                        continue; // don't execute the delay below
-                    }
-                    Err(e) => error!("Failed to check transaction: {}", e),
-                },
-                Err(e) => {
-                    warn!("Failed to fetch transaction: {}", e);
-                }
-            }
-            // error occurred. Sleep before retrying
-            match backoff.next_backoff() {
-                Some(wait) => {
-                    tokio::time::delay_for(wait).await;
-                }
-                None => return Err(Error::TransactionFetchingError),
+        while let Some(Ok((block_hash, tx))) = stream.next().await {
+            if let Err(err) = self.check_transaction(tx, block_hash, num_confirmations).await {
+                error!("Failed to check transaction: {}", err);
             }
         }
+
+        // stream should not end, signal restart
+        Err(Error::RuntimeError(RuntimeError::ClientShutdown))
     }
 }
 
-pub async fn listen_for_wallet_updates(polka_rpc: PolkaBtcProvider, vaults: Arc<Vaults>) -> Result<(), RuntimeError> {
+pub async fn listen_for_wallet_updates(
+    btc_parachain: PolkaBtcProvider,
+    vaults: Arc<Vaults>,
+) -> Result<(), RuntimeError> {
     let vaults = &vaults;
-    polka_rpc
+    btc_parachain
         .on_event::<RegisterAddressEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
                 info!(
@@ -182,13 +161,13 @@ pub async fn listen_for_wallet_updates(polka_rpc: PolkaBtcProvider, vaults: Arc<
 }
 
 pub async fn listen_for_vaults_registered(
-    polka_rpc: PolkaBtcProvider,
+    btc_parachain: PolkaBtcProvider,
     vaults: Arc<Vaults>,
 ) -> Result<(), RuntimeError> {
-    polka_rpc
+    btc_parachain
         .on_event::<RegisterVaultEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async {
-                match polka_rpc.get_vault(event.account_id).await {
+                match btc_parachain.get_vault(event.account_id).await {
                     Ok(vault) => {
                         info!("Vault registered: {}", vault.id);
                         vaults.add_vault(vault).await;
@@ -299,11 +278,11 @@ mod tests {
 
         #[async_trait]
         trait BitcoinCoreApi {
-            async fn wait_for_block(&self, height: u32, delay: Duration, num_confirmations: u32) -> Result<BlockHash, BitcoinError>;
+            async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
-            async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
-            async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
-           async  fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError>;
+            async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+            async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+            async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError>;
             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
             async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError>;
             async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, BitcoinError>;
@@ -346,7 +325,7 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
-            async fn create_wallet(&self, wallet: &str) -> Result<(), BitcoinError>;
+            async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;
             async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError>
                 where
                     P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
@@ -393,10 +372,10 @@ mod tests {
             .returning(|_, _, _, _| Ok(()));
 
         let monitor = VaultTheftMonitor::new(
-            0,
             MockBitcoin::default(),
-            Arc::new(Vaults::default()),
             parachain,
+            0,
+            Arc::new(Vaults::default()),
             Duration::from_millis(100),
         );
 
@@ -416,10 +395,10 @@ mod tests {
             .returning(|_, _, _, _| Ok(()));
 
         let monitor = VaultTheftMonitor::new(
-            0,
             MockBitcoin::default(),
-            Arc::new(Vaults::default()),
             parachain,
+            0,
+            Arc::new(Vaults::default()),
             Duration::from_millis(100),
         );
 

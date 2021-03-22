@@ -22,6 +22,10 @@ pub struct FaucetService {
 
 #[async_trait]
 impl Service<FaucetServiceConfig, PolkaBtcProvider> for FaucetService {
+    async fn initialize(_config: &FaucetServiceConfig) -> Result<(), RuntimeError> {
+        Ok(())
+    }
+
     fn new_service(btc_parachain: PolkaBtcProvider, config: FaucetServiceConfig, shutdown: ShutdownSender) -> Self {
         FaucetService::new(btc_parachain, config, shutdown)
     }
