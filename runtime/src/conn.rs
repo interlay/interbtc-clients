@@ -14,7 +14,7 @@ pub type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
 
 #[async_trait]
 pub trait Provider {
-    async fn new_provider<T>(rpc_client: T, signer: PolkaBtcSigner) -> Result<Self, Error>
+    async fn connect_provider<T>(rpc_client: T, signer: PolkaBtcSigner) -> Result<Self, Error>
     where
         Self: Sized,
         T: Into<RpcClient> + Send;
@@ -22,6 +22,7 @@ pub trait Provider {
 
 #[async_trait]
 pub trait Service<C, P: Provider> {
+    async fn initialize(config: &C) -> Result<(), Error>;
     fn new_service(provider: P, config: C, shutdown: ShutdownSender) -> Self;
     async fn start(&self) -> Result<(), Error>;
 }
@@ -122,6 +123,12 @@ impl<C: Clone + Send + 'static, P: Provider + Send, S: Service<C, P>> Manager<C,
 
     pub async fn start(&self) -> Result<(), Error> {
         loop {
+            let config = self.service_config.clone();
+            let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
+
+            S::initialize(&config).await?;
+
+            // only open connection to parachain after bitcoind sync to prevent timeout
             let ws_client = new_websocket_client_with_retry(
                 &self.url,
                 self.manager_config.max_concurrent_requests,
@@ -130,13 +137,9 @@ impl<C: Clone + Send + 'static, P: Provider + Send, S: Service<C, P>> Manager<C,
             )
             .await?;
             let ws_client = Arc::new(ws_client);
-
             let signer = self.signer.clone();
-            let config = self.service_config.clone();
 
-            let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
-
-            let provider = P::new_provider(ws_client, signer).await?;
+            let provider = P::connect_provider(ws_client, signer).await?;
             let service = S::new_service(provider, config, shutdown_tx);
             service.start().await?;
 

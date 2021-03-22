@@ -354,10 +354,10 @@ mod tests {
 
         #[async_trait]
         trait BitcoinCoreApi {
-            async fn wait_for_block(&self, height: u32, delay: Duration, num_confirmations: u32) -> Result<BlockHash, BitcoinError>;
+            async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
-            async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
-            async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+            async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+            async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError>;
             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
             async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError>;
@@ -401,7 +401,7 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
-            async fn create_wallet(&self, wallet: &str) -> Result<(), BitcoinError>;
+            async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;
             async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError>
                 where
                     P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
@@ -524,7 +524,7 @@ mod tests {
         };
         assert_err!(
             auction_replace(&provider, &bitcoin, &vault, 1000).await,
-            BelowDustAmount
+            Error::BelowDustAmount
         );
     }
 

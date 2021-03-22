@@ -60,10 +60,10 @@ async fn test_report_vault_theft_succeeds() {
     test_service(
         join(
             staked_relayer::service::report_vault_thefts(
-                0,
                 btc_rpc.clone(),
-                vaults.clone(),
                 relayer_provider.clone(),
+                0,
+                vaults.clone(),
                 Duration::from_secs(1),
             ),
             staked_relayer::service::listen_for_wallet_updates(relayer_provider.clone(), vaults.clone()),

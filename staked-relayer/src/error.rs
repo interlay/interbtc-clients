@@ -1,10 +1,8 @@
 use crate::{core::Error as CoreError, relay::Error as RelayError};
-use backoff::ExponentialBackoff;
 use bitcoin::{BitcoinError as BitcoinCoreError, Error as BitcoinError};
 use jsonrpc_core_client::RpcError;
 use parity_scale_codec::Error as CodecError;
 use runtime::{substrate_subxt::Error as SubxtError, Error as RuntimeError};
-use std::time::Duration;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -36,17 +34,4 @@ pub enum Error {
     BitcoinCoreError(#[from] BitcoinCoreError),
     #[error("RPC error: {0}")]
     RpcError(#[from] RpcError),
-}
-
-/// Gets the default retrying policy
-pub fn get_retry_policy() -> ExponentialBackoff {
-    ExponentialBackoff {
-        max_elapsed_time: Some(Duration::from_secs(24 * 60 * 60)),
-        max_interval: Duration::from_secs(10 * 60), // wait at 10 minutes before retrying
-        initial_interval: Duration::from_secs(1),
-        current_interval: Duration::from_secs(1),
-        multiplier: 2.0,            // delay doubles every time
-        randomization_factor: 0.25, // random value between 25% below and 25% above the ideal delay
-        ..Default::default()
-    }
 }

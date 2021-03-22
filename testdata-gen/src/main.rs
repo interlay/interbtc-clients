@@ -19,7 +19,7 @@ use runtime::{
 };
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
-use std::{convert::TryInto, str::FromStr, sync::Arc, time::Duration};
+use std::{convert::TryInto, time::Duration};
 
 #[derive(Debug, Encode, Decode)]
 struct BtcAddressFromStr(BtcAddress);
@@ -201,21 +201,6 @@ enum RelayerApiSubCommand {
     AccountId,
 }
 
-#[derive(Debug, Copy, Clone)]
-struct BitcoinNetwork(bitcoin::Network);
-
-impl FromStr for BitcoinNetwork {
-    type Err = Error;
-    fn from_str(s: &str) -> Result<Self, Error> {
-        match s {
-            "mainnet" => Ok(BitcoinNetwork(bitcoin::Network::Bitcoin)),
-            "testnet" => Ok(BitcoinNetwork(bitcoin::Network::Testnet)),
-            "regtest" => Ok(BitcoinNetwork(bitcoin::Network::Regtest)),
-            _ => Err(Error::UnknownBitcoinNetwork),
-        }
-    }
-}
-
 #[derive(Clap)]
 struct SetExchangeRateInfo {
     /// Exchange rate from BTC to DOT.
@@ -243,10 +228,6 @@ struct RegisterVaultInfo {
     /// Collateral to secure position.
     #[clap(long, default_value = "100000")]
     collateral: u128,
-
-    /// Bitcoin network type for address encoding.
-    #[clap(long, default_value = "regtest")]
-    bitcoin_network: BitcoinNetwork,
 }
 
 #[derive(Clap)]
@@ -262,10 +243,6 @@ struct RequestIssueInfo {
     /// Vault keyring to derive `vault_id`.
     #[clap(long, default_value = "bob")]
     vault: AccountKeyring,
-
-    /// Bitcoin network type for address encoding.
-    #[clap(long, default_value = "regtest")]
-    bitcoin_network: BitcoinNetwork,
 
     /// Do not transfer BTC or execute the issue request.
     #[clap(long)]
@@ -285,10 +262,6 @@ struct SendBitcoinInfo {
     /// Issue id for the issue request.
     #[clap(long)]
     issue_id: Option<H256>,
-
-    /// Bitcoin network type for address encoding.
-    #[clap(long, default_value = "regtest")]
-    bitcoin_network: BitcoinNetwork,
 }
 
 #[derive(Clap)]
@@ -338,10 +311,6 @@ struct ExecuteRedeemInfo {
     /// Redeem id for the redeem request.
     #[clap(long)]
     redeem_id: H256,
-
-    /// Bitcoin network type for address encoding.
-    #[clap(long, default_value = "regtest")]
-    bitcoin_network: BitcoinNetwork,
 }
 
 #[derive(Clap)]
@@ -364,10 +333,6 @@ struct AcceptReplaceInfo {
     /// Collateral used to back replace.
     #[clap(long, default_value = "10000")]
     collateral: u128,
-
-    /// Bitcoin network type for address encoding.
-    #[clap(long, default_value = "regtest")]
-    bitcoin_network: BitcoinNetwork,
 }
 
 #[derive(Clap)]
@@ -375,10 +340,6 @@ struct ExecuteReplaceInfo {
     /// Replace id for the replace request.
     #[clap(long)]
     replace_id: H256,
-
-    /// Bitcoin network type for address encoding.
-    #[clap(long, default_value = "regtest")]
-    bitcoin_network: BitcoinNetwork,
 }
 
 #[derive(Clap, Encode, Decode, Debug)]
@@ -487,14 +448,10 @@ struct FundAccountsInfo {
     pub amount: u128,
 }
 
-async fn get_btc_rpc(
-    wallet_name: String,
-    bitcoin_opts: bitcoin::cli::BitcoinOpts,
-    network: BitcoinNetwork,
-) -> Result<BitcoinCore, Error> {
-    let btc_rpc = BitcoinCore::new(Arc::new(bitcoin_opts.new_client(Some(&wallet_name))?), network.0);
-    btc_rpc.create_wallet(&wallet_name).await?;
-    Ok(btc_rpc)
+async fn get_bitcoin_core(bitcoin_opts: bitcoin::cli::BitcoinOpts, wallet_name: String) -> Result<BitcoinCore, Error> {
+    let bitcoin_core = bitcoin_opts.new_client(Some(wallet_name.to_string()))?;
+    bitcoin_core.create_or_load_wallet().await?;
+    Ok(bitcoin_core)
 }
 
 /// Generates testdata to be used on a development environment of the BTC-Parachain
@@ -540,7 +497,7 @@ async fn main() -> Result<(), Error> {
             println!("{}", provider.get_time_now().await?);
         }
         SubCommand::RegisterVault(info) => {
-            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
+            let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
             vault::register_vault(provider, btc_rpc.get_new_public_key().await?, info.collateral).await?;
         }
         SubCommand::RequestIssue(info) => {
@@ -581,7 +538,7 @@ async fn main() -> Result<(), Error> {
                 return Ok(());
             }
 
-            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
+            let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
             issue::execute_issue(
                 &provider,
                 &btc_rpc,
@@ -608,7 +565,7 @@ async fn main() -> Result<(), Error> {
                 (btc_address, info.satoshis)
             };
 
-            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
+            let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
             let tx_metadata = btc_rpc
                 .send_to_address(
                     btc_address,
@@ -635,7 +592,7 @@ async fn main() -> Result<(), Error> {
             let redeem_id = info.redeem_id;
             let redeem_request = provider.get_redeem_request(redeem_id).await?;
 
-            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
+            let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
             redeem::execute_redeem(
                 &provider,
                 &btc_rpc,
@@ -650,11 +607,11 @@ async fn main() -> Result<(), Error> {
             println!("{}", hex::encode(replace_id.as_bytes()));
         }
         SubCommand::AcceptReplace(info) => {
-            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
+            let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
             replace::accept_replace(&provider, &btc_rpc, info.replace_id, info.collateral).await?;
         }
         SubCommand::ExecuteReplace(info) => {
-            let btc_rpc = get_btc_rpc(wallet_name, opts.bitcoin, info.bitcoin_network).await?;
+            let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
             replace::execute_replace(&provider, &btc_rpc, info.replace_id).await?;
         }
         SubCommand::ApiCall(api_call) => match api_call.subcmd {

@@ -33,6 +33,12 @@ pub struct RelayerService {
 
 #[async_trait]
 impl Service<RelayerServiceConfig, PolkaBtcProvider> for RelayerService {
+    async fn initialize(config: &RelayerServiceConfig) -> Result<(), RuntimeError> {
+        Self::connect_bitcoin(&config.bitcoin_core)
+            .await
+            .map_err(|err| RuntimeError::Other(err.to_string()))
+    }
+
     fn new_service(btc_parachain: PolkaBtcProvider, config: RelayerServiceConfig, shutdown: ShutdownSender) -> Self {
         RelayerService::new(btc_parachain, config, shutdown)
     }
@@ -47,6 +53,12 @@ impl Service<RelayerServiceConfig, PolkaBtcProvider> for RelayerService {
 }
 
 impl RelayerService {
+    async fn connect_bitcoin(bitcoin_core: &BitcoinCore) -> Result<(), Error> {
+        bitcoin_core.connect().await?;
+        bitcoin_core.sync().await?;
+        Ok(())
+    }
+
     fn new(btc_parachain: PolkaBtcProvider, config: RelayerServiceConfig, shutdown: ShutdownSender) -> Self {
         Self {
             btc_parachain,
@@ -102,10 +114,10 @@ impl RelayerService {
         let vaults_listener = wait_or_shutdown(
             self.shutdown.clone(),
             report_vault_thefts(
-                bitcoin_theft_start_height,
                 bitcoin_core.clone(),
-                vaults.clone(),
                 self.btc_parachain.clone(),
+                bitcoin_theft_start_height,
+                vaults.clone(),
                 self.config.bitcoin_timeout,
             ),
         );

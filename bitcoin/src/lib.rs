@@ -27,8 +27,9 @@ pub use bitcoincore_rpc::{
 };
 pub use error::{BitcoinRpcError, ConversionError, Error};
 use hyper::Error as HyperError;
-pub use iter::{get_transactions, stream_blocks, stream_in_chain_transactions};
+pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
 use log::{info, trace};
+use serde_json::error::Category as SerdeJsonCategory;
 use sp_core::H256;
 use std::{io::ErrorKind as IoErrorKind, sync::Arc, time::Duration};
 use tokio::{
@@ -54,13 +55,13 @@ pub struct TransactionMetadata {
 
 #[async_trait]
 pub trait BitcoinCoreApi {
-    async fn wait_for_block(&self, height: u32, delay: Duration, num_confirmations: u32) -> Result<BlockHash, Error>;
+    async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, Error>;
 
     async fn get_block_count(&self) -> Result<u64, Error>;
 
-    async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+    async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
 
-    async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+    async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
 
     async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
 
@@ -120,7 +121,7 @@ pub trait BitcoinCoreApi {
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
-    async fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
+    async fn create_or_load_wallet(&self) -> Result<(), Error>;
 
     async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
     where
@@ -146,37 +147,50 @@ impl LockedTransaction {
 #[derive(Clone)]
 pub struct BitcoinCore {
     rpc: Arc<Client>,
-    transaction_creation_lock: Arc<Mutex<()>>,
+    wallet_name: Option<String>,
     network: Network,
+    transaction_creation_lock: Arc<Mutex<()>>,
+    connection_timeout: Duration,
 }
 
 impl BitcoinCore {
-    pub fn new(rpc: Arc<Client>, network: Network) -> Self {
-        Self {
-            rpc,
-            network,
-            transaction_creation_lock: Arc::new(Mutex::new(())),
-        }
-    }
-
-    pub async fn new_with_retry(
-        rpc: Arc<Client>,
+    pub fn new(
+        url: String,
+        auth: Auth,
+        wallet_name: Option<String>,
         network: Network,
         connection_timeout: Duration,
     ) -> Result<Self, Error> {
-        let core = Self::new(rpc, network);
-        core.connect(connection_timeout).await?;
+        let url = match wallet_name {
+            Some(ref x) => format!("{}/wallet/{}", url, x),
+            None => url,
+        };
+        Ok(Self {
+            rpc: Arc::new(Client::new(url, auth)?),
+            wallet_name,
+            network,
+            transaction_creation_lock: Arc::new(Mutex::new(())),
+            connection_timeout,
+        })
+    }
+
+    pub async fn new_with_retry(
+        url: String,
+        auth: Auth,
+        wallet: Option<String>,
+        network: Network,
+        connection_timeout: Duration,
+    ) -> Result<Self, Error> {
+        let core = Self::new(url, auth, wallet, network, connection_timeout)?;
+        core.connect().await?;
         core.sync().await?;
         Ok(core)
     }
 
     /// Connect to a bitcoin-core full node or timeout.
-    ///
-    /// # Arguments
-    /// * `connection_timeout` - maximum duration before elapsing
-    async fn connect(&self, connection_timeout: Duration) -> Result<(), Error> {
+    pub async fn connect(&self) -> Result<(), Error> {
         info!("Connecting to bitcoin-core...");
-        timeout(connection_timeout, async move {
+        timeout(self.connection_timeout, async move {
             loop {
                 match self.rpc.get_blockchain_info() {
                     Err(BitcoinError::JsonRpc(JsonRpcError::Hyper(HyperError::Io(err))))
@@ -194,6 +208,14 @@ impl BitcoinCore {
                         delay_for(RETRY_DURATION).await;
                         continue;
                     }
+                    Err(BitcoinError::JsonRpc(JsonRpcError::Json(err)))
+                        if err.classify() == SerdeJsonCategory::Syntax =>
+                    {
+                        // invalid response, can happen if server is in shutdown
+                        trace!("bitcoin-core gave an invalid response: {}", err);
+                        delay_for(RETRY_DURATION).await;
+                        continue;
+                    }
                     Ok(_) => {
                         info!("Connected!");
                         return Ok(());
@@ -206,7 +228,7 @@ impl BitcoinCore {
     }
 
     /// Wait indefinitely for the node to sync.
-    async fn sync(&self) -> Result<(), Error> {
+    pub async fn sync(&self) -> Result<(), Error> {
         info!("Waiting for bitcoin-core to sync...");
         loop {
             let info = self.rpc.get_blockchain_info()?;
@@ -269,32 +291,27 @@ impl BitcoinCoreApi for BitcoinCore {
     ///
     /// # Arguments
     /// * `height` - block height to fetch
-    /// * `delay` - wait period before re-checking
-    async fn wait_for_block(&self, height: u32, delay: Duration, num_confirmations: u32) -> Result<BlockHash, Error> {
+    /// * `num_confirmations` - minimum for a block to be accepted
+    async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, Error> {
         loop {
             match self.rpc.get_block_hash(height.into()) {
                 Ok(hash) => {
                     let info = self.rpc.get_block_info(&hash)?;
                     if info.confirmations >= num_confirmations {
-                        return Ok(hash);
+                        return Ok(self.rpc.get_block(&hash)?);
                     } else {
-                        delay_for(delay).await;
+                        delay_for(RETRY_DURATION).await;
                         continue;
                     }
                 }
-                Err(e) => {
-                    if let BitcoinError::JsonRpc(JsonRpcError::Rpc(rpc_error)) = &e {
-                        match BitcoinRpcError::from(rpc_error.clone()) {
-                            // block does not exist yet
-                            BitcoinRpcError::RpcInvalidParameter => {
-                                delay_for(delay).await;
-                                continue;
-                            }
-                            _ => (),
-                        };
-                    }
-                    return Err(e.into());
+                Err(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
+                    if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcInvalidParameter =>
+                {
+                    // block does not exist yet
+                    delay_for(RETRY_DURATION).await;
+                    continue;
                 }
+                Err(err) => return Err(err.into()),
             }
         }
     }
@@ -310,7 +327,7 @@ impl BitcoinCoreApi for BitcoinCore {
     /// # Arguments
     /// * `txid` - transaction ID
     /// * `block_hash` - hash of the block tx is stored in
-    async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
+    async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
         Ok(serialize(&self.rpc.get_raw_transaction(txid, Some(block_hash))?))
     }
 
@@ -319,7 +336,7 @@ impl BitcoinCoreApi for BitcoinCore {
     /// # Arguments
     /// * `txid` - transaction ID
     /// * `block_hash` - hash of the block tx is stored in
-    async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
+    async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
         Ok(self.rpc.get_tx_out_proof(&[txid], Some(block_hash))?)
     }
 
@@ -330,15 +347,13 @@ impl BitcoinCoreApi for BitcoinCore {
     async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error> {
         match self.rpc.get_block_hash(height.into()) {
             Ok(block_hash) => Ok(block_hash),
-            Err(e) => Err(if let BitcoinError::JsonRpc(JsonRpcError::Rpc(rpc_error)) = &e {
-                match BitcoinRpcError::from(rpc_error.clone()) {
-                    // block does not exist yet
-                    BitcoinRpcError::RpcInvalidParameter => Error::InvalidBitcoinHeight,
-                    _ => e.into(),
-                }
-            } else {
-                e.into()
-            }),
+            Err(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
+                if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcInvalidParameter =>
+            {
+                // block does not exist yet
+                Err(Error::InvalidBitcoinHeight)
+            }
+            Err(err) => return Err(err.into()),
         }
     }
 
@@ -349,8 +364,8 @@ impl BitcoinCoreApi for BitcoinCore {
     async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error> {
         match self.rpc.get_block(&block_hash) {
             Ok(_) => Ok(true),
-            Err(BitcoinError::JsonRpc(JsonRpcError::Rpc(RpcError { code, .. })))
-                if code == BitcoinRpcError::RpcInvalidAddressOrKey as i32 =>
+            Err(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
+                if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcInvalidAddressOrKey =>
             {
                 Ok(false) // block not found
             }
@@ -473,11 +488,11 @@ impl BitcoinCoreApi for BitcoinCore {
         .retry(get_retry_policy())
         .await?;
 
-        let proof = (|| async { Ok(self.get_proof_for(txid, &block_hash).await?) })
+        let proof = (|| async { Ok(self.get_proof(txid, &block_hash).await?) })
             .retry(get_retry_policy())
             .await?;
 
-        let raw_tx = (|| async { Ok(self.get_raw_tx_for(&txid, &block_hash).await?) })
+        let raw_tx = (|| async { Ok(self.get_raw_tx(&txid, &block_hash).await?) })
             .retry(get_retry_policy())
             .await?;
 
@@ -593,20 +608,23 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     /// Create or load a wallet on Bitcoin Core.
-    ///
-    /// # Arguments
-    /// * `wallet` - name of the wallet
-    async fn create_wallet(&self, wallet: &str) -> Result<(), Error> {
+    async fn create_or_load_wallet(&self) -> Result<(), Error> {
+        let wallet_name = if let Some(ref wallet_name) = self.wallet_name {
+            wallet_name
+        } else {
+            return Err(Error::WalletNotFound);
+        };
+
         // NOTE: bitcoincore-rpc does not expose listwalletdir
-        if self.rpc.list_wallets()?.contains(&wallet.to_string()) {
+        if self.rpc.list_wallets()?.contains(wallet_name) {
             // wallet already loaded
             return Ok(());
-        } else if let Ok(_) = self.rpc.load_wallet(wallet) {
+        } else if let Ok(_) = self.rpc.load_wallet(wallet_name) {
             // wallet successfully loaded
             return Ok(());
         }
         // wallet does not exist, create
-        self.rpc.create_wallet(wallet, None, None, None, None)?;
+        self.rpc.create_wallet(wallet_name, None, None, None, None)?;
         Ok(())
     }
 

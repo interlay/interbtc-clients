@@ -1,6 +1,22 @@
-use crate::Error;
-use bitcoincore_rpc::{Auth, Client};
+use crate::{BitcoinCore, Error};
+use bitcoincore_rpc::{bitcoin::Network, Auth};
 use clap::Clap;
+use std::{str::FromStr, time::Duration};
+
+#[derive(Debug, Copy, Clone)]
+pub struct BitcoinNetwork(pub Network);
+
+impl FromStr for BitcoinNetwork {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Error> {
+        match s {
+            "mainnet" => Ok(BitcoinNetwork(Network::Bitcoin)),
+            "testnet" => Ok(BitcoinNetwork(Network::Testnet)),
+            "regtest" => Ok(BitcoinNetwork(Network::Regtest)),
+            _ => Err(Error::InvalidBitcoinNetwork),
+        }
+    }
+}
 
 #[derive(Clap, Debug, Clone)]
 pub struct BitcoinOpts {
@@ -16,17 +32,35 @@ pub struct BitcoinOpts {
     /// Timeout in milliseconds to wait for connection to bitcoin-core.
     #[clap(long, default_value = "60000")]
     pub bitcoin_connection_timeout_ms: u64,
+
+    /// Bitcoin network type for address encoding.
+    #[clap(long, default_value = "regtest")]
+    pub network: BitcoinNetwork,
 }
 
 impl BitcoinOpts {
-    pub fn new_client(&self, wallet: Option<&str>) -> Result<Client, Error> {
-        let url = match wallet {
-            Some(x) => format!("{}/wallet/{}", self.bitcoin_rpc_url.clone(), x),
-            None => self.bitcoin_rpc_url.clone(),
-        };
-        Ok(Client::new(
-            url,
-            Auth::UserPass(self.bitcoin_rpc_user.clone(), self.bitcoin_rpc_pass.clone()),
-        )?)
+    pub fn new_auth(&self) -> Auth {
+        Auth::UserPass(self.bitcoin_rpc_user.clone(), self.bitcoin_rpc_pass.clone())
+    }
+
+    pub fn new_client(&self, wallet_name: Option<String>) -> Result<BitcoinCore, Error> {
+        BitcoinCore::new(
+            self.bitcoin_rpc_url.clone(),
+            self.new_auth(),
+            wallet_name,
+            self.network.0,
+            Duration::from_millis(self.bitcoin_connection_timeout_ms),
+        )
+    }
+
+    pub async fn new_client_with_retry(&self, wallet_name: Option<String>) -> Result<BitcoinCore, Error> {
+        BitcoinCore::new_with_retry(
+            self.bitcoin_rpc_url.clone(),
+            self.new_auth(),
+            wallet_name,
+            self.network.0,
+            Duration::from_millis(self.bitcoin_connection_timeout_ms),
+        )
+        .await
     }
 }

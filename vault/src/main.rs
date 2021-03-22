@@ -1,25 +1,9 @@
-use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use log::*;
 use runtime::{substrate_subxt::PairSigner, ConnectionManager, PolkaBtcRuntime};
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::time::Duration;
 
 use vault::{Error, VaultService, VaultServiceConfig};
-
-#[derive(Debug, Copy, Clone)]
-pub struct BitcoinNetwork(pub bitcoin::Network);
-
-impl FromStr for BitcoinNetwork {
-    type Err = Error;
-    fn from_str(s: &str) -> Result<Self, Error> {
-        match s {
-            "mainnet" => Ok(BitcoinNetwork(bitcoin::Network::Bitcoin)),
-            "testnet" => Ok(BitcoinNetwork(bitcoin::Network::Testnet)),
-            "regtest" => Ok(BitcoinNetwork(bitcoin::Network::Regtest)),
-            _ => Err(Error::InvalidBitcoinNetwork),
-        }
-    }
-}
 
 /// The Vault client intermediates between Bitcoin Core
 /// and the PolkaBTC Parachain.
@@ -83,10 +67,6 @@ pub struct Opts {
     /// parachain settings will be used (recommended).
     #[clap(long)]
     pub btc_confirmations: Option<u32>,
-
-    /// Bitcoin network type for address encoding.
-    #[clap(long, default_value = "regtest")]
-    pub network: BitcoinNetwork,
 }
 
 async fn start() -> Result<(), Error> {
@@ -97,23 +77,11 @@ async fn start() -> Result<(), Error> {
 
     info!("Command line arguments: {:?}", opts.clone());
 
-    let (pair, wallet) = opts.account_info.get_key_pair()?;
+    let (pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);
 
-    let bitcoin_core = BitcoinCore::new_with_retry(
-        Arc::new(opts.bitcoin.new_client(Some(&wallet))?),
-        opts.network.0,
-        Duration::from_millis(opts.bitcoin.bitcoin_connection_timeout_ms),
-    )
-    .await?;
+    let bitcoin_core = opts.bitcoin.new_client(Some(wallet_name.to_string()))?;
 
-    // load wallet. Exit on failure, since without wallet we can't do a lot
-    bitcoin_core
-        .create_wallet(&wallet)
-        .await
-        .map_err(|e| Error::WalletInitializationFailure(e))?;
-
-    // only open connection to parachain after bitcoind sync to prevent timeout
     ConnectionManager::<_, _, VaultService>::new(
         opts.parachain.polka_btc_url.clone(),
         signer.clone(),

@@ -9,8 +9,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Unknown Bitcoin network")]
-    UnknownBitcoinNetwork,
     #[error("Mathematical operation error")]
     MathError,
     #[error("Expected Bitcoin address")]

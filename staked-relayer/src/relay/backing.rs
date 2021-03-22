@@ -28,10 +28,10 @@ impl Backing<Error> for Client {
     async fn get_block_header(&self, height: u32) -> Result<Option<Vec<u8>>, CoreError<Error>> {
         let block_hash = match self.bitcoin_core.get_block_hash(height).await {
             Ok(h) => h,
-            Err(_) => {
-                // TODO: match error
+            Err(err) if err.is_invalid_parameter() => {
                 return Ok(None);
             }
+            Err(err) => return Err(CoreError::Backing(err.into())),
         };
         let block_header = self
             .bitcoin_core

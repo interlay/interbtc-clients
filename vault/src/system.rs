@@ -36,6 +36,12 @@ pub struct VaultService {
 
 #[async_trait]
 impl Service<VaultServiceConfig, PolkaBtcProvider> for VaultService {
+    async fn initialize(config: &VaultServiceConfig) -> Result<(), RuntimeError> {
+        Self::connect_bitcoin(&config.bitcoin_core)
+            .await
+            .map_err(|err| RuntimeError::Other(err.to_string()))
+    }
+
     fn new_service(btc_parachain: PolkaBtcProvider, config: VaultServiceConfig, shutdown: ShutdownSender) -> Self {
         VaultService::new(btc_parachain, config, shutdown)
     }
@@ -50,6 +56,19 @@ impl Service<VaultServiceConfig, PolkaBtcProvider> for VaultService {
 }
 
 impl VaultService {
+    async fn connect_bitcoin(bitcoin_core: &BitcoinCore) -> Result<(), Error> {
+        bitcoin_core.connect().await?;
+        bitcoin_core.sync().await?;
+
+        // load wallet. Exit on failure, since without wallet we can't do a lot
+        bitcoin_core
+            .create_or_load_wallet()
+            .await
+            .map_err(|e| Error::WalletInitializationFailure(e))?;
+
+        Ok(())
+    }
+
     fn new(btc_parachain: PolkaBtcProvider, config: VaultServiceConfig, shutdown: ShutdownSender) -> Self {
         Self {
             btc_parachain,
@@ -93,15 +112,15 @@ impl VaultService {
             }
         }
 
-        issue::add_keys_from_past_issue_request(&self.btc_parachain, &bitcoin_core).await?;
+        issue::add_keys_from_past_issue_request(&bitcoin_core, &self.btc_parachain).await?;
 
         let open_request_executor =
             execute_open_requests(self.btc_parachain.clone(), bitcoin_core.clone(), num_confirmations);
         tokio::spawn(async move {
-            info!("Checking for open replace/redeem requests...");
+            info!("Checking for open requests...");
             match open_request_executor.await {
-                Ok(_) => info!("Done processing open replace/redeem requests"),
-                Err(e) => error!("Failed to process open replace/redeem requests: {}", e),
+                Ok(_) => info!("Done processing open requests"),
+                Err(e) => error!("Failed to process open requests: {}", e),
             }
         });
 
@@ -131,7 +150,7 @@ impl VaultService {
 
         // issue handling
         let issue_set = Arc::new(IssueRequests::new());
-        let btc_start_height = issue::initialize_issue_set(&self.btc_parachain, &bitcoin_core, &issue_set).await?;
+        let btc_start_height = issue::initialize_issue_set(&bitcoin_core, &self.btc_parachain, &issue_set).await?;
 
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<RequestEvent>(32);
         let (issue_block_tx, issue_block_rx) = mpsc::channel::<PolkaBtcHeader>(16);
@@ -139,8 +158,8 @@ impl VaultService {
         let issue_request_listener = wait_or_shutdown(
             self.shutdown.clone(),
             listen_for_issue_requests(
-                self.btc_parachain.clone(),
                 bitcoin_core.clone(),
+                self.btc_parachain.clone(),
                 issue_event_tx.clone(),
                 issue_set.clone(),
             ),
@@ -182,8 +201,8 @@ impl VaultService {
         let issue_executor = wait_or_shutdown(
             self.shutdown.clone(),
             issue::process_issue_requests(
-                self.btc_parachain.clone(),
                 bitcoin_core.clone(),
+                self.btc_parachain.clone(),
                 issue_set.clone(),
                 btc_start_height,
                 num_confirmations,

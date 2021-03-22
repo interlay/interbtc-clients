@@ -6,10 +6,12 @@ use bitcoincore_rpc::{
         secp256k1::Error as Secp256k1Error,
         util::{address::Error as AddressError, key::Error as KeyError},
     },
-    jsonrpc::error::RpcError,
+    jsonrpc::{error::RpcError, Error as JsonRpcError},
 };
 use hex::FromHexError;
+use hyper::Error as HyperError;
 use serde_json::Error as SerdeJsonError;
+use std::io::ErrorKind as IoErrorKind;
 use thiserror::Error;
 use tokio::time::Elapsed;
 
@@ -42,6 +44,47 @@ pub enum Error {
     ParsingError,
     #[error("Failed to obtain public key")]
     MissingPublicKey,
+    #[error("Failed to connect")]
+    ConnectionRefused,
+    #[error("Wallet not found")]
+    WalletNotFound,
+    #[error("Invalid Bitcoin network")]
+    InvalidBitcoinNetwork,
+}
+
+impl Error {
+    pub fn is_connection_refused(&self) -> bool {
+        match self {
+            Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Hyper(HyperError::Io(err))))
+                if err.kind() == IoErrorKind::ConnectionRefused =>
+            {
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_wallet_not_found(&self) -> bool {
+        match self {
+            Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
+                if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcWalletNotFound =>
+            {
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_invalid_parameter(&self) -> bool {
+        match self {
+            Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
+                if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcInvalidParameter =>
+            {
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 #[derive(Error, Debug)]

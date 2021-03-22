@@ -5,38 +5,36 @@ use bitcoincore_rpc::{
 };
 use futures::{prelude::*, stream::StreamExt};
 use log::trace;
-use std::{iter, time::Duration};
+use std::iter;
 
-const BLOCK_WAIT_TIMEOUT: u64 = 6;
-
-/// Iterate over transactions, starting with transactions in the mempool, and continuing
-/// with transactions from the best in-chain block, and stopping after the block at
+/// Stream over transactions, starting with this in the mempool and continuing with
+/// transactions from previous in-chain block. The stream ends after the block at
 /// `stop_height` has been returned.
 ///
 /// # Arguments:
 ///
 /// * `rpc` - bitcoin rpc
 /// * `stop_height` - height of the last block the iterator will return transactions from
-pub async fn get_transactions<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn reverse_stream_transactions<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     rpc: &B,
     stop_height: u32,
 ) -> Result<impl Stream<Item = Result<Transaction, Error>> + Unpin + '_, Error> {
     let mempool_transactions = stream::iter(rpc.get_mempool_transactions().await?);
-    let in_chain_transactions = get_in_chain_transactions(rpc, stop_height).await;
+    let in_chain_transactions = reverse_stream_in_chain_transactions(rpc, stop_height).await;
     Ok(mempool_transactions.chain(in_chain_transactions))
 }
 
-/// Iterate over every transaction in every block returned by `get_blocks`.
+/// Stream every transaction in every block returned by `reverse_stream_blocks`.
 ///
 /// # Arguments:
 ///
 /// * `rpc` - bitcoin rpc
 /// * `stop_height` - height of the last block the iterator will return transactions from
-pub async fn get_in_chain_transactions<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn reverse_stream_in_chain_transactions<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     rpc: &B,
     stop_height: u32,
 ) -> impl Stream<Item = Result<Transaction, Error>> + Send + Unpin + '_ {
-    get_blocks(rpc, stop_height).await.flat_map(|block| {
+    reverse_stream_blocks(rpc, stop_height).await.flat_map(|block| {
         // unfortunately two different iterators don't have compatible types, so we have
         // to box them to trait objects
         let transactions: Box<dyn Stream<Item = _> + Unpin + Send> = match block {
@@ -47,44 +45,46 @@ pub async fn get_in_chain_transactions<B: BitcoinCoreApi + Clone + Send + Sync +
     })
 }
 
-struct GetBlocksState<B> {
-    height: Option<usize>,
-    prev_block: Option<Block>,
-    rpc: B,
-    stop_height: u32,
-}
-
-/// Iterate over blocks, start at the best_best, stop at `stop_height`. Note:
-/// the best block is determined when `next()` is first called on the iterator.
-/// This prevents problems when a new block was added while we were iterating
-/// over mempool transactions.
+/// Stream blocks in reverse order, starting at the current best height reported
+/// by Bitcoin core. The best block is determined when `next()` is first called
+/// on the stream. This prevents problems when a new block was added while we were
+/// iterating over mempool transactions. The stream ends when the block at marked
+/// as `stop_height` is resolved.
 ///
 /// # Arguments:
 ///
 /// * `rpc` - bitcoin rpc
-/// * `stop_height` - height of the last block the iterator will return
-pub async fn get_blocks<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+/// * `stop_height` - height of the last block the stream will return
+pub async fn reverse_stream_blocks<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     rpc: &B,
     stop_height: u32,
 ) -> impl Stream<Item = Result<Block, Error>> + Unpin + '_ {
-    let state = GetBlocksState {
+    struct StreamState<B> {
+        height: Option<u32>,
+        prev_block: Option<Block>,
+        rpc: B,
+        stop_height: u32,
+    }
+
+    let state = StreamState {
         height: None,
         prev_block: None,
         rpc,
         stop_height,
     };
+
     Box::pin(
         stream::unfold(state, |mut state| async {
             // get height and hash of the block we potentially are about to fetch
             let (next_height, next_hash) = match (&state.height, &state.prev_block) {
-                (Some(height), Some(block)) => (height - 1, block.header.prev_blockhash),
+                (Some(height), Some(block)) => (height.saturating_sub(1), block.header.prev_blockhash),
                 _ => match get_best_block_info(state.rpc).await {
-                    Ok(info) => (info.height, info.hash),
+                    Ok(info) => (info.height as u32, info.hash),
                     Err(e) => return Some((Err(e), state)), // abort
                 },
             };
 
-            let ret = if next_height < state.stop_height as usize {
+            let result = if next_height < state.stop_height {
                 return None;
             } else {
                 match state.rpc.get_block(&next_hash).await {
@@ -96,7 +96,7 @@ pub async fn get_blocks<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
                     Err(e) => Err(e),
                 }
             };
-            Some((ret, state))
+            Some((result, state))
         })
         .fuse(),
     )
@@ -108,6 +108,7 @@ pub async fn get_blocks<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
 ///
 /// * `rpc` - bitcoin rpc
 /// * `from_height` - height of the first block of the stream
+/// * `num_confirmations` - minimum for a block to be accepted
 pub async fn stream_in_chain_transactions<B: BitcoinCoreApi + Clone>(
     rpc: B,
     from_height: u32,
@@ -129,12 +130,13 @@ pub async fn stream_in_chain_transactions<B: BitcoinCoreApi + Clone>(
 }
 
 /// Stream blocks continuously `from_height` awaiting the production of
-/// new blocks as reported by Bitcoin core.
+/// new blocks as reported by Bitcoin core. The stream never ends.
 ///
 /// # Arguments:
 ///
 /// * `rpc` - bitcoin rpc
 /// * `from_height` - height of the first block of the stream
+/// * `num_confirmations` - minimum for a block to be accepted
 pub async fn stream_blocks<B: BitcoinCoreApi + Clone>(
     rpc: B,
     from_height: u32,
@@ -154,19 +156,12 @@ pub async fn stream_blocks<B: BitcoinCoreApi + Clone>(
         stream::unfold(state, move |mut state| async move {
             // FIXME: if Bitcoin Core forks, this may skip a block
             let height = state.next_height;
-            match state
-                .rpc
-                .wait_for_block(height, Duration::from_secs(BLOCK_WAIT_TIMEOUT), num_confirmations)
-                .await
-            {
-                Ok(block_hash) => match state.rpc.get_block(&block_hash).await {
-                    Ok(block) => {
-                        trace!("found block {} at height {}", block_hash, height);
-                        state.next_height += 1;
-                        Some((Ok(block), state))
-                    }
-                    Err(e) => Some((Err(e), state)),
-                },
+            match state.rpc.wait_for_block(height, num_confirmations).await {
+                Ok(block) => {
+                    trace!("found block {} at height {}", block.block_hash(), height);
+                    state.next_height += 1;
+                    Some((Ok(block), state))
+                }
                 Err(e) => Some((Err(e), state)),
             }
         })
@@ -193,10 +188,10 @@ mod tests {
 
         #[async_trait]
         trait BitcoinCoreApi {
-            async fn wait_for_block(&self, height: u32, delay: Duration, num_confirmations: u32) -> Result<BlockHash, Error>;
+            async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, Error>;
             async fn get_block_count(&self) -> Result<u64, Error>;
-            async fn get_raw_tx_for(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
-            async fn get_proof_for(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+            async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+            async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
             async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
             async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
@@ -240,7 +235,7 @@ mod tests {
                 op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
-            async fn create_wallet(&self, wallet: &str) -> Result<(), Error>;
+            async fn create_or_load_wallet(&self) -> Result<(), Error>;
             async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
                 where
                     P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
@@ -334,7 +329,7 @@ mod tests {
             .returning(|&hash| Ok(dummy_block_info(21, hash)));
 
         let btc_rpc = bitcoin;
-        let mut iter = get_transactions(&btc_rpc, 20).await.unwrap();
+        let mut iter = reverse_stream_transactions(&btc_rpc, 20).await.unwrap();
 
         assert_eq!(iter.next().await.unwrap().unwrap().version, 0);
         assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
@@ -381,7 +376,7 @@ mod tests {
             .returning(|&hash| Ok(dummy_block_info(23, hash)));
 
         let btc_rpc = bitcoin;
-        let mut iter = get_transactions(&btc_rpc, 20).await.unwrap();
+        let mut iter = reverse_stream_transactions(&btc_rpc, 20).await.unwrap();
 
         assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
         assert_eq!(iter.next().await.unwrap().unwrap().version, 2);
@@ -405,7 +400,7 @@ mod tests {
 
         let btc_rpc = bitcoin;
 
-        let mut iter = get_transactions(&btc_rpc, 21).await.unwrap();
+        let mut iter = reverse_stream_transactions(&btc_rpc, 21).await.unwrap();
 
         assert!(iter.next().await.is_none());
     }
@@ -425,7 +420,7 @@ mod tests {
 
         let btc_rpc = bitcoin;
 
-        let mut iter = get_transactions(&btc_rpc, 21).await.unwrap();
+        let mut iter = reverse_stream_transactions(&btc_rpc, 21).await.unwrap();
 
         assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
         assert_eq!(iter.next().await.unwrap().unwrap().version, 2);
@@ -452,7 +447,7 @@ mod tests {
 
         let btc_rpc = bitcoin;
 
-        let mut iter = get_transactions(&btc_rpc, 20).await.unwrap();
+        let mut iter = reverse_stream_transactions(&btc_rpc, 20).await.unwrap();
 
         assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
         assert!(iter.next().await.is_none());

@@ -192,16 +192,11 @@ impl MockBitcoinCore {
 
 #[async_trait]
 impl BitcoinCoreApi for MockBitcoinCore {
-    async fn wait_for_block(
-        &self,
-        height: u32,
-        _delay: Duration,
-        _num_confirmations: u32,
-    ) -> Result<BlockHash, BitcoinError> {
+    async fn wait_for_block(&self, height: u32, _num_confirmations: u32) -> Result<Block, BitcoinError> {
         loop {
             let blocks = self.blocks.read().await;
             if let Some(block) = blocks.get(height as usize + 1) {
-                return Ok(block.header.block_hash());
+                return Ok(block.clone());
             }
             drop(blocks); // release the lock
             delay_for(Duration::from_secs(1)).await;
@@ -210,7 +205,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
     async fn get_block_count(&self) -> Result<u64, BitcoinError> {
         Ok((self.blocks.read().await.len() - 1).try_into().unwrap())
     }
-    async fn get_raw_tx_for(&self, txid: &Txid, _block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError> {
+    async fn get_raw_tx(&self, txid: &Txid, _block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError> {
         let blocks = self.blocks.read().await;
 
         let transaction = blocks
@@ -220,7 +215,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
 
         Ok(serialize(transaction))
     }
-    async fn get_proof_for(&self, txid: Txid, _block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError> {
+    async fn get_proof(&self, txid: Txid, _block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError> {
         let mut proof = Vec::new();
         let blocks = self.blocks.read().await;
 
@@ -343,8 +338,8 @@ impl BitcoinCoreApi for MockBitcoinCore {
             tokio::time::delay_for(Duration::from_secs(1)).await;
         };
         let block_hash = block.block_hash();
-        let proof = self.get_proof_for(txid, &block_hash).await.unwrap();
-        let raw_tx = self.get_raw_tx_for(&txid, &block_hash).await.unwrap();
+        let proof = self.get_proof(txid, &block_hash).await.unwrap();
+        let raw_tx = self.get_raw_tx(&txid, &block_hash).await.unwrap();
 
         Ok(TransactionMetadata {
             block_hash,
@@ -411,7 +406,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
             .unwrap();
         Ok(metadata)
     }
-    async fn create_wallet(&self, _wallet: &str) -> Result<(), BitcoinError> {
+    async fn create_or_load_wallet(&self) -> Result<(), BitcoinError> {
         Ok(())
     }
     async fn wallet_has_public_key<P>(&self, _public_key: P) -> Result<bool, BitcoinError>
