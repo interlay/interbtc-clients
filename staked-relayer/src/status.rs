@@ -49,16 +49,15 @@ impl<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet + UtilFuncs> StatusUpdate
 }
 
 pub async fn listen_for_status_updates<B: BitcoinCoreApi + Clone>(
-    btc_rpc: B,
-    polka_rpc: PolkaBtcProvider,
+    bitcoin_core: B,
+    btc_parachain: PolkaBtcProvider,
 ) -> Result<(), RuntimeError> {
-    let monitor = &StatusUpdateMonitor::new(btc_rpc, polka_rpc.clone());
-
-    let polka_rpc = &polka_rpc;
-    polka_rpc
+    let monitor = &StatusUpdateMonitor::new(bitcoin_core, btc_parachain.clone());
+    let btc_parachain = &btc_parachain;
+    btc_parachain
         .on_event::<PolkaBtcStatusUpdateSuggestedEvent, _, _, _>(
             |event| async move {
-                if event.account_id == *polka_rpc.get_account_id() {
+                if event.account_id == *btc_parachain.get_account_id() {
                     return; // ignore events we caused ourselves
                 }
 
@@ -131,14 +130,21 @@ impl<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet> RelayMonitor<B, P> {
 }
 
 pub async fn listen_for_blocks_stored<B: BitcoinCoreApi + Clone>(
-    btc_rpc: B,
-    polka_rpc: PolkaBtcProvider,
+    bitcoin_core: B,
+    btc_parachain: PolkaBtcProvider,
     status_update_deposit: u128,
 ) -> Result<(), RuntimeError> {
-    let monitor = &RelayMonitor::new(btc_rpc, polka_rpc.clone(), status_update_deposit);
-    polka_rpc
+    let monitor = &RelayMonitor::new(bitcoin_core, btc_parachain.clone(), status_update_deposit);
+    let btc_parachain = &btc_parachain;
+    // TODO: subscribe to StoreForkHeader event
+    btc_parachain
         .on_event::<StoreMainChainHeaderEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
+                if btc_parachain.get_account_id() == &event.account_id {
+                    // ignore self submission
+                    return;
+                }
+
                 if let Err(err) = monitor
                     .on_store_block(event.block_height, event.block_header_hash)
                     .await
