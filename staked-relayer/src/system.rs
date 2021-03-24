@@ -19,7 +19,6 @@ pub struct RelayerServiceConfig {
     pub bitcoin_relay_start_height: Option<u32>,
     pub max_batch_size: u32,
     pub bitcoin_timeout: Duration,
-    pub oracle_timeout: Duration,
     pub required_btc_confirmations: u32,
     pub status_update_deposit: u128,
     pub rpc_cors_domain: String,
@@ -179,11 +178,6 @@ impl RelayerService {
             ),
         );
 
-        let oracle_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            report_offline_oracle(self.btc_parachain.clone(), self.config.oracle_timeout),
-        );
-
         info!("Starting system services...");
         let _ = tokio::join!(
             // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
@@ -194,8 +188,6 @@ impl RelayerService {
             tokio::spawn(async move { vaults_listener.await }),
             // runs sla listener to log events
             tokio::spawn(async move { sla_listener.await }),
-            // runs oracle liveness check
-            tokio::spawn(async move { oracle_listener.await }),
             // runs `NO_DATA` checks and submits status updates
             tokio::spawn(async move { relay_listener.await }),
             // runs subscription service for status updates

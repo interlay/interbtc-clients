@@ -1,6 +1,5 @@
 use super::Core;
 use core::marker::PhantomData;
-pub use module_bitcoin::types::H256Le;
 use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Store};

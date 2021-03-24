@@ -3,7 +3,7 @@
 use crate::{utils, Error};
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
-use runtime::{pallets::btc_relay::H256Le, BtcAddress, PolkaBtcProvider, ReplacePallet, UtilFuncs};
+use runtime::{BtcAddress, H256Le, PolkaBtcProvider, ReplacePallet, UtilFuncs};
 use sp_core::H256;
 use std::{convert::TryInto, time::Duration};
 

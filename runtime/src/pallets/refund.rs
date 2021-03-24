@@ -1,6 +1,6 @@
 use super::Core;
+use crate::RefundRequest;
 use core::marker::PhantomData;
-pub use module_refund::RefundRequest;
 use parity_scale_codec::{Decode, Encode};
 use serde::Serialize;
 use std::fmt::Debug;

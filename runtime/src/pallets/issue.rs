@@ -1,7 +1,6 @@
 use super::Core;
+use crate::IssueRequest;
 use core::marker::PhantomData;
-pub use module_bitcoin::types::H256Le;
-pub use module_issue::IssueRequest;
 use parity_scale_codec::{Decode, Encode};
 use serde::Serialize;
 use std::fmt::Debug;
@@ -32,7 +31,7 @@ pub struct RequestIssueEvent<T: Issue> {
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct ExecuteIssueCall<T: Issue> {
     pub issue_id: T::H256,
-    pub tx_id: H256Le,
+    pub tx_id: T::H256Le,
     pub merkle_proof: Vec<u8>,
     pub raw_tx: Vec<u8>,
     pub _runtime: PhantomData<T>,

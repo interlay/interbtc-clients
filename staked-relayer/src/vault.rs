@@ -227,7 +227,6 @@ mod tests {
                 approve: bool,
             ) -> Result<(), RuntimeError>;
             async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, RuntimeError>;
-            async fn report_oracle_offline(&self) -> Result<(), RuntimeError>;
             async fn report_vault_theft(
                 &self,
                 vault_id: AccountId,
@@ -242,6 +241,13 @@ mod tests {
             ) -> Result<bool, RuntimeError>;
             async fn set_maturity_period(&self, period: u32) -> Result<(), RuntimeError>;
             async fn evaluate_status_update(&self, status_update_id: u64) -> Result<(), RuntimeError>;
+            async fn initialize_btc_relay(
+                &self,
+                header: RawBlockHeader,
+                height: BitcoinBlockHeight,
+            ) -> Result<(), RuntimeError>;
+            async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), RuntimeError>;
+            async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), RuntimeError>;
         }
 
         #[async_trait]
@@ -250,13 +256,6 @@ mod tests {
             async fn get_best_block_height(&self) -> Result<u32, RuntimeError>;
             async fn get_block_hash(&self, height: u32) -> Result<H256Le, RuntimeError>;
             async fn get_block_header(&self, hash: H256Le) -> Result<PolkaBtcRichBlockHeader, RuntimeError>;
-            async fn initialize_btc_relay(
-                &self,
-                header: RawBlockHeader,
-                height: BitcoinBlockHeight,
-            ) -> Result<(), RuntimeError>;
-            async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), RuntimeError>;
-            async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), RuntimeError>;
             async fn get_bitcoin_confirmations(&self) -> Result<u32, RuntimeError>;
             async fn wait_for_block_in_relay(
                 &self,

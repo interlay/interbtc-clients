@@ -1,9 +1,6 @@
 use super::Core;
+use crate::{BitcoinBlockHeight, RawBlockHeader, StakedRelayer, StatusUpdate};
 use core::marker::PhantomData;
-pub use module_staked_relayers::{
-    types::{StakedRelayer, StatusUpdate},
-    Error as StakedRelayersError,
-};
 use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
 use substrate_subxt::balances::Balances;
@@ -37,11 +34,6 @@ pub struct VoteOnStatusUpdateCall<T: StakedRelayers> {
     pub _runtime: PhantomData<T>,
     pub status_update_id: u64,
     pub approve: bool,
-}
-
-#[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct ReportOracleOffline<T: StakedRelayers> {
-    pub _runtime: PhantomData<T>,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
@@ -124,4 +116,23 @@ pub struct ActiveStatusUpdatesStore<T: StakedRelayers> {
     #[store(returns = StatusUpdate<T::AccountId, T::BlockNumber, T::DOT>)]
     pub _runtime: PhantomData<T>,
     pub status_id: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct InitializeCall<T: StakedRelayers> {
+    pub _runtime: PhantomData<T>,
+    pub raw_block_header: RawBlockHeader,
+    pub block_height: BitcoinBlockHeight,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct StoreBlockHeaderCall<T: StakedRelayers> {
+    pub _runtime: PhantomData<T>,
+    pub raw_block_header: RawBlockHeader,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct StoreBlockHeadersCall<T: StakedRelayers> {
+    pub _runtime: PhantomData<T>,
+    pub raw_block_headers: Vec<RawBlockHeader>,
 }

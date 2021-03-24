@@ -1,6 +1,6 @@
 [package]
 name = "bitcoin"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 
@@ -34,7 +34,6 @@ sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1
 [dependencies.polkabtc-bitcoin]
 git = "https://github.com/interlay/btc-parachain"
 branch = "master"
-version = "0.5.0"
 package = "bitcoin"
 optional = true
 

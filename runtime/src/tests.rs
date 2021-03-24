@@ -3,8 +3,8 @@
 use crate::integration::*;
 
 use super::{
-    BtcAddress, BtcPublicKey, BtcRelayPallet, DotBalancesPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet,
-    StatusCode, VaultRegistryPallet, MINIMUM_STAKE,
+    BtcAddress, BtcPublicKey, BtcRelayPallet, DotBalancesPallet, ExchangeRateOraclePallet, FixedPointNumber, FixedU128,
+    ReplacePallet, SecurityPallet, StakedRelayerPallet, StatusCode, VaultRegistryPallet, MINIMUM_STAKE,
 };
 use module_bitcoin::{
     formatter::TryFormattable,
@@ -20,10 +20,19 @@ fn dummy_public_key() -> BtcPublicKey {
     ])
 }
 
+async fn set_exchange_rate(client: SubxtClient) {
+    let oracle_provider = setup_provider(client, AccountKeyring::Bob).await;
+    oracle_provider
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
+        .await
+        .expect("Unable to set exchange rate");
+}
+
 #[tokio::test]
 async fn test_getters() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    set_exchange_rate(client.clone()).await;
 
     assert_eq!(provider.get_free_dot_balance().await.unwrap(), 1 << 60);
     assert_eq!(provider.get_parachain_status().await.unwrap(), StatusCode::Running);
@@ -34,6 +43,7 @@ async fn test_getters() {
 async fn test_register_vault() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    set_exchange_rate(client.clone()).await;
 
     provider.register_vault(100, dummy_public_key()).await.unwrap();
     let vault = provider.get_vault(AccountKeyring::Alice.to_account_id()).await.unwrap();
@@ -44,6 +54,7 @@ async fn test_register_vault() {
 async fn test_btc_relay() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    set_exchange_rate(client.clone()).await;
 
     // must be authorized to submit blocks
     provider.register_staked_relayer(MINIMUM_STAKE).await.unwrap();
