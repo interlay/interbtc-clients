@@ -17,8 +17,8 @@ use tokio::{sync::RwLock, time::delay_for};
 
 use crate::{
     balances_dot::*, btc_relay::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*,
-    refund::*, replace::*, security::*, staked_relayers::*, timestamp::*, types::*, vault_registry::*, AccountId,
-    BlockNumber, Error, PolkaBtcRuntime,
+    refund::*, replace::*, security::*, staked_relayers::*, timestamp::*, types::*, utility::*, vault_registry::*,
+    AccountId, BlockNumber, Error, PolkaBtcRuntime,
 };
 
 #[derive(Clone)]
@@ -191,9 +191,20 @@ impl PolkaBtcProvider {
     }
 
     async fn sudo<C: Call<PolkaBtcRuntime>>(&self, call: C) -> Result<(), Error> {
-        let encoded = self.ext_client.encode(call)?;
+        let encoded_call = self.ext_client.encode(call)?;
         self.ext_client
-            .sudo_and_watch(&self.get_unique_signer().await, &encoded)
+            .sudo_and_watch(&self.get_unique_signer().await, &encoded_call)
+            .await?;
+        Ok(())
+    }
+
+    async fn batch<C: Call<PolkaBtcRuntime>>(&self, calls: Vec<C>) -> Result<(), Error> {
+        let encoded_calls = calls
+            .into_iter()
+            .map(|call| self.ext_client.encode(call))
+            .collect::<Result<Vec<_>, _>>()?;
+        self.ext_client
+            .batch_and_watch(&self.get_unique_signer().await, encoded_calls)
             .await?;
         Ok(())
     }
@@ -849,10 +860,16 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// # Arguments
     /// * `headers` - raw block headers
     async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error> {
-        self.ext_client
-            .store_block_headers_and_watch(&self.get_unique_signer().await, headers)
-            .await?;
-        Ok(())
+        self.batch(
+            headers
+                .into_iter()
+                .map(|header| StoreBlockHeaderCall {
+                    _runtime: PhantomData {},
+                    raw_block_header: header,
+                })
+                .collect(),
+        )
+        .await
     }
 }
 

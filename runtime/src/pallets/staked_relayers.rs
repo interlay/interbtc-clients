@@ -130,9 +130,3 @@ pub struct StoreBlockHeaderCall<T: StakedRelayers> {
     pub _runtime: PhantomData<T>,
     pub raw_block_header: RawBlockHeader,
 }
-
-#[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct StoreBlockHeadersCall<T: StakedRelayers> {
-    pub _runtime: PhantomData<T>,
-    pub raw_block_headers: Vec<RawBlockHeader>,
-}
