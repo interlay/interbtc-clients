@@ -34,6 +34,8 @@ pub enum Error {
     ChannelClosed,
     #[error("Client has shutdown unexpectedly")]
     ClientShutdown,
+    #[error("Transaction is outdated")]
+    OutdatedTransaction,
 
     #[error("Failed to load credentials from file: {0}")]
     KeyLoadingFailure(#[from] KeyLoadingError),
@@ -95,3 +97,7 @@ pub enum KeyLoadingError {
     #[error("Invalid secret string: {0:?}")]
     SecretStringError(SecretStringError),
 }
+
+// https://github.com/paritytech/substrate/blob/e60597dff0aa7ffad623be2cc6edd94c7dc51edd/client/rpc-api/src/author/error.rs#L80
+const BASE_ERROR: i64 = 1000;
+pub const POOL_INVALID_TX: i64 = BASE_ERROR + 10;
