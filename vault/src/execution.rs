@@ -10,7 +10,8 @@ use runtime::{
         replace::{AcceptReplaceEvent, AuctionReplaceEvent},
     },
     BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcRefundRequest,
-    PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RefundPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet, ReplacePallet, UtilFuncs,
+    VaultRegistryPallet,
 };
 use sp_core::H256;
 use std::{collections::HashMap, time::Duration};
@@ -37,7 +38,7 @@ impl Request {
         Request {
             hash,
             open_time: Some(request.opentime),
-            amount: request.amount_polka_btc,
+            amount: request.amount_btc,
             btc_address: request.btc_address,
             request_type: RequestType::Redeem,
         }
@@ -227,7 +228,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
 
     let open_redeems = redeem_requests
         .into_iter()
-        .filter(|(_, request)| !request.completed && !request.cancelled)
+        .filter(|(_, request)| request.status == RedeemRequestStatus::Pending)
         .map(|(hash, request)| Request::from_redeem_request(hash, request));
 
     let open_replaces = replace_requests

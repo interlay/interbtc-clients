@@ -16,9 +16,9 @@ use substrate_subxt::{
 use tokio::{sync::RwLock, time::delay_for};
 
 use crate::{
-    balances_dot::*, btc_relay::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::Core, redeem::*,
-    refund::*, replace::*, security::*, staked_relayers::*, timestamp::*, types::*, vault_registry::*, BlockNumber,
-    Error, PolkaBtcRuntime,
+    balances_dot::*, btc_relay::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*,
+    refund::*, replace::*, security::*, staked_relayers::*, timestamp::*, types::*, vault_registry::*, AccountId,
+    BlockNumber, Error, PolkaBtcRuntime,
 };
 
 #[derive(Clone)]
@@ -630,8 +630,6 @@ pub trait StakedRelayerPallet {
 
     async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, Error>;
 
-    async fn report_oracle_offline(&self) -> Result<(), Error>;
-
     async fn report_vault_theft(
         &self,
         vault_id: AccountId,
@@ -645,6 +643,12 @@ pub trait StakedRelayerPallet {
     async fn set_maturity_period(&self, period: u32) -> Result<(), Error>;
 
     async fn evaluate_status_update(&self, status_update_id: u64) -> Result<(), Error>;
+
+    async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), Error>;
+
+    async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error>;
+
+    async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -745,14 +749,6 @@ impl StakedRelayerPallet for PolkaBtcProvider {
         Ok(self.ext_client.active_status_updates(status_update_id, head).await?)
     }
 
-    /// Submit extrinsic to report that the oracle is offline.
-    async fn report_oracle_offline(&self) -> Result<(), Error> {
-        self.ext_client
-            .report_oracle_offline_and_watch(&self.get_unique_signer().await)
-            .await?;
-        Ok(())
-    }
-
     /// Submit extrinsic to report vault theft, consumer should
     /// first check `is_transaction_invalid` to ensure this call
     /// succeeds.
@@ -819,6 +815,44 @@ impl StakedRelayerPallet for PolkaBtcProvider {
                 _runtime: PhantomData {},
             })
             .await?)
+    }
+
+    /// Initializes the relay with the provided block header and height,
+    /// should be called automatically by relayer subject to the
+    /// result of `is_initialized`.
+    ///
+    /// # Arguments
+    /// * `header` - raw block header
+    /// * `height` - starting height
+    async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), Error> {
+        // TODO: can we initialize the relay through the chain-spec?
+        // we would also need to consider re-initialization per governance
+        self.ext_client
+            .initialize_and_watch(&self.get_unique_signer().await, header, height)
+            .await?;
+        Ok(())
+    }
+
+    /// Stores a block header in the BTC-Relay.
+    ///
+    /// # Arguments
+    /// * `header` - raw block header
+    async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error> {
+        self.ext_client
+            .store_block_header_and_watch(&self.get_unique_signer().await, header)
+            .await?;
+        Ok(())
+    }
+
+    /// Stores multiple block headers in the BTC-Relay.
+    ///
+    /// # Arguments
+    /// * `headers` - raw block headers
+    async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error> {
+        self.ext_client
+            .store_block_headers_and_watch(&self.get_unique_signer().await, headers)
+            .await?;
+        Ok(())
     }
 }
 
@@ -956,7 +990,7 @@ impl IssuePallet for PolkaBtcProvider {
         let head = self.get_latest_block_hash().await?;
         let mut iter = self.ext_client.issue_requests_iter(head).await?;
         while let Some((issue_id, request)) = iter.next().await? {
-            if !request.completed && !request.cancelled && request.opentime + issue_period > current_height {
+            if request.status == IssueRequestStatus::Pending && request.opentime + issue_period > current_height {
                 let key_hash = issue_id.0.as_slice();
                 // last bytes are the raw key
                 let key = &key_hash[key_hash.len() - 32..];
@@ -1138,12 +1172,6 @@ pub trait BtcRelayPallet {
 
     async fn get_block_header(&self, hash: H256Le) -> Result<PolkaBtcRichBlockHeader, Error>;
 
-    async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), Error>;
-
-    async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error>;
-
-    async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error>;
-
     async fn get_bitcoin_confirmations(&self) -> Result<u32, Error>;
 
     async fn wait_for_block_in_relay(&self, block_hash: H256Le, num_confirmations: u32) -> Result<(), Error>;
@@ -1179,44 +1207,6 @@ impl BtcRelayPallet for PolkaBtcProvider {
     async fn get_block_header(&self, hash: H256Le) -> Result<PolkaBtcRichBlockHeader, Error> {
         let head = self.get_latest_block_hash().await?;
         Ok(self.ext_client.block_headers(hash, head).await?)
-    }
-
-    /// Initializes the relay with the provided block header and height,
-    /// should be called automatically by relayer subject to the
-    /// result of `is_initialized`.
-    ///
-    /// # Arguments
-    /// * `header` - raw block header
-    /// * `height` - starting height
-    async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), Error> {
-        // TODO: can we initialize the relay through the chain-spec?
-        // we would also need to consider re-initialization per governance
-        self.ext_client
-            .initialize_and_watch(&self.get_unique_signer().await, header, height)
-            .await?;
-        Ok(())
-    }
-
-    /// Stores a block header in the BTC-Relay.
-    ///
-    /// # Arguments
-    /// * `header` - raw block header
-    async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error> {
-        self.ext_client
-            .store_block_header_and_watch(&self.get_unique_signer().await, header)
-            .await?;
-        Ok(())
-    }
-
-    /// Stores multiple block headers in the BTC-Relay.
-    ///
-    /// # Arguments
-    /// * `headers` - raw block headers
-    async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error> {
-        self.ext_client
-            .store_block_headers_and_watch(&self.get_unique_signer().await, headers)
-            .await?;
-        Ok(())
     }
 
     /// Get the global security parameter k for stable Bitcoin transactions

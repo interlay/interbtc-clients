@@ -2,7 +2,9 @@ use super::Error;
 use async_trait::async_trait;
 use futures::{channel::mpsc::Receiver, *};
 use log::*;
-use runtime::{AccountId, Error as RuntimeError, IssuePallet, PolkaBtcHeader, ReplacePallet, UtilFuncs};
+use runtime::{
+    AccountId, Error as RuntimeError, IssuePallet, IssueRequestStatus, PolkaBtcHeader, ReplacePallet, UtilFuncs,
+};
 use sp_core::H256;
 use std::marker::{Send, Sync};
 
@@ -77,7 +79,7 @@ impl<P: IssuePallet + ReplacePallet + Clone + Send + Sync> Canceller<P> for Issu
             .get_vault_issue_requests(vault_id)
             .await?
             .iter()
-            .filter(|(_, issue)| !issue.completed && !issue.cancelled)
+            .filter(|(_, issue)| issue.status == IssueRequestStatus::Pending)
             .map(|(id, issue)| UnconvertedOpenTime {
                 id: *id,
                 open_time: issue.opentime,

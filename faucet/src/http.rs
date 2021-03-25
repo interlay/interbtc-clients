@@ -294,7 +294,10 @@ mod tests {
         PLANCK_PER_DOT,
     };
     use kv::{Config, Store};
-    use runtime::{integration::*, AccountId, BtcPublicKey, StakedRelayerPallet, VaultRegistryPallet};
+    use runtime::{
+        integration::*, AccountId, BtcPublicKey, ExchangeRateOraclePallet, FixedPointNumber, FixedU128,
+        StakedRelayerPallet, VaultRegistryPallet,
+    };
     use sp_keyring::AccountKeyring;
 
     macro_rules! assert_err {
@@ -318,9 +321,19 @@ mod tests {
         dot.checked_mul(PLANCK_PER_DOT).unwrap()
     }
 
+    async fn set_exchange_rate(client: SubxtClient) {
+        let oracle_provider = setup_provider(client, AccountKeyring::Bob).await;
+        oracle_provider
+            .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
+            .await
+            .expect("Unable to set exchange rate");
+    }
+
     #[tokio::test]
     async fn test_fund_user_once_succeeds() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+        set_exchange_rate(client.clone()).await;
+
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
@@ -361,6 +374,8 @@ mod tests {
     #[tokio::test]
     async fn test_fund_user_immediately_after_registering_as_vault_succeeds() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+        set_exchange_rate(client.clone()).await;
+
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
@@ -413,6 +428,8 @@ mod tests {
     #[tokio::test]
     async fn test_fund_user_immediately_after_registering_as_staked_relayer_succeeds() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+        set_exchange_rate(client.clone()).await;
+
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
@@ -465,6 +482,8 @@ mod tests {
     #[tokio::test]
     async fn test_fund_user_twice_in_a_row_fails() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+        set_exchange_rate(client.clone()).await;
+
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
@@ -513,6 +532,8 @@ mod tests {
     #[tokio::test]
     async fn test_fund_vault_once_succeeds() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+        set_exchange_rate(client.clone()).await;
+
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
@@ -554,6 +575,8 @@ mod tests {
     #[tokio::test]
     async fn test_fund_vault_twice_in_a_row_fails() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+        set_exchange_rate(client.clone()).await;
+
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;

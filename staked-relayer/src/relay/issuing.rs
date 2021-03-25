@@ -1,7 +1,7 @@
 use super::Error;
 use crate::core::{Error as CoreError, Issuing};
 use async_trait::async_trait;
-use runtime::{BtcRelayPallet, H256Le, PolkaBtcProvider, RawBlockHeader};
+use runtime::{BtcRelayPallet, H256Le, PolkaBtcProvider, RawBlockHeader, StakedRelayerPallet};
 
 pub struct Client {
     rpc: PolkaBtcProvider,

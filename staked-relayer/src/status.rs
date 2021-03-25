@@ -168,7 +168,8 @@ mod tests {
         TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
-        AccountId, Error as RuntimeError, ErrorCode, H256Le, PolkaBtcStatusUpdate, StatusCode, MINIMUM_STAKE,
+        AccountId, BitcoinBlockHeight, Error as RuntimeError, ErrorCode, H256Le, PolkaBtcStatusUpdate, RawBlockHeader,
+        StatusCode, MINIMUM_STAKE,
     };
     use sp_core::H256;
     use sp_keyring::AccountKeyring;
@@ -237,7 +238,6 @@ mod tests {
                 approve: bool,
             ) -> Result<(), RuntimeError>;
             async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, RuntimeError>;
-            async fn report_oracle_offline(&self) -> Result<(), RuntimeError>;
             async fn report_vault_theft(
                 &self,
                 vault_id: AccountId,
@@ -252,6 +252,13 @@ mod tests {
             ) -> Result<bool, RuntimeError>;
             async fn set_maturity_period(&self, period: u32) -> Result<(), RuntimeError>;
             async fn evaluate_status_update(&self, status_update_id: u64) -> Result<(), RuntimeError>;
+            async fn initialize_btc_relay(
+                &self,
+                header: RawBlockHeader,
+                height: BitcoinBlockHeight,
+            ) -> Result<(), RuntimeError>;
+            async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), RuntimeError>;
+            async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), RuntimeError>;
         }
     }
 

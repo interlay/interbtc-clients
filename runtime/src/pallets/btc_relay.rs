@@ -1,34 +1,12 @@
 use super::Core;
+use crate::BitcoinBlockHeight;
 use core::marker::PhantomData;
-pub use module_bitcoin::{formatter::Formattable, types::*};
-pub use module_btc_relay::{BtcAddress, BtcPublicKey, RichBlockHeader};
 use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
-use substrate_subxt_proc_macro::{module, Call, Event, Store};
-
-pub type BitcoinBlockHeight = u32;
+use substrate_subxt_proc_macro::{module, Event, Store};
 
 #[module]
 pub trait BTCRelay: Core {}
-
-#[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct InitializeCall<T: BTCRelay> {
-    pub _runtime: PhantomData<T>,
-    pub raw_block_header: RawBlockHeader,
-    pub block_height: BitcoinBlockHeight,
-}
-
-#[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct StoreBlockHeaderCall<T: BTCRelay> {
-    pub _runtime: PhantomData<T>,
-    pub raw_block_header: RawBlockHeader,
-}
-
-#[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct StoreBlockHeadersCall<T: BTCRelay> {
-    pub _runtime: PhantomData<T>,
-    pub raw_block_headers: Vec<RawBlockHeader>,
-}
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct BestBlockStore<T: BTCRelay> {

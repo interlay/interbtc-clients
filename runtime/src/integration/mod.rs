@@ -12,11 +12,11 @@ use sp_keyring::AccountKeyring;
 use sp_runtime::FixedPointNumber;
 use std::time::Duration;
 use substrate_subxt::{Event, PairSigner};
-use substrate_subxt_client::{
-    DatabaseConfig, KeystoreConfig, Role, SubxtClient, SubxtClientConfig, WasmExecutionMethod,
-};
+use substrate_subxt_client::{DatabaseConfig, KeystoreConfig, Role, SubxtClientConfig, WasmExecutionMethod};
 use tempdir::TempDir;
 use tokio::time::timeout;
+
+pub use substrate_subxt_client::SubxtClient;
 
 // export the mocked bitcoin interface
 pub use bitcoin_simulator::MockBitcoinCore;

@@ -2,7 +2,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
-use crate::{BtcAddress, BtcRelayPallet, PolkaBtcProvider};
+use crate::{rpc::StakedRelayerPallet, BtcAddress, BtcRelayPallet, PolkaBtcProvider};
 use async_trait::async_trait;
 use bitcoin::{
     secp256k1::{rand::rngs::OsRng, PublicKey, Secp256k1, SecretKey},

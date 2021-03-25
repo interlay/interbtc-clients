@@ -1,6 +1,6 @@
 [package]
 name = "testdata-gen"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Interlay <dev@interlay.io>"]
 edition = "2018"
 

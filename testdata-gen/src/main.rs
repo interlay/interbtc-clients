@@ -14,8 +14,9 @@ use log::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     substrate_subxt::PairSigner, AccountId, BtcAddress, DotBalancesPallet, ErrorCode as PolkaBtcErrorCode,
-    ExchangeRateOraclePallet, FeePallet, FixedPointNumber, FixedPointTraits::*, FixedU128, H256Le, PolkaBtcProvider,
-    PolkaBtcRuntime, RedeemPallet, StakedRelayerPallet, StatusCode as PolkaBtcStatusCode, TimestampPallet,
+    ExchangeRateOraclePallet, FeePallet, FixedPointNumber, FixedPointTraits::*, FixedU128, H256Le, IssueRequestStatus,
+    PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, StakedRelayerPallet, StatusCode as PolkaBtcStatusCode,
+    TimestampPallet,
 };
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
@@ -63,7 +64,6 @@ impl std::str::FromStr for PolkaBtcErrorCodeFromStr {
             "no-data-btc-relay" => Ok(PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode::NoDataBTCRelay)),
             "invalid-btc-relay" => Ok(PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode::InvalidBTCRelay)),
             "oracle-offline" => Ok(PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode::OracleOffline)),
-            "liquidation" => Ok(PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode::Liquidation)),
             _ => Err("Could not parse input as ErrorCode".to_string()),
         }
     }
@@ -552,9 +552,9 @@ async fn main() -> Result<(), Error> {
             let (btc_address, satoshis) = if let Some(issue_id) = info.issue_id {
                 // gets the data from on-chain
                 let issue_request = issue::get_issue_by_id(&provider, issue_id).await?;
-                if issue_request.completed {
+                if matches!(issue_request.status, IssueRequestStatus::Completed(_)) {
                     return Err(Error::IssueCompleted);
-                } else if issue_request.cancelled {
+                } else if matches!(issue_request.status, IssueRequestStatus::Cancelled) {
                     return Err(Error::IssueCancelled);
                 }
 

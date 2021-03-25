@@ -1,6 +1,5 @@
 use super::Core;
 use core::marker::PhantomData;
-pub use module_security::{ErrorCode, StatusCode};
 use parity_scale_codec::{Decode, Encode};
 use sp_core::U256;
 use std::fmt::Debug;
@@ -17,7 +16,7 @@ pub struct NonceStore<T: Security> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct ParachainStatusStore<T: Security> {
-    #[store(returns = StatusCode)]
+    #[store(returns = T::StatusCode)]
     pub _runtime: PhantomData<T>,
 }
 

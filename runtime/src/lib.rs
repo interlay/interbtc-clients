@@ -12,28 +12,22 @@ mod tests;
 #[cfg(feature = "testing-utils")]
 pub mod integration;
 
-pub use btc_relay::{
-    BitcoinBlockHeight, BlockBuilder, BtcAddress, BtcPublicKey, Formattable, H256Le, RawBlockHeader, RichBlockHeader,
-};
 pub use conn::{
     on_shutdown, wait_or_shutdown, Manager as ConnectionManager, ManagerConfig as ConnectionManagerConfig, Provider,
     RestartPolicy, Service, ShutdownSender,
 };
 pub use error::{Error, SubxtError};
+pub use pallets::*;
 pub use rpc::{
     BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet, ExchangeRateOraclePallet, FeePallet, IssuePallet,
     PolkaBtcProvider, RedeemPallet, RefundPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
     UtilFuncs, VaultRegistryPallet,
 };
-pub use security::{ErrorCode, StatusCode};
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
 pub use sp_runtime;
 pub use substrate_subxt;
 pub use types::*;
-pub use vault_registry::VaultStatus;
 
-use pallets::*;
-use sp_core::{H160, H256};
 use sp_runtime::{
     generic::Header,
     traits::{BlakeTwo256, IdentifyAccount, Verify},
@@ -75,6 +69,8 @@ impl Runtime for PolkaBtcRuntime {
     }
 }
 
+pub type Index = u32;
+
 /// An index to a block.
 pub type BlockNumber = u32;
 
@@ -83,7 +79,7 @@ pub type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::Ac
 
 // TODO: use types from actual runtime
 impl system::System for PolkaBtcRuntime {
-    type Index = u32;
+    type Index = Index;
     type BlockNumber = BlockNumber;
     type Hash = H256;
     type Hashing = BlakeTwo256;
@@ -99,7 +95,7 @@ impl pallets::Core for PolkaBtcRuntime {
     type DOT = Balance;
     type PolkaBTC = Balance;
     type BTCBalance = Balance;
-    type RichBlockHeader = RichBlockHeader<AccountId>;
+    type RichBlockHeader = PolkaBtcRichBlockHeader;
     type H256Le = H256Le;
     type H160 = H160;
     type H256 = H256;

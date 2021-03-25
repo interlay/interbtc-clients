@@ -100,30 +100,6 @@ async fn test_report_vault_theft_succeeds() {
     .await
 }
 
-async fn test_oracle_offline_succeeds() {
-    let _ = env_logger::try_init();
-
-    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-
-    let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
-    let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-
-    root_provider.set_maturity_period(0).await.unwrap();
-
-    relayer_provider.register_staked_relayer(1000000).await.unwrap();
-
-    test_service(
-        staked_relayer::service::report_offline_oracle(relayer_provider.clone(), Duration::from_secs(1)),
-        async {
-            assert_event::<ExecuteStatusUpdateEvent<PolkaBtcRuntime>, _>(TIMEOUT, relayer_provider.clone(), |e| {
-                matches!(e.add_error, Some(runtime::ErrorCode::OracleOffline))
-            })
-            .await;
-        },
-    )
-    .await
-}
-
 #[tokio::test(threaded_scheduler)]
 async fn test_register_deregister_succeeds() {
     let _ = env_logger::try_init();

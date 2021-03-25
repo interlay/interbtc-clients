@@ -1,9 +1,7 @@
 use super::Core;
+use crate::ReplaceRequest;
 use core::marker::PhantomData;
-pub use module_bitcoin::types::H256Le;
-pub use module_replace::ReplaceRequest;
 use parity_scale_codec::{Decode, Encode};
-pub use sp_core::{H160, H256};
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 

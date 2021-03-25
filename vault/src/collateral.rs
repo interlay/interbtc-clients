@@ -2,8 +2,8 @@ use crate::error::Error;
 use futures::future;
 use log::*;
 use runtime::{
-    pallets::{exchange_rate_oracle::SetExchangeRateEvent, vault_registry::VaultStatus},
-    AccountId, DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
+    pallets::exchange_rate_oracle::SetExchangeRateEvent, AccountId, DotBalancesPallet, PolkaBtcProvider,
+    PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet, VaultStatus,
 };
 
 pub async fn maintain_collateralization_rate(
@@ -109,9 +109,7 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use runtime::{
-        pallets::Core, AccountId, BtcAddress, BtcPublicKey, Error as RuntimeError, PolkaBtcRuntime, PolkaBtcVault,
-    };
+    use runtime::{AccountId, BtcAddress, BtcPublicKey, Error as RuntimeError, PolkaBtcBalance, PolkaBtcVault};
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {
@@ -155,9 +153,9 @@ mod tests {
 
         #[async_trait]
         pub trait DotBalancesPallet {
-            async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
-            async fn get_free_dot_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
-            async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
+            async fn get_free_dot_balance(&self) -> Result<PolkaBtcBalance, RuntimeError>;
+            async fn get_free_dot_balance_for_id(&self, id: AccountId) -> Result<PolkaBtcBalance, RuntimeError>;
+            async fn get_reserved_dot_balance(&self) -> Result<PolkaBtcBalance, RuntimeError>;
             async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), RuntimeError>;
         }
     }

@@ -39,10 +39,6 @@ struct Opts {
     #[clap(long, default_value = "16")]
     max_batch_size: u32,
 
-    /// Timeout in milliseconds to repeat oracle liveness check.
-    #[clap(long, default_value = "5000")]
-    oracle_timeout_ms: u64,
-
     /// Default deposit for all automated status proposals.
     #[clap(long, default_value = "100")]
     status_update_deposit: u128,
@@ -87,7 +83,6 @@ async fn start() -> Result<(), Error> {
             bitcoin_relay_start_height: opts.bitcoin_relay_start_height,
             max_batch_size: opts.max_batch_size,
             bitcoin_timeout: Duration::from_millis(opts.bitcoin_poll_timeout_ms),
-            oracle_timeout: Duration::from_millis(opts.oracle_timeout_ms),
             required_btc_confirmations: opts.required_btc_confirmations,
             status_update_deposit: opts.status_update_deposit,
             rpc_cors_domain: opts.rpc_cors_domain,
