@@ -158,6 +158,8 @@ impl sla::Sla for PolkaBtcRuntime {}
 
 impl treasury::Treasury for PolkaBtcRuntime {}
 
+impl utility::Utility for PolkaBtcRuntime {}
+
 pub const BTC_RELAY_MODULE: &str = "BTCRelay";
 pub const ISSUE_MODULE: &str = "Issue";
 

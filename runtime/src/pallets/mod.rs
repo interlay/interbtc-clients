@@ -13,6 +13,7 @@ pub mod sla;
 pub mod staked_relayers;
 pub mod timestamp;
 pub mod treasury;
+pub mod utility;
 pub mod vault_registry;
 
 pub use module_bitcoin::{formatter::Formattable, types::*};
