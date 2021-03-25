@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-use crate::{utils, Error};
+use crate::Error;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
-use runtime::{BtcAddress, H256Le, PolkaBtcProvider, ReplacePallet, UtilFuncs};
+use runtime::{BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, ReplacePallet, UtilFuncs};
 use sp_core::H256;
 use std::{convert::TryInto, time::Duration};
 
@@ -54,7 +54,9 @@ pub async fn execute_replace(
         )
         .await?;
 
-    utils::wait_for_block_in_relay(replace_prov, tx_metadata.block_hash).await;
+    replace_prov
+        .wait_for_block_in_relay(H256Le::from_bytes_le(&tx_metadata.block_hash.to_vec()), None)
+        .await?;
 
     replace_prov
         .execute_replace(

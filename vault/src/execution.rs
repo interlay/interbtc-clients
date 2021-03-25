@@ -290,7 +290,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                         if let Err(e) = provider
                             .wait_for_block_in_relay(
                                 H256Le::from_bytes_le(&tx_metadata.block_hash.to_vec()),
-                                num_confirmations,
+                                Some(num_confirmations),
                             )
                             .await
                         {

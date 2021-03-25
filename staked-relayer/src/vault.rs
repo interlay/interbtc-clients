@@ -103,7 +103,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
         // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
         self.btc_parachain
-            .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash.to_vec()), num_confirmations)
+            .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash.to_vec()), Some(num_confirmations))
             .await?;
 
         let tx_id = tx.txid();
@@ -196,7 +196,7 @@ mod tests {
         Transaction, TransactionMetadata, PUBLIC_KEY_SIZE,
     };
     use runtime::{
-        AccountId, BitcoinBlockHeight, Error as RuntimeError, ErrorCode, H256Le, PolkaBtcRichBlockHeader,
+        AccountId, BitcoinBlockHeight, BlockNumber, Error as RuntimeError, ErrorCode, H256Le, PolkaBtcRichBlockHeader,
         PolkaBtcStatusUpdate, RawBlockHeader, StatusCode,
     };
     use sp_core::{H160, H256};
@@ -257,10 +257,11 @@ mod tests {
             async fn get_block_hash(&self, height: u32) -> Result<H256Le, RuntimeError>;
             async fn get_block_header(&self, hash: H256Le) -> Result<PolkaBtcRichBlockHeader, RuntimeError>;
             async fn get_bitcoin_confirmations(&self) -> Result<u32, RuntimeError>;
+            async fn get_parachain_confirmations(&self) -> Result<BlockNumber, RuntimeError>;
             async fn wait_for_block_in_relay(
                 &self,
                 block_hash: H256Le,
-                num_confirmations: u32,
+                btc_confirmations: Option<BlockNumber>,
             ) -> Result<(), RuntimeError>;
         }
     }

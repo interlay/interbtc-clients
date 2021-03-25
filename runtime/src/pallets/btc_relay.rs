@@ -55,3 +55,9 @@ pub struct StableBitcoinConfirmationsStore<T: BTCRelay> {
     #[store(returns = u32)]
     pub _runtime: PhantomData<T>,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct StableParachainConfirmationsStore<T: BTCRelay> {
+    #[store(returns = T::BlockNumber)]
+    pub _runtime: PhantomData<T>,
+}
