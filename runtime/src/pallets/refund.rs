@@ -17,6 +17,7 @@ pub struct RequestRefundEvent<T: Refund> {
     pub vault_id: T::AccountId,
     pub btc_address: T::BtcAddress,
     pub issue_id: T::H256,
+    pub fee: T::PolkaBTC,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
