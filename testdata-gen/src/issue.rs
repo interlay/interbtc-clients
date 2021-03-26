@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 
-use crate::{utils, Error};
+use crate::Error;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
 use runtime::{
-    AccountId, BtcAddress, H256Le, IssuePallet, PolkaBtcIssueRequest, PolkaBtcProvider, PolkaBtcRequestIssueEvent,
-    UtilFuncs,
+    AccountId, BtcAddress, BtcRelayPallet, H256Le, IssuePallet, PolkaBtcIssueRequest, PolkaBtcProvider,
+    PolkaBtcRequestIssueEvent, UtilFuncs,
 };
 use sp_core::H256;
 use std::{convert::TryInto, time::Duration};
@@ -56,7 +56,9 @@ pub async fn execute_issue(
         )
         .await?;
 
-    utils::wait_for_block_in_relay(issue_prov, tx_metadata.block_hash).await;
+    issue_prov
+        .wait_for_block_in_relay(H256Le::from_bytes_le(&tx_metadata.block_hash.to_vec()), None)
+        .await?;
 
     issue_prov
         .execute_issue(

@@ -3,7 +3,6 @@ mod error;
 mod issue;
 mod redeem;
 mod replace;
-mod utils;
 mod vault;
 
 use bitcoin::{BitcoinCore, BitcoinCoreApi, ConversionError, PartialAddress};

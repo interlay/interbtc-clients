@@ -128,7 +128,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
                 // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
                 // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
                 btc_parachain
-                    .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash.to_vec()), num_confirmations)
+                    .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash.to_vec()), Some(num_confirmations))
                     .await?;
 
                 // found tx, submit proof

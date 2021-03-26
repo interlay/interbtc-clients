@@ -1277,7 +1277,13 @@ pub trait BtcRelayPallet {
 
     async fn get_bitcoin_confirmations(&self) -> Result<u32, Error>;
 
-    async fn wait_for_block_in_relay(&self, block_hash: H256Le, num_confirmations: u32) -> Result<(), Error>;
+    async fn get_parachain_confirmations(&self) -> Result<BlockNumber, Error>;
+
+    async fn wait_for_block_in_relay(
+        &self,
+        block_hash: H256Le,
+        btc_confirmations: Option<BlockNumber>,
+    ) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -1318,15 +1324,72 @@ impl BtcRelayPallet for PolkaBtcProvider {
         Ok(self.ext_client.stable_bitcoin_confirmations(head).await?)
     }
 
+    /// Get the global security parameter for stable parachain confirmations
+    async fn get_parachain_confirmations(&self) -> Result<BlockNumber, Error> {
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.stable_parachain_confirmations(head).await?)
+    }
+
     /// Wait until Bitcoin block is submitted to the relay
-    async fn wait_for_block_in_relay(&self, block_hash: H256Le, num_confirmations: u32) -> Result<(), Error> {
+    async fn wait_for_block_in_relay(
+        &self,
+        block_hash: H256Le,
+        btc_confirmations: Option<BlockNumber>,
+    ) -> Result<(), Error> {
+        let get_bitcoin_confirmations = async {
+            if let Some(btc_confirmations) = btc_confirmations {
+                Ok(btc_confirmations)
+            } else {
+                self.get_bitcoin_confirmations().await
+            }
+        };
+
+        let (bitcoin_confirmations, parachain_confirmations) =
+            futures::future::try_join(get_bitcoin_confirmations, self.get_parachain_confirmations()).await?;
+
+        async fn has_sufficient_confirmations(
+            btc_parachain: &PolkaBtcProvider,
+            rich_block_header: &PolkaBtcRichBlockHeader,
+            bitcoin_confirmations: u32,
+            parachain_confirmations: BlockNumber,
+        ) -> Result<bool, Error> {
+            let (bitcoin_height, parachain_height) = futures::future::try_join(
+                async {
+                    btc_parachain
+                        .get_best_block_height()
+                        .await
+                        .map_err(|err| Error::from(err))
+                },
+                async {
+                    Ok(btc_parachain
+                        .get_latest_block()
+                        .await?
+                        .ok_or(Error::BlockNotFound)?
+                        .block
+                        .header
+                        .number)
+                },
+            )
+            .await?;
+
+            let is_confirmed_bitcoin = rich_block_header.block_height + bitcoin_confirmations <= bitcoin_height;
+            let is_confirmed_parachain = rich_block_header.para_height + parachain_confirmations <= parachain_height;
+            Ok(is_confirmed_bitcoin && is_confirmed_parachain)
+        }
+
         loop {
             match self.get_block_header(block_hash).await {
                 // rpc returns zero-initialized storage items if not set, therefore
                 // a block header only exists if the height is non-zero
                 Ok(block_header)
                     if block_header.block_height > 0
-                        && block_header.block_height + num_confirmations <= self.get_best_block_height().await? =>
+                        && has_sufficient_confirmations(
+                            &self,
+                            &block_header,
+                            bitcoin_confirmations,
+                            parachain_confirmations,
+                        )
+                        .await? =>
                 {
                     return Ok(());
                 }

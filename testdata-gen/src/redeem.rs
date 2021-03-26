@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-use crate::{utils, Error};
+use crate::Error;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
-use runtime::{AccountId, BtcAddress, H256Le, PolkaBtcProvider, RedeemPallet, UtilFuncs};
+use runtime::{AccountId, BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, RedeemPallet, UtilFuncs};
 use sp_core::H256;
 use std::{convert::TryInto, time::Duration};
 
@@ -46,7 +46,9 @@ pub async fn execute_redeem(
         )
         .await?;
 
-    utils::wait_for_block_in_relay(redeem_prov, tx_metadata.block_hash).await;
+    redeem_prov
+        .wait_for_block_in_relay(H256Le::from_bytes_le(&tx_metadata.block_hash.to_vec()), None)
+        .await?;
 
     redeem_prov
         .execute_redeem(
