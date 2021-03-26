@@ -566,6 +566,8 @@ pub trait ExchangeRateOraclePallet {
 
     async fn set_exchange_rate_info(&self, dot_per_btc: FixedU128) -> Result<(), Error>;
 
+    async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error>;
+
     async fn set_btc_tx_fees_per_byte(&self, fast: u32, half: u32, hour: u32) -> Result<(), Error>;
 
     async fn get_btc_tx_fees_per_byte(&self) -> Result<BtcTxFeesPerByte, Error>;
@@ -601,6 +603,21 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
         })
         .await?;
         Ok(())
+    }
+
+    /// Adds a new authorized oracle with the given name and the signer's AccountId
+    ///
+    /// # Arguments
+    /// * `account_id` - The Account ID of the new oracle
+    /// * `name` - The name of the new oracle
+    async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error> {
+        Ok(self
+            .sudo(InsertAuthorizedOracleCall {
+                account_id,
+                name: name.into_bytes(),
+                _runtime: PhantomData {},
+            })
+            .await?)
     }
 
     /// Sets the estimated Satoshis per bytes required to get a Bitcoin transaction included in

@@ -43,6 +43,13 @@ pub struct SetExchangeRateEvent<T: ExchangeRateOracle> {
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct InsertAuthorizedOracleCall<T: ExchangeRateOracle> {
+    pub account_id: T::AccountId,
+    pub name: Vec<u8>,
+    pub _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct SetBtcTxFeesPerByteCall<T: ExchangeRateOracle> {
     pub fast: u32,
     pub half: u32,

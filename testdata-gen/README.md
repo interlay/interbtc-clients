@@ -54,6 +54,7 @@ SUBCOMMANDS:
     get-current-time               Get the time as reported by the chain
     get-exchange-rate              Get the current DOT to BTC exchange rate
     help                           Prints this message or the help of the given subcommand(s)
+    insert-authorized-oracle       Add a new authorized oracle
     register-vault                 Register a new vault using the global keyring
     request-issue                  Request issuance of PolkaBTC and transfer to vault
     request-redeem                 Request that PolkaBTC be burned to redeem BTC
@@ -65,4 +66,5 @@ SUBCOMMANDS:
     set-redeem-period              Set redeem period
     set-relayer-maturity-period    Set relayer maturity period
     set-replace-period             Set replace period
+
 ```

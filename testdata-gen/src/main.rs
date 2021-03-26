@@ -13,10 +13,12 @@ use futures::future::try_join_all;
 use log::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    substrate_subxt::PairSigner, AccountId, BtcAddress, DotBalancesPallet, ErrorCode as PolkaBtcErrorCode,
-    ExchangeRateOraclePallet, FeePallet, FixedPointNumber, FixedPointTraits::*, FixedU128, H256Le, IssueRequestStatus,
-    PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, StakedRelayerPallet, StatusCode as PolkaBtcStatusCode,
-    TimestampPallet,
+    substrate_subxt::{PairSigner, Signer},
+    AccountId, BtcAddress, DotBalancesPallet, ErrorCode as PolkaBtcErrorCode, ExchangeRateOraclePallet, FeePallet,
+    FixedPointNumber,
+    FixedPointTraits::*,
+    FixedU128, H256Le, IssueRequestStatus, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, StakedRelayerPallet,
+    StatusCode as PolkaBtcStatusCode, TimestampPallet,
 };
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
@@ -97,6 +99,8 @@ struct Opts {
 enum SubCommand {
     /// Set the DOT to BTC exchange rate.
     SetExchangeRate(SetExchangeRateInfo),
+    /// Add a new authorized oracle
+    InsertAuthorizedOracle(InsertAuthorizedOracleInfo),
     /// Get the current DOT to BTC exchange rate.
     GetExchangeRate,
     /// Set the current estimated bitcoin transaction fees.
@@ -206,6 +210,14 @@ struct SetExchangeRateInfo {
     /// Exchange rate from BTC to DOT.
     #[clap(long, default_value = "1")]
     exchange_rate: u128,
+}
+
+#[derive(Clap)]
+struct InsertAuthorizedOracleInfo {
+    #[clap(long, default_value = "charlie")]
+    account: AccountKeyring,
+    #[clap(long, default_value = "Charlie")]
+    name: String,
 }
 
 #[derive(Clap)]
@@ -473,6 +485,12 @@ async fn main() -> Result<(), Error> {
         SubCommand::SetExchangeRate(info) => {
             let rate = FixedU128::checked_from_rational(info.exchange_rate, 100_000).unwrap();
             provider.set_exchange_rate_info(rate).await?;
+        }
+        SubCommand::InsertAuthorizedOracle(info) => {
+            let key_pair = info.account.pair();
+            let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
+            let oracle_id = signer.account_id().clone();
+            provider.insert_authorized_oracle(oracle_id, info.name).await?;
         }
         SubCommand::GetExchangeRate => {
             let (rate, time, delay) = provider.get_exchange_rate_info().await?;
