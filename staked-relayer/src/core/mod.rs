@@ -89,7 +89,7 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
             issuing,
             start_height: conf.start_height,
             max_batch_size: conf.max_batch_size,
-            timeout: conf.timeout.unwrap_or(Duration::from_secs(SLEEP_TIME)),
+            timeout: conf.timeout.unwrap_or_else(|| Duration::from_secs(SLEEP_TIME)),
             required_btc_confirmations: conf.required_btc_confirmations,
         }
     }

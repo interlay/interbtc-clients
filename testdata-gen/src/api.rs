@@ -58,7 +58,7 @@ where
 
     if let Some(x) = response.result {
         // decode the response
-        return Ok(Decode::decode(&mut &x.0[..]).map_err(Error::CodecError)?);
+        return Decode::decode(&mut &x.0[..]).map_err(Error::CodecError);
     }
 
     if let Some(x) = response.error {

@@ -51,7 +51,7 @@ fn get_credentials_from_file(file_path: &str, keyname: &str) -> Result<Pair, Key
     let reader = std::io::BufReader::new(file);
     let map: HashMap<String, String> = serde_json::from_reader(reader)?;
     let pair_str = map.get(keyname).ok_or(KeyLoadingError::KeyNotFound)?;
-    let pair = Pair::from_string(pair_str, None).map_err(|e| KeyLoadingError::SecretStringError(e))?;
+    let pair = Pair::from_string(pair_str, None).map_err(KeyLoadingError::SecretStringError)?;
     Ok(pair)
 }
 
@@ -78,13 +78,13 @@ pub struct ConnectionOpts {
     pub max_notifs_per_subscription: Option<usize>,
 }
 
-impl Into<ConnectionManagerConfig> for ConnectionOpts {
-    fn into(self) -> ConnectionManagerConfig {
+impl From<ConnectionOpts> for ConnectionManagerConfig {
+    fn from(opts: ConnectionOpts) -> ConnectionManagerConfig {
         ConnectionManagerConfig {
-            connection_timeout: Duration::from_millis(self.polka_btc_connection_timeout_ms),
-            restart_policy: self.restart_policy,
-            max_concurrent_requests: self.max_concurrent_requests,
-            max_notifs_per_subscription: self.max_notifs_per_subscription,
+            connection_timeout: Duration::from_millis(opts.polka_btc_connection_timeout_ms),
+            restart_policy: opts.restart_policy,
+            max_concurrent_requests: opts.max_concurrent_requests,
+            max_notifs_per_subscription: opts.max_notifs_per_subscription,
         }
     }
 }

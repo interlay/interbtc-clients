@@ -28,7 +28,7 @@ pub trait Service<C, P: Provider> {
 }
 
 pub(crate) async fn new_websocket_client(
-    url: &String,
+    url: &str,
     max_concurrent_requests: Option<usize>,
     max_notifs_per_subscription: Option<usize>,
 ) -> Result<WsClient, Error> {
@@ -48,7 +48,7 @@ pub(crate) async fn new_websocket_client(
 }
 
 pub(crate) async fn new_websocket_client_with_retry(
-    url: &String,
+    url: &str,
     max_concurrent_requests: Option<usize>,
     max_notifs_per_subscription: Option<usize>,
     connection_timeout: Duration,

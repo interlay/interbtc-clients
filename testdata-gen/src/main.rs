@@ -252,8 +252,8 @@ struct RequestIssueInfo {
     griefing_collateral: Option<u128>,
 
     /// Vault keyring to derive `vault_id`.
-    #[clap(long, default_value = "bob")]
-    vault: AccountKeyring,
+    #[clap(long)]
+    vault: AccountId,
 
     /// Do not transfer BTC or execute the issue request.
     #[clap(long)]
@@ -518,7 +518,7 @@ async fn main() -> Result<(), Error> {
             vault::register_vault(provider, btc_rpc.get_new_public_key().await?, info.collateral).await?;
         }
         SubCommand::RequestIssue(info) => {
-            let vault_id = info.vault.to_account_id();
+            let vault_id = info.vault;
 
             let griefing_collateral = match info.griefing_collateral {
                 Some(x) => x,

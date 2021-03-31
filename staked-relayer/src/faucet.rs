@@ -41,7 +41,7 @@ async fn get_faucet_allowance(faucet_connection: TypedClient, allowance_type: &s
     Ok(Decode::decode(&mut &raw_allowance.0[..])?)
 }
 
-pub async fn fund_and_register(provider: &PolkaBtcProvider, faucet_url: &String) -> Result<(), Error> {
+pub async fn fund_and_register(provider: &PolkaBtcProvider, faucet_url: &str) -> Result<(), Error> {
     let connection = jsonrpc_http::connect::<TypedClient>(faucet_url).await?;
 
     // Receive user allowance from faucet

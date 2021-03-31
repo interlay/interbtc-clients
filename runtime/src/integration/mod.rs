@@ -59,14 +59,13 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
             password: None,
         },
         chain_spec: btc_parachain::chain_spec::development_config(),
-        role: Role::Authority(key.clone()),
+        role: Role::Authority(key),
         telemetry: None,
         wasm_method: WasmExecutionMethod::Compiled,
     };
 
-    let client = SubxtClient::from_config(config, btc_parachain_service::new_full)
-        .expect("Error creating subxt client")
-        .into();
+    let client =
+        SubxtClient::from_config(config, btc_parachain_service::new_full).expect("Error creating subxt client");
     return (client, tmp);
 }
 

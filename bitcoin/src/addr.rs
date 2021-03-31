@@ -54,7 +54,7 @@ impl PartialAddress for polkabtc_bitcoin::Address {
         };
 
         let payload = Payload::from_script(&script).ok_or(ConversionError::InvalidPayload)?;
-        let address = Address { network, payload };
+        let address = Address { payload, network };
         Ok(address.to_string())
     }
 }
@@ -79,7 +79,7 @@ impl PartialAddress for Payload {
 }
 
 pub fn calculate_deposit_secret_key(vault_key: SecretKey, issue_key: SecretKey) -> Result<SecretKey, Error> {
-    let mut deposit_key = vault_key.clone();
+    let mut deposit_key = vault_key;
     deposit_key.mul_assign(&issue_key[..])?;
     Ok(deposit_key)
 }

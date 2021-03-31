@@ -51,13 +51,13 @@ impl PolkaBtcProvider {
         Ok(provider)
     }
 
-    pub async fn from_url(url: &String, signer: PolkaBtcSigner) -> Result<Self, Error> {
+    pub async fn from_url(url: &str, signer: PolkaBtcSigner) -> Result<Self, Error> {
         let ws_client = new_websocket_client(url, None, None).await?;
         Self::new(ws_client, signer).await
     }
 
     pub async fn from_url_with_retry(
-        url: &String,
+        url: &str,
         signer: PolkaBtcSigner,
         connection_timeout: Duration,
     ) -> Result<Self, Error> {
@@ -861,19 +861,15 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// * `vault_id` - vault account which features in vin
     /// * `raw_tx` - raw Bitcoin transaction
     async fn is_transaction_invalid(&self, vault_id: AccountId, raw_tx: Vec<u8>) -> Result<bool, Error> {
-        Ok(
-            match self
-                .rpc_client
+        Ok(matches!(
+            self.rpc_client
                 .request(
                     "stakedRelayers_isTransactionInvalid",
                     Params::Array(vec![to_json_value(vault_id)?, to_json_value(raw_tx)?]),
                 )
-                .await
-            {
-                Ok(()) => true,
-                _ => false,
-            },
-        )
+                .await,
+            Ok(()),
+        ))
     }
 
     /// Sets the maturity period.
@@ -1354,12 +1350,7 @@ impl BtcRelayPallet for PolkaBtcProvider {
             parachain_confirmations: BlockNumber,
         ) -> Result<bool, Error> {
             let (bitcoin_height, parachain_height) = futures::future::try_join(
-                async {
-                    btc_parachain
-                        .get_best_block_height()
-                        .await
-                        .map_err(|err| Error::from(err))
-                },
+                async { btc_parachain.get_best_block_height().await.map_err(Error::from) },
                 async {
                     Ok(btc_parachain
                         .get_latest_block()

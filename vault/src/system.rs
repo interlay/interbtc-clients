@@ -64,7 +64,7 @@ impl VaultService {
         bitcoin_core
             .create_or_load_wallet()
             .await
-            .map_err(|e| Error::WalletInitializationFailure(e))?;
+            .map_err(Error::WalletInitializationFailure)?;
 
         Ok(())
     }
