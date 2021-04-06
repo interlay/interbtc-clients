@@ -1,5 +1,4 @@
-use crate::{constants::*, error::Error};
-use backoff::future::FutureOperation as _;
+use crate::{error::Error, retry::*, BITCOIN_MAX_RETRYING_TIME};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use futures::{future, stream::StreamExt};
 use log::*;
@@ -9,12 +8,12 @@ use runtime::{
         refund::RequestRefundEvent,
         replace::{AcceptReplaceEvent, AuctionReplaceEvent},
     },
-    BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcRefundRequest,
-    PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet, ReplacePallet, UtilFuncs,
-    VaultRegistryPallet,
+    BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest,
+    PolkaBtcRefundRequest, PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet,
+    ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H256;
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Request {
@@ -153,7 +152,16 @@ impl Request {
                 let wallet = provider.get_vault(vault_id).await?.wallet;
                 if !wallet.has_btc_address(&address) {
                     info!("Registering address {}", address);
-                    provider.register_address(*address).await?;
+                    // retry address registration if tx was outdated
+                    notify_retry(
+                        || provider.register_address(*address),
+                        |result| match result {
+                            Ok(ok) => Ok(ok),
+                            Err(err @ RuntimeError::OutdatedTransaction) => Err(RetryPolicy::Skip(err)),
+                            Err(err) => Err(RetryPolicy::Throw(err)),
+                        },
+                    )
+                    .await?;
                 }
             }
             _ => return Err(Error::TooManyReturnToSelfAddresses),
@@ -182,25 +190,13 @@ impl Request {
         };
 
         // Retry until success or timeout
-        (|| async {
-            // call the selected function
+        notify_retry_all(|| {
             (execute)(
                 &provider,
                 self.hash,
                 H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
                 tx_metadata.proof.clone(),
                 tx_metadata.raw_tx.clone(),
-            )
-            .await
-            .map_err(|x| x.into())
-        })
-        .retry_notify(get_retry_policy(), |e, dur: Duration| {
-            warn!(
-                "{:?} execution of request {} failed: {} - next retry in {:.3} s",
-                self.request_type,
-                self.hash,
-                e,
-                dur.as_secs_f64()
             )
         })
         .await?;
@@ -371,6 +367,7 @@ mod tests {
     };
     use runtime::{AccountId, BlockNumber, BtcPublicKey, Error as RuntimeError, PolkaBtcVault};
     use sp_core::H160;
+    use std::time::Duration;
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {
