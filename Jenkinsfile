@@ -32,6 +32,7 @@ pipeline {
 
                     sh 'cargo fmt -- --check'
                     sh 'cargo check --workspace --release'
+                    sh 'cargo clippy --workspace --release'
                     sh 'cargo test --workspace --release'
 
                     sh 'cargo test --manifest-path bitcoin/Cargo.toml --test "*" --features uses-bitcoind -- --test-threads=1'
