@@ -3,3 +3,4 @@
 .vscode
 event-logs
 faucet/kv
+keyfile.json

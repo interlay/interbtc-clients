@@ -96,7 +96,7 @@ async fn get_account_type(
     provider: &PolkaBtcProvider,
     account_id: AccountId,
 ) -> Result<FundingRequestAccountType, Error> {
-    if let Ok(_) = provider.get_vault(account_id.clone()).await {
+    if provider.get_vault(account_id.clone()).await.is_ok() {
         return Ok(FundingRequestAccountType::Vault);
     }
     let (active_stake, inactive_stake) = future::try_join(
@@ -145,7 +145,7 @@ fn has_request_expired(
     let cooldown_over = request_datetime.lt(&cooldown_threshold);
 
     // A user that has just become a vault can request again immediately
-    return cooldown_over
+    cooldown_over
         || is_type_and_was_user(
             FundingRequestAccountType::Vault,
             current_account_type.clone(),
@@ -155,7 +155,7 @@ fn has_request_expired(
             FundingRequestAccountType::StakedRelayer,
             current_account_type,
             previous_account_type,
-        );
+        )
 }
 
 fn is_funding_allowed(
@@ -242,8 +242,8 @@ pub async fn start_http(
         });
     }
     {
-        let provider = provider.clone();
-        let store = store.clone();
+        let provider = provider;
+        let store = store;
 
         // an async closure is only FnOnce, so we need this workaround
         io.add_method("fund_account", move |params| {

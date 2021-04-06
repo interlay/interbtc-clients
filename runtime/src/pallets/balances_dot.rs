@@ -7,6 +7,7 @@ use substrate_subxt::{balances::AccountData, system::System};
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
 #[module]
+#[allow(clippy::upper_case_acronyms)]
 pub trait DOT: System {
     type Balance: Parameter
         + Member

@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use super::Core;
 use crate::{BitcoinBlockHeight, RawBlockHeader, StakedRelayer, StatusUpdate};
 use core::marker::PhantomData;

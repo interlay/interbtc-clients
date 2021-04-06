@@ -94,7 +94,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
     let mut issue_requests = issue_set.lock().await;
     if let Some((issue_id, address)) = addresses.iter().find_map(|address| {
         let issue_id = issue_requests.get_key_for_value(address)?;
-        Some((issue_id.clone(), address.clone()))
+        Some((*issue_id, *address))
     }) {
         let issue = btc_parachain.get_issue_request(issue_id).await?;
         // tx has output to address
@@ -136,7 +136,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
 
                 // bitcoin core is currently blocking, no need to try_join
                 let raw_tx = bitcoin_core.get_raw_tx(&txid, &block_hash).await?;
-                let proof = bitcoin_core.get_proof(txid.clone(), &block_hash).await?;
+                let proof = bitcoin_core.get_proof(txid, &block_hash).await?;
 
                 info!("Executing issue with id {}", issue_id);
                 match btc_parachain

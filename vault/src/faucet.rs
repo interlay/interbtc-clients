@@ -43,7 +43,7 @@ async fn get_funding(faucet_connection: TypedClient, vault_id: AccountId) -> Res
 pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
     provider: &PolkaBtcProvider,
     bitcoin_core: &B,
-    faucet_url: &String,
+    faucet_url: &str,
     vault_id: AccountId,
 ) -> Result<(), Error> {
     let connection = jsonrpc_http::connect::<TypedClient>(faucet_url).await?;

@@ -107,7 +107,7 @@ impl MockBitcoinCore {
         block.header.merkle_root = block.merkle_root();
 
         loop {
-            if let Ok(_) = block.header.validate_pow(&target) {
+            if block.header.validate_pow(&target).is_ok() {
                 break;
             }
             block.header.nonce += 1;
@@ -284,7 +284,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
             .iter()
             .find(|x| &x.block_hash() == hash)
             .ok_or(BitcoinError::InvalidBitcoinHeight)?;
-        Ok(block.header.clone())
+        Ok(block.header)
     }
     async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError> {
         let blocks = self.blocks.read().await;
@@ -317,10 +317,10 @@ impl BitcoinCoreApi for MockBitcoinCore {
         })
     }
     async fn get_mempool_transactions<'a>(
-        self: &'a Self,
+        &'a self,
     ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError> {
         let transactions = (*self.mempool.read().await).clone();
-        Ok(Box::new(transactions.into_iter().map(|x| Ok(x))))
+        Ok(Box::new(transactions.into_iter().map(Ok)))
     }
     async fn wait_for_transaction_metadata(
         &self,

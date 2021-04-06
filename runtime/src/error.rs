@@ -66,23 +66,21 @@ pub enum Error {
 
 impl Error {
     pub fn is_issue_completed(&self) -> bool {
-        match self {
+        matches!(self,
             Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
                 ref module,
                 ref error,
-            }))) if module == ISSUE_MODULE && error == ISSUE_COMPLETED_ERROR => true,
-            _ => false,
-        }
+            }))) if module == ISSUE_MODULE && error == ISSUE_COMPLETED_ERROR
+        )
     }
 
     pub fn is_duplicate_block(&self) -> bool {
-        match self {
+        matches!(self,
             Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
                 ref module,
                 ref error,
-            }))) if module == BTC_RELAY_MODULE && error == DUPLICATE_BLOCK_ERROR => true,
-            _ => false,
-        }
+            }))) if module == BTC_RELAY_MODULE && error == DUPLICATE_BLOCK_ERROR
+        )
     }
 }
 

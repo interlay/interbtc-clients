@@ -153,7 +153,7 @@ impl Request {
                 let wallet = provider.get_vault(vault_id).await?.wallet;
                 if !wallet.has_btc_address(&address) {
                     info!("Registering address {}", address);
-                    provider.register_address(address.clone()).await?;
+                    provider.register_address(*address).await?;
                 }
             }
             _ => return Err(Error::TooManyReturnToSelfAddresses),
@@ -516,7 +516,7 @@ mod tests {
             async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, BitcoinError>;
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
             async fn get_mempool_transactions<'a>(
-                self: &'a Self,
+                &'a self,
             ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(
                 &self,

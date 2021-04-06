@@ -66,7 +66,7 @@ pub struct IssueRequests(Mutex<ReversibleHashMap<H256, BtcAddress>>);
 
 impl IssueRequests {
     pub fn new() -> Self {
-        IssueRequests(Mutex::new(ReversibleHashMap::new()))
+        Self::default()
     }
 
     pub(crate) async fn lock(&self) -> MutexGuard<'_, ReversibleHashMap<H256, BtcAddress>> {
@@ -79,6 +79,12 @@ impl IssueRequests {
 
     pub(crate) async fn remove(&self, issue_id: &H256) -> Option<BtcAddress> {
         self.0.lock().await.remove_key(issue_id)
+    }
+}
+
+impl Default for IssueRequests {
+    fn default() -> Self {
+        Self(Mutex::new(ReversibleHashMap::new()))
     }
 }
 

@@ -38,7 +38,7 @@ pub async fn reverse_stream_in_chain_transactions<B: BitcoinCoreApi + Clone + Se
         // unfortunately two different iterators don't have compatible types, so we have
         // to box them to trait objects
         let transactions: Box<dyn Stream<Item = _> + Unpin + Send> = match block {
-            Ok(e) => Box::new(stream::iter(e.txdata.into_iter().map(|x| Ok(x)))),
+            Ok(e) => Box::new(stream::iter(e.txdata.into_iter().map(Ok))),
             Err(e) => Box::new(stream::iter(iter::once(Err(e)))),
         };
         transactions
@@ -206,7 +206,7 @@ mod tests {
             async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error>;
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
             async fn get_mempool_transactions<'a>(
-                self: &'a Self,
+                &'a self,
             ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + Send + 'a>, Error>;
             async fn wait_for_transaction_metadata(
                 &self,

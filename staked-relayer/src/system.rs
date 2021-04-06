@@ -96,7 +96,7 @@ impl RelayerService {
                     .wallet
                     .addresses
                     .iter()
-                    .map(|addr| (addr.clone(), vault.id.clone()))
+                    .map(|addr| (*addr, vault.id.clone()))
                     .collect::<Vec<_>>()
             })
             .collect();

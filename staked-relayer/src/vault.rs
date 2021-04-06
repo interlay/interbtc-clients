@@ -31,7 +31,7 @@ impl Vaults {
 
     pub async fn contains_key(&self, key: BtcAddress) -> Option<AccountId> {
         let vaults = self.0.read().await;
-        vaults.get(&key).map(|id| id.clone())
+        vaults.get(&key).cloned()
     }
 }
 
@@ -296,7 +296,7 @@ mod tests {
             async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, BitcoinError>;
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
             async fn get_mempool_transactions<'a>(
-                self: &'a Self,
+                &'a self,
             ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send +'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(
                 &self,

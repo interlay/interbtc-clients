@@ -86,7 +86,7 @@ pub trait BitcoinCoreApi {
     async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
 
     async fn get_mempool_transactions<'a>(
-        self: &'a Self,
+        &'a self,
     ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + Send + 'a>, Error>;
 
     async fn wait_for_transaction_metadata(
@@ -233,7 +233,7 @@ impl BitcoinCore {
         loop {
             let info = self.rpc.get_blockchain_info()?;
             // NOTE: initial_block_download is always true on regtest
-            if !info.initial_block_download || info.verification_progress == 1.0 {
+            if !info.initial_block_download || info.verification_progress.eq(&1.0) {
                 info!("Synced!");
                 return Ok(());
             }
@@ -394,7 +394,7 @@ impl BitcoinCoreApi for BitcoinCore {
         secret_key: Vec<u8>,
     ) -> Result<(), Error> {
         let address = Address::p2wpkh(&PublicKey::from_slice(&public_key.into())?, self.network)
-            .map_err(|err| ConversionError::from(err))?;
+            .map_err(ConversionError::from)?;
         let private_key = self.rpc.dump_private_key(&address)?;
         let deposit_secret_key =
             addr::calculate_deposit_secret_key(private_key.key, SecretKey::from_slice(&secret_key)?)?;
@@ -430,7 +430,7 @@ impl BitcoinCoreApi for BitcoinCore {
     /// Get the transactions that are currently in the mempool. Since `impl trait` is not
     /// allowed within trait method, we have to use trait objects.
     async fn get_mempool_transactions<'a>(
-        self: &'a Self,
+        &'a self,
     ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + Send + 'a>, Error> {
         // get txids from the mempool
         let txids = self.rpc.get_raw_mempool()?;
@@ -498,10 +498,10 @@ impl BitcoinCoreApi for BitcoinCore {
 
         Ok(TransactionMetadata {
             txid,
-            block_hash,
-            block_height,
             proof,
             raw_tx,
+            block_height,
+            block_hash,
         })
     }
 
@@ -519,7 +519,7 @@ impl BitcoinCoreApi for BitcoinCore {
         sat: u64,
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, Error> {
-        let address_string = address.encode_str(self.network.clone())?;
+        let address_string = address.encode_str(self.network)?;
         // create raw transaction that includes the op_return (if any). If we were to add the op_return
         // after funding, the fees might be insufficient. An alternative to our own version of
         // this function would be to call create_raw_transaction (without the _hex suffix), and
@@ -541,7 +541,7 @@ impl BitcoinCoreApi for BitcoinCore {
                 .sign_raw_transaction_with_wallet(&funded_raw_tx.transaction()?, None, None)?;
 
         // Make sure signing is successful
-        if let Some(_) = signed_funded_raw_tx.errors {
+        if signed_funded_raw_tx.errors.is_some() {
             return Err(Error::TransactionSigningError);
         }
 
@@ -616,11 +616,8 @@ impl BitcoinCoreApi for BitcoinCore {
         };
 
         // NOTE: bitcoincore-rpc does not expose listwalletdir
-        if self.rpc.list_wallets()?.contains(wallet_name) {
+        if self.rpc.list_wallets()?.contains(wallet_name) || self.rpc.load_wallet(wallet_name).is_ok() {
             // wallet already loaded
-            return Ok(());
-        } else if let Ok(_) = self.rpc.load_wallet(wallet_name) {
-            // wallet successfully loaded
             return Ok(());
         }
         // wallet does not exist, create
@@ -633,7 +630,7 @@ impl BitcoinCoreApi for BitcoinCore {
         P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static,
     {
         let address = Address::p2wpkh(&PublicKey::from_slice(&public_key.clone().into())?, self.network)
-            .map_err(|err| ConversionError::from(err))?;
+            .map_err(ConversionError::from)?;
         let address_info = self.rpc.get_address_info(&address)?;
         let wallet_pubkey = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
         Ok(P::from(wallet_pubkey.key.serialize()) == public_key)
@@ -684,7 +681,7 @@ impl TransactionExt for Transaction {
     fn extract_input_addresses<A: PartialAddress>(&self) -> Vec<A> {
         self.input
             .iter()
-            .filter_map(|vin| vin_to_address(vin.clone()).map_or(None, |addr| Some(addr)))
+            .filter_map(|vin| vin_to_address(vin.clone()).ok())
             .collect::<Vec<A>>()
     }
 
@@ -728,7 +725,7 @@ fn vin_to_address<A: PartialAddress>(vin: TxIn) -> Result<A, Error> {
         Script::new_v0_wpkh(&WPubkeyHash::hash(&vin.witness[1]))
     } else {
         let input_script = vin.script_sig.as_bytes();
-        if input_script.len() == 0 {
+        if input_script.is_empty() {
             // ignore empty scripts (i.e. witness)
             return Err(Error::ParsingError);
         }
