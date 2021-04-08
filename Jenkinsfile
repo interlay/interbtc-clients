@@ -1,7 +1,11 @@
 def output_files = ['staked-relayer', 'oracle', 'vault', 'faucet', 'testdata-gen']
 
 pipeline {
-    agent any
+    agent {
+        kubernetes {
+            yamlFile '.deploy/rust-builder-pod.yaml'
+        }
+    }
     environment {
         RUSTC_WRAPPER = '/usr/local/bin/sccache'
         CI = 'true'
@@ -16,11 +20,6 @@ pipeline {
 
     stages {
         stage('Test') {
-            agent {
-                kubernetes {
-                    yamlFile '.deploy/rust-builder-pod.yaml'
-                }
-            }
             environment {
                 BITCOIN_RPC_URL  = "http://localhost:18443"
                 BITCOIN_RPC_USER = "rpcuser"
@@ -90,11 +89,6 @@ pipeline {
                 anyOf {
                     branch 'master'
                     tag '*'
-                }
-            }
-            agent {
-                kubernetes {
-                    yamlFile '.deploy/rust-builder-pod.yaml'
                 }
             }
             environment {
