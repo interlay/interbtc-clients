@@ -125,7 +125,11 @@ pipeline {
                     tag '*'
                 }
             }
-            agent { node { label 'master' } }
+            agent {
+                kubernetes {
+                    yamlFile '.deploy/rust-builder-pod.yaml'
+                }
+            }
             steps {
                 sh '''
                     wget -q -O - https://github.com/cli/cli/releases/download/v1.6.2/gh_1.6.2_linux_amd64.tar.gz | tar xzf -
