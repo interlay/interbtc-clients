@@ -1,5 +1,6 @@
 use crate::{
-    collateral::lock_required_collateral, constants::*, faucet, issue, service::*, Error, IssueRequests, RequestEvent,
+    collateral::lock_required_collateral, faucet, issue, service::*, Error, IssueRequests, RequestEvent,
+    CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};

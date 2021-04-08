@@ -36,6 +36,8 @@ pub enum Error {
     ClientShutdown,
     #[error("Transaction is outdated")]
     OutdatedTransaction,
+    #[error("Request has timed out")]
+    Timeout,
 
     #[error("Failed to load credentials from file: {0}")]
     KeyLoadingFailure(#[from] KeyLoadingError),

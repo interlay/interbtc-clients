@@ -6983,6 +6983,7 @@ name = "runtime"
 version = "0.6.0"
 dependencies = [
  "async-trait",
+ "backoff",
  "bitcoin 0.5.0",
  "bitcoin 0.6.0",
  "btc-parachain",
