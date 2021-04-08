@@ -1,7 +1,7 @@
 def output_files = ['staked-relayer', 'oracle', 'vault', 'faucet', 'testdata-gen']
 
 pipeline {
-    agent none
+    agent any
     environment {
         RUSTC_WRAPPER = '/usr/local/bin/sccache'
         CI = 'true'
@@ -123,11 +123,6 @@ pipeline {
                 anyOf {
                     branch 'github'
                     tag '*'
-                }
-            }
-            agent {
-                kubernetes {
-                    yamlFile '.deploy/rust-builder-pod.yaml'
                 }
             }
             steps {
