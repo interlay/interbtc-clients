@@ -1,7 +1,6 @@
 use crate::{error::Error, utils};
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _, Txid};
 use futures::stream::{iter, StreamExt};
-use log::*;
 use runtime::{
     pallets::vault_registry::{RegisterAddressEvent, RegisterVaultEvent},
     AccountId, BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
@@ -78,14 +77,14 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         raw_tx: Vec<u8>,
         proof: Vec<u8>,
     ) -> Result<(), Error> {
-        info!("Found tx from vault {}", vault_id);
+        tracing::info!("Found tx from vault {}", vault_id);
         // check if matching redeem or replace request
         if self
             .btc_parachain
             .is_transaction_invalid(vault_id.clone(), raw_tx.clone())
             .await?
         {
-            info!("Transaction is invalid");
+            tracing::info!("Transaction is invalid");
             self.btc_parachain
                 .report_vault_theft(vault_id, H256Le::from_bytes_le(&tx_id.as_hash()), proof, raw_tx)
                 .await?;
@@ -132,7 +131,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
 
         while let Some(Ok((block_hash, tx))) = stream.next().await {
             if let Err(err) = self.check_transaction(tx, block_hash, num_confirmations).await {
-                error!("Failed to check transaction: {}", err);
+                tracing::error!("Failed to check transaction: {}", err);
             }
         }
 
@@ -149,13 +148,14 @@ pub async fn listen_for_wallet_updates(
     btc_parachain
         .on_event::<RegisterAddressEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
-                info!(
+                tracing::info!(
                     "Added new btc address {} for vault {}",
-                    event.btc_address, event.vault_id
+                    event.btc_address,
+                    event.vault_id
                 );
                 vaults.write(event.btc_address, event.vault_id).await;
             },
-            |err| error!("Error (RegisterAddressEvent): {}", err.to_string()),
+            |err| tracing::error!("Error (RegisterAddressEvent): {}", err.to_string()),
         )
         .await
 }
@@ -169,13 +169,13 @@ pub async fn listen_for_vaults_registered(
             |event| async {
                 match btc_parachain.get_vault(event.account_id).await {
                     Ok(vault) => {
-                        info!("Vault registered: {}", vault.id);
+                        tracing::info!("Vault registered: {}", vault.id);
                         vaults.add_vault(vault).await;
                     }
-                    Err(err) => error!("Error getting vault: {}", err.to_string()),
+                    Err(err) => tracing::error!("Error getting vault: {}", err.to_string()),
                 };
             },
-            |err| error!("Error (RegisterVaultEvent): {}", err.to_string()),
+            |err| tracing::error!("Error (RegisterVaultEvent): {}", err.to_string()),
         )
         .await
 }

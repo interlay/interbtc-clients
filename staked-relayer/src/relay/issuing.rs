@@ -35,6 +35,7 @@ impl Issuing<Error> for Client {
             .map_err(|e| CoreError::Issuing(Error::PolkaBtcError(e)))
     }
 
+    #[tracing::instrument(name = "submit_block_header", skip(self, header))]
     async fn submit_block_header(&self, header: Vec<u8>) -> Result<(), CoreError<Error>> {
         let raw_block_header = encode_raw_header(header)?;
         if self
@@ -49,6 +50,7 @@ impl Issuing<Error> for Client {
             .map_err(|e| CoreError::Issuing(Error::PolkaBtcError(e)))
     }
 
+    #[tracing::instrument(name = "submit_block_header_batch", skip(self, headers))]
     async fn submit_block_header_batch(&self, headers: Vec<Vec<u8>>) -> Result<(), CoreError<Error>> {
         self.rpc
             .store_block_headers(
