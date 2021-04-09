@@ -1,7 +1,6 @@
 use super::Error;
 use crate::utils;
 use bitcoin::{BitcoinCoreApi, BlockHash, ConversionError as BitcoinConversionError, Error as BitcoinError, Hash};
-use log::{error, info, warn};
 use runtime::{
     pallets::{btc_relay::StoreMainChainHeaderEvent, staked_relayers::StatusUpdateSuggestedEvent},
     Error as RuntimeError, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcRuntime, StakedRelayerPallet, StatusCode,
@@ -40,7 +39,7 @@ impl<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet + UtilFuncs> StatusUpdate
                         .vote_on_status_update(event.status_update_id, true)
                         .await?;
                 }
-                Err(err) => error!("Error validating block: {}", err.to_string()),
+                Err(err) => tracing::error!("Error validating block: {}", err.to_string()),
             }
         }
 
@@ -61,12 +60,12 @@ pub async fn listen_for_status_updates<B: BitcoinCoreApi + Clone>(
                     return; // ignore events we caused ourselves
                 }
 
-                info!("Status update {} suggested", event.status_update_id);
+                tracing::info!("Status update {} suggested", event.status_update_id);
                 if let Err(err) = monitor.on_status_update_suggested(event).await {
-                    error!("Error: {}", err.to_string());
+                    tracing::error!("Error: {}", err.to_string());
                 }
             },
-            |err| error!("Error (Status): {}", err.to_string()),
+            |err| tracing::error!("Error (Status): {}", err.to_string()),
         )
         .await
 }
@@ -110,19 +109,19 @@ impl<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet> RelayMonitor<B, P> {
         }
 
         // TODO: check if user submitted
-        info!("Block submission: {}", parachain_block_hash);
+        tracing::info!("Block submission: {}", parachain_block_hash);
         match self.btc_rpc.get_block_hash(height).await {
             Ok(bitcoin_block_hash) => {
                 if bitcoin_block_hash.into_inner() != parachain_block_hash.to_bytes_le() {
-                    warn!("Block does not match at height {}", height);
+                    tracing::warn!("Block does not match at height {}", height);
                     report_no_data_btc_relay(&self.polka_rpc, self.status_update_deposit, parachain_block_hash).await?;
                 }
             }
             Err(BitcoinError::InvalidBitcoinHeight) => {
-                warn!("Block does not exist at height {}", height);
+                tracing::warn!("Block does not exist at height {}", height);
                 report_no_data_btc_relay(&self.polka_rpc, self.status_update_deposit, parachain_block_hash).await?;
             }
-            Err(e) => error!("Got error on get_block_hash({}): {}", height, e),
+            Err(e) => tracing::error!("Got error on get_block_hash({}): {}", height, e),
         }
 
         Ok(())
@@ -149,10 +148,10 @@ pub async fn listen_for_blocks_stored<B: BitcoinCoreApi + Clone>(
                     .on_store_block(event.block_height, event.block_header_hash)
                     .await
                 {
-                    error!("Error: {}", err.to_string());
+                    tracing::error!("Error: {}", err.to_string());
                 }
             },
-            |err| error!("Error (Blocks): {}", err.to_string()),
+            |err| tracing::error!("Error (Blocks): {}", err.to_string()),
         )
         .await
 }

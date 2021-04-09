@@ -1,4 +1,3 @@
-use log::{info, trace};
 use std::{error::Error as StdError, marker::PhantomData, time::Duration};
 use tokio::time::delay_for;
 
@@ -100,7 +99,7 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
             match self.backing.get_block_header(height).await? {
                 Some(header) => return Ok(header),
                 None => {
-                    trace!("No block found at height {}, sleeping for {:?}", height, self.timeout);
+                    tracing::trace!("No block found at height {}, sleeping for {:?}", height, self.timeout);
                     delay_for(self.timeout).await
                 }
             };
@@ -120,7 +119,7 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
     pub async fn submit_next(&self) -> Result<(), Error<E>> {
         if !self.issuing.is_initialized().await? {
             let start_height = self.start_height.unwrap_or(self.get_num_confirmed_blocks().await?);
-            info!("Initializing at height {}", start_height);
+            tracing::info!("Initializing at height {}", start_height);
             self.issuing
                 .initialize(
                     self.backing.get_block_header(start_height).await?.unwrap(),
@@ -130,9 +129,9 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
         }
 
         let max_height = self.get_num_confirmed_blocks().await?;
-        trace!("Backing height: {}", max_height);
+        tracing::trace!("Backing height: {}", max_height);
         let current_height = compute_start_height(&self.backing, &self.issuing).await?;
-        trace!("Issuing height: {}", current_height);
+        tracing::trace!("Issuing height: {}", current_height);
 
         let batch_size = if current_height.saturating_add(self.max_batch_size) > max_height {
             max_height.saturating_add(1).saturating_sub(current_height)
@@ -143,19 +142,19 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
         match batch_size {
             0 => {
                 // nothing to submit right now. Wait a little while
-                trace!("Waiting for the next Bitcoin block...");
+                tracing::trace!("Waiting for the next Bitcoin block...");
                 delay_for(self.timeout).await;
             }
             1 => {
                 // submit a single block header
-                info!("Processing block at height {}", current_height);
+                tracing::info!("Processing block at height {}", current_height);
                 let header = self.get_block_header(current_height).await?;
                 // TODO: check if block already stored
                 self.issuing.submit_block_header(header).await?;
-                info!("Submitted block at height {}", current_height);
+                tracing::info!("Submitted block at height {}", current_height);
             }
             _ => {
-                info!(
+                tracing::info!(
                     "Processing blocks {} -> {} [{}]",
                     current_height,
                     current_height + batch_size,
@@ -163,7 +162,7 @@ impl<E: StdError, B: Backing<E>, I: Issuing<E>> Runner<E, B, I> {
                 );
                 let headers = collect_headers(current_height, batch_size, &self.backing).await?;
                 self.issuing.submit_block_header_batch(headers).await?;
-                info!(
+                tracing::info!(
                     "Submitted blocks {} -> {} [{}]",
                     current_height,
                     current_height + batch_size,
