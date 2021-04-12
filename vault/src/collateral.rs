@@ -1,6 +1,5 @@
 use crate::error::Error;
 use futures::future;
-use log::*;
 use runtime::{
     pallets::exchange_rate_oracle::SetExchangeRateEvent, AccountId, DotBalancesPallet, PolkaBtcProvider,
     PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet, VaultStatus,
@@ -14,7 +13,7 @@ pub async fn maintain_collateralization_rate(
     provider
         .on_event::<SetExchangeRateEvent<PolkaBtcRuntime>, _, _, _>(
             |_| async move {
-                info!("Received SetExchangeRateEvent");
+                tracing::info!("Received SetExchangeRateEvent");
                 // todo: implement retrying
 
                 match lock_required_collateral(provider.clone(), provider.get_account_id().clone(), maximum_collateral)
@@ -22,11 +21,11 @@ pub async fn maintain_collateralization_rate(
                 {
                     // vault not being registered is ok, no need to log it
                     Err(Error::RuntimeError(runtime::Error::VaultNotFound)) => {}
-                    Err(e) => error!("Failed to maintain collateral level: {}", e),
+                    Err(e) => tracing::error!("Failed to maintain collateral level: {}", e),
                     _ => {} // success
                 }
             },
-            |error| error!("Error reading SetExchangeRate event: {}", error.to_string()),
+            |error| tracing::error!("Error reading SetExchangeRate event: {}", error.to_string()),
         )
         .await
 }
@@ -74,7 +73,7 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet
         return Ok(());
     }
 
-    trace!(
+    tracing::trace!(
         "Current collateral = {}; required = {}; max = {}",
         actual_collateral,
         required_collateral,
@@ -92,7 +91,7 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet
     if actual_collateral < target_collateral {
         // cases 5 & 6
         let amount_to_increase = target_collateral - actual_collateral;
-        info!("Locking additional collateral");
+        tracing::info!("Locking additional collateral");
         provider.lock_additional_collateral(amount_to_increase).await?;
     }
 

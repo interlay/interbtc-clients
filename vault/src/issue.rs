@@ -1,7 +1,6 @@
 use crate::{Error, IssueRequests, RequestEvent};
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt};
-use log::*;
 use runtime::{
     pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
     BtcAddress, BtcPublicKey, BtcRelayPallet, Error as RuntimeError, H256Le, IssuePallet, PolkaBtcProvider,
@@ -57,7 +56,7 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
         )
         .await
         {
-            error!("Error executing issue request: {}", e.to_string());
+            tracing::error!("Error executing issue request: {}", e.to_string());
         }
     }
 
@@ -75,7 +74,7 @@ pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send +
         .into_iter()
     {
         if let Err(e) = add_new_deposit_key(bitcoin_core, issue_id, request.btc_public_key).await {
-            error!("Failed to add deposit key #{}: {}", issue_id, e.to_string());
+            tracing::error!("Failed to add deposit key #{}: {}", issue_id, e.to_string());
         }
     }
     Ok(())
@@ -101,7 +100,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
         match transaction.get_payment_amount_to(address) {
             None => {
                 // this should never happen, so use WARN
-                warn!(
+                tracing::warn!(
                     "Could not extract payment amount for transaction {}",
                     transaction.txid()
                 );
@@ -110,11 +109,13 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
             Some(transferred) => {
                 let transferred = transferred as u128;
                 if transferred == issue.amount {
-                    info!("Found tx for issue with id {}", issue_id);
+                    tracing::info!("Found tx for issue with id {}", issue_id);
                 } else {
-                    info!(
+                    tracing::info!(
                         "Found tx for issue with id {}. Expected amount = {}, got {}",
-                        issue_id, issue.amount, transferred
+                        issue_id,
+                        issue.amount,
+                        transferred
                     );
                 }
 
@@ -138,14 +139,14 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
                 let raw_tx = bitcoin_core.get_raw_tx(&txid, &block_hash).await?;
                 let proof = bitcoin_core.get_proof(txid, &block_hash).await?;
 
-                info!("Executing issue with id {}", issue_id);
+                tracing::info!("Executing issue with id {}", issue_id);
                 match btc_parachain
                     .execute_issue(issue_id, H256Le::from_bytes_le(&txid.as_hash()), proof, raw_tx)
                     .await
                 {
                     Ok(_) => (),
                     Err(err) if err.is_issue_completed() => {
-                        info!("Issue {} has already been completed", issue_id);
+                        tracing::info!("Issue {} has already been completed", issue_id);
                     }
                     Err(err) => return Err(err.into()),
                 };
@@ -197,24 +198,24 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
         .on_event::<RequestIssueEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
                 if &event.vault_id == btc_parachain.get_account_id() {
-                    info!("Received request issue event: {:?}", event);
+                    tracing::info!("Received request issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel.clone().send(RequestEvent::Opened).await;
 
                     if let Err(e) = add_new_deposit_key(bitcoin_core, event.issue_id, event.vault_public_key).await {
-                        error!("Failed to add new deposit key #{}: {}", event.issue_id, e.to_string());
+                        tracing::error!("Failed to add new deposit key #{}: {}", event.issue_id, e.to_string());
                     }
                 }
 
-                trace!(
+                tracing::trace!(
                     "watching issue #{} for payment to {}",
                     event.issue_id,
                     event.vault_btc_address
                 );
                 issue_set.insert(event.issue_id, event.vault_btc_address).await;
             },
-            |error| error!("Error reading request issue event: {}", error.to_string()),
+            |error| tracing::error!("Error reading request issue event: {}", error.to_string()),
         )
         .await
 }
@@ -239,16 +240,16 @@ pub async fn listen_for_issue_executes(
         .on_event::<ExecuteIssueEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
                 if &event.vault_id == btc_parachain.get_account_id() {
-                    info!("Received execute issue event: {:?}", event);
+                    tracing::info!("Received execute issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel.clone().send(RequestEvent::Executed(event.issue_id)).await;
                 }
 
-                trace!("issue #{} executed, no longer watching", event.issue_id);
+                tracing::trace!("issue #{} executed, no longer watching", event.issue_id);
                 issue_set.remove(&event.issue_id).await;
             },
-            |error| error!("Error reading execute issue event: {}", error.to_string()),
+            |error| tracing::error!("Error reading execute issue event: {}", error.to_string()),
         )
         .await
 }
@@ -267,10 +268,10 @@ pub async fn listen_for_issue_cancels(
     btc_parachain
         .on_event::<CancelIssueEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
-                trace!("issue #{} cancelled, no longer watching", event.issue_id);
+                tracing::trace!("issue #{} cancelled, no longer watching", event.issue_id);
                 issue_set.remove(&event.issue_id).await;
             },
-            |error| error!("Error reading cancel issue event: {}", error.to_string()),
+            |error| tracing::error!("Error reading cancel issue event: {}", error.to_string()),
         )
         .await
 }

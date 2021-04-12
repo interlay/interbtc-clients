@@ -1,6 +1,5 @@
 use crate::execution::*;
 use bitcoin::BitcoinCoreApi;
-use log::{error, info};
 use runtime::{pallets::redeem::RequestRedeemEvent, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs};
 
 /// Listen for RequestRedeemEvent directed at this vault; upon reception, transfer
@@ -23,7 +22,7 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                 if &event.vault_id != provider.get_account_id() {
                     return;
                 }
-                info!("Received redeem request: {:?}", event);
+                tracing::info!("Received redeem request: {:?}", event);
 
                 // within this event callback, we captured the arguments of listen_for_redeem_requests
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
@@ -37,11 +36,12 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                     let result = request.pay_and_execute(provider, btc_rpc, num_confirmations).await;
 
                     match result {
-                        Ok(_) => info!(
+                        Ok(_) => tracing::info!(
                             "Completed redeem request #{} with amount {}",
-                            event.redeem_id, event.amount_polka_btc
+                            event.redeem_id,
+                            event.amount_polka_btc
                         ),
-                        Err(e) => error!(
+                        Err(e) => tracing::error!(
                             "Failed to process redeem request #{}: {}",
                             event.redeem_id,
                             e.to_string()
@@ -49,7 +49,7 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                     }
                 });
             },
-            |error| error!("Error reading redeem event: {}", error.to_string()),
+            |error| tracing::error!("Error reading redeem event: {}", error.to_string()),
         )
         .await
 }
