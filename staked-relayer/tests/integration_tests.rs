@@ -10,7 +10,6 @@ use futures::{
     future::{join, Either},
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
-use log::*;
 use runtime::{
     pallets::staked_relayers::*,
     substrate_subxt::{Event, PairSigner},
@@ -28,7 +27,7 @@ const TIMEOUT: Duration = Duration::from_secs(45);
 
 #[tokio::test(threaded_scheduler)]
 async fn test_report_vault_theft_succeeds() {
-    let _ = env_logger::try_init();
+    staked_relayer::init_subscriber();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
@@ -102,7 +101,7 @@ async fn test_report_vault_theft_succeeds() {
 
 #[tokio::test(threaded_scheduler)]
 async fn test_register_deregister_succeeds() {
-    let _ = env_logger::try_init();
+    staked_relayer::init_subscriber();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
@@ -125,7 +124,7 @@ async fn test_register_deregister_succeeds() {
 #[ignore]
 #[tokio::test(threaded_scheduler)]
 async fn test_vote_status_no_data_succeeds() {
-    let _ = env_logger::try_init();
+    staked_relayer::init_subscriber();
 
     let (ref client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;

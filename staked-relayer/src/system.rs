@@ -2,7 +2,6 @@ use crate::{relay::*, service::*, utils::*, Error, Vaults};
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use futures::executor::block_on;
-use log::*;
 use runtime::{
     pallets::sla::UpdateRelayerSLAEvent, wait_or_shutdown, Error as RuntimeError, PolkaBtcProvider, PolkaBtcRuntime,
     Service, ShutdownSender, StakedRelayerPallet, UtilFuncs, VaultRegistryPallet,
@@ -72,20 +71,20 @@ impl RelayerService {
         if let Some(stake) = self.config.auto_register_with_stake {
             if !is_registered(&self.btc_parachain).await? {
                 self.btc_parachain.register_staked_relayer(stake).await?;
-                info!("Automatically registered staked relayer");
+                tracing::info!("Automatically registered staked relayer");
             } else {
-                info!("Not registering staked relayer -- already registered");
+                tracing::info!("Not registering staked relayer -- already registered");
             }
         } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
             if !is_registered(&self.btc_parachain).await? {
                 fund_and_register(&self.btc_parachain, faucet_url).await?;
-                info!("Automatically registered staked relayer");
+                tracing::info!("Automatically registered staked relayer");
             } else {
-                info!("Not registering staked relayer -- already registered");
+                tracing::info!("Not registering staked relayer -- already registered");
             }
         }
 
-        info!("Fetching all active vaults...");
+        tracing::info!("Fetching all active vaults...");
         let vaults = self
             .btc_parachain
             .get_all_vaults()
@@ -138,10 +137,10 @@ impl RelayerService {
                 .on_event::<UpdateRelayerSLAEvent<PolkaBtcRuntime>, _, _, _>(
                     |event| async move {
                         if &event.relayer_id == relayer_id {
-                            info!("Received event: new total SLA score = {:?}", event.new_sla);
+                            tracing::info!("Received event: new total SLA score = {:?}", event.new_sla);
                         }
                     },
-                    |err| error!("Error (UpdateRelayerSLAEvent): {}", err.to_string()),
+                    |err| tracing::error!("Error (UpdateRelayerSLAEvent): {}", err.to_string()),
                 )
                 .await
         });
@@ -178,7 +177,7 @@ impl RelayerService {
             ),
         );
 
-        info!("Starting system services...");
+        tracing::info!("Starting system services...");
         let _ = tokio::join!(
             // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
             tokio::spawn(async move { vaults_registration_listener.await }),
