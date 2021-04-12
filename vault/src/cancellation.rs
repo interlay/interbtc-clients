@@ -1,7 +1,6 @@
 use super::Error;
 use async_trait::async_trait;
 use futures::{channel::mpsc::Receiver, *};
-use log::*;
 use runtime::{
     AccountId, Error as RuntimeError, IssuePallet, IssueRequestStatus, PolkaBtcHeader, ReplacePallet, UtilFuncs,
 };
@@ -253,14 +252,14 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + Clone> CancellationScheduler<P
                 }
                 Err(e) => {
                     active_requests.clear();
-                    error!("Failed to query open {}s: {}", T::TYPE_NAME, e);
+                    tracing::error!("Failed to query open {}s: {}", T::TYPE_NAME, e);
                 }
             }
         }
 
         match selector.select_event(block_listener, event_listener).await? {
             BlockOrEvent::Block(header) => {
-                trace!(
+                tracing::trace!(
                     "Received parachain block at height {} for {}",
                     header.number,
                     T::TYPE_NAME
@@ -270,10 +269,10 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + Clone> CancellationScheduler<P
 
                 for request in cancellable_requests {
                     match T::cancel_request(&self.provider, request.id).await {
-                        Ok(_) => info!("Canceled {} #{}", T::TYPE_NAME, request.id),
+                        Ok(_) => tracing::info!("Canceled {} #{}", T::TYPE_NAME, request.id),
                         Err(e) => {
                             // failed to cancel; get up-to-date request list in next iteration
-                            error!("Failed to cancel {}: {}", T::TYPE_NAME, e);
+                            tracing::error!("Failed to cancel {}: {}", T::TYPE_NAME, e);
                             return Ok(ListState::Invalid);
                         }
                     }
@@ -282,12 +281,12 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + Clone> CancellationScheduler<P
                 Ok(ListState::Valid)
             }
             BlockOrEvent::Event(RequestEvent::Executed(id)) => {
-                debug!("Received event: executed {} #{}", T::TYPE_NAME, id);
+                tracing::debug!("Received event: executed {} #{}", T::TYPE_NAME, id);
                 active_requests.retain(|x| x.id != id);
                 Ok(ListState::Valid)
             }
             BlockOrEvent::Event(RequestEvent::Opened) => {
-                debug!("Received event: opened {}", T::TYPE_NAME);
+                tracing::debug!("Received event: opened {}", T::TYPE_NAME);
                 Ok(ListState::Invalid)
             }
         }

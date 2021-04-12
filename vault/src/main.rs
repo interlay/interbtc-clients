@@ -1,5 +1,4 @@
 use clap::Clap;
-use log::*;
 use runtime::{substrate_subxt::PairSigner, ConnectionManager, PolkaBtcRuntime};
 use std::time::Duration;
 
@@ -70,12 +69,10 @@ pub struct Opts {
 }
 
 async fn start() -> Result<(), Error> {
-    env_logger::init_from_env(
-        env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, log::LevelFilter::Info.as_str()),
-    );
+    vault::init_subscriber();
     let opts: Opts = Opts::parse();
 
-    info!("Command line arguments: {:?}", opts.clone());
+    tracing::info!("Command line arguments: {:?}", opts.clone());
 
     let (pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);

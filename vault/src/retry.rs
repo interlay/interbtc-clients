@@ -1,6 +1,5 @@
 use backoff::{backoff::Backoff, ExponentialBackoff};
 use futures::Future;
-use log::warn;
 use runtime::Error as RuntimeError;
 use std::time::Duration;
 
@@ -50,7 +49,7 @@ where
         match backoff.next_backoff() {
             Some(wait) => {
                 // error occurred, sleep before retrying
-                warn!("{:?} - next retry in {:.3} s", err, wait.as_secs_f64());
+                tracing::warn!("{:?} - next retry in {:.3} s", err, wait.as_secs_f64());
                 tokio::time::delay_for(wait).await;
             }
             None => break Err(RuntimeError::Timeout),

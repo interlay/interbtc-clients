@@ -13,9 +13,9 @@ mod retry;
 mod system;
 mod types;
 
-use log::*;
 use runtime::{PolkaBtcProvider, VaultRegistryPallet};
 use std::time::Duration;
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 pub mod service {
     pub use crate::{
@@ -40,7 +40,7 @@ pub use crate::{
 
 pub(crate) async fn lock_additional_collateral(api: &PolkaBtcProvider, amount: u128) -> Result<(), Error> {
     let result = api.lock_additional_collateral(amount).await;
-    info!("Locking additional collateral; amount {}: {:?}", amount, result);
+    tracing::info!("Locking additional collateral; amount {}: {:?}", amount, result);
     Ok(result?)
 }
 
@@ -50,3 +50,15 @@ pub const BITCOIN_MAX_RETRYING_TIME: Duration = Duration::from_secs(24 * 60 * 60
 /// At startup we wait until a new block has arrived before we start event listeners.
 /// This constant defines the rate at which we check whether the chain height has increased.
 pub const CHAIN_HEIGHT_POLLING_INTERVAL: Duration = Duration::from_millis(500);
+
+pub fn init_subscriber() {
+    let fmt_layer = fmt::layer();
+    let filter_layer = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("info"))
+        .unwrap();
+
+    let _ = tracing_subscriber::registry()
+        .with(filter_layer)
+        .with(fmt_layer)
+        .try_init();
+}

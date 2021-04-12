@@ -21,7 +21,7 @@ const TIMEOUT: Duration = Duration::from_secs(60);
 
 #[tokio::test(threaded_scheduler)]
 async fn test_redeem_succeeds() {
-    let _ = env_logger::try_init();
+    vault::init_subscriber();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
@@ -61,7 +61,7 @@ async fn test_redeem_succeeds() {
 
 #[tokio::test(threaded_scheduler)]
 async fn test_replace_succeeds() {
-    let _ = env_logger::try_init();
+    vault::init_subscriber();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
@@ -127,7 +127,7 @@ async fn test_replace_succeeds() {
 
 #[tokio::test(threaded_scheduler)]
 async fn test_maintain_collateral_succeeds() {
-    let _ = env_logger::try_init();
+    vault::init_subscriber();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
@@ -173,7 +173,7 @@ async fn test_maintain_collateral_succeeds() {
 
 #[tokio::test(threaded_scheduler)]
 async fn test_withdraw_replace_succeeds() {
-    let _ = env_logger::try_init();
+    vault::init_subscriber();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
@@ -239,7 +239,7 @@ async fn test_cancellation_succeeds() {
     // tests cancellation of issue, redeem and replace.
     // issue and replace cancellation is tested through the vault's cancellation service.
     // cancel_redeem is called manually
-    let _ = env_logger::try_init();
+    vault::init_subscriber();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
@@ -389,7 +389,7 @@ async fn test_auction_replace_succeeds() {
     // register two vaults. Issue with old_vault at capacity. Change exchange rate such that new_vault
     // will auction_replace.
 
-    let _ = env_logger::try_init();
+    vault::init_subscriber();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
@@ -475,7 +475,7 @@ async fn test_auction_replace_succeeds() {
 
 #[tokio::test(threaded_scheduler)]
 async fn test_refund_succeeds() {
-    let _ = env_logger::try_init();
+    vault::init_subscriber();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
@@ -544,7 +544,7 @@ async fn test_refund_succeeds() {
 
 #[tokio::test(threaded_scheduler)]
 async fn test_issue_overpayment_succeeds() {
-    let _ = env_logger::try_init();
+    vault::init_subscriber();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
@@ -617,7 +617,7 @@ async fn test_issue_overpayment_succeeds() {
 
 #[tokio::test(threaded_scheduler)]
 async fn test_automatic_issue_execution_succeeds() {
-    let _ = env_logger::try_init();
+    vault::init_subscriber();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
@@ -682,7 +682,7 @@ async fn test_automatic_issue_execution_succeeds() {
 
 #[tokio::test(threaded_scheduler)]
 async fn test_execute_open_requests_succeeds() {
-    let _ = env_logger::try_init();
+    vault::init_subscriber();
 
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
