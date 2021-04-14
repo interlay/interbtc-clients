@@ -3,7 +3,7 @@ use staked_relayer::{system::*, Error};
 use clap::Clap;
 use git_version::git_version;
 use runtime::{substrate_subxt::PairSigner, PolkaBtcRuntime};
-use service::{ConnectionManager, RestartPolicy};
+use service::{ConnectionManager, LoggingFormat, RestartPolicy};
 
 const VERSION: &str = git_version!(args = ["--tags"]);
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -29,15 +29,18 @@ struct Opts {
     #[clap(flatten)]
     relayer: RelayerServiceConfig,
 
-    /// What to do if the connection to the btc-parachain drops.
+    /// Restart or stop internal service on error.
     #[clap(long, default_value = "always")]
     restart_policy: RestartPolicy,
+
+    /// Logging output format.
+    #[clap(long, default_value = "full")]
+    logging_format: LoggingFormat,
 }
 
 async fn start() -> Result<(), Error> {
-    staked_relayer::init_subscriber();
-
     let opts: Opts = Opts::parse();
+    opts.logging_format.init_subscriber();
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);

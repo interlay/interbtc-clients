@@ -16,3 +16,35 @@ impl FromStr for RestartPolicy {
         }
     }
 }
+
+#[derive(Clone, Debug)]
+pub enum LoggingFormat {
+    Full,
+    Json,
+}
+
+impl Default for LoggingFormat {
+    fn default() -> Self {
+        LoggingFormat::Full
+    }
+}
+
+impl FromStr for LoggingFormat {
+    type Err = String;
+    fn from_str(code: &str) -> Result<Self, Self::Err> {
+        match code {
+            "full" => Ok(LoggingFormat::Full),
+            "json" => Ok(LoggingFormat::Json),
+            _ => Err("Could not parse input as LoggingFormat".to_string()),
+        }
+    }
+}
+
+impl LoggingFormat {
+    pub fn init_subscriber(&self) {
+        match *self {
+            Self::Full => crate::log::init_subscriber(),
+            Self::Json => crate::log::init_json_subscriber(),
+        }
+    }
+}

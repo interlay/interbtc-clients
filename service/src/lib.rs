@@ -5,8 +5,10 @@ use runtime::{cli::ConnectionOpts as ParachainConfig, Error, PolkaBtcProvider as
 use std::marker::PhantomData;
 
 mod cli;
+mod trace;
 
-pub use cli::RestartPolicy;
+pub use cli::{LoggingFormat, RestartPolicy};
+pub use trace::init_subscriber;
 
 pub type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
 
@@ -90,7 +92,7 @@ impl<Bitcoin: Clone + Sync, Config: Clone + Send + 'static, S: Service<Bitcoin, 
             let service = S::new_service(btc_parachain, bitcoin_core.clone(), config, shutdown_tx);
             service.start().await?;
 
-            log::info!("Disconnected");
+            tracing::info!("Disconnected");
             match self.restart_policy {
                 RestartPolicy::Never => return Err(Error::ClientShutdown),
                 RestartPolicy::Always => continue,
@@ -113,10 +115,10 @@ where
 
     match futures::future::select(future1, future2).await {
         Either::Left((_, _)) => {
-            log::trace!("Received shutdown signal");
+            tracing::trace!("Received shutdown signal");
         }
         Either::Right((_, _)) => {
-            log::trace!("Sending shutdown signal");
+            tracing::trace!("Sending shutdown signal");
             // TODO: shutdown signal should be error
             let _ = shutdown_tx.send(Some(()));
         }

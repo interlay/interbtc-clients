@@ -29,14 +29,18 @@ pub struct Opts {
     #[clap(flatten)]
     pub vault: VaultServiceConfig,
 
-    /// What to do if the connection to the btc-parachain drops.
+    /// Restart or stop internal service on error.
     #[clap(long, default_value = "always")]
     pub restart_policy: RestartPolicy,
+
+    /// Logging output format.
+    #[clap(long, default_value = "full")]
+    logging_format: LoggingFormat,
 }
 
 async fn start() -> Result<(), Error> {
-    vault::init_subscriber();
     let opts: Opts = Opts::parse();
+    opts.logging_format.init_subscriber();
 
     tracing::info!("Command line arguments: {:?}", opts.clone());
 
