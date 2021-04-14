@@ -32,6 +32,7 @@ jsonrpc-core-client = { version = "17.0.0", features = ["http", "tls"] }
 # Workspace dependencies
 bitcoin = { path = "../bitcoin", features = ["cli"] }
 runtime = { path = "../runtime" }
+service = { path = "../service" }
 
 # Substrate dependencies
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }

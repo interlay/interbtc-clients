@@ -1,12 +1,8 @@
-use crate::{
-    error::{Error, KeyLoadingError},
-    ConnectionManagerConfig, RestartPolicy,
-};
-
+use crate::error::{Error, KeyLoadingError};
 use clap::Clap;
 use sp_core::{sr25519::Pair, Pair as _};
 use sp_keyring::AccountKeyring;
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, num::ParseIntError, time::Duration};
 
 #[derive(Clap, Debug, Clone)]
 pub struct ProviderUserOpts {
@@ -55,6 +51,10 @@ fn get_credentials_from_file(file_path: &str, keyname: &str) -> Result<Pair, Key
     Ok(pair)
 }
 
+pub fn parse_duration_ms(src: &str) -> Result<Duration, ParseIntError> {
+    Ok(Duration::from_millis(u64::from_str_radix(src, 10)?))
+}
+
 #[derive(Clap, Debug, Clone)]
 pub struct ConnectionOpts {
     /// Parachain websocket URL.
@@ -62,12 +62,8 @@ pub struct ConnectionOpts {
     pub polka_btc_url: String,
 
     /// Timeout in milliseconds to wait for connection to btc-parachain.
-    #[clap(long, default_value = "60000")]
-    pub polka_btc_connection_timeout_ms: u64,
-
-    /// What to do if the connection to the btc-parachain drops.
-    #[clap(long, default_value = "always")]
-    pub restart_policy: RestartPolicy,
+    #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "60000")]
+    pub polka_btc_connection_timeout_ms: Duration,
 
     /// Maximum number of concurrent requests
     #[clap(long)]
@@ -76,15 +72,4 @@ pub struct ConnectionOpts {
     /// Maximum notification capacity for each subscription
     #[clap(long)]
     pub max_notifs_per_subscription: Option<usize>,
-}
-
-impl From<ConnectionOpts> for ConnectionManagerConfig {
-    fn from(opts: ConnectionOpts) -> ConnectionManagerConfig {
-        ConnectionManagerConfig {
-            connection_timeout: Duration::from_millis(opts.polka_btc_connection_timeout_ms),
-            restart_policy: opts.restart_policy,
-            max_concurrent_requests: opts.max_concurrent_requests,
-            max_notifs_per_subscription: opts.max_notifs_per_subscription,
-        }
-    }
 }

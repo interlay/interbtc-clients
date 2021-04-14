@@ -52,7 +52,8 @@ impl PolkaBtcProvider {
     }
 
     pub async fn from_url(url: &str, signer: PolkaBtcSigner) -> Result<Self, Error> {
-        let ws_client = new_websocket_client(url, None, None).await?;
+        let ws_config = new_websocket_config(url, None, None)?;
+        let ws_client = new_websocket_client(ws_config).await?;
         Self::new(ws_client, signer).await
     }
 
@@ -61,7 +62,18 @@ impl PolkaBtcProvider {
         signer: PolkaBtcSigner,
         connection_timeout: Duration,
     ) -> Result<Self, Error> {
-        let ws_client = new_websocket_client_with_retry(url, None, None, connection_timeout).await?;
+        Self::from_url_and_config_with_retry(url, signer, None, None, connection_timeout).await
+    }
+
+    pub async fn from_url_and_config_with_retry(
+        url: &str,
+        signer: PolkaBtcSigner,
+        max_concurrent_requests: Option<usize>,
+        max_notifs_per_subscription: Option<usize>,
+        connection_timeout: Duration,
+    ) -> Result<Self, Error> {
+        let ws_config = new_websocket_config(url, max_concurrent_requests, max_notifs_per_subscription)?;
+        let ws_client = new_websocket_client_with_retry(ws_config, connection_timeout).await?;
         Self::new(ws_client, signer).await
     }
 
@@ -233,17 +245,6 @@ impl PolkaBtcProvider {
         self.with_unique_signer(|signer| async move { self.ext_client.batch_and_watch(&signer, encoded_calls).await })
             .await?;
         Ok(())
-    }
-}
-
-#[async_trait]
-impl Provider for PolkaBtcProvider {
-    async fn connect_provider<T>(rpc_client: T, signer: PolkaBtcSigner) -> Result<Self, Error>
-    where
-        Self: Sized,
-        T: Into<RpcClient> + Send,
-    {
-        Self::new(rpc_client, signer).await
     }
 }
 

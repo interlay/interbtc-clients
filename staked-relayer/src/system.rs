@@ -1,44 +1,79 @@
 use crate::{relay::*, service::*, utils::*, Error, Vaults};
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use clap::Clap;
 use futures::executor::block_on;
 use runtime::{
-    pallets::sla::UpdateRelayerSLAEvent, wait_or_shutdown, Error as RuntimeError, PolkaBtcProvider, PolkaBtcRuntime,
-    Service, ShutdownSender, StakedRelayerPallet, UtilFuncs, VaultRegistryPallet,
+    cli::parse_duration_ms, pallets::sla::UpdateRelayerSLAEvent, Error as RuntimeError, PolkaBtcProvider,
+    PolkaBtcRuntime, StakedRelayerPallet, UtilFuncs, VaultRegistryPallet,
 };
+use service::{wait_or_shutdown, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
 
-#[derive(Clone)]
+#[derive(Clone, Clap)]
 pub struct RelayerServiceConfig {
-    /// the bitcoin RPC handle
-    pub bitcoin_core: BitcoinCore,
-    pub auto_register_with_stake: Option<u128>,
-    pub auto_register_with_faucet_url: Option<String>,
+    /// Starting height for vault theft checks, if not defined
+    /// automatically start from the chain tip.
+    #[clap(long)]
     pub bitcoin_theft_start_height: Option<u32>,
+
+    /// Timeout in milliseconds to poll Bitcoin.
+    #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "6000")]
+    pub bitcoin_poll_timeout_ms: Duration,
+
+    /// Starting height to relay block headers, if not defined
+    /// use the best height as reported by the relay module.
+    #[clap(long)]
     pub bitcoin_relay_start_height: Option<u32>,
+
+    /// Max batch size for combined block header submission.
+    #[clap(long, default_value = "16")]
     pub max_batch_size: u32,
-    pub bitcoin_timeout: Duration,
-    pub required_btc_confirmations: u32,
+
+    /// Default deposit for all automated status proposals.
+    #[clap(long, default_value = "100")]
     pub status_update_deposit: u128,
+
+    /// Comma separated list of allowed origins.
+    #[clap(long, default_value = "*")]
     pub rpc_cors_domain: String,
+
+    /// Automatically register the relayer with the given stake (in Planck).
+    #[clap(long)]
+    pub auto_register_with_stake: Option<u128>,
+
+    /// Automatically register the staked relayer with collateral received from the faucet and a newly generated
+    /// address. The parameter is the URL of the faucet
+    #[clap(long, conflicts_with("auto-register-with-stake"))]
+    pub auto_register_with_faucet_url: Option<String>,
+
+    /// Number of confirmations a block needs to have before it is submitted.
+    #[clap(long, default_value = "0")]
+    pub required_btc_confirmations: u32,
 }
 
 pub struct RelayerService {
     btc_parachain: PolkaBtcProvider,
+    bitcoin_core: BitcoinCore,
     config: RelayerServiceConfig,
     shutdown: ShutdownSender,
 }
 
 #[async_trait]
-impl Service<RelayerServiceConfig, PolkaBtcProvider> for RelayerService {
-    async fn initialize(config: &RelayerServiceConfig) -> Result<(), RuntimeError> {
-        Self::connect_bitcoin(&config.bitcoin_core)
+impl Service<BitcoinCore, RelayerServiceConfig> for RelayerService {
+    async fn initialize(bitcoin_core: &BitcoinCore) -> Result<(), RuntimeError> {
+        Self::connect_bitcoin(bitcoin_core)
             .await
             .map_err(|err| RuntimeError::Other(err.to_string()))
     }
 
-    fn new_service(btc_parachain: PolkaBtcProvider, config: RelayerServiceConfig, shutdown: ShutdownSender) -> Self {
-        RelayerService::new(btc_parachain, config, shutdown)
+    fn new_service(
+        btc_parachain: PolkaBtcProvider,
+        bitcoin_core: BitcoinCore,
+        config: RelayerServiceConfig,
+        shutdown: ShutdownSender,
+    ) -> Self {
+        RelayerService::new(btc_parachain, bitcoin_core, config, shutdown)
     }
 
     async fn start(&self) -> Result<(), RuntimeError> {
@@ -57,16 +92,22 @@ impl RelayerService {
         Ok(())
     }
 
-    fn new(btc_parachain: PolkaBtcProvider, config: RelayerServiceConfig, shutdown: ShutdownSender) -> Self {
+    fn new(
+        btc_parachain: PolkaBtcProvider,
+        bitcoin_core: BitcoinCore,
+        config: RelayerServiceConfig,
+        shutdown: ShutdownSender,
+    ) -> Self {
         Self {
             btc_parachain,
+            bitcoin_core,
             config,
             shutdown,
         }
     }
 
     async fn run_service(&self) -> Result<(), Error> {
-        let bitcoin_core = self.config.bitcoin_core.clone();
+        let bitcoin_core = self.bitcoin_core.clone();
 
         if let Some(stake) = self.config.auto_register_with_stake {
             if !is_registered(&self.btc_parachain).await? {
@@ -116,7 +157,7 @@ impl RelayerService {
                 self.btc_parachain.clone(),
                 bitcoin_theft_start_height,
                 vaults.clone(),
-                self.config.bitcoin_timeout,
+                self.config.bitcoin_poll_timeout_ms,
             ),
         );
 
@@ -168,7 +209,7 @@ impl RelayerService {
                     Config {
                         start_height: self.config.bitcoin_relay_start_height,
                         max_batch_size: self.config.max_batch_size,
-                        timeout: Some(self.config.bitcoin_timeout),
+                        timeout: Some(self.config.bitcoin_poll_timeout_ms),
                         required_btc_confirmations: self.config.required_btc_confirmations,
                     },
                 ),

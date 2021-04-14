@@ -24,6 +24,7 @@ git-version = "0.3.4"
 
 # Workspace dependencies
 runtime = { path = "../runtime" }
+service = { path = "../service" }
 
 [dev-dependencies]
 
