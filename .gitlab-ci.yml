@@ -65,9 +65,9 @@ build-clients:
     parallel:
         matrix:
             - PLATFORM: x86_64-unknown-linux-gnu
-              FILE_EXTENSION: ""
+              FILE_EXTENSION: [""]
             - PLATFORM: x86_64-pc-windows-gnu
-              FILE_EXTENSION: ".exe"
+              FILE_EXTENSION: [".exe"]
     artifacts:
         name: "${CI_COMMIT_REF_SLUG}"
         paths:
