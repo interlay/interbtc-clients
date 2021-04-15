@@ -64,15 +64,18 @@ build-clients:
         - ls -l target/$PLATFORM/release/
     parallel:
         matrix:
-            - PLATFORM: [x86_64-unknown-linux-gnu, x86_64-pc-windows-gnu]
+            - PLATFORM: x86_64-unknown-linux-gnu
+              FILE_EXTENSION: ""
+            - PLATFORM: x86_64-pc-windows-gnu
+              FILE_EXTENSION: ".exe"
     artifacts:
         name: "${CI_COMMIT_REF_SLUG}"
         paths:
-            - target/$PLATFORM/release/staked-relayer
-            - target/$PLATFORM/release/oracle
-            - target/$PLATFORM/release/vault
-            - target/$PLATFORM/release/testdata-gen
-            - target/$PLATFORM/release/faucet
+            - target/$PLATFORM/release/staked-relayer${FILE_EXTENSION}
+            - target/$PLATFORM/release/oracle${FILE_EXTENSION}
+            - target/$PLATFORM/release/vault${FILE_EXTENSION}
+            - target/$PLATFORM/release/testdata-gen${FILE_EXTENSION}
+            - target/$PLATFORM/release/faucet${FILE_EXTENSION}
 
 build-docker-images:
     stage: deploy
@@ -94,6 +97,7 @@ build-docker-images:
         - |
             /kaniko/executor \
                 --build-arg BINARY=${IMAGE} \
+                --build-arg PROFILE="x86_64-unknown-linux-gnu/release" \
                 --context ${CI_PROJECT_DIR} \
                 --dockerfile ${CI_PROJECT_DIR}/.deploy/Dockerfile \
                 --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_SHORT_SHA} \
