@@ -28,6 +28,18 @@ test-clients:
     stage: test
     extends:
         - .rust-base-job
+    variables:
+        BITCOIN_RPC_URL: "http://localhost:18443"
+        BITCOIN_RPC_USER: "rpcuser"
+        BITCOIN_RPC_PASS: "rpcpassword"
+    services:
+        - name: ruimarinho/bitcoin-core:0.20
+          alias: bitcoind
+          command:
+              - bitcoind
+              - -regtest
+              - -rpcuser=rpcuser
+              - -rpcpassword=rpcpassword
     script:
         - cargo fmt -- --check
         - cargo check --workspace --release
@@ -89,11 +101,11 @@ build-docker-images:
     # <<: *only_refs
 
 release-github:
-  stage: release
-  image: registry.gitlab.com/interlay/containers/github-publisher:master
-  script:
-    - gh auth status
-    - git-chglog --output CHANGELOG.md $CI_COMMIT_TAG
-    - gh release -R https://github.com/interlay/btc-parachain create $CI_COMMIT_TAG --title $CI_COMMIT_TAG -F CHANGELOG.md -d
-  only:
-    - tags
+    stage: release
+    image: registry.gitlab.com/interlay/containers/github-publisher:master
+    script:
+        - gh auth status
+        - git-chglog --output CHANGELOG.md $CI_COMMIT_TAG
+        - gh release -R https://github.com/interlay/btc-parachain create $CI_COMMIT_TAG --title $CI_COMMIT_TAG -F CHANGELOG.md -d
+    only:
+        - tags
