@@ -86,7 +86,7 @@ build-docker-images:
                 --dockerfile ${CI_PROJECT_DIR}/.deploy/Dockerfile \
                 --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_SHORT_SHA} \
                 --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_REF_SLUG}
-    <<: *only_refs
+    # <<: *only_refs
 
 release-github:
   stage: release
