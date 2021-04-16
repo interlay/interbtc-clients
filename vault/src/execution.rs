@@ -1,7 +1,6 @@
 use crate::{error::Error, retry::*, BITCOIN_MAX_RETRYING_TIME};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use futures::{future, stream::StreamExt};
-use log::*;
 use runtime::{
     pallets::{
         redeem::RequestRedeemEvent,
@@ -130,7 +129,7 @@ impl Request {
         btc_rpc: B,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
-        info!("Sending bitcoin to {}", self.btc_address);
+        tracing::info!("Sending bitcoin to {}", self.btc_address);
 
         let tx = btc_rpc
             .create_transaction(self.btc_address, self.amount as u64, Some(self.hash))
@@ -151,7 +150,7 @@ impl Request {
                 let vault_id = provider.get_account_id().clone();
                 let wallet = provider.get_vault(vault_id).await?.wallet;
                 if !wallet.has_btc_address(&address) {
-                    info!("Registering address {}", address);
+                    tracing::info!("Registering address {}", address);
                     // retry address registration if tx was outdated
                     notify_retry(
                         || provider.register_address(*address),
@@ -172,7 +171,7 @@ impl Request {
             .wait_for_transaction_metadata(txid, BITCOIN_MAX_RETRYING_TIME, num_confirmations)
             .await?;
 
-        info!("Bitcoin successfully sent to {}", self.btc_address);
+        tracing::info!("Bitcoin successfully sent to {}", self.btc_address);
         Ok(tx_metadata)
     }
 
@@ -264,9 +263,10 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
             // remove request from the hashmap
             open_requests.retain(|&key, _| key != request.hash);
 
-            info!(
+            tracing::info!(
                 "{:?} request #{} has valid bitcoin payment - processing...",
-                request.request_type, request.hash
+                request.request_type,
+                request.hash
             );
 
             // start a new task to (potentially) await confirmation and to execute on the parachain
@@ -290,23 +290,25 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                             )
                             .await
                         {
-                            error!(
+                            tracing::error!(
                                 "Error while waiting for block inclusion for request #{}: {}",
-                                request.hash, e
+                                request.hash,
+                                e
                             );
                             // continue; try to execute anyway
                         }
 
                         match request.execute(provider.clone(), tx_metadata).await {
                             Ok(_) => {
-                                info!("Executed request #{}", request.hash);
+                                tracing::info!("Executed request #{}", request.hash);
                             }
-                            Err(e) => error!("Failed to execute request #{}: {}", request.hash, e),
+                            Err(e) => tracing::error!("Failed to execute request #{}: {}", request.hash, e),
                         }
                     }
-                    Err(e) => error!(
+                    Err(e) => tracing::error!(
                         "Failed to confirm bitcoin transaction for request {}: {}",
-                        request.hash, e
+                        request.hash,
+                        e
                     ),
                 }
             });
@@ -323,19 +325,23 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         let provider = provider.clone();
         let btc_rpc = btc_rpc.clone();
         tokio::spawn(async move {
-            info!(
+            tracing::info!(
                 "{:?} request #{} found without bitcoin payment - processing...",
-                request.request_type, request.hash
+                request.request_type,
+                request.hash
             );
 
             match request.pay_and_execute(provider, btc_rpc, num_confirmations).await {
-                Ok(_) => info!(
+                Ok(_) => tracing::info!(
                     "{:?} request #{} successfully executed",
-                    request.request_type, request.hash
+                    request.request_type,
+                    request.hash
                 ),
-                Err(e) => info!(
+                Err(e) => tracing::info!(
                     "{:?} request #{} failed to process: {}",
-                    request.request_type, request.hash, e
+                    request.request_type,
+                    request.hash,
+                    e
                 ),
             }
         });

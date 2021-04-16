@@ -1,7 +1,6 @@
 use crate::{cancellation::RequestEvent, error::Error, execution::Request};
 use bitcoin::BitcoinCoreApi;
 use futures::{channel::mpsc::Sender, SinkExt};
-use log::*;
 use runtime::{
     pallets::replace::{AcceptReplaceEvent, AuctionReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent},
     DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet, UtilFuncs, VaultRegistryPallet,
@@ -30,7 +29,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                 if &event.old_vault_id != provider.get_account_id() {
                     return;
                 }
-                info!("Received accept replace event: {:?}", event);
+                tracing::info!("Received accept replace event: {:?}", event);
 
                 // within this event callback, we captured the arguments of listen_for_redeem_requests
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
@@ -43,11 +42,12 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                     let result = request.pay_and_execute(provider, btc_rpc, num_confirmations).await;
 
                     match result {
-                        Ok(_) => info!(
+                        Ok(_) => tracing::info!(
                             "Successfully Executed replace #{} with amount {}",
-                            event.replace_id, event.amount_btc
+                            event.replace_id,
+                            event.amount_btc
                         ),
-                        Err(e) => error!(
+                        Err(e) => tracing::error!(
                             "Failed to process replace request #{}: {}",
                             event.replace_id,
                             e.to_string()
@@ -55,7 +55,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                     }
                 });
             },
-            |error| error!("Error reading accept_replace_event: {}", error.to_string()),
+            |error| tracing::error!("Error reading accept_replace_event: {}", error.to_string()),
         )
         .await
 }
@@ -81,7 +81,7 @@ pub async fn listen_for_auction_replace<B: BitcoinCoreApi + Clone + Send + Sync 
                 if &event.old_vault_id != provider.get_account_id() {
                     return;
                 }
-                info!("Received auction replace event: {:?}", event);
+                tracing::info!("Received auction replace event: {:?}", event);
 
                 // within this event callback, we captured the arguments of listen_for_redeem_requests
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
@@ -94,11 +94,12 @@ pub async fn listen_for_auction_replace<B: BitcoinCoreApi + Clone + Send + Sync 
                     let result = request.pay_and_execute(provider, btc_rpc, num_confirmations).await;
 
                     match result {
-                        Ok(_) => info!(
+                        Ok(_) => tracing::info!(
                             "Successfully executed auctioned replace #{} with amount {}",
-                            event.replace_id, event.btc_amount
+                            event.replace_id,
+                            event.btc_amount
                         ),
-                        Err(e) => error!(
+                        Err(e) => tracing::error!(
                             "Failed to process auctioned replace request #{}: {}",
                             event.replace_id,
                             e.to_string()
@@ -106,7 +107,7 @@ pub async fn listen_for_auction_replace<B: BitcoinCoreApi + Clone + Send + Sync 
                     }
                 });
             },
-            |error| error!("Error reading auction_replace_event: {}", error.to_string()),
+            |error| tracing::error!("Error reading auction_replace_event: {}", error.to_string()),
         )
         .await
 }
@@ -135,20 +136,22 @@ pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone>(
                     return;
                 }
 
-                info!(
+                tracing::info!(
                     "Received replace request #{} from {} for amount {}",
-                    event.replace_id, event.old_vault_id, event.amount_btc
+                    event.replace_id,
+                    event.old_vault_id,
+                    event.amount_btc
                 );
 
                 if accept_replace_requests {
                     match handle_replace_request(provider.clone(), btc_rpc.clone(), &event).await {
                         Ok(_) => {
-                            info!("Accepted replace request #{}", event.replace_id);
+                            tracing::info!("Accepted replace request #{}", event.replace_id);
                             // try to send the event, but ignore the returned result since
                             // the only way it can fail is if the channel is closed
                             let _ = event_channel.clone().send(RequestEvent::Opened).await;
                         }
-                        Err(e) => error!(
+                        Err(e) => tracing::error!(
                             "Failed to accept replace request #{}: {}",
                             event.replace_id,
                             e.to_string()
@@ -156,7 +159,7 @@ pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone>(
                     }
                 }
             },
-            |error| error!("Error reading replace event: {}", error.to_string()),
+            |error| tracing::error!("Error reading replace event: {}", error.to_string()),
         )
         .await
 }
@@ -204,7 +207,7 @@ pub async fn monitor_collateral_of_vaults<B: BitcoinCoreApi + Clone>(
     // polling is easier for now
     loop {
         if let Err(e) = check_collateral_of_vaults(&provider, &btc_rpc, &mut event_channel).await {
-            error!("Error while monitoring collateral of vaults: {}", e.to_string());
+            tracing::error!("Error while monitoring collateral of vaults: {}", e.to_string());
         }
         delay_for(interval).await
     }
@@ -228,7 +231,7 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi + Clone>(
         .filter(|vault| vault.id != vault_id);
 
     for vault in vaults {
-        trace!("Checking collateral of {}", vault.id);
+        tracing::trace!("Checking collateral of {}", vault.id);
         if provider
             .is_vault_below_auction_threshold(vault.id.clone())
             .await
@@ -236,15 +239,15 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi + Clone>(
         {
             match auction_replace(provider, btc_rpc, &vault, dust_amount).await {
                 Ok(_) => {
-                    info!("Auction replace for vault {} submitted", vault.id);
+                    tracing::info!("Auction replace for vault {} submitted", vault.id);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel.send(RequestEvent::Opened).await;
                 }
                 Err(Error::InsufficientFunds) | Err(Error::BelowDustAmount) => {
-                    debug!("Not auctioning vault {}", vault.id)
+                    tracing::debug!("Not auctioning vault {}", vault.id)
                 }
-                Err(e) => error!("Failed to auction vault {}: {}", vault.id, e.to_string()),
+                Err(e) => tracing::error!("Failed to auction vault {}: {}", vault.id, e.to_string()),
             };
         }
     }
@@ -276,9 +279,11 @@ async fn auction_replace<B: BitcoinCoreApi + Clone, P: DotBalancesPallet + Repla
         return Err(Error::InsufficientFunds);
     }
 
-    info!(
+    tracing::info!(
         "Vault {} is below auction threshold; replacing {} BTC with {} DOT",
-        vault.id, btc_amount, collateral
+        vault.id,
+        btc_amount,
+        collateral
     );
 
     // TODO: retry auctioning?
@@ -310,7 +315,7 @@ pub async fn listen_for_execute_replace(
         .on_event::<ExecuteReplaceEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
                 if &event.new_vault_id == provider.get_account_id() {
-                    info!("Received event: execute replace #{}", event.replace_id);
+                    tracing::info!("Received event: execute replace #{}", event.replace_id);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel
@@ -319,7 +324,7 @@ pub async fn listen_for_execute_replace(
                         .await;
                 }
             },
-            |error| error!("Error reading redeem event: {}", error.to_string()),
+            |error| tracing::error!("Error reading redeem event: {}", error.to_string()),
         )
         .await
 }

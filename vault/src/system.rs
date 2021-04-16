@@ -5,7 +5,6 @@ use crate::{
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use futures::{channel::mpsc, SinkExt};
-use log::*;
 use runtime::{
     pallets::sla::UpdateVaultSLAEvent, wait_or_shutdown, AccountId, BtcRelayPallet, Error as RuntimeError,
     PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, Service, ShutdownSender, UtilFuncs, VaultRegistryPallet,
@@ -87,23 +86,23 @@ impl VaultService {
             Some(x) => x,
             None => self.btc_parachain.get_bitcoin_confirmations().await?,
         };
-        info!("Using {} bitcoin confirmations", num_confirmations);
+        tracing::info!("Using {} bitcoin confirmations", num_confirmations);
 
         if let Some(collateral) = self.config.auto_register_with_collateral {
             if !is_registered(&self.btc_parachain, vault_id.clone()).await? {
                 // bitcoin core is currently blocking, no need to try_join
                 let public_key = bitcoin_core.get_new_public_key().await?;
                 self.btc_parachain.register_vault(collateral, public_key).await?;
-                info!("Automatically registered vault");
+                tracing::info!("Automatically registered vault");
             } else {
-                info!("Not registering vault -- already registered");
+                tracing::info!("Not registering vault -- already registered");
             }
         } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
             if !is_registered(&self.btc_parachain, vault_id.clone()).await? {
                 faucet::fund_and_register(&self.btc_parachain, &bitcoin_core, faucet_url, vault_id.clone()).await?;
-                info!("Automatically registered vault");
+                tracing::info!("Automatically registered vault");
             } else {
-                info!("Not registering vault -- already registered");
+                tracing::info!("Not registering vault -- already registered");
             }
         }
 
@@ -118,10 +117,10 @@ impl VaultService {
         let open_request_executor =
             execute_open_requests(self.btc_parachain.clone(), bitcoin_core.clone(), num_confirmations);
         tokio::spawn(async move {
-            info!("Checking for open requests...");
+            tracing::info!("Checking for open requests...");
             match open_request_executor.await {
-                Ok(_) => info!("Done processing open requests"),
-                Err(e) => error!("Failed to process open requests: {}", e),
+                Ok(_) => tracing::info!("Done processing open requests"),
+                Err(e) => tracing::error!("Failed to process open requests: {}", e),
             }
         });
 
@@ -131,7 +130,7 @@ impl VaultService {
                 .await
             {
                 Err(Error::RuntimeError(runtime::Error::VaultNotFound)) => {} // not registered
-                Err(e) => error!("Failed to lock required additional collateral: {}", e),
+                Err(e) => tracing::error!("Failed to lock required additional collateral: {}", e),
                 _ => {} // collateral level now OK
             };
         }
@@ -143,7 +142,7 @@ impl VaultService {
 
         // wait for a new block to arrive, to prevent processing an event that potentially
         // has been processed already prior to restarting
-        info!("Waiting for new block...");
+        tracing::info!("Waiting for new block...");
         let startup_height = self.btc_parachain.get_current_chain_height().await?;
         while startup_height == self.btc_parachain.get_current_chain_height().await? {
             delay_for(CHAIN_HEIGHT_POLLING_INTERVAL).await;
@@ -292,10 +291,10 @@ impl VaultService {
                 .on_event::<UpdateVaultSLAEvent<PolkaBtcRuntime>, _, _, _>(
                     |event| async move {
                         if &event.vault_id == vault_id {
-                            info!("Received event: new total SLA score = {:?}", event.new_sla);
+                            tracing::info!("Received event: new total SLA score = {:?}", event.new_sla);
                         }
                     },
-                    |err| error!("Error (UpdateVaultSLAEvent): {}", err.to_string()),
+                    |err| tracing::error!("Error (UpdateVaultSLAEvent): {}", err.to_string()),
                 )
                 .await
         });
@@ -303,7 +302,7 @@ impl VaultService {
         let err_provider = self.btc_parachain.clone();
         let err_listener = wait_or_shutdown(self.shutdown.clone(), async move {
             err_provider
-                .on_event_error(|e| debug!("Received error event: {}", e))
+                .on_event_error(|e| tracing::debug!("Received error event: {}", e))
                 .await
         });
 
@@ -312,7 +311,7 @@ impl VaultService {
         let no_issue_execution = self.config.no_issue_execution;
 
         // starts all the tasks
-        info!("Starting to listen for events...");
+        tracing::info!("Starting to listen for events...");
         let _ = tokio::join!(
             // runs error listener to log errors
             tokio::spawn(async move { err_listener.await }),
