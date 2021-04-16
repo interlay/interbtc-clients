@@ -33,7 +33,7 @@ test-clients:
         BITCOIN_RPC_USER: "rpcuser"
         BITCOIN_RPC_PASS: "rpcpassword"
     services:
-        - name: ruimarinho/bitcoin-core:0.20
+        - name: ruimarinho/bitcoin-core:0.21-alpine
           alias: bitcoind
           command:
               - bitcoind
