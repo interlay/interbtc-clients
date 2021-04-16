@@ -1,13 +1,17 @@
 use staked_relayer::{system::*, Error};
 
 use clap::Clap;
+use git_version::git_version;
 use runtime::{substrate_subxt::PairSigner, ConnectionManager, PolkaBtcRuntime};
 use std::time::Duration;
 
-/// The Staked Relayer client intermediates between Bitcoin Core
-/// and the PolkaBTC Parachain.
+const VERSION: &str = git_version!(args = ["--tags"]);
+const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
+const NAME: &str = env!("CARGO_PKG_NAME");
+const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
+
 #[derive(Clap)]
-#[clap(version = "0.2", author = "Interlay <contact@interlay.io>")]
+#[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
 struct Opts {
     /// Keyring / keyfile options.
     #[clap(flatten)]

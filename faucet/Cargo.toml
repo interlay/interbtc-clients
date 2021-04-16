@@ -3,6 +3,7 @@ name = "faucet"
 version = "0.6.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
+description = "DOT faucet for enabling users to test PolkaBTC."
 
 [dependencies]
 log = "0.4.6"
@@ -19,6 +20,7 @@ hex = "0.4.2"
 kv = { version = "0.22.0", features = ["json-value"] }
 async-trait = "0.1.40"
 futures = "0.3.5"
+git-version = "0.3.4"
 
 # Workspace dependencies
 runtime = { path = "../runtime" }

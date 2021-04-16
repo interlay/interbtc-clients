@@ -2,6 +2,7 @@ mod error;
 
 use clap::Clap;
 use error::Error;
+use git_version::git_version;
 use log::{error, info};
 use runtime::{
     substrate_subxt::PairSigner, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, PolkaBtcProvider,
@@ -9,6 +10,11 @@ use runtime::{
 };
 use std::{collections::HashMap, time::Duration};
 use tokio::time::delay_for;
+
+const VERSION: &str = git_version!(args = ["--tags"]);
+const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
+const NAME: &str = env!("CARGO_PKG_NAME");
+const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
 
 const ERR_RETRY_WAIT: Duration = Duration::from_secs(10);
 
@@ -26,10 +32,8 @@ async fn get_exchange_rate_from_coingecko() -> Result<u128, Error> {
         .ok_or(Error::InvalidExchangeRate)?)
 }
 
-/// Simple oracle liveness service to automatically update the
-/// exchange rate periodically.
 #[derive(Clap)]
-#[clap(version = "0.1", author = "Interlay <contact@interlay.io>")]
+#[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
 struct Opts {
     /// Parachain URL, can be over WebSockets or HTTP.
     #[clap(long, default_value = "ws://127.0.0.1:9944")]

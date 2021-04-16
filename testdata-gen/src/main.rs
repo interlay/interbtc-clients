@@ -9,6 +9,7 @@ use bitcoin::{BitcoinCore, BitcoinCoreApi, ConversionError, PartialAddress};
 use clap::Clap;
 use error::Error;
 use futures::future::try_join_all;
+use git_version::git_version;
 use log::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
@@ -70,9 +71,13 @@ impl std::str::FromStr for PolkaBtcErrorCodeFromStr {
     }
 }
 
-/// Toolkit for generating testdata on the local BTC-Parachain.
+const VERSION: &str = git_version!(args = ["--tags"]);
+const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
+const NAME: &str = env!("CARGO_PKG_NAME");
+const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
+
 #[derive(Clap)]
-#[clap(version = "0.1", author = "Interlay <contact@interlay.io>")]
+#[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
 struct Opts {
     /// Parachain URL, can be over WebSockets or HTTP.
     #[clap(long, default_value = "ws://127.0.0.1:9944")]
