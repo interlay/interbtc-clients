@@ -38,6 +38,9 @@ pub struct FaucetService {
 
 #[async_trait]
 impl Service<(), FaucetServiceConfig> for FaucetService {
+    const NAME: &'static str = env!("CARGO_PKG_NAME");
+    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
     fn new_service(
         btc_parachain: PolkaBtcProvider,
         _bitcoin_core: (),
@@ -91,6 +94,7 @@ impl FaucetService {
             close_handle.close();
         });
 
+        log::info!("Running...");
         let _ = future::join(block_listener, http_server).await;
 
         Ok(())

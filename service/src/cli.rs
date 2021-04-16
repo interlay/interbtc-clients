@@ -1,3 +1,4 @@
+use clap::Clap;
 use std::str::FromStr;
 
 #[derive(Clone, Debug)]
@@ -43,8 +44,23 @@ impl FromStr for LoggingFormat {
 impl LoggingFormat {
     pub fn init_subscriber(&self) {
         match *self {
-            Self::Full => crate::log::init_subscriber(),
-            Self::Json => crate::log::init_json_subscriber(),
+            Self::Full => crate::trace::init_subscriber(),
+            Self::Json => crate::trace::init_json_subscriber(),
         }
     }
+}
+
+#[derive(Clap, Debug, Clone)]
+pub struct ServiceConfig {
+    /// Restart or stop on error.
+    #[clap(long, default_value = "always")]
+    pub restart_policy: RestartPolicy,
+
+    /// Logging output format.
+    #[clap(long, default_value = "full")]
+    pub logging_format: LoggingFormat,
+
+    /// Telemetry endpoint.
+    #[clap(long)]
+    pub telemetry_url: Option<String>,
 }

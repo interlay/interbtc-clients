@@ -72,6 +72,9 @@ pub struct VaultService {
 
 #[async_trait]
 impl Service<BitcoinCore, VaultServiceConfig> for VaultService {
+    const NAME: &'static str = env!("CARGO_PKG_NAME");
+    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
     async fn initialize(bitcoin_core: &BitcoinCore) -> Result<(), RuntimeError> {
         Self::connect_bitcoin(bitcoin_core)
             .await

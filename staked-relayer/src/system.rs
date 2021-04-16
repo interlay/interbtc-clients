@@ -61,6 +61,9 @@ pub struct RelayerService {
 
 #[async_trait]
 impl Service<BitcoinCore, RelayerServiceConfig> for RelayerService {
+    const NAME: &'static str = env!("CARGO_PKG_NAME");
+    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
     async fn initialize(bitcoin_core: &BitcoinCore) -> Result<(), RuntimeError> {
         Self::connect_bitcoin(bitcoin_core)
             .await

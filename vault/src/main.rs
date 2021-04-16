@@ -1,7 +1,7 @@
 use clap::Clap;
 use git_version::git_version;
 use runtime::{substrate_subxt::PairSigner, PolkaBtcRuntime};
-use service::{ConnectionManager, RestartPolicy};
+use service::{ConnectionManager, ServiceConfig};
 
 use vault::{Error, VaultService, VaultServiceConfig};
 
@@ -29,18 +29,14 @@ pub struct Opts {
     #[clap(flatten)]
     pub vault: VaultServiceConfig,
 
-    /// Restart or stop internal service on error.
-    #[clap(long, default_value = "always")]
-    pub restart_policy: RestartPolicy,
-
-    /// Logging output format.
-    #[clap(long, default_value = "full")]
-    logging_format: LoggingFormat,
+    /// General service settings.
+    #[clap(flatten)]
+    pub service: ServiceConfig,
 }
 
 async fn start() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
-    opts.logging_format.init_subscriber();
+    opts.service.logging_format.init_subscriber();
 
     tracing::info!("Command line arguments: {:?}", opts.clone());
 
@@ -53,8 +49,8 @@ async fn start() -> Result<(), Error> {
         signer.clone(),
         bitcoin_core,
         opts.parachain,
+        opts.service,
         opts.vault,
-        opts.restart_policy,
     )
     .start()
     .await?;

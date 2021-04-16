@@ -6,7 +6,7 @@ use clap::Clap;
 use error::Error;
 use git_version::git_version;
 use runtime::{substrate_subxt::PairSigner, PolkaBtcRuntime};
-use service::{ConnectionManager, RestartPolicy};
+use service::{ConnectionManager, ServiceConfig};
 use system::{FaucetService, FaucetServiceConfig};
 
 const VERSION: &str = git_version!(args = ["--tags"]);
@@ -29,9 +29,9 @@ struct Opts {
     #[clap(flatten)]
     faucet: FaucetServiceConfig,
 
-    /// What to do if the connection to the btc-parachain drops.
-    #[clap(long, default_value = "always")]
-    restart_policy: RestartPolicy,
+    /// General service settings.
+    #[clap(flatten)]
+    service: ServiceConfig,
 }
 
 #[tokio::main]
@@ -44,7 +44,7 @@ async fn main() -> Result<(), Error> {
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
 
-    ConnectionManager::<(), _, FaucetService>::new(signer.clone(), opts.parachain, opts.faucet, opts.restart_policy)
+    ConnectionManager::<(), _, FaucetService>::new(signer.clone(), opts.parachain, opts.service, opts.faucet)
         .start()
         .await?;
 
