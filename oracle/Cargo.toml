@@ -3,6 +3,7 @@ name = "oracle"
 version = "0.6.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
+description = "Liveness service to update the exchange rate periodically."
 
 [dependencies]
 log = "0.4.0"
@@ -12,6 +13,7 @@ tokio = { version = "0.2.22", features = ["full"] }
 chrono = "0.4"
 thiserror = "1.0"
 reqwest = { version = "0.10.9", features = ["json"] }
+git-version = "0.3.4"
 
 # Workspace dependencies
 runtime = { path = "../runtime" }
