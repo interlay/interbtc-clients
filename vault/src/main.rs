@@ -1,14 +1,8 @@
 use clap::Clap;
-use git_version::git_version;
 use runtime::{substrate_subxt::PairSigner, PolkaBtcRuntime};
 use service::{ConnectionManager, ServiceConfig};
 
-use vault::{Error, VaultService, VaultServiceConfig};
-
-const VERSION: &str = git_version!(args = ["--tags"]);
-const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
-const NAME: &str = env!("CARGO_PKG_NAME");
-const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
+use vault::{Error, VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION};
 
 #[derive(Clap, Debug, Clone)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]

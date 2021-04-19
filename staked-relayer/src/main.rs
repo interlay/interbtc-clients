@@ -1,14 +1,8 @@
-use staked_relayer::{system::*, Error};
-
 use clap::Clap;
-use git_version::git_version;
 use runtime::{substrate_subxt::PairSigner, PolkaBtcRuntime};
 use service::{ConnectionManager, ServiceConfig};
 
-const VERSION: &str = git_version!(args = ["--tags"]);
-const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
-const NAME: &str = env!("CARGO_PKG_NAME");
-const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
+use staked_relayer::{system::*, Error};
 
 #[derive(Clap)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]

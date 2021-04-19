@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use futures::{channel::mpsc, SinkExt};
+use git_version::git_version;
 use runtime::{
     cli::parse_duration_ms, pallets::sla::UpdateVaultSLAEvent, AccountId, BtcRelayPallet, Error as RuntimeError,
     PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
@@ -13,6 +14,11 @@ use runtime::{
 use service::{wait_or_shutdown, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
+
+pub const VERSION: &str = git_version!(args = ["--tags"]);
+pub const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
+pub const NAME: &str = env!("CARGO_PKG_NAME");
+pub const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
 
 #[derive(Clap, Clone, Debug)]
 pub struct VaultServiceConfig {
@@ -72,8 +78,8 @@ pub struct VaultService {
 
 #[async_trait]
 impl Service<BitcoinCore, VaultServiceConfig> for VaultService {
-    const NAME: &'static str = env!("CARGO_PKG_NAME");
-    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+    const NAME: &'static str = NAME;
+    const VERSION: &'static str = VERSION;
 
     async fn initialize(bitcoin_core: &BitcoinCore) -> Result<(), RuntimeError> {
         Self::connect_bitcoin(bitcoin_core)

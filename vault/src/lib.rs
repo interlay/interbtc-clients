@@ -30,12 +30,7 @@ pub mod service {
         },
     };
 }
-pub use crate::{
-    cancellation::RequestEvent,
-    error::Error,
-    system::{VaultService, VaultServiceConfig},
-    types::IssueRequests,
-};
+pub use crate::{cancellation::RequestEvent, error::Error, system::*, types::IssueRequests};
 
 pub(crate) async fn lock_additional_collateral(api: &PolkaBtcProvider, amount: u128) -> Result<(), Error> {
     let result = api.lock_additional_collateral(amount).await;
