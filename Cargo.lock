@@ -2011,6 +2011,7 @@ dependencies = [
  "runtime",
  "serde",
  "serde_json",
+ "service",
  "sp-keyring",
  "thiserror",
  "tokio 0.2.25",
@@ -2743,7 +2744,7 @@ dependencies = [
  "http 0.2.3",
  "indexmap",
  "slab",
- "tokio 1.4.0",
+ "tokio 1.5.0",
  "tokio-util 0.6.5",
  "tracing",
 ]
@@ -3045,7 +3046,7 @@ dependencies = [
  "itoa",
  "pin-project 1.0.5",
  "socket2 0.3.19",
- "tokio 1.4.0",
+ "tokio 1.5.0",
  "tower-service",
  "tracing",
  "want 0.3.0",
@@ -3081,7 +3082,7 @@ dependencies = [
  "log 0.4.14",
  "rustls 0.19.0",
  "rustls-native-certs 0.5.0",
- "tokio 1.4.0",
+ "tokio 1.5.0",
  "tokio-rustls 0.22.0",
  "webpki",
 ]
@@ -5964,6 +5965,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "feb3b2b1033b8a60b4da6ee470325f887758c95d5320f52f9ce0df055a55940e"
 
 [[package]]
+name = "polkabtc-telemetry-types"
+version = "0.1.0"
+source = "git+https://github.com/interlay/polkabtc-telemetry?rev=fb5fe36#fb5fe362f679f1eed60e8ba631540f0133f116f4"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sp-core",
+]
+
+[[package]]
 name = "polkadot-core-primitives"
 version = "0.7.30"
 source = "git+https://github.com/paritytech/polkadot?branch=rococo-v1#2f7b975015d5c3f50199cda82b9b84e38726d001"
@@ -8302,6 +8313,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "service"
+version = "0.6.0"
+dependencies = [
+ "async-trait",
+ "bitcoin 0.6.0",
+ "clap 3.0.0-beta.2",
+ "futures 0.3.13",
+ "hyper 0.13.10",
+ "hyper-tls",
+ "polkabtc-telemetry-types",
+ "runtime",
+ "serde",
+ "serde_json",
+ "sp-core",
+ "thiserror",
+ "tokio 0.2.25",
+ "tracing",
+ "tracing-futures",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "sha-1"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9233,6 +9266,7 @@ dependencies = [
  "parity-scale-codec",
  "runtime",
  "serde",
+ "service",
  "sp-core",
  "sp-keyring",
  "thiserror",
@@ -9774,9 +9808,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "134af885d758d645f0f0505c9a8b3f9bf8a348fd822e112ab5248138348f1722"
+checksum = "83f0c8e7c0addab50b663055baf787d0af7f413a46e6e7fb9559a4e4db7137a5"
 dependencies = [
  "autocfg 1.0.1",
  "bytes 1.0.1",
@@ -9912,7 +9946,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
 dependencies = [
  "rustls 0.19.0",
- "tokio 1.4.0",
+ "tokio 1.5.0",
  "webpki",
 ]
 
@@ -10046,7 +10080,7 @@ dependencies = [
  "futures-sink",
  "log 0.4.14",
  "pin-project-lite 0.2.6",
- "tokio 1.4.0",
+ "tokio 1.5.0",
 ]
 
 [[package]]
@@ -10398,6 +10432,7 @@ dependencies = [
  "runtime",
  "serde",
  "serde_json",
+ "service",
  "sha2 0.8.2",
  "sp-arithmetic",
  "sp-core",

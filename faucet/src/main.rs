@@ -5,7 +5,8 @@ mod system;
 use clap::Clap;
 use error::Error;
 use git_version::git_version;
-use runtime::{substrate_subxt::PairSigner, ConnectionManager, PolkaBtcRuntime};
+use runtime::{substrate_subxt::PairSigner, PolkaBtcRuntime};
+use service::{ConnectionManager, ServiceConfig};
 use system::{FaucetService, FaucetServiceConfig};
 
 const VERSION: &str = git_version!(args = ["--tags"]);
@@ -24,25 +25,13 @@ struct Opts {
     #[clap(flatten)]
     parachain: runtime::cli::ConnectionOpts,
 
-    /// Address to listen on for JSON-RPC requests.
-    #[clap(long, default_value = "[::0]:3033")]
-    http_addr: String,
+    /// Settings specific to the faucet client.
+    #[clap(flatten)]
+    faucet: FaucetServiceConfig,
 
-    /// Comma separated list of allowed origins.
-    #[clap(long, default_value = "*")]
-    rpc_cors_domain: String,
-
-    /// DOT allowance per request for regular users.
-    #[clap(long, default_value = "1")]
-    user_allowance: u128,
-
-    /// DOT allowance per request for vaults.
-    #[clap(long, default_value = "500")]
-    vault_allowance: u128,
-
-    /// DOT allowance per request for vaults.
-    #[clap(long, default_value = "500")]
-    staked_relayer_allowance: u128,
+    /// General service settings.
+    #[clap(flatten)]
+    service: ServiceConfig,
 }
 
 #[tokio::main]
@@ -55,20 +44,9 @@ async fn main() -> Result<(), Error> {
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
 
-    ConnectionManager::<_, _, FaucetService>::new(
-        opts.parachain.polka_btc_url.clone(),
-        signer.clone(),
-        FaucetServiceConfig {
-            http_addr: opts.http_addr.parse()?,
-            rpc_cors_domain: opts.rpc_cors_domain,
-            user_allowance: opts.user_allowance,
-            vault_allowance: opts.vault_allowance,
-            staked_relayer_allowance: opts.staked_relayer_allowance,
-        },
-        opts.parachain.into(),
-    )
-    .start()
-    .await?;
+    ConnectionManager::<(), _, FaucetService>::new(signer.clone(), opts.parachain, opts.service, opts.faucet)
+        .start()
+        .await?;
 
     Ok(())
 }

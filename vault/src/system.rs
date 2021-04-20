@@ -4,46 +4,96 @@ use crate::{
 };
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use clap::Clap;
 use futures::{channel::mpsc, SinkExt};
+use git_version::git_version;
 use runtime::{
-    pallets::sla::UpdateVaultSLAEvent, wait_or_shutdown, AccountId, BtcRelayPallet, Error as RuntimeError,
-    PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, Service, ShutdownSender, UtilFuncs, VaultRegistryPallet,
+    cli::parse_duration_ms, pallets::sla::UpdateVaultSLAEvent, AccountId, BtcRelayPallet, Error as RuntimeError,
+    PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
 };
+use service::{wait_or_shutdown, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
 
-#[derive(Clone)]
+pub const VERSION: &str = git_version!(args = ["--tags"]);
+pub const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
+pub const NAME: &str = env!("CARGO_PKG_NAME");
+pub const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
+
+#[derive(Clap, Clone, Debug)]
 pub struct VaultServiceConfig {
-    /// the bitcoin RPC handle
-    pub bitcoin_core: BitcoinCore,
-    pub auto_register_with_collateral: Option<u128>,
-    pub auto_register_with_faucet_url: Option<String>,
+    /// Comma separated list of allowed origins.
+    #[clap(long, default_value = "*")]
     pub rpc_cors_domain: String,
-    pub no_startup_collateral_increase: bool,
-    pub btc_confirmations: Option<u32>,
-    pub max_collateral: u128,
-    pub no_auto_replace: bool,
+
+    /// Automatically register the vault with the given amount of collateral and a newly generated address.
+    #[clap(long)]
+    pub auto_register_with_collateral: Option<u128>,
+
+    /// Automatically register the vault with the collateral received from the faucet and a newly generated address.
+    /// The parameter is the URL of the faucet
+    #[clap(long, conflicts_with("auto-register-with-collateral"))]
+    pub auto_register_with_faucet_url: Option<String>,
+
+    /// Opt out of auctioning under-collateralized vaults.
+    #[clap(long)]
     pub no_auto_auction: bool,
+
+    /// Opt out of participation in replace requests.
+    #[clap(long)]
+    pub no_auto_replace: bool,
+
+    /// Don't check the collateralization rate at startup.
+    #[clap(long)]
+    pub no_startup_collateral_increase: bool,
+
+    /// Don't try to execute issues.
+    #[clap(long)]
     pub no_issue_execution: bool,
-    pub collateral_timeout: Duration,
+
+    /// Don't run the RPC API.
+    #[clap(long)]
+    pub no_api: bool,
+
+    /// Maximum total collateral to keep the vault securely collateralized.
+    #[clap(long, default_value = "1000000")]
+    pub max_collateral: u128,
+
+    /// Timeout in milliseconds to repeat collateralization checks.
+    #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "5000")]
+    pub collateral_timeout_ms: Duration,
+
+    /// How many bitcoin confirmations to wait for. If not specified, the
+    /// parachain settings will be used (recommended).
+    #[clap(long)]
+    pub btc_confirmations: Option<u32>,
 }
 
 pub struct VaultService {
     btc_parachain: PolkaBtcProvider,
+    bitcoin_core: BitcoinCore,
     config: VaultServiceConfig,
     shutdown: ShutdownSender,
 }
 
 #[async_trait]
-impl Service<VaultServiceConfig, PolkaBtcProvider> for VaultService {
-    async fn initialize(config: &VaultServiceConfig) -> Result<(), RuntimeError> {
-        Self::connect_bitcoin(&config.bitcoin_core)
+impl Service<BitcoinCore, VaultServiceConfig> for VaultService {
+    const NAME: &'static str = NAME;
+    const VERSION: &'static str = VERSION;
+
+    async fn initialize(bitcoin_core: &BitcoinCore) -> Result<(), RuntimeError> {
+        Self::connect_bitcoin(bitcoin_core)
             .await
             .map_err(|err| RuntimeError::Other(err.to_string()))
     }
 
-    fn new_service(btc_parachain: PolkaBtcProvider, config: VaultServiceConfig, shutdown: ShutdownSender) -> Self {
-        VaultService::new(btc_parachain, config, shutdown)
+    fn new_service(
+        btc_parachain: PolkaBtcProvider,
+        bitcoin_core: BitcoinCore,
+        config: VaultServiceConfig,
+        shutdown: ShutdownSender,
+    ) -> Self {
+        VaultService::new(btc_parachain, bitcoin_core, config, shutdown)
     }
 
     async fn start(&self) -> Result<(), RuntimeError> {
@@ -69,16 +119,22 @@ impl VaultService {
         Ok(())
     }
 
-    fn new(btc_parachain: PolkaBtcProvider, config: VaultServiceConfig, shutdown: ShutdownSender) -> Self {
+    fn new(
+        btc_parachain: PolkaBtcProvider,
+        bitcoin_core: BitcoinCore,
+        config: VaultServiceConfig,
+        shutdown: ShutdownSender,
+    ) -> Self {
         Self {
             btc_parachain,
+            bitcoin_core,
             config,
             shutdown,
         }
     }
 
     async fn run_service(&self) -> Result<(), Error> {
-        let bitcoin_core = self.config.bitcoin_core.clone();
+        let bitcoin_core = self.bitcoin_core.clone();
 
         let vault_id = self.btc_parachain.get_account_id().clone();
 
@@ -268,7 +324,7 @@ impl VaultService {
                 self.btc_parachain.clone(),
                 bitcoin_core.clone(),
                 replace_event_tx.clone(),
-                self.config.collateral_timeout,
+                self.config.collateral_timeout_ms,
             ),
         );
 

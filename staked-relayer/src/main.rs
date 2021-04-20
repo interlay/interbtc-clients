@@ -1,14 +1,8 @@
-use staked_relayer::{system::*, Error};
-
 use clap::Clap;
-use git_version::git_version;
-use runtime::{substrate_subxt::PairSigner, ConnectionManager, PolkaBtcRuntime};
-use std::time::Duration;
+use runtime::{substrate_subxt::PairSigner, PolkaBtcRuntime};
+use service::{ConnectionManager, ServiceConfig};
 
-const VERSION: &str = git_version!(args = ["--tags"]);
-const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
-const NAME: &str = env!("CARGO_PKG_NAME");
-const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
+use staked_relayer::{system::*, Error};
 
 #[derive(Clap)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
@@ -25,50 +19,18 @@ struct Opts {
     #[clap(flatten)]
     bitcoin: bitcoin::cli::BitcoinOpts,
 
-    /// Starting height for vault theft checks, if not defined
-    /// automatically start from the chain tip.
-    #[clap(long)]
-    bitcoin_theft_start_height: Option<u32>,
+    /// Settings specific to the relayer client.
+    #[clap(flatten)]
+    relayer: RelayerServiceConfig,
 
-    /// Timeout in milliseconds to poll Bitcoin.
-    #[clap(long, default_value = "6000")]
-    bitcoin_poll_timeout_ms: u64,
-
-    /// Starting height to relay block headers, if not defined
-    /// use the best height as reported by the relay module.
-    #[clap(long)]
-    bitcoin_relay_start_height: Option<u32>,
-
-    /// Max batch size for combined block header submission.
-    #[clap(long, default_value = "16")]
-    max_batch_size: u32,
-
-    /// Default deposit for all automated status proposals.
-    #[clap(long, default_value = "100")]
-    status_update_deposit: u128,
-
-    /// Comma separated list of allowed origins.
-    #[clap(long, default_value = "*")]
-    rpc_cors_domain: String,
-
-    /// Automatically register the relayer with the given stake (in Planck).
-    #[clap(long)]
-    auto_register_with_stake: Option<u128>,
-
-    /// Automatically register the staked relayer with collateral received from the faucet and a newly generated
-    /// address. The parameter is the URL of the faucet
-    #[clap(long, conflicts_with("auto-register-with-stake"))]
-    auto_register_with_faucet_url: Option<String>,
-
-    /// Number of confirmations a block needs to have before it is submitted.
-    #[clap(long, default_value = "0")]
-    required_btc_confirmations: u32,
+    /// General service settings.
+    #[clap(flatten)]
+    service: ServiceConfig,
 }
 
 async fn start() -> Result<(), Error> {
-    staked_relayer::init_subscriber();
-
     let opts: Opts = Opts::parse();
+    opts.service.logging_format.init_subscriber();
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
@@ -76,21 +38,11 @@ async fn start() -> Result<(), Error> {
     let bitcoin_core = opts.bitcoin.new_client(None)?;
 
     ConnectionManager::<_, _, RelayerService>::new(
-        opts.parachain.polka_btc_url.clone(),
         signer.clone(),
-        RelayerServiceConfig {
-            bitcoin_core,
-            auto_register_with_stake: opts.auto_register_with_stake,
-            auto_register_with_faucet_url: opts.auto_register_with_faucet_url,
-            bitcoin_theft_start_height: opts.bitcoin_theft_start_height,
-            bitcoin_relay_start_height: opts.bitcoin_relay_start_height,
-            max_batch_size: opts.max_batch_size,
-            bitcoin_timeout: Duration::from_millis(opts.bitcoin_poll_timeout_ms),
-            required_btc_confirmations: opts.required_btc_confirmations,
-            status_update_deposit: opts.status_update_deposit,
-            rpc_cors_domain: opts.rpc_cors_domain,
-        },
-        opts.parachain.into(),
+        bitcoin_core,
+        opts.parachain,
+        opts.service,
+        opts.relayer,
     )
     .start()
     .await?;
