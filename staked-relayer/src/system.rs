@@ -36,10 +36,6 @@ pub struct RelayerServiceConfig {
     #[clap(long, default_value = "16")]
     pub max_batch_size: u32,
 
-    /// Default deposit for all automated status proposals.
-    #[clap(long, default_value = "100")]
-    pub status_update_deposit: u128,
-
     /// Comma separated list of allowed origins.
     #[clap(long, default_value = "*")]
     pub rpc_cors_domain: String,
@@ -185,20 +181,6 @@ impl RelayerService {
             Ok(())
         });
 
-        let status_update_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            listen_for_status_updates(bitcoin_core.clone(), self.btc_parachain.clone()),
-        );
-
-        let relay_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            listen_for_blocks_stored(
-                bitcoin_core.clone(),
-                self.btc_parachain.clone(),
-                self.config.status_update_deposit,
-            ),
-        );
-
         let relayer = wait_or_shutdown(
             self.shutdown.clone(),
             run_relayer(
@@ -227,10 +209,6 @@ impl RelayerService {
             tokio::spawn(async move { vaults_listener.await }),
             // runs sla listener to log events
             tokio::spawn(async move { sla_listener.await }),
-            // runs `NO_DATA` checks and submits status updates
-            tokio::spawn(async move { relay_listener.await }),
-            // runs subscription service for status updates
-            tokio::spawn(async move { status_update_listener.await }),
             // runs blocking relayer
             tokio::task::spawn_blocking(move || block_on(relayer))
         );
