@@ -3,9 +3,9 @@ use crate::utils;
 use bitcoin::{BitcoinCoreApi, BlockHash, ConversionError as BitcoinConversionError, Error as BitcoinError, Hash};
 use runtime::{
     pallets::{btc_relay::StoreMainChainHeaderEvent, staked_relayers::StatusUpdateSuggestedEvent},
-    Error as RuntimeError, ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcRuntime, StakedRelayerPallet, StatusCode,
-    UtilFuncs,
+    ErrorCode, H256Le, PolkaBtcProvider, PolkaBtcRuntime, StakedRelayerPallet, StatusCode, UtilFuncs,
 };
+use service::Error as ServiceError;
 
 type PolkaBtcStatusUpdateSuggestedEvent = StatusUpdateSuggestedEvent<PolkaBtcRuntime>;
 
@@ -50,7 +50,7 @@ impl<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet + UtilFuncs> StatusUpdate
 pub async fn listen_for_status_updates<B: BitcoinCoreApi + Clone>(
     bitcoin_core: B,
     btc_parachain: PolkaBtcProvider,
-) -> Result<(), RuntimeError> {
+) -> Result<(), ServiceError> {
     let monitor = &StatusUpdateMonitor::new(bitcoin_core, btc_parachain.clone());
     let btc_parachain = &btc_parachain;
     btc_parachain
@@ -67,7 +67,8 @@ pub async fn listen_for_status_updates<B: BitcoinCoreApi + Clone>(
             },
             |err| tracing::error!("Error (Status): {}", err.to_string()),
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 pub struct RelayMonitor<B: BitcoinCoreApi + Clone, P: StakedRelayerPallet> {
@@ -132,7 +133,7 @@ pub async fn listen_for_blocks_stored<B: BitcoinCoreApi + Clone>(
     bitcoin_core: B,
     btc_parachain: PolkaBtcProvider,
     status_update_deposit: u128,
-) -> Result<(), RuntimeError> {
+) -> Result<(), ServiceError> {
     let monitor = &RelayMonitor::new(bitcoin_core, btc_parachain.clone(), status_update_deposit);
     let btc_parachain = &btc_parachain;
     // TODO: subscribe to StoreForkHeader event
@@ -153,7 +154,8 @@ pub async fn listen_for_blocks_stored<B: BitcoinCoreApi + Clone>(
             },
             |err| tracing::error!("Error (Blocks): {}", err.to_string()),
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 fn convert_block_hash(hash: Option<H256Le>) -> Result<BlockHash, Error> {

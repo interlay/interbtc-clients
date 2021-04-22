@@ -174,19 +174,6 @@ impl BitcoinCore {
         })
     }
 
-    pub async fn new_with_retry(
-        url: String,
-        auth: Auth,
-        wallet: Option<String>,
-        network: Network,
-        connection_timeout: Duration,
-    ) -> Result<Self, Error> {
-        let core = Self::new(url, auth, wallet, network, connection_timeout)?;
-        core.connect().await?;
-        core.sync().await?;
-        Ok(core)
-    }
-
     /// Connect to a bitcoin-core full node or timeout.
     pub async fn connect(&self) -> Result<(), Error> {
         info!("Connecting to bitcoin-core...");

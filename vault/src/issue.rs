@@ -3,9 +3,9 @@ use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt};
 use runtime::{
     pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
-    BtcAddress, BtcPublicKey, BtcRelayPallet, Error as RuntimeError, H256Le, IssuePallet, PolkaBtcProvider,
-    PolkaBtcRuntime, UtilFuncs,
+    BtcAddress, BtcPublicKey, BtcRelayPallet, H256Le, IssuePallet, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs,
 };
+use service::Error as ServiceError;
 use sha2::{Digest, Sha256};
 use sp_core::H256;
 use std::sync::Arc;
@@ -41,7 +41,7 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
     issue_set: Arc<IssueRequests>,
     btc_start_height: u32,
     num_confirmations: u32,
-) -> Result<(), RuntimeError> {
+) -> Result<(), ServiceError> {
     let mut stream =
         bitcoin::stream_in_chain_transactions(bitcoin_core.clone(), btc_start_height, num_confirmations).await;
 
@@ -61,7 +61,7 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
     }
 
     // stream closed, restart client
-    Err(RuntimeError::ClientShutdown)
+    Err(ServiceError::ClientShutdown)
 }
 
 pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
@@ -189,7 +189,7 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
     btc_parachain: PolkaBtcProvider,
     event_channel: Sender<RequestEvent>,
     issue_set: Arc<IssueRequests>,
-) -> Result<(), runtime::Error> {
+) -> Result<(), ServiceError> {
     let bitcoin_core = &bitcoin_core;
     let btc_parachain = &btc_parachain;
     let event_channel = &event_channel;
@@ -217,7 +217,8 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
             },
             |error| tracing::error!("Error reading request issue event: {}", error.to_string()),
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Listen for ExecuteIssueEvent directed at this vault. Cancels the scheduled
@@ -232,7 +233,7 @@ pub async fn listen_for_issue_executes(
     btc_parachain: PolkaBtcProvider,
     event_channel: Sender<RequestEvent>,
     issue_set: Arc<IssueRequests>,
-) -> Result<(), runtime::Error> {
+) -> Result<(), ServiceError> {
     let btc_parachain = &btc_parachain;
     let event_channel = &event_channel;
     let issue_set = &issue_set;
@@ -251,7 +252,8 @@ pub async fn listen_for_issue_executes(
             },
             |error| tracing::error!("Error reading execute issue event: {}", error.to_string()),
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Listen for all `CancelIssueEvent`s.
@@ -263,7 +265,7 @@ pub async fn listen_for_issue_executes(
 pub async fn listen_for_issue_cancels(
     btc_parachain: PolkaBtcProvider,
     issue_set: Arc<IssueRequests>,
-) -> Result<(), runtime::Error> {
+) -> Result<(), ServiceError> {
     let issue_set = &issue_set;
     btc_parachain
         .on_event::<CancelIssueEvent<PolkaBtcRuntime>, _, _, _>(
@@ -273,5 +275,6 @@ pub async fn listen_for_issue_cancels(
             },
             |error| tracing::error!("Error reading cancel issue event: {}", error.to_string()),
         )
-        .await
+        .await?;
+    Ok(())
 }

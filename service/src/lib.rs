@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use bitcoin::BitcoinCore;
+use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCore};
 use futures::{future::Either, Future, FutureExt};
 use runtime::{
     cli::ConnectionOpts as ParachainConfig, Error as RuntimeError, PolkaBtcProvider as BtcParachain, PolkaBtcSigner,
@@ -20,37 +20,42 @@ pub use trace::init_subscriber;
 pub type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
 
 #[async_trait]
-pub trait Service<Bitcoin: Sync, Config> {
+pub trait Service<Config> {
     const NAME: &'static str;
     const VERSION: &'static str;
 
-    async fn initialize(_: &Bitcoin) -> Result<(), RuntimeError> {
-        Ok(())
-    }
-    fn new_service(btc_parachain: BtcParachain, bitcoin: Bitcoin, config: Config, shutdown: ShutdownSender) -> Self;
-    async fn start(&self) -> Result<(), RuntimeError>;
+    fn new_service(
+        btc_parachain: BtcParachain,
+        bitcoin_core: BitcoinCore,
+        config: Config,
+        shutdown: ShutdownSender,
+    ) -> Self;
+    async fn start(&self) -> Result<(), Error>;
 }
 
-pub struct ConnectionManager<Bitcoin: Sync, Config: Clone, S: Service<Bitcoin, Config>> {
+pub struct ConnectionManager<Config: Clone, S: Service<Config>> {
     signer: PolkaBtcSigner,
-    bitcoin: Bitcoin,
+    wallet_name: Option<String>,
+    bitcoin_config: BitcoinConfig,
     parachain_config: ParachainConfig,
     service_config: ServiceConfig,
     config: Config,
     _marker: PhantomData<S>,
 }
 
-impl<Config: Clone + Send + 'static, S: Service<BitcoinCore, Config>> ConnectionManager<BitcoinCore, Config, S> {
+impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Config, S> {
     pub fn new(
         signer: PolkaBtcSigner,
-        bitcoin: BitcoinCore,
+        wallet_name: Option<String>,
+        bitcoin_config: BitcoinConfig,
         parachain_config: ParachainConfig,
         service_config: ServiceConfig,
         config: Config,
     ) -> Self {
         Self {
             signer,
-            bitcoin,
+            wallet_name,
+            bitcoin_config,
             parachain_config,
             service_config,
             config,
@@ -59,28 +64,8 @@ impl<Config: Clone + Send + 'static, S: Service<BitcoinCore, Config>> Connection
     }
 }
 
-impl<Config: Clone + Send + 'static, S: Service<(), Config>> ConnectionManager<(), Config, S> {
-    pub fn new(
-        signer: PolkaBtcSigner,
-        parachain_config: ParachainConfig,
-        service_config: ServiceConfig,
-        config: Config,
-    ) -> Self {
-        Self {
-            signer,
-            bitcoin: (),
-            parachain_config,
-            service_config,
-            config,
-            _marker: PhantomData::default(),
-        }
-    }
-}
-
-impl<Bitcoin: Clone + Sync, Config: Clone + Send + 'static, S: Service<Bitcoin, Config>>
-    ConnectionManager<Bitcoin, Config, S>
-{
-    pub async fn start(&self) -> Result<(), RuntimeError> {
+impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Config, S> {
+    pub async fn start(&self) -> Result<(), Error> {
         if let Some(uri) = &self.service_config.telemetry_url {
             // run telemetry client heartbeat
             let telemetry_client = TelemetryClient::new(uri.clone(), self.signer.clone());
@@ -91,8 +76,9 @@ impl<Bitcoin: Clone + Sync, Config: Clone + Send + 'static, S: Service<Bitcoin, 
             let config = self.config.clone();
             let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
 
-            let bitcoin_core = &self.bitcoin;
-            S::initialize(bitcoin_core).await?;
+            let bitcoin_core = self.bitcoin_config.new_client(self.wallet_name.clone())?;
+            bitcoin_core.connect().await?;
+            bitcoin_core.sync().await?;
 
             // only open connection to parachain after bitcoind sync to prevent timeout
             let signer = self.signer.clone();
@@ -105,12 +91,21 @@ impl<Bitcoin: Clone + Sync, Config: Clone + Send + 'static, S: Service<Bitcoin, 
             )
             .await?;
 
-            let service = S::new_service(btc_parachain, bitcoin_core.clone(), config, shutdown_tx);
-            service.start().await?;
+            let service = S::new_service(btc_parachain, bitcoin_core, config, shutdown_tx);
+            match service.start().await {
+                Ok(_) => (),
+                Err(Error::BitcoinError(err))
+                    if err.is_connection_aborted() || err.is_connection_refused() || err.is_json_decode_error() =>
+                {
+                    ()
+                }
+                Err(Error::RuntimeError(RuntimeError::ChannelClosed)) => (),
+                Err(err) => return Err(err),
+            }
 
             tracing::info!("Disconnected");
             match self.service_config.restart_policy {
-                RestartPolicy::Never => return Err(RuntimeError::ClientShutdown),
+                RestartPolicy::Never => return Err(Error::ClientShutdown),
                 RestartPolicy::Always => continue,
             };
         }
@@ -119,7 +114,7 @@ impl<Bitcoin: Clone + Sync, Config: Clone + Send + 'static, S: Service<Bitcoin, 
 
 pub async fn wait_or_shutdown<F>(shutdown_tx: ShutdownSender, future2: F)
 where
-    F: Future<Output = Result<(), RuntimeError>>,
+    F: Future<Output = Result<(), Error>>,
 {
     let mut shutdown_rx = shutdown_tx.subscribe();
 

@@ -4,11 +4,12 @@ use runtime::{
     pallets::exchange_rate_oracle::SetExchangeRateEvent, AccountId, DotBalancesPallet, PolkaBtcProvider,
     PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet, VaultStatus,
 };
+use service::Error as ServiceError;
 
 pub async fn maintain_collateralization_rate(
     provider: PolkaBtcProvider,
     maximum_collateral: u128,
-) -> Result<(), runtime::Error> {
+) -> Result<(), ServiceError> {
     let provider = &provider;
     provider
         .on_event::<SetExchangeRateEvent<PolkaBtcRuntime>, _, _, _>(
@@ -27,7 +28,8 @@ pub async fn maintain_collateralization_rate(
             },
             |error| tracing::error!("Error reading SetExchangeRate event: {}", error.to_string()),
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Gets the required collateral for this vault, and if it is more than the actual

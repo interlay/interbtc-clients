@@ -1,6 +1,7 @@
 use crate::execution::*;
 use bitcoin::BitcoinCoreApi;
 use runtime::{pallets::redeem::RequestRedeemEvent, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs};
+use service::Error as ServiceError;
 
 /// Listen for RequestRedeemEvent directed at this vault; upon reception, transfer
 /// bitcoin and call execute_redeem
@@ -15,7 +16,7 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
     provider: PolkaBtcProvider,
     btc_rpc: B,
     num_confirmations: u32,
-) -> Result<(), runtime::Error> {
+) -> Result<(), ServiceError> {
     provider
         .on_event::<RequestRedeemEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async {
@@ -51,5 +52,6 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
             },
             |error| tracing::error!("Error reading redeem event: {}", error.to_string()),
         )
-        .await
+        .await?;
+    Ok(())
 }

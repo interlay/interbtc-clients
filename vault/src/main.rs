@@ -37,11 +37,10 @@ async fn start() -> Result<(), Error> {
     let (pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);
 
-    let bitcoin_core = opts.bitcoin.new_client(Some(wallet_name.to_string()))?;
-
-    ConnectionManager::<_, _, VaultService>::new(
+    ConnectionManager::<_, VaultService>::new(
         signer.clone(),
-        bitcoin_core,
+        Some(wallet_name.to_string()),
+        opts.bitcoin,
         opts.parachain,
         opts.service,
         opts.vault,

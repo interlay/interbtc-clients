@@ -5,6 +5,7 @@ use runtime::{
     pallets::replace::{AcceptReplaceEvent, AuctionReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent},
     DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
+use service::Error as ServiceError;
 use std::time::Duration;
 use tokio::time::delay_for;
 
@@ -20,7 +21,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
     provider: PolkaBtcProvider,
     btc_rpc: B,
     num_confirmations: u32,
-) -> Result<(), runtime::Error> {
+) -> Result<(), ServiceError> {
     let provider = &provider;
     let btc_rpc = &btc_rpc;
     provider
@@ -57,7 +58,8 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
             },
             |error| tracing::error!("Error reading accept_replace_event: {}", error.to_string()),
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Listen for AuctionReplaceEvent directed at this vault and continue the replacement
@@ -72,7 +74,7 @@ pub async fn listen_for_auction_replace<B: BitcoinCoreApi + Clone + Send + Sync 
     provider: PolkaBtcProvider,
     btc_rpc: B,
     num_confirmations: u32,
-) -> Result<(), runtime::Error> {
+) -> Result<(), ServiceError> {
     let provider = &provider;
     let btc_rpc = &btc_rpc;
     provider
@@ -109,7 +111,8 @@ pub async fn listen_for_auction_replace<B: BitcoinCoreApi + Clone + Send + Sync 
             },
             |error| tracing::error!("Error reading auction_replace_event: {}", error.to_string()),
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Listen for RequestReplaceEvent, and attempt to accept it
@@ -124,7 +127,7 @@ pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone>(
     btc_rpc: B,
     event_channel: Sender<RequestEvent>,
     accept_replace_requests: bool,
-) -> Result<(), runtime::Error> {
+) -> Result<(), ServiceError> {
     let provider = &provider;
     let btc_rpc = &btc_rpc;
     let event_channel = &event_channel;
@@ -161,7 +164,8 @@ pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone>(
             },
             |error| tracing::error!("Error reading replace event: {}", error.to_string()),
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Attempts to accept a replace request. Does not retry RPC calls upon
@@ -201,7 +205,7 @@ pub async fn monitor_collateral_of_vaults<B: BitcoinCoreApi + Clone>(
     btc_rpc: B,
     mut event_channel: Sender<RequestEvent>,
     interval: Duration,
-) -> Result<(), runtime::Error> {
+) -> Result<(), ServiceError> {
     // we could automatically check vault collateralization rates on events
     // that affect this (e.g. `SetExchangeRate`, `WithdrawCollateral`) but
     // polling is easier for now
@@ -308,7 +312,7 @@ async fn auction_replace<B: BitcoinCoreApi + Clone, P: DotBalancesPallet + Repla
 pub async fn listen_for_execute_replace(
     provider: PolkaBtcProvider,
     event_channel: Sender<RequestEvent>,
-) -> Result<(), runtime::Error> {
+) -> Result<(), ServiceError> {
     let event_channel = &event_channel;
     let provider = &provider;
     provider
@@ -326,7 +330,8 @@ pub async fn listen_for_execute_replace(
             },
             |error| tracing::error!("Error reading redeem event: {}", error.to_string()),
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 #[cfg(test)]

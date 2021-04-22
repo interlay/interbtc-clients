@@ -9,14 +9,15 @@ pub use backing::Client as BitcoinClient;
 pub use issuing::Client as PolkaBtcClient;
 
 use crate::core::{Error as CoreError, Runner};
-use runtime::{Error as RuntimeError, PolkaBtcProvider};
+use runtime::PolkaBtcProvider;
+use service::Error as ServiceError;
 use std::time::Duration;
 
 pub async fn run_relayer(
     runner: Runner<Error, BitcoinClient, PolkaBtcClient>,
     provider: PolkaBtcProvider,
     timeout: Duration,
-) -> Result<(), RuntimeError> {
+) -> Result<(), ServiceError> {
     loop {
         super::utils::wait_until_registered(&provider, timeout).await;
         match runner.submit_next().await {
@@ -25,7 +26,7 @@ pub async fn run_relayer(
                 tracing::info!("Attempted to submit block that already exists")
             }
             Err(CoreError::Backing(Error::BitcoinError(err))) if err.is_connection_refused() => {
-                return Err(RuntimeError::ClientShutdown);
+                return Err(ServiceError::ClientShutdown);
             }
             Err(err) => {
                 tracing::error!("Failed to submit_next: {}", err);

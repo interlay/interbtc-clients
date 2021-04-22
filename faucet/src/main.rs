@@ -87,7 +87,8 @@ async fn main() -> Result<(), Error> {
                     log::debug!("Got block {:?}", header);
                     Ok(())
                 })
-                .await
+                .await?;
+            Ok(())
         });
 
         let http_server = on_shutdown(shutdown_tx.clone(), async move {
