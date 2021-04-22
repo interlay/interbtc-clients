@@ -39,7 +39,7 @@ pub struct BitcoinOpts {
 }
 
 impl BitcoinOpts {
-    pub fn new_auth(&self) -> Auth {
+    fn new_auth(&self) -> Auth {
         Auth::UserPass(self.bitcoin_rpc_user.clone(), self.bitcoin_rpc_pass.clone())
     }
 
@@ -51,16 +51,5 @@ impl BitcoinOpts {
             self.network.0,
             Duration::from_millis(self.bitcoin_connection_timeout_ms),
         )
-    }
-
-    pub async fn new_client_with_retry(&self, wallet_name: Option<String>) -> Result<BitcoinCore, Error> {
-        BitcoinCore::new_with_retry(
-            self.bitcoin_rpc_url.clone(),
-            self.new_auth(),
-            wallet_name,
-            self.network.0,
-            Duration::from_millis(self.bitcoin_connection_timeout_ms),
-        )
-        .await
     }
 }

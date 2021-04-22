@@ -1,4 +1,7 @@
-use crate::error::{Error, KeyLoadingError};
+use crate::{
+    error::{Error, KeyLoadingError},
+    PolkaBtcProvider, PolkaBtcSigner,
+};
 use clap::Clap;
 use sp_core::{sr25519::Pair, Pair as _};
 use sp_keyring::AccountKeyring;
@@ -72,4 +75,17 @@ pub struct ConnectionOpts {
     /// Maximum notification capacity for each subscription
     #[clap(long)]
     pub max_notifs_per_subscription: Option<usize>,
+}
+
+impl ConnectionOpts {
+    pub async fn try_connect(&self, signer: PolkaBtcSigner) -> Result<PolkaBtcProvider, Error> {
+        PolkaBtcProvider::from_url_and_config_with_retry(
+            &self.polka_btc_url,
+            signer,
+            self.max_concurrent_requests,
+            self.max_notifs_per_subscription,
+            self.polka_btc_connection_timeout_ms,
+        )
+        .await
+    }
 }

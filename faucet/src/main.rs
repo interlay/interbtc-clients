@@ -1,13 +1,12 @@
 mod error;
 mod http;
-mod system;
 
 use clap::Clap;
 use error::Error;
 use git_version::git_version;
 use runtime::{substrate_subxt::PairSigner, PolkaBtcRuntime};
-use service::{ConnectionManager, ServiceConfig};
-use system::{FaucetService, FaucetServiceConfig};
+use service::{on_shutdown, wait_or_shutdown};
+use std::net::SocketAddr;
 
 const VERSION: &str = git_version!(args = ["--tags"]);
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -27,11 +26,30 @@ struct Opts {
 
     /// Settings specific to the faucet client.
     #[clap(flatten)]
-    faucet: FaucetServiceConfig,
+    faucet: FaucetConfig,
+}
 
-    /// General service settings.
-    #[clap(flatten)]
-    service: ServiceConfig,
+#[derive(Clap, Clone)]
+pub struct FaucetConfig {
+    /// Address to listen on for JSON-RPC requests.
+    #[clap(long, default_value = "[::0]:3033")]
+    http_addr: SocketAddr,
+
+    /// Comma separated list of allowed origins.
+    #[clap(long, default_value = "*")]
+    rpc_cors_domain: String,
+
+    /// DOT allowance per request for regular users.
+    #[clap(long, default_value = "1")]
+    user_allowance: u128,
+
+    /// DOT allowance per request for vaults.
+    #[clap(long, default_value = "500")]
+    vault_allowance: u128,
+
+    /// DOT allowance per request for vaults.
+    #[clap(long, default_value = "500")]
+    staked_relayer_allowance: u128,
 }
 
 #[tokio::main]
@@ -44,9 +62,39 @@ async fn main() -> Result<(), Error> {
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
 
-    ConnectionManager::<(), _, FaucetService>::new(signer.clone(), opts.parachain, opts.service, opts.faucet)
-        .start()
-        .await?;
+    let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
 
-    Ok(())
+    let parachain_config = opts.parachain;
+    let faucet_config = opts.faucet;
+
+    loop {
+        let btc_parachain = parachain_config.try_connect(signer.clone()).await?;
+
+        let close_handle = http::start_http(
+            btc_parachain.clone(),
+            faucet_config.http_addr,
+            faucet_config.rpc_cors_domain.clone(),
+            faucet_config.user_allowance,
+            faucet_config.vault_allowance,
+            faucet_config.staked_relayer_allowance,
+        )
+        .await;
+
+        // run block listener to restart faucet on disconnect
+        let block_listener = wait_or_shutdown(shutdown_tx.clone(), async move {
+            btc_parachain
+                .on_block(move |header| async move {
+                    log::debug!("Got block {:?}", header);
+                    Ok(())
+                })
+                .await?;
+            Ok(())
+        });
+
+        let http_server = on_shutdown(shutdown_tx.clone(), async move {
+            close_handle.close();
+        });
+
+        let _ = futures::future::join(block_listener, http_server).await;
+    }
 }

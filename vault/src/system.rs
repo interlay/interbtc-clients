@@ -11,7 +11,7 @@ use runtime::{
     cli::parse_duration_ms, pallets::sla::UpdateVaultSLAEvent, AccountId, BtcRelayPallet, Error as RuntimeError,
     PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
 };
-use service::{wait_or_shutdown, Service, ShutdownSender};
+use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
 
@@ -77,15 +77,9 @@ pub struct VaultService {
 }
 
 #[async_trait]
-impl Service<BitcoinCore, VaultServiceConfig> for VaultService {
+impl Service<VaultServiceConfig> for VaultService {
     const NAME: &'static str = NAME;
     const VERSION: &'static str = VERSION;
-
-    async fn initialize(bitcoin_core: &BitcoinCore) -> Result<(), RuntimeError> {
-        Self::connect_bitcoin(bitcoin_core)
-            .await
-            .map_err(|err| RuntimeError::Other(err.to_string()))
-    }
 
     fn new_service(
         btc_parachain: PolkaBtcProvider,
@@ -96,29 +90,17 @@ impl Service<BitcoinCore, VaultServiceConfig> for VaultService {
         VaultService::new(btc_parachain, bitcoin_core, config, shutdown)
     }
 
-    async fn start(&self) -> Result<(), RuntimeError> {
+    async fn start(&self) -> Result<(), ServiceError> {
         match self.run_service().await {
             Ok(_) => Ok(()),
-            Err(Error::RuntimeError(err)) => Err(err),
-            Err(err) => Err(RuntimeError::Other(err.to_string())),
+            Err(Error::RuntimeError(err)) => Err(ServiceError::RuntimeError(err)),
+            Err(Error::BitcoinError(err)) => Err(ServiceError::BitcoinError(err)),
+            Err(err) => Err(ServiceError::Other(err.to_string())),
         }
     }
 }
 
 impl VaultService {
-    async fn connect_bitcoin(bitcoin_core: &BitcoinCore) -> Result<(), Error> {
-        bitcoin_core.connect().await?;
-        bitcoin_core.sync().await?;
-
-        // load wallet. Exit on failure, since without wallet we can't do a lot
-        bitcoin_core
-            .create_or_load_wallet()
-            .await
-            .map_err(Error::WalletInitializationFailure)?;
-
-        Ok(())
-    }
-
     fn new(
         btc_parachain: PolkaBtcProvider,
         bitcoin_core: BitcoinCore,
@@ -135,6 +117,12 @@ impl VaultService {
 
     async fn run_service(&self) -> Result<(), Error> {
         let bitcoin_core = self.bitcoin_core.clone();
+
+        // load wallet. Exit on failure, since without wallet we can't do a lot
+        bitcoin_core
+            .create_or_load_wallet()
+            .await
+            .map_err(Error::WalletInitializationFailure)?;
 
         let vault_id = self.btc_parachain.get_account_id().clone();
 
@@ -245,13 +233,15 @@ impl VaultService {
                         .map_err(|_| RuntimeError::ChannelClosed)?;
                     Ok(())
                 })
-                .await
+                .await?;
+            Ok(())
         });
 
         let issue_cancel_scheduler = wait_or_shutdown(self.shutdown.clone(), async move {
             issue_cancellation_scheduler
                 .handle_cancellation::<IssueCanceller>(issue_block_rx, issue_event_rx)
-                .await
+                .await?;
+            Ok(())
         });
 
         let issue_executor = wait_or_shutdown(
@@ -309,13 +299,15 @@ impl VaultService {
                         .map_err(|_| RuntimeError::ChannelClosed)?;
                     Ok(())
                 })
-                .await
+                .await?;
+            Ok(())
         });
 
         let replace_cancel_scheduler = wait_or_shutdown(self.shutdown.clone(), async move {
             replace_cancellation_scheduler
                 .handle_cancellation::<ReplaceCanceller>(replace_block_rx, replace_event_rx)
-                .await
+                .await?;
+            Ok(())
         });
 
         let third_party_collateral_listener = wait_or_shutdown(
@@ -352,14 +344,16 @@ impl VaultService {
                     },
                     |err| tracing::error!("Error (UpdateVaultSLAEvent): {}", err.to_string()),
                 )
-                .await
+                .await?;
+            Ok(())
         });
 
         let err_provider = self.btc_parachain.clone();
         let err_listener = wait_or_shutdown(self.shutdown.clone(), async move {
             err_provider
                 .on_event_error(|e| tracing::debug!("Received error event: {}", e))
-                .await
+                .await?;
+            Ok(())
         });
 
         // misc copies of variables to move into spawn closures

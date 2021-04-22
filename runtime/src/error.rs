@@ -32,8 +32,6 @@ pub enum Error {
     VaultCommittedTheft,
     #[error("Channel closed unexpectedly")]
     ChannelClosed,
-    #[error("Client has shutdown unexpectedly")]
-    ClientShutdown,
     #[error("Transaction is outdated")]
     OutdatedTransaction,
     #[error("Request has timed out")]
@@ -60,10 +58,6 @@ pub enum Error {
     TimeElapsed(#[from] Elapsed),
     #[error("UrlParseError: {0}")]
     UrlParseError(#[from] UrlParseError),
-
-    /// Other error
-    #[error("Other: {0}")]
-    Other(String),
 }
 
 impl Error {

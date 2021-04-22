@@ -1,6 +1,7 @@
 use crate::execution::*;
 use bitcoin::BitcoinCoreApi;
 use runtime::{pallets::refund::RequestRefundEvent, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs};
+use service::Error as ServiceError;
 
 /// Listen for RequestRefundEvent directed at this vault; upon reception, transfer
 /// bitcoin and call execute_refund
@@ -15,7 +16,7 @@ pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync 
     provider: PolkaBtcProvider,
     btc_rpc: B,
     num_confirmations: u32,
-) -> Result<(), runtime::Error> {
+) -> Result<(), ServiceError> {
     provider
         .on_event::<RequestRefundEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async {
@@ -51,5 +52,6 @@ pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync 
             },
             |error| tracing::error!("Error reading refund event: {}", error.to_string()),
         )
-        .await
+        .await?;
+    Ok(())
 }

@@ -5,10 +5,10 @@ use clap::Clap;
 use futures::executor::block_on;
 use git_version::git_version;
 use runtime::{
-    cli::parse_duration_ms, pallets::sla::UpdateRelayerSLAEvent, Error as RuntimeError, PolkaBtcProvider,
-    PolkaBtcRuntime, StakedRelayerPallet, UtilFuncs, VaultRegistryPallet,
+    cli::parse_duration_ms, pallets::sla::UpdateRelayerSLAEvent, PolkaBtcProvider, PolkaBtcRuntime,
+    StakedRelayerPallet, UtilFuncs, VaultRegistryPallet,
 };
-use service::{wait_or_shutdown, Service, ShutdownSender};
+use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
 
 pub const VERSION: &str = git_version!(args = ["--tags"]);
@@ -66,15 +66,9 @@ pub struct RelayerService {
 }
 
 #[async_trait]
-impl Service<BitcoinCore, RelayerServiceConfig> for RelayerService {
+impl Service<RelayerServiceConfig> for RelayerService {
     const NAME: &'static str = NAME;
     const VERSION: &'static str = VERSION;
-
-    async fn initialize(bitcoin_core: &BitcoinCore) -> Result<(), RuntimeError> {
-        Self::connect_bitcoin(bitcoin_core)
-            .await
-            .map_err(|err| RuntimeError::Other(err.to_string()))
-    }
 
     fn new_service(
         btc_parachain: PolkaBtcProvider,
@@ -85,22 +79,17 @@ impl Service<BitcoinCore, RelayerServiceConfig> for RelayerService {
         RelayerService::new(btc_parachain, bitcoin_core, config, shutdown)
     }
 
-    async fn start(&self) -> Result<(), RuntimeError> {
+    async fn start(&self) -> Result<(), ServiceError> {
         match self.run_service().await {
             Ok(_) => Ok(()),
-            Err(Error::RuntimeError(err)) => Err(err),
-            Err(err) => Err(RuntimeError::Other(err.to_string())),
+            Err(Error::RuntimeError(err)) => Err(ServiceError::RuntimeError(err)),
+            Err(Error::BitcoinError(err)) => Err(ServiceError::BitcoinError(err)),
+            Err(err) => Err(ServiceError::Other(err.to_string())),
         }
     }
 }
 
 impl RelayerService {
-    async fn connect_bitcoin(bitcoin_core: &BitcoinCore) -> Result<(), Error> {
-        bitcoin_core.connect().await?;
-        bitcoin_core.sync().await?;
-        Ok(())
-    }
-
     fn new(
         btc_parachain: PolkaBtcProvider,
         bitcoin_core: BitcoinCore,
@@ -192,7 +181,8 @@ impl RelayerService {
                     },
                     |err| tracing::error!("Error (UpdateRelayerSLAEvent): {}", err.to_string()),
                 )
-                .await
+                .await?;
+            Ok(())
         });
 
         let status_update_listener = wait_or_shutdown(

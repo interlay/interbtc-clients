@@ -54,36 +54,35 @@ pub enum Error {
 
 impl Error {
     pub fn is_connection_refused(&self) -> bool {
-        match self {
+        matches!(self,
             Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Hyper(HyperError::Io(err))))
-                if err.kind() == IoErrorKind::ConnectionRefused =>
-            {
-                true
-            }
-            _ => false,
-        }
+                if err.kind() == IoErrorKind::ConnectionRefused
+        )
+    }
+
+    pub fn is_connection_aborted(&self) -> bool {
+        matches!(self,
+            Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Hyper(HyperError::Io(err))))
+                if err.kind() == IoErrorKind::ConnectionAborted
+        )
+    }
+
+    pub fn is_json_decode_error(&self) -> bool {
+        matches!(self, Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Json(_))))
     }
 
     pub fn is_wallet_not_found(&self) -> bool {
-        match self {
+        matches!(self,
             Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
-                if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcWalletNotFound =>
-            {
-                true
-            }
-            _ => false,
-        }
+                if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcWalletNotFound
+        )
     }
 
     pub fn is_invalid_parameter(&self) -> bool {
-        match self {
+        matches!(self,
             Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
-                if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcInvalidParameter =>
-            {
-                true
-            }
-            _ => false,
-        }
+                if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcInvalidParameter
+        )
     }
 }
 

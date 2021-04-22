@@ -6,6 +6,7 @@ use runtime::{
     AccountId, BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
     PolkaBtcVault, StakedRelayerPallet, VaultRegistryPallet,
 };
+use service::Error as ServiceError;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 
@@ -40,14 +41,13 @@ pub async fn report_vault_thefts<P: StakedRelayerPallet + BtcRelayPallet, B: Bit
     btc_height: u32,
     vaults: Arc<Vaults>,
     delay: Duration,
-) -> Result<(), RuntimeError> {
+) -> Result<(), ServiceError> {
     match VaultTheftMonitor::new(bitcoin_core, btc_parachain, btc_height, vaults, delay)
         .process_blocks()
         .await
     {
         Ok(_) => Ok(()),
-        Err(Error::RuntimeError(err)) => Err(err),
-        Err(err) => Err(RuntimeError::Other(err.to_string())),
+        Err(err) => Err(ServiceError::RuntimeError(err)),
     }
 }
 
@@ -121,7 +121,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         Ok(())
     }
 
-    pub async fn process_blocks(&mut self) -> Result<(), Error> {
+    pub async fn process_blocks(&mut self) -> Result<(), RuntimeError> {
         utils::wait_until_active(&self.btc_parachain, self.delay).await;
 
         let num_confirmations = self.btc_parachain.get_bitcoin_confirmations().await?;
@@ -136,14 +136,14 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         }
 
         // stream should not end, signal restart
-        Err(Error::RuntimeError(RuntimeError::ClientShutdown))
+        Err(RuntimeError::ChannelClosed)
     }
 }
 
 pub async fn listen_for_wallet_updates(
     btc_parachain: PolkaBtcProvider,
     vaults: Arc<Vaults>,
-) -> Result<(), RuntimeError> {
+) -> Result<(), ServiceError> {
     let vaults = &vaults;
     btc_parachain
         .on_event::<RegisterAddressEvent<PolkaBtcRuntime>, _, _, _>(
@@ -157,13 +157,14 @@ pub async fn listen_for_wallet_updates(
             },
             |err| tracing::error!("Error (RegisterAddressEvent): {}", err.to_string()),
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 pub async fn listen_for_vaults_registered(
     btc_parachain: PolkaBtcProvider,
     vaults: Arc<Vaults>,
-) -> Result<(), RuntimeError> {
+) -> Result<(), ServiceError> {
     btc_parachain
         .on_event::<RegisterVaultEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async {
@@ -177,7 +178,8 @@ pub async fn listen_for_vaults_registered(
             },
             |err| tracing::error!("Error (RegisterVaultEvent): {}", err.to_string()),
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 async fn filter_matching_vaults(addresses: Vec<BtcAddress>, vaults: &Vaults) -> Vec<AccountId> {

@@ -3,6 +3,7 @@ use hex::FromHexError;
 use jsonrpc_core_client::RpcError;
 use parity_scale_codec::Error as CodecError;
 use runtime::{substrate_subxt::Error as SubxtError, Error as RuntimeError};
+use service::Error as ServiceError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -26,6 +27,8 @@ pub enum Error {
     #[error("Mathematical operation caused an underflow")]
     ArithmeticUnderflow,
 
+    #[error("ServiceError: {0}")]
+    ServiceError(#[from] ServiceError),
     #[error("RPC error: {0}")]
     RpcError(#[from] RpcError),
     #[error("Hex conversion error: {0}")]
