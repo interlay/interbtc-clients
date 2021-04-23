@@ -2,7 +2,8 @@ use super::Error;
 use async_trait::async_trait;
 use futures::{channel::mpsc::Receiver, *};
 use runtime::{
-    AccountId, Error as RuntimeError, IssuePallet, IssueRequestStatus, PolkaBtcHeader, ReplacePallet, UtilFuncs,
+    AccountId, Error as RuntimeError, IssuePallet, IssueRequestStatus, PolkaBtcHeader, ReplacePallet,
+    ReplaceRequestStatus, UtilFuncs,
 };
 use sp_core::H256;
 use std::marker::{Send, Sync};
@@ -116,10 +117,10 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for ReplaceCance
             .get_new_vault_replace_requests(vault_id)
             .await?
             .iter()
-            .filter(|(_, replace)| !replace.completed && !replace.cancelled)
+            .filter(|(_, replace)| replace.status == ReplaceRequestStatus::Pending)
             .map(|(id, replace)| UnconvertedOpenTime {
                 id: *id,
-                open_time: replace.open_time,
+                open_time: replace.accept_time,
             })
             .collect();
         Ok(ret)
@@ -356,7 +357,7 @@ mod tests {
             generic::Digest,
             traits::{BlakeTwo256, Hash},
         },
-        AccountId, BtcAddress, H256Le, PolkaBtcIssueRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent,
+        AccountId, BtcAddress, PolkaBtcIssueRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent,
     };
     use sp_core::H256;
 
@@ -408,7 +409,6 @@ mod tests {
             async fn execute_issue(
                 &self,
                 issue_id: H256,
-                tx_id: H256Le,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -425,10 +425,15 @@ mod tests {
 
         #[async_trait]
         pub trait ReplacePallet {
-            async fn request_replace(&self, amount: u128, griefing_collateral: u128)
-                -> Result<H256, RuntimeError>;
-            async fn withdraw_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
-            async fn accept_replace(&self, replace_id: H256, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
+            async fn request_replace(&self, amount: u128, griefing_collateral: u128) -> Result<(), RuntimeError>;
+            async fn withdraw_replace(&self, amount: u128) -> Result<(), RuntimeError>;
+            async fn accept_replace(
+                &self,
+                old_vault: AccountId,
+                amount_btc: u128,
+                collateral: u128,
+                btc_address: BtcAddress,
+            ) -> Result<(), RuntimeError>;
             async fn auction_replace(
                 &self,
                 old_vault: AccountId,
@@ -439,7 +444,6 @@ mod tests {
             async fn execute_replace(
                 &self,
                 replace_id: H256,
-                tx_id: H256Le,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;

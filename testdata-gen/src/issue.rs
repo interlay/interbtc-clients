@@ -61,12 +61,7 @@ pub async fn execute_issue(
         .await?;
 
     issue_prov
-        .execute_issue(
-            issue_id,
-            H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
-            tx_metadata.proof,
-            tx_metadata.raw_tx,
-        )
+        .execute_issue(issue_id, tx_metadata.proof, tx_metadata.raw_tx)
         .await?;
 
     info!("Executed issue ID {:?}", issue_id);

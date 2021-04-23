@@ -1,6 +1,6 @@
 use super::Core;
+use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use parity_scale_codec::{Decode, Encode};
 use sp_core::U256;
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Event, Store};

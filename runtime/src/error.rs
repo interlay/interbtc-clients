@@ -2,8 +2,8 @@ pub use jsonrpsee_types::error::Error as JsonRpseeError;
 pub use substrate_subxt::Error as SubxtError;
 
 use crate::{BTC_RELAY_MODULE, DUPLICATE_BLOCK_ERROR, ISSUE_COMPLETED_ERROR, ISSUE_MODULE};
+use codec::Error as CodecError;
 use jsonrpsee_ws_client::transport::WsConnectError;
-use parity_scale_codec::Error as CodecError;
 use serde_json::Error as SerdeJsonError;
 use sp_core::crypto::SecretStringError;
 use std::{array::TryFromSliceError, io::Error as IoError, num::TryFromIntError};
@@ -93,5 +93,5 @@ pub enum KeyLoadingError {
 }
 
 // https://github.com/paritytech/substrate/blob/e60597dff0aa7ffad623be2cc6edd94c7dc51edd/client/rpc-api/src/author/error.rs#L80
-const BASE_ERROR: i64 = 1000;
-pub const POOL_INVALID_TX: i64 = BASE_ERROR + 10;
+const BASE_ERROR: i32 = 1000;
+pub const POOL_INVALID_TX: i32 = BASE_ERROR + 10;

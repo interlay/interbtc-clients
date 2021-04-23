@@ -21,7 +21,7 @@ pub use module_btc_relay::{BtcAddress, BtcPublicKey, RichBlockHeader};
 pub use module_issue::{IssueRequest, IssueRequestStatus};
 pub use module_redeem::{RedeemRequest, RedeemRequestStatus};
 pub use module_refund::RefundRequest;
-pub use module_replace::ReplaceRequest;
+pub use module_replace::{ReplaceRequest, ReplaceRequestStatus};
 pub use module_security::{ErrorCode, StatusCode};
 pub use module_staked_relayers::{
     types::{StakedRelayer, StatusUpdate},
@@ -31,9 +31,9 @@ pub use module_vault_registry::{Vault, VaultStatus};
 
 pub use sp_core::{H160, H256, U256};
 
-use parity_scale_codec::{Codec, EncodeLike};
+use codec::{Codec, EncodeLike};
 use sp_arithmetic::traits::Saturating;
-use sp_runtime::traits::Member;
+use sp_runtime::traits::{AtLeast32Bit, Member};
 use substrate_subxt::system::System;
 use substrate_subxt_proc_macro::module;
 
@@ -41,10 +41,10 @@ pub type BitcoinBlockHeight = u32;
 
 #[module]
 pub trait Core: System {
-    type DOT: Codec + EncodeLike + Member + Default + PartialOrd + Saturating;
+    type DOT: Codec + EncodeLike + Member + Default + PartialOrd + Saturating + AtLeast32Bit;
     type Balance: Codec + EncodeLike + Member + Default;
     type BTCBalance: Codec + EncodeLike + Member + Default;
-    type PolkaBTC: Codec + EncodeLike + Member + Default;
+    type PolkaBTC: Codec + EncodeLike + Member + Default + AtLeast32Bit;
     type RichBlockHeader: Codec + EncodeLike + Member + Default;
     type H256Le: Codec + EncodeLike + Member + Default;
     type H256: Codec + EncodeLike + Member + Default;

@@ -52,7 +52,7 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet
 ) -> Result<(), Error> {
     // check that the vault is registered and active
     let vault = provider.get_vault(vault_id.clone()).await?;
-    if vault.status != VaultStatus::Active {
+    if !matches!(vault.status, VaultStatus::Active(..)) {
         return Err(Error::RuntimeError(runtime::Error::VaultNotFound));
     }
 
@@ -177,7 +177,7 @@ mod tests {
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
                 id: x,
-                status: VaultStatus::Active,
+                status: VaultStatus::Active(true),
                 ..Default::default()
             })
         });
@@ -199,7 +199,7 @@ mod tests {
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
                 id: x,
-                status: VaultStatus::Active,
+                status: VaultStatus::Active(true),
                 ..Default::default()
             })
         });
@@ -221,7 +221,7 @@ mod tests {
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
                 id: x,
-                status: VaultStatus::Active,
+                status: VaultStatus::Active(true),
                 ..Default::default()
             })
         });
@@ -243,7 +243,7 @@ mod tests {
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
                 id: x,
-                status: VaultStatus::Active,
+                status: VaultStatus::Active(true),
                 ..Default::default()
             })
         });
@@ -267,7 +267,7 @@ mod tests {
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
                 id: x,
-                status: VaultStatus::Active,
+                status: VaultStatus::Active(true),
                 ..Default::default()
             })
         });
@@ -295,7 +295,7 @@ mod tests {
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
                 id: x,
-                status: VaultStatus::Active,
+                status: VaultStatus::Active(true),
                 ..Default::default()
             })
         });
@@ -321,7 +321,7 @@ mod tests {
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
                 id: x,
-                status: VaultStatus::Active,
+                status: VaultStatus::Active(true),
                 ..Default::default()
             })
         });
@@ -345,7 +345,7 @@ mod tests {
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
                 id: x,
-                status: VaultStatus::Active,
+                status: VaultStatus::Active(true),
                 ..Default::default()
             })
         });

@@ -93,12 +93,7 @@ pub async fn assert_issue(provider: &PolkaBtcProvider, btc_rpc: &MockBitcoinCore
         .unwrap();
 
     provider
-        .execute_issue(
-            issue.issue_id,
-            metadata.txid.translate(),
-            metadata.proof,
-            metadata.raw_tx,
-        )
+        .execute_issue(issue.issue_id, metadata.proof, metadata.raw_tx)
         .await
         .unwrap();
 }

@@ -1,7 +1,7 @@
 use super::Core;
 use crate::RedeemRequest;
+use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use parity_scale_codec::{Decode, Encode};
 use serde::Serialize;
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
@@ -11,6 +11,7 @@ pub trait Redeem: Core {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RequestRedeemCall<T: Redeem> {
+    #[codec(compact)]
     pub amount_polka_btc: T::PolkaBTC,
     pub btc_address: T::BtcAddress,
     pub vault_id: T::AccountId,
@@ -30,7 +31,6 @@ pub struct RequestRedeemEvent<T: Redeem> {
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct ExecuteRedeemCall<T: Redeem> {
     pub redeem_id: T::H256,
-    pub tx_id: T::H256Le,
     pub merkle_proof: Vec<u8>,
     pub raw_tx: Vec<u8>,
     pub _runtime: PhantomData<T>,

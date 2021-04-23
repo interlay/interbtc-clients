@@ -1,7 +1,7 @@
 use super::Core;
 use crate::IssueRequest;
+use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use parity_scale_codec::{Decode, Encode};
 use serde::Serialize;
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
@@ -11,8 +11,10 @@ pub trait Issue: Core {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RequestIssueCall<T: Issue> {
+    #[codec(compact)]
     pub amount: T::PolkaBTC,
     pub vault_id: T::AccountId,
+    #[codec(compact)]
     pub griefing_collateral: T::DOT,
 }
 
@@ -31,7 +33,6 @@ pub struct RequestIssueEvent<T: Issue> {
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct ExecuteIssueCall<T: Issue> {
     pub issue_id: T::H256,
-    pub tx_id: T::H256Le,
     pub merkle_proof: Vec<u8>,
     pub raw_tx: Vec<u8>,
     pub _runtime: PhantomData<T>,

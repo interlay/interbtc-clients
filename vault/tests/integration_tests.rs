@@ -522,12 +522,7 @@ async fn test_refund_succeeds() {
             .unwrap();
 
         let (_, refund_request, refund_execution) = join3(
-            user_provider.execute_issue(
-                issue.issue_id,
-                metadata.txid.translate(),
-                metadata.proof,
-                metadata.raw_tx,
-            ),
+            user_provider.execute_issue(issue.issue_id, metadata.proof, metadata.raw_tx),
             assert_event::<RequestRefundEvent<PolkaBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |x| {
                 x.vault_id == vault_id
             }),
@@ -601,12 +596,7 @@ async fn test_issue_overpayment_succeeds() {
                 }
             }),
             user_provider
-                .execute_issue(
-                    issue.issue_id,
-                    metadata.txid.translate(),
-                    metadata.proof,
-                    metadata.raw_tx,
-                )
+                .execute_issue(issue.issue_id, metadata.proof, metadata.raw_tx)
                 .map(Result::unwrap),
         )
         .await;
