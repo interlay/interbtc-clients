@@ -1,5 +1,5 @@
 use crate::{error::Error, utils};
-use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _, Txid};
+use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _};
 use futures::stream::{iter, StreamExt};
 use runtime::{
     pallets::vault_registry::{RegisterAddressEvent, RegisterVaultEvent},
@@ -71,13 +71,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         }
     }
 
-    async fn report_invalid(
-        &self,
-        vault_id: AccountId,
-        tx_id: &Txid,
-        raw_tx: Vec<u8>,
-        proof: Vec<u8>,
-    ) -> Result<(), Error> {
+    async fn report_invalid(&self, vault_id: AccountId, raw_tx: Vec<u8>, proof: Vec<u8>) -> Result<(), Error> {
         tracing::info!("Found tx from vault {}", vault_id.to_ss58check());
         // check if matching redeem or replace request
         if self
@@ -86,9 +80,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
             .await?
         {
             tracing::info!("Transaction is invalid");
-            self.btc_parachain
-                .report_vault_theft(vault_id, H256Le::from_bytes_le(&tx_id.as_hash()), proof, raw_tx)
-                .await?;
+            self.btc_parachain.report_vault_theft(vault_id, proof, raw_tx).await?;
         }
 
         Ok(())
@@ -115,8 +107,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         let vault_ids = filter_matching_vaults(addresses, &self.vaults).await;
 
         for vault_id in vault_ids {
-            self.report_invalid(vault_id, &tx_id, raw_tx.clone(), proof.clone())
-                .await?;
+            self.report_invalid(vault_id, raw_tx.clone(), proof.clone()).await?;
         }
 
         Ok(())
@@ -196,7 +187,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::{
         Block, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress, PrivateKey,
-        Transaction, TransactionMetadata, PUBLIC_KEY_SIZE,
+        Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
         AccountId, BitcoinBlockHeight, BlockNumber, Error as RuntimeError, ErrorCode, H256Le, PolkaBtcRichBlockHeader,
@@ -233,7 +224,6 @@ mod tests {
             async fn report_vault_theft(
                 &self,
                 vault_id: AccountId,
-                tx_id: H256Le,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -372,7 +362,7 @@ mod tests {
         parachain
             .expect_report_vault_theft()
             .never()
-            .returning(|_, _, _, _| Ok(()));
+            .returning(|_, _, _| Ok(()));
 
         let monitor = VaultTheftMonitor::new(
             MockBitcoin::default(),
@@ -383,7 +373,7 @@ mod tests {
         );
 
         monitor
-            .report_invalid(AccountKeyring::Bob.to_account_id(), &Txid::default(), vec![], vec![])
+            .report_invalid(AccountKeyring::Bob.to_account_id(), vec![], vec![])
             .await
             .unwrap();
     }
@@ -392,10 +382,7 @@ mod tests {
     async fn test_report_invalid_transaction() {
         let mut parachain = MockProvider::default();
         parachain.expect_is_transaction_invalid().returning(|_, _| Ok(true));
-        parachain
-            .expect_report_vault_theft()
-            .once()
-            .returning(|_, _, _, _| Ok(()));
+        parachain.expect_report_vault_theft().once().returning(|_, _, _| Ok(()));
 
         let monitor = VaultTheftMonitor::new(
             MockBitcoin::default(),
@@ -406,7 +393,7 @@ mod tests {
         );
 
         monitor
-            .report_invalid(AccountKeyring::Bob.to_account_id(), &Txid::default(), vec![], vec![])
+            .report_invalid(AccountKeyring::Bob.to_account_id(), vec![], vec![])
             .await
             .unwrap();
     }

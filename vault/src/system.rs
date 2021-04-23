@@ -151,7 +151,7 @@ impl VaultService {
         }
 
         if let Ok(vault) = self.btc_parachain.get_vault(vault_id.clone()).await {
-            if !bitcoin_core.wallet_has_public_key(vault.wallet.public_key).await? {
+            if !bitcoin_core.wallet_has_public_key(vault.wallet.public_key.0).await? {
                 return Err(bitcoin::Error::MissingPublicKey.into());
             }
         }

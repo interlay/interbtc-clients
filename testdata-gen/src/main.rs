@@ -342,12 +342,16 @@ struct RequestReplaceInfo {
 
 #[derive(Clap)]
 struct AcceptReplaceInfo {
-    /// Replace id for the replace request.
+    /// Old vault to replace.
     #[clap(long)]
-    replace_id: H256,
+    old_vault: AccountId,
+
+    /// Amount of PolkaBTC to replace.
+    #[clap(long)]
+    amount_btc: u128,
 
     /// Collateral used to back replace.
-    #[clap(long, default_value = "10000")]
+    #[clap(long)]
     collateral: u128,
 }
 
@@ -625,12 +629,11 @@ async fn main() -> Result<(), Error> {
             .await?;
         }
         SubCommand::RequestReplace(info) => {
-            let replace_id = replace::request_replace(&provider, info.replace_amount, info.griefing_collateral).await?;
-            println!("{}", hex::encode(replace_id.as_bytes()));
+            replace::request_replace(&provider, info.replace_amount, info.griefing_collateral).await?;
         }
         SubCommand::AcceptReplace(info) => {
             let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
-            replace::accept_replace(&provider, &btc_rpc, info.replace_id, info.collateral).await?;
+            replace::accept_replace(&provider, &btc_rpc, info.old_vault, info.amount_btc, info.collateral).await?;
         }
         SubCommand::ExecuteReplace(info) => {
             let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;

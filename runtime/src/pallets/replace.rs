@@ -1,7 +1,7 @@
 use super::Core;
 use crate::ReplaceRequest;
+use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
@@ -10,18 +10,23 @@ pub trait Replace: Core {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RequestReplaceCall<T: Replace> {
+    #[codec(compact)]
     pub btc_amount: T::PolkaBTC,
+    #[codec(compact)]
     pub griefing_collateral: T::DOT,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WithdrawReplaceCall<T: Replace> {
-    pub replace_id: T::H256,
+    pub amount: T::PolkaBTC,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct AcceptReplaceCall<T: Replace> {
-    pub replace_id: T::H256,
+    pub old_vault: T::AccountId,
+    #[codec(compact)]
+    pub amount_btc: T::PolkaBTC,
+    #[codec(compact)]
     pub collateral: T::DOT,
     pub btc_address: T::BtcAddress,
 }
@@ -29,7 +34,9 @@ pub struct AcceptReplaceCall<T: Replace> {
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct AuctionReplaceCall<T: Replace> {
     pub old_vault: T::AccountId,
+    #[codec(compact)]
     pub btc_amount: T::PolkaBTC,
+    #[codec(compact)]
     pub collateral: T::DOT,
     pub btc_address: T::BtcAddress,
 }
@@ -37,7 +44,6 @@ pub struct AuctionReplaceCall<T: Replace> {
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct ExecuteReplaceCall<T: Replace> {
     pub replace_id: T::H256,
-    pub tx_id: T::H256Le,
     pub merkle_proof: Vec<u8>,
     pub raw_tx: Vec<u8>,
 }
@@ -49,7 +55,6 @@ pub struct CancelReplaceCall<T: Replace> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct RequestReplaceEvent<T: Replace> {
-    pub replace_id: T::H256,
     pub old_vault_id: T::AccountId,
     pub amount_btc: T::PolkaBTC,
     pub griefing_collateral: T::DOT,
@@ -57,8 +62,9 @@ pub struct RequestReplaceEvent<T: Replace> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct WithdrawReplaceEvent<T: Replace> {
-    pub replace_id: T::H256,
     pub old_vault_id: T::AccountId,
+    pub withdrawn_polkabtc: T::PolkaBTC,
+    pub withdrawn_griefing_collateral: T::DOT,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
@@ -87,7 +93,6 @@ pub struct AuctionReplaceEvent<T: Replace> {
     pub collateral: T::DOT,
     pub reward: T::DOT,
     pub griefing_collateral: T::DOT,
-    pub current_height: T::BlockNumber,
     pub btc_address: T::BtcAddress,
 }
 

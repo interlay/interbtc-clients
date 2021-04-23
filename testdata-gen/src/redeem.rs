@@ -51,12 +51,7 @@ pub async fn execute_redeem(
         .await?;
 
     redeem_prov
-        .execute_redeem(
-            redeem_id,
-            H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
-            tx_metadata.proof,
-            tx_metadata.raw_tx,
-        )
+        .execute_redeem(redeem_id, tx_metadata.proof, tx_metadata.raw_tx)
         .await?;
 
     info!("Executed redeem ID {:?}", redeem_id);

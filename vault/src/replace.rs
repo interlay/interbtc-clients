@@ -152,14 +152,14 @@ pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone>(
                 if accept_replace_requests {
                     match handle_replace_request(provider.clone(), btc_rpc.clone(), &event).await {
                         Ok(_) => {
-                            tracing::info!("Accepted replace request #{}", event.replace_id);
+                            tracing::info!("Accepted replace request from {}", event.old_vault_id);
                             // try to send the event, but ignore the returned result since
                             // the only way it can fail is if the channel is closed
                             let _ = event_channel.clone().send(RequestEvent::Opened).await;
                         }
                         Err(e) => tracing::error!(
-                            "Failed to accept replace request #{}: {}",
-                            event.replace_id,
+                            "Failed to accept replace request from {}: {}",
+                            event.old_vault_id,
                             e.to_string()
                         ),
                     }
@@ -189,7 +189,12 @@ pub async fn handle_replace_request<
         Err(Error::InsufficientFunds)
     } else {
         Ok(provider
-            .accept_replace(event.replace_id, required_collateral, btc_rpc.get_new_address().await?)
+            .accept_replace(
+                event.old_vault_id.clone(),
+                event.amount_btc,
+                required_collateral,
+                btc_rpc.get_new_address().await?,
+            )
             .await?)
     }
 }
@@ -346,7 +351,7 @@ mod tests {
         PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
-        pallets::Core, AccountId, BtcAddress, BtcPublicKey, Error as RuntimeError, H256Le, PolkaBtcReplaceRequest,
+        pallets::Core, AccountId, BtcAddress, BtcPublicKey, Error as RuntimeError, PolkaBtcReplaceRequest,
         PolkaBtcRuntime, PolkaBtcVault,
     };
     use sp_core::H256;
@@ -448,10 +453,15 @@ mod tests {
 
         #[async_trait]
         pub trait ReplacePallet {
-            async fn request_replace(&self, amount: u128, griefing_collateral: u128)
-                -> Result<H256, RuntimeError>;
-            async fn withdraw_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
-            async fn accept_replace(&self, replace_id: H256, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
+            async fn request_replace(&self, amount: u128, griefing_collateral: u128) -> Result<(), RuntimeError>;
+            async fn withdraw_replace(&self, amount: u128) -> Result<(), RuntimeError>;
+            async fn accept_replace(
+                &self,
+                old_vault: AccountId,
+                amount_btc: u128,
+                collateral: u128,
+                btc_address: BtcAddress,
+            ) -> Result<(), RuntimeError>;
             async fn auction_replace(
                 &self,
                 old_vault: AccountId,
@@ -462,7 +472,6 @@ mod tests {
             async fn execute_replace(
                 &self,
                 replace_id: H256,
-                tx_id: H256Le,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -553,9 +562,8 @@ mod tests {
         provider.expect_get_free_dot_balance().returning(|| Ok(50));
 
         let event = RequestReplaceEvent {
-            amount_btc: Default::default(),
             old_vault_id: Default::default(),
-            replace_id: Default::default(),
+            amount_btc: Default::default(),
             griefing_collateral: Default::default(),
         };
         assert_err!(

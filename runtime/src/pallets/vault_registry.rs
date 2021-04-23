@@ -1,7 +1,7 @@
 use super::Core;
 use crate::Vault;
+use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
@@ -10,6 +10,7 @@ pub trait VaultRegistry: Core {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RegisterVaultCall<T: VaultRegistry> {
+    #[codec(compact)]
     pub collateral: T::DOT,
     pub public_key: T::BtcPublicKey,
 }
@@ -22,6 +23,7 @@ pub struct RegisterVaultEvent<T: VaultRegistry> {
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct LockAdditionalCollateralCall<T: VaultRegistry> {
+    #[codec(compact)]
     pub amount: T::DOT,
 }
 
@@ -35,6 +37,7 @@ pub struct LockAdditionalCollateralEvent<T: VaultRegistry> {
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WithdrawCollateralCall<T: VaultRegistry> {
+    #[codec(compact)]
     pub amount: T::DOT,
 }
 

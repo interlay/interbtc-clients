@@ -2,8 +2,8 @@
 
 use super::Core;
 use crate::{BitcoinBlockHeight, RawBlockHeader, StakedRelayer, StatusUpdate};
+use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
 use substrate_subxt::balances::Balances;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
@@ -13,6 +13,7 @@ pub trait StakedRelayers: Core + Balances {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RegisterStakedRelayerCall<T: StakedRelayers> {
+    #[codec(compact)]
     pub stake: T::DOT,
 }
 
@@ -23,6 +24,7 @@ pub struct DeregisterStakedRelayerCall<T: StakedRelayers> {
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct SuggestStatusUpdateCall<T: StakedRelayers> {
+    #[codec(compact)]
     pub deposit: T::DOT,
     pub status_code: T::StatusCode,
     pub add_error: Option<T::ErrorCode>,
@@ -41,7 +43,6 @@ pub struct VoteOnStatusUpdateCall<T: StakedRelayers> {
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct ReportVaultTheftCall<T: StakedRelayers> {
     pub vault_id: T::AccountId,
-    pub tx_id: T::H256Le,
     pub merkle_proof: Vec<u8>,
     pub raw_tx: Vec<u8>,
 }

@@ -9,7 +9,7 @@ use runtime::{
     },
     BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest,
     PolkaBtcRefundRequest, PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet,
-    ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    ReplacePallet, ReplaceRequestStatus, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H256;
 use std::collections::HashMap;
@@ -43,14 +43,14 @@ impl Request {
     }
 
     /// Constructs a Request for the given PolkaBtcReplaceRequest
-    fn from_replace_request(hash: H256, request: PolkaBtcReplaceRequest) -> Option<Request> {
-        Some(Request {
+    fn from_replace_request(hash: H256, request: PolkaBtcReplaceRequest) -> Request {
+        Request {
             hash,
-            open_time: Some(request.open_time),
+            open_time: Some(request.accept_time),
             amount: request.amount,
-            btc_address: request.btc_address?,
+            btc_address: request.btc_address,
             request_type: RequestType::Replace,
-        })
+        }
     }
 
     /// Constructs a Request for the given PolkaBtcRefundRequest
@@ -245,8 +245,8 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
 
     let open_replaces = replace_requests
         .into_iter()
-        .filter(|(_, request)| !request.completed && !request.cancelled)
-        .filter_map(|(hash, request)| Request::from_replace_request(hash, request));
+        .filter(|(_, request)| request.status == ReplaceRequestStatus::Pending)
+        .map(|(hash, request)| Request::from_replace_request(hash, request));
 
     let open_refunds = refund_requests
         .into_iter()
@@ -440,7 +440,6 @@ mod tests {
             async fn execute_redeem(
                 &self,
                 redeem_id: H256,
-                tx_id: H256Le,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -456,10 +455,15 @@ mod tests {
 
         #[async_trait]
         pub trait ReplacePallet {
-            async fn request_replace(&self, amount: u128, griefing_collateral: u128)
-                -> Result<H256, RuntimeError>;
-            async fn withdraw_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
-            async fn accept_replace(&self, replace_id: H256, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
+            async fn request_replace(&self, amount: u128, griefing_collateral: u128) -> Result<(), RuntimeError>;
+            async fn withdraw_replace(&self, amount: u128) -> Result<(), RuntimeError>;
+            async fn accept_replace(
+                &self,
+                old_vault: AccountId,
+                amount_btc: u128,
+                collateral: u128,
+                btc_address: BtcAddress,
+            ) -> Result<(), RuntimeError>;
             async fn auction_replace(
                 &self,
                 old_vault: AccountId,
@@ -470,7 +474,6 @@ mod tests {
             async fn execute_replace(
                 &self,
                 replace_id: H256,
-                tx_id: H256Le,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -494,7 +497,6 @@ mod tests {
             async fn execute_refund(
                 &self,
                 refund_id: H256,
-                tx_id: H256Le,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -583,7 +585,7 @@ mod tests {
     #[tokio::test]
     async fn should_pay_and_execute_redeem() {
         let mut provider = MockProvider::default();
-        provider.expect_execute_redeem().times(1).returning(|_, _, _, _| Ok(()));
+        provider.expect_execute_redeem().times(1).returning(|_, _, _| Ok(()));
 
         let mut btc_rpc = MockBitcoin::default();
         btc_rpc.expect_create_transaction::<BtcAddress>().returning(|_, _, _| {
@@ -625,10 +627,7 @@ mod tests {
     #[tokio::test]
     async fn should_pay_and_execute_replace() {
         let mut provider = MockProvider::default();
-        provider
-            .expect_execute_replace()
-            .times(1)
-            .returning(|_, _, _, _| Ok(()));
+        provider.expect_execute_replace().times(1).returning(|_, _, _| Ok(()));
 
         let mut btc_rpc = MockBitcoin::default();
         btc_rpc.expect_create_transaction::<BtcAddress>().returning(|_, _, _| {
