@@ -2,7 +2,7 @@ image: "registry.gitlab.com/interlay/containers/rust-base:nightly-2021-03-15"
 
 .rust-base-job:
     variables:
-        CARGO_HOME: $CI_PROJECT_DIR/.cargo
+        CARGO_HOME: /cargo
         RUSTC_WRAPPER: /usr/local/bin/sccache
     before_script:
         - rustup show
