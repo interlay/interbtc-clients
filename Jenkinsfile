@@ -75,6 +75,9 @@ pipeline {
                                     } else {
                                         def binaries = output_files.collect { "target/${env.PLATFORM}/release/$it" }.join(',')
                                         archiveArtifacts binaries
+                                        for (bin in output_files) {
+                                            stash(name: bin, includes: ".deploy/Dockerfile, target/${env.PLATFORM}/release/${bin}")
+                                        }
                                     }
                                 }
                             }
@@ -96,6 +99,7 @@ pipeline {
                 PATH        = "/busybox:$PATH"
                 REGISTRY    = 'registry.gitlab.com'
                 REPOSITORY  = 'interlay/polkabtc-clients'
+                PROFILE     = "x86_64-unknown-linux-gnu/release"
             }
             steps {
                 script {
@@ -158,7 +162,9 @@ def runKaniko() {
     sh '''#!/busybox/sh
     set -x
     GIT_BRANCH_SLUG=$(echo $GIT_BRANCH | sed -e 's/\\//-/g')
-    /kaniko/executor -f `pwd`/.deploy/Dockerfile -c `pwd` --build-arg BINARY=${IMAGE} \
+    /kaniko/executor -f `pwd`/.deploy/Dockerfile -c `pwd` \
+        --build-arg BINARY=${IMAGE} \
+        --build-arg PROFILE=${PROFILE} \
         --destination=${REGISTRY}/${REPOSITORY}/${IMAGE}:${GIT_BRANCH_SLUG} \
         --destination=${REGISTRY}/${REPOSITORY}/${IMAGE}:${GIT_BRANCH_SLUG}-${GIT_COMMIT:0:6}
     '''
