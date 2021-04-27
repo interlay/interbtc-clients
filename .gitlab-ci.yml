@@ -50,8 +50,8 @@ test-clients:
         key: cargo
         paths:
             - .cargo
-    # only:
-        # - merge_requests
+    only:
+        - external_pull_requests
 
 build-clients:
     stage: build
