@@ -160,6 +160,9 @@ pub const BTC_RELAY_MODULE: &str = "BTCRelay";
 pub const ISSUE_MODULE: &str = "Issue";
 pub const REDEEM_MODULE: &str = "Redeem";
 
+pub const STABLE_BITCOIN_CONFIRMATIONS: &str = "StableBitcoinConfirmations";
+pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
+
 pub const DUPLICATE_BLOCK_ERROR: &str = "DuplicateBlock";
 pub const ISSUE_COMPLETED_ERROR: &str = "IssueCompleted";
 pub const COMMIT_PERIOD_EXPIRED_ERROR: &str = "CommitPeriodExpired";

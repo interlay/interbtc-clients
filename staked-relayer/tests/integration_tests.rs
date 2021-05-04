@@ -7,15 +7,15 @@ use runtime::integration::*;
 use bitcoin::{BitcoinCoreApi, BlockHash, Hash, TransactionExt, Txid};
 use futures::{
     channel::mpsc,
-    future::{join, Either},
+    future::{join, try_join3, Either},
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
 use runtime::{
     pallets::staked_relayers::*,
     substrate_subxt::{Event, PairSigner},
-    BtcAddress, ErrorCode, ExchangeRateOraclePallet, FeePallet, FixedPointNumber, FixedU128, H256Le, IssuePallet,
-    PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, ReplacePallet, StakedRelayerPallet, StatusCode, UtilFuncs,
-    VaultRegistryPallet,
+    BtcAddress, BtcRelayPallet, ErrorCode, ExchangeRateOraclePallet, FeePallet, FixedPointNumber, FixedU128, H256Le,
+    IssuePallet, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, ReplacePallet, StakedRelayerPallet, StatusCode,
+    UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H160;
 use sp_keyring::AccountKeyring;
@@ -23,7 +23,7 @@ use staked_relayer;
 use std::{sync::Arc, time::Duration};
 use tokio::time::timeout;
 
-const TIMEOUT: Duration = Duration::from_secs(45);
+const TIMEOUT: Duration = Duration::from_secs(600);
 
 #[tokio::test(threaded_scheduler)]
 async fn test_report_vault_theft_succeeds() {
@@ -41,7 +41,13 @@ async fn test_report_vault_theft_succeeds() {
         .await
         .unwrap();
 
-    root_provider.set_maturity_period(0).await.unwrap();
+    try_join3(
+        root_provider.set_maturity_period(0),
+        root_provider.set_bitcoin_confirmations(0),
+        root_provider.set_parachain_confirmations(0),
+    )
+    .await
+    .unwrap();
 
     relayer_provider.register_staked_relayer(1000000).await.unwrap();
 
