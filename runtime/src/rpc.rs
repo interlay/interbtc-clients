@@ -1,3 +1,4 @@
+use codec::Encode;
 pub use module_exchange_rate_oracle::BtcTxFeesPerByte;
 
 use async_trait::async_trait;
@@ -25,7 +26,8 @@ use tokio::{sync::RwLock, time::delay_for};
 use crate::{
     balances_dot::*, btc_relay::*, conn::*, error::POOL_INVALID_TX, exchange_rate_oracle::*, fee::*, issue::*,
     pallets::*, redeem::*, refund::*, replace::*, security::*, staked_relayers::*, timestamp::*, types::*, utility::*,
-    vault_registry::*, AccountId, BlockNumber, Error, PolkaBtcRuntime,
+    vault_registry::*, AccountId, BlockNumber, Error, PolkaBtcRuntime, BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS,
+    STABLE_PARACHAIN_CONFIRMATIONS,
 };
 
 #[derive(Clone)]
@@ -253,6 +255,18 @@ impl PolkaBtcProvider {
         self.with_unique_signer(|signer| async move { self.ext_client.batch_and_watch(&signer, encoded_calls).await })
             .await?;
         Ok(())
+    }
+
+    async fn set_storage<V: Encode>(&self, module: &str, key: &str, value: V) -> Result<(), Error> {
+        let module = sp_core::twox_128(module.as_bytes());
+        let item = sp_core::twox_128(key.as_bytes());
+
+        Ok(self
+            .sudo(crate::frame_system::SetStorageCall {
+                items: vec![([module, item].concat(), value.encode())],
+                _runtime: PhantomData {},
+            })
+            .await?)
     }
 }
 
@@ -1237,7 +1251,11 @@ pub trait BtcRelayPallet {
 
     async fn get_bitcoin_confirmations(&self) -> Result<u32, Error>;
 
+    async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), Error>;
+
     async fn get_parachain_confirmations(&self) -> Result<BlockNumber, Error>;
+
+    async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), Error>;
 
     async fn wait_for_block_in_relay(
         &self,
@@ -1284,10 +1302,22 @@ impl BtcRelayPallet for PolkaBtcProvider {
         Ok(self.ext_client.stable_bitcoin_confirmations(head).await?)
     }
 
+    /// Set the global security parameter k for stable Bitcoin transactions
+    async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), Error> {
+        self.set_storage(BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS, value)
+            .await
+    }
+
     /// Get the global security parameter for stable parachain confirmations
     async fn get_parachain_confirmations(&self) -> Result<BlockNumber, Error> {
         let head = self.get_latest_block_hash().await?;
         Ok(self.ext_client.stable_parachain_confirmations(head).await?)
+    }
+
+    /// Set the global security parameter for stable parachain confirmations
+    async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), Error> {
+        self.set_storage(BTC_RELAY_MODULE, STABLE_PARACHAIN_CONFIRMATIONS, value)
+            .await
     }
 
     /// Wait until Bitcoin block is submitted to the relay
