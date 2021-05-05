@@ -17,7 +17,7 @@ pub async fn get_issue_by_id(issue_prov: &PolkaBtcProvider, issue_id: H256) -> R
     Ok(issue_request)
 }
 
-/// Request issue of PolkaBTC
+/// Request issue
 pub async fn request_issue(
     issue_prov: &PolkaBtcProvider,
     amount: u128,
@@ -29,7 +29,7 @@ pub async fn request_issue(
         .await?;
 
     info!(
-        "Requested {:?} to issue {:?} PolkaBTC from {:?}",
+        "Requested {:?} to issue {:?} tokens from {:?}",
         issue_prov.get_account_id(),
         amount,
         issue_data.vault_id
@@ -38,7 +38,7 @@ pub async fn request_issue(
     Ok(issue_data)
 }
 
-/// Execute issue of PolkaBTC
+/// Execute issue
 pub async fn execute_issue(
     issue_prov: &PolkaBtcProvider,
     btc_rpc: &BitcoinCore,
@@ -68,7 +68,7 @@ pub async fn execute_issue(
     Ok(())
 }
 
-/// Set issue period of PolkaBTC
+/// Set issue period
 pub async fn set_issue_period(issue_prov: &PolkaBtcProvider, period: u32) -> Result<(), Error> {
     issue_prov.set_issue_period(period).await?;
 

@@ -1,5 +1,5 @@
 use super::Core;
-use crate::Vault;
+use crate::{Vault, VaultStatus};
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use std::fmt::Debug;
@@ -11,46 +11,46 @@ pub trait VaultRegistry: Core {}
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RegisterVaultCall<T: VaultRegistry> {
     #[codec(compact)]
-    pub collateral: T::DOT,
+    pub collateral: T::Backing,
     pub public_key: T::BtcPublicKey,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct RegisterVaultEvent<T: VaultRegistry> {
     pub account_id: T::AccountId,
-    pub collateral: T::DOT,
+    pub collateral: T::Backing,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct LockAdditionalCollateralCall<T: VaultRegistry> {
     #[codec(compact)]
-    pub amount: T::DOT,
+    pub amount: T::Backing,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct LockAdditionalCollateralEvent<T: VaultRegistry> {
     pub vault_id: T::AccountId,
-    pub new_collateral: T::DOT,
-    pub total_collateral: T::DOT,
-    pub free_collateral: T::DOT,
+    pub new_collateral: T::Backing,
+    pub total_collateral: T::Backing,
+    pub free_collateral: T::Backing,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WithdrawCollateralCall<T: VaultRegistry> {
     #[codec(compact)]
-    pub amount: T::DOT,
+    pub amount: T::Backing,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct WithdrawCollateralEvent<T: VaultRegistry> {
     pub vault_id: T::AccountId,
-    pub withdrawn_collateral: T::DOT,
-    pub total_collateral: T::DOT,
+    pub withdrawn_collateral: T::Backing,
+    pub total_collateral: T::Backing,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct VaultsStore<T: VaultRegistry> {
-    #[store(returns = Vault<T::AccountId, T::BlockNumber, T::PolkaBTC, T::DOT>)]
+    #[store(returns = Vault<T::AccountId, T::BlockNumber, T::Issuing, T::Backing>)]
     pub _runtime: PhantomData<T>,
     pub account_id: T::AccountId,
 }
@@ -87,4 +87,16 @@ pub struct RegisterAddressCall<T: VaultRegistry> {
 pub struct RegisterAddressEvent<T: VaultRegistry> {
     pub vault_id: T::AccountId,
     pub btc_address: T::BtcAddress,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct LiquidateVaultEvent<T: VaultRegistry> {
+    pub vault_id: T::AccountId,
+    pub issued_tokens: T::BTCBalance,
+    pub to_be_issued_tokens: T::BTCBalance,
+    pub to_be_redeemed_tokens: T::BTCBalance,
+    pub to_be_replaced_tokens: T::BTCBalance,
+    pub backing_collateral: T::Backing,
+    pub status: VaultStatus,
+    pub replace_collateral: T::Backing,
 }

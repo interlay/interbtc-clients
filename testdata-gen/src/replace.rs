@@ -7,7 +7,7 @@ use runtime::{AccountId, BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, R
 use sp_core::H256;
 use std::{convert::TryInto, time::Duration};
 
-/// Request redeem of PolkaBTC
+/// Request redeem
 pub async fn request_replace(
     replace_prov: &PolkaBtcProvider,
     amount: u128,
@@ -15,7 +15,7 @@ pub async fn request_replace(
 ) -> Result<(), Error> {
     replace_prov.request_replace(amount, griefing_collateral).await?;
     info!(
-        "Requested {:?} to replace {:?} PolkaBTC",
+        "Requested {:?} to replace {:?} tokens",
         replace_prov.get_account_id(),
         amount,
     );
@@ -66,7 +66,7 @@ pub async fn execute_replace(
     Ok(())
 }
 
-/// Set replace period of PolkaBTC
+/// Set replace period
 pub async fn set_replace_period(replace_prov: &PolkaBtcProvider, period: u32) -> Result<(), Error> {
     replace_prov.set_replace_period(period).await?;
 

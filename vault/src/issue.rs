@@ -21,8 +21,8 @@ pub(crate) async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync
     let requests = requests?;
 
     // find the height of bitcoin chain corresponding to the earliest open_time
-    let btc_start_height = match requests.iter().map(|(_, request)| request.opentime).min() {
-        Some(x) => btc_parachain.get_blockchain_height_at(x).await?,
+    let btc_start_height = match requests.iter().map(|(_, request)| request.btc_height).min() {
+        Some(x) => x,
         None => bitcoin_core.get_block_count().await? as u32, // no open issues, start at current height
     };
 
@@ -108,7 +108,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
             }
             Some(transferred) => {
                 let transferred = transferred as u128;
-                if transferred == issue.amount {
+                if transferred == issue.amount + issue.fee {
                     tracing::info!("Found tx for issue with id {:?}", issue_id);
                 } else {
                     tracing::info!(
@@ -206,7 +206,7 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
                 }
 
                 tracing::trace!(
-                    "watching issue #{} for payment to {}",
+                    "watching issue #{} for payment to {:?}",
                     event.issue_id,
                     event.vault_btc_address
                 );

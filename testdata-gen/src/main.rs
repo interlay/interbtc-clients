@@ -17,7 +17,7 @@ use runtime::{
     AccountId, BtcAddress, DotBalancesPallet, ErrorCode as PolkaBtcErrorCode, ExchangeRateOraclePallet, FeePallet,
     FixedPointNumber,
     FixedPointTraits::*,
-    FixedU128, H256Le, IssueRequestStatus, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, StakedRelayerPallet,
+    FixedU128, H256Le, IssueRequestStatus, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet,
     StatusCode as PolkaBtcStatusCode, TimestampPallet,
 };
 use sp_core::H256;
@@ -115,11 +115,11 @@ enum SubCommand {
     GetCurrentTime,
     /// Register a new vault using the global keyring.
     RegisterVault(RegisterVaultInfo),
-    /// Request issuance of PolkaBTC and transfer to vault.
+    /// Request issuance  and transfer to vault.
     RequestIssue(RequestIssueInfo),
     /// Send BTC to an address.
     SendBitcoin(SendBitcoinInfo),
-    /// Request that PolkaBTC be burned to redeem BTC.
+    /// Request that issued tokens be burned to redeem BTC.
     RequestRedeem(RequestRedeemInfo),
     /// Send BTC to user, must be called by vault.
     ExecuteRedeem(ExecuteRedeemInfo),
@@ -137,8 +137,6 @@ enum SubCommand {
     SetRedeemPeriod(SetRedeemPeriodInfo),
     /// Set replace period.
     SetReplacePeriod(SetReplacePeriodInfo),
-    /// Set relayer maturity period.
-    SetRelayerMaturityPeriod(SetRelayerMaturityPeriodInfo),
     /// Transfer DOT collateral
     FundAccounts(FundAccountsInfo),
 }
@@ -248,7 +246,7 @@ struct RegisterVaultInfo {
 
 #[derive(Clap)]
 struct RequestIssueInfo {
-    /// Amount of PolkaBTC to issue.
+    /// Amount  to issue.
     #[clap(long, default_value = "100000")]
     issue_amount: u128,
 
@@ -300,16 +298,10 @@ struct SetReplacePeriodInfo {
     #[clap(long)]
     period: u32,
 }
-#[derive(Clap)]
-struct SetRelayerMaturityPeriodInfo {
-    /// Duration of the relayer bonding period.
-    #[clap(long)]
-    period: u32,
-}
 
 #[derive(Clap)]
 struct RequestRedeemInfo {
-    /// Amount of PolkaBTC to redeem.
+    /// Amount  to redeem.
     #[clap(long, default_value = "500")]
     redeem_amount: u128,
 
@@ -331,7 +323,7 @@ struct ExecuteRedeemInfo {
 
 #[derive(Clap)]
 struct RequestReplaceInfo {
-    /// Amount of PolkaBTC to issue.
+    /// Amount  to issue.
     #[clap(long, default_value = "100000")]
     replace_amount: u128,
 
@@ -346,7 +338,7 @@ struct AcceptReplaceInfo {
     #[clap(long)]
     old_vault: AccountId,
 
-    /// Amount of PolkaBTC to replace.
+    /// Amount  to replace.
     #[clap(long)]
     amount_btc: u128,
 
@@ -690,9 +682,6 @@ async fn main() -> Result<(), Error> {
         }
         SubCommand::SetReplacePeriod(info) => {
             replace::set_replace_period(&provider, info.period).await?;
-        }
-        SubCommand::SetRelayerMaturityPeriod(info) => {
-            provider.set_maturity_period(info.period).await?;
         }
         SubCommand::FundAccounts(info) => {
             let provider = &provider;

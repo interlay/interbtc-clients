@@ -23,10 +23,7 @@ pub use module_redeem::{RedeemRequest, RedeemRequestStatus};
 pub use module_refund::RefundRequest;
 pub use module_replace::{ReplaceRequest, ReplaceRequestStatus};
 pub use module_security::{ErrorCode, StatusCode};
-pub use module_staked_relayers::{
-    types::{StakedRelayer, StatusUpdate},
-    Error as StakedRelayersError,
-};
+pub use module_staked_relayers::Error as StakedRelayersError;
 pub use module_vault_registry::{Vault, VaultStatus};
 
 pub use sp_core::{H160, H256, U256};
@@ -41,10 +38,10 @@ pub type BitcoinBlockHeight = u32;
 
 #[module]
 pub trait Core: System {
-    type DOT: Codec + EncodeLike + Member + Default + PartialOrd + Saturating + AtLeast32Bit;
+    type Backing: Codec + EncodeLike + Member + Default + PartialOrd + Saturating + AtLeast32Bit;
     type Balance: Codec + EncodeLike + Member + Default;
     type BTCBalance: Codec + EncodeLike + Member + Default;
-    type PolkaBTC: Codec + EncodeLike + Member + Default + AtLeast32Bit;
+    type Issuing: Codec + EncodeLike + Member + Default + AtLeast32Bit;
     type RichBlockHeader: Codec + EncodeLike + Member + Default;
     type H256Le: Codec + EncodeLike + Member + Default;
     type H256: Codec + EncodeLike + Member + Default;
@@ -54,7 +51,6 @@ pub trait Core: System {
     type ErrorCodes: Codec + EncodeLike + Member + Default;
     type ErrorCode: Codec + EncodeLike + Member + Default;
     type StatusCode: Codec + EncodeLike + Member + Default;
-    type StatusUpdateId: Codec + EncodeLike + Member + Default;
     type SignedFixedPoint: Codec + EncodeLike + Member + Default;
     type UnsignedFixedPoint: Codec + EncodeLike + Member + Default;
     type VaultStatus: Codec + EncodeLike + Default + Send + Sync;

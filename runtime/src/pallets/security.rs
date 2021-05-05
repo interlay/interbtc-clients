@@ -31,3 +31,9 @@ pub struct RecoverFromErrorsEvent<T: Security> {
     pub status_code: T::StatusCode,
     pub error_codes: Vec<T::ErrorCode>,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct ActiveBlockCountStore<T: Security> {
+    #[store(returns = T::BlockNumber)]
+    pub _runtime: PhantomData<T>,
+}

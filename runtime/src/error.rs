@@ -35,8 +35,8 @@ pub enum Error {
     VaultCommittedTheft,
     #[error("Channel closed unexpectedly")]
     ChannelClosed,
-    #[error("Transaction is invalid: {0}")]
-    InvalidTransaction(String),
+    #[error("Transaction is invalid")]
+    InvalidTransaction,
     #[error("Request has timed out")]
     Timeout,
 

@@ -88,8 +88,8 @@ impl system::System for PolkaBtcRuntime {
 
 impl pallets::Core for PolkaBtcRuntime {
     type Balance = Balance;
-    type DOT = Balance;
-    type PolkaBTC = Balance;
+    type Backing = Balance;
+    type Issuing = Balance;
     type BTCBalance = Balance;
     type RichBlockHeader = PolkaBtcRichBlockHeader;
     type H256Le = H256Le;
@@ -100,7 +100,6 @@ impl pallets::Core for PolkaBtcRuntime {
     type ErrorCode = ErrorCode;
     type ErrorCodes = BTreeSet<ErrorCode>;
     type StatusCode = StatusCode;
-    type StatusUpdateId = u64;
     type SignedFixedPoint = FixedI128;
     type UnsignedFixedPoint = FixedU128;
     type VaultStatus = VaultStatus;
@@ -132,7 +131,7 @@ impl timestamp::Timestamp for PolkaBtcRuntime {
 
 impl exchange_rate_oracle::ExchangeRateOracle for PolkaBtcRuntime {}
 
-impl balances_dot::DOT for PolkaBtcRuntime {
+impl balances_dot::Backing for PolkaBtcRuntime {
     type Balance = Balance;
 }
 

@@ -121,11 +121,10 @@ impl PolkaBtcProvider {
                 error: JsonRpcErrorCode::ApplicationError(POOL_INVALID_TX),
                 ..
             }))) => {
-                // without parsing the error message there is no way
-                // to know why the transaction is invalid, so always
-                // refresh nonce and propogate message to caller
+                // here is no way to know why the transaction is invalid, so always
+                // refresh nonce and propogate to caller
                 self.refresh_nonce().await?;
-                Err(Error::InvalidTransaction(message))
+                Err(Error::InvalidTransaction)
             }
             Err(err) => Err(err.into()),
         }
@@ -278,8 +277,6 @@ pub trait UtilFuncs {
     /// Gets the current height of the parachain
     async fn get_current_chain_height(&self) -> Result<u32, Error>;
 
-    async fn get_blockchain_height_at(&self, parachain_height: u32) -> Result<u32, Error>;
-
     /// Get the address of the configured signer.
     fn get_account_id(&self) -> &AccountId;
 }
@@ -293,11 +290,6 @@ impl UtilFuncs for PolkaBtcProvider {
             Some(x) => Ok(x.block.header.number),
             None => Err(Error::BlockNotFound),
         }
-    }
-
-    async fn get_blockchain_height_at(&self, parachain_height: u32) -> Result<u32, Error> {
-        let hash = self.ext_client.block_hash(Some(parachain_height.into())).await?;
-        Ok(self.ext_client.best_block_height(hash).await?)
     }
 
     fn get_account_id(&self) -> &AccountId {
@@ -348,8 +340,8 @@ pub trait ReplacePallet {
     /// # Arguments
     ///
     /// * `&self` - sender of the transaction
-    /// * `amount` - amount of PolkaBTC
-    /// * `griefing_collateral` - amount of DOT
+    /// * `amount` - amount of [Issuing]
+    /// * `griefing_collateral` - amount of griefing collateral
     async fn request_replace(&self, amount: u128, griefing_collateral: u128) -> Result<(), Error>;
 
     /// Withdraw a request of vault replacement
@@ -357,7 +349,7 @@ pub trait ReplacePallet {
     /// # Arguments
     ///
     /// * `&self` - sender of the transaction: the old vault
-    /// * `amount` - the amount of PolkaBTC to replace
+    /// * `amount` - the amount of [Issuing] to replace
     async fn withdraw_replace(&self, amount: u128) -> Result<(), Error>;
 
     /// Accept request of vault replacement
@@ -366,7 +358,7 @@ pub trait ReplacePallet {
     ///
     /// * `&self` - the initiator of the transaction: the new vault
     /// * `old_vault` - the vault to replace
-    /// * `amount_btc` - the amount of PolkaBTC to replace
+    /// * `amount_btc` - the amount of [Issuing] to replace
     /// * `collateral` - the collateral for replacement
     /// * `btc_address` - the address to send funds to
     async fn accept_replace(
@@ -669,7 +661,7 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
         let result: BalanceWrapper<_> = self
             .rpc_client
             .request(
-                "exchangeRateOracle_btcToDots",
+                "exchangeRateOracle_issuingToBacking",
                 Params::Array(vec![to_json_value(BalanceWrapper { amount: amount_btc })?]),
             )
             .await?;
@@ -682,7 +674,7 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
         let result: BalanceWrapper<_> = self
             .rpc_client
             .request(
-                "exchangeRateOracle_dotsToBtc",
+                "exchangeRateOracle_backingToIssuing",
                 Params::Array(vec![to_json_value(BalanceWrapper { amount: amount_dot })?]),
             )
             .await?;
@@ -693,29 +685,11 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
 
 #[async_trait]
 pub trait StakedRelayerPallet {
-    async fn get_active_stake(&self) -> Result<u128, Error>;
-
-    async fn get_active_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error>;
-
-    async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error>;
+    async fn get_stake_of(&self, account_id: &AccountId) -> Result<u128, Error>;
 
     async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error>;
 
     async fn deregister_staked_relayer(&self) -> Result<(), Error>;
-
-    async fn suggest_status_update(
-        &self,
-        deposit: u128,
-        status_code: StatusCode,
-        add_error: Option<ErrorCode>,
-        remove_error: Option<ErrorCode>,
-        block_hash: Option<H256Le>,
-        message: String,
-    ) -> Result<(), Error>;
-
-    async fn vote_on_status_update(&self, status_update_id: u64, approve: bool) -> Result<(), Error>;
-
-    async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, Error>;
 
     async fn report_vault_theft(
         &self,
@@ -725,10 +699,6 @@ pub trait StakedRelayerPallet {
     ) -> Result<(), Error>;
 
     async fn is_transaction_invalid(&self, vault_id: AccountId, raw_tx: Vec<u8>) -> Result<bool, Error>;
-
-    async fn set_maturity_period(&self, period: u32) -> Result<(), Error>;
-
-    async fn evaluate_status_update(&self, status_update_id: u64) -> Result<(), Error>;
 
     async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), Error>;
 
@@ -740,20 +710,9 @@ pub trait StakedRelayerPallet {
 #[async_trait]
 impl StakedRelayerPallet for PolkaBtcProvider {
     /// Get the stake registered for this staked relayer.
-    async fn get_active_stake(&self) -> Result<u128, Error> {
-        Ok(self.get_active_stake_by_id(self.account_id.clone()).await?)
-    }
-
-    /// Get the stake registered for this staked relayer.
-    async fn get_active_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error> {
+    async fn get_stake_of(&self, account_id: &AccountId) -> Result<u128, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.active_staked_relayers(&account_id, head).await?.stake)
-    }
-
-    /// Get the stake registered for this inactive staked relayer.
-    async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u128, Error> {
-        let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.inactive_staked_relayers(&account_id, head).await?.stake)
+        Ok(self.ext_client.stakes(account_id, head).await?)
     }
 
     /// Submit extrinsic to register the staked relayer.
@@ -775,72 +734,6 @@ impl StakedRelayerPallet for PolkaBtcProvider {
         )
         .await?;
         Ok(())
-    }
-
-    /// Submit extrinsic to suggest a new status update. There are
-    /// four possible error codes as defined in the specification:
-    ///
-    /// * `NoDataBTCRelay` - missing transactional data for a block header
-    /// * `InvalidBTCRelay` - invalid transaction was detected in a block header
-    /// * `OracleOffline` - oracle liveness failure
-    /// * `Liquidation` - at least one vault is being liquidated
-    ///
-    /// Currently only `NoDataBTCRelay` can be voted upon.
-    ///
-    /// # Arguments
-    /// * `deposit` - collateral held while ballot underway
-    /// * `status_code` - one of `Running`, `Error`, `Shutdown`
-    /// * `add_error` - error to add to `BTreeSet<ErrorCode>`
-    /// * `remove_error` - error to remove from `BTreeSet<ErrorCode>`
-    /// * `block_hash` - optional block hash for btc-relay reports
-    async fn suggest_status_update(
-        &self,
-        deposit: u128,
-        status_code: StatusCode,
-        add_error: Option<ErrorCode>,
-        remove_error: Option<ErrorCode>,
-        block_hash: Option<H256Le>,
-        message: String,
-    ) -> Result<(), Error> {
-        self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .suggest_status_update_and_watch(
-                    &signer,
-                    deposit,
-                    status_code,
-                    add_error,
-                    remove_error,
-                    block_hash,
-                    message.into_bytes(),
-                )
-                .await
-        })
-        .await?;
-        Ok(())
-    }
-
-    /// Vote on an ongoing proposal by ID.
-    ///
-    /// # Arguments
-    /// * `status_update_id` - ID of the status update
-    /// * `approve` - whether to approve or reject the proposal
-    async fn vote_on_status_update(&self, status_update_id: u64, approve: bool) -> Result<(), Error> {
-        self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .vote_on_status_update_and_watch(&signer, status_update_id, approve)
-                .await
-        })
-        .await?;
-        Ok(())
-    }
-
-    /// Fetch an ongoing proposal by ID.
-    ///
-    /// # Arguments
-    /// * `status_update_id` - ID of the status update
-    async fn get_status_update(&self, status_update_id: u64) -> Result<PolkaBtcStatusUpdate, Error> {
-        let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.active_status_updates(status_update_id, head).await?)
     }
 
     /// Submit extrinsic to report vault theft, consumer should
@@ -887,25 +780,6 @@ impl StakedRelayerPallet for PolkaBtcProvider {
                 .await,
             Ok(()),
         ))
-    }
-
-    /// Sets the maturity period.
-    ///
-    /// # Arguments
-    ///
-    /// * `period` - the number of blocks to wait before a relayer is considered active.
-    async fn set_maturity_period(&self, period: u32) -> Result<(), Error> {
-        Ok(self.sudo(SetMaturityPeriodCall { period }).await?)
-    }
-
-    /// Finalize all active votes; used for testing
-    async fn evaluate_status_update(&self, status_update_id: u64) -> Result<(), Error> {
-        Ok(self
-            .sudo(EvaluateStatusUpdateCall {
-                status_update_id,
-                _runtime: PhantomData {},
-            })
-            .await?)
     }
 
     /// Initializes the relay with the provided block header and height,
@@ -960,6 +834,9 @@ pub trait SecurityPallet {
     async fn get_parachain_status(&self) -> Result<StatusCode, Error>;
 
     async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, Error>;
+
+    /// Gets the current active block number of the parachain
+    async fn get_current_active_block_number(&self) -> Result<u32, Error>;
 }
 
 #[async_trait]
@@ -974,6 +851,12 @@ impl SecurityPallet for PolkaBtcProvider {
     async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, Error> {
         let head = self.get_latest_block_hash().await?;
         Ok(self.ext_client.errors(head).await?)
+    }
+
+    /// Gets the current active block number of the parachain
+    async fn get_current_active_block_number(&self) -> Result<u32, Error> {
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.active_block_count(head).await?)
     }
 }
 
@@ -1411,7 +1294,7 @@ pub trait VaultRegistryPallet {
 
     async fn register_address(&self, btc_address: BtcAddress) -> Result<(), Error>;
 
-    async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, Error>;
+    async fn get_required_collateral_for_issuing(&self, amount_btc: u128) -> Result<u128, Error>;
 
     async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, Error>;
 
@@ -1491,10 +1374,9 @@ impl VaultRegistryPallet for PolkaBtcProvider {
 
     /// Withdraws `amount` of the collateral from the amount locked by
     /// the vault corresponding to the origin account
-    /// The collateral left after withdrawal must be more
-    /// (free or used in backing issued PolkaBTC) than MinimumCollateralVault
+    /// The collateral left after withdrawal must be more than MinimumCollateralVault
     /// and above the SecureCollateralThreshold. Collateral that is currently
-    /// being used to back issued PolkaBTC remains locked until the Vault
+    /// being used to back issued tokens remains locked until the Vault
     /// is used for a redeem request (full release can take multiple redeem requests).
     ///
     /// # Arguments
@@ -1535,11 +1417,11 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     ///
     /// # Arguments
     /// * `amount_btc` - amount of btc to cover
-    async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, Error> {
+    async fn get_required_collateral_for_issuing(&self, amount_btc: u128) -> Result<u128, Error> {
         let result: BalanceWrapper<_> = self
             .rpc_client
             .request(
-                "vaultRegistry_getRequiredCollateralForPolkabtc",
+                "vaultRegistry_getRequiredCollateralForIssuing",
                 Params::Array(vec![to_json_value(BalanceWrapper { amount: amount_btc })?]),
             )
             .await?;

@@ -9,11 +9,11 @@ pub trait Collateral: Core {}
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct LockCollateralEvent<T: Collateral> {
     pub account_id: T::AccountId,
-    pub balance: T::DOT,
+    pub balance: T::Backing,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct ReleaseCollateralEvent<T: Collateral> {
     pub account_id: T::AccountId,
-    pub balance: T::DOT,
+    pub balance: T::Backing,
 }

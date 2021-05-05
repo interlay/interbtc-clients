@@ -181,7 +181,7 @@ pub async fn handle_replace_request<
     btc_rpc: B,
     event: &RequestReplaceEvent<PolkaBtcRuntime>,
 ) -> Result<(), Error> {
-    let required_collateral = provider.get_required_collateral_for_polkabtc(event.amount_btc).await?;
+    let required_collateral = provider.get_required_collateral_for_issuing(event.amount_btc).await?;
 
     let free_balance = provider.get_free_dot_balance().await?;
 
@@ -284,7 +284,7 @@ async fn auction_replace<B: BitcoinCoreApi + Clone, P: DotBalancesPallet + Repla
         return Err(Error::BelowDustAmount);
     }
 
-    let collateral = provider.get_required_collateral_for_polkabtc(btc_amount).await?;
+    let collateral = provider.get_required_collateral_for_issuing(btc_amount).await?;
 
     // don't auction vault if we can't afford to replace it
     if collateral > provider.get_free_dot_balance().await? {
@@ -446,7 +446,7 @@ mod tests {
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
             async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-            async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
+            async fn get_required_collateral_for_issuing(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
             async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, RuntimeError>;
         }
@@ -513,7 +513,7 @@ mod tests {
 
         let mut provider = MockProvider::default();
         provider
-            .expect_get_required_collateral_for_polkabtc()
+            .expect_get_required_collateral_for_issuing()
             .returning(|_| Ok(100));
         provider.expect_get_free_dot_balance().returning(|| Ok(50));
 
@@ -534,7 +534,7 @@ mod tests {
 
         let mut provider = MockProvider::default();
         provider
-            .expect_get_required_collateral_for_polkabtc()
+            .expect_get_required_collateral_for_issuing()
             .returning(|_| Ok(100));
         provider.expect_get_free_dot_balance().returning(|| Ok(50));
 
@@ -557,7 +557,7 @@ mod tests {
 
         let mut provider = MockProvider::default();
         provider
-            .expect_get_required_collateral_for_polkabtc()
+            .expect_get_required_collateral_for_issuing()
             .returning(|_| Ok(100));
         provider.expect_get_free_dot_balance().returning(|| Ok(50));
 

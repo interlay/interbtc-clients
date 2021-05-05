@@ -13,11 +13,11 @@ pub trait Refund: Core {}
 pub struct RequestRefundEvent<T: Refund> {
     pub refund_id: T::H256,
     pub refundee: T::AccountId,
-    pub amount_polka_btc: T::PolkaBTC,
+    pub amount_polka_btc: T::Issuing,
     pub vault_id: T::AccountId,
     pub btc_address: T::BtcAddress,
     pub issue_id: T::H256,
-    pub fee: T::PolkaBTC,
+    pub fee: T::Issuing,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
@@ -33,12 +33,12 @@ pub struct ExecuteRefundEvent<T: Refund> {
     pub refund_id: T::H256,
     pub refundee: T::AccountId,
     pub vault_id: T::AccountId,
-    pub amount: T::PolkaBTC,
+    pub amount: T::Issuing,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct RefundRequestsStore<T: Refund> {
-    #[store(returns = RefundRequest<T::AccountId, T::PolkaBTC>)]
+    #[store(returns = RefundRequest<T::AccountId, T::Issuing>)]
     pub _runtime: PhantomData<T>,
     pub refund_id: T::H256,
 }

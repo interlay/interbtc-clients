@@ -42,14 +42,22 @@ impl MockBitcoinCore {
         };
 
         let address = BtcAddress::P2PKH(H160::from([0; 20]));
-        let block = ret
-            .generate_block_with_transaction(&Self::generate_normal_transaction(&address, 10000))
-            .await;
+        let dummy_tx = Self::generate_normal_transaction(&address, 10000);
+        let block = ret.generate_block_with_transaction(&dummy_tx).await;
         let raw_block_header = serialize(&block.header);
         ret.provider
             .initialize_btc_relay(raw_block_header.try_into().unwrap(), 0)
             .await
             .unwrap();
+
+        // submit blocks in order to prevent the WaitingForRelayerInitialization error in request_issue
+        let headers = futures::future::join_all((0..7u32).map(|_| ret.generate_block_with_transaction(&dummy_tx)))
+            .await
+            .into_iter()
+            .map(|x| serialize(&x.header).try_into().unwrap())
+            .collect::<Vec<_>>();
+
+        ret.provider.store_block_headers(headers).await.unwrap();
 
         ret
     }

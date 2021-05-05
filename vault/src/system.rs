@@ -191,6 +191,7 @@ impl VaultService {
         while startup_height == self.btc_parachain.get_current_chain_height().await? {
             delay_for(CHAIN_HEIGHT_POLLING_INTERVAL).await;
         }
+        tracing::info!("Got new block...");
 
         // issue handling
         let issue_set = Arc::new(IssueRequests::new());

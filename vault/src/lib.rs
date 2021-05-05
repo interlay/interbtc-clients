@@ -21,7 +21,9 @@ pub mod service {
         cancellation::{CancellationScheduler, IssueCanceller, ReplaceCanceller},
         collateral::maintain_collateralization_rate,
         execution::execute_open_requests,
-        issue::{listen_for_issue_cancels, listen_for_issue_executes, listen_for_issue_requests},
+        issue::{
+            listen_for_issue_cancels, listen_for_issue_executes, listen_for_issue_requests, process_issue_requests,
+        },
         redeem::listen_for_redeem_requests,
         refund::listen_for_refund_requests,
         replace::{

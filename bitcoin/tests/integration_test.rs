@@ -1,4 +1,4 @@
-// #![cfg(feature = "uses-bitcoind")]
+#![cfg(feature = "uses-bitcoind")]
 
 use bitcoin::{
     Auth, BitcoinCore, BitcoinCoreApi, Error, Network, PartialAddress, Payload, PrivateKey, PUBLIC_KEY_SIZE,

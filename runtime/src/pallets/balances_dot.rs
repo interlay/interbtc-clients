@@ -8,7 +8,7 @@ use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
 #[module]
 #[allow(clippy::upper_case_acronyms)]
-pub trait DOT: System {
+pub trait Backing: System {
     type Balance: Parameter
         + Member
         + AtLeast32Bit
@@ -22,27 +22,27 @@ pub trait DOT: System {
 
 /// The balance of an account.
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct AccountStore<T: DOT> {
+pub struct AccountStore<T: Backing> {
     #[store(returns = AccountData<T::Balance>)]
     pub _runtime: PhantomData<T>,
     pub account_id: T::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct ReservedEvent<T: DOT> {
+pub struct ReservedEvent<T: Backing> {
     pub account_id: T::AccountId,
     pub balance: T::Balance,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct TransferCall<'a, T: DOT> {
+pub struct TransferCall<'a, T: Backing> {
     pub to: &'a <T as System>::Address,
     #[codec(compact)]
     pub amount: T::Balance,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct TransferEvent<T: DOT> {
+pub struct TransferEvent<T: Backing> {
     pub from: <T as System>::AccountId,
     pub to: <T as System>::AccountId,
     pub amount: T::Balance,

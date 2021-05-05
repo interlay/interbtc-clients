@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use futures::{channel::mpsc::Receiver, *};
 use runtime::{
     AccountId, Error as RuntimeError, IssuePallet, IssueRequestStatus, PolkaBtcHeader, ReplacePallet,
-    ReplaceRequestStatus, UtilFuncs,
+    ReplaceRequestStatus, SecurityPallet, UtilFuncs,
 };
 use sp_core::H256;
 use std::marker::{Send, Sync};
@@ -197,7 +197,7 @@ fn drain_expired(requests: &mut Vec<ActiveRequest>, current_height: u32) -> Vec<
 }
 
 /// The actual cancellation scheduling and handling
-impl<P: IssuePallet + ReplacePallet + UtilFuncs + Clone> CancellationScheduler<P> {
+impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> CancellationScheduler<P> {
     pub fn new(provider: P, vault_id: AccountId) -> CancellationScheduler<P> {
         CancellationScheduler {
             provider,
@@ -302,20 +302,20 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + Clone> CancellationScheduler<P
         }
 
         // get current block height and request period
-        let chain_height = self.provider.get_current_chain_height().await?;
+        let active_block_number = self.provider.get_current_active_block_number().await?;
         let period = self.get_cached_period::<T>().await?;
 
         let mut ret = open_requests
             .iter()
             .map(|UnconvertedOpenTime { id, open_time }| {
                 // invalid open_time. Return an error so we will retry the operation later
-                if *open_time > chain_height {
+                if *open_time > active_block_number {
                     return Err(Error::InvalidOpenTime);
                 }
 
                 let deadline_block = open_time + period;
 
-                let end_time = if chain_height < deadline_block {
+                let end_time = if active_block_number < deadline_block {
                     deadline_block
                 } else {
                     // deadline has already passed, should cancel ASAP
@@ -357,9 +357,11 @@ mod tests {
             generic::Digest,
             traits::{BlakeTwo256, Hash},
         },
-        AccountId, BtcAddress, PolkaBtcIssueRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent,
+        AccountId, BtcAddress, ErrorCode, PolkaBtcIssueRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent,
+        StatusCode,
     };
     use sp_core::H256;
+    use std::collections::BTreeSet;
 
     macro_rules! assert_err {
         ($result:expr, $err:pat) => {{
@@ -465,8 +467,17 @@ mod tests {
         #[async_trait]
         pub trait UtilFuncs {
             async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
-            async fn get_blockchain_height_at(&self, parachain_height: u32) -> Result<u32, RuntimeError>;
             fn get_account_id(&self) -> &AccountId;
+        }
+
+        #[async_trait]
+        pub trait SecurityPallet {
+            async fn get_parachain_status(&self) -> Result<StatusCode, RuntimeError>;
+
+            async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, RuntimeError>;
+
+            /// Gets the current active block number of the parachain
+            async fn get_current_active_block_number(&self) -> Result<u32, RuntimeError>;
         }
     }
 
@@ -509,7 +520,7 @@ mod tests {
             ])
         });
         provider
-            .expect_get_current_chain_height()
+            .expect_get_current_active_block_number()
             .times(1)
             .returning(|| Ok(100));
         provider.expect_get_issue_period().times(1).returning(|| Ok(10));
@@ -548,7 +559,10 @@ mod tests {
                 },
             )])
         });
-        provider.expect_get_current_chain_height().times(1).returning(|| Ok(5));
+        provider
+            .expect_get_current_active_block_number()
+            .times(1)
+            .returning(|| Ok(5));
         provider.expect_get_issue_period().returning(|| Ok(10));
 
         let mut canceller = CancellationScheduler::new(provider, Default::default());
@@ -571,7 +585,10 @@ mod tests {
                 },
             )])
         });
-        provider.expect_get_current_chain_height().times(1).returning(|| Ok(15));
+        provider
+            .expect_get_current_active_block_number()
+            .times(1)
+            .returning(|| Ok(15));
         provider.expect_get_issue_period().returning(|| Ok(10));
 
         // check that it cancels the issue
@@ -679,7 +696,10 @@ mod tests {
                 },
             )])
         });
-        provider.expect_get_current_chain_height().times(1).returning(|| Ok(15));
+        provider
+            .expect_get_current_active_block_number()
+            .times(1)
+            .returning(|| Ok(15));
         provider.expect_get_issue_period().returning(|| Ok(10));
 
         let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);

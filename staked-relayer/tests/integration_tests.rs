@@ -7,7 +7,7 @@ use runtime::integration::*;
 use bitcoin::{BitcoinCoreApi, BlockHash, Hash, TransactionExt, Txid};
 use futures::{
     channel::mpsc,
-    future::{join, try_join3, Either},
+    future::{join, try_join, Either},
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
 use runtime::{
@@ -41,8 +41,7 @@ async fn test_report_vault_theft_succeeds() {
         .await
         .unwrap();
 
-    try_join3(
-        root_provider.set_maturity_period(0),
+    try_join(
         root_provider.set_bitcoin_confirmations(0),
         root_provider.set_parachain_confirmations(0),
     )
@@ -88,8 +87,8 @@ async fn test_report_vault_theft_succeeds() {
                 .create_transaction(BtcAddress::P2PKH(H160::from_slice(&[4; 20])), 1500, None)
                 .await
                 .unwrap();
-            // set the hash in the input script
-            transaction.transaction.input[0].witness = vec![vec![], vec![5; 20]];
+            // set the hash in the input script. Note: p2wpkh needs to start with 2 or 3
+            transaction.transaction.input[0].witness = vec![vec![], vec![3; 33]];
 
             // extract the public address corresponding to the input script
             let input_address = transaction.transaction.extract_input_addresses::<BtcAddress>()[0];
@@ -112,8 +111,6 @@ async fn test_register_deregister_succeeds() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-    let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
-    root_provider.set_maturity_period(0).await.unwrap();
 
     relayer_provider.register_staked_relayer(1000000).await.unwrap();
 

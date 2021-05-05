@@ -17,7 +17,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct Request {
     hash: H256,
-    open_time: Option<u32>,
+    btc_height: Option<u32>,
     amount: u128,
     btc_address: BtcAddress,
     request_type: RequestType,
@@ -35,7 +35,7 @@ impl Request {
     fn from_redeem_request(hash: H256, request: PolkaBtcRedeemRequest) -> Request {
         Request {
             hash,
-            open_time: Some(request.opentime),
+            btc_height: Some(request.btc_height),
             amount: request.amount_btc,
             btc_address: request.btc_address,
             request_type: RequestType::Redeem,
@@ -46,7 +46,7 @@ impl Request {
     fn from_replace_request(hash: H256, request: PolkaBtcReplaceRequest) -> Request {
         Request {
             hash,
-            open_time: Some(request.accept_time),
+            btc_height: Some(request.btc_height),
             amount: request.amount,
             btc_address: request.btc_address,
             request_type: RequestType::Replace,
@@ -57,7 +57,7 @@ impl Request {
     fn from_refund_request(hash: H256, request: PolkaBtcRefundRequest) -> Request {
         Request {
             hash,
-            open_time: None,
+            btc_height: None,
             amount: request.amount_btc,
             btc_address: request.btc_address,
             request_type: RequestType::Refund,
@@ -70,7 +70,7 @@ impl Request {
             btc_address: request.btc_address,
             amount: request.amount_polka_btc,
             hash: request.refund_id,
-            open_time: None,
+            btc_height: None,
             request_type: RequestType::Refund,
         }
     }
@@ -81,7 +81,7 @@ impl Request {
             btc_address: request.btc_address,
             amount: request.amount_btc,
             hash: request.replace_id,
-            open_time: None,
+            btc_height: None,
             request_type: RequestType::Replace,
         }
     }
@@ -92,7 +92,7 @@ impl Request {
             btc_address: request.btc_address,
             amount: request.btc_amount,
             hash: request.replace_id,
-            open_time: None,
+            btc_height: None,
             request_type: RequestType::Replace,
         }
     }
@@ -103,7 +103,7 @@ impl Request {
             btc_address: request.user_btc_address,
             amount: request.amount_polka_btc,
             hash: request.redeem_id,
-            open_time: None,
+            btc_height: None,
             request_type: RequestType::Redeem,
         }
     }
@@ -164,7 +164,7 @@ impl Request {
                         || provider.register_address(*address),
                         |result| match result {
                             Ok(ok) => Ok(ok),
-                            Err(err @ RuntimeError::InvalidTransaction(_)) => Err(RetryPolicy::Skip(err)),
+                            Err(err @ RuntimeError::InvalidTransaction) => Err(RetryPolicy::Skip(err)),
                             Err(err) => Err(RetryPolicy::Throw(err)),
                         },
                     )
@@ -203,7 +203,6 @@ impl Request {
                 (execute)(
                     &provider,
                     self.hash,
-                    H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
                     tx_metadata.proof.clone(),
                     tx_metadata.raw_tx.clone(),
                 )
@@ -260,13 +259,13 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         .map(|x| (x.hash, x))
         .collect::<HashMap<_, _>>();
 
-    // find the height of bitcoin chain corresponding to the earliest open_time
+    // find the height of bitcoin chain corresponding to the earliest btc_height
     let btc_start_height = match open_requests
         .iter()
-        .map(|(_, request)| request.open_time.unwrap_or(u32::MAX))
+        .map(|(_, request)| request.btc_height.unwrap_or(u32::MAX))
         .min()
     {
-        Some(x) => provider.get_blockchain_height_at(x).await?,
+        Some(x) => x,
         None => return Ok(()), // the iterator is empty so we have nothing to do
     };
 
@@ -411,7 +410,6 @@ mod tests {
         #[async_trait]
         pub trait UtilFuncs {
             async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
-            async fn get_blockchain_height_at(&self, parachain_height: u32) -> Result<u32, RuntimeError>;
             fn get_account_id(&self) -> &AccountId;
         }
 
@@ -424,7 +422,7 @@ mod tests {
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
             async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-            async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
+            async fn get_required_collateral_for_issuing(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
             async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, RuntimeError>;
         }
@@ -617,7 +615,7 @@ mod tests {
             amount: 100,
             btc_address: BtcAddress::P2SH(H160::from_slice(&[1; 20])),
             hash: H256::from_slice(&[1; 32]),
-            open_time: None,
+            btc_height: None,
             request_type: RequestType::Redeem,
         };
 
@@ -659,7 +657,7 @@ mod tests {
             amount: 100,
             btc_address: BtcAddress::P2SH(H160::from_slice(&[1; 20])),
             hash: H256::from_slice(&[1; 32]),
-            open_time: None,
+            btc_height: None,
             request_type: RequestType::Replace,
         };
 
