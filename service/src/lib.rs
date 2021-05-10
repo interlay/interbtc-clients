@@ -100,6 +100,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
                     ()
                 }
                 Err(Error::RuntimeError(RuntimeError::ChannelClosed)) => (),
+                Err(Error::RuntimeError(err)) if err.is_rpc_error() => (),
                 Err(err) => return Err(err),
             }
 
