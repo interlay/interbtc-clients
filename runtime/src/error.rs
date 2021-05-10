@@ -78,6 +78,10 @@ impl Error {
             }))) if module == BTC_RELAY_MODULE && error == DUPLICATE_BLOCK_ERROR
         )
     }
+
+    pub fn is_rpc_error(&self) -> bool {
+        matches!(self, Error::SubxtError(SubxtError::Rpc(_)))
+    }
 }
 
 #[derive(Error, Debug)]
