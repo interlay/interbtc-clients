@@ -2,8 +2,10 @@ use async_trait::async_trait;
 use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCore};
 use futures::{future::Either, Future, FutureExt};
 use runtime::{
-    cli::ConnectionOpts as ParachainConfig, Error as RuntimeError, PolkaBtcProvider as BtcParachain, PolkaBtcSigner,
+    cli::ConnectionOpts as ParachainConfig, substrate_subxt::Signer, Error as RuntimeError,
+    PolkaBtcProvider as BtcParachain, PolkaBtcSigner,
 };
+use sp_core::crypto::Ss58Codec;
 use std::marker::PhantomData;
 
 mod cli;
@@ -71,6 +73,8 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             let telemetry_client = TelemetryClient::new(uri.clone(), self.signer.clone());
             tokio::spawn(async move { telemetry::do_update(&telemetry_client, S::NAME, S::VERSION).await });
         }
+
+        tracing::info!("AccountId: {}", self.signer.account_id().to_ss58check());
 
         loop {
             let config = self.config.clone();

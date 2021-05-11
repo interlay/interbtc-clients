@@ -7,7 +7,6 @@ use jsonrpsee_types::{
     error::Error as RequestError,
     jsonrpc::{to_value as to_json_value, Error as JsonRpcError, ErrorCode as JsonRpcErrorCode, Params},
 };
-use log::trace;
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
 use sp_arithmetic::FixedU128;
 use sp_core::H256;
@@ -193,11 +192,11 @@ impl PolkaBtcProvider {
                 let tx = &tx;
                 while let Some(result) = sub.next().fuse().await {
                     if let Ok(raw_event) = result {
-                        trace!("raw event: {:?}", raw_event);
+                        log::trace!("raw event: {:?}", raw_event);
                         let decoded = T::decode(&mut &raw_event.data[..]);
                         match decoded {
                             Ok(event) => {
-                                trace!("decoded event: {:?}", event);
+                                log::trace!("decoded event: {:?}", event);
                                 // send the event to the other task
                                 if tx.clone().send(event).await.is_err() {
                                     break;
@@ -1386,7 +1385,7 @@ impl BtcRelayPallet for PolkaBtcProvider {
                     return Ok(());
                 }
                 _ => {
-                    trace!(
+                    log::trace!(
                         "block {} not found or confirmed, waiting for {} seconds",
                         block_hash,
                         BLOCK_WAIT_TIMEOUT

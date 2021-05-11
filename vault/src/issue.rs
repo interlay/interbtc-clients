@@ -109,7 +109,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
             Some(transferred) => {
                 let transferred = transferred as u128;
                 if transferred == issue.amount {
-                    tracing::info!("Found tx for issue with id {}", issue_id);
+                    tracing::info!("Found tx for issue with id {:?}", issue_id);
                 } else {
                     tracing::info!(
                         "Found tx for issue with id {}. Expected amount = {}, got {}",
@@ -139,14 +139,14 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
                 let raw_tx = bitcoin_core.get_raw_tx(&txid, &block_hash).await?;
                 let proof = bitcoin_core.get_proof(txid, &block_hash).await?;
 
-                tracing::info!("Executing issue with id {}", issue_id);
+                tracing::info!("Executing issue #{:?}", issue_id);
                 match btc_parachain
                     .execute_issue(issue_id, H256Le::from_bytes_le(&txid.as_hash()), proof, raw_tx)
                     .await
                 {
                     Ok(_) => (),
                     Err(err) if err.is_issue_completed() => {
-                        tracing::info!("Issue {} has already been completed", issue_id);
+                        tracing::info!("Issue #{} has already been completed", issue_id);
                     }
                     Err(err) => return Err(err.into()),
                 };

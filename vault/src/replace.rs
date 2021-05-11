@@ -6,6 +6,7 @@ use runtime::{
     DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use service::Error as ServiceError;
+use sp_core::crypto::Ss58Codec;
 use std::time::Duration;
 use tokio::time::delay_for;
 
@@ -39,17 +40,18 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                 let btc_rpc = btc_rpc.clone();
                 // Spawn a new task so that we handle these events concurrently
                 tokio::spawn(async move {
+                    tracing::info!("Executing accept replace #{:?}", event.replace_id);
                     let request = Request::from_accept_replace_event(&event);
                     let result = request.pay_and_execute(provider, btc_rpc, num_confirmations).await;
 
                     match result {
                         Ok(_) => tracing::info!(
-                            "Successfully Executed replace #{} with amount {}",
+                            "Completed accept replace request #{} with amount {}",
                             event.replace_id,
                             event.amount_btc
                         ),
                         Err(e) => tracing::error!(
-                            "Failed to process replace request #{}: {}",
+                            "Failed to process accept replace request #{}: {}",
                             event.replace_id,
                             e.to_string()
                         ),
@@ -92,17 +94,18 @@ pub async fn listen_for_auction_replace<B: BitcoinCoreApi + Clone + Send + Sync 
                 let btc_rpc = btc_rpc.clone();
                 // Spawn a new task so that we handle these events concurrently
                 tokio::spawn(async move {
+                    tracing::info!("Executing auction replace #{:?}", event.replace_id);
                     let request = Request::from_auction_replace_event(&event);
                     let result = request.pay_and_execute(provider, btc_rpc, num_confirmations).await;
 
                     match result {
                         Ok(_) => tracing::info!(
-                            "Successfully executed auctioned replace #{} with amount {}",
+                            "Completed auction replace request #{} with amount {}",
                             event.replace_id,
                             event.btc_amount
                         ),
                         Err(e) => tracing::error!(
-                            "Failed to process auctioned replace request #{}: {}",
+                            "Failed to process auction replace request #{}: {}",
                             event.replace_id,
                             e.to_string()
                         ),
@@ -140,7 +143,7 @@ pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone>(
                 }
 
                 tracing::info!(
-                    "Received replace request #{} from {} for amount {}",
+                    "Received replace request #{:?} from {} for amount {}",
                     event.replace_id,
                     event.old_vault_id,
                     event.amount_btc
@@ -243,15 +246,15 @@ pub async fn check_collateral_of_vaults<B: BitcoinCoreApi + Clone>(
         {
             match auction_replace(provider, btc_rpc, &vault, dust_amount).await {
                 Ok(_) => {
-                    tracing::info!("Auction replace for vault {} submitted", vault.id);
+                    tracing::info!("Auction replace for vault {} submitted", vault.id.to_ss58check());
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel.send(RequestEvent::Opened).await;
                 }
                 Err(Error::InsufficientFunds) | Err(Error::BelowDustAmount) => {
-                    tracing::debug!("Not auctioning vault {}", vault.id)
+                    tracing::debug!("Not auctioning vault {}", vault.id.to_ss58check())
                 }
-                Err(e) => tracing::error!("Failed to auction vault {}: {}", vault.id, e.to_string()),
+                Err(e) => tracing::error!("Failed to auction vault {}: {}", vault.id.to_ss58check(), e.to_string()),
             };
         }
     }
@@ -284,8 +287,8 @@ async fn auction_replace<B: BitcoinCoreApi + Clone, P: DotBalancesPallet + Repla
     }
 
     tracing::info!(
-        "Vault {} is below auction threshold; replacing {} BTC with {} DOT",
-        vault.id,
+        "Vault {} is below auction threshold; replacing {} Satoshis with {} Planck",
+        vault.id.to_ss58check(),
         btc_amount,
         collateral
     );
@@ -319,7 +322,7 @@ pub async fn listen_for_execute_replace(
         .on_event::<ExecuteReplaceEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
                 if &event.new_vault_id == provider.get_account_id() {
-                    tracing::info!("Received event: execute replace #{}", event.replace_id);
+                    tracing::info!("Received event: execute replace #{:?}", event.replace_id);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel
