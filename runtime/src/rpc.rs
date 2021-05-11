@@ -88,6 +88,7 @@ impl PolkaBtcProvider {
             Option::<H256>::None,
         )
         .await?;
+        log::info!("Refreshing nonce to {}", account_info.nonce);
         signer.set_nonce(account_info.nonce);
         Ok(())
     }

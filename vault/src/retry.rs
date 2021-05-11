@@ -24,14 +24,6 @@ pub enum RetryPolicy<E> {
     Throw(E),
 }
 
-pub async fn notify_retry_all<L, F, T>(call: L) -> Result<T, RuntimeError>
-where
-    L: Fn() -> F,
-    F: Future<Output = Result<T, RuntimeError>>,
-{
-    notify_retry(call, |res| res.map_err(RetryPolicy::Skip)).await
-}
-
 pub async fn notify_retry<L, F, R, T>(call: L, verify: R) -> Result<T, RuntimeError>
 where
     L: Fn() -> F,

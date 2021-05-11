@@ -188,16 +188,25 @@ impl Request {
             RequestType::Refund => RefundPallet::execute_refund,
         };
 
-        // Retry until success or timeout
-        notify_retry_all(|| {
-            (execute)(
-                &provider,
-                self.hash,
-                H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
-                tx_metadata.proof.clone(),
-                tx_metadata.raw_tx.clone(),
-            )
-        })
+        // Retry until success or timeout, explicitly handle the cases
+        // where the redeem has expired or the rpc has disconnected
+        notify_retry(
+            || {
+                (execute)(
+                    &provider,
+                    self.hash,
+                    H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
+                    tx_metadata.proof.clone(),
+                    tx_metadata.raw_tx.clone(),
+                )
+            },
+            |result| match result {
+                Ok(ok) => Ok(ok),
+                Err(err) if err.is_commit_period_expired() => Err(RetryPolicy::Throw(err)),
+                Err(err) if err.is_rpc_error() => Err(RetryPolicy::Throw(err)),
+                Err(err) => Err(RetryPolicy::Skip(err)),
+            },
+        )
         .await?;
 
         Ok(())
