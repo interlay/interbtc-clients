@@ -1,7 +1,10 @@
 pub use jsonrpsee_types::error::Error as JsonRpseeError;
 pub use substrate_subxt::Error as SubxtError;
 
-use crate::{BTC_RELAY_MODULE, DUPLICATE_BLOCK_ERROR, ISSUE_COMPLETED_ERROR, ISSUE_MODULE};
+use crate::{
+    BTC_RELAY_MODULE, COMMIT_PERIOD_EXPIRED_ERROR, DUPLICATE_BLOCK_ERROR, ISSUE_COMPLETED_ERROR, ISSUE_MODULE,
+    REDEEM_MODULE,
+};
 use jsonrpsee_ws_client::transport::WsConnectError;
 use parity_scale_codec::Error as CodecError;
 use serde_json::Error as SerdeJsonError;
@@ -32,8 +35,8 @@ pub enum Error {
     VaultCommittedTheft,
     #[error("Channel closed unexpectedly")]
     ChannelClosed,
-    #[error("Transaction is outdated")]
-    OutdatedTransaction,
+    #[error("Transaction is invalid: {0}")]
+    InvalidTransaction(String),
     #[error("Request has timed out")]
     Timeout,
 
@@ -76,6 +79,22 @@ impl Error {
                 ref module,
                 ref error,
             }))) if module == BTC_RELAY_MODULE && error == DUPLICATE_BLOCK_ERROR
+        )
+    }
+
+    pub fn is_commit_period_expired(&self) -> bool {
+        matches!(self,
+            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
+                ref module,
+                ref error,
+            }))) if module == REDEEM_MODULE && error == COMMIT_PERIOD_EXPIRED_ERROR
+        )
+    }
+
+    pub fn is_rpc_disconnect_error(&self) -> bool {
+        matches!(
+            self,
+            Error::SubxtError(SubxtError::Rpc(JsonRpseeError::RestartNeeded(_)))
         )
     }
 
