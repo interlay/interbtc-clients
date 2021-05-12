@@ -132,13 +132,15 @@ pub trait BitcoinCoreApi {
 
 pub struct LockedTransaction {
     pub transaction: Transaction,
+    pub recipient: String,
     _lock: Option<OwnedMutexGuard<()>>,
 }
 
 impl LockedTransaction {
-    pub fn new(transaction: Transaction, lock: Option<OwnedMutexGuard<()>>) -> Self {
+    pub fn new(transaction: Transaction, recipient: String, lock: Option<OwnedMutexGuard<()>>) -> Self {
         LockedTransaction {
             transaction,
+            recipient,
             _lock: lock,
         }
     }
@@ -257,6 +259,10 @@ impl BitcoinCore {
         self.rpc
             .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
         Ok(())
+    }
+
+    pub fn encode_address<A: PartialAddress + Send + 'static>(&self, address: A) -> Result<String, Error> {
+        Ok(address.encode_str(self.network)?)
     }
 }
 
@@ -512,7 +518,7 @@ impl BitcoinCoreApi for BitcoinCore {
         // this function would be to call create_raw_transaction (without the _hex suffix), and
         // to add the op_return afterwards. However, this function fails if no inputs are
         // specified, as is the case for us prior to calling fund_raw_transaction.
-        let raw_tx = self.create_raw_transaction_hex(address_string, Amount::from_sat(sat), request_id)?;
+        let raw_tx = self.create_raw_transaction_hex(address_string.clone(), Amount::from_sat(sat), request_id)?;
 
         // ensure no other fund_raw_transaction calls are made until we submitted the
         // transaction to the bitcoind. If we don't do this, the same uxto may be used
@@ -534,7 +540,7 @@ impl BitcoinCoreApi for BitcoinCore {
 
         let transaction = signed_funded_raw_tx.transaction()?;
 
-        Ok(LockedTransaction::new(transaction, Some(lock)))
+        Ok(LockedTransaction::new(transaction, address_string, Some(lock)))
     }
 
     /// Submits a transaction to the mempool

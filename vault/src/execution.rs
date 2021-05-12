@@ -123,17 +123,25 @@ impl Request {
     }
 
     /// Make a bitcoin transfer to fulfil the request
+    #[tracing::instrument(
+        name = "transfer_btc",
+        skip(self, provider, btc_rpc),
+        fields(
+            request_type = ?self.request_type,
+            request_id = ?self.hash,
+        )
+    )]
     async fn transfer_btc<B: BitcoinCoreApi + Clone, P: VaultRegistryPallet + UtilFuncs + Clone + Send + Sync>(
         &self,
         provider: &P,
         btc_rpc: B,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
-        tracing::info!("Sending bitcoin to {:?}", self.btc_address);
-
         let tx = btc_rpc
             .create_transaction(self.btc_address, self.amount as u64, Some(self.hash))
             .await?;
+        let recipient = tx.recipient.clone();
+        tracing::info!("Sending bitcoin to {}", recipient);
 
         let return_to_self_addresses = tx
             .transaction
@@ -171,7 +179,7 @@ impl Request {
             .wait_for_transaction_metadata(txid, BITCOIN_MAX_RETRYING_TIME, num_confirmations)
             .await?;
 
-        tracing::info!("Bitcoin successfully sent to {:?}", self.btc_address);
+        tracing::info!("Bitcoin successfully sent to {}", recipient);
         Ok(tx_metadata)
     }
 
@@ -577,6 +585,7 @@ mod tests {
                     input: vec![],
                     output: vec![],
                 },
+                Default::default(),
                 None,
             ))
         });
@@ -621,6 +630,7 @@ mod tests {
                     input: vec![],
                     output: vec![],
                 },
+                Default::default(),
                 None,
             ))
         });
