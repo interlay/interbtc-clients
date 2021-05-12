@@ -20,7 +20,10 @@ use tokio::time::timeout;
 const HEALTH_DURATION: Duration = Duration::from_millis(5000);
 
 const KV_STORE_NAME: &str = "store";
-const FAUCET_COOLDOWN_HOURS: i64 = 6;
+const FAUCET_COOLDOWN_HOURS: i64 = 12;
+
+// If the client has more 50 DOT it won't be funded
+const MAX_FUNDABLE_CLIENT_BALANCE: u128 = 500_000_000_000;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 struct FaucetRequest {
@@ -144,7 +147,7 @@ fn has_request_expired(
 ) -> bool {
     let cooldown_over = request_datetime.lt(&cooldown_threshold);
 
-    // A user that has just become a vault can request again immediately
+    // A user that has just become a vault or relayer can request again immediately
     cooldown_over
         || is_type_and_was_user(
             FundingRequestAccountType::Vault,
@@ -158,24 +161,34 @@ fn has_request_expired(
         )
 }
 
-fn is_funding_allowed(
+async fn is_funding_allowed(
+    provider: &PolkaBtcProvider,
+    account_id: AccountId,
     last_request_json: Option<Json<FaucetRequest>>,
     account_type: FundingRequestAccountType,
 ) -> Result<bool, Error> {
-    // We are subtracting FAUCET_COOLDOWN_HOURS from the milliseconds since the unix epoch.
-    // Unless there's a bug in the std lib implementation of Utc::now() or a false reading from the
-    // system clock, unwrap will never panic
+    let balance = provider.get_free_dot_balance_for_id(account_id.clone()).await?;
+    if balance > MAX_FUNDABLE_CLIENT_BALANCE {
+        warn!("user {} has enough funds: {:?}", account_id, balance);
+        return Ok(false);
+    }
     let cooldown_threshold = Utc::now()
         .checked_sub_signed(ISO8601::hours(FAUCET_COOLDOWN_HOURS))
         .ok_or(Error::MathError)?;
 
     Ok(match last_request_json {
-        Some(last_request_json) => has_request_expired(
-            DateTime::parse_from_rfc2822(&last_request_json.0.datetime)?.with_timezone(&Utc),
-            cooldown_threshold,
-            account_type,
-            last_request_json.0.account_type,
-        ),
+        Some(last_request_json) => {
+            let last_request_expired = has_request_expired(
+                DateTime::parse_from_rfc2822(&last_request_json.0.datetime)?.with_timezone(&Utc),
+                cooldown_threshold,
+                account_type,
+                last_request_json.0.account_type,
+            );
+            if !last_request_expired {
+                warn!("already funded {} at {:?}", account_id, last_request_json.0.datetime);
+            }
+            last_request_expired
+        }
         None => true,
     })
 }
@@ -188,9 +201,8 @@ async fn atomic_faucet_funding(
 ) -> Result<(), Error> {
     let last_request_json = kv.get(account_id.to_string())?;
     let account_type = get_account_type(&provider, account_id.clone()).await?;
-    if !is_funding_allowed(last_request_json, account_type.clone())? {
-        warn!("{} already funded", account_id);
-        return Err(Error::FaucetOveruseError);
+    if !is_funding_allowed(provider, account_id.clone(), last_request_json, account_type.clone()).await? {
+        return Err(Error::FaucetError);
     }
     // Replace the previous, expired claim datetime with the datetime of the current claim
     update_kv_store(&kv, account_id.clone(), Utc::now().to_rfc2822(), account_type.clone())?;
@@ -334,7 +346,7 @@ mod tests {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
 
-        let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
+        let bob_account_id: AccountId = [3; 32].into();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
         let staked_relayer_allowance_dot: u128 = 500;
@@ -372,14 +384,47 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fund_user_immediately_after_registering_as_vault_succeeds() {
+    async fn test_fund_rich_user_fails() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
 
+        // Bob's account is prefunded with lots of DOT
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
         let staked_relayer_allowance_dot: u128 = 500;
+
+        let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
+        allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
+        allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
+        allowances.insert(FundingRequestAccountType::StakedRelayer, staked_relayer_allowance_dot);
+
+        let store = Store::new(Config::new(tmp_dir.path().join("kv1"))).expect("Unable to open kv store");
+        let kv = open_kv_store(store.clone()).unwrap();
+        kv.clear().unwrap();
+
+        let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+        let req = FundAccountJsonRpcRequest {
+            account_id: bob_account_id.clone(),
+        };
+
+        assert_err!(
+            fund_account(&Arc::from(alice_provider.clone()), req, store, allowances).await,
+            Error::FaucetError
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fund_user_immediately_after_registering_as_vault_succeeds() {
+        let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+        set_exchange_rate(client.clone()).await;
+
+        let bob_account_id: AccountId = [3; 32].into();
+        let user_allowance_dot: u128 = 1;
+        let vault_allowance_dot: u128 = 500;
+        let staked_relayer_allowance_dot: u128 = 500;
+        let one_dot: u128 = 10_000_000_000;
+        let drain_account_id: AccountId = [3; 32].into();
 
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
@@ -392,6 +437,16 @@ mod tests {
         kv.clear().unwrap();
 
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+        let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+        // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding
+        let bob_prefunded_amount = bob_provider
+            .get_free_dot_balance_for_id(bob_account_id.clone())
+            .await
+            .unwrap();
+        bob_provider
+            .transfer_to(drain_account_id, bob_prefunded_amount - one_dot)
+            .await
+            .expect("Unable to transfer funds");
 
         let req = FundAccountJsonRpcRequest {
             account_id: bob_account_id.clone(),
@@ -406,7 +461,6 @@ mod tests {
         .await
         .expect("Funding the account failed");
 
-        let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         bob_provider.register_vault(100, dummy_public_key()).await.unwrap();
 
         let bob_funds_before = alice_provider
@@ -434,6 +488,8 @@ mod tests {
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
         let staked_relayer_allowance_dot: u128 = 500;
+        let one_dot: u128 = 10_000_000_000;
+        let drain_account_id: AccountId = [3; 32].into();
 
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
@@ -446,6 +502,16 @@ mod tests {
         kv.clear().unwrap();
 
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+        let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+        // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding
+        let bob_prefunded_amount = bob_provider
+            .get_free_dot_balance_for_id(bob_account_id.clone())
+            .await
+            .unwrap();
+        bob_provider
+            .transfer_to(drain_account_id, bob_prefunded_amount - one_dot)
+            .await
+            .expect("Unable to transfer funds");
 
         let req = FundAccountJsonRpcRequest {
             account_id: bob_account_id.clone(),
@@ -460,9 +526,7 @@ mod tests {
         .await
         .expect("Funding the account failed");
 
-        let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         bob_provider.register_staked_relayer(100).await.unwrap();
-
         let bob_funds_before = alice_provider
             .get_free_dot_balance_for_id(bob_account_id.clone())
             .await
@@ -472,10 +536,7 @@ mod tests {
             .await
             .expect("Funding the account failed");
 
-        let bob_funds_after = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id)
-            .await
-            .unwrap();
+        let bob_funds_after = alice_provider.get_free_dot_balance_for_id(bob_account_id).await.unwrap();
         assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
     }
 
@@ -484,7 +545,7 @@ mod tests {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
 
-        let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
+        let bob_account_id: AccountId = [3; 32].into();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
         let staked_relayer_allowance_dot: u128 = 500;
@@ -525,7 +586,7 @@ mod tests {
 
         assert_err!(
             fund_account(&Arc::from(alice_provider.clone()), req, store, allowances).await,
-            Error::FaucetOveruseError
+            Error::FaucetError
         );
     }
 
@@ -538,6 +599,8 @@ mod tests {
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
         let staked_relayer_allowance_dot: u128 = 500;
+        let one_dot: u128 = 10_000_000_000;
+        let drain_account_id: AccountId = [3; 32].into();
 
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
@@ -549,7 +612,18 @@ mod tests {
         bob_provider.register_vault(100, dummy_public_key()).await.unwrap();
 
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
-        let bob_funds_before = alice_provider
+
+        // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding
+        let bob_prefunded_amount = bob_provider
+            .get_free_dot_balance_for_id(bob_account_id.clone())
+            .await
+            .unwrap();
+        bob_provider
+            .transfer_to(drain_account_id, bob_prefunded_amount - one_dot)
+            .await
+            .expect("Unable to transfer funds");
+
+        let bob_funds_before = bob_provider
             .get_free_dot_balance_for_id(bob_account_id.clone())
             .await
             .unwrap();
@@ -581,6 +655,8 @@ mod tests {
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
         let staked_relayer_allowance_dot: u128 = 500;
+        let one_dot: u128 = 10_000_000_000;
+        let drain_account_id: AccountId = [3; 32].into();
 
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
@@ -592,6 +668,16 @@ mod tests {
         bob_provider.register_vault(100, dummy_public_key()).await.unwrap();
 
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+        // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding
+        let bob_prefunded_amount = bob_provider
+            .get_free_dot_balance_for_id(bob_account_id.clone())
+            .await
+            .unwrap();
+        bob_provider
+            .transfer_to(drain_account_id, bob_prefunded_amount - one_dot)
+            .await
+            .expect("Unable to transfer funds");
+
         let bob_funds_before = alice_provider
             .get_free_dot_balance_for_id(bob_account_id.clone())
             .await
@@ -621,7 +707,7 @@ mod tests {
 
         assert_err!(
             fund_account(&Arc::from(alice_provider.clone()), req, store, allowances).await,
-            Error::FaucetOveruseError
+            Error::FaucetError
         );
     }
 }

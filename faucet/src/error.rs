@@ -20,8 +20,8 @@ pub enum Error {
     KvError(#[from] KvError),
     #[error("Error parsing datetime string: {0}")]
     DatetimeParsingError(#[from] ParseError),
-    #[error("Too many faucet requests")]
-    FaucetOveruseError,
+    #[error("Funding error")]
+    FaucetError,
     #[error("Mathematical operation error")]
     MathError,
     #[error("No faucet allowance set for account type")]
