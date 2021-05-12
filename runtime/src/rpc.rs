@@ -110,10 +110,14 @@ impl PolkaBtcProvider {
             Ok(val) => Ok(val),
             Err(SubxtError::Rpc(RequestError::Request(JsonRpcError {
                 code: JsonRpcErrorCode::MethodError(POOL_INVALID_TX),
+                message,
                 ..
             }))) => {
+                // without parsing the error message there is no way
+                // to know why the transaction is invalid, so always
+                // refresh nonce and propogate message to caller
                 self.refresh_nonce().await?;
-                Err(Error::OutdatedTransaction)
+                Err(Error::InvalidTransaction(message))
             }
             Err(err) => Err(err.into()),
         }

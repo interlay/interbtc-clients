@@ -156,7 +156,7 @@ impl Request {
                         || provider.register_address(*address),
                         |result| match result {
                             Ok(ok) => Ok(ok),
-                            Err(err @ RuntimeError::OutdatedTransaction) => Err(RetryPolicy::Skip(err)),
+                            Err(err @ RuntimeError::InvalidTransaction(_)) => Err(RetryPolicy::Skip(err)),
                             Err(err) => Err(RetryPolicy::Throw(err)),
                         },
                     )
