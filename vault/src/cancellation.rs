@@ -269,7 +269,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + Clone> CancellationScheduler<P
 
                 for request in cancellable_requests {
                     match T::cancel_request(&self.provider, request.id).await {
-                        Ok(_) => tracing::info!("Canceled {} #{}", T::TYPE_NAME, request.id),
+                        Ok(_) => tracing::info!("Canceled {} #{:?}", T::TYPE_NAME, request.id),
                         Err(e) => {
                             // failed to cancel; get up-to-date request list in next iteration
                             tracing::error!("Failed to cancel {}: {}", T::TYPE_NAME, e);

@@ -370,6 +370,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
 
         Ok(LockedTransaction::new(
             transaction,
+            Default::default(),
             Some(self.transaction_creation_lock.clone().lock_owned().await),
         ))
     }

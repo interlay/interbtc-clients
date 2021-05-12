@@ -32,8 +32,6 @@ async fn start() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
     opts.service.logging_format.init_subscriber();
 
-    tracing::info!("Command line arguments: {:?}", opts.clone());
-
     let (pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(pair);
 

@@ -7,6 +7,7 @@ use runtime::{
     PolkaBtcVault, StakedRelayerPallet, VaultRegistryPallet,
 };
 use service::Error as ServiceError;
+use sp_core::crypto::Ss58Codec;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 
@@ -77,7 +78,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         raw_tx: Vec<u8>,
         proof: Vec<u8>,
     ) -> Result<(), Error> {
-        tracing::info!("Found tx from vault {}", vault_id);
+        tracing::info!("Found tx from vault {}", vault_id.to_ss58check());
         // check if matching redeem or replace request
         if self
             .btc_parachain
@@ -149,9 +150,9 @@ pub async fn listen_for_wallet_updates(
         .on_event::<RegisterAddressEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
                 tracing::info!(
-                    "Added new btc address {} for vault {}",
+                    "Added new btc address {:?} for vault {}",
                     event.btc_address,
-                    event.vault_id
+                    event.vault_id.to_ss58check()
                 );
                 vaults.write(event.btc_address, event.vault_id).await;
             },
@@ -170,7 +171,7 @@ pub async fn listen_for_vaults_registered(
             |event| async {
                 match btc_parachain.get_vault(event.account_id).await {
                     Ok(vault) => {
-                        tracing::info!("Vault registered: {}", vault.id);
+                        tracing::info!("Vault registered: {}", vault.id.to_ss58check());
                         vaults.add_vault(vault).await;
                     }
                     Err(err) => tracing::error!("Error getting vault: {}", err.to_string()),

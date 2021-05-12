@@ -32,6 +32,7 @@ pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                 let btc_rpc = btc_rpc.clone();
                 // Spawn a new task so that we handle these events concurrently
                 tokio::spawn(async move {
+                    tracing::info!("Executing refund #{:?}", event.refund_id);
                     // prepare the action that will be executed after the bitcoin transfer
                     let request = Request::from_refund_request_event(&event);
                     let result = request.pay_and_execute(provider, btc_rpc, num_confirmations).await;
