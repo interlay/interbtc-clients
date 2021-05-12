@@ -203,7 +203,7 @@ impl Request {
             |result| match result {
                 Ok(ok) => Ok(ok),
                 Err(err) if err.is_commit_period_expired() => Err(RetryPolicy::Throw(err)),
-                Err(err) if err.is_rpc_error() => Err(RetryPolicy::Throw(err)),
+                Err(err) if err.is_rpc_disconnect_error() => Err(RetryPolicy::Throw(err)),
                 Err(err) => Err(RetryPolicy::Skip(err)),
             },
         )

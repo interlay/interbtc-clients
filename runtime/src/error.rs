@@ -91,6 +91,13 @@ impl Error {
         )
     }
 
+    pub fn is_rpc_disconnect_error(&self) -> bool {
+        matches!(
+            self,
+            Error::SubxtError(SubxtError::Rpc(JsonRpseeError::RestartNeeded(_)))
+        )
+    }
+
     pub fn is_rpc_error(&self) -> bool {
         matches!(self, Error::SubxtError(SubxtError::Rpc(_)))
     }
