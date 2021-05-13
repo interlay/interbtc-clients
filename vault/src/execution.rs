@@ -2,11 +2,7 @@ use crate::{error::Error, retry::*, BITCOIN_MAX_RETRYING_TIME};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use futures::{future, stream::StreamExt};
 use runtime::{
-    pallets::{
-        redeem::RequestRedeemEvent,
-        refund::RequestRefundEvent,
-        replace::{AcceptReplaceEvent, AuctionReplaceEvent},
-    },
+    pallets::{redeem::RequestRedeemEvent, refund::RequestRefundEvent, replace::AcceptReplaceEvent},
     BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest,
     PolkaBtcRefundRequest, PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet,
     ReplacePallet, ReplaceRequestStatus, UtilFuncs, VaultRegistryPallet,
@@ -80,17 +76,6 @@ impl Request {
         Request {
             btc_address: request.btc_address,
             amount: request.amount_btc,
-            hash: request.replace_id,
-            btc_height: None,
-            request_type: RequestType::Replace,
-        }
-    }
-
-    /// Constructs a Request for the given AuctionReplaceEvent
-    pub fn from_auction_replace_event(request: &AuctionReplaceEvent<PolkaBtcRuntime>) -> Request {
-        Request {
-            btc_address: request.btc_address,
-            amount: request.btc_amount,
             hash: request.replace_id,
             btc_height: None,
             request_type: RequestType::Replace,
@@ -424,7 +409,6 @@ mod tests {
             async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;
             async fn get_required_collateral_for_issuing(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
-            async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, RuntimeError>;
         }
 
         #[async_trait]
@@ -459,13 +443,6 @@ mod tests {
                 &self,
                 old_vault: AccountId,
                 amount_btc: u128,
-                collateral: u128,
-                btc_address: BtcAddress,
-            ) -> Result<(), RuntimeError>;
-            async fn auction_replace(
-                &self,
-                old_vault: AccountId,
-                btc_amount: u128,
                 collateral: u128,
                 btc_address: BtcAddress,
             ) -> Result<(), RuntimeError>;

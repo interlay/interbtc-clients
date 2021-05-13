@@ -436,13 +436,6 @@ mod tests {
                 collateral: u128,
                 btc_address: BtcAddress,
             ) -> Result<(), RuntimeError>;
-            async fn auction_replace(
-                &self,
-                old_vault: AccountId,
-                btc_amount: u128,
-                collateral: u128,
-                btc_address: BtcAddress,
-            ) -> Result<(), RuntimeError>;
             async fn execute_replace(
                 &self,
                 replace_id: H256,

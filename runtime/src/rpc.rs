@@ -369,23 +369,6 @@ pub trait ReplacePallet {
         btc_address: BtcAddress,
     ) -> Result<(), Error>;
 
-    /// Auction forces vault replacement
-    ///
-    /// # Arguments
-    ///
-    /// * `&self` - sender of the transaction: the new vault
-    /// * `old_vault` - the old vault of the replacement request
-    /// * `btc_amount` - the btc amount to be transferred over from old to new
-    /// * `collateral` - the collateral to be transferred over from old to new
-    /// * `btc_address` - the address to send funds to
-    async fn auction_replace(
-        &self,
-        old_vault: AccountId,
-        btc_amount: u128,
-        collateral: u128,
-        btc_address: BtcAddress,
-    ) -> Result<(), Error>;
-
     /// Execute vault replacement
     ///
     /// # Arguments
@@ -427,7 +410,7 @@ pub trait ReplacePallet {
     /// Get a replace request from storage
     async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, Error>;
 
-    /// Gets the minimum btc amount for replace requests/auctions
+    /// Gets the minimum btc amount for replace requests
     async fn get_replace_dust_amount(&self) -> Result<u128, Error>;
 }
 
@@ -461,22 +444,6 @@ impl ReplacePallet for PolkaBtcProvider {
         self.with_unique_signer(|signer| async move {
             self.ext_client
                 .accept_replace_and_watch(&signer, old_vault, amount_btc, collateral, btc_address)
-                .await
-        })
-        .await?;
-        Ok(())
-    }
-
-    async fn auction_replace(
-        &self,
-        old_vault: AccountId,
-        btc_amount: u128,
-        collateral: u128,
-        btc_address: BtcAddress,
-    ) -> Result<(), Error> {
-        self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .auction_replace_and_watch(&signer, old_vault, btc_amount, collateral, btc_address)
                 .await
         })
         .await?;
@@ -1297,8 +1264,6 @@ pub trait VaultRegistryPallet {
     async fn get_required_collateral_for_issuing(&self, amount_btc: u128) -> Result<u128, Error>;
 
     async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, Error>;
-
-    async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, Error>;
 }
 
 #[async_trait]
@@ -1441,20 +1406,6 @@ impl VaultRegistryPallet for PolkaBtcProvider {
             .await?;
 
         Ok(result.amount)
-    }
-
-    /// Custom RPC that tests whether a vault is below the auction threshold.
-    ///
-    /// # Arguments
-    /// * `vault_id` - vault account to check
-    async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, Error> {
-        Ok(self
-            .rpc_client
-            .request(
-                "vaultRegistry_isVaultBelowAuctionThreshold",
-                Params::Array(vec![to_json_value(vault_id)?]),
-            )
-            .await?)
     }
 }
 

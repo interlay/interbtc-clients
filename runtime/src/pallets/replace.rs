@@ -33,16 +33,6 @@ pub struct AcceptReplaceCall<T: Replace> {
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct AuctionReplaceCall<T: Replace> {
-    pub old_vault: T::AccountId,
-    #[codec(compact)]
-    pub btc_amount: T::Issuing,
-    #[codec(compact)]
-    pub collateral: T::Backing,
-    pub btc_address: T::BtcAddress,
-}
-
-#[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct ExecuteReplaceCall<T: Replace> {
     pub replace_id: T::H256,
     pub merkle_proof: Vec<u8>,
@@ -83,18 +73,6 @@ pub struct ExecuteReplaceEvent<T: Replace> {
     pub replace_id: T::H256,
     pub old_vault_id: T::AccountId,
     pub new_vault_id: T::AccountId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct AuctionReplaceEvent<T: Replace> {
-    pub replace_id: T::H256,
-    pub old_vault_id: T::AccountId,
-    pub new_vault_id: T::AccountId,
-    pub btc_amount: T::Issuing,
-    pub collateral: T::Backing,
-    pub reward: T::Backing,
-    pub griefing_collateral: T::Backing,
-    pub btc_address: T::BtcAddress,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
