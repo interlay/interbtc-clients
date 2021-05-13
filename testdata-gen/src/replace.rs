@@ -3,36 +3,37 @@
 use crate::Error;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
-use runtime::{BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, ReplacePallet, UtilFuncs};
+use runtime::{AccountId, BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, ReplacePallet, UtilFuncs};
 use sp_core::H256;
 use std::{convert::TryInto, time::Duration};
 
-/// Request redeem of PolkaBTC
+/// Request redeem
 pub async fn request_replace(
     replace_prov: &PolkaBtcProvider,
     amount: u128,
     griefing_collateral: u128,
-) -> Result<H256, Error> {
-    let replace_id = replace_prov.request_replace(amount, griefing_collateral).await?;
-
+) -> Result<(), Error> {
+    replace_prov.request_replace(amount, griefing_collateral).await?;
     info!(
-        "Requested {:?} to replace {:?} PolkaBTC",
+        "Requested {:?} to replace {:?} tokens",
         replace_prov.get_account_id(),
         amount,
     );
-
-    Ok(replace_id)
+    Ok(())
 }
 
 pub async fn accept_replace(
     replace_prov: &PolkaBtcProvider,
     btc_rpc: &BitcoinCore,
-    replace_id: H256,
+    old_vault: AccountId,
+    amount_btc: u128,
     collateral: u128,
 ) -> Result<(), Error> {
     info!("Collateral: {}", collateral);
     let address = btc_rpc.get_new_address().await?;
-    replace_prov.accept_replace(replace_id, collateral, address).await?;
+    replace_prov
+        .accept_replace(old_vault, amount_btc, collateral, address)
+        .await?;
     Ok(())
 }
 
@@ -46,7 +47,7 @@ pub async fn execute_replace(
 
     let tx_metadata = btc_rpc
         .send_to_address::<BtcAddress>(
-            replace_request.btc_address.unwrap(),
+            replace_request.btc_address,
             replace_request.amount.try_into().unwrap(),
             Some(replace_id),
             Duration::from_secs(15 * 60),
@@ -59,18 +60,13 @@ pub async fn execute_replace(
         .await?;
 
     replace_prov
-        .execute_replace(
-            replace_id,
-            H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
-            tx_metadata.proof,
-            tx_metadata.raw_tx,
-        )
+        .execute_replace(replace_id, tx_metadata.proof, tx_metadata.raw_tx)
         .await?;
 
     Ok(())
 }
 
-/// Set replace period of PolkaBTC
+/// Set replace period
 pub async fn set_replace_period(replace_prov: &PolkaBtcProvider, period: u32) -> Result<(), Error> {
     replace_prov.set_replace_period(period).await?;
 

@@ -21,8 +21,8 @@ pub(crate) async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync
     let requests = requests?;
 
     // find the height of bitcoin chain corresponding to the earliest open_time
-    let btc_start_height = match requests.iter().map(|(_, request)| request.opentime).min() {
-        Some(x) => btc_parachain.get_blockchain_height_at(x).await?,
+    let btc_start_height = match requests.iter().map(|(_, request)| request.btc_height).min() {
+        Some(x) => x,
         None => bitcoin_core.get_block_count().await? as u32, // no open issues, start at current height
     };
 
@@ -108,8 +108,8 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
             }
             Some(transferred) => {
                 let transferred = transferred as u128;
-                if transferred == issue.amount {
-                    tracing::info!("Found tx for issue with id {}", issue_id);
+                if transferred == issue.amount + issue.fee {
+                    tracing::info!("Found tx for issue with id {:?}", issue_id);
                 } else {
                     tracing::info!(
                         "Found tx for issue with id {}. Expected amount = {}, got {}",
@@ -139,14 +139,11 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
                 let raw_tx = bitcoin_core.get_raw_tx(&txid, &block_hash).await?;
                 let proof = bitcoin_core.get_proof(txid, &block_hash).await?;
 
-                tracing::info!("Executing issue with id {}", issue_id);
-                match btc_parachain
-                    .execute_issue(issue_id, H256Le::from_bytes_le(&txid.as_hash()), proof, raw_tx)
-                    .await
-                {
+                tracing::info!("Executing issue #{:?}", issue_id);
+                match btc_parachain.execute_issue(issue_id, proof, raw_tx).await {
                     Ok(_) => (),
                     Err(err) if err.is_issue_completed() => {
-                        tracing::info!("Issue {} has already been completed", issue_id);
+                        tracing::info!("Issue #{} has already been completed", issue_id);
                     }
                     Err(err) => return Err(err.into()),
                 };
@@ -170,7 +167,7 @@ async fn add_new_deposit_key<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     // input issue id
     hasher.input(secure_id.as_bytes());
     bitcoin_core
-        .add_new_deposit_key(public_key, hasher.result().as_slice().to_vec())
+        .add_new_deposit_key(public_key.0, hasher.result().as_slice().to_vec())
         .await?;
     Ok(())
 }
@@ -209,7 +206,7 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
                 }
 
                 tracing::trace!(
-                    "watching issue #{} for payment to {}",
+                    "watching issue #{} for payment to {:?}",
                     event.issue_id,
                     event.vault_btc_address
                 );

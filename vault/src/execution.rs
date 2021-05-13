@@ -2,14 +2,10 @@ use crate::{error::Error, retry::*, BITCOIN_MAX_RETRYING_TIME};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use futures::{future, stream::StreamExt};
 use runtime::{
-    pallets::{
-        redeem::RequestRedeemEvent,
-        refund::RequestRefundEvent,
-        replace::{AcceptReplaceEvent, AuctionReplaceEvent},
-    },
+    pallets::{redeem::RequestRedeemEvent, refund::RequestRefundEvent, replace::AcceptReplaceEvent},
     BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest,
     PolkaBtcRefundRequest, PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet,
-    ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    ReplacePallet, ReplaceRequestStatus, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H256;
 use std::collections::HashMap;
@@ -17,7 +13,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct Request {
     hash: H256,
-    open_time: Option<u32>,
+    btc_height: Option<u32>,
     amount: u128,
     btc_address: BtcAddress,
     request_type: RequestType,
@@ -35,7 +31,7 @@ impl Request {
     fn from_redeem_request(hash: H256, request: PolkaBtcRedeemRequest) -> Request {
         Request {
             hash,
-            open_time: Some(request.opentime),
+            btc_height: Some(request.btc_height),
             amount: request.amount_btc,
             btc_address: request.btc_address,
             request_type: RequestType::Redeem,
@@ -43,21 +39,21 @@ impl Request {
     }
 
     /// Constructs a Request for the given PolkaBtcReplaceRequest
-    fn from_replace_request(hash: H256, request: PolkaBtcReplaceRequest) -> Option<Request> {
-        Some(Request {
+    fn from_replace_request(hash: H256, request: PolkaBtcReplaceRequest) -> Request {
+        Request {
             hash,
-            open_time: Some(request.open_time),
+            btc_height: Some(request.btc_height),
             amount: request.amount,
-            btc_address: request.btc_address?,
+            btc_address: request.btc_address,
             request_type: RequestType::Replace,
-        })
+        }
     }
 
     /// Constructs a Request for the given PolkaBtcRefundRequest
     fn from_refund_request(hash: H256, request: PolkaBtcRefundRequest) -> Request {
         Request {
             hash,
-            open_time: None,
+            btc_height: None,
             amount: request.amount_btc,
             btc_address: request.btc_address,
             request_type: RequestType::Refund,
@@ -70,7 +66,7 @@ impl Request {
             btc_address: request.btc_address,
             amount: request.amount_polka_btc,
             hash: request.refund_id,
-            open_time: None,
+            btc_height: None,
             request_type: RequestType::Refund,
         }
     }
@@ -81,18 +77,7 @@ impl Request {
             btc_address: request.btc_address,
             amount: request.amount_btc,
             hash: request.replace_id,
-            open_time: None,
-            request_type: RequestType::Replace,
-        }
-    }
-
-    /// Constructs a Request for the given AuctionReplaceEvent
-    pub fn from_auction_replace_event(request: &AuctionReplaceEvent<PolkaBtcRuntime>) -> Request {
-        Request {
-            btc_address: request.btc_address,
-            amount: request.btc_amount,
-            hash: request.replace_id,
-            open_time: None,
+            btc_height: None,
             request_type: RequestType::Replace,
         }
     }
@@ -103,7 +88,7 @@ impl Request {
             btc_address: request.user_btc_address,
             amount: request.amount_polka_btc,
             hash: request.redeem_id,
-            open_time: None,
+            btc_height: None,
             request_type: RequestType::Redeem,
         }
     }
@@ -123,17 +108,25 @@ impl Request {
     }
 
     /// Make a bitcoin transfer to fulfil the request
+    #[tracing::instrument(
+        name = "transfer_btc",
+        skip(self, provider, btc_rpc),
+        fields(
+            request_type = ?self.request_type,
+            request_id = ?self.hash,
+        )
+    )]
     async fn transfer_btc<B: BitcoinCoreApi + Clone, P: VaultRegistryPallet + UtilFuncs + Clone + Send + Sync>(
         &self,
         provider: &P,
         btc_rpc: B,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
-        tracing::info!("Sending bitcoin to {}", self.btc_address);
-
         let tx = btc_rpc
             .create_transaction(self.btc_address, self.amount as u64, Some(self.hash))
             .await?;
+        let recipient = tx.recipient.clone();
+        tracing::info!("Sending bitcoin to {}", recipient);
 
         let return_to_self_addresses = tx
             .transaction
@@ -150,13 +143,13 @@ impl Request {
                 let vault_id = provider.get_account_id().clone();
                 let wallet = provider.get_vault(vault_id).await?.wallet;
                 if !wallet.has_btc_address(&address) {
-                    tracing::info!("Registering address {}", address);
+                    tracing::info!("Registering address {:?}", address);
                     // retry address registration if tx was outdated
                     notify_retry(
                         || provider.register_address(*address),
                         |result| match result {
                             Ok(ok) => Ok(ok),
-                            Err(err @ RuntimeError::InvalidTransaction(_)) => Err(RetryPolicy::Skip(err)),
+                            Err(err @ RuntimeError::InvalidTransaction) => Err(RetryPolicy::Skip(err)),
                             Err(err) => Err(RetryPolicy::Throw(err)),
                         },
                     )
@@ -171,7 +164,7 @@ impl Request {
             .wait_for_transaction_metadata(txid, BITCOIN_MAX_RETRYING_TIME, num_confirmations)
             .await?;
 
-        tracing::info!("Bitcoin successfully sent to {}", self.btc_address);
+        tracing::info!("Bitcoin successfully sent to {}", recipient);
         Ok(tx_metadata)
     }
 
@@ -195,7 +188,6 @@ impl Request {
                 (execute)(
                     &provider,
                     self.hash,
-                    H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
                     tx_metadata.proof.clone(),
                     tx_metadata.raw_tx.clone(),
                 )
@@ -237,8 +229,8 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
 
     let open_replaces = replace_requests
         .into_iter()
-        .filter(|(_, request)| !request.completed && !request.cancelled)
-        .filter_map(|(hash, request)| Request::from_replace_request(hash, request));
+        .filter(|(_, request)| request.status == ReplaceRequestStatus::Pending)
+        .map(|(hash, request)| Request::from_replace_request(hash, request));
 
     let open_refunds = refund_requests
         .into_iter()
@@ -252,13 +244,13 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         .map(|x| (x.hash, x))
         .collect::<HashMap<_, _>>();
 
-    // find the height of bitcoin chain corresponding to the earliest open_time
+    // find the height of bitcoin chain corresponding to the earliest btc_height
     let btc_start_height = match open_requests
         .iter()
-        .map(|(_, request)| request.open_time.unwrap_or(u32::MAX))
+        .map(|(_, request)| request.btc_height.unwrap_or(u32::MAX))
         .min()
     {
-        Some(x) => provider.get_blockchain_height_at(x).await?,
+        Some(x) => x,
         None => return Ok(()), // the iterator is empty so we have nothing to do
     };
 
@@ -273,7 +265,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
             open_requests.retain(|&key, _| key != request.hash);
 
             tracing::info!(
-                "{:?} request #{} has valid bitcoin payment - processing...",
+                "{:?} request #{:?} has valid bitcoin payment - processing...",
                 request.request_type,
                 request.hash
             );
@@ -309,7 +301,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
 
                         match request.execute(provider.clone(), tx_metadata).await {
                             Ok(_) => {
-                                tracing::info!("Executed request #{}", request.hash);
+                                tracing::info!("Executed request #{:?}", request.hash);
                             }
                             Err(e) => tracing::error!("Failed to execute request #{}: {}", request.hash, e),
                         }
@@ -335,19 +327,19 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         let btc_rpc = btc_rpc.clone();
         tokio::spawn(async move {
             tracing::info!(
-                "{:?} request #{} found without bitcoin payment - processing...",
+                "{:?} request #{:?} found without bitcoin payment - processing...",
                 request.request_type,
                 request.hash
             );
 
             match request.pay_and_execute(provider, btc_rpc, num_confirmations).await {
                 Ok(_) => tracing::info!(
-                    "{:?} request #{} successfully executed",
+                    "{:?} request #{:?} successfully executed",
                     request.request_type,
                     request.hash
                 ),
                 Err(e) => tracing::info!(
-                    "{:?} request #{} failed to process: {}",
+                    "{:?} request #{:?} failed to process: {}",
                     request.request_type,
                     request.hash,
                     e
@@ -403,7 +395,6 @@ mod tests {
         #[async_trait]
         pub trait UtilFuncs {
             async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
-            async fn get_blockchain_height_at(&self, parachain_height: u32) -> Result<u32, RuntimeError>;
             fn get_account_id(&self) -> &AccountId;
         }
 
@@ -416,9 +407,8 @@ mod tests {
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
             async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-            async fn get_required_collateral_for_polkabtc(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
+            async fn get_required_collateral_for_issuing(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
-            async fn is_vault_below_auction_threshold(&self, vault_id: AccountId) -> Result<bool, RuntimeError>;
         }
 
         #[async_trait]
@@ -432,7 +422,6 @@ mod tests {
             async fn execute_redeem(
                 &self,
                 redeem_id: H256,
-                tx_id: H256Le,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -448,21 +437,18 @@ mod tests {
 
         #[async_trait]
         pub trait ReplacePallet {
-            async fn request_replace(&self, amount: u128, griefing_collateral: u128)
-                -> Result<H256, RuntimeError>;
-            async fn withdraw_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
-            async fn accept_replace(&self, replace_id: H256, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-            async fn auction_replace(
+            async fn request_replace(&self, amount: u128, griefing_collateral: u128) -> Result<(), RuntimeError>;
+            async fn withdraw_replace(&self, amount: u128) -> Result<(), RuntimeError>;
+            async fn accept_replace(
                 &self,
                 old_vault: AccountId,
-                btc_amount: u128,
+                amount_btc: u128,
                 collateral: u128,
                 btc_address: BtcAddress,
             ) -> Result<(), RuntimeError>;
             async fn execute_replace(
                 &self,
                 replace_id: H256,
-                tx_id: H256Le,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -486,7 +472,6 @@ mod tests {
             async fn execute_refund(
                 &self,
                 refund_id: H256,
-                tx_id: H256Le,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
@@ -575,7 +560,7 @@ mod tests {
     #[tokio::test]
     async fn should_pay_and_execute_redeem() {
         let mut provider = MockProvider::default();
-        provider.expect_execute_redeem().times(1).returning(|_, _, _, _| Ok(()));
+        provider.expect_execute_redeem().times(1).returning(|_, _, _| Ok(()));
 
         let mut btc_rpc = MockBitcoin::default();
         btc_rpc.expect_create_transaction::<BtcAddress>().returning(|_, _, _| {
@@ -586,6 +571,7 @@ mod tests {
                     input: vec![],
                     output: vec![],
                 },
+                Default::default(),
                 None,
             ))
         });
@@ -606,7 +592,7 @@ mod tests {
             amount: 100,
             btc_address: BtcAddress::P2SH(H160::from_slice(&[1; 20])),
             hash: H256::from_slice(&[1; 32]),
-            open_time: None,
+            btc_height: None,
             request_type: RequestType::Redeem,
         };
 
@@ -616,10 +602,7 @@ mod tests {
     #[tokio::test]
     async fn should_pay_and_execute_replace() {
         let mut provider = MockProvider::default();
-        provider
-            .expect_execute_replace()
-            .times(1)
-            .returning(|_, _, _, _| Ok(()));
+        provider.expect_execute_replace().times(1).returning(|_, _, _| Ok(()));
 
         let mut btc_rpc = MockBitcoin::default();
         btc_rpc.expect_create_transaction::<BtcAddress>().returning(|_, _, _| {
@@ -630,6 +613,7 @@ mod tests {
                     input: vec![],
                     output: vec![],
                 },
+                Default::default(),
                 None,
             ))
         });
@@ -650,7 +634,7 @@ mod tests {
             amount: 100,
             btc_address: BtcAddress::P2SH(H160::from_slice(&[1; 20])),
             hash: H256::from_slice(&[1; 32]),
-            open_time: None,
+            btc_height: None,
             request_type: RequestType::Replace,
         };
 

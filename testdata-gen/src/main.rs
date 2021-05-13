@@ -17,7 +17,7 @@ use runtime::{
     AccountId, BtcAddress, DotBalancesPallet, ErrorCode as PolkaBtcErrorCode, ExchangeRateOraclePallet, FeePallet,
     FixedPointNumber,
     FixedPointTraits::*,
-    FixedU128, H256Le, IssueRequestStatus, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, StakedRelayerPallet,
+    FixedU128, H256Le, IssueRequestStatus, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet,
     StatusCode as PolkaBtcStatusCode, TimestampPallet,
 };
 use sp_core::H256;
@@ -115,11 +115,11 @@ enum SubCommand {
     GetCurrentTime,
     /// Register a new vault using the global keyring.
     RegisterVault(RegisterVaultInfo),
-    /// Request issuance of PolkaBTC and transfer to vault.
+    /// Request issuance  and transfer to vault.
     RequestIssue(RequestIssueInfo),
     /// Send BTC to an address.
     SendBitcoin(SendBitcoinInfo),
-    /// Request that PolkaBTC be burned to redeem BTC.
+    /// Request that issued tokens be burned to redeem BTC.
     RequestRedeem(RequestRedeemInfo),
     /// Send BTC to user, must be called by vault.
     ExecuteRedeem(ExecuteRedeemInfo),
@@ -137,8 +137,6 @@ enum SubCommand {
     SetRedeemPeriod(SetRedeemPeriodInfo),
     /// Set replace period.
     SetReplacePeriod(SetReplacePeriodInfo),
-    /// Set relayer maturity period.
-    SetRelayerMaturityPeriod(SetRelayerMaturityPeriodInfo),
     /// Transfer DOT collateral
     FundAccounts(FundAccountsInfo),
 }
@@ -248,7 +246,7 @@ struct RegisterVaultInfo {
 
 #[derive(Clap)]
 struct RequestIssueInfo {
-    /// Amount of PolkaBTC to issue.
+    /// Amount  to issue.
     #[clap(long, default_value = "100000")]
     issue_amount: u128,
 
@@ -300,16 +298,10 @@ struct SetReplacePeriodInfo {
     #[clap(long)]
     period: u32,
 }
-#[derive(Clap)]
-struct SetRelayerMaturityPeriodInfo {
-    /// Duration of the relayer bonding period.
-    #[clap(long)]
-    period: u32,
-}
 
 #[derive(Clap)]
 struct RequestRedeemInfo {
-    /// Amount of PolkaBTC to redeem.
+    /// Amount  to redeem.
     #[clap(long, default_value = "500")]
     redeem_amount: u128,
 
@@ -331,7 +323,7 @@ struct ExecuteRedeemInfo {
 
 #[derive(Clap)]
 struct RequestReplaceInfo {
-    /// Amount of PolkaBTC to issue.
+    /// Amount  to issue.
     #[clap(long, default_value = "100000")]
     replace_amount: u128,
 
@@ -342,12 +334,16 @@ struct RequestReplaceInfo {
 
 #[derive(Clap)]
 struct AcceptReplaceInfo {
-    /// Replace id for the replace request.
+    /// Old vault to replace.
     #[clap(long)]
-    replace_id: H256,
+    old_vault: AccountId,
+
+    /// Amount  to replace.
+    #[clap(long)]
+    amount_btc: u128,
 
     /// Collateral used to back replace.
-    #[clap(long, default_value = "10000")]
+    #[clap(long)]
     collateral: u128,
 }
 
@@ -625,12 +621,11 @@ async fn main() -> Result<(), Error> {
             .await?;
         }
         SubCommand::RequestReplace(info) => {
-            let replace_id = replace::request_replace(&provider, info.replace_amount, info.griefing_collateral).await?;
-            println!("{}", hex::encode(replace_id.as_bytes()));
+            replace::request_replace(&provider, info.replace_amount, info.griefing_collateral).await?;
         }
         SubCommand::AcceptReplace(info) => {
             let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
-            replace::accept_replace(&provider, &btc_rpc, info.replace_id, info.collateral).await?;
+            replace::accept_replace(&provider, &btc_rpc, info.old_vault, info.amount_btc, info.collateral).await?;
         }
         SubCommand::ExecuteReplace(info) => {
             let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
@@ -687,9 +682,6 @@ async fn main() -> Result<(), Error> {
         }
         SubCommand::SetReplacePeriod(info) => {
             replace::set_replace_period(&provider, info.period).await?;
-        }
-        SubCommand::SetRelayerMaturityPeriod(info) => {
-            provider.set_maturity_period(info.period).await?;
         }
         SubCommand::FundAccounts(info) => {
             let provider = &provider;

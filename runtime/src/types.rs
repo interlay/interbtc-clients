@@ -5,7 +5,7 @@ use substrate_subxt::{system::System, PairSigner};
 use crate::{
     pallets::{
         issue::RequestIssueEvent, Core, IssueRequest, RedeemRequest, RefundRequest, ReplaceRequest, RichBlockHeader,
-        StatusUpdate, Vault,
+        Vault,
     },
     PolkaBtcRuntime,
 };
@@ -21,22 +21,20 @@ pub type PolkaBtcBalance = <PolkaBtcRuntime as Core>::Balance;
 pub type PolkaBtcBlock = SignedBlock<Block<PolkaBtcHeader, <PolkaBtcRuntime as System>::Extrinsic>>;
 
 pub type PolkaBtcVault =
-    Vault<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC, <PolkaBtcRuntime as Core>::DOT>;
+    Vault<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::Issuing, <PolkaBtcRuntime as Core>::Backing>;
 
 pub type PolkaBtcIssueRequest =
-    IssueRequest<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC, <PolkaBtcRuntime as Core>::DOT>;
+    IssueRequest<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::Issuing, <PolkaBtcRuntime as Core>::Backing>;
 
 pub type PolkaBtcRequestIssueEvent = RequestIssueEvent<PolkaBtcRuntime>;
 
 pub type PolkaBtcRedeemRequest =
-    RedeemRequest<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC, <PolkaBtcRuntime as Core>::DOT>;
+    RedeemRequest<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::Issuing, <PolkaBtcRuntime as Core>::Backing>;
 
-pub type PolkaBtcRefundRequest = RefundRequest<AccountId, <PolkaBtcRuntime as Core>::PolkaBTC>;
+pub type PolkaBtcRefundRequest = RefundRequest<AccountId, <PolkaBtcRuntime as Core>::Issuing>;
 
 pub type PolkaBtcReplaceRequest =
-    ReplaceRequest<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::PolkaBTC, <PolkaBtcRuntime as Core>::DOT>;
-
-pub type PolkaBtcStatusUpdate = StatusUpdate<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::DOT>;
+    ReplaceRequest<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::Issuing, <PolkaBtcRuntime as Core>::Backing>;
 
 pub type PolkaBtcRichBlockHeader = RichBlockHeader<AccountId, BlockNumber>;
 

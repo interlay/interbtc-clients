@@ -1,7 +1,7 @@
 use super::Core;
 use crate::BitcoinBlockHeight;
+use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use parity_scale_codec::{Decode, Encode};
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Event, Store};
 

@@ -1,5 +1,5 @@
-use crate::{error::Error, utils};
-use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _, Txid};
+use crate::error::Error;
+use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _};
 use futures::stream::{iter, StreamExt};
 use runtime::{
     pallets::vault_registry::{RegisterAddressEvent, RegisterVaultEvent},
@@ -7,6 +7,7 @@ use runtime::{
     PolkaBtcVault, StakedRelayerPallet, VaultRegistryPallet,
 };
 use service::Error as ServiceError;
+use sp_core::crypto::Ss58Codec;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 
@@ -70,14 +71,8 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         }
     }
 
-    async fn report_invalid(
-        &self,
-        vault_id: AccountId,
-        tx_id: &Txid,
-        raw_tx: Vec<u8>,
-        proof: Vec<u8>,
-    ) -> Result<(), Error> {
-        tracing::info!("Found tx from vault {}", vault_id);
+    async fn report_invalid(&self, vault_id: AccountId, raw_tx: Vec<u8>, proof: Vec<u8>) -> Result<(), Error> {
+        tracing::info!("Found tx from vault {}", vault_id.to_ss58check());
         // check if matching redeem or replace request
         if self
             .btc_parachain
@@ -85,9 +80,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
             .await?
         {
             tracing::info!("Transaction is invalid");
-            self.btc_parachain
-                .report_vault_theft(vault_id, H256Le::from_bytes_le(&tx_id.as_hash()), proof, raw_tx)
-                .await?;
+            self.btc_parachain.report_vault_theft(vault_id, proof, raw_tx).await?;
         }
 
         Ok(())
@@ -114,22 +107,21 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         let vault_ids = filter_matching_vaults(addresses, &self.vaults).await;
 
         for vault_id in vault_ids {
-            self.report_invalid(vault_id, &tx_id, raw_tx.clone(), proof.clone())
-                .await?;
+            self.report_invalid(vault_id, raw_tx.clone(), proof.clone()).await?;
         }
 
         Ok(())
     }
 
     pub async fn process_blocks(&mut self) -> Result<(), RuntimeError> {
-        utils::wait_until_active(&self.btc_parachain, self.delay).await;
-
         let num_confirmations = self.btc_parachain.get_bitcoin_confirmations().await?;
 
         let mut stream =
             bitcoin::stream_in_chain_transactions(self.bitcoin_core.clone(), self.btc_height, num_confirmations).await;
 
         while let Some(Ok((block_hash, tx))) = stream.next().await {
+            tracing::debug!("Checking transaction");
+
             if let Err(err) = self.check_transaction(tx, block_hash, num_confirmations).await {
                 tracing::error!("Failed to check transaction: {}", err);
             }
@@ -149,9 +141,9 @@ pub async fn listen_for_wallet_updates(
         .on_event::<RegisterAddressEvent<PolkaBtcRuntime>, _, _, _>(
             |event| async move {
                 tracing::info!(
-                    "Added new btc address {} for vault {}",
+                    "Added new btc address {:?} for vault {}",
                     event.btc_address,
-                    event.vault_id
+                    event.vault_id.to_ss58check()
                 );
                 vaults.write(event.btc_address, event.vault_id).await;
             },
@@ -170,7 +162,7 @@ pub async fn listen_for_vaults_registered(
             |event| async {
                 match btc_parachain.get_vault(event.account_id).await {
                     Ok(vault) => {
-                        tracing::info!("Vault registered: {}", vault.id);
+                        tracing::info!("Vault registered: {}", vault.id.to_ss58check());
                         vaults.add_vault(vault).await;
                     }
                     Err(err) => tracing::error!("Error getting vault: {}", err.to_string()),
@@ -195,11 +187,11 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::{
         Block, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress, PrivateKey,
-        Transaction, TransactionMetadata, PUBLIC_KEY_SIZE,
+        Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
-        AccountId, BitcoinBlockHeight, BlockNumber, Error as RuntimeError, ErrorCode, H256Le, PolkaBtcRichBlockHeader,
-        PolkaBtcStatusUpdate, RawBlockHeader, StatusCode,
+        AccountId, BitcoinBlockHeight, BlockNumber, Error as RuntimeError, H256Le, PolkaBtcRichBlockHeader,
+        RawBlockHeader,
     };
     use sp_core::{H160, H256};
     use sp_keyring::AccountKeyring;
@@ -208,46 +200,18 @@ mod tests {
         Provider {}
 
         #[async_trait]
-        trait StakedRelayerPallet {
-            async fn get_active_stake(&self) -> Result<u128, RuntimeError>;
-            async fn get_active_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
-            async fn get_inactive_stake_by_id(&self, account_id: AccountId) -> Result<u128, RuntimeError>;
+        pub trait StakedRelayerPallet {
+            async fn get_stake_of(&self, account_id: &AccountId) -> Result<u128, RuntimeError>;
             async fn register_staked_relayer(&self, stake: u128) -> Result<(), RuntimeError>;
             async fn deregister_staked_relayer(&self) -> Result<(), RuntimeError>;
-            async fn suggest_status_update(
-                &self,
-                deposit: u128,
-                status_code: StatusCode,
-                add_error: Option<ErrorCode>,
-                remove_error: Option<ErrorCode>,
-                block_hash: Option<H256Le>,
-                message: String,
-            ) -> Result<(), RuntimeError>;
-            async fn vote_on_status_update(
-                &self,
-                status_update_id: u64,
-                approve: bool,
-            ) -> Result<(), RuntimeError>;
-            async fn get_status_update(&self, id: u64) -> Result<PolkaBtcStatusUpdate, RuntimeError>;
             async fn report_vault_theft(
                 &self,
                 vault_id: AccountId,
-                tx_id: H256Le,
                 merkle_proof: Vec<u8>,
                 raw_tx: Vec<u8>,
             ) -> Result<(), RuntimeError>;
-            async fn is_transaction_invalid(
-                &self,
-                vault_id: AccountId,
-                raw_tx: Vec<u8>,
-            ) -> Result<bool, RuntimeError>;
-            async fn set_maturity_period(&self, period: u32) -> Result<(), RuntimeError>;
-            async fn evaluate_status_update(&self, status_update_id: u64) -> Result<(), RuntimeError>;
-            async fn initialize_btc_relay(
-                &self,
-                header: RawBlockHeader,
-                height: BitcoinBlockHeight,
-            ) -> Result<(), RuntimeError>;
+            async fn is_transaction_invalid(&self, vault_id: AccountId, raw_tx: Vec<u8>) -> Result<bool, RuntimeError>;
+            async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), RuntimeError>;
             async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), RuntimeError>;
             async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), RuntimeError>;
         }
@@ -259,7 +223,9 @@ mod tests {
             async fn get_block_hash(&self, height: u32) -> Result<H256Le, RuntimeError>;
             async fn get_block_header(&self, hash: H256Le) -> Result<PolkaBtcRichBlockHeader, RuntimeError>;
             async fn get_bitcoin_confirmations(&self) -> Result<u32, RuntimeError>;
+            async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), RuntimeError>;
             async fn get_parachain_confirmations(&self) -> Result<BlockNumber, RuntimeError>;
+            async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), RuntimeError>;
             async fn wait_for_block_in_relay(
                 &self,
                 block_hash: H256Le,
@@ -371,7 +337,7 @@ mod tests {
         parachain
             .expect_report_vault_theft()
             .never()
-            .returning(|_, _, _, _| Ok(()));
+            .returning(|_, _, _| Ok(()));
 
         let monitor = VaultTheftMonitor::new(
             MockBitcoin::default(),
@@ -382,7 +348,7 @@ mod tests {
         );
 
         monitor
-            .report_invalid(AccountKeyring::Bob.to_account_id(), &Txid::default(), vec![], vec![])
+            .report_invalid(AccountKeyring::Bob.to_account_id(), vec![], vec![])
             .await
             .unwrap();
     }
@@ -391,10 +357,7 @@ mod tests {
     async fn test_report_invalid_transaction() {
         let mut parachain = MockProvider::default();
         parachain.expect_is_transaction_invalid().returning(|_, _| Ok(true));
-        parachain
-            .expect_report_vault_theft()
-            .once()
-            .returning(|_, _, _, _| Ok(()));
+        parachain.expect_report_vault_theft().once().returning(|_, _, _| Ok(()));
 
         let monitor = VaultTheftMonitor::new(
             MockBitcoin::default(),
@@ -405,7 +368,7 @@ mod tests {
         );
 
         monitor
-            .report_invalid(AccountKeyring::Bob.to_account_id(), &Txid::default(), vec![], vec![])
+            .report_invalid(AccountKeyring::Bob.to_account_id(), vec![], vec![])
             .await
             .unwrap();
     }

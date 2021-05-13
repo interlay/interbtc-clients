@@ -34,9 +34,20 @@ async fn test_getters() {
     let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
     set_exchange_rate(client.clone()).await;
 
-    assert_eq!(provider.get_free_dot_balance().await.unwrap(), 1 << 60);
-    assert_eq!(provider.get_parachain_status().await.unwrap(), StatusCode::Running);
-    assert!(provider.get_replace_dust_amount().await.unwrap() > 0);
+    tokio::join!(
+        async {
+            assert_eq!(provider.get_free_dot_balance().await.unwrap(), 1 << 60);
+        },
+        async {
+            assert_eq!(provider.get_parachain_status().await.unwrap(), StatusCode::Running);
+        },
+        async {
+            assert!(provider.get_replace_dust_amount().await.unwrap() > 0);
+        },
+        async {
+            assert!(provider.get_current_active_block_number().await.unwrap() > 0);
+        }
+    );
 }
 
 #[tokio::test]
