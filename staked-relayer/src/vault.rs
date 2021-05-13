@@ -120,7 +120,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
             bitcoin::stream_in_chain_transactions(self.bitcoin_core.clone(), self.btc_height, num_confirmations).await;
 
         while let Some(Ok((block_hash, tx))) = stream.next().await {
-            tracing::error!("Checking transactions!");
+            tracing::debug!("Checking transaction");
 
             if let Err(err) = self.check_transaction(tx, block_hash, num_confirmations).await {
                 tracing::error!("Failed to check transaction: {}", err);

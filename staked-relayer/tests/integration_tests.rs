@@ -23,7 +23,7 @@ use staked_relayer;
 use std::{sync::Arc, time::Duration};
 use tokio::time::timeout;
 
-const TIMEOUT: Duration = Duration::from_secs(600);
+const TIMEOUT: Duration = Duration::from_secs(45);
 
 #[tokio::test(threaded_scheduler)]
 async fn test_report_vault_theft_succeeds() {
