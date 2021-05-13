@@ -35,10 +35,6 @@ pub struct VaultServiceConfig {
     #[clap(long, conflicts_with("auto-register-with-collateral"))]
     pub auto_register_with_faucet_url: Option<String>,
 
-    /// Opt out of auctioning under-collateralized vaults.
-    #[clap(long)]
-    pub no_auto_auction: bool,
-
     /// Opt out of participation in replace requests.
     #[clap(long)]
     pub no_auto_replace: bool,
@@ -151,7 +147,7 @@ impl VaultService {
         }
 
         if let Ok(vault) = self.btc_parachain.get_vault(vault_id.clone()).await {
-            if !bitcoin_core.wallet_has_public_key(vault.wallet.public_key).await? {
+            if !bitcoin_core.wallet_has_public_key(vault.wallet.public_key.0).await? {
                 return Err(bitcoin::Error::MissingPublicKey.into());
             }
         }
@@ -191,6 +187,7 @@ impl VaultService {
         while startup_height == self.btc_parachain.get_current_chain_height().await? {
             delay_for(CHAIN_HEIGHT_POLLING_INTERVAL).await;
         }
+        tracing::info!("Got new block...");
 
         // issue handling
         let issue_set = Arc::new(IssueRequests::new());
@@ -279,11 +276,6 @@ impl VaultService {
             listen_for_execute_replace(self.btc_parachain.clone(), replace_event_tx.clone()),
         );
 
-        let auction_replace_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            listen_for_auction_replace(self.btc_parachain.clone(), bitcoin_core.clone(), num_confirmations),
-        );
-
         let mut replace_cancellation_scheduler =
             CancellationScheduler::new(self.btc_parachain.clone(), vault_id.clone());
 
@@ -309,16 +301,6 @@ impl VaultService {
                 .await?;
             Ok(())
         });
-
-        let third_party_collateral_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            monitor_collateral_of_vaults(
-                self.btc_parachain.clone(),
-                bitcoin_core.clone(),
-                replace_event_tx.clone(),
-                self.config.collateral_timeout_ms,
-            ),
-        );
 
         // redeem handling
         let redeem_listener = wait_or_shutdown(
@@ -357,7 +339,6 @@ impl VaultService {
         });
 
         // misc copies of variables to move into spawn closures
-        let no_auto_auction = self.config.no_auto_auction;
         let no_issue_execution = self.config.no_issue_execution;
 
         // starts all the tasks
@@ -386,14 +367,8 @@ impl VaultService {
             tokio::spawn(async move { request_replace_listener.await }),
             tokio::spawn(async move { accept_replace_listener.await }),
             tokio::spawn(async move { execute_replace_listener.await }),
-            tokio::spawn(async move { auction_replace_listener.await }),
             tokio::spawn(async move { replace_block_listener.await }),
             tokio::spawn(async move { replace_cancel_scheduler.await }),
-            tokio::spawn(async move {
-                if !no_auto_auction {
-                    let _ = third_party_collateral_listener.await;
-                }
-            }),
             // redeem handling
             tokio::spawn(async move { redeem_listener.await }),
             // refund handling

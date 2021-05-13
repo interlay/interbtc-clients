@@ -1,7 +1,7 @@
 use super::Core;
 use crate::RefundRequest;
+use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use parity_scale_codec::{Decode, Encode};
 use serde::Serialize;
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
@@ -13,17 +13,16 @@ pub trait Refund: Core {}
 pub struct RequestRefundEvent<T: Refund> {
     pub refund_id: T::H256,
     pub refundee: T::AccountId,
-    pub amount_polka_btc: T::PolkaBTC,
+    pub amount_polka_btc: T::Issuing,
     pub vault_id: T::AccountId,
     pub btc_address: T::BtcAddress,
     pub issue_id: T::H256,
-    pub fee: T::PolkaBTC,
+    pub fee: T::Issuing,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct ExecuteRefundCall<T: Refund> {
     pub refund_id: T::H256,
-    pub tx_id: T::H256Le,
     pub merkle_proof: Vec<u8>,
     pub raw_tx: Vec<u8>,
     pub _runtime: PhantomData<T>,
@@ -34,12 +33,12 @@ pub struct ExecuteRefundEvent<T: Refund> {
     pub refund_id: T::H256,
     pub refundee: T::AccountId,
     pub vault_id: T::AccountId,
-    pub amount: T::PolkaBTC,
+    pub amount: T::Issuing,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct RefundRequestsStore<T: Refund> {
-    #[store(returns = RefundRequest<T::AccountId, T::PolkaBTC>)]
+    #[store(returns = RefundRequest<T::AccountId, T::Issuing>)]
     pub _runtime: PhantomData<T>,
     pub refund_id: T::H256,
 }

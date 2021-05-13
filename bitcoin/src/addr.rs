@@ -1,6 +1,6 @@
 use crate::{
     secp256k1::SecretKey, Address, ConversionError, Error, Hash, Network, Payload, PubkeyHash, Script, ScriptHash,
-    WPubkeyHash,
+    WPubkeyHash, WScriptHash,
 };
 use sp_core::H160;
 use std::str::FromStr;
@@ -51,6 +51,7 @@ impl PartialAddress for polkabtc_bitcoin::Address {
             Self::P2PKH(hash) => Script::new_p2pkh(&PubkeyHash::from_slice(hash.as_bytes())?),
             Self::P2SH(hash) => Script::new_p2sh(&ScriptHash::from_slice(hash.as_bytes())?),
             Self::P2WPKHv0(hash) => Script::new_v0_wpkh(&WPubkeyHash::from_slice(hash.as_bytes())?),
+            Self::P2WSHv0(hash) => Script::new_v0_wsh(&WScriptHash::from_slice(hash.as_bytes())?),
         };
 
         let payload = Payload::from_script(&script).ok_or(ConversionError::InvalidPayload)?;

@@ -3,13 +3,15 @@
 mod bitcoin_simulator;
 
 use crate::{
-    rpc::{FeePallet, IssuePallet, VaultRegistryPallet},
-    AccountId, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
+    rpc::{IssuePallet, VaultRegistryPallet},
+    AccountId, BtcRelayPallet, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
-use futures::{future::Either, pin_mut, Future, FutureExt, SinkExt, StreamExt};
+use futures::{
+    future::{try_join, Either},
+    pin_mut, Future, FutureExt, SinkExt, StreamExt,
+};
 use sp_keyring::AccountKeyring;
-use sp_runtime::FixedPointNumber;
 use std::time::Duration;
 use substrate_subxt::{Event, PairSigner};
 use substrate_subxt_client::{DatabaseConfig, KeystoreConfig, Role, SubxtClientConfig, WasmExecutionMethod};
@@ -64,8 +66,21 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
         wasm_method: WasmExecutionMethod::Compiled,
     };
 
-    let client =
-        SubxtClient::from_config(config, btc_parachain_service::new_full).expect("Error creating subxt client");
+    // enable off chain workers
+    let mut service_config = config.into_service_config();
+    service_config.offchain_worker.enabled = true;
+
+    let (task_manager, rpc_handlers) = btc_parachain_service::new_full(service_config).unwrap();
+    let client = SubxtClient::new(task_manager, rpc_handlers);
+
+    let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    try_join(
+        root_provider.set_bitcoin_confirmations(1),
+        root_provider.set_parachain_confirmations(1),
+    )
+    .await
+    .unwrap();
+
     return (client, tmp);
 }
 
@@ -84,7 +99,7 @@ pub async fn assert_issue(provider: &PolkaBtcProvider, btc_rpc: &MockBitcoinCore
     let metadata = btc_rpc
         .send_to_address(
             issue.vault_btc_address,
-            issue.amount_btc as u64,
+            (issue.amount_btc + issue.fee) as u64,
             None,
             Duration::from_secs(30),
             0,
@@ -93,24 +108,14 @@ pub async fn assert_issue(provider: &PolkaBtcProvider, btc_rpc: &MockBitcoinCore
         .unwrap();
 
     provider
-        .execute_issue(
-            issue.issue_id,
-            metadata.txid.translate(),
-            metadata.proof,
-            metadata.raw_tx,
-        )
+        .execute_issue(issue.issue_id, metadata.proof, metadata.raw_tx)
         .await
         .unwrap();
 }
 
 /// calculate how much collateral the vault requires to accept an issue of the given size
 pub async fn get_required_vault_collateral_for_issue(provider: &PolkaBtcProvider, amount: u128) -> u128 {
-    let fee = provider.get_issue_fee().await.unwrap();
-    let amount_btc_including_fee = amount + fee.checked_mul_int(amount).unwrap();
-    provider
-        .get_required_collateral_for_polkabtc(amount_btc_including_fee)
-        .await
-        .unwrap()
+    provider.get_required_collateral_for_issuing(amount).await.unwrap()
 }
 
 /// wait for an event to occur. After the specified error, this will panic. This returns the event.

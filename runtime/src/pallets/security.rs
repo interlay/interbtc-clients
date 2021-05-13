@@ -1,6 +1,6 @@
 use super::Core;
+use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use parity_scale_codec::{Decode, Encode};
 use sp_core::U256;
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Event, Store};
@@ -30,4 +30,10 @@ pub struct ErrorsStore<T: Security> {
 pub struct RecoverFromErrorsEvent<T: Security> {
     pub status_code: T::StatusCode,
     pub error_codes: Vec<T::ErrorCode>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct ActiveBlockCountStore<T: Security> {
+    #[store(returns = T::BlockNumber)]
+    pub _runtime: PhantomData<T>,
 }

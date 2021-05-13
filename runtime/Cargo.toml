@@ -17,7 +17,7 @@ testing-utils = [
 ]
 
 [dependencies]
-parity-scale-codec = "2.0.0"
+codec = { package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"] }
 async-trait = "0.1.40"
 thiserror = "1.0"
 serde_json = "1.0.57"
@@ -37,18 +37,18 @@ sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "rococo
 frame-support = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
 
 # Subxt dependencies
-substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "82e0328" }
-substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "82e0328" }
+substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "df14750" }
+substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "df14750" }
 
-jsonrpsee-types = "=0.2.0-alpha.3"
-jsonrpsee-ws-client = "=0.2.0-alpha.3"
+jsonrpsee-types = "=0.2.0-alpha.5"
+jsonrpsee-ws-client = "=0.2.0-alpha.5"
 
 # Polkadot dependencies
 xcm = { git = "https://github.com/paritytech/polkadot", branch = "rococo-v1" }
 parachain = { package = "polkadot-parachain", git = "https://github.com/paritytech/polkadot", branch = "rococo-v1" }
 
 # Dependencies for the testing utils for integration tests
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "82e0328", optional = true }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "df14750", optional = true }
 tempdir = {version = "0.3.7", optional = true }
 btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "master", features = ["aura-grandpa"], optional = true }
 btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "master", features = ["aura-grandpa"], optional = true }
@@ -111,7 +111,7 @@ branch = "master"
 package = "exchange-rate-oracle"
 
 [dev-dependencies]
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "82e0328" }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "df14750" }
 btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "master", features = ["aura-grandpa"] }
 btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "master", features = ["aura-grandpa"] }
 tempdir = "0.3.7"

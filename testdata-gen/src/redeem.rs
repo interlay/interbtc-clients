@@ -7,7 +7,7 @@ use runtime::{AccountId, BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, R
 use sp_core::H256;
 use std::{convert::TryInto, time::Duration};
 
-/// Request redeem of PolkaBTC
+/// Request redeem
 pub async fn request_redeem(
     redeem_prov: &PolkaBtcProvider,
     amount_polka_btc: u128,
@@ -19,7 +19,7 @@ pub async fn request_redeem(
         .await?;
 
     info!(
-        "Requested {:?} to redeem {:?} PolkaBTC from {:?}",
+        "Requested {:?} to redeem {:?} tokens from {:?}",
         redeem_prov.get_account_id(),
         amount_polka_btc,
         vault_id
@@ -28,7 +28,7 @@ pub async fn request_redeem(
     Ok(redeem_id)
 }
 
-/// Execute redeem of PolkaBTC
+/// Execute redeem
 pub async fn execute_redeem(
     redeem_prov: &PolkaBtcProvider,
     btc_rpc: &BitcoinCore,
@@ -51,19 +51,14 @@ pub async fn execute_redeem(
         .await?;
 
     redeem_prov
-        .execute_redeem(
-            redeem_id,
-            H256Le::from_bytes_le(tx_metadata.txid.as_ref()),
-            tx_metadata.proof,
-            tx_metadata.raw_tx,
-        )
+        .execute_redeem(redeem_id, tx_metadata.proof, tx_metadata.raw_tx)
         .await?;
 
     info!("Executed redeem ID {:?}", redeem_id);
     Ok(())
 }
 
-/// Set redeem period of PolkaBTC
+/// Set redeem period
 pub async fn set_redeem_period(redeem_prov: &PolkaBtcProvider, period: u32) -> Result<(), Error> {
     redeem_prov.set_redeem_period(period).await?;
 

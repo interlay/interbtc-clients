@@ -1,7 +1,7 @@
 use super::Core;
 use crate::RedeemRequest;
+use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use parity_scale_codec::{Decode, Encode};
 use serde::Serialize;
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
@@ -11,7 +11,8 @@ pub trait Redeem: Core {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RequestRedeemCall<T: Redeem> {
-    pub amount_polka_btc: T::PolkaBTC,
+    #[codec(compact)]
+    pub amount_polka_btc: T::Issuing,
     pub btc_address: T::BtcAddress,
     pub vault_id: T::AccountId,
 }
@@ -20,17 +21,17 @@ pub struct RequestRedeemCall<T: Redeem> {
 pub struct RequestRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,
-    pub amount_polka_btc: T::PolkaBTC,
-    pub fee_polka_btc: T::PolkaBTC,
-    pub premium_dot: T::DOT,
+    pub amount_polka_btc: T::Issuing,
+    pub fee_polka_btc: T::Issuing,
+    pub premium_dot: T::Backing,
     pub vault_id: T::AccountId,
     pub user_btc_address: T::BtcAddress,
+    pub transfer_fee_btc: T::Issuing,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct ExecuteRedeemCall<T: Redeem> {
     pub redeem_id: T::H256,
-    pub tx_id: T::H256Le,
     pub merkle_proof: Vec<u8>,
     pub raw_tx: Vec<u8>,
     pub _runtime: PhantomData<T>,
@@ -40,8 +41,8 @@ pub struct ExecuteRedeemCall<T: Redeem> {
 pub struct ExecuteRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,
-    pub amount_polka_btc: T::PolkaBTC,
-    pub fee_polka_btc: T::PolkaBTC,
+    pub amount_polka_btc: T::Issuing,
+    pub fee_polka_btc: T::Issuing,
     pub vault_id: T::AccountId,
 }
 
@@ -57,13 +58,13 @@ pub struct CancelRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,
     pub vault_id: T::AccountId,
-    pub slashing_amount_in_dot: T::DOT,
+    pub slashing_amount_in_dot: T::Backing,
     pub reimburse: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct RedeemRequestsStore<T: Redeem> {
-    #[store(returns = RedeemRequest<T::AccountId, T::BlockNumber, T::PolkaBTC, T::DOT>)]
+    #[store(returns = RedeemRequest<T::AccountId, T::BlockNumber, T::Issuing, T::Backing>)]
     pub _runtime: PhantomData<T>,
     pub redeem_id: T::H256,
 }

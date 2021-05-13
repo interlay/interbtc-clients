@@ -1,7 +1,7 @@
 use super::Core;
 use crate::IssueRequest;
+use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use parity_scale_codec::{Decode, Encode};
 use serde::Serialize;
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
@@ -11,18 +11,20 @@ pub trait Issue: Core {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RequestIssueCall<T: Issue> {
-    pub amount: T::PolkaBTC,
+    #[codec(compact)]
+    pub amount: T::Issuing,
     pub vault_id: T::AccountId,
-    pub griefing_collateral: T::DOT,
+    #[codec(compact)]
+    pub griefing_collateral: T::Backing,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
 pub struct RequestIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,
-    pub amount_btc: T::PolkaBTC, //add _btc
-    pub fee_polkabtc: T::PolkaBTC,
-    pub griefing_collateral: T::DOT,
+    pub amount_btc: T::Issuing, //add _btc
+    pub fee: T::Issuing,
+    pub griefing_collateral: T::Backing,
     pub vault_id: T::AccountId,
     pub vault_btc_address: T::BtcAddress,
     pub vault_public_key: T::BtcPublicKey,
@@ -31,7 +33,6 @@ pub struct RequestIssueEvent<T: Issue> {
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct ExecuteIssueCall<T: Issue> {
     pub issue_id: T::H256,
-    pub tx_id: T::H256Le,
     pub merkle_proof: Vec<u8>,
     pub raw_tx: Vec<u8>,
     pub _runtime: PhantomData<T>,
@@ -41,7 +42,7 @@ pub struct ExecuteIssueCall<T: Issue> {
 pub struct ExecuteIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,
-    pub total_amount: T::PolkaBTC,
+    pub total_amount: T::Issuing,
     pub vault_id: T::AccountId,
 }
 
@@ -55,12 +56,12 @@ pub struct CancelIssueCall<T: Issue> {
 pub struct CancelIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,
-    pub griefing_collateral: T::DOT,
+    pub griefing_collateral: T::Backing,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct IssueRequestsStore<T: Issue> {
-    #[store(returns = IssueRequest<T::AccountId, T::BlockNumber, T::PolkaBTC, T::DOT>)]
+    #[store(returns = IssueRequest<T::AccountId, T::BlockNumber, T::Issuing, T::Backing>)]
     pub _runtime: PhantomData<T>,
     pub issue_id: T::H256,
 }
