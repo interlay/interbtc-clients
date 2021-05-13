@@ -413,7 +413,7 @@ mod tests {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
 
-        let bob_account_id: AccountId = [3; 32].into();
+        let bob_account_id = AccountKeyring::Bob.to_account_id();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
         let staked_relayer_allowance_dot: u128 = 500;
@@ -530,7 +530,10 @@ mod tests {
             .await
             .expect("Funding the account failed");
 
-        let bob_funds_after = alice_provider.get_free_dot_balance_for_id(bob_account_id).await.unwrap();
+        let bob_funds_after = alice_provider
+            .get_free_dot_balance_for_id(bob_account_id)
+            .await
+            .unwrap();
         assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
     }
 
