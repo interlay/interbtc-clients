@@ -20,8 +20,13 @@ pub type PolkaBtcBalance = <PolkaBtcRuntime as Core>::Balance;
 
 pub type PolkaBtcBlock = SignedBlock<Block<PolkaBtcHeader, <PolkaBtcRuntime as System>::Extrinsic>>;
 
-pub type PolkaBtcVault =
-    Vault<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::Issuing, <PolkaBtcRuntime as Core>::Backing>;
+pub type PolkaBtcVault = Vault<
+    AccountId,
+    BlockNumber,
+    <PolkaBtcRuntime as Core>::Issuing,
+    <PolkaBtcRuntime as Core>::Backing,
+    <PolkaBtcRuntime as Core>::SignedFixedPoint,
+>;
 
 pub type PolkaBtcIssueRequest =
     IssueRequest<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::Issuing, <PolkaBtcRuntime as Core>::Backing>;

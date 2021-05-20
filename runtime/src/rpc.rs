@@ -7,10 +7,7 @@ use futures::{stream::StreamExt, FutureExt, SinkExt};
 use jsonrpsee_types::{
     error::Error as RequestError,
     to_json_value,
-    v2::{
-        error::{ErrorCode as JsonRpcErrorCode, JsonRpcErrorAlloc as JsonRpcError},
-        params::JsonRpcParams as Params,
-    },
+    v2::error::{JsonRpcErrorAlloc as JsonRpcError, JsonRpcErrorCode},
 };
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
 use sp_arithmetic::FixedU128;
@@ -117,10 +114,9 @@ impl PolkaBtcProvider {
         };
         match call(signer).await {
             Ok(val) => Ok(val),
-            Err(SubxtError::Rpc(RequestError::Request(JsonRpcError {
-                error: JsonRpcErrorCode::ApplicationError(POOL_INVALID_TX),
-                ..
-            }))) => {
+            Err(SubxtError::Rpc(RequestError::Request(JsonRpcError { error, .. })))
+                if error == JsonRpcErrorCode::ServerError(POOL_INVALID_TX).into() =>
+            {
                 // here is no way to know why the transaction is invalid, so always
                 // refresh nonce and propogate to caller
                 self.refresh_nonce().await?;
@@ -485,10 +481,7 @@ impl ReplacePallet for PolkaBtcProvider {
     ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error> {
         let result: Vec<(H256, PolkaBtcReplaceRequest)> = self
             .rpc_client
-            .request(
-                "replace_getNewVaultReplaceRequests",
-                Params::Array(vec![to_json_value(account_id)?]),
-            )
+            .request("replace_getNewVaultReplaceRequests", &[to_json_value(account_id)?])
             .await?;
 
         Ok(result)
@@ -501,10 +494,7 @@ impl ReplacePallet for PolkaBtcProvider {
     ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error> {
         let result: Vec<(H256, PolkaBtcReplaceRequest)> = self
             .rpc_client
-            .request(
-                "replace_getOldVaultReplaceRequests",
-                Params::Array(vec![to_json_value(account_id)?]),
-            )
+            .request("replace_getOldVaultReplaceRequests", &[to_json_value(account_id)?])
             .await?;
 
         Ok(result)
@@ -639,7 +629,7 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
             .rpc_client
             .request(
                 "exchangeRateOracle_issuingToBacking",
-                Params::Array(vec![to_json_value(BalanceWrapper { amount: amount_btc })?]),
+                &[to_json_value(BalanceWrapper { amount: amount_btc })?],
             )
             .await?;
 
@@ -652,7 +642,7 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
             .rpc_client
             .request(
                 "exchangeRateOracle_backingToIssuing",
-                Params::Array(vec![to_json_value(BalanceWrapper { amount: amount_dot })?]),
+                &[to_json_value(BalanceWrapper { amount: amount_dot })?],
             )
             .await?;
 
@@ -752,7 +742,7 @@ impl StakedRelayerPallet for PolkaBtcProvider {
             self.rpc_client
                 .request(
                     "stakedRelayers_isTransactionInvalid",
-                    Params::Array(vec![to_json_value(vault_id)?, to_json_value(raw_tx)?]),
+                    &[to_json_value(vault_id)?, to_json_value(raw_tx)?],
                 )
                 .await,
             Ok(()),
@@ -912,10 +902,7 @@ impl IssuePallet for PolkaBtcProvider {
     ) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, Error> {
         let result: Vec<(H256, PolkaBtcIssueRequest)> = self
             .rpc_client
-            .request(
-                "issue_getVaultIssueRequests",
-                Params::Array(vec![to_json_value(account_id)?]),
-            )
+            .request("issue_getVaultIssueRequests", &[to_json_value(account_id)?])
             .await?;
 
         Ok(result)
@@ -1036,10 +1023,7 @@ impl RedeemPallet for PolkaBtcProvider {
     ) -> Result<Vec<(H256, PolkaBtcRedeemRequest)>, Error> {
         let requests: Vec<(H256, PolkaBtcRedeemRequest)> = self
             .rpc_client
-            .request(
-                "redeem_getVaultRedeemRequests",
-                Params::Array(vec![to_json_value(account_id)?]),
-            )
+            .request("redeem_getVaultRedeemRequests", &[to_json_value(account_id)?])
             .await?;
 
         Ok(requests)
@@ -1090,10 +1074,7 @@ impl RefundPallet for PolkaBtcProvider {
     ) -> Result<Vec<(H256, PolkaBtcRefundRequest)>, Error> {
         let result: Vec<(H256, PolkaBtcRefundRequest)> = self
             .rpc_client
-            .request(
-                "refund_getVaultRefundRequests",
-                Params::Array(vec![to_json_value(account_id)?]),
-            )
+            .request("refund_getVaultRefundRequests", &[to_json_value(account_id)?])
             .await?;
 
         Ok(result)
@@ -1263,7 +1244,7 @@ pub trait VaultRegistryPallet {
 
     async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey) -> Result<(), Error>;
 
-    async fn lock_additional_collateral(&self, amount: u128) -> Result<(), Error>;
+    async fn deposit_collateral(&self, amount: u128) -> Result<(), Error>;
 
     async fn withdraw_collateral(&self, amount: u128) -> Result<(), Error>;
 
@@ -1337,12 +1318,10 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     ///
     /// # Arguments
     /// * `amount` - the amount of extra collateral to lock
-    async fn lock_additional_collateral(&self, amount: u128) -> Result<(), Error> {
-        self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .lock_additional_collateral_and_watch(&signer, amount)
-                .await
-        })
+    async fn deposit_collateral(&self, amount: u128) -> Result<(), Error> {
+        self.with_unique_signer(
+            |signer| async move { self.ext_client.deposit_collateral_and_watch(&signer, amount).await },
+        )
         .await?;
         Ok(())
     }
@@ -1397,7 +1376,7 @@ impl VaultRegistryPallet for PolkaBtcProvider {
             .rpc_client
             .request(
                 "vaultRegistry_getRequiredCollateralForIssuing",
-                Params::Array(vec![to_json_value(BalanceWrapper { amount: amount_btc })?]),
+                &[to_json_value(BalanceWrapper { amount: amount_btc })?],
             )
             .await?;
 
@@ -1411,7 +1390,7 @@ impl VaultRegistryPallet for PolkaBtcProvider {
             .rpc_client
             .request(
                 "vaultRegistry_getRequiredCollateralForVault",
-                Params::Array(vec![to_json_value(vault_id)?]),
+                &[to_json_value(vault_id)?],
             )
             .await?;
 

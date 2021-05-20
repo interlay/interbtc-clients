@@ -32,4 +32,4 @@ service = { path = "../service" }
 runtime = { path = "../runtime", features = ["testing-utils"] }
 
 # Substrate dependencies
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.1" }

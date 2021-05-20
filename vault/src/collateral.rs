@@ -94,7 +94,7 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet
         // cases 5 & 6
         let amount_to_increase = target_collateral - actual_collateral;
         tracing::info!("Locking additional collateral");
-        provider.lock_additional_collateral(amount_to_increase).await?;
+        provider.deposit_collateral(amount_to_increase).await?;
     }
 
     // if we were unable to add the required amount, return error
@@ -143,7 +143,7 @@ mod tests {
             async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
             async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, RuntimeError>;
             async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
-            async fn lock_additional_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
+            async fn deposit_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
             async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;
@@ -172,7 +172,7 @@ mod tests {
     async fn test_lock_required_collateral_case_1() {
         // case 1: required <= actual <= limit -- do nothing (already enough)
         // required = 50, actual = 75, max = 100:
-        // check that lock_additional_collateral is not called
+        // check that deposit_collateral is not called
         let mut provider = MockProvider::default();
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
@@ -194,7 +194,7 @@ mod tests {
     async fn test_lock_required_collateral_case_2() {
         // case 2: required <= limit <= actual -- do nothing (already enough)
         // required = 100, actual = 200, max = 150:
-        // check that lock_additional_collateral is not called
+        // check that deposit_collateral is not called
         let mut provider = MockProvider::default();
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
@@ -216,7 +216,7 @@ mod tests {
     async fn test_lock_required_collateral_case_3() {
         // case 3: limit <= required <= actual -- do nothing (already enough)
         // required = 100, actual = 150, max = 75:
-        // check that lock_additional_collateral is not called
+        // check that deposit_collateral is not called
         let mut provider = MockProvider::default();
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
@@ -238,7 +238,7 @@ mod tests {
     async fn test_lock_required_collateral_case_4() {
         // case 4: limit <= actual <= required -- do nothing (return error)
         // required = 100, actual = 75, max = 50:
-        // check that lock_additional_collateral is not called
+        // check that deposit_collateral is not called
         let mut provider = MockProvider::default();
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
@@ -276,7 +276,7 @@ mod tests {
             .returning(|_| Ok(100));
         provider.expect_get_reserved_dot_balance().returning(|| Ok(25));
         provider
-            .expect_lock_additional_collateral()
+            .expect_deposit_collateral()
             .withf(|&amount| amount == 50)
             .times(1)
             .returning(|_| Ok(()));
@@ -304,7 +304,7 @@ mod tests {
             .returning(|_| Ok(100));
         provider.expect_get_reserved_dot_balance().returning(|| Ok(25));
         provider
-            .expect_lock_additional_collateral()
+            .expect_deposit_collateral()
             .withf(|&amount| amount == 75)
             .times(1)
             .returning(|_| Ok(()));
@@ -316,7 +316,7 @@ mod tests {
     #[tokio::test]
     async fn test_lock_required_collateral_at_max_fails() {
         // required = 100, actual = 25, max = 25:
-        // check that lock_additional_collateral is not called with amount 0
+        // check that deposit_collateral is not called with amount 0
         let mut provider = MockProvider::default();
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
@@ -340,7 +340,7 @@ mod tests {
     #[tokio::test]
     async fn test_lock_required_collateral_at_required_succeeds() {
         // required = 100, actual = 100, max = 200:
-        // check that lock_additional_collateral is not called with amount 0
+        // check that deposit_collateral is not called with amount 0
         let mut provider = MockProvider::default();
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {

@@ -184,7 +184,7 @@ enum VaultApiSubCommand {
     /// Tell the vault to register itself.
     RegisterVault(RegisterVaultJsonRpcRequest),
     /// Tell the vault to lock additional collateral.
-    LockAdditionalCollateral(LockAdditionalCollateralJsonRpcRequest),
+    DepositCollateral(DepositCollateralJsonRpcRequest),
     /// Tell the vault to withdraw collateral.
     WithdrawCollateral(WithdrawCollateralJsonRpcRequest),
     /// Tell the vault to update its BTC address.
@@ -377,7 +377,7 @@ struct RegisterVaultJsonRpcRequest {
 }
 
 #[derive(Clap, Encode, Decode, Debug)]
-struct LockAdditionalCollateralJsonRpcRequest {
+struct DepositCollateralJsonRpcRequest {
     /// Amount to lock.
     #[clap(long, default_value = "10000")]
     amount: u128,
@@ -636,8 +636,8 @@ async fn main() -> Result<(), Error> {
                 VaultApiSubCommand::RegisterVault(info) => {
                     api::call::<_, ()>(cmd.url, "register_vault", info).await?;
                 }
-                VaultApiSubCommand::LockAdditionalCollateral(info) => {
-                    api::call::<_, ()>(cmd.url, "lock_additional_collateral", info).await?;
+                VaultApiSubCommand::DepositCollateral(info) => {
+                    api::call::<_, ()>(cmd.url, "deposit_collateral", info).await?;
                 }
                 VaultApiSubCommand::WithdrawCollateral(info) => {
                     api::call::<_, ()>(cmd.url, "withdraw_collateral", info).await?;

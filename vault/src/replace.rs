@@ -3,12 +3,9 @@ use bitcoin::BitcoinCoreApi;
 use futures::{channel::mpsc::Sender, SinkExt};
 use runtime::{
     pallets::replace::{AcceptReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent},
-    DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use service::Error as ServiceError;
-use sp_core::crypto::Ss58Codec;
-use std::time::Duration;
-use tokio::time::delay_for;
 
 /// Listen for AcceptReplaceEvent directed at this vault and continue the replacement
 /// procedure by transferring bitcoin and calling execute_replace
@@ -275,7 +272,7 @@ mod tests {
             async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
             async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, RuntimeError>;
             async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
-            async fn lock_additional_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
+            async fn deposit_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
             async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;

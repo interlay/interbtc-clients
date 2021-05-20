@@ -22,13 +22,13 @@ pub struct RegisterVaultEvent<T: VaultRegistry> {
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct LockAdditionalCollateralCall<T: VaultRegistry> {
+pub struct DepositCollateralCall<T: VaultRegistry> {
     #[codec(compact)]
     pub amount: T::Backing,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct LockAdditionalCollateralEvent<T: VaultRegistry> {
+pub struct DepositCollateralEvent<T: VaultRegistry> {
     pub vault_id: T::AccountId,
     pub new_collateral: T::Backing,
     pub total_collateral: T::Backing,
@@ -50,7 +50,7 @@ pub struct WithdrawCollateralEvent<T: VaultRegistry> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct VaultsStore<T: VaultRegistry> {
-    #[store(returns = Vault<T::AccountId, T::BlockNumber, T::Issuing, T::Backing>)]
+    #[store(returns = Vault<T::AccountId, T::BlockNumber, T::Issuing, T::Backing, T::SignedFixedPoint>)]
     pub _runtime: PhantomData<T>,
     pub account_id: T::AccountId,
 }

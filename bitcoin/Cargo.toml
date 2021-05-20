@@ -29,7 +29,7 @@ log = "0.4.0"
 hyper = "0.10"
 
 # Substrate dependencies
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.1" }
 
 [dependencies.polkabtc-bitcoin]
 git = "https://github.com/interlay/btc-parachain"

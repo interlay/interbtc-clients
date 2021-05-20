@@ -1,4 +1,4 @@
-use crate::{error::Error, lock_additional_collateral};
+use crate::{deposit_collateral, error::Error};
 use bitcoin::BitcoinCoreApi;
 use hex::FromHex;
 use jsonrpc_core::Value;
@@ -71,7 +71,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
         .checked_sub(TX_FEES)
         .ok_or(Error::ArithmeticUnderflow)?;
 
-    lock_additional_collateral(&provider, operational_collateral).await?;
+    deposit_collateral(&provider, operational_collateral).await?;
 
     Ok(())
 }
