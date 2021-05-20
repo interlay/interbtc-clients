@@ -171,6 +171,9 @@ async fn is_funding_allowed(
         );
         return Ok(false);
     }
+    // We are subtracting FAUCET_COOLDOWN_HOURS from the milliseconds since the unix epoch.
+    // Unless there's a bug in the std lib implementation of Utc::now() or a false reading from the
+    // system clock, the MathError will never occur
     let cooldown_threshold = Utc::now()
         .checked_sub_signed(ISO8601::hours(FAUCET_COOLDOWN_HOURS))
         .ok_or(Error::MathError)?;
@@ -422,7 +425,7 @@ mod tests {
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
         let staked_relayer_allowance_dot: u128 = 500;
-        let one_dot: u128 = 10_000_000_000;
+        let one_dot: u128 = 10u128.pow(10);
         let drain_account_id: AccountId = [3; 32].into();
 
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
@@ -487,7 +490,7 @@ mod tests {
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
         let staked_relayer_allowance_dot: u128 = 500;
-        let one_dot: u128 = 10_000_000_000;
+        let one_dot: u128 = 10u128.pow(10);
         let drain_account_id: AccountId = [3; 32].into();
 
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
@@ -601,7 +604,7 @@ mod tests {
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
         let staked_relayer_allowance_dot: u128 = 500;
-        let one_dot: u128 = 10_000_000_000;
+        let one_dot: u128 = 10u128.pow(10);
         let drain_account_id: AccountId = [3; 32].into();
 
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
@@ -657,7 +660,7 @@ mod tests {
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
         let staked_relayer_allowance_dot: u128 = 500;
-        let one_dot: u128 = 10_000_000_000;
+        let one_dot: u128 = 10u128.pow(10);
         let drain_account_id: AccountId = [3; 32].into();
 
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
