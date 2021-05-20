@@ -19,7 +19,7 @@ use tokio::time::timeout;
 const HEALTH_DURATION: Duration = Duration::from_millis(5000);
 
 const KV_STORE_NAME: &str = "store";
-const FAUCET_COOLDOWN_HOURS: i64 = 12;
+const FAUCET_COOLDOWN_HOURS: i64 = 6;
 
 // If the client has more 50 DOT it won't be funded
 const MAX_FUNDABLE_CLIENT_BALANCE: u128 = 500_000_000_000;
@@ -161,9 +161,14 @@ async fn is_funding_allowed(
     last_request_json: Option<Json<FaucetRequest>>,
     account_type: FundingRequestAccountType,
 ) -> Result<bool, Error> {
-    let balance = provider.get_free_dot_balance_for_id(account_id.clone()).await?;
-    if balance > MAX_FUNDABLE_CLIENT_BALANCE {
-        warn!("user {} has enough funds: {:?}", account_id, balance);
+    let free_balance = provider.get_free_dot_balance_for_id(account_id.clone()).await?;
+    let reserved_balance = provider.get_reserved_dot_balance_for_id(account_id.clone()).await?;
+    if free_balance + reserved_balance > MAX_FUNDABLE_CLIENT_BALANCE {
+        warn!(
+            "user {} has enough funds: {:?}",
+            account_id,
+            free_balance + reserved_balance
+        );
         return Ok(false);
     }
     let cooldown_threshold = Utc::now()

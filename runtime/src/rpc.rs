@@ -305,6 +305,9 @@ pub trait DotBalancesPallet {
 
     async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
 
+    async fn get_reserved_dot_balance_for_id(&self, id: AccountId)
+        -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
+
     async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), Error>;
 }
 
@@ -320,8 +323,15 @@ impl DotBalancesPallet for PolkaBtcProvider {
     }
 
     async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
+        Ok(Self::get_reserved_dot_balance_for_id(&self, self.account_id.clone()).await?)
+    }
+
+    async fn get_reserved_dot_balance_for_id(
+        &self,
+        id: AccountId,
+    ) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.account(self.account_id.clone(), head).await?.reserved)
+        Ok(self.ext_client.account(id.clone(), head).await?.reserved)
     }
 
     async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), Error> {
