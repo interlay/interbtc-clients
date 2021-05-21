@@ -39,7 +39,6 @@ use substrate_subxt::{
 use parachain::primitives::{Id as ParaId, RelayChainBlockNumber};
 use xcm::v0::{Error as XcmError, NetworkId};
 
-pub const MINIMUM_STAKE: u128 = 100;
 pub const TX_FEES: u128 = 2000000000;
 pub const PLANCK_PER_DOT: u128 = 10000000000;
 

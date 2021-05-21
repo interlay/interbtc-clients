@@ -46,10 +46,6 @@ pub struct FaucetConfig {
     /// DOT allowance per request for vaults.
     #[clap(long, default_value = "500")]
     vault_allowance: u128,
-
-    /// DOT allowance per request for vaults.
-    #[clap(long, default_value = "500")]
-    staked_relayer_allowance: u128,
 }
 
 #[tokio::main]
@@ -76,7 +72,6 @@ async fn main() -> Result<(), Error> {
             faucet_config.rpc_cors_domain.clone(),
             faucet_config.user_allowance,
             faucet_config.vault_allowance,
-            faucet_config.staked_relayer_allowance,
         )
         .await;
 

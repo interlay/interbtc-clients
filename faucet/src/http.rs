@@ -9,8 +9,7 @@ use kv::*;
 use log::{debug, info, warn};
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    AccountId, DotBalancesPallet, Error as RuntimeError, PolkaBtcProvider, StakedRelayerPallet, VaultRegistryPallet,
-    PLANCK_PER_DOT,
+    AccountId, DotBalancesPallet, Error as RuntimeError, PolkaBtcProvider, VaultRegistryPallet, PLANCK_PER_DOT,
 };
 use serde::{Deserialize, Deserializer};
 use std::{collections::HashMap, net::SocketAddr, time::Duration};
@@ -75,7 +74,6 @@ struct FundAccountJsonRpcRequest {
 enum FundingRequestAccountType {
     User,
     Vault,
-    StakedRelayer,
 }
 
 async fn _fund_account_raw(
@@ -84,13 +82,11 @@ async fn _fund_account_raw(
     store: Store,
     user_allowance: u128,
     vault_allowance: u128,
-    staked_relayer_allowance: u128,
 ) -> Result<(), Error> {
     let req: FundAccountJsonRpcRequest = parse_params(params)?;
     let mut allowances = HashMap::new();
     allowances.insert(FundingRequestAccountType::User, user_allowance);
     allowances.insert(FundingRequestAccountType::Vault, vault_allowance);
-    allowances.insert(FundingRequestAccountType::StakedRelayer, staked_relayer_allowance);
     fund_account(provider, req, store, allowances).await
 }
 
@@ -100,9 +96,6 @@ async fn get_account_type(
 ) -> Result<FundingRequestAccountType, Error> {
     if provider.get_vault(account_id.clone()).await.is_ok() {
         return Ok(FundingRequestAccountType::Vault);
-    }
-    if provider.get_stake_of(&account_id).await? > 0 {
-        return Ok(FundingRequestAccountType::StakedRelayer);
     }
     Ok(FundingRequestAccountType::User)
 }
@@ -147,11 +140,6 @@ fn has_request_expired(
             FundingRequestAccountType::Vault,
             current_account_type.clone(),
             previous_account_type.clone(),
-        )
-        || is_type_and_was_user(
-            FundingRequestAccountType::StakedRelayer,
-            current_account_type,
-            previous_account_type,
         )
 }
 
@@ -239,15 +227,11 @@ pub async fn start_http(
     origin: String,
     user_allowance: u128,
     vault_allowance: u128,
-    staked_relayer_allowance: u128,
 ) -> jsonrpc_http_server::CloseHandle {
     let mut io = IoHandler::default();
     let store = Store::new(Config::new("./kv")).expect("Unable to open kv store");
     io.add_sync_method("user_allowance", move |_| handle_resp(Ok(user_allowance)));
     io.add_sync_method("vault_allowance", move |_| handle_resp(Ok(vault_allowance)));
-    io.add_sync_method("staked_relayer_allowance", move |_| {
-        handle_resp(Ok(staked_relayer_allowance))
-    });
     {
         let provider = provider.clone();
         io.add_method("system_health", move |_| {
@@ -264,15 +248,7 @@ pub async fn start_http(
             let provider = provider.clone();
             let store = store.clone();
             async move {
-                let result = _fund_account_raw(
-                    &provider.clone(),
-                    params,
-                    store,
-                    user_allowance,
-                    vault_allowance,
-                    staked_relayer_allowance,
-                )
-                .await;
+                let result = _fund_account_raw(&provider.clone(), params, store, user_allowance, vault_allowance).await;
                 debug!("Result: {:?}", result);
                 handle_resp(result)
             }
@@ -310,7 +286,7 @@ mod tests {
     use kv::{Config, Store};
     use runtime::{
         integration::*, AccountId, BtcPublicKey, ExchangeRateOraclePallet, FixedPointNumber, FixedU128,
-        StakedRelayerPallet, VaultRegistryPallet,
+        VaultRegistryPallet,
     };
     use sp_keyring::AccountKeyring;
 
@@ -351,13 +327,10 @@ mod tests {
         let bob_account_id: AccountId = [3; 32].into();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
-        let staked_relayer_allowance_dot: u128 = 500;
 
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
         allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        allowances.insert(FundingRequestAccountType::StakedRelayer, staked_relayer_allowance_dot);
-
         let expected_amount_planck: u128 = dot_to_planck(user_allowance_dot);
 
         let store = Store::new(Config::new(tmp_dir.path().join("kv1"))).expect("Unable to open kv store");
@@ -394,12 +367,10 @@ mod tests {
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
-        let staked_relayer_allowance_dot: u128 = 500;
 
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
         allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        allowances.insert(FundingRequestAccountType::StakedRelayer, staked_relayer_allowance_dot);
 
         let store = Store::new(Config::new(tmp_dir.path().join("kv1"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
@@ -424,14 +395,12 @@ mod tests {
         let bob_account_id = AccountKeyring::Bob.to_account_id();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
-        let staked_relayer_allowance_dot: u128 = 500;
         let one_dot: u128 = 10u128.pow(10);
         let drain_account_id: AccountId = [3; 32].into();
 
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
         allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        allowances.insert(FundingRequestAccountType::StakedRelayer, staked_relayer_allowance_dot);
         let expected_amount_planck: u128 = dot_to_planck(vault_allowance_dot);
 
         let store = Store::new(Config::new(tmp_dir.path().join("kv3"))).expect("Unable to open kv store");
@@ -482,70 +451,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fund_user_immediately_after_registering_as_staked_relayer_succeeds() {
-        let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-        set_exchange_rate(client.clone()).await;
-
-        let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
-        let user_allowance_dot: u128 = 1;
-        let vault_allowance_dot: u128 = 500;
-        let staked_relayer_allowance_dot: u128 = 500;
-        let one_dot: u128 = 10u128.pow(10);
-        let drain_account_id: AccountId = [3; 32].into();
-
-        let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
-        allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
-        allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        allowances.insert(FundingRequestAccountType::StakedRelayer, staked_relayer_allowance_dot);
-        let expected_amount_planck: u128 = dot_to_planck(staked_relayer_allowance_dot);
-
-        let store = Store::new(Config::new(tmp_dir.path().join("kv3"))).expect("Unable to open kv store");
-        let kv = open_kv_store(store.clone()).unwrap();
-        kv.clear().unwrap();
-
-        let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
-        let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-        // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding
-        let bob_prefunded_amount = bob_provider
-            .get_free_dot_balance_for_id(bob_account_id.clone())
-            .await
-            .unwrap();
-        bob_provider
-            .transfer_to(drain_account_id, bob_prefunded_amount - one_dot)
-            .await
-            .expect("Unable to transfer funds");
-
-        let req = FundAccountJsonRpcRequest {
-            account_id: bob_account_id.clone(),
-        };
-
-        fund_account(
-            &Arc::from(alice_provider.clone()),
-            req.clone(),
-            store.clone(),
-            allowances.clone(),
-        )
-        .await
-        .expect("Funding the account failed");
-
-        bob_provider.register_staked_relayer(100).await.unwrap();
-        let bob_funds_before = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id.clone())
-            .await
-            .unwrap();
-
-        fund_account(&Arc::from(alice_provider.clone()), req, store, allowances)
-            .await
-            .expect("Funding the account failed");
-
-        let bob_funds_after = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id)
-            .await
-            .unwrap();
-        assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
-    }
-
-    #[tokio::test]
     async fn test_fund_user_twice_in_a_row_fails() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
@@ -553,12 +458,10 @@ mod tests {
         let bob_account_id: AccountId = [3; 32].into();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
-        let staked_relayer_allowance_dot: u128 = 500;
 
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
         allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        allowances.insert(FundingRequestAccountType::StakedRelayer, staked_relayer_allowance_dot);
         let expected_amount_planck: u128 = dot_to_planck(user_allowance_dot);
 
         let store = Store::new(Config::new(tmp_dir.path().join("kv3"))).expect("Unable to open kv store");
@@ -603,14 +506,12 @@ mod tests {
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
-        let staked_relayer_allowance_dot: u128 = 500;
         let one_dot: u128 = 10u128.pow(10);
         let drain_account_id: AccountId = [3; 32].into();
 
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
         allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        allowances.insert(FundingRequestAccountType::StakedRelayer, staked_relayer_allowance_dot);
         let expected_amount_planck: u128 = dot_to_planck(vault_allowance_dot);
 
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
@@ -659,14 +560,12 @@ mod tests {
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
-        let staked_relayer_allowance_dot: u128 = 500;
         let one_dot: u128 = 10u128.pow(10);
         let drain_account_id: AccountId = [3; 32].into();
 
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
         allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        allowances.insert(FundingRequestAccountType::StakedRelayer, staked_relayer_allowance_dot);
         let expected_amount_planck: u128 = dot_to_planck(vault_allowance_dot);
 
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;

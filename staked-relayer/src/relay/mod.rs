@@ -9,17 +9,10 @@ pub use backing::Client as BitcoinClient;
 pub use issuing::Client as PolkaBtcClient;
 
 use crate::core::{Error as CoreError, Runner};
-use runtime::PolkaBtcProvider;
 use service::Error as ServiceError;
-use std::time::Duration;
 
-pub async fn run_relayer(
-    runner: Runner<Error, BitcoinClient, PolkaBtcClient>,
-    provider: PolkaBtcProvider,
-    timeout: Duration,
-) -> Result<(), ServiceError> {
+pub async fn run_relayer(runner: Runner<Error, BitcoinClient, PolkaBtcClient>) -> Result<(), ServiceError> {
     loop {
-        super::utils::wait_until_registered(&provider, timeout).await;
         match runner.submit_next().await {
             Ok(_) => (),
             Err(CoreError::Issuing(Error::PolkaBtcError(ref err))) if err.is_duplicate_block() => {

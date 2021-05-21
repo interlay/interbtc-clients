@@ -1,12 +1,12 @@
-use crate::{relay::*, service::*, utils::*, Error, Vaults};
+use crate::{relay::*, service::*, Error, Vaults};
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use futures::executor::block_on;
 use git_version::git_version;
 use runtime::{
-    cli::parse_duration_ms, pallets::sla::UpdateRelayerSLAEvent, PolkaBtcProvider, PolkaBtcRuntime,
-    StakedRelayerPallet, UtilFuncs, VaultRegistryPallet,
+    cli::parse_duration_ms, pallets::sla::UpdateRelayerSLAEvent, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs,
+    VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
@@ -40,14 +40,10 @@ pub struct RelayerServiceConfig {
     #[clap(long, default_value = "*")]
     pub rpc_cors_domain: String,
 
-    /// Automatically register the relayer with the given stake (in Planck).
-    #[clap(long)]
-    pub auto_register_with_stake: Option<u128>,
-
-    /// Automatically register the staked relayer with collateral received from the faucet and a newly generated
+    /// Automatically fund the staked relayer with collateral received from the faucet and a newly generated
     /// address. The parameter is the URL of the faucet
-    #[clap(long, conflicts_with("auto-register-with-stake"))]
-    pub auto_register_with_faucet_url: Option<String>,
+    #[clap(long)]
+    pub auto_fund_with_faucet_url: Option<String>,
 
     /// Number of confirmations a block needs to have before it is submitted.
     #[clap(long, default_value = "0")]
@@ -103,19 +99,10 @@ impl RelayerService {
     async fn run_service(&self) -> Result<(), Error> {
         let bitcoin_core = self.bitcoin_core.clone();
 
-        if let Some(stake) = self.config.auto_register_with_stake {
-            if !is_registered(&self.btc_parachain).await? {
-                self.btc_parachain.register_staked_relayer(stake).await?;
-                tracing::info!("Automatically registered staked relayer");
-            } else {
-                tracing::info!("Not registering staked relayer -- already registered");
-            }
-        } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
-            if !is_registered(&self.btc_parachain).await? {
-                fund_and_register(&self.btc_parachain, faucet_url).await?;
-                tracing::info!("Automatically registered staked relayer");
-            } else {
-                tracing::info!("Not registering staked relayer -- already registered");
+        if let Some(faucet_url) = &self.config.auto_fund_with_faucet_url {
+            tracing::info!("Automatically funding staked relayer");
+            if let Err(err) = connect_and_fund(&self.btc_parachain, faucet_url).await {
+                tracing::info!("Not funding staked relayer: {}", err);
             }
         }
 
@@ -151,7 +138,6 @@ impl RelayerService {
                 self.btc_parachain.clone(),
                 bitcoin_theft_start_height,
                 vaults.clone(),
-                self.config.bitcoin_poll_timeout_ms,
             ),
         );
 
@@ -183,20 +169,16 @@ impl RelayerService {
 
         let relayer = wait_or_shutdown(
             self.shutdown.clone(),
-            run_relayer(
-                Runner::new(
-                    BitcoinClient::new(bitcoin_core.clone()),
-                    PolkaBtcClient::new(self.btc_parachain.clone()),
-                    Config {
-                        start_height: self.config.bitcoin_relay_start_height,
-                        max_batch_size: self.config.max_batch_size,
-                        timeout: Some(self.config.bitcoin_poll_timeout_ms),
-                        required_btc_confirmations: self.config.required_btc_confirmations,
-                    },
-                ),
-                self.btc_parachain.clone(),
-                Duration::from_secs(1),
-            ),
+            run_relayer(Runner::new(
+                BitcoinClient::new(bitcoin_core.clone()),
+                PolkaBtcClient::new(self.btc_parachain.clone()),
+                Config {
+                    start_height: self.config.bitcoin_relay_start_height,
+                    max_batch_size: self.config.max_batch_size,
+                    timeout: Some(self.config.bitcoin_poll_timeout_ms),
+                    required_btc_confirmations: self.config.required_btc_confirmations,
+                },
+            )),
         );
 
         tracing::info!("Starting system services...");

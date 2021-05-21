@@ -652,12 +652,6 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
 
 #[async_trait]
 pub trait StakedRelayerPallet {
-    async fn get_stake_of(&self, account_id: &AccountId) -> Result<u128, Error>;
-
-    async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error>;
-
-    async fn deregister_staked_relayer(&self) -> Result<(), Error>;
-
     async fn report_vault_theft(
         &self,
         vault_id: AccountId,
@@ -676,33 +670,6 @@ pub trait StakedRelayerPallet {
 
 #[async_trait]
 impl StakedRelayerPallet for PolkaBtcProvider {
-    /// Get the stake registered for this staked relayer.
-    async fn get_stake_of(&self, account_id: &AccountId) -> Result<u128, Error> {
-        let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.stakes(account_id, head).await?)
-    }
-
-    /// Submit extrinsic to register the staked relayer.
-    ///
-    /// # Arguments
-    /// * `stake` - deposit
-    async fn register_staked_relayer(&self, stake: u128) -> Result<(), Error> {
-        self.with_unique_signer(|signer| async move {
-            self.ext_client.register_staked_relayer_and_watch(&signer, stake).await
-        })
-        .await?;
-        Ok(())
-    }
-
-    /// Submit extrinsic to deregister the staked relayer.
-    async fn deregister_staked_relayer(&self) -> Result<(), Error> {
-        self.with_unique_signer(
-            |signer| async move { self.ext_client.deregister_staked_relayer_and_watch(&signer).await },
-        )
-        .await?;
-        Ok(())
-    }
-
     /// Submit extrinsic to report vault theft, consumer should
     /// first check `is_transaction_invalid` to ensure this call
     /// succeeds.
