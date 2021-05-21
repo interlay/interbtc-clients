@@ -612,11 +612,11 @@ dependencies = [
 
 [[package]]
 name = "bitcoin"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "backoff",
- "bitcoin 0.7.0",
+ "bitcoin 0.7.0 (git+https://github.com/interlay/btc-parachain?branch=master)",
  "bitcoincore-rpc",
  "clap 3.0.0-beta.2",
  "futures 0.3.15",
@@ -857,7 +857,7 @@ name = "btc-parachain"
 version = "0.7.0"
 source = "git+https://github.com/interlay/btc-parachain?branch=master#ae2f07ed1384dc5a57b90a3fdb5576f09d7a126d"
 dependencies = [
- "bitcoin 0.7.0",
+ "bitcoin 0.7.0 (git+https://github.com/interlay/btc-parachain?branch=master)",
  "btc-parachain-rpc",
  "btc-parachain-runtime",
  "btc-parachain-service",
@@ -1033,7 +1033,7 @@ name = "btc-relay"
 version = "0.7.0"
 source = "git+https://github.com/interlay/btc-parachain?branch=master#ae2f07ed1384dc5a57b90a3fdb5576f09d7a126d"
 dependencies = [
- "bitcoin 0.7.0",
+ "bitcoin 0.7.0 (git+https://github.com/interlay/btc-parachain?branch=master)",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -2265,7 +2265,7 @@ dependencies = [
 
 [[package]]
 name = "faucet"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3593,7 +3593,7 @@ name = "issue"
 version = "0.7.0"
 source = "git+https://github.com/interlay/btc-parachain?branch=master#ae2f07ed1384dc5a57b90a3fdb5576f09d7a126d"
 dependencies = [
- "bitcoin 0.7.0",
+ "bitcoin 0.7.0 (git+https://github.com/interlay/btc-parachain?branch=master)",
  "btc-relay",
  "currency",
  "exchange-rate-oracle",
@@ -5630,7 +5630,7 @@ dependencies = [
 
 [[package]]
 name = "oracle"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "clap 3.0.0-beta.2",
@@ -8168,7 +8168,7 @@ name = "redeem"
 version = "0.7.0"
 source = "git+https://github.com/interlay/btc-parachain?branch=master#ae2f07ed1384dc5a57b90a3fdb5576f09d7a126d"
 dependencies = [
- "bitcoin 0.7.0",
+ "bitcoin 0.7.0 (git+https://github.com/interlay/btc-parachain?branch=master)",
  "btc-relay",
  "currency",
  "exchange-rate-oracle",
@@ -8253,7 +8253,7 @@ name = "refund"
 version = "0.7.0"
 source = "git+https://github.com/interlay/btc-parachain?branch=master#ae2f07ed1384dc5a57b90a3fdb5576f09d7a126d"
 dependencies = [
- "bitcoin 0.7.0",
+ "bitcoin 0.7.0 (git+https://github.com/interlay/btc-parachain?branch=master)",
  "btc-relay",
  "currency",
  "exchange-rate-oracle",
@@ -8340,7 +8340,7 @@ name = "replace"
 version = "0.7.0"
 source = "git+https://github.com/interlay/btc-parachain?branch=master#ae2f07ed1384dc5a57b90a3fdb5576f09d7a126d"
 dependencies = [
- "bitcoin 0.7.0",
+ "bitcoin 0.7.0 (git+https://github.com/interlay/btc-parachain?branch=master)",
  "btc-relay",
  "currency",
  "exchange-rate-oracle",
@@ -8542,12 +8542,12 @@ dependencies = [
 
 [[package]]
 name = "runtime"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "backoff",
- "bitcoin 0.6.0",
  "bitcoin 0.7.0",
+ "bitcoin 0.7.0 (git+https://github.com/interlay/btc-parachain?branch=master)",
  "btc-parachain",
  "btc-parachain-service",
  "btc-relay",
@@ -9970,10 +9970,10 @@ dependencies = [
 
 [[package]]
 name = "service"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
- "bitcoin 0.6.0",
+ "bitcoin 0.7.0",
  "clap 3.0.0-beta.2",
  "futures 0.3.15",
  "hyper 0.13.10",
@@ -10939,10 +10939,10 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "staked-relayer"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
- "bitcoin 0.6.0",
+ "bitcoin 0.7.0",
  "clap 3.0.0-beta.2",
  "futures 0.3.15",
  "git-version",
@@ -10968,7 +10968,7 @@ name = "staked-relayers"
 version = "0.7.0"
 source = "git+https://github.com/interlay/btc-parachain?branch=master#ae2f07ed1384dc5a57b90a3fdb5576f09d7a126d"
 dependencies = [
- "bitcoin 0.7.0",
+ "bitcoin 0.7.0 (git+https://github.com/interlay/btc-parachain?branch=master)",
  "btc-relay",
  "currency",
  "exchange-rate-oracle",
@@ -11364,9 +11364,9 @@ dependencies = [
 
 [[package]]
 name = "testdata-gen"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
- "bitcoin 0.6.0",
+ "bitcoin 0.7.0",
  "clap 3.0.0-beta.2",
  "env_logger 0.7.1",
  "futures 0.3.15",
@@ -12190,11 +12190,11 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "backoff",
- "bitcoin 0.6.0",
+ "bitcoin 0.7.0",
  "clap 3.0.0-beta.2",
  "futures 0.3.15",
  "git-version",
@@ -12223,7 +12223,7 @@ name = "vault-registry"
 version = "0.7.0"
 source = "git+https://github.com/interlay/btc-parachain?branch=master#ae2f07ed1384dc5a57b90a3fdb5576f09d7a126d"
 dependencies = [
- "bitcoin 0.7.0",
+ "bitcoin 0.7.0 (git+https://github.com/interlay/btc-parachain?branch=master)",
  "currency",
  "exchange-rate-oracle",
  "fixed-hash",

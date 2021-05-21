@@ -1,6 +1,6 @@
 [package]
 name = "vault"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 description = "The Vault client intermediates between Bitcoin Core and the PolkaBTC Parachain."
