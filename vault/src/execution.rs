@@ -1,11 +1,11 @@
 use crate::{error::Error, retry::*, BITCOIN_MAX_RETRYING_TIME};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
-use futures::{future, stream::StreamExt};
+use futures::{stream::StreamExt, try_join};
 use runtime::{
     pallets::{redeem::RequestRedeemEvent, refund::RequestRefundEvent, replace::AcceptReplaceEvent},
     BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest,
     PolkaBtcRefundRequest, PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet,
-    ReplacePallet, ReplaceRequestStatus, UtilFuncs, VaultRegistryPallet,
+    ReplacePallet, ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H256;
 use std::collections::HashMap;
@@ -215,21 +215,29 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
     let vault_id = provider.get_account_id().clone();
 
     // get all redeem, replace and refund requests
-    let (redeem_requests, replace_requests, refund_requests) = future::try_join3(
+    let (redeem_requests, replace_requests, refund_requests, replace_period, redeem_period, current_height) = try_join!(
         provider.get_vault_redeem_requests(vault_id.clone()),
         provider.get_old_vault_replace_requests(vault_id.clone()),
         provider.get_vault_refund_requests(vault_id),
-    )
-    .await?;
+        provider.get_replace_period(),
+        provider.get_redeem_period(),
+        provider.get_current_active_block_number()
+    )?;
 
     let open_redeems = redeem_requests
         .into_iter()
-        .filter(|(_, request)| request.status == RedeemRequestStatus::Pending)
+        .filter(|(_, request)| {
+            request.status == RedeemRequestStatus::Pending
+                && current_height < request.opentime + request.period.max(redeem_period)
+        })
         .map(|(hash, request)| Request::from_redeem_request(hash, request));
 
     let open_replaces = replace_requests
         .into_iter()
-        .filter(|(_, request)| request.status == ReplaceRequestStatus::Pending)
+        .filter(|(_, request)| {
+            request.status == ReplaceRequestStatus::Pending
+                && current_height < request.accept_time + request.period.max(replace_period)
+        })
         .map(|(hash, request)| Request::from_replace_request(hash, request));
 
     let open_refunds = refund_requests
