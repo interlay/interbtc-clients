@@ -9,7 +9,7 @@ use kv::*;
 use log::{debug, info, warn};
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    AccountId, DotBalancesPallet, Error as RuntimeError, PolkaBtcProvider, VaultRegistryPallet, PLANCK_PER_DOT,
+    AccountId, CollateralBalancesPallet, Error as RuntimeError, PolkaBtcProvider, VaultRegistryPallet, PLANCK_PER_DOT,
 };
 use serde::{Deserialize, Deserializer};
 use std::{collections::HashMap, net::SocketAddr, time::Duration};
@@ -149,8 +149,8 @@ async fn is_funding_allowed(
     last_request_json: Option<Json<FaucetRequest>>,
     account_type: FundingRequestAccountType,
 ) -> Result<bool, Error> {
-    let free_balance = provider.get_free_dot_balance_for_id(account_id.clone()).await?;
-    let reserved_balance = provider.get_reserved_dot_balance_for_id(account_id.clone()).await?;
+    let free_balance = provider.get_free_balance_for_id(account_id.clone()).await?;
+    let reserved_balance = provider.get_reserved_balance_for_id(account_id.clone()).await?;
     if free_balance + reserved_balance > MAX_FUNDABLE_CLIENT_BALANCE {
         warn!(
             "user {} has enough funds: {:?}",
@@ -280,7 +280,7 @@ mod tests {
     use std::{collections::HashMap, sync::Arc};
 
     use super::{
-        fund_account, open_kv_store, DotBalancesPallet, FundAccountJsonRpcRequest, FundingRequestAccountType,
+        fund_account, open_kv_store, CollateralBalancesPallet, FundAccountJsonRpcRequest, FundingRequestAccountType,
         PLANCK_PER_DOT,
     };
     use kv::{Config, Store};
@@ -339,7 +339,7 @@ mod tests {
 
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         let bob_funds_before = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone())
             .await
             .unwrap();
         let req = FundAccountJsonRpcRequest {
@@ -350,10 +350,7 @@ mod tests {
             .await
             .expect("Funding the account failed");
 
-        let bob_funds_after = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id)
-            .await
-            .unwrap();
+        let bob_funds_after = alice_provider.get_free_balance_for_id(bob_account_id).await.unwrap();
 
         assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
     }
@@ -411,7 +408,7 @@ mod tests {
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding
         let bob_prefunded_amount = bob_provider
-            .get_free_dot_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone())
             .await
             .unwrap();
         bob_provider
@@ -435,7 +432,7 @@ mod tests {
         bob_provider.register_vault(100, dummy_public_key()).await.unwrap();
 
         let bob_funds_before = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone())
             .await
             .unwrap();
 
@@ -443,10 +440,7 @@ mod tests {
             .await
             .expect("Funding the account failed");
 
-        let bob_funds_after = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id)
-            .await
-            .unwrap();
+        let bob_funds_after = alice_provider.get_free_balance_for_id(bob_account_id).await.unwrap();
         assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
     }
 
@@ -470,7 +464,7 @@ mod tests {
 
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         let bob_funds_before = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone())
             .await
             .unwrap();
         let req = FundAccountJsonRpcRequest {
@@ -486,10 +480,7 @@ mod tests {
         .await
         .expect("Funding the account failed");
 
-        let bob_funds_after = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id)
-            .await
-            .unwrap();
+        let bob_funds_after = alice_provider.get_free_balance_for_id(bob_account_id).await.unwrap();
         assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
 
         assert_err!(
@@ -521,7 +512,7 @@ mod tests {
 
         // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding
         let bob_prefunded_amount = bob_provider
-            .get_free_dot_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone())
             .await
             .unwrap();
         bob_provider
@@ -530,7 +521,7 @@ mod tests {
             .expect("Unable to transfer funds");
 
         let bob_funds_before = bob_provider
-            .get_free_dot_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone())
             .await
             .unwrap();
         let req = FundAccountJsonRpcRequest {
@@ -544,10 +535,7 @@ mod tests {
             .await
             .expect("Funding the account failed");
 
-        let bob_funds_after = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id)
-            .await
-            .unwrap();
+        let bob_funds_after = alice_provider.get_free_balance_for_id(bob_account_id).await.unwrap();
 
         assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
     }
@@ -574,7 +562,7 @@ mod tests {
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding
         let bob_prefunded_amount = bob_provider
-            .get_free_dot_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone())
             .await
             .unwrap();
         bob_provider
@@ -583,7 +571,7 @@ mod tests {
             .expect("Unable to transfer funds");
 
         let bob_funds_before = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone())
             .await
             .unwrap();
         let req = FundAccountJsonRpcRequest {
@@ -602,10 +590,7 @@ mod tests {
         .await
         .expect("Funding the account failed");
 
-        let bob_funds_after = alice_provider
-            .get_free_dot_balance_for_id(bob_account_id)
-            .await
-            .unwrap();
+        let bob_funds_after = alice_provider.get_free_balance_for_id(bob_account_id).await.unwrap();
 
         assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
 

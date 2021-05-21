@@ -15,7 +15,7 @@ pub mod integration;
 pub use error::{Error, SubxtError};
 pub use pallets::*;
 pub use rpc::{
-    BtcRelayPallet, BtcTxFeesPerByte, DotBalancesPallet, ExchangeRateOraclePallet, FeePallet, IssuePallet,
+    BtcRelayPallet, BtcTxFeesPerByte, CollateralBalancesPallet, ExchangeRateOraclePallet, FeePallet, IssuePallet,
     PolkaBtcProvider, RedeemPallet, RefundPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
     UtilFuncs, VaultRegistryPallet,
 };
@@ -87,8 +87,8 @@ impl system::System for PolkaBtcRuntime {
 
 impl pallets::Core for PolkaBtcRuntime {
     type Balance = Balance;
-    type Backing = Balance;
-    type Issuing = Balance;
+    type Collateral = Balance;
+    type Wrapped = Balance;
     type BTCBalance = Balance;
     type RichBlockHeader = PolkaBtcRichBlockHeader;
     type H256Le = H256Le;
@@ -120,8 +120,6 @@ impl security::Security for PolkaBtcRuntime {}
 
 impl staked_relayers::StakedRelayers for PolkaBtcRuntime {}
 
-impl collateral::Collateral for PolkaBtcRuntime {}
-
 impl vault_registry::VaultRegistry for PolkaBtcRuntime {}
 
 impl timestamp::Timestamp for PolkaBtcRuntime {
@@ -130,9 +128,17 @@ impl timestamp::Timestamp for PolkaBtcRuntime {
 
 impl exchange_rate_oracle::ExchangeRateOracle for PolkaBtcRuntime {}
 
-impl balances_dot::Backing for PolkaBtcRuntime {
+impl collateral_balances::Collateral for PolkaBtcRuntime {
     type Balance = Balance;
 }
+
+impl collateral_currency::CollateralCurrency for PolkaBtcRuntime {}
+
+impl wrapped_balances::Wrapped for PolkaBtcRuntime {
+    type Balance = Balance;
+}
+
+impl wrapped_currency::WrappedCurrency for PolkaBtcRuntime {}
 
 impl issue::Issue for PolkaBtcRuntime {}
 
@@ -149,8 +155,6 @@ impl sudo::Sudo for PolkaBtcRuntime {}
 impl fee::Fee for PolkaBtcRuntime {}
 
 impl sla::Sla for PolkaBtcRuntime {}
-
-impl treasury::Treasury for PolkaBtcRuntime {}
 
 impl utility::Utility for PolkaBtcRuntime {}
 

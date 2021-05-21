@@ -9,7 +9,7 @@ use substrate_subxt_proc_macro::{module, Call, Event, Store};
 #[module]
 pub trait ExchangeRateOracle: Core + Timestamp {}
 
-/// Current BTC/DOT exchange rate
+/// Current exchange rate (i.e. Planck/Satoshi)
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct ExchangeRateStore<T: ExchangeRateOracle> {
     #[store(returns = T::UnsignedFixedPoint)]

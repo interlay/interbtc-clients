@@ -1,6 +1,6 @@
-pub mod balances_dot;
 pub mod btc_relay;
-pub mod collateral;
+pub mod collateral_balances;
+pub mod collateral_currency;
 pub mod exchange_rate_oracle;
 pub mod fee;
 pub mod frame_system;
@@ -12,9 +12,10 @@ pub mod security;
 pub mod sla;
 pub mod staked_relayers;
 pub mod timestamp;
-pub mod treasury;
 pub mod utility;
 pub mod vault_registry;
+pub mod wrapped_balances;
+pub mod wrapped_currency;
 
 pub use module_bitcoin::{formatter::Formattable, types::*};
 pub use module_btc_relay::{BtcAddress, BtcPublicKey, RichBlockHeader};
@@ -38,10 +39,10 @@ pub type BitcoinBlockHeight = u32;
 
 #[module]
 pub trait Core: System {
-    type Backing: Codec + EncodeLike + Member + Default + PartialOrd + Saturating + AtLeast32Bit;
+    type Collateral: Codec + EncodeLike + Member + Default + PartialOrd + Saturating + AtLeast32Bit;
+    type Wrapped: Codec + EncodeLike + Member + Default + AtLeast32Bit;
     type Balance: Codec + EncodeLike + Member + Default;
     type BTCBalance: Codec + EncodeLike + Member + Default;
-    type Issuing: Codec + EncodeLike + Member + Default + AtLeast32Bit;
     type RichBlockHeader: Codec + EncodeLike + Member + Default;
     type H256Le: Codec + EncodeLike + Member + Default;
     type H256: Codec + EncodeLike + Member + Default;

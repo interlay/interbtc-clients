@@ -8,7 +8,7 @@ use futures::{
 };
 use runtime::{
     integration::*,
-    pallets::{issue::*, redeem::*, refund::*, replace::*, treasury::*, vault_registry::*},
+    pallets::{issue::*, redeem::*, refund::*, replace::*, vault_registry::*, wrapped_currency::*},
     BtcAddress, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, IssuePallet, PolkaBtcHeader, PolkaBtcProvider,
     PolkaBtcRuntime, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };

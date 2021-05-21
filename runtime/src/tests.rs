@@ -3,8 +3,8 @@
 use crate::integration::*;
 
 use super::{
-    BtcAddress, BtcPublicKey, BtcRelayPallet, DotBalancesPallet, ExchangeRateOraclePallet, FixedPointNumber, FixedU128,
-    ReplacePallet, SecurityPallet, StakedRelayerPallet, StatusCode, VaultRegistryPallet,
+    BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, ExchangeRateOraclePallet, FixedPointNumber,
+    FixedU128, ReplacePallet, SecurityPallet, StakedRelayerPallet, StatusCode, VaultRegistryPallet,
 };
 use module_bitcoin::{
     formatter::TryFormattable,
@@ -36,7 +36,7 @@ async fn test_getters() {
 
     tokio::join!(
         async {
-            assert_eq!(provider.get_free_dot_balance().await.unwrap(), 1 << 60);
+            assert_eq!(provider.get_free_balance().await.unwrap(), 1 << 60);
         },
         async {
             assert_eq!(provider.get_parachain_status().await.unwrap(), StatusCode::Running);

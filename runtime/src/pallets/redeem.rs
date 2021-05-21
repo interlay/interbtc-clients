@@ -12,7 +12,7 @@ pub trait Redeem: Core {}
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RequestRedeemCall<T: Redeem> {
     #[codec(compact)]
-    pub amount_polka_btc: T::Issuing,
+    pub amount: T::Wrapped,
     pub btc_address: T::BtcAddress,
     pub vault_id: T::AccountId,
 }
@@ -21,12 +21,12 @@ pub struct RequestRedeemCall<T: Redeem> {
 pub struct RequestRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,
-    pub amount_polka_btc: T::Issuing,
-    pub fee_polka_btc: T::Issuing,
-    pub premium_dot: T::Backing,
+    pub amount: T::Wrapped,
+    pub fee: T::Wrapped,
+    pub premium: T::Collateral,
     pub vault_id: T::AccountId,
     pub user_btc_address: T::BtcAddress,
-    pub transfer_fee_btc: T::Issuing,
+    pub transfer_fee: T::Wrapped,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
@@ -41,8 +41,8 @@ pub struct ExecuteRedeemCall<T: Redeem> {
 pub struct ExecuteRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,
-    pub amount_polka_btc: T::Issuing,
-    pub fee_polka_btc: T::Issuing,
+    pub amount: T::Wrapped,
+    pub fee: T::Wrapped,
     pub vault_id: T::AccountId,
 }
 
@@ -58,13 +58,13 @@ pub struct CancelRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,
     pub vault_id: T::AccountId,
-    pub slashing_amount_in_dot: T::Backing,
+    pub slashing_amount: T::Collateral,
     pub reimburse: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct RedeemRequestsStore<T: Redeem> {
-    #[store(returns = RedeemRequest<T::AccountId, T::BlockNumber, T::Issuing, T::Backing>)]
+    #[store(returns = RedeemRequest<T::AccountId, T::BlockNumber, T::Wrapped, T::Collateral>)]
     pub _runtime: PhantomData<T>,
     pub redeem_id: T::H256,
 }

@@ -23,23 +23,23 @@ pub type PolkaBtcBlock = SignedBlock<Block<PolkaBtcHeader, <PolkaBtcRuntime as S
 pub type PolkaBtcVault = Vault<
     AccountId,
     BlockNumber,
-    <PolkaBtcRuntime as Core>::Issuing,
-    <PolkaBtcRuntime as Core>::Backing,
+    <PolkaBtcRuntime as Core>::Wrapped,
+    <PolkaBtcRuntime as Core>::Collateral,
     <PolkaBtcRuntime as Core>::SignedFixedPoint,
 >;
 
 pub type PolkaBtcIssueRequest =
-    IssueRequest<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::Issuing, <PolkaBtcRuntime as Core>::Backing>;
+    IssueRequest<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::Wrapped, <PolkaBtcRuntime as Core>::Collateral>;
 
 pub type PolkaBtcRequestIssueEvent = RequestIssueEvent<PolkaBtcRuntime>;
 
 pub type PolkaBtcRedeemRequest =
-    RedeemRequest<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::Issuing, <PolkaBtcRuntime as Core>::Backing>;
+    RedeemRequest<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::Wrapped, <PolkaBtcRuntime as Core>::Collateral>;
 
-pub type PolkaBtcRefundRequest = RefundRequest<AccountId, <PolkaBtcRuntime as Core>::Issuing>;
+pub type PolkaBtcRefundRequest = RefundRequest<AccountId, <PolkaBtcRuntime as Core>::Wrapped>;
 
 pub type PolkaBtcReplaceRequest =
-    ReplaceRequest<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::Issuing, <PolkaBtcRuntime as Core>::Backing>;
+    ReplaceRequest<AccountId, BlockNumber, <PolkaBtcRuntime as Core>::Wrapped, <PolkaBtcRuntime as Core>::Collateral>;
 
 pub type PolkaBtcRichBlockHeader = RichBlockHeader<AccountId, BlockNumber>;
 

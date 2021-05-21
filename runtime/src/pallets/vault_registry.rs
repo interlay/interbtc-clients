@@ -11,46 +11,46 @@ pub trait VaultRegistry: Core {}
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RegisterVaultCall<T: VaultRegistry> {
     #[codec(compact)]
-    pub collateral: T::Backing,
+    pub collateral: T::Collateral,
     pub public_key: T::BtcPublicKey,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct RegisterVaultEvent<T: VaultRegistry> {
     pub account_id: T::AccountId,
-    pub collateral: T::Backing,
+    pub collateral: T::Collateral,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct DepositCollateralCall<T: VaultRegistry> {
     #[codec(compact)]
-    pub amount: T::Backing,
+    pub amount: T::Collateral,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct DepositCollateralEvent<T: VaultRegistry> {
     pub vault_id: T::AccountId,
-    pub new_collateral: T::Backing,
-    pub total_collateral: T::Backing,
-    pub free_collateral: T::Backing,
+    pub new_collateral: T::Collateral,
+    pub total_collateral: T::Collateral,
+    pub free_collateral: T::Collateral,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WithdrawCollateralCall<T: VaultRegistry> {
     #[codec(compact)]
-    pub amount: T::Backing,
+    pub amount: T::Collateral,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct WithdrawCollateralEvent<T: VaultRegistry> {
     pub vault_id: T::AccountId,
-    pub withdrawn_collateral: T::Backing,
-    pub total_collateral: T::Backing,
+    pub withdrawn_collateral: T::Collateral,
+    pub total_collateral: T::Collateral,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct VaultsStore<T: VaultRegistry> {
-    #[store(returns = Vault<T::AccountId, T::BlockNumber, T::Issuing, T::Backing, T::SignedFixedPoint>)]
+    #[store(returns = Vault<T::AccountId, T::BlockNumber, T::Wrapped, T::Collateral, T::SignedFixedPoint>)]
     pub _runtime: PhantomData<T>,
     pub account_id: T::AccountId,
 }
@@ -96,7 +96,7 @@ pub struct LiquidateVaultEvent<T: VaultRegistry> {
     pub to_be_issued_tokens: T::BTCBalance,
     pub to_be_redeemed_tokens: T::BTCBalance,
     pub to_be_replaced_tokens: T::BTCBalance,
-    pub backing_collateral: T::Backing,
+    pub collateral_collateral: T::Collateral,
     pub status: VaultStatus,
-    pub replace_collateral: T::Backing,
+    pub replace_collateral: T::Collateral,
 }

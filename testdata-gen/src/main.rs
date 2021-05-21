@@ -13,8 +13,8 @@ use log::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     substrate_subxt::{PairSigner, Signer},
-    AccountId, BtcAddress, DotBalancesPallet, ErrorCode as PolkaBtcErrorCode, ExchangeRateOraclePallet, FeePallet,
-    FixedPointNumber,
+    AccountId, BtcAddress, CollateralBalancesPallet, ErrorCode as PolkaBtcErrorCode, ExchangeRateOraclePallet,
+    FeePallet, FixedPointNumber,
     FixedPointTraits::*,
     FixedU128, H256Le, IssueRequestStatus, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet,
     StatusCode as PolkaBtcStatusCode, TimestampPallet,
@@ -456,7 +456,7 @@ async fn main() -> Result<(), Error> {
                 Some(x) => x,
                 None => {
                     // calculate required amount
-                    let amount_in_dot = provider.btc_to_dots(info.issue_amount).await?;
+                    let amount_in_dot = provider.wrapped_to_collateral(info.issue_amount).await?;
                     let required_griefing_collateral_rate = provider.get_issue_griefing_collateral().await?;
 
                     // we add 0.5 before we do the final integer division to round the result we return.

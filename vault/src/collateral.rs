@@ -1,7 +1,7 @@
 use crate::error::Error;
 use futures::future;
 use runtime::{
-    pallets::exchange_rate_oracle::SetExchangeRateEvent, AccountId, DotBalancesPallet, PolkaBtcProvider,
+    pallets::exchange_rate_oracle::SetExchangeRateEvent, AccountId, CollateralBalancesPallet, PolkaBtcProvider,
     PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet, VaultStatus,
 };
 use service::Error as ServiceError;
@@ -45,7 +45,7 @@ pub async fn maintain_collateralization_rate(
 /// * `provider` - the parachain RPC handle
 /// * `vault_id` - the id of this vault
 /// * `maximum_collateral` - the upperbound of total collateral that is allowed to be placed
-pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet>(
+pub async fn lock_required_collateral<P: VaultRegistryPallet + CollateralBalancesPallet>(
     provider: P,
     vault_id: AccountId,
     maximum_collateral: u128,
@@ -58,7 +58,7 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet
 
     let (required_collateral, actual_collateral) = future::try_join(
         provider.get_required_collateral_for_vault(vault_id),
-        provider.get_reserved_dot_balance(),
+        provider.get_reserved_balance(),
     )
     .await?;
 
@@ -147,16 +147,16 @@ mod tests {
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
             async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-            async fn get_required_collateral_for_issuing(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
+            async fn get_required_collateral_for_wrapped(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
         }
 
         #[async_trait]
-        pub trait DotBalancesPallet {
-            async fn get_free_dot_balance(&self) -> Result<PolkaBtcBalance, RuntimeError>;
-            async fn get_free_dot_balance_for_id(&self, id: AccountId) -> Result<PolkaBtcBalance, RuntimeError>;
-            async fn get_reserved_dot_balance(&self) -> Result<PolkaBtcBalance, RuntimeError>;
-            async fn get_reserved_dot_balance_for_id(&self, id: AccountId) -> Result<PolkaBtcBalance, RuntimeError>;
+        pub trait CollateralBalancesPallet {
+            async fn get_free_balance(&self) -> Result<PolkaBtcBalance, RuntimeError>;
+            async fn get_free_balance_for_id(&self, id: AccountId) -> Result<PolkaBtcBalance, RuntimeError>;
+            async fn get_reserved_balance(&self) -> Result<PolkaBtcBalance, RuntimeError>;
+            async fn get_reserved_balance_for_id(&self, id: AccountId) -> Result<PolkaBtcBalance, RuntimeError>;
             async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), RuntimeError>;
         }
     }
@@ -184,7 +184,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(50));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(75));
+        provider.expect_get_reserved_balance().returning(|| Ok(75));
 
         let vault_id = AccountId::default();
         assert_ok!(lock_required_collateral(provider, vault_id, 100).await);
@@ -206,7 +206,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(200));
+        provider.expect_get_reserved_balance().returning(|| Ok(200));
 
         let vault_id = AccountId::default();
         assert_ok!(lock_required_collateral(provider, vault_id, 150).await);
@@ -228,7 +228,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(150));
+        provider.expect_get_reserved_balance().returning(|| Ok(150));
 
         let vault_id = AccountId::default();
         assert_ok!(lock_required_collateral(provider, vault_id, 75).await);
@@ -250,7 +250,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(75));
+        provider.expect_get_reserved_balance().returning(|| Ok(75));
 
         let vault_id = AccountId::default();
         assert_err!(
@@ -274,7 +274,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(25));
+        provider.expect_get_reserved_balance().returning(|| Ok(25));
         provider
             .expect_deposit_collateral()
             .withf(|&amount| amount == 50)
@@ -302,7 +302,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(25));
+        provider.expect_get_reserved_balance().returning(|| Ok(25));
         provider
             .expect_deposit_collateral()
             .withf(|&amount| amount == 75)
@@ -328,7 +328,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(25));
+        provider.expect_get_reserved_balance().returning(|| Ok(25));
 
         let vault_id = AccountId::default();
         assert_err!(
@@ -352,7 +352,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(100));
+        provider.expect_get_reserved_balance().returning(|| Ok(100));
 
         let vault_id = AccountId::default();
         assert_ok!(lock_required_collateral(provider, vault_id, 200).await);

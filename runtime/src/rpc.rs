@@ -20,7 +20,7 @@ use substrate_subxt::{
 use tokio::{sync::RwLock, time::delay_for};
 
 use crate::{
-    balances_dot::*, btc_relay::*, conn::*, error::POOL_INVALID_TX, exchange_rate_oracle::*, fee::*, issue::*,
+    btc_relay::*, collateral_balances::*, conn::*, error::POOL_INVALID_TX, exchange_rate_oracle::*, fee::*, issue::*,
     pallets::*, redeem::*, refund::*, replace::*, security::*, staked_relayers::*, timestamp::*, types::*, utility::*,
     vault_registry::*, AccountId, BlockNumber, Error, PolkaBtcRuntime, BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS,
     STABLE_PARACHAIN_CONFIRMATIONS,
@@ -294,38 +294,34 @@ impl UtilFuncs for PolkaBtcProvider {
 }
 
 #[async_trait]
-pub trait DotBalancesPallet {
-    async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
+pub trait CollateralBalancesPallet {
+    async fn get_free_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
 
-    async fn get_free_dot_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
+    async fn get_free_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
 
-    async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
+    async fn get_reserved_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
 
-    async fn get_reserved_dot_balance_for_id(&self, id: AccountId)
-        -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
+    async fn get_reserved_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, Error>;
 
     async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), Error>;
 }
 
 #[async_trait]
-impl DotBalancesPallet for PolkaBtcProvider {
-    async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
-        Ok(Self::get_free_dot_balance_for_id(&self, self.account_id.clone()).await?)
+impl CollateralBalancesPallet for PolkaBtcProvider {
+    async fn get_free_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
+        Ok(Self::get_free_balance_for_id(&self, self.account_id.clone()).await?)
     }
 
-    async fn get_free_dot_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
+    async fn get_free_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
         let head = self.get_latest_block_hash().await?;
         Ok(self.ext_client.account(id.clone(), head).await?.free)
     }
 
-    async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
-        Ok(Self::get_reserved_dot_balance_for_id(&self, self.account_id.clone()).await?)
+    async fn get_reserved_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
+        Ok(Self::get_reserved_balance_for_id(&self, self.account_id.clone()).await?)
     }
 
-    async fn get_reserved_dot_balance_for_id(
-        &self,
-        id: AccountId,
-    ) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
+    async fn get_reserved_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, Error> {
         let head = self.get_latest_block_hash().await?;
         Ok(self.ext_client.account(id.clone(), head).await?.reserved)
     }
@@ -346,7 +342,7 @@ pub trait ReplacePallet {
     /// # Arguments
     ///
     /// * `&self` - sender of the transaction
-    /// * `amount` - amount of [Issuing]
+    /// * `amount` - amount of [Wrapped]
     /// * `griefing_collateral` - amount of griefing collateral
     async fn request_replace(&self, amount: u128, griefing_collateral: u128) -> Result<(), Error>;
 
@@ -355,7 +351,7 @@ pub trait ReplacePallet {
     /// # Arguments
     ///
     /// * `&self` - sender of the transaction: the old vault
-    /// * `amount` - the amount of [Issuing] to replace
+    /// * `amount` - the amount of [Wrapped] to replace
     async fn withdraw_replace(&self, amount: u128) -> Result<(), Error>;
 
     /// Accept request of vault replacement
@@ -364,7 +360,7 @@ pub trait ReplacePallet {
     ///
     /// * `&self` - the initiator of the transaction: the new vault
     /// * `old_vault` - the vault to replace
-    /// * `amount_btc` - the amount of [Issuing] to replace
+    /// * `amount_btc` - the amount of [Wrapped] to replace
     /// * `collateral` - the collateral for replacement
     /// * `btc_address` - the address to send funds to
     async fn accept_replace(
@@ -543,7 +539,7 @@ impl TimestampPallet for PolkaBtcProvider {
 pub trait ExchangeRateOraclePallet {
     async fn get_exchange_rate_info(&self) -> Result<(FixedU128, u64, u64), Error>;
 
-    async fn set_exchange_rate_info(&self, dot_per_btc: FixedU128) -> Result<(), Error>;
+    async fn set_exchange_rate_info(&self, collateral_per_wrapped: FixedU128) -> Result<(), Error>;
 
     async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error>;
 
@@ -551,9 +547,9 @@ pub trait ExchangeRateOraclePallet {
 
     async fn get_btc_tx_fees_per_byte(&self) -> Result<BtcTxFeesPerByte, Error>;
 
-    async fn btc_to_dots(&self, amount: u128) -> Result<u128, Error>;
+    async fn wrapped_to_collateral(&self, amount: u128) -> Result<u128, Error>;
 
-    async fn dots_to_btc(&self, amount: u128) -> Result<u128, Error>;
+    async fn collateral_to_wrapped(&self, amount: u128) -> Result<u128, Error>;
 }
 
 #[async_trait]
@@ -572,13 +568,15 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
         }
     }
 
-    /// Sets the current exchange rate as BTC/DOT
+    /// Sets the current exchange rate (i.e. DOT/BTC)
     ///
     /// # Arguments
-    /// * `dot_per_btc` - the current dot per btc exchange rate
-    async fn set_exchange_rate_info(&self, dot_per_btc: FixedU128) -> Result<(), Error> {
+    /// * `collateral_per_wrapped` - the current exchange rate
+    async fn set_exchange_rate_info(&self, collateral_per_wrapped: FixedU128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client.set_exchange_rate_and_watch(&signer, dot_per_btc).await
+            self.ext_client
+                .set_exchange_rate_and_watch(&signer, collateral_per_wrapped)
+                .await
         })
         .await?;
         Ok(())
@@ -624,12 +622,12 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
     }
 
     /// Converts the amount in btc to dot, based on the current set exchange rate.
-    async fn btc_to_dots(&self, amount_btc: u128) -> Result<u128, Error> {
+    async fn wrapped_to_collateral(&self, amount: u128) -> Result<u128, Error> {
         let result: BalanceWrapper<_> = self
             .rpc_client
             .request(
-                "exchangeRateOracle_issuingToBacking",
-                &[to_json_value(BalanceWrapper { amount: amount_btc })?],
+                "exchangeRateOracle_wrappedToCollateral",
+                &[to_json_value(BalanceWrapper { amount })?],
             )
             .await?;
 
@@ -637,12 +635,12 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
     }
 
     /// Converts the amount in dot to btc, based on the current set exchange rate.
-    async fn dots_to_btc(&self, amount_dot: u128) -> Result<u128, Error> {
+    async fn collateral_to_wrapped(&self, amount: u128) -> Result<u128, Error> {
         let result: BalanceWrapper<_> = self
             .rpc_client
             .request(
-                "exchangeRateOracle_backingToIssuing",
-                &[to_json_value(BalanceWrapper { amount: amount_dot })?],
+                "exchangeRateOracle_collateralToWrapped",
+                &[to_json_value(BalanceWrapper { amount })?],
             )
             .await?;
 
@@ -911,12 +909,7 @@ impl IssuePallet for PolkaBtcProvider {
 #[async_trait]
 pub trait RedeemPallet {
     /// Request a new redeem
-    async fn request_redeem(
-        &self,
-        amount_polka_btc: u128,
-        btc_address: BtcAddress,
-        vault_id: AccountId,
-    ) -> Result<H256, Error>;
+    async fn request_redeem(&self, amount: u128, btc_address: BtcAddress, vault_id: AccountId) -> Result<H256, Error>;
 
     /// Execute a redeem request by providing a Bitcoin transaction inclusion proof
     async fn execute_redeem(&self, redeem_id: H256, merkle_proof: Vec<u8>, raw_tx: Vec<u8>) -> Result<(), Error>;
@@ -939,16 +932,11 @@ pub trait RedeemPallet {
 
 #[async_trait]
 impl RedeemPallet for PolkaBtcProvider {
-    async fn request_redeem(
-        &self,
-        amount_polka_btc: u128,
-        btc_address: BtcAddress,
-        vault_id: AccountId,
-    ) -> Result<H256, Error> {
+    async fn request_redeem(&self, amount: u128, btc_address: BtcAddress, vault_id: AccountId) -> Result<H256, Error> {
         let result = self
             .with_unique_signer(|signer| async move {
                 self.ext_client
-                    .request_redeem_and_watch(&signer, amount_polka_btc, btc_address, vault_id)
+                    .request_redeem_and_watch(&signer, amount, btc_address, vault_id)
                     .await
             })
             .await?;
@@ -1219,7 +1207,7 @@ pub trait VaultRegistryPallet {
 
     async fn register_address(&self, btc_address: BtcAddress) -> Result<(), Error>;
 
-    async fn get_required_collateral_for_issuing(&self, amount_btc: u128) -> Result<u128, Error>;
+    async fn get_required_collateral_for_wrapped(&self, amount_btc: u128) -> Result<u128, Error>;
 
     async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, Error>;
 }
@@ -1338,11 +1326,11 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     ///
     /// # Arguments
     /// * `amount_btc` - amount of btc to cover
-    async fn get_required_collateral_for_issuing(&self, amount_btc: u128) -> Result<u128, Error> {
+    async fn get_required_collateral_for_wrapped(&self, amount_btc: u128) -> Result<u128, Error> {
         let result: BalanceWrapper<_> = self
             .rpc_client
             .request(
-                "vaultRegistry_getRequiredCollateralForIssuing",
+                "vaultRegistry_getRequiredCollateralForWrapped",
                 &[to_json_value(BalanceWrapper { amount: amount_btc })?],
             )
             .await?;
