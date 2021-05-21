@@ -156,6 +156,7 @@ mod tests {
             async fn get_free_dot_balance(&self) -> Result<PolkaBtcBalance, RuntimeError>;
             async fn get_free_dot_balance_for_id(&self, id: AccountId) -> Result<PolkaBtcBalance, RuntimeError>;
             async fn get_reserved_dot_balance(&self) -> Result<PolkaBtcBalance, RuntimeError>;
+            async fn get_reserved_dot_balance_for_id(&self, id: AccountId) -> Result<PolkaBtcBalance, RuntimeError>;
             async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), RuntimeError>;
         }
     }
