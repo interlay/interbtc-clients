@@ -12,19 +12,19 @@ pub trait Issue: Core {}
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RequestIssueCall<T: Issue> {
     #[codec(compact)]
-    pub amount: T::Issuing,
+    pub amount: T::Wrapped,
     pub vault_id: T::AccountId,
     #[codec(compact)]
-    pub griefing_collateral: T::Backing,
+    pub griefing_collateral: T::Collateral,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
 pub struct RequestIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,
-    pub amount_btc: T::Issuing, //add _btc
-    pub fee: T::Issuing,
-    pub griefing_collateral: T::Backing,
+    pub amount_btc: T::Wrapped, //add _btc
+    pub fee: T::Wrapped,
+    pub griefing_collateral: T::Collateral,
     pub vault_id: T::AccountId,
     pub vault_btc_address: T::BtcAddress,
     pub vault_public_key: T::BtcPublicKey,
@@ -42,7 +42,7 @@ pub struct ExecuteIssueCall<T: Issue> {
 pub struct ExecuteIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,
-    pub total_amount: T::Issuing,
+    pub total_amount: T::Wrapped,
     pub vault_id: T::AccountId,
 }
 
@@ -56,12 +56,12 @@ pub struct CancelIssueCall<T: Issue> {
 pub struct CancelIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,
-    pub griefing_collateral: T::Backing,
+    pub griefing_collateral: T::Collateral,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct IssueRequestsStore<T: Issue> {
-    #[store(returns = IssueRequest<T::AccountId, T::BlockNumber, T::Issuing, T::Backing>)]
+    #[store(returns = IssueRequest<T::AccountId, T::BlockNumber, T::Wrapped, T::Collateral>)]
     pub _runtime: PhantomData<T>,
     pub issue_id: T::H256,
 }

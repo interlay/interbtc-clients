@@ -3,12 +3,9 @@ use bitcoin::BitcoinCoreApi;
 use futures::{channel::mpsc::Sender, SinkExt};
 use runtime::{
     pallets::replace::{AcceptReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent},
-    DotBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, PolkaBtcVault, ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    CollateralBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use service::Error as ServiceError;
-use sp_core::crypto::Ss58Codec;
-use std::time::Duration;
-use tokio::time::delay_for;
 
 /// Listen for AcceptReplaceEvent directed at this vault and continue the replacement
 /// procedure by transferring bitcoin and calling execute_replace
@@ -120,15 +117,15 @@ pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone>(
 /// failure, since nothing is at stake at this point
 pub async fn handle_replace_request<
     B: BitcoinCoreApi + Clone,
-    P: DotBalancesPallet + ReplacePallet + VaultRegistryPallet,
+    P: CollateralBalancesPallet + ReplacePallet + VaultRegistryPallet,
 >(
     provider: P,
     btc_rpc: B,
     event: &RequestReplaceEvent<PolkaBtcRuntime>,
 ) -> Result<(), Error> {
-    let required_collateral = provider.get_required_collateral_for_issuing(event.amount_btc).await?;
+    let required_collateral = provider.get_required_collateral_for_wrapped(event.amount_btc).await?;
 
-    let free_balance = provider.get_free_dot_balance().await?;
+    let free_balance = provider.get_free_balance().await?;
 
     if free_balance < required_collateral {
         Err(Error::InsufficientFunds)
@@ -275,11 +272,11 @@ mod tests {
             async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
             async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, RuntimeError>;
             async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
-            async fn lock_additional_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
+            async fn deposit_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
             async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-            async fn get_required_collateral_for_issuing(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
+            async fn get_required_collateral_for_wrapped(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
         }
 
@@ -316,11 +313,11 @@ mod tests {
         }
 
         #[async_trait]
-        pub trait DotBalancesPallet {
-            async fn get_free_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
-            async fn get_free_dot_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
-            async fn get_reserved_dot_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
-            async fn get_reserved_dot_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
+        pub trait CollateralBalancesPallet {
+            async fn get_free_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
+            async fn get_free_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
+            async fn get_reserved_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
+            async fn get_reserved_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
             async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), RuntimeError>;
         }
     }
@@ -339,9 +336,9 @@ mod tests {
 
         let mut provider = MockProvider::default();
         provider
-            .expect_get_required_collateral_for_issuing()
+            .expect_get_required_collateral_for_wrapped()
             .returning(|_| Ok(100));
-        provider.expect_get_free_dot_balance().returning(|| Ok(50));
+        provider.expect_get_free_balance().returning(|| Ok(50));
 
         let event = RequestReplaceEvent {
             old_vault_id: Default::default(),

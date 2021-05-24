@@ -115,7 +115,7 @@ pub async fn assert_issue(provider: &PolkaBtcProvider, btc_rpc: &MockBitcoinCore
 
 /// calculate how much collateral the vault requires to accept an issue of the given size
 pub async fn get_required_vault_collateral_for_issue(provider: &PolkaBtcProvider, amount: u128) -> u128 {
-    provider.get_required_collateral_for_issuing(amount).await.unwrap()
+    provider.get_required_collateral_for_wrapped(amount).await.unwrap()
 }
 
 /// wait for an event to occur. After the specified error, this will panic. This returns the event.
@@ -145,7 +145,7 @@ where
         }
     })
     .await
-    .unwrap()
+    .expect(&format!("could not find event: {}::{}", T::MODULE, T::EVENT))
 }
 
 /// run `service` in the background, and run `fut`. If the service completes before the

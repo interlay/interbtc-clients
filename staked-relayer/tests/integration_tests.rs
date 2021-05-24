@@ -48,8 +48,6 @@ async fn test_report_vault_theft_succeeds() {
     .await
     .unwrap();
 
-    relayer_provider.register_staked_relayer(1000000).await.unwrap();
-
     let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
     let issue_amount = 100000;
@@ -63,13 +61,7 @@ async fn test_report_vault_theft_succeeds() {
 
     test_service(
         join(
-            staked_relayer::service::report_vault_thefts(
-                btc_rpc.clone(),
-                relayer_provider.clone(),
-                0,
-                vaults.clone(),
-                Duration::from_secs(1),
-            ),
+            staked_relayer::service::report_vault_thefts(btc_rpc.clone(), relayer_provider.clone(), 0, vaults.clone()),
             staked_relayer::service::listen_for_wallet_updates(relayer_provider.clone(), vaults.clone()),
         ),
         async {
@@ -102,23 +94,4 @@ async fn test_report_vault_theft_succeeds() {
         },
     )
     .await
-}
-
-#[tokio::test(threaded_scheduler)]
-async fn test_register_deregister_succeeds() {
-    service::init_subscriber();
-
-    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-
-    let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-
-    relayer_provider.register_staked_relayer(1000000).await.unwrap();
-
-    assert!(relayer_provider.register_staked_relayer(1000000).await.is_err());
-
-    relayer_provider.deregister_staked_relayer().await.unwrap();
-
-    assert!(relayer_provider.deregister_staked_relayer().await.is_err());
-
-    relayer_provider.register_staked_relayer(1000000).await.unwrap();
 }

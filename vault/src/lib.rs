@@ -31,8 +31,8 @@ pub mod service {
 }
 pub use crate::{cancellation::RequestEvent, error::Error, system::*, types::IssueRequests};
 
-pub(crate) async fn lock_additional_collateral(api: &PolkaBtcProvider, amount: u128) -> Result<(), Error> {
-    let result = api.lock_additional_collateral(amount).await;
+pub(crate) async fn deposit_collateral(api: &PolkaBtcProvider, amount: u128) -> Result<(), Error> {
+    let result = api.deposit_collateral(amount).await;
     tracing::info!("Locking additional collateral; amount {}: {:?}", amount, result);
     Ok(result?)
 }

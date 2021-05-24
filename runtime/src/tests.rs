@@ -3,8 +3,8 @@
 use crate::integration::*;
 
 use super::{
-    BtcAddress, BtcPublicKey, BtcRelayPallet, DotBalancesPallet, ExchangeRateOraclePallet, FixedPointNumber, FixedU128,
-    ReplacePallet, SecurityPallet, StakedRelayerPallet, StatusCode, VaultRegistryPallet, MINIMUM_STAKE,
+    BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, ExchangeRateOraclePallet, FixedPointNumber,
+    FixedU128, ReplacePallet, SecurityPallet, StakedRelayerPallet, StatusCode, VaultRegistryPallet,
 };
 use module_bitcoin::{
     formatter::TryFormattable,
@@ -36,7 +36,7 @@ async fn test_getters() {
 
     tokio::join!(
         async {
-            assert_eq!(provider.get_free_dot_balance().await.unwrap(), 1 << 60);
+            assert_eq!(provider.get_free_balance().await.unwrap(), 1 << 60);
         },
         async {
             assert_eq!(provider.get_parachain_status().await.unwrap(), StatusCode::Running);
@@ -66,9 +66,6 @@ async fn test_btc_relay() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
     set_exchange_rate(client.clone()).await;
-
-    // must be authorized to submit blocks
-    provider.register_staked_relayer(MINIMUM_STAKE).await.unwrap();
 
     let address = BtcAddress::P2PKH(H160::zero());
     let mut height = 0;

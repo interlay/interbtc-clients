@@ -10,18 +10,18 @@ use std::{convert::TryInto, time::Duration};
 /// Request redeem
 pub async fn request_redeem(
     redeem_prov: &PolkaBtcProvider,
-    amount_polka_btc: u128,
+    amount: u128,
     btc_address: BtcAddress,
     vault_id: AccountId,
 ) -> Result<H256, Error> {
     let redeem_id = redeem_prov
-        .request_redeem(amount_polka_btc, btc_address, vault_id.clone())
+        .request_redeem(amount, btc_address, vault_id.clone())
         .await?;
 
     info!(
         "Requested {:?} to redeem {:?} tokens from {:?}",
         redeem_prov.get_account_id(),
-        amount_polka_btc,
+        amount,
         vault_id
     );
 

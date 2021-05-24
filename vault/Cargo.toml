@@ -1,6 +1,6 @@
 [package]
 name = "vault"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 description = "The Vault client intermediates between Bitcoin Core and the PolkaBTC Parachain."
@@ -35,9 +35,9 @@ runtime = { path = "../runtime" }
 service = { path = "../service" }
 
 # Substrate dependencies
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
-sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.1" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.1" }
+sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.1" }
 
 [dev-dependencies]
 mockall = "0.8.1"

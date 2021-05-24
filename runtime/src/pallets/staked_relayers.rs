@@ -6,21 +6,10 @@ use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use std::fmt::Debug;
 use substrate_subxt::balances::Balances;
-use substrate_subxt_proc_macro::{module, Call, Event, Store};
+use substrate_subxt_proc_macro::{module, Call, Event};
 
 #[module]
 pub trait StakedRelayers: Core + Balances {}
-
-#[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct RegisterStakedRelayerCall<T: StakedRelayers> {
-    #[codec(compact)]
-    pub stake: T::Backing,
-}
-
-#[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct DeregisterStakedRelayerCall<T: StakedRelayers> {
-    pub _runtime: PhantomData<T>,
-}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct ReportVaultTheftCall<T: StakedRelayers> {
@@ -33,24 +22,6 @@ pub struct ReportVaultTheftCall<T: StakedRelayers> {
 pub struct VaultTheftEvent<T: StakedRelayers> {
     pub vault_id: T::AccountId,
     pub txid: T::H256Le,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct RegisterStakedRelayerEvent<T: StakedRelayers> {
-    pub account_id: T::AccountId,
-    pub collateral: T::Backing,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct DeregisterStakedRelayerEvent<T: StakedRelayers> {
-    pub account_id: T::AccountId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct StakesStore<'a, T: StakedRelayers> {
-    #[store(returns = T::Backing)]
-    pub _runtime: PhantomData<T>,
-    pub account_id: &'a T::AccountId,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]

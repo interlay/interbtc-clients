@@ -41,7 +41,7 @@ pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                         Ok(_) => tracing::info!(
                             "Completed refund request #{} with amount {}",
                             event.refund_id,
-                            event.amount_polka_btc
+                            event.amount
                         ),
                         Err(e) => tracing::error!(
                             "Failed to process refund request #{}: {}",

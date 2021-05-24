@@ -41,7 +41,7 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                         Ok(_) => tracing::info!(
                             "Completed redeem request #{} with amount {}",
                             event.redeem_id,
-                            event.amount_polka_btc
+                            event.amount
                         ),
                         Err(e) => tracing::error!(
                             "Failed to process redeem request #{}: {}",

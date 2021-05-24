@@ -1,6 +1,5 @@
 use bitcoin::{ConversionError, Error as BitcoinError};
 use hex::FromHexError;
-use jsonrpc_core::error::Error as JsonRpcError;
 use parity_scale_codec::Error as CodecError;
 use runtime::Error as RuntimeError;
 use serde_json::Error as SerdeJsonError;
@@ -24,10 +23,6 @@ pub enum Error {
     SerdeJsonError(#[from] SerdeJsonError),
     #[error("CodecError: {0}")]
     CodecError(#[from] CodecError),
-    #[error("Json RPC error: {0}")]
-    JsonRpcError(#[from] JsonRpcError),
-    #[error("Http error: {0}")]
-    HttpError(#[from] reqwest::Error),
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
     #[error("RuntimeError: {0}")]

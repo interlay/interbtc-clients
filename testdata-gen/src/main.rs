@@ -1,4 +1,3 @@
-mod api;
 mod error;
 mod issue;
 mod redeem;
@@ -14,8 +13,8 @@ use log::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     substrate_subxt::{PairSigner, Signer},
-    AccountId, BtcAddress, DotBalancesPallet, ErrorCode as PolkaBtcErrorCode, ExchangeRateOraclePallet, FeePallet,
-    FixedPointNumber,
+    AccountId, BtcAddress, CollateralBalancesPallet, ErrorCode as PolkaBtcErrorCode, ExchangeRateOraclePallet,
+    FeePallet, FixedPointNumber,
     FixedPointTraits::*,
     FixedU128, H256Le, IssueRequestStatus, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet,
     StatusCode as PolkaBtcStatusCode, TimestampPallet,
@@ -129,8 +128,6 @@ enum SubCommand {
     AcceptReplace(AcceptReplaceInfo),
     /// Accept replace request of another vault.
     ExecuteReplace(ExecuteReplaceInfo),
-    /// Send a API request.
-    ApiCall(ApiCall),
     /// Set issue period.
     SetIssuePeriod(SetIssuePeriodInfo),
     /// Set redeem period.
@@ -139,72 +136,6 @@ enum SubCommand {
     SetReplacePeriod(SetReplacePeriodInfo),
     /// Transfer DOT collateral
     FundAccounts(FundAccountsInfo),
-}
-
-#[derive(Clap)]
-struct ApiCall {
-    #[clap(subcommand)]
-    subcmd: ApiSubCommand,
-}
-
-#[derive(Clap)]
-enum ApiSubCommand {
-    /// Send an API message to the vault
-    Vault(VaultApiCommand),
-    /// Send an API message to the staked relayer
-    Relayer(RelayerApiCommand),
-}
-
-#[derive(Clap)]
-struct VaultApiCommand {
-    /// API URL.
-    #[clap(long, default_value = "http://127.0.0.1:3031")]
-    url: String,
-
-    #[clap(subcommand)]
-    subcmd: VaultApiSubCommand,
-}
-
-#[derive(Clap)]
-struct RelayerApiCommand {
-    /// API URL.
-    #[clap(long, default_value = "http://127.0.0.1:3030")]
-    url: String,
-
-    #[clap(subcommand)]
-    subcmd: RelayerApiSubCommand,
-}
-
-#[derive(Clap)]
-enum VaultApiSubCommand {
-    /// Tell the vault to place a replace request.
-    RequestReplace(RequestReplaceJsonRpcRequest),
-    /// Tell the vault to withdraw a replace request.
-    WithdrawReplace(WithdrawReplaceJsonRpcRequest),
-    /// Tell the vault to register itself.
-    RegisterVault(RegisterVaultJsonRpcRequest),
-    /// Tell the vault to lock additional collateral.
-    LockAdditionalCollateral(LockAdditionalCollateralJsonRpcRequest),
-    /// Tell the vault to withdraw collateral.
-    WithdrawCollateral(WithdrawCollateralJsonRpcRequest),
-    /// Tell the vault to update its BTC address.
-    UpdateBtcAddress(UpdateBtcAddressJsonRpcRequest),
-}
-
-#[derive(Clap)]
-enum RelayerApiSubCommand {
-    /// Tell the relayer to issue a status update suggestion.
-    SuggestStatusUpdate(SuggestStatusUpdateJsonRpcRequest),
-    /// Tell the relayer to vote on a status update suggestion.
-    VoteOnStatusUpdate(VoteOnStatusUpdateJsonRpcRequest),
-    /// Tell the relayer to register itself.
-    Register(RegisterStakedRelayerJsonRpcRequest),
-    /// Tell the relayer to deregister itself.
-    Deregister,
-    /// Get the status of the parachain.
-    SystemHealth,
-    /// Get the account id of the relayer.
-    AccountId,
 }
 
 #[derive(Clap)]
@@ -377,7 +308,7 @@ struct RegisterVaultJsonRpcRequest {
 }
 
 #[derive(Clap, Encode, Decode, Debug)]
-struct LockAdditionalCollateralJsonRpcRequest {
+struct DepositCollateralJsonRpcRequest {
     /// Amount to lock.
     #[clap(long, default_value = "10000")]
     amount: u128,
@@ -525,7 +456,7 @@ async fn main() -> Result<(), Error> {
                 Some(x) => x,
                 None => {
                     // calculate required amount
-                    let amount_in_dot = provider.btc_to_dots(info.issue_amount).await?;
+                    let amount_in_dot = provider.wrapped_to_collateral(info.issue_amount).await?;
                     let required_griefing_collateral_rate = provider.get_issue_griefing_collateral().await?;
 
                     // we add 0.5 before we do the final integer division to round the result we return.
@@ -631,49 +562,6 @@ async fn main() -> Result<(), Error> {
             let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
             replace::execute_replace(&provider, &btc_rpc, info.replace_id).await?;
         }
-        SubCommand::ApiCall(api_call) => match api_call.subcmd {
-            ApiSubCommand::Vault(cmd) => match cmd.subcmd {
-                VaultApiSubCommand::RegisterVault(info) => {
-                    api::call::<_, ()>(cmd.url, "register_vault", info).await?;
-                }
-                VaultApiSubCommand::LockAdditionalCollateral(info) => {
-                    api::call::<_, ()>(cmd.url, "lock_additional_collateral", info).await?;
-                }
-                VaultApiSubCommand::WithdrawCollateral(info) => {
-                    api::call::<_, ()>(cmd.url, "withdraw_collateral", info).await?;
-                }
-                VaultApiSubCommand::RequestReplace(info) => {
-                    api::call::<_, ()>(cmd.url, "request_replace", info).await?;
-                }
-                VaultApiSubCommand::UpdateBtcAddress(info) => {
-                    api::call::<_, ()>(cmd.url, "update_btc_address", info).await?;
-                }
-                VaultApiSubCommand::WithdrawReplace(info) => {
-                    api::call::<_, ()>(cmd.url, "withdraw_replace", info).await?;
-                }
-            },
-            ApiSubCommand::Relayer(cmd) => match cmd.subcmd {
-                RelayerApiSubCommand::SuggestStatusUpdate(info) => {
-                    api::call::<_, ()>(cmd.url, "suggest_status_update", info).await?;
-                }
-                RelayerApiSubCommand::VoteOnStatusUpdate(info) => {
-                    api::call::<_, ()>(cmd.url, "vote_on_status_update", info).await?;
-                }
-                RelayerApiSubCommand::Register(info) => {
-                    api::call::<_, ()>(cmd.url, "register_staked_relayer", info).await?;
-                }
-                RelayerApiSubCommand::Deregister => {
-                    api::call::<_, ()>(cmd.url, "deregister_staked_relayer", ()).await?;
-                }
-                RelayerApiSubCommand::SystemHealth => {
-                    api::call::<_, ()>(cmd.url, "system_health", ()).await?;
-                }
-                RelayerApiSubCommand::AccountId => {
-                    let ret = api::call::<_, String>(cmd.url, "account_id", ()).await?;
-                    println!("{}", ret);
-                }
-            },
-        },
         SubCommand::SetIssuePeriod(info) => {
             issue::set_issue_period(&provider, info.period).await?;
         }

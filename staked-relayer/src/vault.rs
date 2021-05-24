@@ -8,7 +8,7 @@ use runtime::{
 };
 use service::Error as ServiceError;
 use sp_core::crypto::Ss58Codec;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
 #[derive(Default)]
@@ -41,9 +41,8 @@ pub async fn report_vault_thefts<P: StakedRelayerPallet + BtcRelayPallet, B: Bit
     btc_parachain: P,
     btc_height: u32,
     vaults: Arc<Vaults>,
-    delay: Duration,
 ) -> Result<(), ServiceError> {
-    match VaultTheftMonitor::new(bitcoin_core, btc_parachain, btc_height, vaults, delay)
+    match VaultTheftMonitor::new(bitcoin_core, btc_parachain, btc_height, vaults)
         .process_blocks()
         .await
     {
@@ -57,17 +56,15 @@ pub struct VaultTheftMonitor<P: StakedRelayerPallet + BtcRelayPallet, B: Bitcoin
     btc_parachain: P,
     btc_height: u32,
     vaults: Arc<Vaults>,
-    delay: Duration,
 }
 
 impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonitor<P, B> {
-    pub fn new(bitcoin_core: B, btc_parachain: P, btc_height: u32, vaults: Arc<Vaults>, delay: Duration) -> Self {
+    pub fn new(bitcoin_core: B, btc_parachain: P, btc_height: u32, vaults: Arc<Vaults>) -> Self {
         Self {
             bitcoin_core,
             btc_parachain,
             btc_height,
             vaults,
-            delay,
         }
     }
 
@@ -195,15 +192,13 @@ mod tests {
     };
     use sp_core::{H160, H256};
     use sp_keyring::AccountKeyring;
+    use std::time::Duration;
 
     mockall::mock! {
         Provider {}
 
         #[async_trait]
         pub trait StakedRelayerPallet {
-            async fn get_stake_of(&self, account_id: &AccountId) -> Result<u128, RuntimeError>;
-            async fn register_staked_relayer(&self, stake: u128) -> Result<(), RuntimeError>;
-            async fn deregister_staked_relayer(&self) -> Result<(), RuntimeError>;
             async fn report_vault_theft(
                 &self,
                 vault_id: AccountId,
@@ -339,13 +334,7 @@ mod tests {
             .never()
             .returning(|_, _, _| Ok(()));
 
-        let monitor = VaultTheftMonitor::new(
-            MockBitcoin::default(),
-            parachain,
-            0,
-            Arc::new(Vaults::default()),
-            Duration::from_millis(100),
-        );
+        let monitor = VaultTheftMonitor::new(MockBitcoin::default(), parachain, 0, Arc::new(Vaults::default()));
 
         monitor
             .report_invalid(AccountKeyring::Bob.to_account_id(), vec![], vec![])
@@ -359,13 +348,7 @@ mod tests {
         parachain.expect_is_transaction_invalid().returning(|_, _| Ok(true));
         parachain.expect_report_vault_theft().once().returning(|_, _, _| Ok(()));
 
-        let monitor = VaultTheftMonitor::new(
-            MockBitcoin::default(),
-            parachain,
-            0,
-            Arc::new(Vaults::default()),
-            Duration::from_millis(100),
-        );
+        let monitor = VaultTheftMonitor::new(MockBitcoin::default(), parachain, 0, Arc::new(Vaults::default()));
 
         monitor
             .report_invalid(AccountKeyring::Bob.to_account_id(), vec![], vec![])

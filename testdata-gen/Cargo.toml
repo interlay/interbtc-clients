@@ -1,6 +1,6 @@
 [package]
 name = "testdata-gen"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 description = "Toolkit for generating testdata on the local BTC-Parachain."
@@ -18,8 +18,6 @@ env_logger = "0.7.1"
 hex = "0.4.2"
 serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.59"
-reqwest = {version = "0.10.9", features = ["json"] }
-jsonrpc-core = "17.0.0"
 futures = "0.3.5"
 git-version = "0.3.4"
 
@@ -28,5 +26,5 @@ bitcoin = { path = "../bitcoin", features = ["cli"] }
 runtime = { path = "../runtime" }
 
 # Substrate dependencies
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "rococo-v1" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.1" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.1" }

@@ -1,7 +1,7 @@
 use crate::error::Error;
 use futures::future;
 use runtime::{
-    pallets::exchange_rate_oracle::SetExchangeRateEvent, AccountId, DotBalancesPallet, PolkaBtcProvider,
+    pallets::exchange_rate_oracle::SetExchangeRateEvent, AccountId, CollateralBalancesPallet, PolkaBtcProvider,
     PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet, VaultStatus,
 };
 use service::Error as ServiceError;
@@ -45,7 +45,7 @@ pub async fn maintain_collateralization_rate(
 /// * `provider` - the parachain RPC handle
 /// * `vault_id` - the id of this vault
 /// * `maximum_collateral` - the upperbound of total collateral that is allowed to be placed
-pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet>(
+pub async fn lock_required_collateral<P: VaultRegistryPallet + CollateralBalancesPallet>(
     provider: P,
     vault_id: AccountId,
     maximum_collateral: u128,
@@ -58,7 +58,7 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet
 
     let (required_collateral, actual_collateral) = future::try_join(
         provider.get_required_collateral_for_vault(vault_id),
-        provider.get_reserved_dot_balance(),
+        provider.get_reserved_balance(),
     )
     .await?;
 
@@ -94,7 +94,7 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + DotBalancesPallet
         // cases 5 & 6
         let amount_to_increase = target_collateral - actual_collateral;
         tracing::info!("Locking additional collateral");
-        provider.lock_additional_collateral(amount_to_increase).await?;
+        provider.deposit_collateral(amount_to_increase).await?;
     }
 
     // if we were unable to add the required amount, return error
@@ -143,20 +143,20 @@ mod tests {
             async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
             async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, RuntimeError>;
             async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
-            async fn lock_additional_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
+            async fn deposit_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
             async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-            async fn get_required_collateral_for_issuing(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
+            async fn get_required_collateral_for_wrapped(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
         }
 
         #[async_trait]
-        pub trait DotBalancesPallet {
-            async fn get_free_dot_balance(&self) -> Result<PolkaBtcBalance, RuntimeError>;
-            async fn get_free_dot_balance_for_id(&self, id: AccountId) -> Result<PolkaBtcBalance, RuntimeError>;
-            async fn get_reserved_dot_balance(&self) -> Result<PolkaBtcBalance, RuntimeError>;
-            async fn get_reserved_dot_balance_for_id(&self, id: AccountId) -> Result<PolkaBtcBalance, RuntimeError>;
+        pub trait CollateralBalancesPallet {
+            async fn get_free_balance(&self) -> Result<PolkaBtcBalance, RuntimeError>;
+            async fn get_free_balance_for_id(&self, id: AccountId) -> Result<PolkaBtcBalance, RuntimeError>;
+            async fn get_reserved_balance(&self) -> Result<PolkaBtcBalance, RuntimeError>;
+            async fn get_reserved_balance_for_id(&self, id: AccountId) -> Result<PolkaBtcBalance, RuntimeError>;
             async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), RuntimeError>;
         }
     }
@@ -172,7 +172,7 @@ mod tests {
     async fn test_lock_required_collateral_case_1() {
         // case 1: required <= actual <= limit -- do nothing (already enough)
         // required = 50, actual = 75, max = 100:
-        // check that lock_additional_collateral is not called
+        // check that deposit_collateral is not called
         let mut provider = MockProvider::default();
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
@@ -184,7 +184,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(50));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(75));
+        provider.expect_get_reserved_balance().returning(|| Ok(75));
 
         let vault_id = AccountId::default();
         assert_ok!(lock_required_collateral(provider, vault_id, 100).await);
@@ -194,7 +194,7 @@ mod tests {
     async fn test_lock_required_collateral_case_2() {
         // case 2: required <= limit <= actual -- do nothing (already enough)
         // required = 100, actual = 200, max = 150:
-        // check that lock_additional_collateral is not called
+        // check that deposit_collateral is not called
         let mut provider = MockProvider::default();
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
@@ -206,7 +206,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(200));
+        provider.expect_get_reserved_balance().returning(|| Ok(200));
 
         let vault_id = AccountId::default();
         assert_ok!(lock_required_collateral(provider, vault_id, 150).await);
@@ -216,7 +216,7 @@ mod tests {
     async fn test_lock_required_collateral_case_3() {
         // case 3: limit <= required <= actual -- do nothing (already enough)
         // required = 100, actual = 150, max = 75:
-        // check that lock_additional_collateral is not called
+        // check that deposit_collateral is not called
         let mut provider = MockProvider::default();
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
@@ -228,7 +228,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(150));
+        provider.expect_get_reserved_balance().returning(|| Ok(150));
 
         let vault_id = AccountId::default();
         assert_ok!(lock_required_collateral(provider, vault_id, 75).await);
@@ -238,7 +238,7 @@ mod tests {
     async fn test_lock_required_collateral_case_4() {
         // case 4: limit <= actual <= required -- do nothing (return error)
         // required = 100, actual = 75, max = 50:
-        // check that lock_additional_collateral is not called
+        // check that deposit_collateral is not called
         let mut provider = MockProvider::default();
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
@@ -250,7 +250,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(75));
+        provider.expect_get_reserved_balance().returning(|| Ok(75));
 
         let vault_id = AccountId::default();
         assert_err!(
@@ -274,9 +274,9 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(25));
+        provider.expect_get_reserved_balance().returning(|| Ok(25));
         provider
-            .expect_lock_additional_collateral()
+            .expect_deposit_collateral()
             .withf(|&amount| amount == 50)
             .times(1)
             .returning(|_| Ok(()));
@@ -302,9 +302,9 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(25));
+        provider.expect_get_reserved_balance().returning(|| Ok(25));
         provider
-            .expect_lock_additional_collateral()
+            .expect_deposit_collateral()
             .withf(|&amount| amount == 75)
             .times(1)
             .returning(|_| Ok(()));
@@ -316,7 +316,7 @@ mod tests {
     #[tokio::test]
     async fn test_lock_required_collateral_at_max_fails() {
         // required = 100, actual = 25, max = 25:
-        // check that lock_additional_collateral is not called with amount 0
+        // check that deposit_collateral is not called with amount 0
         let mut provider = MockProvider::default();
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
@@ -328,7 +328,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(25));
+        provider.expect_get_reserved_balance().returning(|| Ok(25));
 
         let vault_id = AccountId::default();
         assert_err!(
@@ -340,7 +340,7 @@ mod tests {
     #[tokio::test]
     async fn test_lock_required_collateral_at_required_succeeds() {
         // required = 100, actual = 100, max = 200:
-        // check that lock_additional_collateral is not called with amount 0
+        // check that deposit_collateral is not called with amount 0
         let mut provider = MockProvider::default();
         provider.expect_get_vault().returning(|x| {
             Ok(PolkaBtcVault {
@@ -352,7 +352,7 @@ mod tests {
         provider
             .expect_get_required_collateral_for_vault()
             .returning(|_| Ok(100));
-        provider.expect_get_reserved_dot_balance().returning(|| Ok(100));
+        provider.expect_get_reserved_balance().returning(|| Ok(100));
 
         let vault_id = AccountId::default();
         assert_ok!(lock_required_collateral(provider, vault_id, 200).await);

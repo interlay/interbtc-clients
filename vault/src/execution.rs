@@ -64,7 +64,7 @@ impl Request {
     pub fn from_refund_request_event(request: &RequestRefundEvent<PolkaBtcRuntime>) -> Request {
         Request {
             btc_address: request.btc_address,
-            amount: request.amount_polka_btc,
+            amount: request.amount,
             hash: request.refund_id,
             btc_height: None,
             request_type: RequestType::Refund,
@@ -86,7 +86,7 @@ impl Request {
     pub fn from_redeem_request_event(request: &RequestRedeemEvent<PolkaBtcRuntime>) -> Request {
         Request {
             btc_address: request.user_btc_address,
-            amount: request.amount_polka_btc,
+            amount: request.amount,
             hash: request.redeem_id,
             btc_height: None,
             request_type: RequestType::Redeem,
@@ -403,11 +403,11 @@ mod tests {
             async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
             async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, RuntimeError>;
             async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
-            async fn lock_additional_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
+            async fn deposit_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
             async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-            async fn get_required_collateral_for_issuing(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
+            async fn get_required_collateral_for_wrapped(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
         }
 
@@ -415,7 +415,7 @@ mod tests {
         pub trait RedeemPallet {
             async fn request_redeem(
                 &self,
-                amount_polka_btc: u128,
+                amount: u128,
                 btc_address: BtcAddress,
                 vault_id: AccountId,
             ) -> Result<H256, RuntimeError>;
