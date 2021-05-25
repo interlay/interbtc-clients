@@ -128,7 +128,7 @@ impl MockBitcoinCore {
 
     fn generate_normal_transaction<A: PartialAddress + Send + 'static>(address: &A, reward: u64) -> Transaction {
         let address: BtcAddress = BtcAddress::decode_str(&address.encode_str(Network::Regtest).unwrap()).unwrap();
-        let address = Script::from(address.to_script().as_bytes().to_vec());
+        let address = Script::from(address.to_script_pub_key().as_bytes().to_vec());
 
         Transaction {
             input: vec![TxIn {
@@ -164,7 +164,7 @@ impl MockBitcoinCore {
     }
 
     fn generate_coinbase_transaction(address: &BtcAddress, reward: u64, height: u32) -> Transaction {
-        let address = Script::from(address.to_script().as_bytes().to_vec());
+        let address = Script::from(address.to_script_pub_key().as_bytes().to_vec());
 
         // note that we set lock_time to height, otherwise we might generate blocks with
         // identical block hashes

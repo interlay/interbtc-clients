@@ -102,6 +102,7 @@ impl pallets::Core for PolkaBtcRuntime {
     type SignedFixedPoint = FixedI128;
     type UnsignedFixedPoint = FixedU128;
     type VaultStatus = VaultStatus;
+    type RedeemRequestStatus = RedeemRequestStatus;
 
     // cumulus / polkadot types
     type XcmError = XcmError;
