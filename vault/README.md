@@ -124,7 +124,7 @@ OPTIONS:
         --network <network>
             Bitcoin network type for address encoding [default: regtest]
 
-        --polka-btc-connection-timeout-ms <polka-btc-connection-timeout-ms>
+        --btc-parachain-connection-timeout-ms <btc-parachain-connection-timeout-ms>
             Timeout in milliseconds to wait for connection to btc-parachain [default: 60000]
 
         --restart-policy <restart-policy>

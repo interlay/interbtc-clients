@@ -91,7 +91,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
                 signer,
                 self.parachain_config.max_concurrent_requests,
                 self.parachain_config.max_notifs_per_subscription,
-                self.parachain_config.polka_btc_connection_timeout_ms,
+                self.parachain_config.btc_parachain_connection_timeout_ms,
             )
             .await?;
 

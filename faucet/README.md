@@ -55,7 +55,7 @@ OPTIONS:
         --max-notifs-per-subscription <max-notifs-per-subscription>
             Maximum notification capacity for each subscription
 
-        --polka-btc-connection-timeout-ms <polka-btc-connection-timeout-ms>
+        --btc-parachain-connection-timeout-ms <btc-parachain-connection-timeout-ms>
             Timeout in milliseconds to wait for connection to btc-parachain [default: 60000]
 
         --rpc-cors-domain <rpc-cors-domain>
