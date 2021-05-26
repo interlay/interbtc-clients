@@ -62,11 +62,11 @@ pub fn parse_duration_ms(src: &str) -> Result<Duration, ParseIntError> {
 pub struct ConnectionOpts {
     /// Parachain websocket URL.
     #[clap(long, default_value = "ws://127.0.0.1:9944")]
-    pub polka_btc_url: String,
+    pub btc_parachain_url: String,
 
     /// Timeout in milliseconds to wait for connection to btc-parachain.
     #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "60000")]
-    pub polka_btc_connection_timeout_ms: Duration,
+    pub btc_parachain_connection_timeout_ms: Duration,
 
     /// Maximum number of concurrent requests
     #[clap(long)]
@@ -80,11 +80,11 @@ pub struct ConnectionOpts {
 impl ConnectionOpts {
     pub async fn try_connect(&self, signer: PolkaBtcSigner) -> Result<PolkaBtcProvider, Error> {
         PolkaBtcProvider::from_url_and_config_with_retry(
-            &self.polka_btc_url,
+            &self.btc_parachain_url,
             signer,
             self.max_concurrent_requests,
             self.max_notifs_per_subscription,
-            self.polka_btc_connection_timeout_ms,
+            self.btc_parachain_connection_timeout_ms,
         )
         .await
     }

@@ -11,7 +11,7 @@ struct Opts {
     #[clap(flatten)]
     account_info: runtime::cli::ProviderUserOpts,
 
-    /// Connection settings for the BTC-Parachain.
+    /// Connection settings for the BTC Parachain.
     #[clap(flatten)]
     parachain: runtime::cli::ConnectionOpts,
 

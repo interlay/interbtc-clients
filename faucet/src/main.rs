@@ -20,7 +20,7 @@ struct Opts {
     #[clap(flatten)]
     account_info: runtime::cli::ProviderUserOpts,
 
-    /// Connection settings for the BTC-Parachain.
+    /// Connection settings for the BTC Parachain.
     #[clap(flatten)]
     parachain: runtime::cli::ConnectionOpts,
 
@@ -39,11 +39,11 @@ pub struct FaucetConfig {
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
 
-    /// DOT allowance per request for regular users.
+    /// Allowance per request for regular users.
     #[clap(long, default_value = "1")]
     user_allowance: u128,
 
-    /// DOT allowance per request for vaults.
+    /// Allowance per request for vaults.
     #[clap(long, default_value = "500")]
     vault_allowance: u128,
 }

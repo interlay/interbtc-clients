@@ -20,7 +20,7 @@ Download and start [Bitcoin Core](https://bitcoin.org/en/bitcoin-core/):
 bitcoind -regtest -server
 ```
 
-Build and run the [PolkaBTC Parachain](https://github.com/interlay/btc-parachain):
+Build and run the [BTC Parachain](https://github.com/interlay/btc-parachain):
 
 ```
 git clone git@gitlab.com:interlay/btc-parachain.git
@@ -56,7 +56,7 @@ rustup default nightly-2021-03-15
 
 ### Oracle
 
-PolkaBTC requires a price oracle to calculate collateralization rates, for local development we can run this client
+The BTC Parachain requires a price oracle to calculate collateralization rates, for local development we can run this client
 to automatically update the exchange rate at a pre-determined time interval.
 
 ```bash
@@ -65,7 +65,7 @@ cargo run --bin oracle
 
 ### Staked Relayer
 
-The [Staked Relayer](./staked-relayer/README.md) client is responsible for submitting Bitcoin block headers to PolkaBTC and reporting on various error states.
+The [Staked Relayer](./staked-relayer/README.md) client is responsible for submitting Bitcoin block headers to the BTC Parachain.
 
 ```bash
 source .env
@@ -74,7 +74,7 @@ cargo run --bin staked-relayer -- --http-addr '[::0]:3030'
 
 ### Testdata
 
-To interact with PolkaBTC directly, use the [testdata-gen](./testdata-gen/README.md) client.
+To interact with the BTC Parachain directly, use the [testdata-gen](./testdata-gen/README.md) client.
 
 ```bash
 source .env
@@ -83,7 +83,7 @@ cargo run --bin testdata-gen -- --keyring bob set-exchange-rate --exchange-rate 
 
 ### Vault
 
-The [Vault](./vault/README.md) client is used to intermediate assets between Bitcoin and PolkaBTC.
+The [Vault](./vault/README.md) client is used to intermediate assets between Bitcoin and the BTC Parachain.
 
 ```bash
 source .env

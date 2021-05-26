@@ -1,6 +1,6 @@
-# PolkaBTC Oracle
+# Oracle
 
-Automated price feeder for the BTC-Parachain. 
+Automated price feeder for the BTC Parachain. 
 
 ## Examples
 
@@ -28,6 +28,12 @@ FLAGS:
     -V, --version      Prints version information
 
 OPTIONS:
+        --btc-parachain-url <btc-parachain-url>
+            Parachain URL, can be over WebSockets or HTTP [default: ws://127.0.0.1:9944]
+
+        --connection-timeout-ms <connection-timeout-ms>
+            Timeout in milliseconds to wait for connection to btc-parachain [default: 60000]
+
         --exchange-rate <exchange-rate>
             Exchange rate from Planck to Satoshi. hardcoded to 1 BTC = 3855.23187 DOT at granularity
             of 5 [default: 385523187]
@@ -36,11 +42,12 @@ OPTIONS:
             Path to the json file containing key pairs in a map. Valid content of this file is e.g.
             `{ "MyUser1": "<Polkadot Account Mnemonic>", "MyUser2": "<Polkadot Account Mnemonic>" }`
 
-        --keyname <keyname>                The name of the account from the keyfile to use
-        --keyring <keyring>                Keyring to use, mutually exclusive with keyfile
-        --polka-btc-url <polka-btc-url>
-            Parachain URL, can be over WebSockets or HTTP [default: ws://127.0.0.1:9944]
+        --keyname <keyname>
+            The name of the account from the keyfile to use
+
+        --keyring <keyring>
+            Keyring to use, mutually exclusive with keyfile
 
         --timeout-ms <timeout-ms>
-            Timeout for exchange rate setter, default 30 minutes [default: 1800000]
+            Timeout for exchange rate setter, default 25 minutes [default: 1500000]
 ```

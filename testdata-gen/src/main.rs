@@ -80,7 +80,7 @@ const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
 struct Opts {
     /// Parachain URL, can be over WebSockets or HTTP.
     #[clap(long, default_value = "ws://127.0.0.1:9944")]
-    polka_btc_url: String,
+    btc_parachain_url: String,
 
     /// keyring / keyfile options.
     #[clap(flatten)]
@@ -100,11 +100,11 @@ struct Opts {
 
 #[derive(Clap)]
 enum SubCommand {
-    /// Set the DOT to BTC exchange rate.
+    /// Set the exchange rate.
     SetExchangeRate(SetExchangeRateInfo),
     /// Add a new authorized oracle
     InsertAuthorizedOracle(InsertAuthorizedOracleInfo),
-    /// Get the current DOT to BTC exchange rate.
+    /// Get the current exchange rate.
     GetExchangeRate,
     /// Set the current estimated bitcoin transaction fees.
     SetBtcTxFees(SetBtcTxFeesInfo),
@@ -134,13 +134,14 @@ enum SubCommand {
     SetRedeemPeriod(SetRedeemPeriodInfo),
     /// Set replace period.
     SetReplacePeriod(SetReplacePeriodInfo),
-    /// Transfer DOT collateral
+    /// Transfer collateral.
     FundAccounts(FundAccountsInfo),
 }
 
 #[derive(Clap)]
 struct SetExchangeRateInfo {
-    /// Exchange rate from BTC to DOT.
+    /// This value, when multiplied by the conversion factor (i.e. 10**8 / 10**10 for BTC/DOT),
+    /// represents the base exchange rate - i.e. (Planck per Satoshi).
     #[clap(long, default_value = "1")]
     exchange_rate: u128,
 }
@@ -397,7 +398,7 @@ async fn get_bitcoin_core(bitcoin_opts: bitcoin::cli::BitcoinOpts, wallet_name: 
     Ok(bitcoin_core)
 }
 
-/// Generates testdata to be used on a development environment of the BTC-Parachain
+/// Generates testdata to be used on a development environment of the BTC Parachain
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     env_logger::init();
@@ -406,7 +407,7 @@ async fn main() -> Result<(), Error> {
     let (key_pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
     let provider = PolkaBtcProvider::from_url_with_retry(
-        &opts.polka_btc_url,
+        &opts.btc_parachain_url,
         signer,
         Duration::from_millis(opts.connection_timeout_ms),
     )

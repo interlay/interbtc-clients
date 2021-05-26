@@ -3,7 +3,7 @@ name = "testdata-gen"
 version = "0.7.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
-description = "Toolkit for generating testdata on the local BTC-Parachain."
+description = "Toolkit for generating testdata on the local BTC Parachain."
 
 [features]
 default = ["bitcoin/regtest-mine-on-tx"]
