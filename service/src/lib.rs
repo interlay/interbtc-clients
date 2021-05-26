@@ -87,7 +87,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             // only open connection to parachain after bitcoind sync to prevent timeout
             let signer = self.signer.clone();
             let btc_parachain = BtcParachain::from_url_and_config_with_retry(
-                &self.parachain_config.polka_btc_url,
+                &self.parachain_config.btc_parachain_url,
                 signer,
                 self.parachain_config.max_concurrent_requests,
                 self.parachain_config.max_notifs_per_subscription,

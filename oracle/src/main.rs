@@ -37,7 +37,7 @@ async fn get_exchange_rate_from_coingecko() -> Result<u128, Error> {
 struct Opts {
     /// Parachain URL, can be over WebSockets or HTTP.
     #[clap(long, default_value = "ws://127.0.0.1:9944")]
-    polka_btc_url: String,
+    btc_parachain_url: String,
 
     /// Exchange rate from Planck to Satoshi.
     /// hardcoded to 1 BTC = 3855.23187 DOT
@@ -100,7 +100,7 @@ async fn main() -> Result<(), Error> {
         );
 
         let result = PolkaBtcProvider::from_url_with_retry(
-            &opts.polka_btc_url.clone(),
+            &opts.btc_parachain_url.clone(),
             signer.clone(),
             Duration::from_millis(opts.connection_timeout_ms),
         )

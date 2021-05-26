@@ -3,7 +3,7 @@ name = "faucet"
 version = "0.7.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
-description = "DOT faucet for enabling users to test PolkaBTC."
+description = "Collateral faucet for the BTC Parachain."
 
 [dependencies]
 log = "0.4.6"

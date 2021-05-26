@@ -1,9 +1,9 @@
-# PolkaBTC Vault
+# Vault
 
 ## Responsibilities
 
 - Register
-  - Lock DOT collateral in Vault Registry
+  - Lock collateral in Vault Registry
   - Submit master public key to Vault Registry
 - Issue
   - Detect and execute pending issue requests
@@ -16,7 +16,7 @@
   - Reimburse users who overpay on issue
 - Collateral balance
   - Observe collateralization rate in Vault Registry
-  - Withdraw / lock collateral to keep rate consistent
+  - Withdraw / deposit collateral to keep rate consistent
 - Replace
   - Request Replace
   - Execute Replace
@@ -29,7 +29,7 @@ Download and start [Bitcoin Core](https://bitcoin.org/en/bitcoin-core/):
 bitcoind -regtest -server
 ```
 
-Build and run the [PolkaBTC Parachain](https://github.com/interlay/btc-parachain):
+Build and run the [BTC Parachain](https://github.com/interlay/btc-parachain):
 
 ```
 git clone git@gitlab.com:interlay/btc-parachain.git
@@ -77,6 +77,9 @@ OPTIONS:
             Automatically register the vault with the collateral received from the faucet and a
             newly generated address. The parameter is the URL of the faucet
 
+        --bitcoin-connection-timeout-ms <bitcoin-connection-timeout-ms>
+            Timeout in milliseconds to wait for connection to bitcoin-core [default: 60000]
+
         --bitcoin-rpc-pass <bitcoin-rpc-pass>
             [env: BITCOIN_RPC_PASS=rpcpassword]
 
@@ -86,12 +89,12 @@ OPTIONS:
         --bitcoin-rpc-user <bitcoin-rpc-user>
             [env: BITCOIN_RPC_USER=rpcuser]
 
-        --bitcoin-timeout-ms <bitcoin-timeout-ms>
-            Timeout in milliseconds to poll Bitcoin [default: 6000]
-
         --btc-confirmations <btc-confirmations>
             How many bitcoin confirmations to wait for. If not specified, the parachain settings
             will be used (recommended)
+
+        --btc-parachain-url <btc-parachain-url>
+            Parachain websocket URL [default: ws://127.0.0.1:9944]
 
         --collateral-timeout-ms <collateral-timeout-ms>
             Timeout in milliseconds to repeat collateralization checks [default: 5000]
@@ -106,55 +109,29 @@ OPTIONS:
         --keyring <keyring>
             Keyring to use, mutually exclusive with keyfile
 
+        --logging-format <logging-format>
+            Logging output format [default: full]
+
         --max-collateral <max-collateral>
             Maximum total collateral to keep the vault securely collateralized [default: 1000000]
+
+        --max-concurrent-requests <max-concurrent-requests>
+            Maximum number of concurrent requests
+
+        --max-notifs-per-subscription <max-notifs-per-subscription>
+            Maximum notification capacity for each subscription
 
         --network <network>
             Bitcoin network type for address encoding [default: regtest]
 
-        --polka-btc-url <polka-btc-url>
-            Parachain URL, can be over WebSockets or HTTP [default: ws://127.0.0.1:9944]
+        --polka-btc-connection-timeout-ms <polka-btc-connection-timeout-ms>
+            Timeout in milliseconds to wait for connection to btc-parachain [default: 60000]
+
+        --restart-policy <restart-policy>
+            Restart or stop on error [default: always]
 
         --rpc-cors-domain <rpc-cors-domain>
             Comma separated list of allowed origins [default: *]
-```
 
-## Example
-
-First, ensure you have a running Bitcoin node and a `keyfile.json` as specified above, denoting a Polkadot account. An example keyfile looks as follows:
+        --telemetry-url <telemetry-url>                                        Telemetry endpoint
 ```
-{ 
-    "vault": "car timber smoke zone west involve board success norm inherit door road" 
-}
-```
-
-To register your collateral, you can either use your own DOT or request some from our faucet service.
-
-
-**Using your own DOT**
-For example, to register 500 DOT collateral of your own, run the vault as in the example below:
-```
-cargo run -- \
-    --bitcoin-rpc-url http://localhost:18332 \
-    --bitcoin-rpc-user rpcuser \
-    --bitcoin-rpc-pass rpcpass \
-    --keyfile /path/to/keyfile.json \
-    --keyname vault \
-    --polka-btc-url 'wss://beta.polkabtc.io/api/parachain'
-    --auto-register-with-collateral 5000000000000
-```
-Once the vault is running, you can check its status on the Dashboard page.
-
-**Using DOT from the faucet**
-With funding from the faucet, the command becomes:
-```
-cargo run -- \
-    --bitcoin-rpc-url http://localhost:18332 \
-    --bitcoin-rpc-user rpcuser \
-    --bitcoin-rpc-pass rpcpass \
-    --keyfile /path/to/keyfile.json \
-    --keyname vault \
-    --polka-btc-url 'wss://beta.polkabtc.io/api/parachain'
-    --auto-register-with-faucet-url https://beta.polkabtc.io/api/faucet
-```
-

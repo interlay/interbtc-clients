@@ -1,9 +1,9 @@
-# PolkaBTC Staked Relayer
+# Staked Relayer
 
 ## Responsibilities
 
 - Receive block headers from [Bitcoin Core](https://github.com/bitcoin/bitcoin)
-- Submit block headers to the [PolkaBTC Parachain](https://github.com/interlay/BTC-Parachain)
+- Submit block headers to the [BTC Parachain](https://github.com/interlay/btc-parachain)
 - Monitor the BTC addresses of vaults to report BTC thefts
 
 ## Prerequisites
@@ -14,7 +14,7 @@ Download and start [Bitcoin Core](https://bitcoin.org/en/bitcoin-core/):
 bitcoind -regtest -server
 ```
 
-Build and run the [PolkaBTC Parachain](https://github.com/interlay/btc-parachain):
+Build and run the [BTC Parachain](https://github.com/interlay/btc-parachain):
 
 ```
 git clone git@gitlab.com:interlay/btc-parachain.git
@@ -50,12 +50,15 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-        --auto-register-with-faucet-url <auto-register-with-faucet-url>
-            Automatically register the staked relayer with collateral received from the faucet and a
+        --auto-fund-with-faucet-url <auto-fund-with-faucet-url>
+            Automatically fund the staked relayer with collateral received from the faucet and a
             newly generated address. The parameter is the URL of the faucet
 
-        --auto-register-with-stake <auto-register-with-stake>
-            Automatically register the relayer with the given stake (in Planck)
+        --bitcoin-connection-timeout-ms <bitcoin-connection-timeout-ms>
+            Timeout in milliseconds to wait for connection to bitcoin-core [default: 60000]
+
+        --bitcoin-poll-timeout-ms <bitcoin-poll-timeout-ms>
+            Timeout in milliseconds to poll Bitcoin [default: 6000]
 
         --bitcoin-relay-start-height <bitcoin-relay-start-height>
             Starting height to relay block headers, if not defined use the best height as reported
@@ -74,8 +77,8 @@ OPTIONS:
             Starting height for vault theft checks, if not defined automatically start from the
             chain tip
 
-        --bitcoin-timeout-ms <bitcoin-timeout-ms>
-            Timeout in milliseconds to poll Bitcoin [default: 6000]
+        --btc-parachain-url <btc-parachain-url>
+            Parachain websocket URL [default: ws://127.0.0.1:9944]
 
         --keyfile <keyfile>
             Path to the json file containing key pairs in a map. Valid content of this file is e.g.
@@ -87,23 +90,34 @@ OPTIONS:
         --keyring <keyring>
             Keyring to use, mutually exclusive with keyfile
 
+        --logging-format <logging-format>
+            Logging output format [default: full]
+
         --max-batch-size <max-batch-size>
             Max batch size for combined block header submission [default: 16]
 
-        --oracle-timeout-ms <oracle-timeout-ms>
-            Timeout in milliseconds to repeat oracle liveness check [default: 5000]
+        --max-concurrent-requests <max-concurrent-requests>
+            Maximum number of concurrent requests
 
-        --polka-btc-url <polka-btc-url>
-            Parachain URL, can be over WebSockets or HTTP [default: ws://127.0.0.1:9944]
+        --max-notifs-per-subscription <max-notifs-per-subscription>
+            Maximum notification capacity for each subscription
+
+        --network <network>
+            Bitcoin network type for address encoding [default: regtest]
+
+        --polka-btc-connection-timeout-ms <polka-btc-connection-timeout-ms>
+            Timeout in milliseconds to wait for connection to btc-parachain [default: 60000]
+
+        --required-btc-confirmations <required-btc-confirmations>
+            Number of confirmations a block needs to have before it is submitted [default: 0]
+
+        --restart-policy <restart-policy>
+            Restart or stop on error [default: always]
 
         --rpc-cors-domain <rpc-cors-domain>
             Comma separated list of allowed origins [default: *]
 
-        --status-update-deposit <status-update-deposit>
-            Default deposit for all automated status proposals [default: 100]
-
-        --required-btc-confirmations: <required-btc-confirmations:>
-            Number of confirmations a block needs to have before it is submitted [default: 0]
+        --telemetry-url <telemetry-url>                                        Telemetry endpoint
 ```
 
 ## Example
@@ -113,34 +127,4 @@ First, ensure you have a running Bitcoin node and a `keyfile.json` as specified 
 { 
     "relayer": "car timber smoke zone west involve board success norm inherit door road" 
 }
-```
-
-To register your stake, you can either use your own DOT or request some from our faucet service.
-
-
-**Using your own DOT**
-First, run the staked relayer as in the example below:
-```
-cargo run -- \
-    --bitcoin-rpc-url http://localhost:18332 \
-    --bitcoin-rpc-user rpcuser \
-    --bitcoin-rpc-pass rpcpass \
-    --keyfile /path/to/keyfile.json \
-    --keyname relayer \
-    --polka-btc-url 'wss://beta.polkabtc.io/api/parachain'
-```
-
-Then, once the staked relayer is running, go to https://beta.polkabtc.io to the Relayer page and register by locking some DOT. The relayer client can contribute to the running of PolkaBTC without locking DOT, but interest is only earned if the relayer is registered. You can check its status on the Dashboard page.
-
-**Using DOT from the faucet**
-With funding from the faucet, you can run the command below to register your staked relayer with ~1 DOT and also receive ~500DOT to pay for transaction fees:
-```
-cargo run -- \
-    --bitcoin-rpc-url http://localhost:18332 \
-    --bitcoin-rpc-user rpcuser \
-    --bitcoin-rpc-pass rpcpass \
-    --keyfile /path/to/keyfile.json \
-    --keyname relayer \
-    --polka-btc-url 'wss://beta.polkabtc.io/api/parachain'
-    --auto-register-with-faucet-url https://beta.polkabtc.io/api/faucet
 ```
