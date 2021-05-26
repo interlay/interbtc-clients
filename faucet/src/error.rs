@@ -20,8 +20,10 @@ pub enum Error {
     KvError(#[from] KvError),
     #[error("Error parsing datetime string: {0}")]
     DatetimeParsingError(#[from] ParseError),
-    #[error("Funding error")]
-    FaucetError,
+    #[error("Requester balance already sufficient")]
+    AccountBalanceExceedsMaximum,
+    #[error("Requester was recently funded")]
+    AccountAlreadyFunded,
     #[error("Mathematical operation error")]
     MathError,
     #[error("No faucet allowance set for account type")]

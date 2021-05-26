@@ -6,7 +6,6 @@ use jsonrpc_http_server::{
     DomainsValidation, ServerBuilder,
 };
 use kv::*;
-use log::{debug, info, warn};
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     AccountId, CollateralBalancesPallet, Error as RuntimeError, PolkaBtcProvider, VaultRegistryPallet, PLANCK_PER_DOT,
@@ -143,22 +142,23 @@ fn has_request_expired(
         )
 }
 
-async fn is_funding_allowed(
+async fn ensure_funding_allowed(
     provider: &PolkaBtcProvider,
     account_id: AccountId,
     last_request_json: Option<Json<FaucetRequest>>,
     account_type: FundingRequestAccountType,
-) -> Result<bool, Error> {
+) -> Result<(), Error> {
     let free_balance = provider.get_free_balance_for_id(account_id.clone()).await?;
     let reserved_balance = provider.get_reserved_balance_for_id(account_id.clone()).await?;
     if free_balance + reserved_balance > MAX_FUNDABLE_CLIENT_BALANCE {
-        warn!(
-            "user {} has enough funds: {:?}",
+        log::warn!(
+            "User {} has enough funds: {:?}",
             account_id,
             free_balance + reserved_balance
         );
-        return Ok(false);
+        return Err(Error::AccountBalanceExceedsMaximum);
     }
+
     // We are subtracting FAUCET_COOLDOWN_HOURS from the milliseconds since the unix epoch.
     // Unless there's a bug in the std lib implementation of Utc::now() or a false reading from the
     // system clock, the MathError will never occur
@@ -166,7 +166,7 @@ async fn is_funding_allowed(
         .checked_sub_signed(ISO8601::hours(FAUCET_COOLDOWN_HOURS))
         .ok_or(Error::MathError)?;
 
-    Ok(match last_request_json {
+    match last_request_json {
         Some(last_request_json) => {
             let last_request_expired = has_request_expired(
                 DateTime::parse_from_rfc2822(&last_request_json.0.datetime)?.with_timezone(&Utc),
@@ -175,12 +175,14 @@ async fn is_funding_allowed(
                 last_request_json.0.account_type,
             );
             if !last_request_expired {
-                warn!("already funded {} at {:?}", account_id, last_request_json.0.datetime);
+                log::warn!("Already funded {} at {:?}", account_id, last_request_json.0.datetime);
+                Err(Error::AccountAlreadyFunded)
+            } else {
+                Ok(())
             }
-            last_request_expired
         }
-        None => true,
-    })
+        None => Ok(()),
+    }
 }
 
 async fn atomic_faucet_funding(
@@ -191,21 +193,25 @@ async fn atomic_faucet_funding(
 ) -> Result<(), Error> {
     let last_request_json = kv.get(account_id.to_string())?;
     let account_type = get_account_type(&provider, account_id.clone()).await?;
-    if !is_funding_allowed(provider, account_id.clone(), last_request_json, account_type.clone()).await? {
-        return Err(Error::FaucetError);
-    }
-    // Replace the previous, expired claim datetime with the datetime of the current claim
-    update_kv_store(&kv, account_id.clone(), Utc::now().to_rfc2822(), account_type.clone())?;
+    ensure_funding_allowed(provider, account_id.clone(), last_request_json, account_type.clone()).await?;
+
     let amount = allowances
         .get(&account_type)
         .ok_or(Error::NoFaucetAllowance)?
         .checked_mul(PLANCK_PER_DOT)
         .ok_or(Error::MathError)?;
-    info!(
+
+    log::info!(
         "AccountId: {}, Type: {:?}, Amount: {}",
-        account_id, account_type, amount
+        account_id,
+        account_type,
+        amount
     );
-    provider.transfer_to(account_id, amount).await?;
+    provider.transfer_to(account_id.clone(), amount).await?;
+
+    // Replace the previous (expired) claim datetime with the datetime of the current claim, only update
+    // this after successfully transferring funds to ensure that this can be called again on error
+    update_kv_store(&kv, account_id, Utc::now().to_rfc2822(), account_type.clone())?;
     Ok(())
 }
 
@@ -249,7 +255,9 @@ pub async fn start_http(
             let store = store.clone();
             async move {
                 let result = _fund_account_raw(&provider.clone(), params, store, user_allowance, vault_allowance).await;
-                debug!("Result: {:?}", result);
+                if let Err(ref err) = result {
+                    log::debug!("Failed to fund account: {}", err);
+                }
                 handle_resp(result)
             }
         });
@@ -267,7 +275,7 @@ pub async fn start_http(
     let close_handle = server.close_handle();
 
     tokio::task::spawn_blocking(move || {
-        info!("Starting http server...");
+        log::info!("Starting http server...");
         server.wait();
     });
 
@@ -380,7 +388,7 @@ mod tests {
 
         assert_err!(
             fund_account(&Arc::from(alice_provider.clone()), req, store, allowances).await,
-            Error::FaucetError
+            Error::AccountBalanceExceedsMaximum
         );
     }
 
@@ -485,7 +493,7 @@ mod tests {
 
         assert_err!(
             fund_account(&Arc::from(alice_provider.clone()), req, store, allowances).await,
-            Error::FaucetError
+            Error::AccountAlreadyFunded
         );
     }
 
@@ -596,7 +604,7 @@ mod tests {
 
         assert_err!(
             fund_account(&Arc::from(alice_provider.clone()), req, store, allowances).await,
-            Error::FaucetError
+            Error::AccountBalanceExceedsMaximum
         );
     }
 }
