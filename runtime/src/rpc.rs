@@ -1144,15 +1144,7 @@ impl BtcRelayPallet for PolkaBtcProvider {
         ) -> Result<bool, Error> {
             let (bitcoin_height, parachain_height) = futures::future::try_join(
                 async { btc_parachain.get_best_block_height().await.map_err(Error::from) },
-                async {
-                    Ok(btc_parachain
-                        .get_latest_block()
-                        .await?
-                        .ok_or(Error::BlockNotFound)?
-                        .block
-                        .header
-                        .number)
-                },
+                async { btc_parachain.get_current_active_block_number().await },
             )
             .await?;
 
