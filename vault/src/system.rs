@@ -5,11 +5,16 @@ use crate::{
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
-use futures::{channel::mpsc, SinkExt};
+use futures::{
+    channel::{mpsc, mpsc::Sender},
+    SinkExt,
+};
 use git_version::git_version;
 use runtime::{
-    cli::parse_duration_ms, pallets::sla::UpdateVaultSLAEvent, AccountId, BtcRelayPallet, Error as RuntimeError,
-    PolkaBtcHeader, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs, VaultRegistryPallet,
+    cli::parse_duration_ms,
+    pallets::{security::UpdateActiveBlockEvent, sla::UpdateVaultSLAEvent},
+    AccountId, BlockNumber, BtcRelayPallet, Error as RuntimeError, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs,
+    VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
@@ -63,6 +68,19 @@ pub struct VaultServiceConfig {
     /// parachain settings will be used (recommended).
     #[clap(long)]
     pub btc_confirmations: Option<u32>,
+}
+
+async fn active_block_listener(provider: PolkaBtcProvider, block_tx: Sender<BlockNumber>) -> Result<(), ServiceError> {
+    let block_tx = &block_tx;
+    provider
+        .on_event::<UpdateActiveBlockEvent<PolkaBtcRuntime>, _, _, _>(
+            |event| async move {
+                let _ = block_tx.clone().send(event.height).await;
+            },
+            |err| tracing::error!("Error (UpdateActiveBlockEvent): {}", err.to_string()),
+        )
+        .await?;
+    Ok(())
 }
 
 pub struct VaultService {
@@ -194,7 +212,7 @@ impl VaultService {
         let btc_start_height = issue::initialize_issue_set(&bitcoin_core, &self.btc_parachain, &issue_set).await?;
 
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<RequestEvent>(32);
-        let (issue_block_tx, issue_block_rx) = mpsc::channel::<PolkaBtcHeader>(16);
+        let (issue_block_tx, issue_block_rx) = mpsc::channel::<BlockNumber>(16);
 
         let issue_request_listener = wait_or_shutdown(
             self.shutdown.clone(),
@@ -218,21 +236,10 @@ impl VaultService {
 
         let mut issue_cancellation_scheduler = CancellationScheduler::new(self.btc_parachain.clone(), vault_id.clone());
 
-        let issue_block_provider = self.btc_parachain.clone();
-        let issue_block_listener = wait_or_shutdown(self.shutdown.clone(), async move {
-            let issue_block_tx = &issue_block_tx;
-            issue_block_provider
-                .on_block(move |header| async move {
-                    issue_block_tx
-                        .clone()
-                        .send(header.clone())
-                        .await
-                        .map_err(|_| RuntimeError::ChannelClosed)?;
-                    Ok(())
-                })
-                .await?;
-            Ok(())
-        });
+        let issue_block_listener = wait_or_shutdown(
+            self.shutdown.clone(),
+            active_block_listener(self.btc_parachain.clone(), issue_block_tx),
+        );
 
         let issue_cancel_scheduler = wait_or_shutdown(self.shutdown.clone(), async move {
             issue_cancellation_scheduler
@@ -254,7 +261,7 @@ impl VaultService {
 
         // replace handling
         let (replace_event_tx, replace_event_rx) = mpsc::channel::<RequestEvent>(16);
-        let (replace_block_tx, replace_block_rx) = mpsc::channel::<PolkaBtcHeader>(16);
+        let (replace_block_tx, replace_block_rx) = mpsc::channel::<BlockNumber>(16);
 
         let request_replace_listener = wait_or_shutdown(
             self.shutdown.clone(),
@@ -279,21 +286,10 @@ impl VaultService {
         let mut replace_cancellation_scheduler =
             CancellationScheduler::new(self.btc_parachain.clone(), vault_id.clone());
 
-        let replace_block_provider = self.btc_parachain.clone();
-        let replace_block_listener = wait_or_shutdown(self.shutdown.clone(), async move {
-            let replace_block_tx = &replace_block_tx;
-            replace_block_provider
-                .on_block(move |header| async move {
-                    replace_block_tx
-                        .clone()
-                        .send(header.clone())
-                        .await
-                        .map_err(|_| RuntimeError::ChannelClosed)?;
-                    Ok(())
-                })
-                .await?;
-            Ok(())
-        });
+        let replace_block_listener = wait_or_shutdown(
+            self.shutdown.clone(),
+            active_block_listener(self.btc_parachain.clone(), replace_block_tx),
+        );
 
         let replace_cancel_scheduler = wait_or_shutdown(self.shutdown.clone(), async move {
             replace_cancellation_scheduler

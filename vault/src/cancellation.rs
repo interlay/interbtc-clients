@@ -2,7 +2,7 @@ use super::Error;
 use async_trait::async_trait;
 use futures::{channel::mpsc::Receiver, *};
 use runtime::{
-    AccountId, Error as RuntimeError, IssuePallet, IssueRequestStatus, PolkaBtcHeader, ReplacePallet,
+    AccountId, BlockNumber, Error as RuntimeError, IssuePallet, IssueRequestStatus, ReplacePallet,
     ReplaceRequestStatus, SecurityPallet, UtilFuncs,
 };
 use sp_core::H256;
@@ -33,7 +33,7 @@ pub struct UnconvertedOpenTime {
 }
 
 enum BlockOrEvent {
-    Block(PolkaBtcHeader),
+    Block(BlockNumber),
     Event(RequestEvent),
 }
 
@@ -148,7 +148,7 @@ trait EventSelector {
     /// which event woke us up
     async fn select_event(
         self,
-        block_listener: &mut Receiver<PolkaBtcHeader>,
+        block_listener: &mut Receiver<BlockNumber>,
         event_listener: &mut Receiver<RequestEvent>,
     ) -> Result<BlockOrEvent, RuntimeError>;
 }
@@ -159,7 +159,7 @@ struct ProductionEventSelector;
 impl EventSelector for ProductionEventSelector {
     async fn select_event(
         self,
-        block_listener: &mut Receiver<PolkaBtcHeader>,
+        block_listener: &mut Receiver<BlockNumber>,
         event_listener: &mut Receiver<RequestEvent>,
     ) -> Result<BlockOrEvent, RuntimeError> {
         // fuse and pin the tasks, required for select! macro
@@ -216,7 +216,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
     /// *`event_listener`: channel that signals relevant events _for this vault_.
     pub async fn handle_cancellation<T: Canceller<P>>(
         &mut self,
-        mut block_listener: Receiver<PolkaBtcHeader>,
+        mut block_listener: Receiver<BlockNumber>,
         mut event_listener: Receiver<RequestEvent>,
     ) -> Result<(), RuntimeError> {
         let mut list_state = ListState::Invalid;
@@ -239,7 +239,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
     /// testing purposes
     async fn wait_for_event<T: Canceller<P>, U: EventSelector>(
         &mut self,
-        block_listener: &mut Receiver<PolkaBtcHeader>,
+        block_listener: &mut Receiver<BlockNumber>,
         event_listener: &mut Receiver<RequestEvent>,
         active_requests: &mut Vec<ActiveRequest>,
         list_state: ListState,
@@ -259,14 +259,14 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
         }
 
         match selector.select_event(block_listener, event_listener).await? {
-            BlockOrEvent::Block(header) => {
+            BlockOrEvent::Block(height) => {
                 tracing::trace!(
-                    "Received parachain block at height {} for {}",
-                    header.number,
+                    "Received parachain block at active height {} for {}",
+                    height,
                     T::TYPE_NAME
                 );
 
-                let cancellable_requests = drain_expired(active_requests, header.number);
+                let cancellable_requests = drain_expired(active_requests, height);
 
                 for request in cancellable_requests {
                     match T::cancel_request(&self.provider, request.id).await {
@@ -375,7 +375,7 @@ mod tests {
 
     struct TestEventSelector<F>
     where
-        F: Fn(&mut Receiver<PolkaBtcHeader>, &mut Receiver<RequestEvent>) -> Result<BlockOrEvent, RuntimeError>,
+        F: Fn(&mut Receiver<BlockNumber>, &mut Receiver<RequestEvent>) -> Result<BlockOrEvent, RuntimeError>,
     {
         on_event: F,
     }
@@ -383,14 +383,14 @@ mod tests {
     #[async_trait]
     impl<F> EventSelector for TestEventSelector<F>
     where
-        F: Fn(&mut Receiver<PolkaBtcHeader>, &mut Receiver<RequestEvent>) -> Result<BlockOrEvent, RuntimeError>
+        F: Fn(&mut Receiver<BlockNumber>, &mut Receiver<RequestEvent>) -> Result<BlockOrEvent, RuntimeError>
             + std::marker::Send,
     {
         /// Sleep until either the timeout has occured or an event has been received, and return
         /// which event woke us up
         async fn select_event(
             self,
-            block_listener: &mut Receiver<PolkaBtcHeader>,
+            block_listener: &mut Receiver<BlockNumber>,
             event_listener: &mut Receiver<RequestEvent>,
         ) -> Result<BlockOrEvent, RuntimeError> {
             (self.on_event)(block_listener, event_listener)
@@ -587,22 +587,14 @@ mod tests {
         // check that it cancels the issue
         provider.expect_cancel_issue().times(1).returning(|_| Ok(()));
 
-        let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
+        let (_, mut block_listener) = mpsc::channel::<BlockNumber>(16);
         let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
         let mut active_processes: Vec<ActiveRequest> = vec![];
         let mut cancellation_scheduler = CancellationScheduler::new(provider, AccountId::default());
 
         // simulate that we have a a new block
         let selector = TestEventSelector {
-            on_event: |_, _| {
-                Ok(BlockOrEvent::Block(PolkaBtcHeader {
-                    parent_hash: BlakeTwo256::hash(&[0; 32]),
-                    number: 30,
-                    state_root: BlakeTwo256::hash(&[0; 32]),
-                    extrinsics_root: BlakeTwo256::hash(&[0; 32]),
-                    digest: Digest::default(),
-                }))
-            },
+            on_event: |_, _| Ok(BlockOrEvent::Block(30)),
         };
 
         assert_eq!(
@@ -629,7 +621,7 @@ mod tests {
         // is removed from the list
         let provider = MockProvider::default();
 
-        let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
+        let (_, mut block_listener) = mpsc::channel::<BlockNumber>(16);
         let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
         let mut active_processes: Vec<ActiveRequest> = vec![
             ActiveRequest {
@@ -695,7 +687,7 @@ mod tests {
             .returning(|| Ok(15));
         provider.expect_get_issue_period().returning(|| Ok(10));
 
-        let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
+        let (_, mut block_listener) = mpsc::channel::<BlockNumber>(16);
         let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
         let mut active_processes: Vec<ActiveRequest> = vec![];
         let mut cancellation_scheduler = CancellationScheduler::new(provider, AccountId::default());
@@ -732,7 +724,7 @@ mod tests {
             .times(1)
             .returning(|_| Err(RuntimeError::BlockNotFound));
 
-        let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
+        let (_, mut block_listener) = mpsc::channel::<BlockNumber>(16);
         let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
         let mut active_processes: Vec<ActiveRequest> = vec![];
         let mut cancellation_scheduler = CancellationScheduler::new(provider, AccountId::default());
@@ -763,7 +755,7 @@ mod tests {
         // check that if the selector fails, the error is propagated
         let provider = MockProvider::default();
 
-        let (_, mut block_listener) = mpsc::channel::<PolkaBtcHeader>(16);
+        let (_, mut block_listener) = mpsc::channel::<BlockNumber>(16);
         let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
         let mut active_processes: Vec<ActiveRequest> = vec![];
         let mut cancellation_scheduler = CancellationScheduler::new(provider, AccountId::default());
