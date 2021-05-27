@@ -96,19 +96,24 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             .await?;
 
             let service = S::new_service(btc_parachain, bitcoin_core, config, shutdown_tx);
-            match service.start().await {
-                Ok(_) => (),
-                Err(Error::BitcoinError(err))
-                    if err.is_connection_aborted() || err.is_connection_refused() || err.is_json_decode_error() =>
-                {
-                    ()
-                }
-                Err(Error::RuntimeError(RuntimeError::ChannelClosed)) => (),
-                Err(Error::RuntimeError(err)) if err.is_rpc_error() => (),
-                Err(err) => return Err(err),
+            if let Err(outer) = service.start().await {
+                match outer {
+                    Error::BitcoinError(ref inner)
+                        if inner.is_connection_aborted()
+                            || inner.is_connection_refused()
+                            || inner.is_json_decode_error() =>
+                    {
+                        ()
+                    }
+                    Error::RuntimeError(RuntimeError::ChannelClosed) => (),
+                    Error::RuntimeError(ref inner) if inner.is_rpc_error() => (),
+                    other => return Err(other),
+                };
+                tracing::info!("Disconnected: {}", outer);
+            } else {
+                tracing::info!("Disconnected");
             }
 
-            tracing::info!("Disconnected");
             match self.service_config.restart_policy {
                 RestartPolicy::Never => return Err(Error::ClientShutdown),
                 RestartPolicy::Always => continue,
