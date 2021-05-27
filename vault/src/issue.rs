@@ -119,7 +119,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
                     );
                 }
 
-                if transferred < issue.amount {
+                if transferred < issue.amount + issue.fee {
                     // insufficient amount, don't execute
                     return Ok(());
                 }
