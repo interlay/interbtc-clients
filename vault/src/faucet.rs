@@ -46,6 +46,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
     faucet_url: &str,
     vault_id: AccountId,
 ) -> Result<(), Error> {
+    tracing::info!("Connecting to the faucet");
     let connection = jsonrpc_http::connect::<TypedClient>(faucet_url).await?;
 
     // Receive user allowance from faucet
@@ -58,6 +59,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
         .checked_sub(TX_FEES)
         .ok_or(Error::ArithmeticUnderflow)?;
 
+    tracing::info!("Registering the vault");
     let public_key = bitcoin_core.get_new_public_key().await?;
     provider.register_vault(registration_collateral, public_key).await?;
 

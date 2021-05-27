@@ -148,17 +148,16 @@ impl VaultService {
 
         if let Some(collateral) = self.config.auto_register_with_collateral {
             if !is_registered(&self.btc_parachain, vault_id.clone()).await? {
+                tracing::info!("Automatically registering vault");
                 // bitcoin core is currently blocking, no need to try_join
                 let public_key = bitcoin_core.get_new_public_key().await?;
                 self.btc_parachain.register_vault(collateral, public_key).await?;
-                tracing::info!("Automatically registered vault");
             } else {
                 tracing::info!("Not registering vault -- already registered");
             }
         } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
             if !is_registered(&self.btc_parachain, vault_id.clone()).await? {
                 faucet::fund_and_register(&self.btc_parachain, &bitcoin_core, faucet_url, vault_id.clone()).await?;
-                tracing::info!("Automatically registered vault");
             } else {
                 tracing::info!("Not registering vault -- already registered");
             }
