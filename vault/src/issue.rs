@@ -56,7 +56,7 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
         )
         .await
         {
-            tracing::error!("Error executing issue request: {}", e.to_string());
+            tracing::warn!("Failed to execute issue request: {}", e.to_string());
         }
     }
 
