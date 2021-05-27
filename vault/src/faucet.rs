@@ -50,7 +50,9 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
     let connection = jsonrpc_http::connect::<TypedClient>(faucet_url).await?;
 
     // Receive user allowance from faucet
-    get_funding(connection.clone(), vault_id.clone()).await?;
+    if let Err(e) = get_funding(connection.clone(), vault_id.clone()).await {
+        tracing::warn!("Failed to get funding from faucet: {}", e);
+    }
 
     let user_allowance_in_dot: u128 = get_faucet_allowance(connection.clone(), "user_allowance").await?;
     let registration_collateral = user_allowance_in_dot
