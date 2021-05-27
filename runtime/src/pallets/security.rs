@@ -37,3 +37,8 @@ pub struct ActiveBlockCountStore<T: Security> {
     #[store(returns = T::BlockNumber)]
     pub _runtime: PhantomData<T>,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct UpdateActiveBlockEvent<T: Security> {
+    pub height: T::BlockNumber,
+}
