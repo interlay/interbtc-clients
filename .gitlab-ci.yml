@@ -103,8 +103,8 @@ build-docker-images:
                 --build-arg PROFILE="x86_64-unknown-linux-gnu/release" \
                 --context ${CI_PROJECT_DIR} \
                 --dockerfile ${CI_PROJECT_DIR}/.deploy/Dockerfile \
-                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_SHORT_SHA} \
-                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_REF_SLUG}
+                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_REF_NAME}-${CI_COMMIT_SHORT_SHA}-$(date +%s) \
+                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_REF_NAME}
     <<: *only_refs
 
 release-github:
