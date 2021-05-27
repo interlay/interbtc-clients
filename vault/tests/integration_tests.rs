@@ -8,8 +8,11 @@ use futures::{
 };
 use runtime::{
     integration::*,
-    pallets::{issue::*, redeem::*, refund::*, replace::*, vault_registry::*, wrapped_currency::*},
-    BtcAddress, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, IssuePallet, PolkaBtcHeader, PolkaBtcProvider,
+    pallets::{
+        issue::*, redeem::*, refund::*, replace::*, security::UpdateActiveBlockEvent, vault_registry::*,
+        wrapped_currency::*,
+    },
+    BlockNumber, BtcAddress, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, IssuePallet, PolkaBtcProvider,
     PolkaBtcRuntime, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
@@ -282,10 +285,10 @@ async fn test_cancellation_succeeds() {
     root_provider.set_replace_period(1).await.unwrap();
     root_provider.set_redeem_period(1).await.unwrap();
 
-    let (issue_block_tx, issue_block_rx) = mpsc::channel::<PolkaBtcHeader>(16);
+    let (issue_block_tx, issue_block_rx) = mpsc::channel::<BlockNumber>(16);
     let (replace_event_tx, replace_event_rx) = mpsc::channel::<RequestEvent>(16);
 
-    let (replace_block_tx, replace_block_rx) = mpsc::channel::<PolkaBtcHeader>(16);
+    let (replace_block_tx, replace_block_rx) = mpsc::channel::<BlockNumber>(16);
     let (issue_event_tx, issue_event_rx) = mpsc::channel::<RequestEvent>(16);
 
     let block_listener = new_vault_provider.clone();
@@ -317,11 +320,13 @@ async fn test_cancellation_succeeds() {
 
         block_listener
             .clone()
-            .on_block(move |header| async move {
-                issue_block_tx.clone().send(header.clone()).await.unwrap();
-                replace_block_tx.clone().send(header.clone()).await.unwrap();
-                Ok(())
-            })
+            .on_event::<UpdateActiveBlockEvent<PolkaBtcRuntime>, _, _, _>(
+                |event| async move {
+                    issue_block_tx.clone().send(event.height).await.unwrap();
+                    replace_block_tx.clone().send(event.height).await.unwrap();
+                },
+                |_err| (),
+            )
             .await
             .unwrap();
     };
