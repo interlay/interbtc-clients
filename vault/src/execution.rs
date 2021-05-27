@@ -96,7 +96,15 @@ impl Request {
     /// Makes the bitcoin transfer and executes the request
     pub async fn pay_and_execute<
         B: BitcoinCoreApi + Clone,
-        P: ReplacePallet + RefundPallet + RedeemPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
+        P: ReplacePallet
+            + RefundPallet
+            + BtcRelayPallet
+            + RedeemPallet
+            + VaultRegistryPallet
+            + UtilFuncs
+            + Clone
+            + Send
+            + Sync,
     >(
         &self,
         provider: P,
@@ -116,7 +124,10 @@ impl Request {
             request_id = ?self.hash,
         )
     )]
-    async fn transfer_btc<B: BitcoinCoreApi + Clone, P: VaultRegistryPallet + UtilFuncs + Clone + Send + Sync>(
+    async fn transfer_btc<
+        B: BitcoinCoreApi + Clone,
+        P: BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
+    >(
         &self,
         provider: &P,
         btc_rpc: B,
@@ -164,7 +175,16 @@ impl Request {
             .wait_for_transaction_metadata(txid, BITCOIN_MAX_RETRYING_TIME, num_confirmations)
             .await?;
 
-        tracing::info!("Bitcoin successfully sent to {}", recipient);
+        tracing::info!("Awaiting parachain confirmations...");
+
+        provider
+            .wait_for_block_in_relay(
+                H256Le::from_bytes_le(&tx_metadata.block_hash.to_vec()),
+                Some(num_confirmations),
+            )
+            .await?;
+
+        tracing::info!("Bitcoin successfully sent and relayed");
         Ok(tx_metadata)
     }
 
@@ -380,7 +400,9 @@ mod tests {
         Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress,
         PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
-    use runtime::{AccountId, BlockNumber, BtcPublicKey, Error as RuntimeError, PolkaBtcVault};
+    use runtime::{
+        AccountId, BlockNumber, BtcPublicKey, Error as RuntimeError, PolkaBtcRichBlockHeader, PolkaBtcVault,
+    };
     use sp_core::H160;
     use std::time::Duration;
 
@@ -489,6 +511,22 @@ mod tests {
             ) -> Result<Vec<(H256, PolkaBtcRefundRequest)>, RuntimeError>;
         }
 
+        #[async_trait]
+        pub trait BtcRelayPallet {
+            async fn get_best_block(&self) -> Result<H256Le, RuntimeError>;
+            async fn get_best_block_height(&self) -> Result<u32, RuntimeError>;
+            async fn get_block_hash(&self, height: u32) -> Result<H256Le, RuntimeError>;
+            async fn get_block_header(&self, hash: H256Le) -> Result<PolkaBtcRichBlockHeader, RuntimeError>;
+            async fn get_bitcoin_confirmations(&self) -> Result<u32, RuntimeError>;
+            async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), RuntimeError>;
+            async fn get_parachain_confirmations(&self) -> Result<BlockNumber, RuntimeError>;
+            async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), RuntimeError>;
+            async fn wait_for_block_in_relay(
+                &self,
+                block_hash: H256Le,
+                btc_confirmations: Option<BlockNumber>,
+            ) -> Result<(), RuntimeError>;
+        }
     }
 
     impl Clone for MockProvider {

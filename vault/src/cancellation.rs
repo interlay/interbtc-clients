@@ -353,10 +353,6 @@ mod tests {
     use async_trait::async_trait;
     use futures::channel::mpsc;
     use runtime::{
-        sp_runtime::{
-            generic::Digest,
-            traits::{BlakeTwo256, Hash},
-        },
         AccountId, BtcAddress, ErrorCode, PolkaBtcIssueRequest, PolkaBtcReplaceRequest, PolkaBtcRequestIssueEvent,
         StatusCode,
     };
