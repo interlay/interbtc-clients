@@ -1,6 +1,6 @@
 use crate::{cancellation::RequestEvent, error::Error, execution::Request};
 use bitcoin::BitcoinCoreApi;
-use futures::{channel::mpsc::Sender, SinkExt};
+use futures::{channel::mpsc::Sender, future::try_join3, SinkExt};
 use runtime::{
     pallets::replace::{AcceptReplaceEvent, ExecuteReplaceEvent, RequestReplaceEvent},
     CollateralBalancesPallet, PolkaBtcProvider, PolkaBtcRuntime, ReplacePallet, UtilFuncs, VaultRegistryPallet,
@@ -123,11 +123,16 @@ pub async fn handle_replace_request<
     btc_rpc: B,
     event: &RequestReplaceEvent<PolkaBtcRuntime>,
 ) -> Result<(), Error> {
-    let required_collateral = provider.get_required_collateral_for_wrapped(event.amount_btc).await?;
+    let (required_collateral, free_balance, minimum_replace) = try_join3(
+        provider.get_required_collateral_for_wrapped(event.amount_btc),
+        provider.get_free_balance(),
+        provider.get_replace_dust_amount(),
+    )
+    .await?;
 
-    let free_balance = provider.get_free_balance().await?;
-
-    if free_balance < required_collateral {
+    if required_collateral <= minimum_replace {
+        Err(Error::BelowDustAmount)
+    } else if free_balance < required_collateral {
         Err(Error::InsufficientFunds)
     } else {
         Ok(provider
