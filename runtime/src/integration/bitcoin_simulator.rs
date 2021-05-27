@@ -333,7 +333,6 @@ impl BitcoinCoreApi for MockBitcoinCore {
     async fn wait_for_transaction_metadata(
         &self,
         txid: Txid,
-        _op_timeout: Duration,
         _num_confirmations: u32,
     ) -> Result<TransactionMetadata, BitcoinError> {
         let (block_height, block) = loop {
@@ -357,7 +356,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
             block_height: block_height as u32,
         })
     }
-    async fn create_transaction<A: PartialAddress + Send + 'static>(
+    async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
         &self,
         address: A,
         sat: u64,
@@ -387,7 +386,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         self.send_block(block.clone()).await;
         Ok(transaction.transaction.txid())
     }
-    async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
+    async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
         &self,
         address: A,
         sat: u64,
@@ -397,12 +396,11 @@ impl BitcoinCoreApi for MockBitcoinCore {
         let txid = self.send_transaction(tx).await?;
         Ok(txid)
     }
-    async fn send_to_address<A: PartialAddress + Send + 'static>(
+    async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
         &self,
         address: A,
         sat: u64,
         request_id: Option<H256>,
-        op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, BitcoinError> {
         let txid = self
@@ -410,7 +408,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
             .await
             .unwrap();
         let metadata = self
-            .wait_for_transaction_metadata(txid, op_timeout, num_confirmations)
+            .wait_for_transaction_metadata(txid, num_confirmations)
             .await
             .unwrap();
         Ok(metadata)

@@ -37,13 +37,7 @@ pub async fn execute_redeem(
     btc_address: BtcAddress,
 ) -> Result<(), Error> {
     let tx_metadata = btc_rpc
-        .send_to_address(
-            btc_address,
-            redeem_amount.try_into().unwrap(),
-            Some(redeem_id),
-            Duration::from_secs(15 * 60),
-            1,
-        )
+        .send_to_address(btc_address, redeem_amount.try_into().unwrap(), Some(redeem_id), 1)
         .await?;
 
     redeem_prov

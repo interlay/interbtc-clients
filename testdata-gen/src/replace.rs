@@ -50,7 +50,6 @@ pub async fn execute_replace(
             replace_request.btc_address,
             replace_request.amount.try_into().unwrap(),
             Some(replace_id),
-            Duration::from_secs(15 * 60),
             1,
         )
         .await?;

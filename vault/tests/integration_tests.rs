@@ -423,7 +423,6 @@ async fn test_refund_succeeds() {
                 issue.vault_btc_address,
                 (issue.amount_btc + issue.fee) as u64 + over_payment,
                 None,
-                TIMEOUT,
                 0,
             )
             .await
@@ -485,7 +484,6 @@ async fn test_issue_overpayment_succeeds() {
                 issue.vault_btc_address,
                 (issue.amount_btc + issue.fee) as u64 * over_payment_factor as u64,
                 None,
-                TIMEOUT,
                 0,
             )
             .await
@@ -546,13 +544,7 @@ async fn test_automatic_issue_execution_succeeds() {
             .unwrap();
 
         btc_rpc
-            .send_to_address(
-                issue.vault_btc_address,
-                (issue.amount_btc + issue.fee) as u64,
-                None,
-                TIMEOUT,
-                0,
-            )
+            .send_to_address(issue.vault_btc_address, (issue.amount_btc + issue.fee) as u64, None, 0)
             .await
             .unwrap();
 
@@ -617,7 +609,7 @@ async fn test_execute_open_requests_succeeds() {
 
     // send btc for redeem 0
     btc_rpc
-        .send_to_address(address, 10000, Some(redeem_ids[0]), TIMEOUT, 0)
+        .send_to_address(address, 10000, Some(redeem_ids[0]), 0)
         .await
         .unwrap();
 

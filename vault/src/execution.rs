@@ -1,4 +1,4 @@
-use crate::{error::Error, retry::*, BITCOIN_MAX_RETRYING_TIME};
+use crate::{error::Error, retry::*};
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use futures::{stream::StreamExt, try_join};
 use runtime::{
@@ -160,9 +160,7 @@ impl Request {
         };
 
         let txid = btc_rpc.send_transaction(tx).await?;
-        let tx_metadata = btc_rpc
-            .wait_for_transaction_metadata(txid, BITCOIN_MAX_RETRYING_TIME, num_confirmations)
-            .await?;
+        let tx_metadata = btc_rpc.wait_for_transaction_metadata(txid, num_confirmations).await?;
 
         tracing::info!("Bitcoin successfully sent to {}", recipient);
         Ok(tx_metadata)
@@ -286,7 +284,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                 // Payment has been made, but it might not have been confirmed enough times yet
                 let tx_metadata = btc_rpc
                     .clone()
-                    .wait_for_transaction_metadata(tx.txid(), BITCOIN_MAX_RETRYING_TIME, num_confirmations)
+                    .wait_for_transaction_metadata(tx.txid(), num_confirmations)
                     .await;
 
                 match tx_metadata {
@@ -526,28 +524,26 @@ mod tests {
             async fn wait_for_transaction_metadata(
                 &self,
                 txid: Txid,
-                op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
-            async fn create_transaction<A: PartialAddress + Send + 'static>(
+            async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
                 &self,
                 address: A,
                 sat: u64,
                 request_id: Option<H256>,
             ) -> Result<LockedTransaction, BitcoinError>;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
-            async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
+            async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
                 &self,
                 address: A,
                 sat: u64,
                 request_id: Option<H256>,
             ) -> Result<Txid, BitcoinError>;
-            async fn send_to_address<A: PartialAddress + Send + 'static>(
+            async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
                 &self,
                 address: A,
                 sat: u64,
                 request_id: Option<H256>,
-                op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;
@@ -586,7 +582,7 @@ mod tests {
 
         btc_rpc.expect_send_transaction().returning(|_| Ok(Txid::default()));
 
-        btc_rpc.expect_wait_for_transaction_metadata().returning(|_, _, _| {
+        btc_rpc.expect_wait_for_transaction_metadata().returning(|_, _| {
             Ok(TransactionMetadata {
                 txid: Txid::default(),
                 proof: vec![],
@@ -628,7 +624,7 @@ mod tests {
 
         btc_rpc.expect_send_transaction().returning(|_| Ok(Txid::default()));
 
-        btc_rpc.expect_wait_for_transaction_metadata().returning(|_, _, _| {
+        btc_rpc.expect_wait_for_transaction_metadata().returning(|_, _| {
             Ok(TransactionMetadata {
                 txid: Txid::default(),
                 proof: vec![],

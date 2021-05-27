@@ -47,13 +47,7 @@ pub async fn execute_issue(
     vault_btc_address: BtcAddress,
 ) -> Result<(), Error> {
     let tx_metadata = btc_rpc
-        .send_to_address(
-            vault_btc_address,
-            issue_amount.try_into().unwrap(),
-            None,
-            Duration::from_secs(15 * 60),
-            1,
-        )
+        .send_to_address(vault_btc_address, issue_amount.try_into().unwrap(), None, 1)
         .await?;
 
     issue_prov

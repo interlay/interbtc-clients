@@ -97,13 +97,7 @@ pub async fn assert_issue(provider: &PolkaBtcProvider, btc_rpc: &MockBitcoinCore
     let issue = provider.request_issue(amount, vault_id.clone(), 10000).await.unwrap();
 
     let metadata = btc_rpc
-        .send_to_address(
-            issue.vault_btc_address,
-            (issue.amount_btc + issue.fee) as u64,
-            None,
-            Duration::from_secs(30),
-            0,
-        )
+        .send_to_address(issue.vault_btc_address, (issue.amount_btc + issue.fee) as u64, None, 0)
         .await
         .unwrap();
 

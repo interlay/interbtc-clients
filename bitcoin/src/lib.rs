@@ -7,7 +7,7 @@ mod iter;
 
 pub use addr::PartialAddress;
 use async_trait::async_trait;
-use backoff::{future::FutureOperation as _, ExponentialBackoff};
+use backoff::{backoff::Backoff, future::FutureOperation as _, ExponentialBackoff};
 pub use bitcoincore_rpc::{
     bitcoin::{
         blockdata::{opcodes::all as opcodes, script::Builder},
@@ -31,7 +31,7 @@ pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_trans
 use log::{info, trace};
 use serde_json::error::Category as SerdeJsonCategory;
 use sp_core::H256;
-use std::{io::ErrorKind as IoErrorKind, sync::Arc, time::Duration};
+use std::{future::Future, io::ErrorKind as IoErrorKind, sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, OwnedMutexGuard},
     time::{delay_for, timeout},
@@ -92,11 +92,10 @@ pub trait BitcoinCoreApi {
     async fn wait_for_transaction_metadata(
         &self,
         txid: Txid,
-        op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
-    async fn create_transaction<A: PartialAddress + Send + 'static>(
+    async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
         &self,
         address: A,
         sat: u64,
@@ -105,19 +104,18 @@ pub trait BitcoinCoreApi {
 
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
 
-    async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
+    async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
         &self,
         address: A,
         sat: u64,
         request_id: Option<H256>,
     ) -> Result<Txid, Error>;
 
-    async fn send_to_address<A: PartialAddress + Send + 'static>(
+    async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
         &self,
         address: A,
         sat: u64,
         request_id: Option<H256>,
-        op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
@@ -143,6 +141,18 @@ impl LockedTransaction {
             recipient,
             _lock: lock,
         }
+    }
+}
+
+fn get_exponential_backoff() -> ExponentialBackoff {
+    ExponentialBackoff {
+        max_elapsed_time: Some(Duration::from_secs(24 * 60 * 60)),
+        max_interval: Duration::from_secs(5 * 60), // wait at most 5 minutes before retrying
+        initial_interval: Duration::from_secs(1),
+        current_interval: Duration::from_secs(1),
+        multiplier: 2.0,            // delay doubles every time
+        randomization_factor: 0.25, // random value between 25% below and 25% above the ideal delay
+        ..Default::default()
     }
 }
 
@@ -263,6 +273,32 @@ impl BitcoinCore {
 
     pub fn encode_address<A: PartialAddress + Send + 'static>(&self, address: A) -> Result<String, Error> {
         Ok(address.encode_str(self.network)?)
+    }
+
+    async fn with_wallet<F, R, T>(&self, call: F) -> Result<T, Error>
+    where
+        F: Fn() -> R,
+        R: Future<Output = Result<T, Error>>,
+    {
+        let mut backoff = get_exponential_backoff();
+        loop {
+            let err = match call().await.map_err(Error::from) {
+                Err(inner) if inner.is_wallet_not_found() => {
+                    self.create_or_load_wallet().await?;
+                    inner
+                }
+                result => return result,
+            };
+
+            match backoff.next_backoff() {
+                Some(wait) => {
+                    // error occurred, sleep before retrying
+                    log::warn!("{:?} - next retry in {:.3} s", err, wait.as_secs_f64());
+                    tokio::time::delay_for(wait).await;
+                }
+                None => break Err(Error::ConnectionRefused),
+            }
+        }
     }
 }
 
@@ -443,25 +479,12 @@ impl BitcoinCoreApi for BitcoinCore {
     ///
     /// # Arguments
     /// * `txid` - transaction ID
-    /// * `op_timeout` - wait period before re-checking
-    /// * `op_timeout` - how long operations will be retried
     /// * `num_confirmations` - how many confirmations we need to wait for
     async fn wait_for_transaction_metadata(
         &self,
         txid: Txid,
-        op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
-        let get_retry_policy = || ExponentialBackoff {
-            max_elapsed_time: Some(op_timeout),
-            max_interval: Duration::from_secs(5 * 60), // wait at most 5 minutes before retrying
-            initial_interval: Duration::from_secs(1),
-            current_interval: Duration::from_secs(1),
-            multiplier: 2.0,            // delay doubles every time
-            randomization_factor: 0.25, // random value between 25% below and 25% above the ideal delay
-            ..Default::default()
-        };
-
         let (block_height, block_hash) = (|| async {
             Ok(match self.rpc.get_transaction(&txid, None) {
                 Ok(GetTransactionResult {
@@ -478,15 +501,15 @@ impl BitcoinCoreApi for BitcoinCore {
                 Err(e) => Err(e.into()),
             }?)
         })
-        .retry(get_retry_policy())
+        .retry(get_exponential_backoff())
         .await?;
 
         let proof = (|| async { Ok(self.get_proof(txid, &block_hash).await?) })
-            .retry(get_retry_policy())
+            .retry(get_exponential_backoff())
             .await?;
 
         let raw_tx = (|| async { Ok(self.get_raw_tx(&txid, &block_hash).await?) })
-            .retry(get_retry_policy())
+            .retry(get_exponential_backoff())
             .await?;
 
         Ok(TransactionMetadata {
@@ -506,41 +529,45 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
     /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
-    async fn create_transaction<A: PartialAddress + Send + 'static>(
+    async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
         &self,
         address: A,
         sat: u64,
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, Error> {
-        let address_string = address.encode_str(self.network)?;
-        // create raw transaction that includes the op_return (if any). If we were to add the op_return
-        // after funding, the fees might be insufficient. An alternative to our own version of
-        // this function would be to call create_raw_transaction (without the _hex suffix), and
-        // to add the op_return afterwards. However, this function fails if no inputs are
-        // specified, as is the case for us prior to calling fund_raw_transaction.
-        let raw_tx = self.create_raw_transaction_hex(address_string.clone(), Amount::from_sat(sat), request_id)?;
+        self.with_wallet(|| async {
+            let address_string = address.encode_str(self.network)?;
 
-        // ensure no other fund_raw_transaction calls are made until we submitted the
-        // transaction to the bitcoind. If we don't do this, the same uxto may be used
-        // as input twice (i.e. double spend)
-        let lock = self.transaction_creation_lock.clone().lock_owned().await;
+            // create raw transaction that includes the op_return (if any). If we were to add the op_return
+            // after funding, the fees might be insufficient. An alternative to our own version of
+            // this function would be to call create_raw_transaction (without the _hex suffix), and
+            // to add the op_return afterwards. However, this function fails if no inputs are
+            // specified, as is the case for us prior to calling fund_raw_transaction.
+            let raw_tx = self.create_raw_transaction_hex(address_string.clone(), Amount::from_sat(sat), request_id)?;
 
-        // fund the transaction: adds required inputs, and possibly a return-to-self output
-        let funded_raw_tx = self.rpc.fund_raw_transaction(raw_tx, None, None)?;
+            // ensure no other fund_raw_transaction calls are made until we submitted the
+            // transaction to the bitcoind. If we don't do this, the same uxto may be used
+            // as input twice (i.e. double spend)
+            let lock = self.transaction_creation_lock.clone().lock_owned().await;
 
-        // sign the transaction
-        let signed_funded_raw_tx =
-            self.rpc
-                .sign_raw_transaction_with_wallet(&funded_raw_tx.transaction()?, None, None)?;
+            // fund the transaction: adds required inputs, and possibly a return-to-self output
+            let funded_raw_tx = self.rpc.fund_raw_transaction(raw_tx, None, None)?;
 
-        // Make sure signing is successful
-        if signed_funded_raw_tx.errors.is_some() {
-            return Err(Error::TransactionSigningError);
-        }
+            // sign the transaction
+            let signed_funded_raw_tx =
+                self.rpc
+                    .sign_raw_transaction_with_wallet(&funded_raw_tx.transaction()?, None, None)?;
 
-        let transaction = signed_funded_raw_tx.transaction()?;
+            // Make sure signing is successful
+            if signed_funded_raw_tx.errors.is_some() {
+                return Err(Error::TransactionSigningError);
+            }
 
-        Ok(LockedTransaction::new(transaction, address_string, Some(lock)))
+            let transaction = signed_funded_raw_tx.transaction()?;
+
+            Ok(LockedTransaction::new(transaction, address_string, Some(lock)))
+        })
+        .await
     }
 
     /// Submits a transaction to the mempool
@@ -548,8 +575,10 @@ impl BitcoinCoreApi for BitcoinCore {
     /// # Arguments
     /// * `transaction` - The transaction created by create_transaction
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error> {
-        // place the transaction into the mempool
-        let txid = self.rpc.send_raw_transaction(&transaction.transaction)?;
+        // place the transaction into the mempool, this is fine to retry
+        let txid = self
+            .with_wallet(|| async { Ok(self.rpc.send_raw_transaction(&transaction.transaction)?) })
+            .await?;
         Ok(txid)
     }
 
@@ -561,7 +590,7 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
     /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
-    async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
+    async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
         &self,
         address: A,
         sat: u64,
@@ -579,14 +608,12 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
     /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
-    /// * `op_timeout` - how long operations will be retried
     /// * `num_confirmations` - how many confirmations we need to wait for
-    async fn send_to_address<A: PartialAddress + Send + 'static>(
+    async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
         &self,
         address: A,
         sat: u64,
         request_id: Option<H256>,
-        op_timeout: Duration,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
         let txid = self.create_and_send_transaction(address, sat, request_id).await?;
@@ -595,9 +622,7 @@ impl BitcoinCoreApi for BitcoinCore {
         self.rpc
             .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
 
-        Ok(self
-            .wait_for_transaction_metadata(txid, op_timeout, num_confirmations)
-            .await?)
+        Ok(self.wait_for_transaction_metadata(txid, num_confirmations).await?)
     }
 
     /// Create or load a wallet on Bitcoin Core.
@@ -622,15 +647,19 @@ impl BitcoinCoreApi for BitcoinCore {
     where
         P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static,
     {
-        let address = Address::p2wpkh(&PublicKey::from_slice(&public_key.clone().into())?, self.network)
-            .map_err(ConversionError::from)?;
-        let address_info = self.rpc.get_address_info(&address)?;
-        let wallet_pubkey = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
-        Ok(P::from(wallet_pubkey.key.serialize()) == public_key)
+        self.with_wallet(|| async {
+            let address = Address::p2wpkh(&PublicKey::from_slice(&public_key.clone().into())?, self.network)
+                .map_err(ConversionError::from)?;
+            let address_info = self.rpc.get_address_info(&address)?;
+            let wallet_pubkey = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
+            Ok(P::from(wallet_pubkey.key.serialize()) == public_key)
+        })
+        .await
     }
 
     async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error> {
-        Ok(self.rpc.import_private_key(&privkey, None, None)?)
+        self.with_wallet(|| async { Ok(self.rpc.import_private_key(&privkey, None, None)?) })
+            .await
     }
 }
 
