@@ -12,9 +12,7 @@ integration = []
 thiserror = "1.0"
 clap = "3.0.0-beta.2"
 tokio = { version = "0.2.22", features = ["full"] }
-backoff = { version = "0.2.1", features = ["tokio"] }
 serde = "1.0.116"
-serde_json = { version = "1.0.57", features = ["raw_value"] }
 parity-scale-codec = "2.0.0"
 hex = "0.4.2"
 futures = "0.3.5"
