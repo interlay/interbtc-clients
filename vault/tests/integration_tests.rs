@@ -53,7 +53,7 @@ async fn test_redeem_succeeds() {
         async {
             let address = BtcAddress::P2PKH(H160::from_slice(&[2; 20]));
             let vault_id = vault_provider.clone().get_account_id().clone();
-            let redeem_id = user_provider.request_redeem(10000, address, vault_id).await.unwrap();
+            let redeem_id = user_provider.request_redeem(10000, address, &vault_id).await.unwrap();
             assert_redeem_event(TIMEOUT, user_provider, redeem_id).await;
             // TODO: check bitcoin payment amount
         },
@@ -234,7 +234,7 @@ async fn test_withdraw_replace_succeeds() {
 
     let address = BtcAddress::P2PKH(H160::from_slice(&[2; 20]));
     assert!(new_vault_provider
-        .accept_replace(old_vault_id, 1u32.into(), vault_collateral, address)
+        .accept_replace(&old_vault_id, 1u32.into(), vault_collateral, address)
         .await
         .is_err());
 }
@@ -346,7 +346,7 @@ async fn test_cancellation_succeeds() {
 
             // setup the to-be-cancelled redeem
             let redeem_id = user_provider
-                .request_redeem(20000, address, old_vault_provider.get_account_id().clone())
+                .request_redeem(20000, address, old_vault_provider.get_account_id())
                 .await
                 .unwrap();
 
@@ -358,14 +358,14 @@ async fn test_cancellation_succeeds() {
                         .await
                         .unwrap();
                     new_vault_provider
-                        .accept_replace(old_vault_id.clone(), 10000000u32.into(), 0u32.into(), address)
+                        .accept_replace(&old_vault_id, 10000000u32.into(), 0u32.into(), address)
                         .await
                         .unwrap();
                     replace_event_tx.clone().send(RequestEvent::Opened).await.unwrap();
 
                     // setup the to-be-cancelled issue
                     user_provider
-                        .request_issue(issue_amount, new_vault_provider.get_account_id().clone(), 10000)
+                        .request_issue(issue_amount, new_vault_provider.get_account_id(), 10000)
                         .await
                         .unwrap();
                 },
@@ -420,7 +420,7 @@ async fn test_refund_succeeds() {
         let over_payment = 100500;
 
         let issue = user_provider
-            .request_issue(issue_amount, vault_provider.get_account_id().clone(), 10000)
+            .request_issue(issue_amount, vault_provider.get_account_id(), 10000)
             .await
             .unwrap();
 
@@ -435,7 +435,7 @@ async fn test_refund_succeeds() {
             .unwrap();
 
         let (_, refund_request, refund_execution) = join3(
-            user_provider.execute_issue(issue.issue_id, metadata.proof, metadata.raw_tx),
+            user_provider.execute_issue(issue.issue_id, &metadata.proof, &metadata.raw_tx),
             assert_event::<RequestRefundEvent<PolkaBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |x| {
                 x.vault_id == vault_id
             }),
@@ -481,7 +481,7 @@ async fn test_issue_overpayment_succeeds() {
     let _vault_id = vault_provider.get_account_id().clone();
     let fut_user = async {
         let issue = user_provider
-            .request_issue(issue_amount, vault_provider.get_account_id().clone(), 10000)
+            .request_issue(issue_amount, vault_provider.get_account_id(), 10000)
             .await
             .unwrap();
 
@@ -505,7 +505,7 @@ async fn test_issue_overpayment_succeeds() {
                 }
             }),
             user_provider
-                .execute_issue(issue.issue_id, metadata.proof, metadata.raw_tx)
+                .execute_issue(issue.issue_id, &metadata.proof, &metadata.raw_tx)
                 .map(Result::unwrap),
         )
         .await;
@@ -545,7 +545,7 @@ async fn test_automatic_issue_execution_succeeds() {
 
     let fut_user = async {
         let issue = user_provider
-            .request_issue(issue_amount, vault1_provider.get_account_id().clone(), 10000)
+            .request_issue(issue_amount, vault1_provider.get_account_id(), 10000)
             .await
             .unwrap();
 
@@ -606,7 +606,7 @@ async fn test_execute_open_requests_succeeds() {
     let address = BtcAddress::P2PKH(H160::from_slice(&[2; 20]));
     // place replace requests
     let redeem_ids = futures::future::join_all(
-        (0..3u128).map(|_| user_provider.request_redeem(10000, address, vault_provider.get_account_id().clone())),
+        (0..3u128).map(|_| user_provider.request_redeem(10000, address, vault_provider.get_account_id())),
     )
     .await
     .into_iter()

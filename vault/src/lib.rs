@@ -9,7 +9,6 @@ mod issue;
 mod redeem;
 mod refund;
 mod replace;
-mod retry;
 mod system;
 mod types;
 

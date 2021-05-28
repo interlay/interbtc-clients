@@ -1,11 +1,11 @@
-use crate::{error::Error, retry::*};
+use crate::error::Error;
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use futures::{stream::StreamExt, try_join};
 use runtime::{
     pallets::{redeem::RequestRedeemEvent, refund::RequestRefundEvent, replace::AcceptReplaceEvent},
-    BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest,
-    PolkaBtcRefundRequest, PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet,
-    ReplacePallet, ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultRegistryPallet,
+    BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcRefundRequest,
+    PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet, ReplacePallet,
+    ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H256;
 use std::collections::HashMap;
@@ -155,16 +155,7 @@ impl Request {
                 let wallet = provider.get_vault(vault_id).await?.wallet;
                 if !wallet.has_btc_address(&address) {
                     tracing::info!("Registering address {:?}", address);
-                    // retry address registration if tx was outdated
-                    notify_retry(
-                        || provider.register_address(*address),
-                        |result| match result {
-                            Ok(ok) => Ok(ok),
-                            Err(err @ RuntimeError::InvalidTransaction) => Err(RetryPolicy::Skip(err)),
-                            Err(err) => Err(RetryPolicy::Throw(err)),
-                        },
-                    )
-                    .await?;
+                    provider.register_address(*address).await?;
                 }
             }
             _ => return Err(Error::TooManyReturnToSelfAddresses),
@@ -201,20 +192,15 @@ impl Request {
 
         // Retry until success or timeout, explicitly handle the cases
         // where the redeem has expired or the rpc has disconnected
-        notify_retry(
-            || {
-                (execute)(
-                    &provider,
-                    self.hash,
-                    tx_metadata.proof.clone(),
-                    tx_metadata.raw_tx.clone(),
-                )
-            },
-            |result| match result {
-                Ok(ok) => Ok(ok),
-                Err(err) if err.is_commit_period_expired() => Err(RetryPolicy::Throw(err)),
-                Err(err) if err.is_rpc_disconnect_error() => Err(RetryPolicy::Throw(err)),
-                Err(err) => Err(RetryPolicy::Skip(err)),
+        runtime::notify_retry(
+            || (execute)(&provider, self.hash, &tx_metadata.proof, &tx_metadata.raw_tx),
+            |result| async {
+                match result {
+                    Ok(ok) => Ok(ok),
+                    Err(err) if err.is_commit_period_expired() => Err(runtime::RetryPolicy::Throw(err)),
+                    Err(err) if err.is_rpc_disconnect_error() => Err(runtime::RetryPolicy::Throw(err)),
+                    Err(err) => Err(runtime::RetryPolicy::Skip(err)),
+                }
             },
         )
         .await?;
@@ -445,13 +431,13 @@ mod tests {
                 &self,
                 amount: u128,
                 btc_address: BtcAddress,
-                vault_id: AccountId,
+                vault_id: &AccountId,
             ) -> Result<H256, RuntimeError>;
             async fn execute_redeem(
                 &self,
                 redeem_id: H256,
-                merkle_proof: Vec<u8>,
-                raw_tx: Vec<u8>,
+                merkle_proof: &[u8],
+                raw_tx: &[u8],
             ) -> Result<(), RuntimeError>;
             async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), RuntimeError>;
             async fn get_redeem_request(&self, redeem_id: H256) -> Result<PolkaBtcRedeemRequest, RuntimeError>;
@@ -469,7 +455,7 @@ mod tests {
             async fn withdraw_replace(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn accept_replace(
                 &self,
-                old_vault: AccountId,
+                old_vault: &AccountId,
                 amount_btc: u128,
                 collateral: u128,
                 btc_address: BtcAddress,
@@ -477,8 +463,8 @@ mod tests {
             async fn execute_replace(
                 &self,
                 replace_id: H256,
-                merkle_proof: Vec<u8>,
-                raw_tx: Vec<u8>,
+                merkle_proof: &[u8],
+                raw_tx: &[u8],
             ) -> Result<(), RuntimeError>;
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
             async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, RuntimeError>;
@@ -500,8 +486,8 @@ mod tests {
             async fn execute_refund(
                 &self,
                 refund_id: H256,
-                merkle_proof: Vec<u8>,
-                raw_tx: Vec<u8>,
+                merkle_proof: &[u8],
+                raw_tx: &[u8],
             ) -> Result<(), RuntimeError>;
             async fn get_vault_refund_requests(
                 &self,

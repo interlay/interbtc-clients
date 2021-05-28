@@ -23,8 +23,8 @@ pub struct WithdrawReplaceCall<T: Replace> {
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct AcceptReplaceCall<T: Replace> {
-    pub old_vault: T::AccountId,
+pub struct AcceptReplaceCall<'a, T: Replace> {
+    pub old_vault: &'a T::AccountId,
     #[codec(compact)]
     pub amount_btc: T::Wrapped,
     #[codec(compact)]
@@ -33,10 +33,10 @@ pub struct AcceptReplaceCall<T: Replace> {
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct ExecuteReplaceCall<T: Replace> {
+pub struct ExecuteReplaceCall<'a, T: Replace> {
     pub replace_id: T::H256,
-    pub merkle_proof: Vec<u8>,
-    pub raw_tx: Vec<u8>,
+    pub merkle_proof: &'a [u8],
+    pub raw_tx: &'a [u8],
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]

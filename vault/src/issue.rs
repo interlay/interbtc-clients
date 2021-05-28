@@ -140,7 +140,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
                 let proof = bitcoin_core.get_proof(txid, &block_hash).await?;
 
                 tracing::info!("Executing issue #{:?}", issue_id);
-                match btc_parachain.execute_issue(issue_id, proof, raw_tx).await {
+                match btc_parachain.execute_issue(issue_id, &proof, &raw_tx).await {
                     Ok(_) => (),
                     Err(err) if err.is_issue_completed() => {
                         tracing::info!("Issue #{} has already been completed", issue_id);

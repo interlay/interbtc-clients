@@ -137,7 +137,7 @@ pub async fn handle_replace_request<
     } else {
         Ok(provider
             .accept_replace(
-                event.old_vault_id.clone(),
+                &event.old_vault_id,
                 event.amount_btc,
                 required_collateral,
                 btc_rpc.get_new_address().await?,
@@ -289,7 +289,7 @@ mod tests {
             async fn withdraw_replace(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn accept_replace(
                 &self,
-                old_vault: AccountId,
+                old_vault: &AccountId,
                 amount_btc: u128,
                 collateral: u128,
                 btc_address: BtcAddress,
@@ -297,8 +297,8 @@ mod tests {
             async fn execute_replace(
                 &self,
                 replace_id: H256,
-                merkle_proof: Vec<u8>,
-                raw_tx: Vec<u8>,
+                merkle_proof: &[u8],
+                raw_tx: &[u8],
             ) -> Result<(), RuntimeError>;
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
             async fn get_new_vault_replace_requests(
@@ -321,7 +321,7 @@ mod tests {
             async fn get_free_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
             async fn get_reserved_balance(&self) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
             async fn get_reserved_balance_for_id(&self, id: AccountId) -> Result<<PolkaBtcRuntime as Core>::Balance, RuntimeError>;
-            async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), RuntimeError>;
+            async fn transfer_to(&self, recipient: &AccountId, amount: u128) -> Result<(), RuntimeError>;
         }
     }
 

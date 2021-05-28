@@ -401,14 +401,14 @@ mod tests {
             async fn request_issue(
                 &self,
                 amount: u128,
-                vault_id: AccountId,
+                vault_id: &AccountId,
                 griefing_collateral: u128,
             ) -> Result<PolkaBtcRequestIssueEvent, RuntimeError>;
             async fn execute_issue(
                 &self,
                 issue_id: H256,
-                merkle_proof: Vec<u8>,
-                raw_tx: Vec<u8>,
+                merkle_proof: &[u8],
+                raw_tx: &[u8],
             ) -> Result<(), RuntimeError>;
             async fn cancel_issue(&self, issue_id: H256) -> Result<(), RuntimeError>;
             async fn get_issue_request(&self, issue_id: H256) -> Result<PolkaBtcIssueRequest, RuntimeError>;
@@ -427,7 +427,7 @@ mod tests {
             async fn withdraw_replace(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn accept_replace(
                 &self,
-                old_vault: AccountId,
+                old_vault: &AccountId,
                 amount_btc: u128,
                 collateral: u128,
                 btc_address: BtcAddress,
@@ -435,8 +435,8 @@ mod tests {
             async fn execute_replace(
                 &self,
                 replace_id: H256,
-                merkle_proof: Vec<u8>,
-                raw_tx: Vec<u8>,
+                merkle_proof: &[u8],
+                raw_tx: &[u8],
             ) -> Result<(), RuntimeError>;
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
             async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, RuntimeError>;

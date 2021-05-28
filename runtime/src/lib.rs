@@ -3,6 +3,7 @@ pub mod pallets;
 
 mod conn;
 mod error;
+mod retry;
 mod rpc;
 mod types;
 
@@ -14,6 +15,7 @@ pub mod integration;
 
 pub use error::{Error, SubxtError};
 pub use pallets::*;
+pub use retry::{notify_retry, RetryPolicy};
 pub use rpc::{
     BtcRelayPallet, BtcTxFeesPerByte, CollateralBalancesPallet, ExchangeRateOraclePallet, FeePallet, IssuePallet,
     PolkaBtcProvider, RedeemPallet, RefundPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,

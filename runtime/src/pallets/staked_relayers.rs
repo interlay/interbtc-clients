@@ -12,10 +12,10 @@ use substrate_subxt_proc_macro::{module, Call, Event};
 pub trait StakedRelayers: Core + Balances {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct ReportVaultTheftCall<T: StakedRelayers> {
-    pub vault_id: T::AccountId,
-    pub merkle_proof: Vec<u8>,
-    pub raw_tx: Vec<u8>,
+pub struct ReportVaultTheftCall<'a, T: StakedRelayers> {
+    pub vault_id: &'a T::AccountId,
+    pub merkle_proof: &'a [u8],
+    pub raw_tx: &'a [u8],
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]

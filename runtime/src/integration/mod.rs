@@ -94,7 +94,7 @@ pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> PolkaBt
 
 /// request, pay and execute an issue
 pub async fn assert_issue(provider: &PolkaBtcProvider, btc_rpc: &MockBitcoinCore, vault_id: &AccountId, amount: u128) {
-    let issue = provider.request_issue(amount, vault_id.clone(), 10000).await.unwrap();
+    let issue = provider.request_issue(amount, vault_id, 10000).await.unwrap();
 
     let metadata = btc_rpc
         .send_to_address(issue.vault_btc_address, (issue.amount_btc + issue.fee) as u64, None, 0)
@@ -102,7 +102,7 @@ pub async fn assert_issue(provider: &PolkaBtcProvider, btc_rpc: &MockBitcoinCore
         .unwrap();
 
     provider
-        .execute_issue(issue.issue_id, metadata.proof, metadata.raw_tx)
+        .execute_issue(issue.issue_id, &metadata.proof, &metadata.raw_tx)
         .await
         .unwrap();
 }

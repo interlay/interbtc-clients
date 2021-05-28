@@ -207,7 +207,7 @@ async fn atomic_faucet_funding(
         account_type,
         amount
     );
-    provider.transfer_to(account_id.clone(), amount).await?;
+    provider.transfer_to(&account_id, amount).await?;
 
     // Replace the previous (expired) claim datetime with the datetime of the current claim, only update
     // this after successfully transferring funds to ensure that this can be called again on error
@@ -420,7 +420,7 @@ mod tests {
             .await
             .unwrap();
         bob_provider
-            .transfer_to(drain_account_id, bob_prefunded_amount - one_dot)
+            .transfer_to(&drain_account_id, bob_prefunded_amount - one_dot)
             .await
             .expect("Unable to transfer funds");
 
@@ -524,7 +524,7 @@ mod tests {
             .await
             .unwrap();
         bob_provider
-            .transfer_to(drain_account_id, bob_prefunded_amount - one_dot)
+            .transfer_to(&drain_account_id, bob_prefunded_amount - one_dot)
             .await
             .expect("Unable to transfer funds");
 
@@ -574,7 +574,7 @@ mod tests {
             .await
             .unwrap();
         bob_provider
-            .transfer_to(drain_account_id, bob_prefunded_amount - one_dot)
+            .transfer_to(&drain_account_id, bob_prefunded_amount - one_dot)
             .await
             .expect("Unable to transfer funds");
 
