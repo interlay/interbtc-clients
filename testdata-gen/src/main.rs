@@ -517,13 +517,7 @@ async fn main() -> Result<(), Error> {
 
             let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
             let tx_metadata = btc_rpc
-                .send_to_address(
-                    btc_address,
-                    satoshis.try_into().unwrap(),
-                    None,
-                    Duration::from_secs(15 * 60),
-                    1,
-                )
+                .send_to_address(btc_address, satoshis.try_into().unwrap(), None, 1)
                 .await?;
 
             println!("{}", tx_metadata.txid);

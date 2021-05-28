@@ -230,28 +230,26 @@ mod tests {
             async fn wait_for_transaction_metadata(
                 &self,
                 txid: Txid,
-                op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
-            async fn create_transaction<A: PartialAddress + Send + 'static>(
+            async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
                 &self,
                 address: A,
                 sat: u64,
                 request_id: Option<H256>,
             ) -> Result<LockedTransaction, BitcoinError>;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
-            async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
+            async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
                 &self,
                 address: A,
                 sat: u64,
                 request_id: Option<H256>,
             ) -> Result<Txid, BitcoinError>;
-            async fn send_to_address<A: PartialAddress + Send + 'static>(
+            async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
                 &self,
                 address: A,
                 sat: u64,
                 request_id: Option<H256>,
-                op_timeout: Duration,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;
