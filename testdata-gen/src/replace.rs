@@ -5,7 +5,7 @@ use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
 use runtime::{AccountId, BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, ReplacePallet, UtilFuncs};
 use sp_core::H256;
-use std::{convert::TryInto, time::Duration};
+use std::convert::TryInto;
 
 /// Request redeem
 pub async fn request_replace(
@@ -32,7 +32,7 @@ pub async fn accept_replace(
     info!("Collateral: {}", collateral);
     let address = btc_rpc.get_new_address().await?;
     replace_prov
-        .accept_replace(old_vault, amount_btc, collateral, address)
+        .accept_replace(&old_vault, amount_btc, collateral, address)
         .await?;
     Ok(())
 }
@@ -59,7 +59,7 @@ pub async fn execute_replace(
         .await?;
 
     replace_prov
-        .execute_replace(replace_id, tx_metadata.proof, tx_metadata.raw_tx)
+        .execute_replace(replace_id, &tx_metadata.proof, &tx_metadata.raw_tx)
         .await?;
 
     Ok(())

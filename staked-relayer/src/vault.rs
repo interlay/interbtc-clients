@@ -68,14 +68,10 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         }
     }
 
-    async fn report_invalid(&self, vault_id: AccountId, raw_tx: Vec<u8>, proof: Vec<u8>) -> Result<(), Error> {
+    async fn report_invalid(&self, vault_id: &AccountId, proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
         tracing::info!("Found tx from vault {}", vault_id.to_ss58check());
         // check if matching redeem or replace request
-        if self
-            .btc_parachain
-            .is_transaction_invalid(vault_id.clone(), raw_tx.clone())
-            .await?
-        {
+        if self.btc_parachain.is_transaction_invalid(vault_id, &raw_tx).await? {
             tracing::info!("Transaction is invalid");
             self.btc_parachain.report_vault_theft(vault_id, proof, raw_tx).await?;
         }
@@ -104,7 +100,7 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
         let vault_ids = filter_matching_vaults(addresses, &self.vaults).await;
 
         for vault_id in vault_ids {
-            self.report_invalid(vault_id, raw_tx.clone(), proof.clone()).await?;
+            self.report_invalid(&vault_id, &proof, &raw_tx).await?;
         }
 
         Ok(())
@@ -201,11 +197,11 @@ mod tests {
         pub trait StakedRelayerPallet {
             async fn report_vault_theft(
                 &self,
-                vault_id: AccountId,
-                merkle_proof: Vec<u8>,
-                raw_tx: Vec<u8>,
+                vault_id: &AccountId,
+                merkle_proof: &[u8],
+                raw_tx: &[u8],
             ) -> Result<(), RuntimeError>;
-            async fn is_transaction_invalid(&self, vault_id: AccountId, raw_tx: Vec<u8>) -> Result<bool, RuntimeError>;
+            async fn is_transaction_invalid(&self, vault_id: &AccountId, raw_tx: &[u8]) -> Result<bool, RuntimeError>;
             async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), RuntimeError>;
             async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), RuntimeError>;
             async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), RuntimeError>;
@@ -335,7 +331,7 @@ mod tests {
         let monitor = VaultTheftMonitor::new(MockBitcoin::default(), parachain, 0, Arc::new(Vaults::default()));
 
         monitor
-            .report_invalid(AccountKeyring::Bob.to_account_id(), vec![], vec![])
+            .report_invalid(&AccountKeyring::Bob.to_account_id(), &vec![], &vec![])
             .await
             .unwrap();
     }
@@ -349,7 +345,7 @@ mod tests {
         let monitor = VaultTheftMonitor::new(MockBitcoin::default(), parachain, 0, Arc::new(Vaults::default()));
 
         monitor
-            .report_invalid(AccountKeyring::Bob.to_account_id(), vec![], vec![])
+            .report_invalid(&AccountKeyring::Bob.to_account_id(), &vec![], &vec![])
             .await
             .unwrap();
     }

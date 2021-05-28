@@ -8,7 +8,7 @@ use runtime::{
     PolkaBtcRequestIssueEvent, UtilFuncs,
 };
 use sp_core::H256;
-use std::{convert::TryInto, time::Duration};
+use std::convert::TryInto;
 
 /// Fetch an issue request by it's ID
 pub async fn get_issue_by_id(issue_prov: &PolkaBtcProvider, issue_id: H256) -> Result<PolkaBtcIssueRequest, Error> {
@@ -24,9 +24,7 @@ pub async fn request_issue(
     griefing_collateral: u128,
     vault_id: AccountId,
 ) -> Result<PolkaBtcRequestIssueEvent, Error> {
-    let issue_data = issue_prov
-        .request_issue(amount, vault_id.clone(), griefing_collateral)
-        .await?;
+    let issue_data = issue_prov.request_issue(amount, &vault_id, griefing_collateral).await?;
 
     info!(
         "Requested {:?} to issue {:?} tokens from {:?}",
@@ -55,7 +53,7 @@ pub async fn execute_issue(
         .await?;
 
     issue_prov
-        .execute_issue(issue_id, tx_metadata.proof, tx_metadata.raw_tx)
+        .execute_issue(issue_id, &tx_metadata.proof, &tx_metadata.raw_tx)
         .await?;
 
     info!("Executed issue ID {:?}", issue_id);

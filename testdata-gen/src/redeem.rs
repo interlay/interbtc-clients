@@ -5,7 +5,7 @@ use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
 use runtime::{AccountId, BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, RedeemPallet, UtilFuncs};
 use sp_core::H256;
-use std::{convert::TryInto, time::Duration};
+use std::convert::TryInto;
 
 /// Request redeem
 pub async fn request_redeem(
@@ -14,9 +14,7 @@ pub async fn request_redeem(
     btc_address: BtcAddress,
     vault_id: AccountId,
 ) -> Result<H256, Error> {
-    let redeem_id = redeem_prov
-        .request_redeem(amount, btc_address, vault_id.clone())
-        .await?;
+    let redeem_id = redeem_prov.request_redeem(amount, btc_address, &vault_id).await?;
 
     info!(
         "Requested {:?} to redeem {:?} tokens from {:?}",
@@ -45,7 +43,7 @@ pub async fn execute_redeem(
         .await?;
 
     redeem_prov
-        .execute_redeem(redeem_id, tx_metadata.proof, tx_metadata.raw_tx)
+        .execute_redeem(redeem_id, &tx_metadata.proof, &tx_metadata.raw_tx)
         .await?;
 
     info!("Executed redeem ID {:?}", redeem_id);

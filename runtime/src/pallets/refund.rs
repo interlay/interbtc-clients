@@ -21,10 +21,10 @@ pub struct RequestRefundEvent<T: Refund> {
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct ExecuteRefundCall<T: Refund> {
+pub struct ExecuteRefundCall<'a, T: Refund> {
     pub refund_id: T::H256,
-    pub merkle_proof: Vec<u8>,
-    pub raw_tx: Vec<u8>,
+    pub merkle_proof: &'a [u8],
+    pub raw_tx: &'a [u8],
     pub _runtime: PhantomData<T>,
 }
 

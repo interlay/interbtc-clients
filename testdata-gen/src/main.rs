@@ -572,7 +572,7 @@ async fn main() -> Result<(), Error> {
                 .accounts
                 .iter()
                 .map(|account_id| (account_id, info.amount))
-                .map(|(account_id, amount)| async move { provider.transfer_to(account_id.clone(), amount).await })
+                .map(|(account_id, amount)| async move { provider.transfer_to(account_id, amount).await })
                 .collect();
 
             try_join_all(futures).await?;

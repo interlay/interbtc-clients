@@ -10,11 +10,11 @@ use substrate_subxt_proc_macro::{module, Call, Event, Store};
 pub trait Redeem: Core {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct RequestRedeemCall<T: Redeem> {
+pub struct RequestRedeemCall<'a, T: Redeem> {
     #[codec(compact)]
     pub amount: T::Wrapped,
     pub btc_address: T::BtcAddress,
-    pub vault_id: T::AccountId,
+    pub vault_id: &'a T::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
@@ -30,10 +30,10 @@ pub struct RequestRedeemEvent<T: Redeem> {
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct ExecuteRedeemCall<T: Redeem> {
+pub struct ExecuteRedeemCall<'a, T: Redeem> {
     pub redeem_id: T::H256,
-    pub merkle_proof: Vec<u8>,
-    pub raw_tx: Vec<u8>,
+    pub merkle_proof: &'a [u8],
+    pub raw_tx: &'a [u8],
     pub _runtime: PhantomData<T>,
 }
 

@@ -157,7 +157,7 @@ mod tests {
             async fn get_free_balance_for_id(&self, id: AccountId) -> Result<PolkaBtcBalance, RuntimeError>;
             async fn get_reserved_balance(&self) -> Result<PolkaBtcBalance, RuntimeError>;
             async fn get_reserved_balance_for_id(&self, id: AccountId) -> Result<PolkaBtcBalance, RuntimeError>;
-            async fn transfer_to(&self, destination: AccountId, amount: u128) -> Result<(), RuntimeError>;
+            async fn transfer_to(&self, recipient: &AccountId, amount: u128) -> Result<(), RuntimeError>;
         }
     }
 

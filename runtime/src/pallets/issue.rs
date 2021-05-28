@@ -10,10 +10,10 @@ use substrate_subxt_proc_macro::{module, Call, Event, Store};
 pub trait Issue: Core {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct RequestIssueCall<T: Issue> {
+pub struct RequestIssueCall<'a, T: Issue> {
     #[codec(compact)]
     pub amount: T::Wrapped,
-    pub vault_id: T::AccountId,
+    pub vault_id: &'a T::AccountId,
     #[codec(compact)]
     pub griefing_collateral: T::Collateral,
 }
@@ -31,10 +31,10 @@ pub struct RequestIssueEvent<T: Issue> {
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct ExecuteIssueCall<T: Issue> {
+pub struct ExecuteIssueCall<'a, T: Issue> {
     pub issue_id: T::H256,
-    pub merkle_proof: Vec<u8>,
-    pub raw_tx: Vec<u8>,
+    pub merkle_proof: &'a [u8],
+    pub raw_tx: &'a [u8],
     pub _runtime: PhantomData<T>,
 }
 
