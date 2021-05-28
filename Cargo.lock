@@ -11181,7 +11181,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.15.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=4dcf04d#4dcf04d5aa11887e11171bae4aa9d6edcc9368e3"
+source = "git+https://github.com/interlay/substrate-subxt?rev=a55b3a7#a55b3a7c7f5bfefac653e0a2e3b075ccb2ef05d1"
 dependencies = [
  "async-trait",
  "dyn-clone",
@@ -11214,7 +11214,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-client"
 version = "0.7.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=4dcf04d#4dcf04d5aa11887e11171bae4aa9d6edcc9368e3"
+source = "git+https://github.com/interlay/substrate-subxt?rev=a55b3a7#a55b3a7c7f5bfefac653e0a2e3b075ccb2ef05d1"
 dependencies = [
  "async-std",
  "futures 0.1.31",
@@ -11232,7 +11232,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.15.0"
-source = "git+https://github.com/interlay/substrate-subxt?rev=4dcf04d#4dcf04d5aa11887e11171bae4aa9d6edcc9368e3"
+source = "git+https://github.com/interlay/substrate-subxt?rev=a55b3a7#a55b3a7c7f5bfefac653e0a2e3b075ccb2ef05d1"
 dependencies = [
  "async-trait",
  "heck",
