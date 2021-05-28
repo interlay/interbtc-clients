@@ -199,6 +199,7 @@ impl Request {
                     Ok(ok) => Ok(ok),
                     Err(err) if err.is_commit_period_expired() => Err(runtime::RetryPolicy::Throw(err)),
                     Err(err) if err.is_rpc_disconnect_error() => Err(runtime::RetryPolicy::Throw(err)),
+                    Err(err) if err.is_invalid_chain_id() => Err(runtime::RetryPolicy::Throw(err)),
                     Err(err) => Err(runtime::RetryPolicy::Skip(err)),
                 }
             },

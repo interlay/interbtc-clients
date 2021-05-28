@@ -2,8 +2,8 @@ pub use jsonrpsee_types::error::Error as JsonRpseeError;
 pub use substrate_subxt::Error as SubxtError;
 
 use crate::{
-    BTC_RELAY_MODULE, COMMIT_PERIOD_EXPIRED_ERROR, DUPLICATE_BLOCK_ERROR, ISSUE_COMPLETED_ERROR, ISSUE_MODULE,
-    REDEEM_MODULE,
+    BTC_RELAY_MODULE, COMMIT_PERIOD_EXPIRED_ERROR, DUPLICATE_BLOCK_ERROR, INVALID_CHAIN_ID_ERROR,
+    ISSUE_COMPLETED_ERROR, ISSUE_MODULE, REDEEM_MODULE,
 };
 use codec::Error as CodecError;
 use jsonrpsee_ws_client::transport::WsConnectError;
@@ -64,21 +64,30 @@ pub enum Error {
 }
 
 impl Error {
-    pub fn is_issue_completed(&self) -> bool {
-        matches!(self,
-            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
-                ref module,
-                ref error,
-            }))) if module == ISSUE_MODULE && error == ISSUE_COMPLETED_ERROR
-        )
-    }
-
     pub fn is_duplicate_block(&self) -> bool {
         matches!(self,
             Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
                 ref module,
                 ref error,
             }))) if module == BTC_RELAY_MODULE && error == DUPLICATE_BLOCK_ERROR
+        )
+    }
+
+    pub fn is_invalid_chain_id(&self) -> bool {
+        matches!(self,
+            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
+                ref module,
+                ref error,
+            }))) if module == BTC_RELAY_MODULE && error == INVALID_CHAIN_ID_ERROR
+        )
+    }
+
+    pub fn is_issue_completed(&self) -> bool {
+        matches!(self,
+            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
+                ref module,
+                ref error,
+            }))) if module == ISSUE_MODULE && error == ISSUE_COMPLETED_ERROR
         )
     }
 
