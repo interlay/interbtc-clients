@@ -8,7 +8,10 @@ use runtime::{
     ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H256;
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
+use tokio::time::delay_for;
+
+const ON_FORK_RETRY_DELAY: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone)]
 pub struct Request {
@@ -162,19 +165,32 @@ impl Request {
         };
 
         let txid = btc_rpc.send_transaction(tx).await?;
-        let tx_metadata = btc_rpc.wait_for_transaction_metadata(txid, num_confirmations).await?;
 
-        tracing::info!("Awaiting parachain confirmations...");
+        loop {
+            let tx_metadata = btc_rpc.wait_for_transaction_metadata(txid, num_confirmations).await?;
 
-        provider
-            .wait_for_block_in_relay(
-                H256Le::from_bytes_le(&tx_metadata.block_hash.to_vec()),
-                Some(num_confirmations),
-            )
-            .await?;
+            tracing::info!("Awaiting parachain confirmations...");
 
-        tracing::info!("Bitcoin successfully sent and relayed");
-        Ok(tx_metadata)
+            match provider
+                .wait_for_block_in_relay(
+                    H256Le::from_bytes_le(&tx_metadata.block_hash.to_vec()),
+                    Some(num_confirmations),
+                )
+                .await
+            {
+                Ok(_) => {
+                    tracing::info!("Bitcoin successfully sent and relayed");
+                    return Ok(tx_metadata);
+                }
+                Err(e) if e.is_invalid_chain_id() => {
+                    // small delay to prevent spamming
+                    delay_for(ON_FORK_RETRY_DELAY).await;
+                    // re-fetch the metadata - it might be in a different block now
+                    continue;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
     }
 
     /// Executes the request. Upon failure it will retry
@@ -511,6 +527,7 @@ mod tests {
                 block_hash: H256Le,
                 btc_confirmations: Option<BlockNumber>,
             ) -> Result<(), RuntimeError>;
+            async fn verify_block_header_inclusion(&self, block_hash: H256Le) -> Result<(), RuntimeError>;
         }
     }
 

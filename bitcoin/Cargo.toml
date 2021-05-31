@@ -33,7 +33,7 @@ sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-
 
 [dependencies.polkabtc-bitcoin]
 git = "https://github.com/interlay/btc-parachain"
-branch = "master"
+branch = "feat/block-header-inclusion-rpc"
 package = "bitcoin"
 optional = true
 

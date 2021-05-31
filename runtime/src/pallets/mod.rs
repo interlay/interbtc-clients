@@ -18,7 +18,7 @@ pub mod wrapped_balances;
 pub mod wrapped_currency;
 
 pub use module_bitcoin::{formatter::Formattable, types::*};
-pub use module_btc_relay::{BtcAddress, BtcPublicKey, RichBlockHeader};
+pub use module_btc_relay::{BtcAddress, BtcPublicKey, RichBlockHeader, MAIN_CHAIN_ID};
 pub use module_issue::{IssueRequest, IssueRequestStatus};
 pub use module_redeem::{RedeemRequest, RedeemRequestStatus};
 pub use module_refund::RefundRequest;

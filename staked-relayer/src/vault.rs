@@ -222,6 +222,7 @@ mod tests {
                 block_hash: H256Le,
                 btc_confirmations: Option<BlockNumber>,
             ) -> Result<(), RuntimeError>;
+            async fn verify_block_header_inclusion(&self, block_hash: H256Le) -> Result<(), RuntimeError>;
         }
     }
 
