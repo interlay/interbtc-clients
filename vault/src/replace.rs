@@ -342,6 +342,7 @@ mod tests {
             .expect_get_required_collateral_for_wrapped()
             .returning(|_| Ok(100));
         provider.expect_get_free_balance().returning(|| Ok(50));
+        provider.expect_get_replace_dust_amount().times(1).returning(|| Ok(0));
 
         let event = RequestReplaceEvent {
             old_vault_id: Default::default(),
