@@ -589,6 +589,10 @@ mod tests {
     async fn should_pay_and_execute_redeem() {
         let mut provider = MockProvider::default();
         provider.expect_execute_redeem().times(1).returning(|_, _, _| Ok(()));
+        provider
+            .expect_wait_for_block_in_relay()
+            .times(1)
+            .returning(|_, _| Ok(()));
 
         let mut btc_rpc = MockBitcoin::default();
         btc_rpc.expect_create_transaction::<BtcAddress>().returning(|_, _, _| {
@@ -631,6 +635,10 @@ mod tests {
     async fn should_pay_and_execute_replace() {
         let mut provider = MockProvider::default();
         provider.expect_execute_replace().times(1).returning(|_, _, _| Ok(()));
+        provider
+            .expect_wait_for_block_in_relay()
+            .times(1)
+            .returning(|_, _| Ok(()));
 
         let mut btc_rpc = MockBitcoin::default();
         btc_rpc.expect_create_transaction::<BtcAddress>().returning(|_, _, _| {
