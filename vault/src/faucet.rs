@@ -68,12 +68,16 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
     // Receive vault allowance from faucet
     get_funding(connection.clone(), vault_id).await?;
 
+    // TODO: faucet allowance should return planck
     let vault_allowance_in_dot: u128 = get_faucet_allowance(connection.clone(), "vault_allowance").await?;
-    let operational_collateral = vault_allowance_in_dot
+    let vault_allowance_in_planck = vault_allowance_in_dot
         .checked_mul(PLANCK_PER_DOT)
-        .ok_or(Error::ArithmeticOverflow)?
-        .checked_sub(TX_FEES)
-        .ok_or(Error::ArithmeticUnderflow)?;
+        .ok_or(Error::ArithmeticOverflow)?;
+    let operational_collateral = vault_allowance_in_planck
+        .checked_div(3)
+        .unwrap_or_default()
+        .checked_mul(2)
+        .unwrap_or_default();
 
     deposit_collateral(&provider, operational_collateral).await?;
 
