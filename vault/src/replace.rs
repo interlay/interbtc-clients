@@ -190,7 +190,6 @@ mod tests {
         PolkaBtcRuntime, PolkaBtcVault,
     };
     use sp_core::H256;
-    use std::time::Duration;
 
     macro_rules! assert_err {
         ($result:expr, $err:pat) => {{

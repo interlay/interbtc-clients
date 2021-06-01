@@ -405,7 +405,6 @@ mod tests {
         AccountId, BlockNumber, BtcPublicKey, Error as RuntimeError, PolkaBtcRichBlockHeader, PolkaBtcVault,
     };
     use sp_core::H160;
-    use std::time::Duration;
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {
