@@ -240,7 +240,6 @@ async fn test_withdraw_replace_succeeds() {
 }
 
 #[tokio::test(threaded_scheduler)]
-#[ignore]
 async fn test_cancellation_succeeds() {
     // tests cancellation of issue, redeem and replace.
     // issue and replace cancellation is tested through the vault's cancellation service.
