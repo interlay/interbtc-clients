@@ -39,6 +39,8 @@ pub enum Error {
     InvalidTransaction,
     #[error("Request has timed out")]
     Timeout,
+    #[error("Block is not in the relay main chain")]
+    BlockNotInRelayMainChain,
 
     #[error("Failed to load credentials from file: {0}")]
     KeyLoadingFailure(#[from] KeyLoadingError),

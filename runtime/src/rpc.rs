@@ -12,10 +12,11 @@ use jsonrpsee_types::{
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
 use sp_arithmetic::FixedU128;
 use sp_core::H256;
+use sp_runtime::DispatchError;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 use substrate_subxt::{
     sudo::*, Call, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Error as SubxtError, Event,
-    EventSubscription, EventTypeRegistry, EventsDecoder, RpcClient, Signer,
+    EventSubscription, EventTypeRegistry, EventsDecoder, RpcClient, RuntimeError as SubxtRuntimeError, Signer,
 };
 use tokio::{sync::RwLock, time::delay_for};
 
@@ -1058,8 +1059,10 @@ pub trait BtcRelayPallet {
     async fn wait_for_block_in_relay(
         &self,
         block_hash: H256Le,
-        btc_confirmations: Option<BlockNumber>,
+        _btc_confirmations: Option<BlockNumber>, // todo: can we remove this?
     ) -> Result<(), Error>;
+
+    async fn verify_block_header_inclusion(&self, block_hash: H256Le) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -1122,52 +1125,12 @@ impl BtcRelayPallet for PolkaBtcProvider {
     async fn wait_for_block_in_relay(
         &self,
         block_hash: H256Le,
-        btc_confirmations: Option<BlockNumber>,
+        _btc_confirmations: Option<BlockNumber>,
     ) -> Result<(), Error> {
-        let get_bitcoin_confirmations = async {
-            if let Some(btc_confirmations) = btc_confirmations {
-                Ok(btc_confirmations)
-            } else {
-                self.get_bitcoin_confirmations().await
-            }
-        };
-
-        let (bitcoin_confirmations, parachain_confirmations) =
-            futures::future::try_join(get_bitcoin_confirmations, self.get_parachain_confirmations()).await?;
-
-        async fn has_sufficient_confirmations(
-            btc_parachain: &PolkaBtcProvider,
-            rich_block_header: &PolkaBtcRichBlockHeader,
-            bitcoin_confirmations: u32,
-            parachain_confirmations: BlockNumber,
-        ) -> Result<bool, Error> {
-            let (bitcoin_height, parachain_height) = futures::future::try_join(
-                async { btc_parachain.get_best_block_height().await.map_err(Error::from) },
-                async { btc_parachain.get_current_active_block_number().await },
-            )
-            .await?;
-
-            let is_confirmed_bitcoin = rich_block_header.block_height + bitcoin_confirmations <= bitcoin_height;
-            let is_confirmed_parachain = rich_block_header.para_height + parachain_confirmations <= parachain_height;
-            Ok(is_confirmed_bitcoin && is_confirmed_parachain)
-        }
-
         loop {
-            match self.get_block_header(block_hash).await {
-                // rpc returns zero-initialized storage items if not set, therefore
-                // a block header only exists if the height is non-zero
-                Ok(block_header)
-                    if block_header.block_height > 0
-                        && has_sufficient_confirmations(
-                            &self,
-                            &block_header,
-                            bitcoin_confirmations,
-                            parachain_confirmations,
-                        )
-                        .await? =>
-                {
-                    return Ok(());
-                }
+            match self.verify_block_header_inclusion(block_hash).await {
+                Ok(_) => return Ok(()),
+                Err(e) if e.is_invalid_chain_id() => return Err(e),
                 _ => {
                     log::trace!(
                         "block {} not found or confirmed, waiting for {} seconds",
@@ -1175,10 +1138,25 @@ impl BtcRelayPallet for PolkaBtcProvider {
                         BLOCK_WAIT_TIMEOUT
                     );
                     delay_for(Duration::from_secs(BLOCK_WAIT_TIMEOUT)).await;
-                    continue;
                 }
             };
         }
+    }
+
+    /// check that the block with the given block is included in the main chain of the relay, with sufficient
+    /// confirmations
+    async fn verify_block_header_inclusion(&self, block_hash: H256Le) -> Result<(), Error> {
+        let result: Result<(), DispatchError> = self
+            .rpc_client
+            .request("btcRelay_verifyBlockHeaderInclusion", &[to_json_value(block_hash)?])
+            .await?;
+
+        result.map_err(
+            |x| match SubxtRuntimeError::from_dispatch(self.ext_client.metadata(), x) {
+                Ok(e) => Error::SubxtError(SubxtError::Runtime(e)),
+                Err(e) => Error::SubxtError(e),
+            },
+        )
     }
 }
 

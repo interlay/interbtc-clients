@@ -188,7 +188,6 @@ mod tests {
     };
     use sp_core::{H160, H256};
     use sp_keyring::AccountKeyring;
-    use std::time::Duration;
 
     mockall::mock! {
         Provider {}
@@ -222,6 +221,7 @@ mod tests {
                 block_hash: H256Le,
                 btc_confirmations: Option<BlockNumber>,
             ) -> Result<(), RuntimeError>;
+            async fn verify_block_header_inclusion(&self, block_hash: H256Le) -> Result<(), RuntimeError>;
         }
     }
 
