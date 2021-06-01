@@ -51,11 +51,18 @@ async fn test_getters() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_outdated_nonce_matching() {
+    env_logger::init();
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
-    set_exchange_rate(client.clone()).await;
-    assert!(provider.get_outdated_nonce_error().is_outdated_nonce())
+    provider
+        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
+        .await
+        .unwrap();
+    let err = provider.get_outdated_nonce_error().await;
+    log::error!("Error: {:?}", err);
+    assert!(err.is_outdated_nonce())
 }
 
 #[tokio::test]

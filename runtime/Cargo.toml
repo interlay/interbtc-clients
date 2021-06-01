@@ -115,3 +115,4 @@ substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", 
 btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "master", features = ["aura-grandpa"] }
 btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "master", features = ["aura-grandpa"] }
 tempdir = "0.3.7"
+env_logger = "0.8.3"
