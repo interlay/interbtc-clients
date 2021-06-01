@@ -57,8 +57,9 @@ pub struct VaultServiceConfig {
     pub no_api: bool,
 
     /// Maximum total collateral to keep the vault securely collateralized.
-    #[clap(long, default_value = "1000000")]
-    pub max_collateral: u128,
+    /// If unset, this will default to the account's total free balance.
+    #[clap(long)]
+    pub max_collateral: Option<u128>,
 
     /// Timeout in milliseconds to repeat collateralization checks.
     #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "5000")]

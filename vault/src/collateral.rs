@@ -8,7 +8,7 @@ use service::Error as ServiceError;
 
 pub async fn maintain_collateralization_rate(
     provider: PolkaBtcProvider,
-    maximum_collateral: u128,
+    maximum_collateral: Option<u128>,
 ) -> Result<(), ServiceError> {
     let provider = &provider;
     provider
@@ -48,7 +48,7 @@ pub async fn maintain_collateralization_rate(
 pub async fn lock_required_collateral<P: VaultRegistryPallet + CollateralBalancesPallet>(
     provider: P,
     vault_id: AccountId,
-    maximum_collateral: u128,
+    maximum_collateral: Option<u128>,
 ) -> Result<(), Error> {
     // check that the vault is registered and active
     let vault = provider.get_vault(vault_id.clone()).await?;
@@ -56,11 +56,17 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + CollateralBalance
         return Err(Error::RuntimeError(runtime::Error::VaultNotFound));
     }
 
-    let (required_collateral, actual_collateral) = future::try_join(
-        provider.get_required_collateral_for_vault(vault_id),
-        provider.get_reserved_balance(),
-    )
-    .await?;
+    let actual_collateral = vault.backing_collateral;
+
+    let (required_collateral, maximum_collateral) =
+        future::try_join(provider.get_required_collateral_for_vault(vault_id), async {
+            if let Some(max) = maximum_collateral {
+                Ok(max)
+            } else {
+                provider.get_free_balance().await
+            }
+        })
+        .await?;
 
     // we have 6 possible orderings of (required, actual, limit):
     // case 1: required <= actual <= limit // do nothing (already enough)
@@ -75,7 +81,7 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + CollateralBalance
         return Ok(());
     }
 
-    tracing::trace!(
+    tracing::info!(
         "Current collateral = {}; required = {}; max = {}",
         actual_collateral,
         required_collateral,
@@ -187,7 +193,7 @@ mod tests {
         provider.expect_get_reserved_balance().returning(|| Ok(75));
 
         let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(provider, vault_id, 100).await);
+        assert_ok!(lock_required_collateral(provider, vault_id, Some(100)).await);
     }
 
     #[tokio::test]
@@ -209,7 +215,7 @@ mod tests {
         provider.expect_get_reserved_balance().returning(|| Ok(200));
 
         let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(provider, vault_id, 150).await);
+        assert_ok!(lock_required_collateral(provider, vault_id, Some(150)).await);
     }
 
     #[tokio::test]
@@ -231,7 +237,7 @@ mod tests {
         provider.expect_get_reserved_balance().returning(|| Ok(150));
 
         let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(provider, vault_id, 75).await);
+        assert_ok!(lock_required_collateral(provider, vault_id, Some(75)).await);
     }
 
     #[tokio::test]
@@ -254,7 +260,7 @@ mod tests {
 
         let vault_id = AccountId::default();
         assert_err!(
-            lock_required_collateral(provider, vault_id, 50).await,
+            lock_required_collateral(provider, vault_id, Some(50)).await,
             Error::InsufficientFunds
         );
     }
@@ -283,7 +289,7 @@ mod tests {
 
         let vault_id = AccountId::default();
         assert_err!(
-            lock_required_collateral(provider, vault_id, 75).await,
+            lock_required_collateral(provider, vault_id, Some(75)).await,
             Error::InsufficientFunds
         );
     }
@@ -310,7 +316,7 @@ mod tests {
             .returning(|_| Ok(()));
 
         let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(provider, vault_id, 200).await);
+        assert_ok!(lock_required_collateral(provider, vault_id, Some(200)).await);
     }
 
     #[tokio::test]
@@ -332,7 +338,7 @@ mod tests {
 
         let vault_id = AccountId::default();
         assert_err!(
-            lock_required_collateral(provider, vault_id, 25).await,
+            lock_required_collateral(provider, vault_id, Some(25)).await,
             Error::InsufficientFunds
         );
     }
@@ -355,7 +361,7 @@ mod tests {
         provider.expect_get_reserved_balance().returning(|| Ok(100));
 
         let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(provider, vault_id, 200).await);
+        assert_ok!(lock_required_collateral(provider, vault_id, Some(200)).await);
     }
 
     #[tokio::test]
@@ -371,7 +377,7 @@ mod tests {
 
         let vault_id = AccountId::default();
         assert_err!(
-            lock_required_collateral(provider, vault_id, 75).await,
+            lock_required_collateral(provider, vault_id, Some(75)).await,
             Error::RuntimeError(runtime::Error::VaultNotFound)
         );
     }
