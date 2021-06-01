@@ -51,6 +51,14 @@ async fn test_getters() {
 }
 
 #[tokio::test]
+async fn test_outdated_nonce_matching() {
+    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+    let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    set_exchange_rate(client.clone()).await;
+    assert!(provider.get_outdated_nonce_error().is_outdated_nonce())
+}
+
+#[tokio::test]
 async fn test_register_vault() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;

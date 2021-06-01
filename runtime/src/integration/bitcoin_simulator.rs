@@ -72,6 +72,9 @@ impl MockBitcoinCore {
         }
     }
 
+    /// creates a fork
+    pub fn enable_forking_test() {}
+
     /// relay a given block to the parachain
     async fn send_block(&self, block: Block) {
         let raw_block_header = serialize(&block.header);
