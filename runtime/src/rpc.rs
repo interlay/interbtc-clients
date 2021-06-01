@@ -271,12 +271,17 @@ impl PolkaBtcProvider {
     }
 
     #[cfg(test)]
-    async fn get_outdated_nonce_error(&self) -> Error {
-        let signer = {
+    pub async fn get_outdated_nonce_error(&self) -> Error {
+        let signer: PolkaBtcSigner = {
             let mut signer = self.signer.write().await;
-            signer.set_nonce(1);
+            signer.set_nonce(0);
+            signer.clone()
         };
-        self::set_redeem_period(2).unwrap_err()
+        self.ext_client
+            .withdraw_replace_and_watch(&signer, 23)
+            .await
+            .unwrap_err()
+            .into()
     }
 }
 
