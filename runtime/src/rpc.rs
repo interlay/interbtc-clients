@@ -4,11 +4,7 @@ pub use module_exchange_rate_oracle::BtcTxFeesPerByte;
 use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures::{stream::StreamExt, FutureExt, SinkExt};
-use jsonrpsee_types::{
-    error::Error as RequestError,
-    to_json_value,
-    v2::error::{JsonRpcErrorAlloc as JsonRpcError, JsonRpcErrorCode},
-};
+use jsonrpsee_types::to_json_value;
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
 use sp_arithmetic::FixedU128;
 use sp_core::H256;
@@ -20,10 +16,10 @@ use substrate_subxt::{
 use tokio::{sync::RwLock, time::delay_for};
 
 use crate::{
-    btc_relay::*, collateral_balances::*, conn::*, error::POOL_INVALID_TX, exchange_rate_oracle::*, fee::*, issue::*,
-    pallets::*, redeem::*, refund::*, replace::*, retry::*, security::*, staked_relayers::*, timestamp::*, types::*,
-    utility::*, vault_registry::*, AccountId, BlockNumber, Error, PolkaBtcRuntime, BTC_RELAY_MODULE,
-    STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CONFIRMATIONS,
+    btc_relay::*, collateral_balances::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*,
+    refund::*, replace::*, retry::*, security::*, staked_relayers::*, timestamp::*, types::*, utility::*,
+    vault_registry::*, AccountId, BlockNumber, Error, PolkaBtcRuntime, BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS,
+    STABLE_PARACHAIN_CONFIRMATIONS,
 };
 
 #[derive(Clone)]
@@ -117,23 +113,13 @@ impl PolkaBtcProvider {
                 call(signer).await
             },
             |result| async {
-                match result {
+                match result.map_err(|x| Into::<Error>::into(x)) {
                     Ok(ok) => Ok(ok),
-                    Err(SubxtError::Rpc(RequestError::Request(JsonRpcError { error, .. })))
-                        if error.code == JsonRpcErrorCode::ServerError(POOL_INVALID_TX) =>
-                    {
-                        log::debug!(
-                            "Got JsonRpcError: \"{}\" with attached data: {:?}",
-                            error.message,
-                            error.data
-                        );
-
-                        // here is no way to know why the transaction is invalid, so always
-                        // refresh nonce and retry the call
+                    Err(err) if err.is_outdated_nonce() => {
                         self.refresh_nonce().await;
                         Err(RetryPolicy::Skip(Error::InvalidTransaction))
                     }
-                    Err(err) => Err(RetryPolicy::Throw(err.into())),
+                    Err(err) => Err(RetryPolicy::Throw(err)),
                 }
             },
         )
@@ -281,6 +267,15 @@ impl PolkaBtcProvider {
                 _runtime: PhantomData {},
             })
             .await?)
+    }
+
+    #[cfg(test)]
+    async fn get_outdated_nonce_error(&self) -> Error {
+        let signer = {
+            let mut signer = self.signer.write().await;
+            signer.set_nonce(1);
+        };
+        self::set_redeem_period(2).unwrap_err()
     }
 }
 

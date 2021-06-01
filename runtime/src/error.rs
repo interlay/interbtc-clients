@@ -6,8 +6,12 @@ use crate::{
     ISSUE_COMPLETED_ERROR, ISSUE_MODULE, REDEEM_MODULE,
 };
 use codec::Error as CodecError;
+use jsonrpsee_types::{
+    error::Error as RequestError,
+    v2::error::{JsonRpcErrorAlloc as JsonRpcError, JsonRpcErrorCode},
+};
 use jsonrpsee_ws_client::transport::WsConnectError;
-use serde_json::Error as SerdeJsonError;
+use serde_json::{value::Value as JsonValue, Error as SerdeJsonError};
 use sp_core::crypto::SecretStringError;
 use std::{array::TryFromSliceError, io::Error as IoError, num::TryFromIntError};
 use substrate_subxt::{ModuleError as SubxtModuleError, RuntimeError as SubxtRuntimeError};
@@ -91,6 +95,15 @@ impl Error {
         )
     }
 
+    pub fn is_outdated_nonce(&self) -> bool {
+        matches!(self,
+            Error::SubxtError(SubxtError::Rpc(RequestError::Request(JsonRpcError { error, .. })))
+                if error.code == JsonRpcErrorCode::ServerError(POOL_INVALID_TX) &&
+                error.message == OUTDATED_NONCE_MESSAGE &&
+                error.data == Some(JsonValue::String(OUTDATED_NONCE_DATA_STR.to_string()))
+        )
+    }
+
     pub fn is_commit_period_expired(&self) -> bool {
         matches!(self,
             Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
@@ -126,4 +139,6 @@ pub enum KeyLoadingError {
 
 // https://github.com/paritytech/substrate/blob/e60597dff0aa7ffad623be2cc6edd94c7dc51edd/client/rpc-api/src/author/error.rs#L80
 const BASE_ERROR: i32 = 1000;
-pub const POOL_INVALID_TX: i32 = BASE_ERROR + 10;
+const POOL_INVALID_TX: i32 = BASE_ERROR + 10;
+const OUTDATED_NONCE_MESSAGE: &str = "Invalid Transaction";
+const OUTDATED_NONCE_DATA_STR: &str = "Transaction is outdated";
