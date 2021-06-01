@@ -12222,7 +12222,6 @@ name = "vault"
 version = "0.7.0"
 dependencies = [
  "async-trait",
- "backoff",
  "bitcoin 0.7.0",
  "clap 3.0.0-beta.2",
  "futures 0.3.15",
@@ -12234,7 +12233,6 @@ dependencies = [
  "parity-scale-codec",
  "runtime",
  "serde",
- "serde_json",
  "service",
  "sha2 0.8.2",
  "sp-arithmetic",

@@ -18,6 +18,9 @@ pub async fn run_relayer(runner: Runner<Error, BitcoinClient, PolkaBtcClient>) -
             Err(CoreError::Issuing(Error::PolkaBtcError(ref err))) if err.is_duplicate_block() => {
                 tracing::info!("Attempted to submit block that already exists")
             }
+            Err(CoreError::Issuing(Error::PolkaBtcError(ref err))) if err.is_rpc_disconnect_error() => {
+                return Err(ServiceError::ClientShutdown);
+            }
             Err(CoreError::Backing(Error::BitcoinError(err))) if err.is_connection_refused() => {
                 return Err(ServiceError::ClientShutdown);
             }
