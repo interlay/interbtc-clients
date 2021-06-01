@@ -45,12 +45,13 @@ docker run --network host --entrypoint bitcoin-cli ruimarinho/bitcoin-core:0.20 
 
 ### Development
 
-Building requires Rust `nightly`. Run the following commands to set it up:
+Building requires a specific rust toolchain and nightly compiler version. The
+requirements are specified in the [./rust-toolchain.toml](./rust-toolchain.toml)
+[override file](https://rust-lang.github.io/rustup/overrides.html#the-toolchain-file).
 
-```
-rustup toolchain install nightly-2021-03-15
-rustup default nightly-2021-03-15
-```
+Running `rustup show` from the root directory of this repo should be enough to
+set up the toolchain and you can inspect the output to verify that it matches
+the version specified in the override file.
 
 ## Getting Started
 

@@ -613,6 +613,24 @@ dependencies = [
 [[package]]
 name = "bitcoin"
 version = "0.7.0"
+source = "git+https://github.com/interlay/btc-parachain?branch=master#f5790cc3ca05ccfa295adf4789030c4f7f8f4ca1"
+dependencies = [
+ "bitcoin_hashes 0.7.6",
+ "frame-support",
+ "hex 0.4.3",
+ "impl-serde",
+ "parity-scale-codec",
+ "secp256k1",
+ "serde",
+ "sha2 0.8.2",
+ "sp-core",
+ "sp-std",
+ "spin 0.7.1",
+]
+
+[[package]]
+name = "bitcoin"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "backoff",
@@ -632,24 +650,6 @@ dependencies = [
  "sp-core",
  "thiserror",
  "tokio 0.2.25",
-]
-
-[[package]]
-name = "bitcoin"
-version = "0.7.0"
-source = "git+https://github.com/interlay/btc-parachain?branch=master#f5790cc3ca05ccfa295adf4789030c4f7f8f4ca1"
-dependencies = [
- "bitcoin_hashes 0.7.6",
- "frame-support",
- "hex 0.4.3",
- "impl-serde",
- "parity-scale-codec",
- "secp256k1",
- "serde",
- "sha2 0.8.2",
- "sp-core",
- "sp-std",
- "spin 0.7.1",
 ]
 
 [[package]]
