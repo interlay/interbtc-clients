@@ -120,8 +120,14 @@ impl PolkaBtcProvider {
                 match result {
                     Ok(ok) => Ok(ok),
                     Err(SubxtError::Rpc(RequestError::Request(JsonRpcError { error, .. })))
-                        if error == JsonRpcErrorCode::ServerError(POOL_INVALID_TX).into() =>
+                        if error.code == JsonRpcErrorCode::ServerError(POOL_INVALID_TX) =>
                     {
+                        log::debug!(
+                            "Got JsonRpcError: \"{}\" with attached data: {:?}",
+                            error.message,
+                            error.data
+                        );
+
                         // here is no way to know why the transaction is invalid, so always
                         // refresh nonce and retry the call
                         self.refresh_nonce().await;
