@@ -34,7 +34,7 @@ pub(crate) async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync
 }
 
 /// execute issue requests on best-effort (i.e. don't retry on error),
-/// returns `NoIncomingBlocks` if stream ends, otherwise runs forever
+/// returns an error if stream ends, otherwise runs forever
 pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     bitcoin_core: B,
     btc_parachain: PolkaBtcProvider,

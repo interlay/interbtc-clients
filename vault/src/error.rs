@@ -14,10 +14,6 @@ pub enum Error {
     BelowDustAmount,
     #[error("Open time inconsistent with chain height")]
     InvalidOpenTime,
-    #[error("Channel unexpectedly closed")]
-    ChannelClosed,
-    #[error("Expected blocks but got none")]
-    NoIncomingBlocks,
     #[error("Failed to load or create bitcoin wallet: {0}")]
     WalletInitializationFailure(BitcoinError),
     #[error("Transaction contains more than one return-to-self uxto")]
