@@ -159,7 +159,7 @@ async fn test_maintain_collateral_succeeds() {
     assert_issue(&user_provider, &btc_rpc, vault_provider.get_account_id(), issue_amount).await;
 
     test_service(
-        vault::service::maintain_collateralization_rate(vault_provider.clone(), 1000000000),
+        vault::service::maintain_collateralization_rate(vault_provider.clone(), Some(1000000000)),
         async {
             // dot per btc increases by 10%
             relayer_provider
