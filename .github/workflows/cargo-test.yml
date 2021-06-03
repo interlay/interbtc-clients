@@ -8,6 +8,10 @@ jobs:
     runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v2
+      - name: Install System Dependencies
+        run: |
+            sudo apt-get update && apt-get install -y --no-install-recommends \
+            libssl-dev \
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2021-03-15
