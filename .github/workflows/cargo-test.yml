@@ -10,8 +10,8 @@ jobs:
       - uses: actions/checkout@v2
       - name: Install System Dependencies
         run: |
-            sudo apt-get update && sudo apt-get install -y --no-install-recommends \
-            libssl-dev \
+            sudo apt-get update && sudo apt-get install -y \
+            cmake pkg-config libssl-dev git clang curl libc6-dev
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2021-03-15
