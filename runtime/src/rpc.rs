@@ -492,9 +492,13 @@ impl ReplacePallet for PolkaBtcProvider {
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error> {
+        let head = self.get_latest_block_hash().await?;
         let result: Vec<(H256, PolkaBtcReplaceRequest)> = self
             .rpc_client
-            .request("replace_getNewVaultReplaceRequests", &[to_json_value(account_id)?])
+            .request(
+                "replace_getNewVaultReplaceRequests",
+                &[to_json_value(account_id)?, to_json_value(head)?],
+            )
             .await?;
 
         Ok(result)
@@ -505,9 +509,13 @@ impl ReplacePallet for PolkaBtcProvider {
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, Error> {
+        let head = self.get_latest_block_hash().await?;
         let result: Vec<(H256, PolkaBtcReplaceRequest)> = self
             .rpc_client
-            .request("replace_getOldVaultReplaceRequests", &[to_json_value(account_id)?])
+            .request(
+                "replace_getOldVaultReplaceRequests",
+                &[to_json_value(account_id)?, to_json_value(head)?],
+            )
             .await?;
 
         Ok(result)
@@ -640,11 +648,12 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
 
     /// Converts the amount in btc to dot, based on the current set exchange rate.
     async fn wrapped_to_collateral(&self, amount: u128) -> Result<u128, Error> {
+        let head = self.get_latest_block_hash().await?;
         let result: BalanceWrapper<_> = self
             .rpc_client
             .request(
                 "exchangeRateOracle_wrappedToCollateral",
-                &[to_json_value(BalanceWrapper { amount })?],
+                &[to_json_value(BalanceWrapper { amount })?, to_json_value(head)?],
             )
             .await?;
 
@@ -653,11 +662,12 @@ impl ExchangeRateOraclePallet for PolkaBtcProvider {
 
     /// Converts the amount in dot to btc, based on the current set exchange rate.
     async fn collateral_to_wrapped(&self, amount: u128) -> Result<u128, Error> {
+        let head = self.get_latest_block_hash().await?;
         let result: BalanceWrapper<_> = self
             .rpc_client
             .request(
                 "exchangeRateOracle_collateralToWrapped",
-                &[to_json_value(BalanceWrapper { amount })?],
+                &[to_json_value(BalanceWrapper { amount })?, to_json_value(head)?],
             )
             .await?;
 
@@ -709,11 +719,12 @@ impl StakedRelayerPallet for PolkaBtcProvider {
     /// * `vault_id` - vault account which features in vin
     /// * `raw_tx` - raw Bitcoin transaction
     async fn is_transaction_invalid(&self, vault_id: &AccountId, raw_tx: &[u8]) -> Result<bool, Error> {
+        let head = self.get_latest_block_hash().await?;
         Ok(matches!(
             self.rpc_client
                 .request(
                     "stakedRelayers_isTransactionInvalid",
-                    &[to_json_value(vault_id)?, to_json_value(raw_tx)?],
+                    &[to_json_value(vault_id)?, to_json_value(raw_tx)?, to_json_value(head)?],
                 )
                 .await,
             Ok(()),
@@ -871,9 +882,13 @@ impl IssuePallet for PolkaBtcProvider {
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, PolkaBtcIssueRequest)>, Error> {
+        let head = self.get_latest_block_hash().await?;
         let result: Vec<(H256, PolkaBtcIssueRequest)> = self
             .rpc_client
-            .request("issue_getVaultIssueRequests", &[to_json_value(account_id)?])
+            .request(
+                "issue_getVaultIssueRequests",
+                &[to_json_value(account_id)?, to_json_value(head)?],
+            )
             .await?;
 
         Ok(result)
@@ -982,9 +997,13 @@ impl RedeemPallet for PolkaBtcProvider {
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, PolkaBtcRedeemRequest)>, Error> {
+        let head = self.get_latest_block_hash().await?;
         let requests: Vec<(H256, PolkaBtcRedeemRequest)> = self
             .rpc_client
-            .request("redeem_getVaultRedeemRequests", &[to_json_value(account_id)?])
+            .request(
+                "redeem_getVaultRedeemRequests",
+                &[to_json_value(account_id)?, to_json_value(head)?],
+            )
             .await?;
 
         Ok(requests)
@@ -1033,9 +1052,13 @@ impl RefundPallet for PolkaBtcProvider {
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, PolkaBtcRefundRequest)>, Error> {
+        let head = self.get_latest_block_hash().await?;
         let result: Vec<(H256, PolkaBtcRefundRequest)> = self
             .rpc_client
-            .request("refund_getVaultRefundRequests", &[to_json_value(account_id)?])
+            .request(
+                "refund_getVaultRefundRequests",
+                &[to_json_value(account_id)?, to_json_value(head)?],
+            )
             .await?;
 
         Ok(result)
@@ -1152,9 +1175,13 @@ impl BtcRelayPallet for PolkaBtcProvider {
     /// check that the block with the given block is included in the main chain of the relay, with sufficient
     /// confirmations
     async fn verify_block_header_inclusion(&self, block_hash: H256Le) -> Result<(), Error> {
+        let head = self.get_latest_block_hash().await?;
         let result: Result<(), DispatchError> = self
             .rpc_client
-            .request("btcRelay_verifyBlockHeaderInclusion", &[to_json_value(block_hash)?])
+            .request(
+                "btcRelay_verifyBlockHeaderInclusion",
+                &[to_json_value(block_hash)?, to_json_value(head)?],
+            )
             .await?;
 
         result.map_err(
@@ -1306,11 +1333,15 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     /// # Arguments
     /// * `amount_btc` - amount of btc to cover
     async fn get_required_collateral_for_wrapped(&self, amount_btc: u128) -> Result<u128, Error> {
+        let head = self.get_latest_block_hash().await?;
         let result: BalanceWrapper<_> = self
             .rpc_client
             .request(
                 "vaultRegistry_getRequiredCollateralForWrapped",
-                &[to_json_value(BalanceWrapper { amount: amount_btc })?],
+                &[
+                    to_json_value(BalanceWrapper { amount: amount_btc })?,
+                    to_json_value(head)?,
+                ],
             )
             .await?;
 
@@ -1320,11 +1351,12 @@ impl VaultRegistryPallet for PolkaBtcProvider {
     /// Get the amount of collateral required for the given vault to be at the
     /// current SecureCollateralThreshold with the current exchange rate
     async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, Error> {
+        let head = self.get_latest_block_hash().await?;
         let result: BalanceWrapper<_> = self
             .rpc_client
             .request(
                 "vaultRegistry_getRequiredCollateralForVault",
-                &[to_json_value(vault_id)?],
+                &[to_json_value(vault_id)?, to_json_value(head)?],
             )
             .await?;
 
