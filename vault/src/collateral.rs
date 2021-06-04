@@ -58,15 +58,19 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + CollateralBalance
 
     let actual_collateral = vault.backing_collateral;
 
-    let (required_collateral, maximum_collateral) =
-        future::try_join(provider.get_required_collateral_for_vault(vault_id), async {
+    let (required_collateral, maximum_collateral) = future::try_join(
+        async { Ok(provider.get_required_collateral_for_vault(vault_id).await?) },
+        async {
             if let Some(max) = maximum_collateral {
                 Ok(max)
             } else {
-                provider.get_free_balance().await
+                // allow all balance to be used as collateral
+                let free = provider.get_free_balance().await?;
+                free.checked_add(actual_collateral).ok_or(Error::ArithmeticOverflow)
             }
-        })
-        .await?;
+        },
+    )
+    .await?;
 
     // we have 6 possible orderings of (required, actual, limit):
     // case 1: required <= actual <= limit // do nothing (already enough)
@@ -174,26 +178,31 @@ mod tests {
         }
     }
 
+    fn setup_mocks(required: u128, actual: u128) -> MockProvider {
+        let mut provider = MockProvider::default();
+        provider
+            .expect_get_required_collateral_for_vault()
+            .returning(move |_| Ok(required));
+
+        provider.expect_get_vault().returning(move |x| {
+            Ok(PolkaBtcVault {
+                id: x,
+                backing_collateral: actual,
+                status: VaultStatus::Active(true),
+                ..Default::default()
+            })
+        });
+
+        provider
+    }
     #[tokio::test]
     async fn test_lock_required_collateral_case_1() {
         // case 1: required <= actual <= limit -- do nothing (already enough)
         // required = 50, actual = 75, max = 100:
         // check that deposit_collateral is not called
-        let mut provider = MockProvider::default();
-        provider.expect_get_vault().returning(|x| {
-            Ok(PolkaBtcVault {
-                id: x,
-                status: VaultStatus::Active(true),
-                ..Default::default()
-            })
-        });
-        provider
-            .expect_get_required_collateral_for_vault()
-            .returning(|_| Ok(50));
-        provider.expect_get_reserved_balance().returning(|| Ok(75));
+        let provider = setup_mocks(50, 75);
 
-        let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(provider, vault_id, Some(100)).await);
+        assert_ok!(lock_required_collateral(provider, AccountId::default(), Some(100)).await);
     }
 
     #[tokio::test]
@@ -201,21 +210,9 @@ mod tests {
         // case 2: required <= limit <= actual -- do nothing (already enough)
         // required = 100, actual = 200, max = 150:
         // check that deposit_collateral is not called
-        let mut provider = MockProvider::default();
-        provider.expect_get_vault().returning(|x| {
-            Ok(PolkaBtcVault {
-                id: x,
-                status: VaultStatus::Active(true),
-                ..Default::default()
-            })
-        });
-        provider
-            .expect_get_required_collateral_for_vault()
-            .returning(|_| Ok(100));
-        provider.expect_get_reserved_balance().returning(|| Ok(200));
+        let provider = setup_mocks(100, 200);
 
-        let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(provider, vault_id, Some(150)).await);
+        assert_ok!(lock_required_collateral(provider, AccountId::default(), Some(150)).await);
     }
 
     #[tokio::test]
@@ -223,21 +220,9 @@ mod tests {
         // case 3: limit <= required <= actual -- do nothing (already enough)
         // required = 100, actual = 150, max = 75:
         // check that deposit_collateral is not called
-        let mut provider = MockProvider::default();
-        provider.expect_get_vault().returning(|x| {
-            Ok(PolkaBtcVault {
-                id: x,
-                status: VaultStatus::Active(true),
-                ..Default::default()
-            })
-        });
-        provider
-            .expect_get_required_collateral_for_vault()
-            .returning(|_| Ok(100));
-        provider.expect_get_reserved_balance().returning(|| Ok(150));
+        let provider = setup_mocks(100, 150);
 
-        let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(provider, vault_id, Some(75)).await);
+        assert_ok!(lock_required_collateral(provider, AccountId::default(), Some(75)).await);
     }
 
     #[tokio::test]
@@ -245,22 +230,10 @@ mod tests {
         // case 4: limit <= actual <= required -- do nothing (return error)
         // required = 100, actual = 75, max = 50:
         // check that deposit_collateral is not called
-        let mut provider = MockProvider::default();
-        provider.expect_get_vault().returning(|x| {
-            Ok(PolkaBtcVault {
-                id: x,
-                status: VaultStatus::Active(true),
-                ..Default::default()
-            })
-        });
-        provider
-            .expect_get_required_collateral_for_vault()
-            .returning(|_| Ok(100));
-        provider.expect_get_reserved_balance().returning(|| Ok(75));
+        let provider = setup_mocks(100, 75);
 
-        let vault_id = AccountId::default();
         assert_err!(
-            lock_required_collateral(provider, vault_id, Some(50)).await,
+            lock_required_collateral(provider, AccountId::default(), Some(50)).await,
             Error::InsufficientFunds
         );
     }
@@ -269,27 +242,15 @@ mod tests {
     async fn test_lock_required_collateral_case_5() {
         // case 5: actual <= limit <= required -- increase to limit (return error)
         // required = 100, actual = 25, max = 75: should add 50, but return err
-        let mut provider = MockProvider::default();
-        provider.expect_get_vault().returning(|x| {
-            Ok(PolkaBtcVault {
-                id: x,
-                status: VaultStatus::Active(true),
-                ..Default::default()
-            })
-        });
-        provider
-            .expect_get_required_collateral_for_vault()
-            .returning(|_| Ok(100));
-        provider.expect_get_reserved_balance().returning(|| Ok(25));
+        let mut provider = setup_mocks(100, 25);
         provider
             .expect_deposit_collateral()
             .withf(|&amount| amount == 50)
             .times(1)
             .returning(|_| Ok(()));
 
-        let vault_id = AccountId::default();
         assert_err!(
-            lock_required_collateral(provider, vault_id, Some(75)).await,
+            lock_required_collateral(provider, AccountId::default(), Some(75)).await,
             Error::InsufficientFunds
         );
     }
@@ -297,48 +258,24 @@ mod tests {
     async fn test_lock_required_collateral_case_6() {
         // case 6: actual <= required <= limit -- increase to required (return ok)
         // required = 100, actual = 25, max = 200: should add 75
-        let mut provider = MockProvider::default();
-        provider.expect_get_vault().returning(|x| {
-            Ok(PolkaBtcVault {
-                id: x,
-                status: VaultStatus::Active(true),
-                ..Default::default()
-            })
-        });
-        provider
-            .expect_get_required_collateral_for_vault()
-            .returning(|_| Ok(100));
-        provider.expect_get_reserved_balance().returning(|| Ok(25));
+        let mut provider = setup_mocks(100, 25);
         provider
             .expect_deposit_collateral()
             .withf(|&amount| amount == 75)
             .times(1)
             .returning(|_| Ok(()));
 
-        let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(provider, vault_id, Some(200)).await);
+        assert_ok!(lock_required_collateral(provider, AccountId::default(), Some(200)).await);
     }
 
     #[tokio::test]
     async fn test_lock_required_collateral_at_max_fails() {
         // required = 100, actual = 25, max = 25:
         // check that deposit_collateral is not called with amount 0
-        let mut provider = MockProvider::default();
-        provider.expect_get_vault().returning(|x| {
-            Ok(PolkaBtcVault {
-                id: x,
-                status: VaultStatus::Active(true),
-                ..Default::default()
-            })
-        });
-        provider
-            .expect_get_required_collateral_for_vault()
-            .returning(|_| Ok(100));
-        provider.expect_get_reserved_balance().returning(|| Ok(25));
+        let provider = setup_mocks(100, 25);
 
-        let vault_id = AccountId::default();
         assert_err!(
-            lock_required_collateral(provider, vault_id, Some(25)).await,
+            lock_required_collateral(provider, AccountId::default(), Some(25)).await,
             Error::InsufficientFunds
         );
     }
@@ -347,21 +284,9 @@ mod tests {
     async fn test_lock_required_collateral_at_required_succeeds() {
         // required = 100, actual = 100, max = 200:
         // check that deposit_collateral is not called with amount 0
-        let mut provider = MockProvider::default();
-        provider.expect_get_vault().returning(|x| {
-            Ok(PolkaBtcVault {
-                id: x,
-                status: VaultStatus::Active(true),
-                ..Default::default()
-            })
-        });
-        provider
-            .expect_get_required_collateral_for_vault()
-            .returning(|_| Ok(100));
-        provider.expect_get_reserved_balance().returning(|| Ok(100));
+        let provider = setup_mocks(100, 100);
 
-        let vault_id = AccountId::default();
-        assert_ok!(lock_required_collateral(provider, vault_id, Some(200)).await);
+        assert_ok!(lock_required_collateral(provider, AccountId::default(), Some(200)).await);
     }
 
     #[tokio::test]
@@ -375,9 +300,8 @@ mod tests {
             })
         });
 
-        let vault_id = AccountId::default();
         assert_err!(
-            lock_required_collateral(provider, vault_id, Some(75)).await,
+            lock_required_collateral(provider, AccountId::default(), Some(75)).await,
             Error::RuntimeError(runtime::Error::VaultNotFound)
         );
     }
