@@ -58,15 +58,19 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + CollateralBalance
 
     let actual_collateral = vault.backing_collateral;
 
-    let (required_collateral, maximum_collateral) =
-        future::try_join(provider.get_required_collateral_for_vault(vault_id), async {
+    let (required_collateral, maximum_collateral) = future::try_join(
+        async { Ok(provider.get_required_collateral_for_vault(vault_id).await?) },
+        async {
             if let Some(max) = maximum_collateral {
                 Ok(max)
             } else {
-                provider.get_free_balance().await
+                // allow all balance to be used as collateral
+                let free = provider.get_free_balance().await?;
+                free.checked_add(actual_collateral).ok_or(Error::ArithmeticOverflow)
             }
-        })
-        .await?;
+        },
+    )
+    .await?;
 
     // we have 6 possible orderings of (required, actual, limit):
     // case 1: required <= actual <= limit // do nothing (already enough)
