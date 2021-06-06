@@ -1,10 +1,13 @@
+name: Continuous integration
+
+permissions:
+  contents: read
+
 on: [pull_request]
 
-name: Cargo build
-
 jobs:
-  build_and_test:
-    name: Clients
+  check:
+    name: Check
     runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v2
@@ -18,5 +21,61 @@ jobs:
           toolchain: nightly-2021-03-15
       - uses: actions-rs/cargo@v1
         with:
-          command: build
+          command: check
+          args: --release --workspace
+
+  test:
+    name: Test Suite
+    runs-on: [self-hosted, linux]
+    steps:
+      - uses: actions/checkout@v2
+      - run: git fetch --prune --unshallow
+      - name: Install System Dependencies
+        run: |
+            sudo apt-get update && sudo apt-get install -y \
+            cmake pkg-config libssl-dev git clang curl libc6-dev
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-03-15
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --release --workspace
+
+  fmt:
+    name: Rustfmt
+    runs-on: [self-hosted, linux]
+    steps:
+      - uses: actions/checkout@v2
+      - run: git fetch --prune --unshallow
+      - name: Install System Dependencies
+        run: |
+            sudo apt-get update && sudo apt-get install -y \
+            cmake pkg-config libssl-dev git clang curl libc6-dev
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-03-15
+      - run: rustup component add rustfmt
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: [self-hosted, linux]
+    steps:
+      - uses: actions/checkout@v2
+      - run: git fetch --prune --unshallow
+      - name: Install System Dependencies
+        run: |
+            sudo apt-get update && sudo apt-get install -y \
+            cmake pkg-config libssl-dev git clang curl libc6-dev
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-03-15
+      - run: rustup component add clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
           args: --release --workspace
