@@ -55,7 +55,7 @@ fn get_credentials_from_file(file_path: &str, keyname: &str) -> Result<Pair, Key
 }
 
 pub fn parse_duration_ms(src: &str) -> Result<Duration, ParseIntError> {
-    Ok(Duration::from_millis(u64::from_str_radix(src, 10)?))
+    Ok(Duration::from_millis(src.parse::<u64>()?))
 }
 
 #[derive(Clap, Debug, Clone)]

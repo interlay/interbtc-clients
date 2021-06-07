@@ -101,10 +101,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
                     Error::BitcoinError(ref inner)
                         if inner.is_connection_aborted()
                             || inner.is_connection_refused()
-                            || inner.is_json_decode_error() =>
-                    {
-                        ()
-                    }
+                            || inner.is_json_decode_error() => {}
                     Error::RuntimeError(RuntimeError::ChannelClosed) => (),
                     Error::RuntimeError(ref inner) if inner.is_rpc_error() => (),
                     other => return Err(other),

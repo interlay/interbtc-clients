@@ -137,8 +137,8 @@ fn has_request_expired(
     cooldown_over
         || is_type_and_was_user(
             FundingRequestAccountType::Vault,
-            current_account_type.clone(),
-            previous_account_type.clone(),
+            current_account_type,
+            previous_account_type,
         )
 }
 
