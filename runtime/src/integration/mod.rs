@@ -81,7 +81,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
     .await
     .unwrap();
 
-    return (client, tmp);
+    (client, tmp)
 }
 
 /// Create a new provider with the given keyring
@@ -139,7 +139,7 @@ where
         }
     })
     .await
-    .expect(&format!("could not find event: {}::{}", T::MODULE, T::EVENT))
+    .unwrap_or_else(|_| panic!("could not find event: {}::{}", T::MODULE, T::EVENT))
 }
 
 /// run `service` in the background, and run `fut`. If the service completes before the

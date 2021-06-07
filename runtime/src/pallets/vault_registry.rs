@@ -49,6 +49,7 @@ pub struct WithdrawCollateralEvent<T: VaultRegistry> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+#[allow(clippy::type_complexity)]
 pub struct VaultsStore<T: VaultRegistry> {
     #[store(returns = Vault<T::AccountId, T::BlockNumber, T::Wrapped, T::Collateral, T::SignedFixedPoint>)]
     pub _runtime: PhantomData<T>,
