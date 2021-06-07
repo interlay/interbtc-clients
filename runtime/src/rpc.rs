@@ -114,7 +114,7 @@ impl PolkaBtcProvider {
                 call(signer).await
             },
             |result| async {
-                match result.map_err(|x| Into::<Error>::into(x)) {
+                match result.map_err(Into::<Error>::into) {
                     Ok(ok) => Ok(ok),
                     Err(err) if err.is_outdated_nonce() => {
                         self.refresh_nonce().await;
