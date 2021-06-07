@@ -3,7 +3,7 @@ use hex::FromHex;
 use jsonrpc_core::Value;
 use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use parity_scale_codec::{Decode, Encode};
-use runtime::{AccountId, PolkaBtcProvider, UtilFuncs};
+use runtime::{AccountId, InterBtcParachain, UtilFuncs};
 use serde::{Deserialize, Deserializer};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -34,9 +34,9 @@ async fn get_funding(faucet_connection: TypedClient, staked_relayer_id: AccountI
     Ok(())
 }
 
-pub async fn connect_and_fund(provider: &PolkaBtcProvider, faucet_url: &str) -> Result<(), Error> {
+pub async fn connect_and_fund(parachain_rpc: &InterBtcParachain, faucet_url: &str) -> Result<(), Error> {
     let connection = jsonrpc_http::connect::<TypedClient>(faucet_url).await?;
     // Receive user allowance from faucet
-    get_funding(connection.clone(), provider.get_account_id().clone()).await?;
+    get_funding(connection.clone(), parachain_rpc.get_account_id().clone()).await?;
     Ok(())
 }

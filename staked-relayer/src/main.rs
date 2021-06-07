@@ -1,5 +1,5 @@
 use clap::Clap;
-use runtime::{substrate_subxt::PairSigner, PolkaBtcRuntime};
+use runtime::{substrate_subxt::PairSigner, InterBtcRuntime};
 use service::{ConnectionManager, ServiceConfig};
 
 use staked_relayer::{system::*, Error};
@@ -33,7 +33,7 @@ async fn start() -> Result<(), Error> {
     opts.service.logging_format.init_subscriber();
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
+    let signer = PairSigner::<InterBtcRuntime, _>::new(key_pair);
 
     ConnectionManager::<_, RelayerService>::new(
         signer.clone(),

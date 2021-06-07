@@ -8,7 +8,7 @@ use jsonrpc_http_server::{
 use kv::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    AccountId, CollateralBalancesPallet, Error as RuntimeError, PolkaBtcProvider, VaultRegistryPallet, PLANCK_PER_DOT,
+    AccountId, CollateralBalancesPallet, Error as RuntimeError, InterBtcParachain, VaultRegistryPallet, PLANCK_PER_DOT,
 };
 use serde::{Deserialize, Deserializer};
 use std::{collections::HashMap, net::SocketAddr, time::Duration};
@@ -57,8 +57,8 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
     }
 }
 
-async fn _system_health(provider: &PolkaBtcProvider) -> Result<(), Error> {
-    match timeout(HEALTH_DURATION, provider.get_latest_block_hash()).await {
+async fn _system_health(parachain_rpc: &InterBtcParachain) -> Result<(), Error> {
+    match timeout(HEALTH_DURATION, parachain_rpc.get_latest_block_hash()).await {
         Err(err) => Err(Error::RuntimeError(RuntimeError::from(err))),
         _ => Ok(()),
     }
@@ -76,7 +76,7 @@ enum FundingRequestAccountType {
 }
 
 async fn _fund_account_raw(
-    provider: &PolkaBtcProvider,
+    parachain_rpc: &InterBtcParachain,
     params: Params,
     store: Store,
     user_allowance: u128,
@@ -86,14 +86,14 @@ async fn _fund_account_raw(
     let mut allowances = HashMap::new();
     allowances.insert(FundingRequestAccountType::User, user_allowance);
     allowances.insert(FundingRequestAccountType::Vault, vault_allowance);
-    fund_account(provider, req, store, allowances).await
+    fund_account(parachain_rpc, req, store, allowances).await
 }
 
 async fn get_account_type(
-    provider: &PolkaBtcProvider,
+    parachain_rpc: &InterBtcParachain,
     account_id: AccountId,
 ) -> Result<FundingRequestAccountType, Error> {
-    if provider.get_vault(account_id.clone()).await.is_ok() {
+    if parachain_rpc.get_vault(account_id.clone()).await.is_ok() {
         return Ok(FundingRequestAccountType::Vault);
     }
     Ok(FundingRequestAccountType::User)
@@ -143,13 +143,13 @@ fn has_request_expired(
 }
 
 async fn ensure_funding_allowed(
-    provider: &PolkaBtcProvider,
+    parachain_rpc: &InterBtcParachain,
     account_id: AccountId,
     last_request_json: Option<Json<FaucetRequest>>,
     account_type: FundingRequestAccountType,
 ) -> Result<(), Error> {
-    let free_balance = provider.get_free_balance_for_id(account_id.clone()).await?;
-    let reserved_balance = provider.get_reserved_balance_for_id(account_id.clone()).await?;
+    let free_balance = parachain_rpc.get_free_balance_for_id(account_id.clone()).await?;
+    let reserved_balance = parachain_rpc.get_reserved_balance_for_id(account_id.clone()).await?;
     if free_balance + reserved_balance > MAX_FUNDABLE_CLIENT_BALANCE {
         log::warn!(
             "User {} has enough funds: {:?}",
@@ -186,14 +186,20 @@ async fn ensure_funding_allowed(
 }
 
 async fn atomic_faucet_funding(
-    provider: &PolkaBtcProvider,
+    parachain_rpc: &InterBtcParachain,
     kv: Bucket<'_, String, Json<FaucetRequest>>,
     account_id: AccountId,
     allowances: HashMap<FundingRequestAccountType, u128>,
 ) -> Result<(), Error> {
     let last_request_json = kv.get(account_id.to_string())?;
-    let account_type = get_account_type(&provider, account_id.clone()).await?;
-    ensure_funding_allowed(provider, account_id.clone(), last_request_json, account_type.clone()).await?;
+    let account_type = get_account_type(&parachain_rpc, account_id.clone()).await?;
+    ensure_funding_allowed(
+        parachain_rpc,
+        account_id.clone(),
+        last_request_json,
+        account_type.clone(),
+    )
+    .await?;
 
     let amount = allowances
         .get(&account_type)
@@ -207,7 +213,7 @@ async fn atomic_faucet_funding(
         account_type,
         amount
     );
-    provider.transfer_to(&account_id, amount).await?;
+    parachain_rpc.transfer_to(&account_id, amount).await?;
 
     // Replace the previous (expired) claim datetime with the datetime of the current claim, only update
     // this after successfully transferring funds to ensure that this can be called again on error
@@ -216,19 +222,19 @@ async fn atomic_faucet_funding(
 }
 
 async fn fund_account(
-    provider: &PolkaBtcProvider,
+    parachain_rpc: &InterBtcParachain,
     req: FundAccountJsonRpcRequest,
     store: Store,
     allowances: HashMap<FundingRequestAccountType, u128>,
 ) -> Result<(), Error> {
-    let provider = provider.clone();
+    let parachain_rpc = parachain_rpc.clone();
     let kv = open_kv_store(store)?;
-    atomic_faucet_funding(&provider, kv, req.account_id.clone(), allowances).await?;
+    atomic_faucet_funding(&parachain_rpc, kv, req.account_id.clone(), allowances).await?;
     Ok(())
 }
 
 pub async fn start_http(
-    provider: PolkaBtcProvider,
+    parachain_rpc: InterBtcParachain,
     addr: SocketAddr,
     origin: String,
     user_allowance: u128,
@@ -239,22 +245,23 @@ pub async fn start_http(
     io.add_sync_method("user_allowance", move |_| handle_resp(Ok(user_allowance)));
     io.add_sync_method("vault_allowance", move |_| handle_resp(Ok(vault_allowance)));
     {
-        let provider = provider.clone();
+        let parachain_rpc = parachain_rpc.clone();
         io.add_method("system_health", move |_| {
-            let provider = provider.clone();
-            async move { handle_resp(_system_health(&provider).await) }
+            let parachain_rpc = parachain_rpc.clone();
+            async move { handle_resp(_system_health(&parachain_rpc).await) }
         });
     }
     {
-        let provider = provider;
+        let parachain_rpc = parachain_rpc;
         let store = store;
 
         // an async closure is only FnOnce, so we need this workaround
         io.add_method("fund_account", move |params| {
-            let provider = provider.clone();
+            let parachain_rpc = parachain_rpc.clone();
             let store = store.clone();
             async move {
-                let result = _fund_account_raw(&provider.clone(), params, store, user_allowance, vault_allowance).await;
+                let result =
+                    _fund_account_raw(&parachain_rpc.clone(), params, store, user_allowance, vault_allowance).await;
                 if let Err(ref err) = result {
                     log::debug!("Failed to fund account: {}", err);
                 }

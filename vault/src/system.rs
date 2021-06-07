@@ -13,7 +13,7 @@ use git_version::git_version;
 use runtime::{
     cli::parse_duration_ms,
     pallets::{security::UpdateActiveBlockEvent, sla::UpdateVaultSLAEvent},
-    AccountId, BlockNumber, BtcRelayPallet, Error as RuntimeError, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs,
+    AccountId, BlockNumber, BtcRelayPallet, Error as RuntimeError, InterBtcParachain, InterBtcRuntime, UtilFuncs,
     VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
@@ -71,10 +71,13 @@ pub struct VaultServiceConfig {
     pub btc_confirmations: Option<u32>,
 }
 
-async fn active_block_listener(provider: PolkaBtcProvider, block_tx: Sender<BlockNumber>) -> Result<(), ServiceError> {
+async fn active_block_listener(
+    parachain_rpc: InterBtcParachain,
+    block_tx: Sender<BlockNumber>,
+) -> Result<(), ServiceError> {
     let block_tx = &block_tx;
-    provider
-        .on_event::<UpdateActiveBlockEvent<PolkaBtcRuntime>, _, _, _>(
+    parachain_rpc
+        .on_event::<UpdateActiveBlockEvent<InterBtcRuntime>, _, _, _>(
             |event| async move {
                 let _ = block_tx.clone().send(event.height).await;
             },
@@ -85,7 +88,7 @@ async fn active_block_listener(provider: PolkaBtcProvider, block_tx: Sender<Bloc
 }
 
 pub struct VaultService {
-    btc_parachain: PolkaBtcProvider,
+    btc_parachain: InterBtcParachain,
     bitcoin_core: BitcoinCore,
     config: VaultServiceConfig,
     shutdown: ShutdownSender,
@@ -97,7 +100,7 @@ impl Service<VaultServiceConfig> for VaultService {
     const VERSION: &'static str = VERSION;
 
     fn new_service(
-        btc_parachain: PolkaBtcProvider,
+        btc_parachain: InterBtcParachain,
         bitcoin_core: BitcoinCore,
         config: VaultServiceConfig,
         shutdown: ShutdownSender,
@@ -117,7 +120,7 @@ impl Service<VaultServiceConfig> for VaultService {
 
 impl VaultService {
     fn new(
-        btc_parachain: PolkaBtcProvider,
+        btc_parachain: InterBtcParachain,
         bitcoin_core: BitcoinCore,
         config: VaultServiceConfig,
         shutdown: ShutdownSender,
@@ -314,7 +317,7 @@ impl VaultService {
         let sla_listener = wait_or_shutdown(self.shutdown.clone(), async move {
             let vault_id = sla_provider.get_account_id();
             sla_provider
-                .on_event::<UpdateVaultSLAEvent<PolkaBtcRuntime>, _, _, _>(
+                .on_event::<UpdateVaultSLAEvent<InterBtcRuntime>, _, _, _>(
                     |event| async move {
                         if &event.vault_id == vault_id {
                             tracing::info!("Received event: new total SLA score = {:?}", event.new_sla);
@@ -375,8 +378,8 @@ impl VaultService {
     }
 }
 
-pub(crate) async fn is_registered(provider: &PolkaBtcProvider, vault_id: AccountId) -> Result<bool, Error> {
-    match provider.get_vault(vault_id).await {
+pub(crate) async fn is_registered(parachain_rpc: &InterBtcParachain, vault_id: AccountId) -> Result<bool, Error> {
+    match parachain_rpc.get_vault(vault_id).await {
         Ok(_) => Ok(true),
         Err(RuntimeError::VaultNotFound) => Ok(false),
         Err(err) => Err(err.into()),

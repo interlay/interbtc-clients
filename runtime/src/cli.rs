@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, KeyLoadingError},
-    PolkaBtcProvider, PolkaBtcSigner,
+    InterBtcParachain, InterBtcSigner,
 };
 use clap::Clap;
 use sp_core::{sr25519::Pair, Pair as _};
@@ -78,8 +78,8 @@ pub struct ConnectionOpts {
 }
 
 impl ConnectionOpts {
-    pub async fn try_connect(&self, signer: PolkaBtcSigner) -> Result<PolkaBtcProvider, Error> {
-        PolkaBtcProvider::from_url_and_config_with_retry(
+    pub async fn try_connect(&self, signer: InterBtcSigner) -> Result<InterBtcParachain, Error> {
+        InterBtcParachain::from_url_and_config_with_retry(
             &self.btc_parachain_url,
             signer,
             self.max_concurrent_requests,

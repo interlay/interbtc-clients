@@ -17,7 +17,7 @@ ARG PACKAGE=staked-relayer
 
 RUN install_packages libssl-dev
 
-COPY --from=builder /app/polkabtc-clients/target/$PROFILE/$PACKAGE /usr/local/bin
+COPY --from=builder /app/interbtc-clients/target/$PROFILE/$PACKAGE /usr/local/bin
 
 # Checks
 RUN ldd /usr/local/bin/$PACKAGE && \

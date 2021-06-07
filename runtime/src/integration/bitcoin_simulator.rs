@@ -2,7 +2,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
-use crate::{rpc::StakedRelayerPallet, BtcAddress, BtcRelayPallet, PolkaBtcProvider};
+use crate::{rpc::StakedRelayerPallet, BtcAddress, BtcRelayPallet, InterBtcParachain};
 use async_trait::async_trait;
 use bitcoin::{
     secp256k1::{rand::rngs::OsRng, PublicKey, Secp256k1, SecretKey},
@@ -25,7 +25,7 @@ use tokio::{
 /// input uxto.
 #[derive(Clone)]
 pub struct MockBitcoinCore {
-    provider: PolkaBtcProvider,
+    parachain_rpc: InterBtcParachain,
     blocks: Arc<RwLock<Vec<Block>>>,
     mempool: Arc<RwLock<Vec<Transaction>>>,
     transaction_creation_lock: Arc<Mutex<()>>,
@@ -33,9 +33,9 @@ pub struct MockBitcoinCore {
 
 impl MockBitcoinCore {
     /// Creates a new instance, and initializes parachain's btc-relay
-    pub async fn new(provider: PolkaBtcProvider) -> Self {
+    pub async fn new(parachain_rpc: InterBtcParachain) -> Self {
         let ret = Self {
-            provider,
+            parachain_rpc,
             blocks: Arc::new(RwLock::new(vec![])),
             mempool: Arc::new(RwLock::new(vec![])),
             transaction_creation_lock: Arc::new(Mutex::new(())),
@@ -45,7 +45,7 @@ impl MockBitcoinCore {
         let dummy_tx = Self::generate_normal_transaction(&address, 10000);
         let block = ret.generate_block_with_transaction(&dummy_tx).await;
         let raw_block_header = serialize(&block.header);
-        ret.provider
+        ret.parachain_rpc
             .initialize_btc_relay(raw_block_header.try_into().unwrap(), 0)
             .await
             .unwrap();
@@ -57,15 +57,15 @@ impl MockBitcoinCore {
             .map(|x| serialize(&x.header).try_into().unwrap())
             .collect::<Vec<_>>();
 
-        ret.provider.store_block_headers(headers).await.unwrap();
+        ret.parachain_rpc.store_block_headers(headers).await.unwrap();
 
         ret
     }
 
     /// Creates a new instance, but does not initializes parachain's btc-relay
-    pub async fn new_uninitialized(provider: PolkaBtcProvider) -> Self {
+    pub async fn new_uninitialized(parachain_rpc: InterBtcParachain) -> Self {
         Self {
-            provider,
+            parachain_rpc,
             blocks: Arc::new(RwLock::new(vec![])),
             mempool: Arc::new(RwLock::new(vec![])),
             transaction_creation_lock: Arc::new(Mutex::new(())),
@@ -78,7 +78,7 @@ impl MockBitcoinCore {
     /// relay a given block to the parachain
     async fn send_block(&self, block: Block) {
         let raw_block_header = serialize(&block.header);
-        self.provider
+        self.parachain_rpc
             .store_block_header(raw_block_header.try_into().unwrap())
             .await
             .unwrap();

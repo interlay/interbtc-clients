@@ -14,7 +14,7 @@ use runtime::{
     pallets::staked_relayers::*,
     substrate_subxt::{Event, PairSigner},
     BtcAddress, BtcRelayPallet, ErrorCode, ExchangeRateOraclePallet, FeePallet, FixedPointNumber, FixedU128, H256Le,
-    IssuePallet, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, ReplacePallet, StakedRelayerPallet, StatusCode,
+    InterBtcParachain, InterBtcRuntime, IssuePallet, RedeemPallet, ReplacePallet, StakedRelayerPallet, StatusCode,
     UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H160;
@@ -90,7 +90,7 @@ async fn test_report_vault_theft_succeeds() {
             // now perform the theft
             btc_rpc.send_transaction(transaction).await.unwrap();
 
-            assert_event::<VaultTheftEvent<PolkaBtcRuntime>, _>(TIMEOUT, vault_provider, |_| true).await;
+            assert_event::<VaultTheftEvent<InterBtcRuntime>, _>(TIMEOUT, vault_provider, |_| true).await;
         },
     )
     .await

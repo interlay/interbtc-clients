@@ -4,7 +4,7 @@ use crate::Error;
 use hyper::{client::HttpConnector, Body, Client, Method, Request, StatusCode};
 use hyper_tls::HttpsConnector;
 use polkabtc_telemetry::{ClientInfo, Message, Payload};
-use runtime::PolkaBtcSigner;
+use runtime::InterBtcSigner;
 use sp_core::sr25519::Pair;
 use tokio::time;
 
@@ -19,7 +19,7 @@ pub(crate) struct TelemetryClient {
 }
 
 impl TelemetryClient {
-    pub(crate) fn new(uri: String, signer: PolkaBtcSigner) -> Self {
+    pub(crate) fn new(uri: String, signer: InterBtcSigner) -> Self {
         let https = HttpsConnector::new();
         let client = Client::builder().build::<_, Body>(https);
 

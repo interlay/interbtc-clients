@@ -1,5 +1,5 @@
 use bitcoin::Error as BitcoinError;
-use runtime::Error as PolkaBtcError;
+use runtime::Error as InterBtcError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -11,6 +11,6 @@ pub enum Error {
 
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
-    #[error("PolkaBtcError: {0}")]
-    PolkaBtcError(#[from] PolkaBtcError),
+    #[error("InterBtcError: {0}")]
+    InterBtcError(#[from] InterBtcError),
 }

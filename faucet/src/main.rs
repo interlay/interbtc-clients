@@ -4,7 +4,7 @@ mod http;
 use clap::Clap;
 use error::Error;
 use git_version::git_version;
-use runtime::{substrate_subxt::PairSigner, PolkaBtcRuntime};
+use runtime::{substrate_subxt::PairSigner, InterBtcRuntime};
 use service::{on_shutdown, wait_or_shutdown};
 use std::net::SocketAddr;
 
@@ -56,7 +56,7 @@ async fn main() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
+    let signer = PairSigner::<InterBtcRuntime, _>::new(key_pair);
 
     let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
 

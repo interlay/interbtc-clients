@@ -25,8 +25,8 @@ pub trait PartialAddress: Sized + Eq + PartialOrd {
     fn encode_str(&self, network: Network) -> Result<String, ConversionError>;
 }
 
-#[cfg(feature = "polkabtc")]
-impl PartialAddress for polkabtc_bitcoin::Address {
+#[cfg(feature = "interbtc")]
+impl PartialAddress for interbtc_bitcoin::Address {
     fn from_payload(payload: Payload) -> Result<Self, ConversionError> {
         match payload {
             Payload::PubkeyHash(hash) => Ok(Self::P2PKH(H160::from(hash.as_hash().into_inner()))),

@@ -2,8 +2,8 @@ use crate::error::Error;
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use futures::{stream::StreamExt, try_join};
 use runtime::{
-    pallets::refund::RequestRefundEvent, BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest,
-    PolkaBtcRefundRequest, PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet,
+    pallets::refund::RequestRefundEvent, BtcAddress, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRedeemRequest,
+    InterBtcRefundRequest, InterBtcReplaceRequest, InterBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet,
     ReplacePallet, ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H256;
@@ -30,8 +30,8 @@ pub enum RequestType {
 }
 
 impl Request {
-    /// Constructs a Request for the given PolkaBtcRedeemRequest
-    pub fn from_redeem_request(hash: H256, request: PolkaBtcRedeemRequest) -> Result<Request, Error> {
+    /// Constructs a Request for the given InterBtcRedeemRequest
+    pub fn from_redeem_request(hash: H256, request: InterBtcRedeemRequest) -> Result<Request, Error> {
         Ok(Request {
             hash,
             deadline: Some(
@@ -47,8 +47,8 @@ impl Request {
         })
     }
 
-    /// Constructs a Request for the given PolkaBtcReplaceRequest
-    pub fn from_replace_request(hash: H256, request: PolkaBtcReplaceRequest) -> Result<Request, Error> {
+    /// Constructs a Request for the given InterBtcReplaceRequest
+    pub fn from_replace_request(hash: H256, request: InterBtcReplaceRequest) -> Result<Request, Error> {
         Ok(Request {
             hash,
             deadline: Some(
@@ -64,8 +64,8 @@ impl Request {
         })
     }
 
-    /// Constructs a Request for the given PolkaBtcRefundRequest
-    fn from_refund_request(hash: H256, request: PolkaBtcRefundRequest) -> Request {
+    /// Constructs a Request for the given InterBtcRefundRequest
+    fn from_refund_request(hash: H256, request: InterBtcRefundRequest) -> Request {
         Request {
             hash,
             deadline: None,
@@ -77,7 +77,7 @@ impl Request {
     }
 
     /// Constructs a Request for the given RequestRefundEvent
-    pub fn from_refund_request_event(request: &RequestRefundEvent<PolkaBtcRuntime>) -> Request {
+    pub fn from_refund_request_event(request: &RequestRefundEvent<InterBtcRuntime>) -> Request {
         Request {
             btc_address: request.btc_address,
             amount: request.amount,
@@ -103,26 +103,26 @@ impl Request {
             + Sync,
     >(
         &self,
-        provider: P,
+        parachain_rpc: P,
         btc_rpc: B,
         num_confirmations: u32,
     ) -> Result<(), Error> {
         // ensure the deadline has not expired yet
         // TODO: subtract a (configurable) safety margin so we don't make payments too close to deadline
         if let Some(deadline) = self.deadline {
-            if provider.get_current_active_block_number().await? >= deadline {
+            if parachain_rpc.get_current_active_block_number().await? >= deadline {
                 return Err(Error::DeadlineExpired);
             }
         }
 
-        let tx_metadata = self.transfer_btc(&provider, btc_rpc, num_confirmations).await?;
-        self.execute(provider, tx_metadata).await
+        let tx_metadata = self.transfer_btc(&parachain_rpc, btc_rpc, num_confirmations).await?;
+        self.execute(parachain_rpc, tx_metadata).await
     }
 
     /// Make a bitcoin transfer to fulfil the request
     #[tracing::instrument(
         name = "transfer_btc",
-        skip(self, provider, btc_rpc),
+        skip(self, parachain_rpc, btc_rpc),
         fields(
             request_type = ?self.request_type,
             request_id = ?self.hash,
@@ -133,7 +133,7 @@ impl Request {
         P: BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
     >(
         &self,
-        provider: &P,
+        parachain_rpc: &P,
         btc_rpc: B,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
@@ -155,11 +155,11 @@ impl Request {
             [] => {} // no return-to-self
             [address] => {
                 // one return-to-self address, make sure it is registered
-                let vault_id = provider.get_account_id().clone();
-                let wallet = provider.get_vault(vault_id).await?.wallet;
+                let vault_id = parachain_rpc.get_account_id().clone();
+                let wallet = parachain_rpc.get_vault(vault_id).await?.wallet;
                 if !wallet.has_btc_address(&address) {
                     tracing::info!("Registering address {:?}", address);
-                    provider.register_address(*address).await?;
+                    parachain_rpc.register_address(*address).await?;
                 }
             }
             _ => return Err(Error::TooManyReturnToSelfAddresses),
@@ -172,7 +172,7 @@ impl Request {
 
             tracing::info!("Awaiting parachain confirmations...");
 
-            match provider
+            match parachain_rpc
                 .wait_for_block_in_relay(
                     H256Le::from_bytes_le(&tx_metadata.block_hash.to_vec()),
                     Some(num_confirmations),
@@ -197,7 +197,7 @@ impl Request {
     /// Executes the request. Upon failure it will retry
     async fn execute<P: ReplacePallet + RedeemPallet + RefundPallet>(
         &self,
-        provider: P,
+        parachain_rpc: P,
         tx_metadata: TransactionMetadata,
     ) -> Result<(), Error> {
         // select the execute function based on request_type
@@ -210,7 +210,7 @@ impl Request {
         // Retry until success or timeout, explicitly handle the cases
         // where the redeem has expired or the rpc has disconnected
         runtime::notify_retry(
-            || (execute)(&provider, self.hash, &tx_metadata.proof, &tx_metadata.raw_tx),
+            || (execute)(&parachain_rpc, self.hash, &tx_metadata.proof, &tx_metadata.raw_tx),
             |result| async {
                 match result {
                     Ok(ok) => Ok(ok),
@@ -230,17 +230,17 @@ impl Request {
 /// Queries the parachain for open requests and executes them. It checks the
 /// bitcoin blockchain to see if a payment has already been made.
 pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    provider: PolkaBtcProvider,
+    parachain_rpc: InterBtcParachain,
     btc_rpc: B,
     num_confirmations: u32,
 ) -> Result<(), Error> {
-    let vault_id = provider.get_account_id().clone();
+    let vault_id = parachain_rpc.get_account_id().clone();
 
     // get all redeem, replace and refund requests
     let (redeem_requests, replace_requests, refund_requests) = try_join!(
-        provider.get_vault_redeem_requests(vault_id.clone()),
-        provider.get_old_vault_replace_requests(vault_id.clone()),
-        provider.get_vault_refund_requests(vault_id),
+        parachain_rpc.get_vault_redeem_requests(vault_id.clone()),
+        parachain_rpc.get_old_vault_replace_requests(vault_id.clone()),
+        parachain_rpc.get_vault_refund_requests(vault_id),
     )?;
 
     let open_redeems = redeem_requests
@@ -293,7 +293,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
 
             // start a new task to (potentially) await confirmation and to execute on the parachain
             // make copies of the variables we move into the task
-            let provider = provider.clone();
+            let parachain_rpc = parachain_rpc.clone();
             let btc_rpc = btc_rpc.clone();
             tokio::spawn(async move {
                 // Payment has been made, but it might not have been confirmed enough times yet
@@ -305,7 +305,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                 match tx_metadata {
                     Ok(tx_metadata) => {
                         // we have enough btc confirmations, now make sure they have been relayed before we continue
-                        if let Err(e) = provider
+                        if let Err(e) = parachain_rpc
                             .wait_for_block_in_relay(
                                 H256Le::from_bytes_le(&tx_metadata.block_hash.to_vec()),
                                 Some(num_confirmations),
@@ -320,7 +320,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                             // continue; try to execute anyway
                         }
 
-                        match request.execute(provider.clone(), tx_metadata).await {
+                        match request.execute(parachain_rpc.clone(), tx_metadata).await {
                             Ok(_) => {
                                 tracing::info!("Executed request #{:?}", request.hash);
                             }
@@ -344,7 +344,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         // in a separate task to ensure that awaiting confirmations does not significantly
         // delay other requests
         // make copies of the variables we move into the task
-        let provider = provider.clone();
+        let parachain_rpc = parachain_rpc.clone();
         let btc_rpc = btc_rpc.clone();
         tokio::spawn(async move {
             tracing::info!(
@@ -353,7 +353,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                 request.hash
             );
 
-            match request.pay_and_execute(provider, btc_rpc, num_confirmations).await {
+            match request.pay_and_execute(parachain_rpc, btc_rpc, num_confirmations).await {
                 Ok(_) => tracing::info!(
                     "{:?} request #{:?} successfully executed",
                     request.request_type,
@@ -394,7 +394,7 @@ mod tests {
         PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
-        AccountId, BlockNumber, BtcPublicKey, Error as RuntimeError, ErrorCode, PolkaBtcRichBlockHeader, PolkaBtcVault,
+        AccountId, BlockNumber, BtcPublicKey, Error as RuntimeError, ErrorCode, InterBtcRichBlockHeader, InterBtcVault,
         StatusCode,
     };
     use sp_core::H160;
@@ -424,8 +424,8 @@ mod tests {
 
         #[async_trait]
         pub trait VaultRegistryPallet {
-            async fn get_vault(&self, vault_id: AccountId) -> Result<PolkaBtcVault, RuntimeError>;
-            async fn get_all_vaults(&self) -> Result<Vec<PolkaBtcVault>, RuntimeError>;
+            async fn get_vault(&self, vault_id: AccountId) -> Result<InterBtcVault, RuntimeError>;
+            async fn get_all_vaults(&self) -> Result<Vec<InterBtcVault>, RuntimeError>;
             async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
             async fn deposit_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
@@ -450,11 +450,11 @@ mod tests {
                 raw_tx: &[u8],
             ) -> Result<(), RuntimeError>;
             async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), RuntimeError>;
-            async fn get_redeem_request(&self, redeem_id: H256) -> Result<PolkaBtcRedeemRequest, RuntimeError>;
+            async fn get_redeem_request(&self, redeem_id: H256) -> Result<InterBtcRedeemRequest, RuntimeError>;
             async fn get_vault_redeem_requests(
                 &self,
                 account_id: AccountId,
-            ) -> Result<Vec<(H256, PolkaBtcRedeemRequest)>, RuntimeError>;
+            ) -> Result<Vec<(H256, InterBtcRedeemRequest)>, RuntimeError>;
             async fn get_redeem_period(&self) -> Result<BlockNumber, RuntimeError>;
             async fn set_redeem_period(&self, period: u32) -> Result<(), RuntimeError>;
         }
@@ -477,15 +477,15 @@ mod tests {
                 raw_tx: &[u8],
             ) -> Result<(), RuntimeError>;
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
-            async fn get_replace_request(&self, replace_id: H256) -> Result<PolkaBtcReplaceRequest, RuntimeError>;
+            async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
             async fn get_new_vault_replace_requests(
                 &self,
                 account_id: AccountId,
-            ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
+            ) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_old_vault_replace_requests(
                 &self,
                 account_id: AccountId,
-            ) -> Result<Vec<(H256, PolkaBtcReplaceRequest)>, RuntimeError>;
+            ) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
             async fn set_replace_period(&self, period: u32) -> Result<(), RuntimeError>;
             async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;
@@ -502,7 +502,7 @@ mod tests {
             async fn get_vault_refund_requests(
                 &self,
                 account_id: AccountId,
-            ) -> Result<Vec<(H256, PolkaBtcRefundRequest)>, RuntimeError>;
+            ) -> Result<Vec<(H256, InterBtcRefundRequest)>, RuntimeError>;
         }
 
         #[async_trait]
@@ -510,7 +510,7 @@ mod tests {
             async fn get_best_block(&self) -> Result<H256Le, RuntimeError>;
             async fn get_best_block_height(&self) -> Result<u32, RuntimeError>;
             async fn get_block_hash(&self, height: u32) -> Result<H256Le, RuntimeError>;
-            async fn get_block_header(&self, hash: H256Le) -> Result<PolkaBtcRichBlockHeader, RuntimeError>;
+            async fn get_block_header(&self, hash: H256Le) -> Result<InterBtcRichBlockHeader, RuntimeError>;
             async fn get_bitcoin_confirmations(&self) -> Result<u32, RuntimeError>;
             async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), RuntimeError>;
             async fn get_parachain_confirmations(&self) -> Result<BlockNumber, RuntimeError>;
@@ -618,13 +618,16 @@ mod tests {
 
     #[tokio::test]
     async fn should_pay_and_execute_redeem() {
-        let mut provider = MockProvider::default();
-        provider
+        let mut parachain_rpc = MockProvider::default();
+        parachain_rpc
             .expect_get_current_active_block_number()
             .times(1)
             .returning(|| Ok(50));
-        provider.expect_execute_redeem().times(1).returning(|_, _, _| Ok(()));
-        provider
+        parachain_rpc
+            .expect_execute_redeem()
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+        parachain_rpc
             .expect_wait_for_block_in_relay()
             .times(1)
             .returning(|_, _| Ok(()));
@@ -664,13 +667,13 @@ mod tests {
             request_type: RequestType::Redeem,
         };
 
-        assert_ok!(request.pay_and_execute(provider, btc_rpc, 6).await);
+        assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
     }
 
     #[tokio::test]
     async fn should_not_pay_after_expiry() {
-        let mut provider = MockProvider::default();
-        provider
+        let mut parachain_rpc = MockProvider::default();
+        parachain_rpc
             .expect_get_current_active_block_number()
             .times(1)
             .returning(|| Ok(110));
@@ -687,20 +690,23 @@ mod tests {
         };
 
         assert_err!(
-            request.pay_and_execute(provider, btc_rpc, 6).await,
+            request.pay_and_execute(parachain_rpc, btc_rpc, 6).await,
             Error::DeadlineExpired
         );
     }
 
     #[tokio::test]
     async fn should_pay_and_execute_replace() {
-        let mut provider = MockProvider::default();
-        provider
+        let mut parachain_rpc = MockProvider::default();
+        parachain_rpc
             .expect_get_current_active_block_number()
             .times(1)
             .returning(|| Ok(50));
-        provider.expect_execute_replace().times(1).returning(|_, _, _| Ok(()));
-        provider
+        parachain_rpc
+            .expect_execute_replace()
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+        parachain_rpc
             .expect_wait_for_block_in_relay()
             .times(1)
             .returning(|_, _| Ok(()));
@@ -740,6 +746,6 @@ mod tests {
             request_type: RequestType::Replace,
         };
 
-        assert_ok!(request.pay_and_execute(provider, btc_rpc, 6).await);
+        assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
     }
 }

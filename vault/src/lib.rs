@@ -12,7 +12,7 @@ mod replace;
 mod system;
 mod types;
 
-use runtime::{PolkaBtcProvider, VaultRegistryPallet};
+use runtime::{InterBtcParachain, VaultRegistryPallet};
 use std::time::Duration;
 
 pub mod service {
@@ -30,7 +30,7 @@ pub mod service {
 }
 pub use crate::{cancellation::RequestEvent, error::Error, system::*, types::IssueRequests};
 
-pub(crate) async fn deposit_collateral(api: &PolkaBtcProvider, amount: u128) -> Result<(), Error> {
+pub(crate) async fn deposit_collateral(api: &InterBtcParachain, amount: u128) -> Result<(), Error> {
     let result = api.deposit_collateral(amount).await;
     tracing::info!("Locking additional collateral; amount {}: {:?}", amount, result);
     Ok(result?)

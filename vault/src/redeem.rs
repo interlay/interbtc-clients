@@ -1,6 +1,6 @@
 use crate::execution::*;
 use bitcoin::BitcoinCoreApi;
-use runtime::{pallets::redeem::RequestRedeemEvent, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet, UtilFuncs};
+use runtime::{pallets::redeem::RequestRedeemEvent, InterBtcParachain, InterBtcRuntime, RedeemPallet, UtilFuncs};
 use service::Error as ServiceError;
 
 /// Listen for RequestRedeemEvent directed at this vault; upon reception, transfer
@@ -8,19 +8,19 @@ use service::Error as ServiceError;
 ///
 /// # Arguments
 ///
-/// * `provider` - the parachain RPC handle
+/// * `parachain_rpc` - the parachain RPC handle
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    provider: PolkaBtcProvider,
+    parachain_rpc: InterBtcParachain,
     btc_rpc: B,
     num_confirmations: u32,
 ) -> Result<(), ServiceError> {
-    provider
-        .on_event::<RequestRedeemEvent<PolkaBtcRuntime>, _, _, _>(
+    parachain_rpc
+        .on_event::<RequestRedeemEvent<InterBtcRuntime>, _, _, _>(
             |event| async {
-                if &event.vault_id != provider.get_account_id() {
+                if &event.vault_id != parachain_rpc.get_account_id() {
                     return;
                 }
                 tracing::info!("Received redeem request: {:?}", event);
@@ -28,7 +28,7 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                 // within this event callback, we captured the arguments of listen_for_redeem_requests
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
                 // arguments by value rather than by reference, so clone these:
-                let provider = provider.clone();
+                let parachain_rpc = parachain_rpc.clone();
                 let btc_rpc = btc_rpc.clone();
                 // Spawn a new task so that we handle these events concurrently
                 tokio::spawn(async move {
@@ -36,9 +36,9 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                     let result = async {
                         let request = Request::from_redeem_request(
                             event.redeem_id,
-                            provider.get_redeem_request(event.redeem_id).await?,
+                            parachain_rpc.get_redeem_request(event.redeem_id).await?,
                         )?;
-                        request.pay_and_execute(provider, btc_rpc, num_confirmations).await
+                        request.pay_and_execute(parachain_rpc, btc_rpc, num_confirmations).await
                     }
                     .await;
 

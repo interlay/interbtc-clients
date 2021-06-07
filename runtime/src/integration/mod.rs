@@ -4,7 +4,7 @@ mod bitcoin_simulator;
 
 use crate::{
     rpc::{IssuePallet, VaultRegistryPallet},
-    AccountId, BtcRelayPallet, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
+    AccountId, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
 use futures::{
@@ -84,42 +84,47 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
     (client, tmp)
 }
 
-/// Create a new provider with the given keyring
-pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> PolkaBtcProvider {
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(key.pair());
-    PolkaBtcProvider::new(client, signer)
+/// Create a new parachain_rpc with the given keyring
+pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> InterBtcParachain {
+    let signer = PairSigner::<InterBtcRuntime, _>::new(key.pair());
+    InterBtcParachain::new(client, signer)
         .await
-        .expect("Error creating provider")
+        .expect("Error creating parachain_rpc")
 }
 
 /// request, pay and execute an issue
-pub async fn assert_issue(provider: &PolkaBtcProvider, btc_rpc: &MockBitcoinCore, vault_id: &AccountId, amount: u128) {
-    let issue = provider.request_issue(amount, vault_id, 10000).await.unwrap();
+pub async fn assert_issue(
+    parachain_rpc: &InterBtcParachain,
+    btc_rpc: &MockBitcoinCore,
+    vault_id: &AccountId,
+    amount: u128,
+) {
+    let issue = parachain_rpc.request_issue(amount, vault_id, 10000).await.unwrap();
 
     let metadata = btc_rpc
         .send_to_address(issue.vault_btc_address, (issue.amount_btc + issue.fee) as u64, None, 0)
         .await
         .unwrap();
 
-    provider
+    parachain_rpc
         .execute_issue(issue.issue_id, &metadata.proof, &metadata.raw_tx)
         .await
         .unwrap();
 }
 
 /// calculate how much collateral the vault requires to accept an issue of the given size
-pub async fn get_required_vault_collateral_for_issue(provider: &PolkaBtcProvider, amount: u128) -> u128 {
-    provider.get_required_collateral_for_wrapped(amount).await.unwrap()
+pub async fn get_required_vault_collateral_for_issue(parachain_rpc: &InterBtcParachain, amount: u128) -> u128 {
+    parachain_rpc.get_required_collateral_for_wrapped(amount).await.unwrap()
 }
 
 /// wait for an event to occur. After the specified error, this will panic. This returns the event.
-pub async fn assert_event<T, F>(duration: Duration, provider: PolkaBtcProvider, f: F) -> T
+pub async fn assert_event<T, F>(duration: Duration, parachain_rpc: InterBtcParachain, f: F) -> T
 where
-    T: Event<PolkaBtcRuntime> + Clone + std::fmt::Debug,
+    T: Event<InterBtcRuntime> + Clone + std::fmt::Debug,
     F: Fn(T) -> bool,
 {
     let (tx, mut rx) = futures::channel::mpsc::channel(1);
-    let event_writer = provider
+    let event_writer = parachain_rpc
         .on_event::<T, _, _, _>(
             |event| async {
                 if (f)(event.clone()) {

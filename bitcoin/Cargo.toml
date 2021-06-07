@@ -5,11 +5,11 @@ authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 
 [features]
-default = ["polkabtc"]
+default = ["interbtc"]
 regtest-mine-on-tx = []
 regtest-manual-mining = []
 cli = ["clap"]
-polkabtc = ["polkabtc-bitcoin"]
+interbtc = ["interbtc-bitcoin"]
 uses-bitcoind = []
 
 [dependencies]
@@ -31,7 +31,7 @@ hyper = "0.10"
 # Substrate dependencies
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.1" }
 
-[dependencies.polkabtc-bitcoin]
+[dependencies.interbtc-bitcoin]
 git = "https://github.com/interlay/btc-parachain"
 branch = "master"
 package = "bitcoin"

@@ -12,8 +12,8 @@ use runtime::{
         issue::*, redeem::*, refund::*, replace::*, security::UpdateActiveBlockEvent, vault_registry::*,
         wrapped_currency::*,
     },
-    BlockNumber, BtcAddress, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, IssuePallet, PolkaBtcProvider,
-    PolkaBtcRuntime, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    BlockNumber, BtcAddress, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRuntime,
+    IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
@@ -115,13 +115,13 @@ async fn test_replace_succeeds() {
         async {
             old_vault_provider.request_replace(issue_amount, 1000000).await.unwrap();
 
-            assert_event::<AcceptReplaceEvent<PolkaBtcRuntime>, _>(TIMEOUT, old_vault_provider.clone(), |e| {
+            assert_event::<AcceptReplaceEvent<InterBtcRuntime>, _>(TIMEOUT, old_vault_provider.clone(), |e| {
                 assert_eq!(e.old_vault_id, old_vault_id);
                 assert_eq!(e.new_vault_id, new_vault_id);
                 true
             })
             .await;
-            assert_event::<ExecuteReplaceEvent<PolkaBtcRuntime>, _>(TIMEOUT, old_vault_provider.clone(), |e| {
+            assert_event::<ExecuteReplaceEvent<InterBtcRuntime>, _>(TIMEOUT, old_vault_provider.clone(), |e| {
                 assert_eq!(e.old_vault_id, old_vault_id);
                 assert_eq!(e.new_vault_id, new_vault_id);
                 true
@@ -166,7 +166,7 @@ async fn test_maintain_collateral_succeeds() {
                 .set_exchange_rate_info(FixedU128::saturating_from_rational(110u128, 10000u128))
                 .await
                 .unwrap();
-            assert_event::<DepositCollateralEvent<PolkaBtcRuntime>, _>(TIMEOUT, vault_provider.clone(), |e| {
+            assert_event::<DepositCollateralEvent<InterBtcRuntime>, _>(TIMEOUT, vault_provider.clone(), |e| {
                 assert_eq!(e.new_collateral, vault_collateral / 10);
                 true
             })
@@ -217,7 +217,7 @@ async fn test_withdraw_replace_succeeds() {
         old_vault_provider
             .request_replace(issue_amount, 1000000)
             .map(Result::unwrap),
-        assert_event::<RequestReplaceEvent<PolkaBtcRuntime>, _>(TIMEOUT, old_vault_provider.clone(), |_| true),
+        assert_event::<RequestReplaceEvent<InterBtcRuntime>, _>(TIMEOUT, old_vault_provider.clone(), |_| true),
     )
     .await;
 
@@ -225,7 +225,7 @@ async fn test_withdraw_replace_succeeds() {
 
     join(
         old_vault_provider.withdraw_replace(issue_amount).map(Result::unwrap),
-        assert_event::<WithdrawReplaceEvent<PolkaBtcRuntime>, _>(TIMEOUT, old_vault_provider.clone(), |e| {
+        assert_event::<WithdrawReplaceEvent<InterBtcRuntime>, _>(TIMEOUT, old_vault_provider.clone(), |e| {
             assert_eq!(e.old_vault_id, old_vault_id);
             true
         }),
@@ -320,7 +320,7 @@ async fn test_cancellation_succeeds() {
 
         block_listener
             .clone()
-            .on_event::<UpdateActiveBlockEvent<PolkaBtcRuntime>, _, _, _>(
+            .on_event::<UpdateActiveBlockEvent<InterBtcRuntime>, _, _, _>(
                 |event| async move {
                     issue_block_tx.clone().send(event.height).await.unwrap();
                     replace_block_tx.clone().send(event.height).await.unwrap();
@@ -368,12 +368,12 @@ async fn test_cancellation_succeeds() {
                         .await
                         .unwrap();
                 },
-                assert_event::<CancelIssueEvent<PolkaBtcRuntime>, _>(
+                assert_event::<CancelIssueEvent<InterBtcRuntime>, _>(
                     Duration::from_secs(120),
                     user_provider.clone(),
                     |_| true,
                 ),
-                assert_event::<CancelReplaceEvent<PolkaBtcRuntime>, _>(
+                assert_event::<CancelReplaceEvent<InterBtcRuntime>, _>(
                     Duration::from_secs(120),
                     user_provider.clone(),
                     |_| true,
@@ -435,10 +435,10 @@ async fn test_refund_succeeds() {
 
         let (_, refund_request, refund_execution) = join3(
             user_provider.execute_issue(issue.issue_id, &metadata.proof, &metadata.raw_tx),
-            assert_event::<RequestRefundEvent<PolkaBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |x| {
+            assert_event::<RequestRefundEvent<InterBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |x| {
                 x.vault_id == vault_id
             }),
-            assert_event::<ExecuteRefundEvent<PolkaBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |_| true),
+            assert_event::<ExecuteRefundEvent<InterBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |_| true),
         )
         .await;
 
@@ -495,7 +495,7 @@ async fn test_issue_overpayment_succeeds() {
             .unwrap();
 
         join(
-            assert_event::<MintEvent<PolkaBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |x| {
+            assert_event::<MintEvent<InterBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |x| {
                 if &x.account_id == user_provider.get_account_id() {
                     assert_eq!(x.amount, issue.amount_btc * over_payment_factor);
                     true
@@ -555,7 +555,7 @@ async fn test_automatic_issue_execution_succeeds() {
 
         // wait for vault2 to execute this issue
         let vault_id = vault1_provider.get_account_id().clone();
-        assert_event::<ExecuteIssueEvent<PolkaBtcRuntime>, _>(TIMEOUT, user_provider.clone(), move |x| {
+        assert_event::<ExecuteIssueEvent<InterBtcRuntime>, _>(TIMEOUT, user_provider.clone(), move |x| {
             x.vault_id == vault_id
         })
         .await;
@@ -668,13 +668,13 @@ async fn test_off_chain_liquidation() {
         .await
         .unwrap();
 
-    assert_event::<LiquidateVaultEvent<PolkaBtcRuntime>, _>(TIMEOUT, vault_provider.clone(), |_| true).await;
+    assert_event::<LiquidateVaultEvent<InterBtcRuntime>, _>(TIMEOUT, vault_provider.clone(), |_| true).await;
 }
 
 async fn assert_redeem_event(
     duration: Duration,
-    provider: PolkaBtcProvider,
+    parachain_rpc: InterBtcParachain,
     redeem_id: H256,
-) -> ExecuteRedeemEvent<PolkaBtcRuntime> {
-    assert_event::<ExecuteRedeemEvent<PolkaBtcRuntime>, _>(duration, provider, |x| x.redeem_id == redeem_id).await
+) -> ExecuteRedeemEvent<InterBtcRuntime> {
+    assert_event::<ExecuteRedeemEvent<InterBtcRuntime>, _>(duration, parachain_rpc, |x| x.redeem_id == redeem_id).await
 }

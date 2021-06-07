@@ -13,11 +13,11 @@ use log::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     substrate_subxt::{PairSigner, Signer},
-    AccountId, BtcAddress, CollateralBalancesPallet, ErrorCode as PolkaBtcErrorCode, ExchangeRateOraclePallet,
+    AccountId, BtcAddress, CollateralBalancesPallet, ErrorCode as InterBtcErrorCode, ExchangeRateOraclePallet,
     FeePallet, FixedPointNumber,
     FixedPointTraits::*,
-    FixedU128, H256Le, IssueRequestStatus, PolkaBtcProvider, PolkaBtcRuntime, RedeemPallet,
-    StatusCode as PolkaBtcStatusCode, TimestampPallet,
+    FixedU128, H256Le, InterBtcParachain, InterBtcRuntime, IssueRequestStatus, RedeemPallet,
+    StatusCode as InterBtcStatusCode, TimestampPallet,
 };
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
@@ -33,14 +33,14 @@ impl std::str::FromStr for BtcAddressFromStr {
 }
 
 #[derive(Debug, Encode, Decode)]
-struct PolkaBtcStatusCodeFromStr(PolkaBtcStatusCode);
-impl std::str::FromStr for PolkaBtcStatusCodeFromStr {
+struct InterBtcStatusCodeFromStr(InterBtcStatusCode);
+impl std::str::FromStr for InterBtcStatusCodeFromStr {
     type Err = String;
     fn from_str(code: &str) -> Result<Self, Self::Err> {
         match code {
-            "running" => Ok(PolkaBtcStatusCodeFromStr(PolkaBtcStatusCode::Running)),
-            "shutdown" => Ok(PolkaBtcStatusCodeFromStr(PolkaBtcStatusCode::Shutdown)),
-            "error" => Ok(PolkaBtcStatusCodeFromStr(PolkaBtcStatusCode::Error)),
+            "running" => Ok(InterBtcStatusCodeFromStr(InterBtcStatusCode::Running)),
+            "shutdown" => Ok(InterBtcStatusCodeFromStr(InterBtcStatusCode::Shutdown)),
+            "error" => Ok(InterBtcStatusCodeFromStr(InterBtcStatusCode::Error)),
             _ => Err("Could not parse input as StatusCode".to_string()),
         }
     }
@@ -56,15 +56,15 @@ impl std::str::FromStr for H256LeFromStr {
 }
 
 #[derive(Debug, Encode, Decode)]
-struct PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode);
-impl std::str::FromStr for PolkaBtcErrorCodeFromStr {
+struct InterBtcErrorCodeFromStr(InterBtcErrorCode);
+impl std::str::FromStr for InterBtcErrorCodeFromStr {
     type Err = String;
     fn from_str(code: &str) -> Result<Self, Self::Err> {
         match code {
-            "none" => Ok(PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode::None)),
-            "no-data-btc-relay" => Ok(PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode::NoDataBTCRelay)),
-            "invalid-btc-relay" => Ok(PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode::InvalidBTCRelay)),
-            "oracle-offline" => Ok(PolkaBtcErrorCodeFromStr(PolkaBtcErrorCode::OracleOffline)),
+            "none" => Ok(InterBtcErrorCodeFromStr(InterBtcErrorCode::None)),
+            "no-data-btc-relay" => Ok(InterBtcErrorCodeFromStr(InterBtcErrorCode::NoDataBTCRelay)),
+            "invalid-btc-relay" => Ok(InterBtcErrorCodeFromStr(InterBtcErrorCode::InvalidBTCRelay)),
+            "oracle-offline" => Ok(InterBtcErrorCodeFromStr(InterBtcErrorCode::OracleOffline)),
             _ => Err("Could not parse input as ErrorCode".to_string()),
         }
     }
@@ -344,15 +344,15 @@ struct SuggestStatusUpdateJsonRpcRequest {
 
     /// Status code: running, shutdown or error.
     #[clap(long)]
-    status_code: PolkaBtcStatusCodeFromStr,
+    status_code: InterBtcStatusCodeFromStr,
 
     /// Error code: none, no-data-btc-relay, invalid-btc-relay, oracle-offline or liquidation.
     #[clap(long)]
-    add_error: Option<PolkaBtcErrorCodeFromStr>,
+    add_error: Option<InterBtcErrorCodeFromStr>,
 
     /// Error code: none, no-data-btc-relay, invalid-btc-relay, oracle-offline or liquidation.
     #[clap(long)]
-    remove_error: Option<PolkaBtcErrorCodeFromStr>,
+    remove_error: Option<InterBtcErrorCodeFromStr>,
 
     /// Hash of the block.
     #[clap(long)]
@@ -405,8 +405,8 @@ async fn main() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
 
     let (key_pair, wallet_name) = opts.account_info.get_key_pair()?;
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
-    let provider = PolkaBtcProvider::from_url_with_retry(
+    let signer = PairSigner::<InterBtcRuntime, _>::new(key_pair);
+    let parachain_rpc = InterBtcParachain::from_url_with_retry(
         &opts.btc_parachain_url,
         signer,
         Duration::from_millis(opts.connection_timeout_ms),
@@ -416,39 +416,39 @@ async fn main() -> Result<(), Error> {
     match opts.subcmd {
         SubCommand::SetExchangeRate(info) => {
             let rate = FixedU128::checked_from_rational(info.exchange_rate, 100_000).unwrap();
-            provider.set_exchange_rate_info(rate).await?;
+            parachain_rpc.set_exchange_rate_info(rate).await?;
         }
         SubCommand::InsertAuthorizedOracle(info) => {
             let key_pair = info.account.pair();
-            let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
+            let signer = PairSigner::<InterBtcRuntime, _>::new(key_pair);
             let oracle_id = signer.account_id().clone();
-            provider.insert_authorized_oracle(oracle_id, info.name).await?;
+            parachain_rpc.insert_authorized_oracle(oracle_id, info.name).await?;
         }
         SubCommand::GetExchangeRate => {
-            let (rate, time, delay) = provider.get_exchange_rate_info().await?;
+            let (rate, time, delay) = parachain_rpc.get_exchange_rate_info().await?;
             println!(
                 "Exchange Rate BTC/DOT: {:?}, Last Update: {}, Delay: {}",
                 rate, time, delay
             );
         }
         SubCommand::SetBtcTxFees(info) => {
-            provider
+            parachain_rpc
                 .set_btc_tx_fees_per_byte(info.fast, info.half, info.hour)
                 .await?;
         }
         SubCommand::GetBtcTxFees => {
-            let fees = provider.get_btc_tx_fees_per_byte().await?;
+            let fees = parachain_rpc.get_btc_tx_fees_per_byte().await?;
             println!(
                 "Fees per byte: fast={} half={} hour={}",
                 fees.fast, fees.half, fees.hour
             );
         }
         SubCommand::GetCurrentTime => {
-            println!("{}", provider.get_time_now().await?);
+            println!("{}", parachain_rpc.get_time_now().await?);
         }
         SubCommand::RegisterVault(info) => {
             let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
-            vault::register_vault(provider, btc_rpc.get_new_public_key().await?, info.collateral).await?;
+            vault::register_vault(parachain_rpc, btc_rpc.get_new_public_key().await?, info.collateral).await?;
         }
         SubCommand::RequestIssue(info) => {
             let vault_id = info.vault;
@@ -457,8 +457,8 @@ async fn main() -> Result<(), Error> {
                 Some(x) => x,
                 None => {
                     // calculate required amount
-                    let amount_in_dot = provider.wrapped_to_collateral(info.issue_amount).await?;
-                    let required_griefing_collateral_rate = provider.get_issue_griefing_collateral().await?;
+                    let amount_in_dot = parachain_rpc.wrapped_to_collateral(info.issue_amount).await?;
+                    let required_griefing_collateral_rate = parachain_rpc.get_issue_griefing_collateral().await?;
 
                     // we add 0.5 before we do the final integer division to round the result we return.
                     // note that unwrapping is safe because we use a constant
@@ -479,7 +479,7 @@ async fn main() -> Result<(), Error> {
             };
 
             let request_data =
-                issue::request_issue(&provider, info.issue_amount, griefing_collateral, vault_id).await?;
+                issue::request_issue(&parachain_rpc, info.issue_amount, griefing_collateral, vault_id).await?;
 
             let vault_btc_address = request_data.vault_btc_address;
 
@@ -490,7 +490,7 @@ async fn main() -> Result<(), Error> {
 
             let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
             issue::execute_issue(
-                &provider,
+                &parachain_rpc,
                 &btc_rpc,
                 request_data.issue_id,
                 request_data.amount_btc,
@@ -501,7 +501,7 @@ async fn main() -> Result<(), Error> {
         SubCommand::SendBitcoin(info) => {
             let (btc_address, satoshis) = if let Some(issue_id) = info.issue_id {
                 // gets the data from on-chain
-                let issue_request = issue::get_issue_by_id(&provider, issue_id).await?;
+                let issue_request = issue::get_issue_by_id(&parachain_rpc, issue_id).await?;
                 if matches!(issue_request.status, IssueRequestStatus::Completed(_)) {
                     return Err(Error::IssueCompleted);
                 } else if matches!(issue_request.status, IssueRequestStatus::Cancelled) {
@@ -524,7 +524,7 @@ async fn main() -> Result<(), Error> {
         }
         SubCommand::RequestRedeem(info) => {
             let redeem_id = redeem::request_redeem(
-                &provider,
+                &parachain_rpc,
                 info.redeem_amount,
                 info.btc_address.0,
                 info.vault.to_account_id(),
@@ -534,11 +534,11 @@ async fn main() -> Result<(), Error> {
         }
         SubCommand::ExecuteRedeem(info) => {
             let redeem_id = info.redeem_id;
-            let redeem_request = provider.get_redeem_request(redeem_id).await?;
+            let redeem_request = parachain_rpc.get_redeem_request(redeem_id).await?;
 
             let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
             redeem::execute_redeem(
-                &provider,
+                &parachain_rpc,
                 &btc_rpc,
                 redeem_id,
                 redeem_request.amount_btc,
@@ -547,32 +547,39 @@ async fn main() -> Result<(), Error> {
             .await?;
         }
         SubCommand::RequestReplace(info) => {
-            replace::request_replace(&provider, info.replace_amount, info.griefing_collateral).await?;
+            replace::request_replace(&parachain_rpc, info.replace_amount, info.griefing_collateral).await?;
         }
         SubCommand::AcceptReplace(info) => {
             let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
-            replace::accept_replace(&provider, &btc_rpc, info.old_vault, info.amount_btc, info.collateral).await?;
+            replace::accept_replace(
+                &parachain_rpc,
+                &btc_rpc,
+                info.old_vault,
+                info.amount_btc,
+                info.collateral,
+            )
+            .await?;
         }
         SubCommand::ExecuteReplace(info) => {
             let btc_rpc = get_bitcoin_core(opts.bitcoin, wallet_name).await?;
-            replace::execute_replace(&provider, &btc_rpc, info.replace_id).await?;
+            replace::execute_replace(&parachain_rpc, &btc_rpc, info.replace_id).await?;
         }
         SubCommand::SetIssuePeriod(info) => {
-            issue::set_issue_period(&provider, info.period).await?;
+            issue::set_issue_period(&parachain_rpc, info.period).await?;
         }
         SubCommand::SetRedeemPeriod(info) => {
-            redeem::set_redeem_period(&provider, info.period).await?;
+            redeem::set_redeem_period(&parachain_rpc, info.period).await?;
         }
         SubCommand::SetReplacePeriod(info) => {
-            replace::set_replace_period(&provider, info.period).await?;
+            replace::set_replace_period(&parachain_rpc, info.period).await?;
         }
         SubCommand::FundAccounts(info) => {
-            let provider = &provider;
+            let parachain_rpc = &parachain_rpc;
             let futures: Vec<_> = info
                 .accounts
                 .iter()
                 .map(|account_id| (account_id, info.amount))
-                .map(|(account_id, amount)| async move { provider.transfer_to(account_id, amount).await })
+                .map(|(account_id, amount)| async move { parachain_rpc.transfer_to(account_id, amount).await })
                 .collect();
 
             try_join_all(futures).await?;
