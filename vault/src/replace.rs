@@ -38,8 +38,15 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                 // Spawn a new task so that we handle these events concurrently
                 tokio::spawn(async move {
                     tracing::info!("Executing accept replace #{:?}", event.replace_id);
-                    let request = Request::from_accept_replace_event(&event);
-                    let result = request.pay_and_execute(provider, btc_rpc, num_confirmations).await;
+
+                    let result = async {
+                        let request = Request::from_replace_request(
+                            event.replace_id,
+                            provider.get_replace_request(event.replace_id).await?,
+                        )?;
+                        request.pay_and_execute(provider, btc_rpc, num_confirmations).await
+                    }
+                    .await;
 
                     match result {
                         Ok(_) => tracing::info!(

@@ -2,10 +2,9 @@ use crate::error::Error;
 use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
 use futures::{stream::StreamExt, try_join};
 use runtime::{
-    pallets::{redeem::RequestRedeemEvent, refund::RequestRefundEvent, replace::AcceptReplaceEvent},
-    BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest, PolkaBtcRefundRequest,
-    PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet, ReplacePallet,
-    ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultRegistryPallet,
+    pallets::refund::RequestRefundEvent, BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, PolkaBtcRedeemRequest,
+    PolkaBtcRefundRequest, PolkaBtcReplaceRequest, PolkaBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet,
+    ReplacePallet, ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H256;
 use std::{collections::HashMap, time::Duration};
@@ -17,6 +16,7 @@ const ON_FORK_RETRY_DELAY: Duration = Duration::from_secs(10);
 pub struct Request {
     hash: H256,
     btc_height: Option<u32>,
+    deadline: Option<u32>,
     amount: u128,
     btc_address: BtcAddress,
     request_type: RequestType,
@@ -31,31 +31,44 @@ pub enum RequestType {
 
 impl Request {
     /// Constructs a Request for the given PolkaBtcRedeemRequest
-    fn from_redeem_request(hash: H256, request: PolkaBtcRedeemRequest) -> Request {
-        Request {
+    pub fn from_redeem_request(hash: H256, request: PolkaBtcRedeemRequest) -> Result<Request, Error> {
+        Ok(Request {
             hash,
+            deadline: Some(
+                request
+                    .opentime
+                    .checked_add(request.period)
+                    .ok_or(Error::ArithmeticOverflow)?,
+            ),
             btc_height: Some(request.btc_height),
             amount: request.amount_btc,
             btc_address: request.btc_address,
             request_type: RequestType::Redeem,
-        }
+        })
     }
 
     /// Constructs a Request for the given PolkaBtcReplaceRequest
-    fn from_replace_request(hash: H256, request: PolkaBtcReplaceRequest) -> Request {
-        Request {
+    pub fn from_replace_request(hash: H256, request: PolkaBtcReplaceRequest) -> Result<Request, Error> {
+        Ok(Request {
             hash,
+            deadline: Some(
+                request
+                    .accept_time
+                    .checked_add(request.period)
+                    .ok_or(Error::ArithmeticOverflow)?,
+            ),
             btc_height: Some(request.btc_height),
             amount: request.amount,
             btc_address: request.btc_address,
             request_type: RequestType::Replace,
-        }
+        })
     }
 
     /// Constructs a Request for the given PolkaBtcRefundRequest
     fn from_refund_request(hash: H256, request: PolkaBtcRefundRequest) -> Request {
         Request {
             hash,
+            deadline: None,
             btc_height: None,
             amount: request.amount_btc,
             btc_address: request.btc_address,
@@ -70,29 +83,8 @@ impl Request {
             amount: request.amount,
             hash: request.refund_id,
             btc_height: None,
+            deadline: None,
             request_type: RequestType::Refund,
-        }
-    }
-
-    /// Constructs a Request for the given AcceptReplaceEvent
-    pub fn from_accept_replace_event(request: &AcceptReplaceEvent<PolkaBtcRuntime>) -> Request {
-        Request {
-            btc_address: request.btc_address,
-            amount: request.amount_btc,
-            hash: request.replace_id,
-            btc_height: None,
-            request_type: RequestType::Replace,
-        }
-    }
-
-    /// Constructs a Request for the given RequestRedeemEvent
-    pub fn from_redeem_request_event(request: &RequestRedeemEvent<PolkaBtcRuntime>) -> Request {
-        Request {
-            btc_address: request.user_btc_address,
-            amount: request.amount,
-            hash: request.redeem_id,
-            btc_height: None,
-            request_type: RequestType::Redeem,
         }
     }
 
@@ -103,6 +95,7 @@ impl Request {
             + RefundPallet
             + BtcRelayPallet
             + RedeemPallet
+            + SecurityPallet
             + VaultRegistryPallet
             + UtilFuncs
             + Clone
@@ -114,6 +107,14 @@ impl Request {
         btc_rpc: B,
         num_confirmations: u32,
     ) -> Result<(), Error> {
+        // ensure the deadline has not expired yet
+        // TODO: subtract a (configurable) safety margin so we don't make payments too close to deadline
+        if let Some(deadline) = self.deadline {
+            if provider.get_current_active_block_number().await? >= deadline {
+                return Err(Error::DeadlineExpired);
+            }
+        }
+
         let tx_metadata = self.transfer_btc(&provider, btc_rpc, num_confirmations).await?;
         self.execute(provider, tx_metadata).await
     }
@@ -236,30 +237,21 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
     let vault_id = provider.get_account_id().clone();
 
     // get all redeem, replace and refund requests
-    let (redeem_requests, replace_requests, refund_requests, replace_period, redeem_period, current_height) = try_join!(
+    let (redeem_requests, replace_requests, refund_requests) = try_join!(
         provider.get_vault_redeem_requests(vault_id.clone()),
         provider.get_old_vault_replace_requests(vault_id.clone()),
         provider.get_vault_refund_requests(vault_id),
-        provider.get_replace_period(),
-        provider.get_redeem_period(),
-        provider.get_current_active_block_number()
     )?;
 
     let open_redeems = redeem_requests
         .into_iter()
-        .filter(|(_, request)| {
-            request.status == RedeemRequestStatus::Pending
-                && current_height < request.opentime + request.period.max(redeem_period)
-        })
-        .map(|(hash, request)| Request::from_redeem_request(hash, request));
+        .filter(|(_, request)| request.status == RedeemRequestStatus::Pending)
+        .filter_map(|(hash, request)| Request::from_redeem_request(hash, request).ok());
 
     let open_replaces = replace_requests
         .into_iter()
-        .filter(|(_, request)| {
-            request.status == ReplaceRequestStatus::Pending
-                && current_height < request.accept_time + request.period.max(replace_period)
-        })
-        .map(|(hash, request)| Request::from_replace_request(hash, request));
+        .filter(|(_, request)| request.status == ReplaceRequestStatus::Pending)
+        .filter_map(|(hash, request)| Request::from_replace_request(hash, request).ok());
 
     let open_refunds = refund_requests
         .into_iter()
@@ -402,9 +394,11 @@ mod tests {
         PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
-        AccountId, BlockNumber, BtcPublicKey, Error as RuntimeError, PolkaBtcRichBlockHeader, PolkaBtcVault,
+        AccountId, BlockNumber, BtcPublicKey, Error as RuntimeError, ErrorCode, PolkaBtcRichBlockHeader, PolkaBtcVault,
+        StatusCode,
     };
     use sp_core::H160;
+    use std::collections::BTreeSet;
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {
@@ -528,6 +522,16 @@ mod tests {
             ) -> Result<(), RuntimeError>;
             async fn verify_block_header_inclusion(&self, block_hash: H256Le) -> Result<(), RuntimeError>;
         }
+
+        #[async_trait]
+        pub trait SecurityPallet {
+            async fn get_parachain_status(&self) -> Result<StatusCode, RuntimeError>;
+
+            async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, RuntimeError>;
+
+            /// Gets the current active block number of the parachain
+            async fn get_current_active_block_number(&self) -> Result<u32, RuntimeError>;
+        }
     }
 
     impl Clone for MockProvider {
@@ -602,9 +606,23 @@ mod tests {
         }
     }
 
+    macro_rules! assert_err {
+        ($result:expr, $err:pat) => {{
+            match $result {
+                Err($err) => (),
+                Ok(v) => panic!("assertion failed: Ok({:?})", v),
+                _ => panic!("expected: Err($err)"),
+            }
+        }};
+    }
+
     #[tokio::test]
     async fn should_pay_and_execute_redeem() {
         let mut provider = MockProvider::default();
+        provider
+            .expect_get_current_active_block_number()
+            .times(1)
+            .returning(|| Ok(50));
         provider.expect_execute_redeem().times(1).returning(|_, _, _| Ok(()));
         provider
             .expect_wait_for_block_in_relay()
@@ -639,6 +657,7 @@ mod tests {
 
         let request = Request {
             amount: 100,
+            deadline: Some(100),
             btc_address: BtcAddress::P2SH(H160::from_slice(&[1; 20])),
             hash: H256::from_slice(&[1; 32]),
             btc_height: None,
@@ -649,8 +668,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn should_not_pay_after_expiry() {
+        let mut provider = MockProvider::default();
+        provider
+            .expect_get_current_active_block_number()
+            .times(1)
+            .returning(|| Ok(110));
+        let btc_rpc = MockBitcoin::default();
+        // omitting other mocks to test that they do not get called
+
+        let request = Request {
+            amount: 100,
+            deadline: Some(100),
+            btc_address: BtcAddress::P2SH(H160::from_slice(&[1; 20])),
+            hash: H256::from_slice(&[1; 32]),
+            btc_height: None,
+            request_type: RequestType::Redeem,
+        };
+
+        assert_err!(
+            request.pay_and_execute(provider, btc_rpc, 6).await,
+            Error::DeadlineExpired
+        );
+    }
+
+    #[tokio::test]
     async fn should_pay_and_execute_replace() {
         let mut provider = MockProvider::default();
+        provider
+            .expect_get_current_active_block_number()
+            .times(1)
+            .returning(|| Ok(50));
         provider.expect_execute_replace().times(1).returning(|_, _, _| Ok(()));
         provider
             .expect_wait_for_block_in_relay()
@@ -685,6 +733,7 @@ mod tests {
 
         let request = Request {
             amount: 100,
+            deadline: Some(100),
             btc_address: BtcAddress::P2SH(H160::from_slice(&[1; 20])),
             hash: H256::from_slice(&[1; 32]),
             btc_height: None,
