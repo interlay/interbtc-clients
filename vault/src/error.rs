@@ -22,6 +22,8 @@ pub enum Error {
     ArithmeticOverflow,
     #[error("Mathematical operation caused an underflow")]
     ArithmeticUnderflow,
+    #[error("Deadline has expired")]
+    DeadlineExpired,
 
     #[error("ServiceError: {0}")]
     ServiceError(#[from] ServiceError),
