@@ -17,8 +17,8 @@ pub use error::{Error, SubxtError};
 pub use pallets::*;
 pub use retry::{notify_retry, RetryPolicy};
 pub use rpc::{
-    BtcRelayPallet, BtcTxFeesPerByte, CollateralBalancesPallet, ExchangeRateOraclePallet, FeePallet, IssuePallet,
-    PolkaBtcProvider, RedeemPallet, RefundPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
+    BtcRelayPallet, BtcTxFeesPerByte, CollateralBalancesPallet, ExchangeRateOraclePallet, FeePallet, InterBtcParachain,
+    IssuePallet, RedeemPallet, RefundPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
     UtilFuncs, VaultRegistryPallet,
 };
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
@@ -53,9 +53,9 @@ pub const HOURS: BlockNumber = MINUTES * 60;
 pub type Balance = u128;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct PolkaBtcRuntime;
+pub struct InterBtcRuntime;
 
-impl Runtime for PolkaBtcRuntime {
+impl Runtime for InterBtcRuntime {
     type Signature = MultiSignature;
     type Extra = DefaultExtra<Self>;
 
@@ -75,7 +75,7 @@ pub type BlockNumber = u32;
 pub type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 
 // TODO: use types from actual runtime
-impl system::System for PolkaBtcRuntime {
+impl system::System for InterBtcRuntime {
     type Index = Index;
     type BlockNumber = BlockNumber;
     type Hash = H256;
@@ -87,12 +87,12 @@ impl system::System for PolkaBtcRuntime {
     type AccountData = balances::AccountData<Balance>;
 }
 
-impl pallets::Core for PolkaBtcRuntime {
+impl pallets::Core for InterBtcRuntime {
     type Balance = Balance;
     type Collateral = Balance;
     type Wrapped = Balance;
     type BTCBalance = Balance;
-    type RichBlockHeader = PolkaBtcRichBlockHeader;
+    type RichBlockHeader = InterBtcRichBlockHeader;
     type H256Le = H256Le;
     type H160 = H160;
     type H256 = H256;
@@ -113,53 +113,53 @@ impl pallets::Core for PolkaBtcRuntime {
     type ParaId = ParaId;
 }
 
-impl balances::Balances for PolkaBtcRuntime {
+impl balances::Balances for InterBtcRuntime {
     type Balance = Balance;
 }
 
-impl btc_relay::BTCRelay for PolkaBtcRuntime {}
+impl btc_relay::BTCRelay for InterBtcRuntime {}
 
-impl security::Security for PolkaBtcRuntime {}
+impl security::Security for InterBtcRuntime {}
 
-impl staked_relayers::StakedRelayers for PolkaBtcRuntime {}
+impl staked_relayers::StakedRelayers for InterBtcRuntime {}
 
-impl vault_registry::VaultRegistry for PolkaBtcRuntime {}
+impl vault_registry::VaultRegistry for InterBtcRuntime {}
 
-impl timestamp::Timestamp for PolkaBtcRuntime {
+impl timestamp::Timestamp for InterBtcRuntime {
     type Moment = u64;
 }
 
-impl exchange_rate_oracle::ExchangeRateOracle for PolkaBtcRuntime {}
+impl exchange_rate_oracle::ExchangeRateOracle for InterBtcRuntime {}
 
-impl collateral_balances::Collateral for PolkaBtcRuntime {
+impl collateral_balances::Collateral for InterBtcRuntime {
     type Balance = Balance;
 }
 
-impl collateral_currency::CollateralCurrency for PolkaBtcRuntime {}
+impl collateral_currency::CollateralCurrency for InterBtcRuntime {}
 
-impl wrapped_balances::Wrapped for PolkaBtcRuntime {
+impl wrapped_balances::Wrapped for InterBtcRuntime {
     type Balance = Balance;
 }
 
-impl wrapped_currency::WrappedCurrency for PolkaBtcRuntime {}
+impl wrapped_currency::WrappedCurrency for InterBtcRuntime {}
 
-impl issue::Issue for PolkaBtcRuntime {}
+impl issue::Issue for InterBtcRuntime {}
 
-impl frame_system::System for PolkaBtcRuntime {}
+impl frame_system::System for InterBtcRuntime {}
 
-impl redeem::Redeem for PolkaBtcRuntime {}
+impl redeem::Redeem for InterBtcRuntime {}
 
-impl replace::Replace for PolkaBtcRuntime {}
+impl replace::Replace for InterBtcRuntime {}
 
-impl refund::Refund for PolkaBtcRuntime {}
+impl refund::Refund for InterBtcRuntime {}
 
-impl sudo::Sudo for PolkaBtcRuntime {}
+impl sudo::Sudo for InterBtcRuntime {}
 
-impl fee::Fee for PolkaBtcRuntime {}
+impl fee::Fee for InterBtcRuntime {}
 
-impl sla::Sla for PolkaBtcRuntime {}
+impl sla::Sla for InterBtcRuntime {}
 
-impl utility::Utility for PolkaBtcRuntime {}
+impl utility::Utility for InterBtcRuntime {}
 
 pub const BTC_RELAY_MODULE: &str = "BTCRelay";
 pub const ISSUE_MODULE: &str = "Issue";

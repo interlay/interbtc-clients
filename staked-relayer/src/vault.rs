@@ -3,8 +3,8 @@ use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _};
 use futures::stream::{iter, StreamExt};
 use runtime::{
     pallets::vault_registry::{RegisterAddressEvent, RegisterVaultEvent},
-    AccountId, BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, PolkaBtcProvider, PolkaBtcRuntime,
-    PolkaBtcVault, StakedRelayerPallet, VaultRegistryPallet,
+    AccountId, BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcRuntime,
+    InterBtcVault, StakedRelayerPallet, VaultRegistryPallet,
 };
 use service::Error as ServiceError;
 use sp_core::crypto::Ss58Codec;
@@ -23,7 +23,7 @@ impl Vaults {
         self.0.write().await.insert(key, value);
     }
 
-    pub async fn add_vault(&self, vault: PolkaBtcVault) {
+    pub async fn add_vault(&self, vault: InterBtcVault) {
         let mut vaults = self.0.write().await;
         for address in vault.wallet.addresses {
             vaults.insert(address, vault.id.clone());
@@ -126,12 +126,12 @@ impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTh
 }
 
 pub async fn listen_for_wallet_updates(
-    btc_parachain: PolkaBtcProvider,
+    btc_parachain: InterBtcParachain,
     vaults: Arc<Vaults>,
 ) -> Result<(), ServiceError> {
     let vaults = &vaults;
     btc_parachain
-        .on_event::<RegisterAddressEvent<PolkaBtcRuntime>, _, _, _>(
+        .on_event::<RegisterAddressEvent<InterBtcRuntime>, _, _, _>(
             |event| async move {
                 tracing::info!(
                     "Added new btc address {:?} for vault {}",
@@ -147,11 +147,11 @@ pub async fn listen_for_wallet_updates(
 }
 
 pub async fn listen_for_vaults_registered(
-    btc_parachain: PolkaBtcProvider,
+    btc_parachain: InterBtcParachain,
     vaults: Arc<Vaults>,
 ) -> Result<(), ServiceError> {
     btc_parachain
-        .on_event::<RegisterVaultEvent<PolkaBtcRuntime>, _, _, _>(
+        .on_event::<RegisterVaultEvent<InterBtcRuntime>, _, _, _>(
             |event| async {
                 match btc_parachain.get_vault(event.account_id).await {
                     Ok(vault) => {
@@ -183,7 +183,7 @@ mod tests {
         Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
-        AccountId, BitcoinBlockHeight, BlockNumber, Error as RuntimeError, H256Le, PolkaBtcRichBlockHeader,
+        AccountId, BitcoinBlockHeight, BlockNumber, Error as RuntimeError, H256Le, InterBtcRichBlockHeader,
         RawBlockHeader,
     };
     use sp_core::{H160, H256};
@@ -211,7 +211,7 @@ mod tests {
             async fn get_best_block(&self) -> Result<H256Le, RuntimeError>;
             async fn get_best_block_height(&self) -> Result<u32, RuntimeError>;
             async fn get_block_hash(&self, height: u32) -> Result<H256Le, RuntimeError>;
-            async fn get_block_header(&self, hash: H256Le) -> Result<PolkaBtcRichBlockHeader, RuntimeError>;
+            async fn get_block_header(&self, hash: H256Le) -> Result<InterBtcRichBlockHeader, RuntimeError>;
             async fn get_bitcoin_confirmations(&self) -> Result<u32, RuntimeError>;
             async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), RuntimeError>;
             async fn get_parachain_confirmations(&self) -> Result<BlockNumber, RuntimeError>;

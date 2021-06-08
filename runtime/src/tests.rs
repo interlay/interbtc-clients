@@ -31,21 +31,21 @@ async fn set_exchange_rate(client: SubxtClient) {
 #[tokio::test]
 async fn test_getters() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-    let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
     set_exchange_rate(client.clone()).await;
 
     tokio::join!(
         async {
-            assert_eq!(provider.get_free_balance().await.unwrap(), 1 << 60);
+            assert_eq!(parachain_rpc.get_free_balance().await.unwrap(), 1 << 60);
         },
         async {
-            assert_eq!(provider.get_parachain_status().await.unwrap(), StatusCode::Running);
+            assert_eq!(parachain_rpc.get_parachain_status().await.unwrap(), StatusCode::Running);
         },
         async {
-            assert!(provider.get_replace_dust_amount().await.unwrap() > 0);
+            assert!(parachain_rpc.get_replace_dust_amount().await.unwrap() > 0);
         },
         async {
-            assert!(provider.get_current_active_block_number().await.unwrap() > 0);
+            assert!(parachain_rpc.get_current_active_block_number().await.unwrap() > 0);
         }
     );
 }
@@ -55,12 +55,12 @@ async fn test_getters() {
 async fn test_outdated_nonce_matching() {
     env_logger::init();
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-    let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
-    provider
+    let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    parachain_rpc
         .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
         .await
         .unwrap();
-    let err = provider.get_outdated_nonce_error().await;
+    let err = parachain_rpc.get_outdated_nonce_error().await;
     log::error!("Error: {:?}", err);
     assert!(err.is_outdated_nonce())
 }
@@ -68,18 +68,21 @@ async fn test_outdated_nonce_matching() {
 #[tokio::test]
 async fn test_register_vault() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-    let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
     set_exchange_rate(client.clone()).await;
 
-    provider.register_vault(100, dummy_public_key()).await.unwrap();
-    let vault = provider.get_vault(AccountKeyring::Alice.to_account_id()).await.unwrap();
+    parachain_rpc.register_vault(100, dummy_public_key()).await.unwrap();
+    let vault = parachain_rpc
+        .get_vault(AccountKeyring::Alice.to_account_id())
+        .await
+        .unwrap();
     assert_eq!(vault.wallet.public_key, dummy_public_key());
 }
 
 #[tokio::test]
 async fn test_btc_relay() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-    let provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
     set_exchange_rate(client.clone()).await;
 
     let address = BtcAddress::P2PKH(H160::zero());
@@ -96,10 +99,10 @@ async fn test_btc_relay() {
     let block_header =
         RawBlockHeader::from_bytes(&block.header.try_format().unwrap()).expect("could not serialize block header");
 
-    provider.initialize_btc_relay(block_header, height).await.unwrap();
+    parachain_rpc.initialize_btc_relay(block_header, height).await.unwrap();
 
-    assert_eq!(provider.get_best_block().await.unwrap(), block_hash);
-    assert_eq!(provider.get_best_block_height().await.unwrap(), height);
+    assert_eq!(parachain_rpc.get_best_block().await.unwrap(), block_hash);
+    assert_eq!(parachain_rpc.get_best_block_height().await.unwrap(), height);
 
     for _ in 0..4 {
         height += 1;
@@ -117,9 +120,9 @@ async fn test_btc_relay() {
         let block_header =
             RawBlockHeader::from_bytes(&block.header.try_format().unwrap()).expect("could not serialize block header");
 
-        provider.store_block_header(block_header).await.unwrap();
+        parachain_rpc.store_block_header(block_header).await.unwrap();
 
-        assert_eq!(provider.get_best_block().await.unwrap(), block_hash);
-        assert_eq!(provider.get_best_block_height().await.unwrap(), height);
+        assert_eq!(parachain_rpc.get_best_block().await.unwrap(), block_hash);
+        assert_eq!(parachain_rpc.get_best_block_height().await.unwrap(), height);
     }
 }

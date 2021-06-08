@@ -1,14 +1,14 @@
 use super::Error;
 use crate::core::{Error as CoreError, Issuing};
 use async_trait::async_trait;
-use runtime::{BtcRelayPallet, H256Le, PolkaBtcProvider, RawBlockHeader, StakedRelayerPallet};
+use runtime::{BtcRelayPallet, H256Le, InterBtcParachain, RawBlockHeader, StakedRelayerPallet};
 
 pub struct Client {
-    rpc: PolkaBtcProvider,
+    rpc: InterBtcParachain,
 }
 
 impl Client {
-    pub fn new(rpc: PolkaBtcProvider) -> Self {
+    pub fn new(rpc: InterBtcParachain) -> Self {
         Self { rpc }
     }
 }
@@ -24,7 +24,7 @@ impl Issuing<Error> for Client {
             .rpc
             .get_best_block()
             .await
-            .map_err(|e| CoreError::Issuing(Error::PolkaBtcError(e)))?;
+            .map_err(|e| CoreError::Issuing(Error::InterBtcError(e)))?;
         Ok(!hash.is_zero())
     }
 
@@ -32,7 +32,7 @@ impl Issuing<Error> for Client {
         self.rpc
             .initialize_btc_relay(encode_raw_header(header)?, height)
             .await
-            .map_err(|e| CoreError::Issuing(Error::PolkaBtcError(e)))
+            .map_err(|e| CoreError::Issuing(Error::InterBtcError(e)))
     }
 
     #[tracing::instrument(name = "submit_block_header", skip(self, header))]
@@ -47,7 +47,7 @@ impl Issuing<Error> for Client {
         self.rpc
             .store_block_header(raw_block_header)
             .await
-            .map_err(|e| CoreError::Issuing(Error::PolkaBtcError(e)))
+            .map_err(|e| CoreError::Issuing(Error::InterBtcError(e)))
     }
 
     #[tracing::instrument(name = "submit_block_header_batch", skip(self, headers))]
@@ -60,14 +60,14 @@ impl Issuing<Error> for Client {
                     .collect::<Result<Vec<_>, _>>()?,
             )
             .await
-            .map_err(|e| CoreError::Issuing(Error::PolkaBtcError(e)))
+            .map_err(|e| CoreError::Issuing(Error::InterBtcError(e)))
     }
 
     async fn get_best_height(&self) -> Result<u32, CoreError<Error>> {
         self.rpc
             .get_best_block_height()
             .await
-            .map_err(|e| CoreError::Issuing(Error::PolkaBtcError(e)))
+            .map_err(|e| CoreError::Issuing(Error::InterBtcError(e)))
     }
 
     async fn get_block_hash(&self, height: u32) -> Result<Vec<u8>, CoreError<Error>> {
@@ -75,7 +75,7 @@ impl Issuing<Error> for Client {
             .rpc
             .get_block_hash(height)
             .await
-            .map_err(|e| CoreError::Issuing(Error::PolkaBtcError(e)))?;
+            .map_err(|e| CoreError::Issuing(Error::InterBtcError(e)))?;
         hex::decode(hash.to_hex_le()).map_err(|_| CoreError::Issuing(Error::DecodeHash))
     }
 
@@ -84,7 +84,7 @@ impl Issuing<Error> for Client {
             .rpc
             .get_block_header(H256Le::from_bytes_le(&hash_le))
             .await
-            .map_err(|e| CoreError::Issuing(Error::PolkaBtcError(e)))?;
+            .map_err(|e| CoreError::Issuing(Error::InterBtcError(e)))?;
         Ok(head.block_height > 0)
     }
 }

@@ -98,7 +98,7 @@ pipeline {
             environment {
                 PATH        = "/busybox:$PATH"
                 REGISTRY    = 'registry.gitlab.com'
-                REPOSITORY  = 'interlay/polkabtc-clients'
+                REPOSITORY  = 'interlay/interbtc-clients'
                 PROFILE     = "x86_64-unknown-linux-gnu/release"
             }
             steps {

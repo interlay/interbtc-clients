@@ -4,14 +4,14 @@ use crate::Error;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
 use runtime::{
-    AccountId, BtcAddress, BtcRelayPallet, H256Le, IssuePallet, PolkaBtcIssueRequest, PolkaBtcProvider,
-    PolkaBtcRequestIssueEvent, UtilFuncs,
+    AccountId, BtcAddress, BtcRelayPallet, H256Le, InterBtcIssueRequest, InterBtcParachain, InterBtcRequestIssueEvent,
+    IssuePallet, UtilFuncs,
 };
 use sp_core::H256;
 use std::convert::TryInto;
 
 /// Fetch an issue request by it's ID
-pub async fn get_issue_by_id(issue_prov: &PolkaBtcProvider, issue_id: H256) -> Result<PolkaBtcIssueRequest, Error> {
+pub async fn get_issue_by_id(issue_prov: &InterBtcParachain, issue_id: H256) -> Result<InterBtcIssueRequest, Error> {
     let issue_request = issue_prov.get_issue_request(issue_id).await?;
 
     Ok(issue_request)
@@ -19,11 +19,11 @@ pub async fn get_issue_by_id(issue_prov: &PolkaBtcProvider, issue_id: H256) -> R
 
 /// Request issue
 pub async fn request_issue(
-    issue_prov: &PolkaBtcProvider,
+    issue_prov: &InterBtcParachain,
     amount: u128,
     griefing_collateral: u128,
     vault_id: AccountId,
-) -> Result<PolkaBtcRequestIssueEvent, Error> {
+) -> Result<InterBtcRequestIssueEvent, Error> {
     let issue_data = issue_prov.request_issue(amount, &vault_id, griefing_collateral).await?;
 
     info!(
@@ -38,7 +38,7 @@ pub async fn request_issue(
 
 /// Execute issue
 pub async fn execute_issue(
-    issue_prov: &PolkaBtcProvider,
+    issue_prov: &InterBtcParachain,
     btc_rpc: &BitcoinCore,
     issue_id: H256,
     issue_amount: u128,
@@ -61,7 +61,7 @@ pub async fn execute_issue(
 }
 
 /// Set issue period
-pub async fn set_issue_period(issue_prov: &PolkaBtcProvider, period: u32) -> Result<(), Error> {
+pub async fn set_issue_period(issue_prov: &InterBtcParachain, period: u32) -> Result<(), Error> {
     issue_prov.set_issue_period(period).await?;
 
     info!("Set the issue period to {:?}", period,);

@@ -3,13 +3,13 @@
 use crate::Error;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use log::info;
-use runtime::{AccountId, BtcAddress, BtcRelayPallet, H256Le, PolkaBtcProvider, ReplacePallet, UtilFuncs};
+use runtime::{AccountId, BtcAddress, BtcRelayPallet, H256Le, InterBtcParachain, ReplacePallet, UtilFuncs};
 use sp_core::H256;
 use std::convert::TryInto;
 
 /// Request redeem
 pub async fn request_replace(
-    replace_prov: &PolkaBtcProvider,
+    replace_prov: &InterBtcParachain,
     amount: u128,
     griefing_collateral: u128,
 ) -> Result<(), Error> {
@@ -23,7 +23,7 @@ pub async fn request_replace(
 }
 
 pub async fn accept_replace(
-    replace_prov: &PolkaBtcProvider,
+    replace_prov: &InterBtcParachain,
     btc_rpc: &BitcoinCore,
     old_vault: AccountId,
     amount_btc: u128,
@@ -38,7 +38,7 @@ pub async fn accept_replace(
 }
 
 pub async fn execute_replace(
-    replace_prov: &PolkaBtcProvider,
+    replace_prov: &InterBtcParachain,
     btc_rpc: &BitcoinCore,
     replace_id: H256,
 ) -> Result<(), Error> {
@@ -66,7 +66,7 @@ pub async fn execute_replace(
 }
 
 /// Set replace period
-pub async fn set_replace_period(replace_prov: &PolkaBtcProvider, period: u32) -> Result<(), Error> {
+pub async fn set_replace_period(replace_prov: &InterBtcParachain, period: u32) -> Result<(), Error> {
     replace_prov.set_replace_period(period).await?;
 
     info!("Set the replace period to {:?}", period,);

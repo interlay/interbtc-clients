@@ -5,7 +5,7 @@ use clap::Clap;
 use futures::executor::block_on;
 use git_version::git_version;
 use runtime::{
-    cli::parse_duration_ms, pallets::sla::UpdateRelayerSLAEvent, PolkaBtcProvider, PolkaBtcRuntime, UtilFuncs,
+    cli::parse_duration_ms, pallets::sla::UpdateRelayerSLAEvent, InterBtcParachain, InterBtcRuntime, UtilFuncs,
     VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
@@ -51,7 +51,7 @@ pub struct RelayerServiceConfig {
 }
 
 pub struct RelayerService {
-    btc_parachain: PolkaBtcProvider,
+    btc_parachain: InterBtcParachain,
     bitcoin_core: BitcoinCore,
     config: RelayerServiceConfig,
     shutdown: ShutdownSender,
@@ -63,7 +63,7 @@ impl Service<RelayerServiceConfig> for RelayerService {
     const VERSION: &'static str = VERSION;
 
     fn new_service(
-        btc_parachain: PolkaBtcProvider,
+        btc_parachain: InterBtcParachain,
         bitcoin_core: BitcoinCore,
         config: RelayerServiceConfig,
         shutdown: ShutdownSender,
@@ -83,7 +83,7 @@ impl Service<RelayerServiceConfig> for RelayerService {
 
 impl RelayerService {
     fn new(
-        btc_parachain: PolkaBtcProvider,
+        btc_parachain: InterBtcParachain,
         bitcoin_core: BitcoinCore,
         config: RelayerServiceConfig,
         shutdown: ShutdownSender,
@@ -155,7 +155,7 @@ impl RelayerService {
         let sla_listener = wait_or_shutdown(self.shutdown.clone(), async move {
             let relayer_id = sla_provider.get_account_id();
             sla_provider
-                .on_event::<UpdateRelayerSLAEvent<PolkaBtcRuntime>, _, _, _>(
+                .on_event::<UpdateRelayerSLAEvent<InterBtcRuntime>, _, _, _>(
                     |event| async move {
                         if &event.relayer_id == relayer_id {
                             tracing::info!("Received event: new total SLA score = {:?}", event.new_sla);
@@ -171,7 +171,7 @@ impl RelayerService {
             self.shutdown.clone(),
             run_relayer(Runner::new(
                 BitcoinClient::new(bitcoin_core.clone()),
-                PolkaBtcClient::new(self.btc_parachain.clone()),
+                InterBtcClient::new(self.btc_parachain.clone()),
                 Config {
                     start_height: self.config.bitcoin_relay_start_height,
                     max_batch_size: self.config.max_batch_size,

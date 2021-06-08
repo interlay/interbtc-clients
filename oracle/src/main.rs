@@ -5,8 +5,8 @@ use error::Error;
 use git_version::git_version;
 use log::{error, info};
 use runtime::{
-    substrate_subxt::PairSigner, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, PolkaBtcProvider,
-    PolkaBtcRuntime,
+    substrate_subxt::PairSigner, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, InterBtcParachain,
+    InterBtcRuntime,
 };
 use std::{collections::HashMap, time::Duration};
 use tokio::time::delay_for;
@@ -70,7 +70,7 @@ async fn main() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
-    let signer = PairSigner::<PolkaBtcRuntime, _>::new(key_pair);
+    let signer = PairSigner::<InterBtcRuntime, _>::new(key_pair);
 
     let timeout = Duration::from_millis(opts.timeout_ms);
     let exchange_rate =
@@ -99,7 +99,7 @@ async fn main() -> Result<(), Error> {
             chrono::offset::Local::now()
         );
 
-        let result = PolkaBtcProvider::from_url_with_retry(
+        let result = InterBtcParachain::from_url_with_retry(
             &opts.btc_parachain_url.clone(),
             signer.clone(),
             Duration::from_millis(opts.connection_timeout_ms),

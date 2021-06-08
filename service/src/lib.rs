@@ -3,7 +3,7 @@ use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCore};
 use futures::{future::Either, Future, FutureExt};
 use runtime::{
     cli::ConnectionOpts as ParachainConfig, substrate_subxt::Signer, Error as RuntimeError,
-    PolkaBtcProvider as BtcParachain, PolkaBtcSigner,
+    InterBtcParachain as BtcParachain, InterBtcSigner,
 };
 use sp_core::crypto::Ss58Codec;
 use std::marker::PhantomData;
@@ -36,7 +36,7 @@ pub trait Service<Config> {
 }
 
 pub struct ConnectionManager<Config: Clone, S: Service<Config>> {
-    signer: PolkaBtcSigner,
+    signer: InterBtcSigner,
     wallet_name: Option<String>,
     bitcoin_config: BitcoinConfig,
     parachain_config: ParachainConfig,
@@ -47,7 +47,7 @@ pub struct ConnectionManager<Config: Clone, S: Service<Config>> {
 
 impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Config, S> {
     pub fn new(
-        signer: PolkaBtcSigner,
+        signer: InterBtcSigner,
         wallet_name: Option<String>,
         bitcoin_config: BitcoinConfig,
         parachain_config: ParachainConfig,
