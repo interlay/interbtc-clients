@@ -68,15 +68,24 @@ pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send +
     bitcoin_core: &B,
     btc_parachain: &InterBtcParachain,
 ) -> Result<(), Error> {
-    for (issue_id, request) in btc_parachain
+    let issue_requests = btc_parachain
         .get_vault_issue_requests(btc_parachain.get_account_id().clone())
-        .await?
-        .into_iter()
-    {
+        .await?;
+
+    let btc_start_height = match issue_requests.iter().map(|(_, request)| request.btc_height).min() {
+        Some(x) => x as usize,
+        None => return Ok(()), // the iterator is empty so we have nothing to do
+    };
+
+    for (issue_id, request) in issue_requests.into_iter() {
         if let Err(e) = add_new_deposit_key(bitcoin_core, issue_id, request.btc_public_key).await {
             tracing::error!("Failed to add deposit key #{}: {}", issue_id, e.to_string());
         }
     }
+
+    tracing::info!("Rescanning bitcoin chain from height {}...", btc_start_height);
+    bitcoin_core.rescan_blockchain(btc_start_height).await?;
+
     Ok(())
 }
 
