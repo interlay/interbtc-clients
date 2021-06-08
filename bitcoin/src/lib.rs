@@ -126,6 +126,8 @@ pub trait BitcoinCoreApi {
         P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
 
     async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error>;
+
+    async fn rescan_blockchain(&self, start_height: usize) -> Result<(), Error>;
 }
 
 pub struct LockedTransaction {
@@ -660,6 +662,11 @@ impl BitcoinCoreApi for BitcoinCore {
     async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error> {
         self.with_wallet(|| async { Ok(self.rpc.import_private_key(&privkey, None, None)?) })
             .await
+    }
+
+    async fn rescan_blockchain(&self, start_height: usize) -> Result<(), Error> {
+        self.rpc.rescan_blockchain(Some(start_height), None)?;
+        Ok(())
     }
 }
 

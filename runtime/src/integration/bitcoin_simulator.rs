@@ -428,4 +428,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
     async fn import_private_key(&self, _privkey: PrivateKey) -> Result<(), BitcoinError> {
         Ok(())
     }
+    async fn rescan_blockchain(&self, start_height: usize) -> Result<(), BitcoinError> {
+        Ok(())
+    }
 }
