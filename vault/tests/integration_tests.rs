@@ -49,7 +49,7 @@ async fn test_redeem_succeeds() {
     assert_issue(&user_provider, &btc_rpc, vault_provider.get_account_id(), issue_amount).await;
 
     test_service(
-        vault::service::listen_for_redeem_requests(vault_provider.clone(), btc_rpc, 0),
+        vault::service::listen_for_redeem_requests(vault_provider.clone(), btc_rpc, 0, Duration::from_secs(0)),
         async {
             let address = BtcAddress::P2PKH(H160::from_slice(&[2; 20]));
             let vault_id = vault_provider.clone().get_account_id().clone();
@@ -110,7 +110,12 @@ async fn test_replace_succeeds() {
                 replace_event_tx.clone(),
                 true,
             ),
-            vault::service::listen_for_accept_replace(old_vault_provider.clone(), btc_rpc.clone(), 0),
+            vault::service::listen_for_accept_replace(
+                old_vault_provider.clone(),
+                btc_rpc.clone(),
+                0,
+                Duration::from_secs(0),
+            ),
         ),
         async {
             old_vault_provider.request_replace(issue_amount, 1000000).await.unwrap();
@@ -626,7 +631,8 @@ async fn test_execute_open_requests_succeeds() {
     btc_rpc.send_to_mempool(transaction).await;
 
     join3(
-        vault::service::execute_open_requests(vault_provider, btc_rpc.clone(), 0).map(Result::unwrap),
+        vault::service::execute_open_requests(vault_provider, btc_rpc.clone(), 0, Duration::from_secs(0))
+            .map(Result::unwrap),
         assert_redeem_event(TIMEOUT, user_provider.clone(), redeem_ids[0]),
         assert_redeem_event(TIMEOUT, user_provider.clone(), redeem_ids[2]),
     )

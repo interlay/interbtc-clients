@@ -6,6 +6,7 @@ use runtime::{
     CollateralBalancesPallet, InterBtcParachain, InterBtcRuntime, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use service::Error as ServiceError;
+use std::time::Duration;
 
 /// Listen for AcceptReplaceEvent directed at this vault and continue the replacement
 /// procedure by transferring bitcoin and calling execute_replace
@@ -19,6 +20,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
     parachain_rpc: InterBtcParachain,
     btc_rpc: B,
     num_confirmations: u32,
+    payment_margin: Duration,
 ) -> Result<(), ServiceError> {
     let parachain_rpc = &parachain_rpc;
     let btc_rpc = &btc_rpc;
@@ -43,6 +45,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                         let request = Request::from_replace_request(
                             event.replace_id,
                             parachain_rpc.get_replace_request(event.replace_id).await?,
+                            payment_margin,
                         )?;
                         request.pay_and_execute(parachain_rpc, btc_rpc, num_confirmations).await
                     }

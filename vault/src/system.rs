@@ -11,7 +11,7 @@ use futures::{
 };
 use git_version::git_version;
 use runtime::{
-    cli::parse_duration_ms,
+    cli::{parse_duration_minutes, parse_duration_ms},
     pallets::{security::UpdateActiveBlockEvent, sla::UpdateVaultSLAEvent},
     AccountId, BlockNumber, BtcRelayPallet, Error as RuntimeError, InterBtcParachain, InterBtcRuntime, UtilFuncs,
     VaultRegistryPallet,
@@ -69,6 +69,10 @@ pub struct VaultServiceConfig {
     /// parachain settings will be used (recommended).
     #[clap(long)]
     pub btc_confirmations: Option<u32>,
+
+    /// Minimum time to the the redeem/replace execution deadline to make the bitcoin payment.
+    #[clap(long, parse(try_from_str = parse_duration_minutes), default_value = "120")]
+    pub payment_margin_minutes: Duration,
 }
 
 async fn active_block_listener(
@@ -175,8 +179,12 @@ impl VaultService {
 
         issue::add_keys_from_past_issue_request(&bitcoin_core, &self.btc_parachain).await?;
 
-        let open_request_executor =
-            execute_open_requests(self.btc_parachain.clone(), bitcoin_core.clone(), num_confirmations);
+        let open_request_executor = execute_open_requests(
+            self.btc_parachain.clone(),
+            bitcoin_core.clone(),
+            num_confirmations,
+            self.config.payment_margin_minutes,
+        );
         tokio::spawn(async move {
             tracing::info!("Checking for open requests...");
             match open_request_executor.await {
@@ -278,7 +286,12 @@ impl VaultService {
 
         let accept_replace_listener = wait_or_shutdown(
             self.shutdown.clone(),
-            listen_for_accept_replace(self.btc_parachain.clone(), bitcoin_core.clone(), num_confirmations),
+            listen_for_accept_replace(
+                self.btc_parachain.clone(),
+                bitcoin_core.clone(),
+                num_confirmations,
+                self.config.payment_margin_minutes,
+            ),
         );
 
         let execute_replace_listener = wait_or_shutdown(
@@ -304,7 +317,12 @@ impl VaultService {
         // redeem handling
         let redeem_listener = wait_or_shutdown(
             self.shutdown.clone(),
-            listen_for_redeem_requests(self.btc_parachain.clone(), bitcoin_core.clone(), num_confirmations),
+            listen_for_redeem_requests(
+                self.btc_parachain.clone(),
+                bitcoin_core.clone(),
+                num_confirmations,
+                self.config.payment_margin_minutes,
+            ),
         );
 
         // refund handling

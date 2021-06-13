@@ -7,15 +7,15 @@ use runtime::{
     ReplacePallet, ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H256;
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, convert::TryInto, time::Duration};
 use tokio::time::delay_for;
-
 const ON_FORK_RETRY_DELAY: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone)]
 pub struct Request {
     hash: H256,
     btc_height: Option<u32>,
+    /// Deadline (unit: active block number) after which payments will no longer be attempted.
     deadline: Option<u32>,
     amount: u128,
     btc_address: BtcAddress,
@@ -30,16 +30,34 @@ pub enum RequestType {
 }
 
 impl Request {
+    fn duration_to_blocks(duration: Duration) -> Result<u32, Error> {
+        let num_blocks = duration.as_millis() / (runtime::MILLISECS_PER_BLOCK as u128);
+        Ok(num_blocks.try_into()?)
+    }
+
+    fn calculate_deadline(opentime: u32, period: u32, payment_margin: Duration) -> Result<u32, Error> {
+        // if margin > period, we allow deadline to be before opentime. The rest of the code
+        // can deal with the expired deadline as normal.
+        opentime
+            .checked_add(period)
+            .ok_or(Error::ArithmeticOverflow)?
+            .checked_sub(Self::duration_to_blocks(payment_margin)?)
+            .ok_or(Error::ArithmeticUnderflow)
+    }
+
     /// Constructs a Request for the given InterBtcRedeemRequest
-    pub fn from_redeem_request(hash: H256, request: InterBtcRedeemRequest) -> Result<Request, Error> {
+    pub fn from_redeem_request(
+        hash: H256,
+        request: InterBtcRedeemRequest,
+        payment_margin: Duration,
+    ) -> Result<Request, Error> {
         Ok(Request {
             hash,
-            deadline: Some(
-                request
-                    .opentime
-                    .checked_add(request.period)
-                    .ok_or(Error::ArithmeticOverflow)?,
-            ),
+            deadline: Some(Self::calculate_deadline(
+                request.opentime,
+                request.period,
+                payment_margin,
+            )?),
             btc_height: Some(request.btc_height),
             amount: request.amount_btc,
             btc_address: request.btc_address,
@@ -48,15 +66,18 @@ impl Request {
     }
 
     /// Constructs a Request for the given InterBtcReplaceRequest
-    pub fn from_replace_request(hash: H256, request: InterBtcReplaceRequest) -> Result<Request, Error> {
+    pub fn from_replace_request(
+        hash: H256,
+        request: InterBtcReplaceRequest,
+        payment_margin: Duration,
+    ) -> Result<Request, Error> {
         Ok(Request {
             hash,
-            deadline: Some(
-                request
-                    .accept_time
-                    .checked_add(request.period)
-                    .ok_or(Error::ArithmeticOverflow)?,
-            ),
+            deadline: Some(Self::calculate_deadline(
+                request.accept_time,
+                request.period,
+                payment_margin,
+            )?),
             btc_height: Some(request.btc_height),
             amount: request.amount,
             btc_address: request.btc_address,
@@ -233,6 +254,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
     parachain_rpc: InterBtcParachain,
     btc_rpc: B,
     num_confirmations: u32,
+    payment_margin: Duration,
 ) -> Result<(), Error> {
     let vault_id = parachain_rpc.get_account_id().clone();
 
@@ -246,12 +268,12 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
     let open_redeems = redeem_requests
         .into_iter()
         .filter(|(_, request)| request.status == RedeemRequestStatus::Pending)
-        .filter_map(|(hash, request)| Request::from_redeem_request(hash, request).ok());
+        .filter_map(|(hash, request)| Request::from_redeem_request(hash, request, payment_margin).ok());
 
     let open_replaces = replace_requests
         .into_iter()
         .filter(|(_, request)| request.status == ReplaceRequestStatus::Pending)
-        .filter_map(|(hash, request)| Request::from_replace_request(hash, request).ok());
+        .filter_map(|(hash, request)| Request::from_replace_request(hash, request, payment_margin).ok());
 
     let open_refunds = refund_requests
         .into_iter()
@@ -409,7 +431,7 @@ mod tests {
             }
         };
         ( $x:expr, $y:expr $(,)? ) => {
-            assert_eq!($x, Ok($y));
+            assert_eq!($x.unwrap(), $y);
         };
     }
 
@@ -615,6 +637,35 @@ mod tests {
                 _ => panic!("expected: Err($err)"),
             }
         }};
+    }
+
+    #[test]
+    fn calculate_deadline_behavior() {
+        assert_ok!(
+            Request::calculate_deadline(100, 50, Duration::from_millis(runtime::MILLISECS_PER_BLOCK)),
+            149
+        );
+        assert_ok!(
+            Request::calculate_deadline(100, 50, 25 * Duration::from_millis(runtime::MILLISECS_PER_BLOCK)),
+            125
+        );
+        assert_ok!(
+            Request::calculate_deadline(100, 50, 50 * Duration::from_millis(runtime::MILLISECS_PER_BLOCK)),
+            100
+        );
+
+        // if margin > period, deadline will be before opentime. The rest of the code will deal with the expired
+        // deadline as normal.
+        assert_ok!(
+            Request::calculate_deadline(100, 50, 60 * Duration::from_millis(runtime::MILLISECS_PER_BLOCK)),
+            90
+        );
+
+        // if margin > period + opentime, the result would be negative, so we expect an error.
+        assert_err!(
+            Request::calculate_deadline(100, 50, 175 * Duration::from_millis(runtime::MILLISECS_PER_BLOCK)),
+            Error::ArithmeticUnderflow
+        );
     }
 
     #[tokio::test]
