@@ -22,6 +22,8 @@ pub enum Error {
     ArithmeticOverflow,
     #[error("Mathematical operation caused an underflow")]
     ArithmeticUnderflow,
+    #[error(transparent)]
+    TryIntoIntError(#[from] std::num::TryFromIntError),
     #[error("Deadline has expired")]
     DeadlineExpired,
 

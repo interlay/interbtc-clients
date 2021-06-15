@@ -2,6 +2,7 @@ use crate::execution::*;
 use bitcoin::BitcoinCoreApi;
 use runtime::{pallets::redeem::RequestRedeemEvent, InterBtcParachain, InterBtcRuntime, RedeemPallet, UtilFuncs};
 use service::Error as ServiceError;
+use std::time::Duration;
 
 /// Listen for RequestRedeemEvent directed at this vault; upon reception, transfer
 /// bitcoin and call execute_redeem
@@ -16,6 +17,7 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
     parachain_rpc: InterBtcParachain,
     btc_rpc: B,
     num_confirmations: u32,
+    payment_margin: Duration,
 ) -> Result<(), ServiceError> {
     parachain_rpc
         .on_event::<RequestRedeemEvent<InterBtcRuntime>, _, _, _>(
@@ -37,6 +39,7 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                         let request = Request::from_redeem_request(
                             event.redeem_id,
                             parachain_rpc.get_redeem_request(event.redeem_id).await?,
+                            payment_margin,
                         )?;
                         request.pay_and_execute(parachain_rpc, btc_rpc, num_confirmations).await
                     }

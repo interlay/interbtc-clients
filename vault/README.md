@@ -124,6 +124,9 @@ OPTIONS:
         --network <network>
             Bitcoin network type for address encoding [default: regtest]
 
+        --payment-margin-minutes <payment-margin-minutes>
+            Minimum time to the the redeem/replace execution deadline to make the bitcoin payment. [default: 120]
+
         --btc-parachain-connection-timeout-ms <btc-parachain-connection-timeout-ms>
             Timeout in milliseconds to wait for connection to btc-parachain [default: 60000]
 

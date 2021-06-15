@@ -58,6 +58,10 @@ pub fn parse_duration_ms(src: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(src.parse::<u64>()?))
 }
 
+pub fn parse_duration_minutes(src: &str) -> Result<Duration, ParseIntError> {
+    Ok(Duration::from_secs(src.parse::<u64>()? * 60))
+}
+
 #[derive(Clap, Debug, Clone)]
 pub struct ConnectionOpts {
     /// Parachain websocket URL.
