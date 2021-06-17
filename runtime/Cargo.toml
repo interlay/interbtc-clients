@@ -37,8 +37,8 @@ sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkad
 frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.1" }
 
 # Subxt dependencies
-substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "a55b3a7" }
-substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "a55b3a7" }
+substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "28afc106c98b4950fc83018e8339ad36bdd56cf6" }
+substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "28afc106c98b4950fc83018e8339ad36bdd56cf6" }
 
 jsonrpsee-types = "=0.2.0-alpha.6"
 jsonrpsee-ws-client = "=0.2.0-alpha.6"
@@ -48,7 +48,7 @@ xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.1
 parachain = { package = "polkadot-parachain", git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.1" }
 
 # Dependencies for the testing utils for integration tests
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "a55b3a7", optional = true }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "28afc106c98b4950fc83018e8339ad36bdd56cf6", optional = true }
 tempdir = {version = "0.3.7", optional = true }
 btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "master", features = ["aura-grandpa"], optional = true }
 btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "master", features = ["aura-grandpa"], optional = true }
@@ -111,7 +111,7 @@ branch = "master"
 package = "exchange-rate-oracle"
 
 [dev-dependencies]
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "a55b3a7" }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "28afc106c98b4950fc83018e8339ad36bdd56cf6" }
 btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "master", features = ["aura-grandpa"] }
 btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "master", features = ["aura-grandpa"] }
 tempdir = "0.3.7"
