@@ -1,17 +1,17 @@
 #![cfg(test)]
 
-use crate::integration::*;
-
 use super::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, ExchangeRateOraclePallet, FixedPointNumber,
     FixedU128, ReplacePallet, SecurityPallet, StakedRelayerPallet, StatusCode, VaultRegistryPallet,
 };
+use crate::{exchange_rate_oracle::SetExchangeRateEvent, integration::*, InterBtcRuntime};
 use module_bitcoin::{
     formatter::TryFormattable,
     types::{BlockBuilder, RawBlockHeader},
 };
 use sp_core::{H160, U256};
 use sp_keyring::AccountKeyring;
+use std::time::Duration;
 
 fn dummy_public_key() -> BtcPublicKey {
     BtcPublicKey([
@@ -63,6 +63,30 @@ async fn test_outdated_nonce_matching() {
     let err = parachain_rpc.get_outdated_nonce_error().await;
     log::error!("Error: {:?}", err);
     assert!(err.is_outdated_nonce())
+}
+
+#[tokio::test]
+async fn test_subxt_processing_events_after_dispatch_error() {
+    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+    let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
+
+    let oracle_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    let invalid_oracle = setup_provider(client, AccountKeyring::Dave).await;
+
+    let event_listener = crate::integration::assert_event::<SetExchangeRateEvent<InterBtcRuntime>, _>(
+        Duration::from_secs(30),
+        parachain_rpc.clone(),
+        |_| true,
+    );
+    let result = tokio::join!(
+        event_listener,
+        invalid_oracle.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128)),
+        oracle_provider.set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
+    );
+
+    // ensure first set_exchange_rate_info failed and second succeeded.
+    result.1.unwrap_err();
+    result.2.unwrap();
 }
 
 #[tokio::test]
