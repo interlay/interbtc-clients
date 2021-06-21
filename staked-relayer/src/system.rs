@@ -1,4 +1,4 @@
-use crate::{relay::*, service::*, Error, Vaults};
+use crate::{relay::run_relayer, service::*, Error, Vaults};
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
@@ -170,8 +170,8 @@ impl RelayerService {
         let relayer = wait_or_shutdown(
             self.shutdown.clone(),
             run_relayer(Runner::new(
-                BitcoinClient::new(bitcoin_core.clone()),
-                InterBtcClient::new(self.btc_parachain.clone()),
+                bitcoin_core.clone(),
+                self.btc_parachain.clone(),
                 Config {
                     start_height: self.config.bitcoin_relay_start_height,
                     max_batch_size: self.config.max_batch_size,
