@@ -1,4 +1,3 @@
-mod core;
 mod error;
 mod faucet;
 mod vault;
@@ -11,8 +10,8 @@ pub use vault::Vaults;
 
 pub mod service {
     pub use crate::{
-        core::{Config, Runner},
         faucet::connect_and_fund,
+        relay::{Config, Runner},
         vault::{listen_for_vaults_registered, listen_for_wallet_updates, report_vault_thefts},
     };
 }

@@ -1,53 +1,50 @@
 use super::Error;
-use crate::core::{Backing, Error as CoreError};
 use async_trait::async_trait;
-use bitcoin::serialize;
-pub use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use bitcoin::{serialize, BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
 
-pub struct Client {
-    bitcoin_core: BitcoinCore,
-}
+#[async_trait]
+pub trait Backing {
+    /// Returns the height of the longest chain
+    async fn get_block_count(&self) -> Result<u32, Error>;
 
-impl Client {
-    pub fn new(bitcoin_core: BitcoinCore) -> Self {
-        Client { bitcoin_core }
-    }
+    /// Returns the raw header of a block in storage
+    ///
+    /// # Arguments
+    ///
+    /// * `height` - The height of the block to fetch
+    async fn get_block_header(&self, height: u32) -> Result<Option<Vec<u8>>, Error>;
+
+    /// Returns the (little endian) hash of a block
+    ///
+    /// # Arguments
+    ///
+    /// * `height` - The height of the block to fetch
+    async fn get_block_hash(&self, height: u32) -> Result<Vec<u8>, Error>;
 }
 
 #[async_trait]
-impl Backing<Error> for Client {
-    async fn get_block_count(&self) -> Result<u32, CoreError<Error>> {
-        let count = self
-            .bitcoin_core
-            .get_block_count()
-            .await
-            .map_err(|e| CoreError::Backing(Error::BitcoinError(e)))?;
+impl Backing for BitcoinCore {
+    async fn get_block_count(&self) -> Result<u32, Error> {
+        let count = BitcoinCoreApi::get_block_count(self).await?;
         return Ok(count as u32);
     }
 
-    async fn get_block_header(&self, height: u32) -> Result<Option<Vec<u8>>, CoreError<Error>> {
-        let block_hash = match self.bitcoin_core.get_block_hash(height).await {
+    async fn get_block_header(&self, height: u32) -> Result<Option<Vec<u8>>, Error> {
+        let block_hash = match BitcoinCoreApi::get_block_hash(self, height).await {
             Ok(h) => h,
-            Err(err) if err.is_invalid_parameter() => {
+            Err(BitcoinError::InvalidBitcoinHeight) => {
                 return Ok(None);
             }
-            Err(err) => return Err(CoreError::Backing(err.into())),
+            Err(err) => return Err(err.into()),
         };
-        let block_header = self
-            .bitcoin_core
-            .get_block_header(&block_hash)
-            .await
-            .map_err(|e| CoreError::Backing(Error::BitcoinError(e)))?;
+        let block_header = BitcoinCoreApi::get_block_header(self, &block_hash).await?;
         Ok(Some(serialize(&block_header)))
     }
 
-    async fn get_block_hash(&self, height: u32) -> Result<Vec<u8>, CoreError<Error>> {
-        let block_hash = self
-            .bitcoin_core
-            .get_block_hash(height)
+    async fn get_block_hash(&self, height: u32) -> Result<Vec<u8>, Error> {
+        let block_hash = BitcoinCoreApi::get_block_hash(self, height)
             .await
-            .map(|hash| serialize(&hash))
-            .map_err(|e| CoreError::Backing(Error::BitcoinError(e)))?;
+            .map(|hash| serialize(&hash))?;
         Ok(block_hash)
     }
 }

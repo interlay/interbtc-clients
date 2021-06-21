@@ -1,4 +1,4 @@
-use crate::{core::Error as CoreError, relay::Error as RelayError};
+use crate::relay::Error as RelayError;
 use bitcoin::{BitcoinError as BitcoinCoreError, Error as BitcoinError};
 use jsonrpc_core_client::RpcError;
 use runtime::{substrate_subxt::Error as SubxtError, Error as RuntimeError};
@@ -15,8 +15,6 @@ pub enum Error {
     RelayError(#[from] RelayError),
     #[error("SubxtError: {0}")]
     SubxtError(#[from] SubxtError),
-    #[error("CoreError: {0}")]
-    CoreError(#[from] CoreError<RelayError>),
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
     #[error("BitcoinCoreError: {0}")]
