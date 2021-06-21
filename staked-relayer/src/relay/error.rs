@@ -1,7 +1,9 @@
 use bitcoin::Error as BitcoinError;
 use runtime::Error as InterBtcError;
-use std::mem::discriminant;
 use thiserror::Error;
+
+#[cfg(test)]
+use std::mem::discriminant;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -26,6 +28,7 @@ pub enum Error {
     InterBtcError(#[from] InterBtcError),
 }
 
+#[cfg(test)]
 impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {
         discriminant(self) == discriminant(other)
