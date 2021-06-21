@@ -1,6 +1,4 @@
 pub mod btc_relay;
-pub mod collateral_balances;
-pub mod collateral_currency;
 pub mod exchange_rate_oracle;
 pub mod fee;
 pub mod frame_system;
@@ -12,10 +10,9 @@ pub mod security;
 pub mod sla;
 pub mod staked_relayers;
 pub mod timestamp;
+pub mod tokens;
 pub mod utility;
 pub mod vault_registry;
-pub mod wrapped_balances;
-pub mod wrapped_currency;
 
 pub use module_bitcoin::{formatter::Formattable, types::*};
 pub use module_btc_relay::{BtcAddress, BtcPublicKey, RichBlockHeader, MAIN_CHAIN_ID};

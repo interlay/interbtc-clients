@@ -98,7 +98,7 @@ pub struct LiquidateVaultEvent<T: VaultRegistry> {
     pub to_be_issued_tokens: T::BTCBalance,
     pub to_be_redeemed_tokens: T::BTCBalance,
     pub to_be_replaced_tokens: T::BTCBalance,
-    pub collateral_collateral: T::Collateral,
+    pub backing_collateral: T::Collateral,
     pub status: VaultStatus,
     pub replace_collateral: T::Collateral,
 }

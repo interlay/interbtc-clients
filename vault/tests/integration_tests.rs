@@ -9,8 +9,7 @@ use futures::{
 use runtime::{
     integration::*,
     pallets::{
-        issue::*, redeem::*, refund::*, replace::*, security::UpdateActiveBlockEvent, vault_registry::*,
-        wrapped_currency::*,
+        issue::*, redeem::*, refund::*, replace::*, security::UpdateActiveBlockEvent, tokens::*, vault_registry::*,
     },
     BlockNumber, BtcAddress, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRuntime,
     IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
@@ -500,7 +499,7 @@ async fn test_issue_overpayment_succeeds() {
             .unwrap();
 
         join(
-            assert_event::<MintEvent<InterBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |x| {
+            assert_event::<EndowedEvent<InterBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |x| {
                 if &x.account_id == user_provider.get_account_id() {
                     assert_eq!(x.amount, issue.amount_btc * over_payment_factor);
                     true

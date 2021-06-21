@@ -26,6 +26,8 @@ pub use sp_runtime;
 pub use substrate_subxt;
 pub use types::*;
 
+use codec::{Encode, Decode};
+use serde::{Deserialize, Serialize};
 use sp_runtime::{
     generic::Header,
     traits::{BlakeTwo256, IdentifyAccount, Verify},
@@ -131,17 +133,16 @@ impl timestamp::Timestamp for InterBtcRuntime {
 
 impl exchange_rate_oracle::ExchangeRateOracle for InterBtcRuntime {}
 
-impl collateral_balances::Collateral for InterBtcRuntime {
-    type Balance = Balance;
+#[derive(Encode, Decode, Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Copy, Serialize, Deserialize)]
+pub enum CurrencyId {
+    DOT,
+    INTERBTC,
 }
 
-impl collateral_currency::CollateralCurrency for InterBtcRuntime {}
-
-impl wrapped_balances::Wrapped for InterBtcRuntime {
+impl tokens::Tokens for InterBtcRuntime {
+    type CurrencyId = CurrencyId;
     type Balance = Balance;
 }
-
-impl wrapped_currency::WrappedCurrency for InterBtcRuntime {}
 
 impl issue::Issue for InterBtcRuntime {}
 

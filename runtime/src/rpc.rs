@@ -17,9 +17,9 @@ use substrate_subxt::{
 use tokio::{sync::RwLock, time::delay_for};
 
 use crate::{
-    btc_relay::*, collateral_balances::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*,
-    refund::*, replace::*, retry::*, security::*, staked_relayers::*, timestamp::*, types::*, utility::*,
-    vault_registry::*, AccountId, BlockNumber, Error, InterBtcRuntime, BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS,
+    btc_relay::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*, refund::*, replace::*,
+    retry::*, security::*, staked_relayers::*, timestamp::*, tokens::*, types::*, utility::*, vault_registry::*,
+    AccountId, BlockNumber, CurrencyId, Error, InterBtcRuntime, BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS,
     STABLE_PARACHAIN_CONFIRMATIONS,
 };
 
@@ -345,7 +345,9 @@ impl CollateralBalancesPallet for InterBtcParachain {
 
     async fn transfer_to(&self, recipient: &AccountId, amount: u128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client.transfer_and_watch(&signer, &recipient, amount).await
+            self.ext_client
+                .transfer_and_watch(&signer, &recipient, CurrencyId::DOT, amount)
+                .await
         })
         .await?;
         Ok(())
