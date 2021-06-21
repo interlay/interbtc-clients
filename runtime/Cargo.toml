@@ -30,15 +30,15 @@ log = "0.4.0"
 url = "2"
 
 # Substrate dependencies
-sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.1" }
-sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.1" }
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.1" }
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.1" }
-frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.1" }
+sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.5" }
+sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.5" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.5" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.5" }
+frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.5" }
 
 # Subxt dependencies
-substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "28afc106c98b4950fc83018e8339ad36bdd56cf6" }
-substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "28afc106c98b4950fc83018e8339ad36bdd56cf6" }
+substrate-subxt-proc-macro = { git = "https://github.com/interlay/substrate-subxt", rev = "ceef243f8700fb2f4ded9461a9d725af1a333aac" }
+substrate-subxt = { git = "https://github.com/interlay/substrate-subxt", rev = "ceef243f8700fb2f4ded9461a9d725af1a333aac" }
 
 jsonrpsee-types = "=0.2.0-alpha.6"
 jsonrpsee-ws-client = "=0.2.0-alpha.6"
@@ -48,71 +48,71 @@ xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.1
 parachain = { package = "polkadot-parachain", git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.1" }
 
 # Dependencies for the testing utils for integration tests
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "28afc106c98b4950fc83018e8339ad36bdd56cf6", optional = true }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "ceef243f8700fb2f4ded9461a9d725af1a333aac", optional = true }
 tempdir = {version = "0.3.7", optional = true }
-btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "master", features = ["aura-grandpa"], optional = true }
-btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "master", features = ["aura-grandpa"], optional = true }
+btc-parachain = { git = "ssh://git@github.com/interlay/interbtc.git", branch = "master", features = ["aura-grandpa"], optional = true }
+btc-parachain-service = { git = "ssh://git@github.com/interlay/interbtc.git", branch = "master", features = ["aura-grandpa"], optional = true }
 bitcoin = { path = "../bitcoin", optional = true }
 rand = { version = "0.7", optional = true }
 
 [dependencies.module-bitcoin]
-git = "https://github.com/interlay/btc-parachain"
+git = "ssh://git@github.com/interlay/interbtc.git"
 branch = "master"
 package = "bitcoin"
 
 [dependencies.module-refund]
-git = "https://github.com/interlay/btc-parachain"
+git = "ssh://git@github.com/interlay/interbtc.git"
 branch = "master"
 package = "refund"
 
 [dependencies.module-btc-relay]
-git = "https://github.com/interlay/btc-parachain"
+git = "ssh://git@github.com/interlay/interbtc.git"
 branch = "master"
 package = "btc-relay"
 
 [dependencies.module-security]
-git = "https://github.com/interlay/btc-parachain"
+git = "ssh://git@github.com/interlay/interbtc.git"
 branch = "master"
 package = "security"
 
 [dependencies.module-staked-relayers]
-git = "https://github.com/interlay/btc-parachain"
+git = "ssh://git@github.com/interlay/interbtc.git"
 branch = "master"
 package = "staked-relayers"
 
 [dependencies.module-vault-registry]
-git = "https://github.com/interlay/btc-parachain"
+git = "ssh://git@github.com/interlay/interbtc.git"
 branch = "master"
 package = "vault-registry"
 
 [dependencies.module-exchange-rate-oracle-rpc-runtime-api]
-git = "https://github.com/interlay/btc-parachain"
+git = "ssh://git@github.com/interlay/interbtc.git"
 branch = "master"
 package = "module-exchange-rate-oracle-rpc-runtime-api"
 
 [dependencies.module-issue]
-git = "https://github.com/interlay/btc-parachain"
+git = "ssh://git@github.com/interlay/interbtc.git"
 branch = "master"
 package = "issue"
 
 [dependencies.module-redeem]
-git = "https://github.com/interlay/btc-parachain"
+git = "ssh://git@github.com/interlay/interbtc.git"
 branch = "master"
 package = "redeem"
 
 [dependencies.module-replace]
-git = "https://github.com/interlay/btc-parachain"
+git = "ssh://git@github.com/interlay/interbtc.git"
 branch = "master"
 package = "replace"
 
 [dependencies.module-exchange-rate-oracle]
-git = "https://github.com/interlay/btc-parachain"
+git = "ssh://git@github.com/interlay/interbtc.git"
 branch = "master"
 package = "exchange-rate-oracle"
 
 [dev-dependencies]
-substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "28afc106c98b4950fc83018e8339ad36bdd56cf6" }
-btc-parachain = { git = "https://github.com/interlay/btc-parachain", branch = "master", features = ["aura-grandpa"] }
-btc-parachain-service = { git = "https://github.com/interlay/btc-parachain", branch = "master", features = ["aura-grandpa"] }
+substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "ceef243f8700fb2f4ded9461a9d725af1a333aac" }
+btc-parachain = { git = "ssh://git@github.com/interlay/interbtc.git", branch = "master", features = ["aura-grandpa"] }
+btc-parachain-service = { git = "ssh://git@github.com/interlay/interbtc.git", branch = "master", features = ["aura-grandpa"] }
 tempdir = "0.3.7"
 env_logger = "0.8.3"

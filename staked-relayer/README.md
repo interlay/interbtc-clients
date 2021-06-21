@@ -3,7 +3,7 @@
 ## Responsibilities
 
 - Receive block headers from [Bitcoin Core](https://github.com/bitcoin/bitcoin)
-- Submit block headers to the [BTC Parachain](https://github.com/interlay/btc-parachain)
+- Submit block headers to the [BTC Parachain](https://github.com/interlay/interbtc)
 - Monitor the BTC addresses of vaults to report BTC thefts
 
 ## Prerequisites
@@ -14,7 +14,7 @@ Download and start [Bitcoin Core](https://bitcoin.org/en/bitcoin-core/):
 bitcoind -regtest -server
 ```
 
-Build and run the [BTC Parachain](https://github.com/interlay/btc-parachain):
+Build and run the [BTC Parachain](https://github.com/interlay/interbtc):
 
 ```
 git clone git@gitlab.com:interlay/btc-parachain.git
