@@ -26,7 +26,7 @@ pub use sp_runtime;
 pub use substrate_subxt;
 pub use types::*;
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
     generic::Header,
@@ -76,6 +76,18 @@ pub type BlockNumber = u32;
 /// Some way of identifying an account on the chain.
 pub type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 
+#[derive(Encode, Decode)]
+pub enum RewardPool {
+    Global,
+    Local(AccountId),
+}
+
+#[derive(Encode, Decode, Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Copy, Serialize, Deserialize)]
+pub enum CurrencyId {
+    DOT,
+    INTERBTC,
+}
+
 // TODO: use types from actual runtime
 impl system::System for InterBtcRuntime {
     type Index = Index;
@@ -107,6 +119,8 @@ impl pallets::Core for InterBtcRuntime {
     type UnsignedFixedPoint = FixedU128;
     type VaultStatus = VaultStatus;
     type RedeemRequestStatus = RedeemRequestStatus;
+    type CurrencyId = CurrencyId;
+    type RewardPool = RewardPool;
 
     // cumulus / polkadot types
     type XcmError = XcmError;
@@ -133,16 +147,7 @@ impl timestamp::Timestamp for InterBtcRuntime {
 
 impl exchange_rate_oracle::ExchangeRateOracle for InterBtcRuntime {}
 
-#[derive(Encode, Decode, Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Copy, Serialize, Deserialize)]
-pub enum CurrencyId {
-    DOT,
-    INTERBTC,
-}
-
-impl tokens::Tokens for InterBtcRuntime {
-    type CurrencyId = CurrencyId;
-    type Balance = Balance;
-}
+impl tokens::Tokens for InterBtcRuntime {}
 
 impl issue::Issue for InterBtcRuntime {}
 

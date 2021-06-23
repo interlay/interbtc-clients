@@ -521,28 +521,10 @@ dependencies = [
 [[package]]
 name = "bitcoin"
 version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
-dependencies = [
- "bitcoin_hashes 0.7.6",
- "frame-support",
- "hex 0.4.3",
- "impl-serde",
- "parity-scale-codec",
- "secp256k1",
- "serde",
- "sha2 0.8.2",
- "sp-core 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
- "sp-std 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
- "spin 0.7.1",
-]
-
-[[package]]
-name = "bitcoin"
-version = "0.7.0"
 dependencies = [
  "async-trait",
  "backoff",
- "bitcoin 0.7.0 (git+ssh://git@github.com/interlay/interbtc.git?branch=master)",
+ "bitcoin 0.8.0",
  "bitcoincore-rpc",
  "clap 3.0.0-beta.2",
  "futures 0.3.15",
@@ -558,6 +540,24 @@ dependencies = [
  "sp-core 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
  "thiserror",
  "tokio 0.2.25",
+]
+
+[[package]]
+name = "bitcoin"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+dependencies = [
+ "bitcoin_hashes 0.7.6",
+ "frame-support",
+ "hex 0.4.3",
+ "impl-serde",
+ "parity-scale-codec",
+ "secp256k1",
+ "serde",
+ "sha2 0.8.2",
+ "sp-core 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
+ "sp-std 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
+ "spin 0.7.1",
 ]
 
 [[package]]
@@ -768,10 +768,10 @@ checksum = "bd769563b4ea2953e2825c9e6b7470a5f55f67e0be00030bf3e390a2a6071f64"
 
 [[package]]
 name = "btc-parachain"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
- "bitcoin 0.7.0 (git+ssh://git@github.com/interlay/interbtc.git?branch=master)",
+ "bitcoin 0.8.0",
  "btc-parachain-rpc",
  "btc-parachain-runtime",
  "btc-parachain-service",
@@ -797,10 +797,10 @@ dependencies = [
 
 [[package]]
 name = "btc-parachain-primitives"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
- "bitcoin 0.7.0 (git+ssh://git@github.com/interlay/interbtc.git?branch=master)",
+ "bitcoin 0.8.0",
  "bstringify",
  "issue",
  "parity-scale-codec",
@@ -815,8 +815,8 @@ dependencies = [
 
 [[package]]
 name = "btc-parachain-rpc"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "btc-parachain-primitives",
  "jsonrpc-core 15.1.0",
@@ -842,8 +842,8 @@ dependencies = [
 
 [[package]]
 name = "btc-parachain-runtime"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "btc-parachain-primitives",
  "btc-relay",
@@ -921,8 +921,8 @@ dependencies = [
 
 [[package]]
 name = "btc-parachain-service"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "btc-parachain-rpc",
  "btc-parachain-runtime",
@@ -967,10 +967,10 @@ dependencies = [
 
 [[package]]
 name = "btc-relay"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
- "bitcoin 0.7.0 (git+ssh://git@github.com/interlay/interbtc.git?branch=master)",
+ "bitcoin 0.8.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -1769,8 +1769,8 @@ dependencies = [
 
 [[package]]
 name = "currency"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -2163,8 +2163,8 @@ checksum = "f7531096570974c3a9dcf9e4b8e1cede1ec26cf5046219fb3b9d897503b9be59"
 
 [[package]]
 name = "exchange-rate-oracle"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -2266,8 +2266,8 @@ dependencies = [
 
 [[package]]
 name = "fee"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "currency",
  "frame-benchmarking",
@@ -3522,10 +3522,10 @@ checksum = "68f2d64f2edebec4ce84ad108148e67e1064789bee435edc5b60ad398714a3a9"
 
 [[package]]
 name = "issue"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
- "bitcoin 0.7.0 (git+ssh://git@github.com/interlay/interbtc.git?branch=master)",
+ "bitcoin 0.8.0",
  "btc-relay",
  "currency",
  "exchange-rate-oracle",
@@ -4889,8 +4889,8 @@ dependencies = [
 
 [[package]]
 name = "module-btc-relay-rpc"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -4904,8 +4904,8 @@ dependencies = [
 
 [[package]]
 name = "module-btc-relay-rpc-runtime-api"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4915,8 +4915,8 @@ dependencies = [
 
 [[package]]
 name = "module-exchange-rate-oracle-rpc"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -4930,8 +4930,8 @@ dependencies = [
 
 [[package]]
 name = "module-exchange-rate-oracle-rpc-runtime-api"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4942,8 +4942,8 @@ dependencies = [
 
 [[package]]
 name = "module-issue-rpc"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -4957,8 +4957,8 @@ dependencies = [
 
 [[package]]
 name = "module-issue-rpc-runtime-api"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4968,8 +4968,8 @@ dependencies = [
 
 [[package]]
 name = "module-redeem-rpc"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -4983,8 +4983,8 @@ dependencies = [
 
 [[package]]
 name = "module-redeem-rpc-runtime-api"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4994,8 +4994,8 @@ dependencies = [
 
 [[package]]
 name = "module-refund-rpc"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -5009,8 +5009,8 @@ dependencies = [
 
 [[package]]
 name = "module-refund-rpc-runtime-api"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -5020,8 +5020,8 @@ dependencies = [
 
 [[package]]
 name = "module-replace-rpc"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -5035,8 +5035,8 @@ dependencies = [
 
 [[package]]
 name = "module-replace-rpc-runtime-api"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -5046,8 +5046,8 @@ dependencies = [
 
 [[package]]
 name = "module-staked-relayers-rpc"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -5061,8 +5061,8 @@ dependencies = [
 
 [[package]]
 name = "module-staked-relayers-rpc-runtime-api"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -5073,7 +5073,7 @@ dependencies = [
 [[package]]
 name = "module-vault-registry-rpc"
 version = "0.3.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -5089,7 +5089,7 @@ dependencies = [
 [[package]]
 name = "module-vault-registry-rpc-runtime-api"
 version = "0.3.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "frame-support",
  "module-exchange-rate-oracle-rpc-runtime-api",
@@ -5273,7 +5273,7 @@ dependencies = [
 [[package]]
 name = "nomination"
 version = "0.5.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "currency",
  "exchange-rate-oracle",
@@ -5541,7 +5541,7 @@ dependencies = [
 [[package]]
 name = "orml-tokens"
 version = "0.4.1-dev"
-source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev=55053241229a8e842dbb717c2bb281daa9fbdf04#55053241229a8e842dbb717c2bb281daa9fbdf04"
+source = "git+https://github.com/interlay/open-runtime-module-library?rev=189dfe2#189dfe2d53917fdbd418cd4cb92ef6f2ad5a6494"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -5556,7 +5556,7 @@ dependencies = [
 [[package]]
 name = "orml-traits"
 version = "0.4.1-dev"
-source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev=55053241229a8e842dbb717c2bb281daa9fbdf04#55053241229a8e842dbb717c2bb281daa9fbdf04"
+source = "git+https://github.com/interlay/open-runtime-module-library?rev=189dfe2#189dfe2d53917fdbd418cd4cb92ef6f2ad5a6494"
 dependencies = [
  "frame-support",
  "impl-trait-for-tuples",
@@ -5573,7 +5573,7 @@ dependencies = [
 [[package]]
 name = "orml-utilities"
 version = "0.4.1-dev"
-source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev=55053241229a8e842dbb717c2bb281daa9fbdf04#55053241229a8e842dbb717c2bb281daa9fbdf04"
+source = "git+https://github.com/interlay/open-runtime-module-library?rev=189dfe2#189dfe2d53917fdbd418cd4cb92ef6f2ad5a6494"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -6191,8 +6191,8 @@ dependencies = [
 
 [[package]]
 name = "parachain-info"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "cumulus-primitives-core",
  "frame-support",
@@ -7421,10 +7421,10 @@ dependencies = [
 
 [[package]]
 name = "redeem"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
- "bitcoin 0.7.0 (git+ssh://git@github.com/interlay/interbtc.git?branch=master)",
+ "bitcoin 0.8.0",
  "btc-relay",
  "currency",
  "exchange-rate-oracle",
@@ -7492,10 +7492,10 @@ dependencies = [
 
 [[package]]
 name = "refund"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
- "bitcoin 0.7.0 (git+ssh://git@github.com/interlay/interbtc.git?branch=master)",
+ "bitcoin 0.8.0",
  "btc-relay",
  "currency",
  "exchange-rate-oracle",
@@ -7576,10 +7576,10 @@ dependencies = [
 
 [[package]]
 name = "replace"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
- "bitcoin 0.7.0 (git+ssh://git@github.com/interlay/interbtc.git?branch=master)",
+ "bitcoin 0.8.0",
  "btc-relay",
  "currency",
  "exchange-rate-oracle",
@@ -7656,7 +7656,7 @@ checksum = "e9c17925a9027d298a4603d286befe3f9dc0e8ed02523141914eb628798d6e5b"
 [[package]]
 name = "reward"
 version = "0.6.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -7722,7 +7722,7 @@ dependencies = [
  "async-trait",
  "backoff",
  "bitcoin 0.7.0",
- "bitcoin 0.7.0 (git+ssh://git@github.com/interlay/interbtc.git?branch=master)",
+ "bitcoin 0.8.0",
  "btc-parachain",
  "btc-parachain-service",
  "btc-relay",
@@ -8881,8 +8881,8 @@ dependencies = [
 
 [[package]]
 name = "security"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -9175,8 +9175,8 @@ dependencies = [
 
 [[package]]
 name = "sla"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -10328,10 +10328,10 @@ dependencies = [
 
 [[package]]
 name = "staked-relayers"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
- "bitcoin 0.7.0 (git+ssh://git@github.com/interlay/interbtc.git?branch=master)",
+ "bitcoin 0.8.0",
  "btc-relay",
  "currency",
  "exchange-rate-oracle",
@@ -11536,10 +11536,10 @@ dependencies = [
 
 [[package]]
 name = "vault-registry"
-version = "0.7.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#0cc3acf131b695cc9c7f22030bd3a57e8769653e"
+version = "0.8.0"
+source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
 dependencies = [
- "bitcoin 0.7.0 (git+ssh://git@github.com/interlay/interbtc.git?branch=master)",
+ "bitcoin 0.8.0",
  "currency",
  "exchange-rate-oracle",
  "fixed-hash",

@@ -27,6 +27,7 @@ pub use module_vault_registry::{Vault, VaultStatus};
 pub use sp_core::{H160, H256, U256};
 
 use codec::{Codec, EncodeLike};
+use frame_support::Parameter;
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::traits::{AtLeast32Bit, Member};
 use substrate_subxt::system::System;
@@ -38,7 +39,7 @@ pub type BitcoinBlockHeight = u32;
 pub trait Core: System {
     type Collateral: Codec + EncodeLike + Member + Default + PartialOrd + Saturating + AtLeast32Bit;
     type Wrapped: Codec + EncodeLike + Member + Default + AtLeast32Bit;
-    type Balance: Codec + EncodeLike + Member + Default;
+    type Balance: Parameter + AtLeast32Bit + Codec + EncodeLike + Member + Default;
     type BTCBalance: Codec + EncodeLike + Member + Default;
     type RichBlockHeader: Codec + EncodeLike + Member + Default;
     type H256Le: Codec + EncodeLike + Member + Default;
@@ -53,6 +54,8 @@ pub trait Core: System {
     type UnsignedFixedPoint: Codec + EncodeLike + Member + Default;
     type VaultStatus: Codec + EncodeLike + Default + Send + Sync;
     type RedeemRequestStatus: Codec + EncodeLike + Default + Send + Sync;
+    type CurrencyId: Codec + EncodeLike + Send + Sync;
+    type RewardPool: Codec + EncodeLike + Send + Sync;
 
     // cumulus / polkadot types
     type XcmError: Codec + EncodeLike + Member;

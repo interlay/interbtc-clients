@@ -501,7 +501,7 @@ async fn test_issue_overpayment_succeeds() {
         join(
             assert_event::<EndowedEvent<InterBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |x| {
                 if &x.account_id == user_provider.get_account_id() {
-                    assert_eq!(x.amount, issue.amount_btc * over_payment_factor);
+                    assert_eq!(x.balance, issue.amount_btc * over_payment_factor);
                     true
                 } else {
                     false

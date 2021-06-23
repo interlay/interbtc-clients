@@ -1,24 +1,12 @@
-use codec::{Codec, Decode, Encode, EncodeLike};
+use super::Core;
+use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use frame_support::Parameter;
-use sp_runtime::traits::{AtLeast32Bit, MaybeSerialize, Member};
 use std::fmt::Debug;
 use substrate_subxt::{balances::AccountData, system::System};
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
 #[module]
-pub trait Tokens: System {
-    type Balance: Parameter
-        + Member
-        + AtLeast32Bit
-        + Codec
-        + Default
-        + Copy
-        + MaybeSerialize
-        + Debug
-        + From<<Self as System>::BlockNumber>;
-    type CurrencyId: Codec + EncodeLike + Send + Sync;
-}
+pub trait Tokens: Core {}
 
 /// The balance of an account.
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
