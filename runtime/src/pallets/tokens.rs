@@ -2,18 +2,27 @@ use super::Core;
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use std::fmt::Debug;
-use substrate_subxt::{balances::AccountData, system::System};
+use substrate_subxt::system::System;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
+
+// https://github.com/open-web3-stack/open-runtime-module-library/blob/bb6ad7a629ac53ed138d30583d36971b3030322d/tokens/src/lib.rs#L117
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Default)]
+pub struct AccountData<Balance> {
+    pub free: Balance,
+    pub reserved: Balance,
+    pub frozen: Balance,
+}
 
 #[module]
 pub trait Tokens: Core {}
 
 /// The balance of an account.
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct AccountStore<T: Tokens> {
+pub struct AccountsStore<T: Tokens> {
     #[store(returns = AccountData<T::Balance>)]
     pub _runtime: PhantomData<T>,
     pub account_id: T::AccountId,
+    pub currency_id: T::CurrencyId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]

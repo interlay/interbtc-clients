@@ -331,7 +331,7 @@ impl CollateralBalancesPallet for InterBtcParachain {
 
     async fn get_free_balance_for_id(&self, id: AccountId) -> Result<<InterBtcRuntime as Core>::Balance, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.account(id.clone(), head).await?.free)
+        Ok(self.ext_client.accounts(id.clone(), CurrencyId::DOT, head).await?.free)
     }
 
     async fn get_reserved_balance(&self) -> Result<<InterBtcRuntime as Core>::Balance, Error> {
@@ -340,7 +340,11 @@ impl CollateralBalancesPallet for InterBtcParachain {
 
     async fn get_reserved_balance_for_id(&self, id: AccountId) -> Result<<InterBtcRuntime as Core>::Balance, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.account(id.clone(), head).await?.reserved)
+        Ok(self
+            .ext_client
+            .accounts(id.clone(), CurrencyId::DOT, head)
+            .await?
+            .reserved)
     }
 
     async fn transfer_to(&self, recipient: &AccountId, amount: u128) -> Result<(), Error> {

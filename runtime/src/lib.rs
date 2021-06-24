@@ -85,6 +85,7 @@ pub enum RewardPool {
 #[derive(Encode, Decode, Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum CurrencyId {
     DOT,
+    KSM,
     INTERBTC,
 }
 
