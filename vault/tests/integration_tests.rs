@@ -11,8 +11,8 @@ use runtime::{
     pallets::{
         issue::*, redeem::*, refund::*, replace::*, security::UpdateActiveBlockEvent, tokens::*, vault_registry::*,
     },
-    BlockNumber, BtcAddress, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRuntime,
-    IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    BlockNumber, BtcAddress, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, InterBtcParachain,
+    InterBtcRedeemRequest, InterBtcRuntime, IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
@@ -616,14 +616,21 @@ async fn test_execute_open_requests_succeeds() {
     .map(|x| x.unwrap())
     .collect::<Vec<_>>();
 
+    let redeems: Vec<InterBtcRedeemRequest> =
+        futures::future::join_all(redeem_ids.iter().map(|id| user_provider.get_redeem_request(id.clone())))
+            .await
+            .into_iter()
+            .map(|x| x.unwrap())
+            .collect::<Vec<_>>();
+
     // send btc for redeem 0
     btc_rpc
-        .send_to_address(address, 10000, Some(redeem_ids[0]), 0)
+        .send_to_address(address, redeems[0].amount_btc as u64, Some(redeem_ids[0]), 0)
         .await
         .unwrap();
 
     let transaction = btc_rpc
-        .create_transaction(address, 10000, Some(redeem_ids[1]))
+        .create_transaction(address, redeems[1].amount_btc as u64, Some(redeem_ids[1]))
         .await
         .unwrap()
         .transaction;
