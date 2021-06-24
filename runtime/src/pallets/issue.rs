@@ -42,8 +42,9 @@ pub struct ExecuteIssueCall<'a, T: Issue> {
 pub struct ExecuteIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,
-    pub total_amount: T::Wrapped,
+    pub executed_amount: T::Wrapped,
     pub vault_id: T::AccountId,
+    pub fee: T::Wrapped,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]

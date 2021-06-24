@@ -34,6 +34,7 @@ pub struct ExecuteRefundEvent<T: Refund> {
     pub refundee: T::AccountId,
     pub vault_id: T::AccountId,
     pub amount: T::Wrapped,
+    pub fee: T::Wrapped,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
