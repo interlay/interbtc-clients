@@ -1,17 +1,15 @@
 image: "registry.gitlab.com/interlay/containers/rust-base:nightly-2021-03-15"
 
-before_script:
-  - 'command -v ssh-agent >/dev/null || ( apt-get update -y && apt-get install openssh-client -y )'
-  - eval $(ssh-agent -s)
-  - echo "$GH_INTERBTC_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-  - mkdir -p ~/.ssh
-  - chmod 700 ~/.ssh
-
 .rust-base-job:
     variables:
         CARGO_HOME: /cargo
         RUSTC_WRAPPER: /usr/local/bin/sccache
     before_script:
+        - 'command -v ssh-agent >/dev/null || ( apt-get update -y && apt-get install openssh-client -y )'
+        - eval $(ssh-agent -s)
+        - echo "$GH_INTERBTC_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+        - mkdir -p ~/.ssh
+        - chmod 700 ~/.ssh
         - rustup show
         - rustc --version
         - rustfmt --version
