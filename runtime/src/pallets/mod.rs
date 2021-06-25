@@ -1,6 +1,4 @@
 pub mod btc_relay;
-pub mod collateral_balances;
-pub mod collateral_currency;
 pub mod exchange_rate_oracle;
 pub mod fee;
 pub mod frame_system;
@@ -12,10 +10,9 @@ pub mod security;
 pub mod sla;
 pub mod staked_relayers;
 pub mod timestamp;
+pub mod tokens;
 pub mod utility;
 pub mod vault_registry;
-pub mod wrapped_balances;
-pub mod wrapped_currency;
 
 pub use module_bitcoin::{formatter::Formattable, types::*};
 pub use module_btc_relay::{BtcAddress, BtcPublicKey, RichBlockHeader, MAIN_CHAIN_ID};
@@ -30,6 +27,7 @@ pub use module_vault_registry::{Vault, VaultStatus};
 pub use sp_core::{H160, H256, U256};
 
 use codec::{Codec, EncodeLike};
+use frame_support::Parameter;
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::traits::{AtLeast32Bit, Member};
 use substrate_subxt::system::System;
@@ -41,7 +39,7 @@ pub type BitcoinBlockHeight = u32;
 pub trait Core: System {
     type Collateral: Codec + EncodeLike + Member + Default + PartialOrd + Saturating + AtLeast32Bit;
     type Wrapped: Codec + EncodeLike + Member + Default + AtLeast32Bit;
-    type Balance: Codec + EncodeLike + Member + Default;
+    type Balance: Parameter + AtLeast32Bit + Codec + EncodeLike + Member + Default;
     type BTCBalance: Codec + EncodeLike + Member + Default;
     type RichBlockHeader: Codec + EncodeLike + Member + Default;
     type H256Le: Codec + EncodeLike + Member + Default;
@@ -56,6 +54,8 @@ pub trait Core: System {
     type UnsignedFixedPoint: Codec + EncodeLike + Member + Default;
     type VaultStatus: Codec + EncodeLike + Default + Send + Sync;
     type RedeemRequestStatus: Codec + EncodeLike + Default + Send + Sync;
+    type CurrencyId: Codec + EncodeLike + Send + Sync;
+    type RewardPool: Codec + EncodeLike + Send + Sync;
 
     // cumulus / polkadot types
     type XcmError: Codec + EncodeLike + Member;

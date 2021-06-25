@@ -41,6 +41,6 @@ pub type InterBtcRefundRequest = RefundRequest<AccountId, <InterBtcRuntime as Co
 pub type InterBtcReplaceRequest =
     ReplaceRequest<AccountId, BlockNumber, <InterBtcRuntime as Core>::Wrapped, <InterBtcRuntime as Core>::Collateral>;
 
-pub type InterBtcRichBlockHeader = RichBlockHeader<AccountId, BlockNumber>;
+pub type InterBtcRichBlockHeader = RichBlockHeader<BlockNumber>;
 
 pub type InterBtcSigner = PairSigner<InterBtcRuntime, KeyPair>;

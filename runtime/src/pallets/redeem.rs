@@ -44,6 +44,7 @@ pub struct ExecuteRedeemEvent<T: Redeem> {
     pub amount: T::Wrapped,
     pub fee: T::Wrapped,
     pub vault_id: T::AccountId,
+    pub transfer_fee_btc: T::Wrapped,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]

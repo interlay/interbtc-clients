@@ -119,7 +119,7 @@ async fn test_btc_relay() {
         .mine(U256::from(2).pow(254.into()))
         .unwrap();
 
-    let mut block_hash = block.header.hash().unwrap();
+    let mut block_hash = block.header.hash;
     let block_header =
         RawBlockHeader::from_bytes(&block.header.try_format().unwrap()).expect("could not serialize block header");
 
@@ -140,7 +140,7 @@ async fn test_btc_relay() {
             .mine(U256::from(2).pow(254.into()))
             .unwrap();
 
-        block_hash = block.header.hash().unwrap();
+        block_hash = block.header.hash;
         let block_header =
             RawBlockHeader::from_bytes(&block.header.try_format().unwrap()).expect("could not serialize block header");
 
