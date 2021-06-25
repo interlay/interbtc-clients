@@ -1,4 +1,4 @@
-def output_files = ['staked-relayer', 'oracle', 'vault', 'faucet', 'testdata-gen']
+def output_files = ['staked-relayer', 'oracle', 'vault', 'faucet']
 
 pipeline {
     agent {

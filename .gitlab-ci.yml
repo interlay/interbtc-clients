@@ -82,7 +82,6 @@ build-clients:
             - target/$PLATFORM/release/staked-relayer${FILE_EXTENSION}
             - target/$PLATFORM/release/oracle${FILE_EXTENSION}
             - target/$PLATFORM/release/vault${FILE_EXTENSION}
-            - target/$PLATFORM/release/testdata-gen${FILE_EXTENSION}
             - target/$PLATFORM/release/faucet${FILE_EXTENSION}
 
 build-docker-images:
@@ -95,7 +94,6 @@ build-docker-images:
                       "oracle",
                       "vault",
                       "faucet",
-                      "testdata-gen",
                   ]
     image:
         name: gcr.io/kaniko-project/executor:debug
