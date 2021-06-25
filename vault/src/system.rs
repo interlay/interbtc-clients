@@ -78,7 +78,7 @@ pub struct VaultServiceConfig {
 
     /// Timeout in milliseconds to poll Bitcoin.
     #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "6000")]
-    pub bitcoin_poll_timeout_ms: Duration,
+    pub bitcoin_poll_interval_ms: Duration,
 
     /// Starting height to relay block headers, if not defined
     /// use the best height as reported by the relay module.
@@ -428,8 +428,8 @@ impl VaultService {
                 Config {
                     start_height: self.config.bitcoin_relay_start_height,
                     max_batch_size: self.config.max_batch_size,
-                    timeout: Some(self.config.bitcoin_poll_timeout_ms),
-                    required_btc_confirmations: self.config.bitcoin_relay_confirmations,
+                    interval: Some(self.config.bitcoin_poll_interval_ms),
+                    btc_confirmations: self.config.bitcoin_relay_confirmations,
                 },
             )),
         );
