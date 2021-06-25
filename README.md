@@ -73,15 +73,6 @@ source .env
 cargo run --bin staked-relayer -- --http-addr '[::0]:3030'
 ```
 
-### Testdata
-
-To interact with the BTC Parachain directly, use the [testdata-gen](./testdata-gen/README.md) client.
-
-```bash
-source .env
-cargo run --bin testdata-gen -- --keyring bob set-exchange-rate --exchange-rate 1
-```
-
 ### Vault
 
 The [Vault](./vault/README.md) client is used to intermediate assets between Bitcoin and the BTC Parachain.

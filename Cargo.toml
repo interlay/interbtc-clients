@@ -3,7 +3,6 @@ members = [
   "oracle",
   "staked-relayer",
   "runtime",
-  "testdata-gen",
   "vault",
   "bitcoin",
   "faucet",
