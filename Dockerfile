@@ -2,7 +2,7 @@
 
 FROM registry.gitlab.com/interlay/containers/rust-base:nightly-2021-01-25 as builder
 ARG PROFILE=release
-ARG PACKAGE=staked-relayer
+ARG PACKAGE=vault
 WORKDIR /app
 
 COPY . /app
@@ -13,7 +13,7 @@ RUN cargo build "--$PROFILE" --package $PACKAGE
 
 FROM bitnami/minideb:buster
 ARG PROFILE=release
-ARG PACKAGE=staked-relayer
+ARG PACKAGE=vault
 
 RUN install_packages libssl-dev
 

@@ -1,7 +1,6 @@
 [workspace]
 members = [
   "oracle",
-  "staked-relayer",
   "runtime",
   "vault",
   "bitcoin",

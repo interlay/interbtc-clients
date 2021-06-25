@@ -1,3 +1,4 @@
+use crate::relay::Error as RelayError;
 use bitcoin::Error as BitcoinError;
 use hex::FromHexError;
 use jsonrpc_core_client::RpcError;
@@ -41,4 +42,6 @@ pub enum Error {
     SubxtError(#[from] SubxtError),
     #[error("CodecError: {0}")]
     CodecError(#[from] CodecError),
+    #[error("RelayError: {0}")]
+    RelayError(#[from] RelayError),
 }

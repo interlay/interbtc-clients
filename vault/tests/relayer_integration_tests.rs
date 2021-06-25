@@ -19,9 +19,9 @@ use runtime::{
 };
 use sp_core::H160;
 use sp_keyring::AccountKeyring;
-use staked_relayer;
 use std::{sync::Arc, time::Duration};
 use tokio::time::timeout;
+use vault;
 
 const TIMEOUT: Duration = Duration::from_secs(45);
 
@@ -57,12 +57,12 @@ async fn test_report_vault_theft_succeeds() {
         .await
         .unwrap();
 
-    let vaults = Arc::new(staked_relayer::Vaults::from(Default::default()));
+    let vaults = Arc::new(vault::Vaults::from(Default::default()));
 
     test_service(
         join(
-            staked_relayer::service::report_vault_thefts(btc_rpc.clone(), relayer_provider.clone(), 0, vaults.clone()),
-            staked_relayer::service::listen_for_wallet_updates(relayer_provider.clone(), vaults.clone()),
+            vault::service::report_vault_thefts(btc_rpc.clone(), relayer_provider.clone(), 0, vaults.clone()),
+            vault::service::listen_for_wallet_updates(relayer_provider.clone(), vaults.clone()),
         ),
         async {
             // Theft detection works by extracting the public address from transaction inputs,

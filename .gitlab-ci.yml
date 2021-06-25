@@ -79,7 +79,6 @@ build-clients:
     artifacts:
         name: "${CI_COMMIT_REF_SLUG}"
         paths:
-            - target/$PLATFORM/release/staked-relayer${FILE_EXTENSION}
             - target/$PLATFORM/release/oracle${FILE_EXTENSION}
             - target/$PLATFORM/release/vault${FILE_EXTENSION}
             - target/$PLATFORM/release/faucet${FILE_EXTENSION}
@@ -90,7 +89,6 @@ build-docker-images:
         matrix:
             - IMAGE:
                   [
-                      "staked-relayer",
                       "oracle",
                       "vault",
                       "faucet",

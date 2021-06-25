@@ -6,7 +6,7 @@
   <h2 align="center">InterBTC Clients</h2>
 
   <p align="center">
-    Faucet, Oracle, Vault & Staked Relayer
+    Faucet, Oracle & Vault / Relayer
   </p>
 </p>
 
@@ -64,18 +64,10 @@ to automatically update the exchange rate at a pre-determined time interval.
 cargo run --bin oracle
 ```
 
-### Staked Relayer
-
-The [Staked Relayer](./staked-relayer/README.md) client is responsible for submitting Bitcoin block headers to the BTC Parachain.
-
-```bash
-source .env
-cargo run --bin staked-relayer -- --http-addr '[::0]:3030'
-```
-
 ### Vault
 
 The [Vault](./vault/README.md) client is used to intermediate assets between Bitcoin and the BTC Parachain.
+It is also capable of submitting Bitcoin block headers to the BTC Parachain.
 
 ```bash
 source .env
