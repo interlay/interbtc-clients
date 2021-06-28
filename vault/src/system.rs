@@ -8,7 +8,7 @@ use clap::Clap;
 use futures::{
     channel::{mpsc, mpsc::Sender},
     executor::block_on,
-    SinkExt,
+    Future, SinkExt,
 };
 use git_version::git_version;
 use runtime::{
@@ -92,6 +92,14 @@ pub struct VaultServiceConfig {
     /// Number of confirmations a block needs to have before it is submitted.
     #[clap(long, default_value = "0")]
     pub bitcoin_relay_confirmations: u32,
+
+    /// Don't relay bitcoin block headers.
+    #[clap(long)]
+    pub no_bitcoin_block_relay: bool,
+
+    /// Don't monitor vault thefts.
+    #[clap(long)]
+    pub no_vault_theft_report: bool,
 }
 
 async fn active_block_listener(
@@ -138,6 +146,12 @@ impl Service<VaultServiceConfig> for VaultService {
             Err(Error::BitcoinError(err)) => Err(ServiceError::BitcoinError(err)),
             Err(err) => Err(ServiceError::Other(err.to_string())),
         }
+    }
+}
+
+async fn maybe_run_task(should_run: bool, task: impl Future) {
+    if should_run {
+        task.await;
     }
 }
 
@@ -278,14 +292,17 @@ impl VaultService {
             Ok(())
         });
 
-        let issue_executor = wait_or_shutdown(
-            self.shutdown.clone(),
-            issue::process_issue_requests(
-                bitcoin_core.clone(),
-                self.btc_parachain.clone(),
-                issue_set.clone(),
-                btc_start_height,
-                num_confirmations,
+        let issue_executor = maybe_run_task(
+            !self.config.no_issue_execution,
+            wait_or_shutdown(
+                self.shutdown.clone(),
+                issue::process_issue_requests(
+                    bitcoin_core.clone(),
+                    self.btc_parachain.clone(),
+                    issue_set.clone(),
+                    btc_start_height,
+                    num_confirmations,
+                ),
             ),
         );
 
@@ -374,6 +391,66 @@ impl VaultService {
             Ok(())
         });
 
+        // watch vault address registration and report potential thefts
+        let vaults_listener = maybe_run_task(!self.config.no_vault_theft_report, self.start_theft_reporting().await?);
+
+        // relay bitcoin block headers to the relay
+        let relayer = maybe_run_task(
+            !self.config.no_bitcoin_block_relay,
+            wait_or_shutdown(
+                self.shutdown.clone(),
+                run_relayer(Runner::new(
+                    bitcoin_core.clone(),
+                    self.btc_parachain.clone(),
+                    Config {
+                        start_height: self.config.bitcoin_relay_start_height,
+                        max_batch_size: self.config.max_batch_size,
+                        interval: Some(self.config.bitcoin_poll_interval_ms),
+                        btc_confirmations: self.config.bitcoin_relay_confirmations,
+                    },
+                )),
+            ),
+        );
+
+        // starts all the tasks
+        tracing::info!("Starting to listen for events...");
+        let _ = tokio::join!(
+            // runs error listener to log errors
+            tokio::spawn(async move { err_listener.await }),
+            // runs sla listener to log events
+            tokio::spawn(async move { sla_listener.await }),
+            // maintain collateralization rate
+            tokio::spawn(async move {
+                collateral_maintainer.await;
+            }),
+            // issue handling
+            tokio::spawn(async move { issue_request_listener.await }),
+            tokio::spawn(async move { issue_execute_listener.await }),
+            tokio::spawn(async move { issue_cancel_listener.await }),
+            tokio::spawn(async move { issue_block_listener.await }),
+            tokio::spawn(async move { issue_cancel_scheduler.await }),
+            tokio::spawn(async move { issue_executor.await }),
+            // replace handling
+            tokio::spawn(async move { request_replace_listener.await }),
+            tokio::spawn(async move { accept_replace_listener.await }),
+            tokio::spawn(async move { execute_replace_listener.await }),
+            tokio::spawn(async move { replace_block_listener.await }),
+            tokio::spawn(async move { replace_cancel_scheduler.await }),
+            // redeem handling
+            tokio::spawn(async move { redeem_listener.await }),
+            // refund handling
+            tokio::spawn(async move { refund_listener.await }),
+            // runs vault theft checks
+            tokio::spawn(async move { vaults_listener.await }),
+            // relayer process
+            tokio::task::spawn_blocking(move || block_on(relayer))
+        );
+
+        Ok(())
+    }
+
+    pub(crate) async fn start_theft_reporting(&self) -> Result<impl Future, Error> {
+        // TODO: don't fetch vaults if reporting is disabled
         tracing::info!("Fetching all active vaults...");
         let vaults = self
             .btc_parachain
@@ -397,89 +474,35 @@ impl VaultService {
         let bitcoin_theft_start_height = self
             .config
             .bitcoin_theft_start_height
-            .unwrap_or(bitcoin_core.get_block_count().await? as u32 + 1);
+            .unwrap_or(self.bitcoin_core.get_block_count().await? as u32 + 1);
 
         let vaults_listener = wait_or_shutdown(
             self.shutdown.clone(),
             report_vault_thefts(
-                bitcoin_core.clone(),
+                self.bitcoin_core.clone(),
                 self.btc_parachain.clone(),
                 bitcoin_theft_start_height,
                 vaults.clone(),
             ),
         );
 
+        // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
         let vaults_registration_listener = wait_or_shutdown(
             self.shutdown.clone(),
             listen_for_vaults_registered(self.btc_parachain.clone(), vaults.clone()),
         );
 
+        // keep vault wallets up-to-date
         let wallet_update_listener = wait_or_shutdown(
             self.shutdown.clone(),
             listen_for_wallet_updates(self.btc_parachain.clone(), vaults.clone()),
         );
 
-        // relayer process
-        let relayer = wait_or_shutdown(
-            self.shutdown.clone(),
-            run_relayer(Runner::new(
-                bitcoin_core.clone(),
-                self.btc_parachain.clone(),
-                Config {
-                    start_height: self.config.bitcoin_relay_start_height,
-                    max_batch_size: self.config.max_batch_size,
-                    interval: Some(self.config.bitcoin_poll_interval_ms),
-                    btc_confirmations: self.config.bitcoin_relay_confirmations,
-                },
-            )),
-        );
-
-        // misc copies of variables to move into spawn closures
-        let no_issue_execution = self.config.no_issue_execution;
-
-        // starts all the tasks
-        tracing::info!("Starting to listen for events...");
-        let _ = tokio::join!(
-            // runs error listener to log errors
-            tokio::spawn(async move { err_listener.await }),
-            // runs sla listener to log events
-            tokio::spawn(async move { sla_listener.await }),
-            // maintain collateralization rate
-            tokio::spawn(async move {
-                collateral_maintainer.await;
-            }),
-            // issue handling
-            tokio::spawn(async move { issue_request_listener.await }),
-            tokio::spawn(async move { issue_execute_listener.await }),
-            tokio::spawn(async move { issue_cancel_listener.await }),
-            tokio::spawn(async move { issue_block_listener.await }),
-            tokio::spawn(async move { issue_cancel_scheduler.await }),
-            tokio::spawn(async move {
-                if !no_issue_execution {
-                    let _ = issue_executor.await;
-                }
-            }),
-            // replace handling
-            tokio::spawn(async move { request_replace_listener.await }),
-            tokio::spawn(async move { accept_replace_listener.await }),
-            tokio::spawn(async move { execute_replace_listener.await }),
-            tokio::spawn(async move { replace_block_listener.await }),
-            tokio::spawn(async move { replace_cancel_scheduler.await }),
-            // redeem handling
-            tokio::spawn(async move { redeem_listener.await }),
-            // refund handling
-            tokio::spawn(async move { refund_listener.await }),
-            // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
-            tokio::spawn(async move { vaults_registration_listener.await }),
-            // keep vault wallets up-to-date
-            tokio::spawn(async move { wallet_update_listener.await }),
-            // runs vault theft checks
-            tokio::spawn(async move { vaults_listener.await }),
-            // relayer process
-            tokio::task::spawn_blocking(move || block_on(relayer))
-        );
-
-        Ok(())
+        Ok(futures::future::join3(
+            vaults_listener,
+            vaults_registration_listener,
+            wallet_update_listener,
+        ))
     }
 }
 
