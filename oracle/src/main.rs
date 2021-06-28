@@ -5,8 +5,8 @@ use error::Error;
 use git_version::git_version;
 use log::{error, info};
 use runtime::{
-    substrate_subxt::PairSigner, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, InterBtcParachain,
-    InterBtcRuntime,
+    substrate_subxt::PairSigner, ExchangeRateOraclePallet, FixedPointNumber, FixedPointTraits::CheckedMul, FixedU128,
+    InterBtcParachain, InterBtcRuntime,
 };
 use std::{collections::HashMap, time::Duration};
 use tokio::time::delay_for;
@@ -39,15 +39,22 @@ struct Opts {
     #[clap(long, default_value = "ws://127.0.0.1:9944")]
     btc_parachain_url: String,
 
-    /// Exchange rate from Planck to Satoshi.
-    /// hardcoded to 1 BTC = 3855.23187 DOT
-    /// at granularity of 5
-    #[clap(long, default_value = "385523187")]
+    /// Exchange rate from the collateral currency to
+    /// the wrapped currency - i.e. 1 BTC = 2308 DOT.
+    #[clap(long, default_value = "2308")]
     exchange_rate: u128,
 
-    /// Timeout for exchange rate setter, default 25 minutes.
+    /// Number of decimals for the collateral currency.
+    #[clap(long, default_value = "10")]
+    collateral_decimals: u32,
+
+    /// Number of decimals for the wrapped currency.
+    #[clap(long, default_value = "8")]
+    wrapped_decimals: u32,
+
+    /// Interval for exchange rate setter, default 25 minutes.
     #[clap(long, default_value = "1500000")]
-    timeout_ms: u64,
+    interval_ms: u64,
 
     /// keyring / keyfile options.
     #[clap(flatten)]
@@ -72,9 +79,14 @@ async fn main() -> Result<(), Error> {
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = PairSigner::<InterBtcRuntime, _>::new(key_pair);
 
-    let timeout = Duration::from_millis(opts.timeout_ms);
-    let exchange_rate =
-        FixedU128::checked_from_rational(opts.exchange_rate, 100_000).ok_or(Error::InvalidExchangeRate)?;
+    let interval = Duration::from_millis(opts.interval_ms);
+    let exchange_rate = FixedU128::checked_from_integer(opts.exchange_rate).ok_or(Error::InvalidExchangeRate)?;
+
+    let conversion_factor = FixedU128::checked_from_rational(
+        10_u128.pow(opts.collateral_decimals),
+        10_u128.pow(opts.wrapped_decimals),
+    )
+    .unwrap();
 
     loop {
         let exchange_rate = if opts.coingecko {
@@ -92,6 +104,10 @@ async fn main() -> Result<(), Error> {
         } else {
             exchange_rate
         };
+
+        let exchange_rate = exchange_rate
+            .checked_mul(&conversion_factor)
+            .ok_or(Error::InvalidExchangeRate)?;
 
         info!(
             "Setting exchange rate: {} ({})",
@@ -112,6 +128,6 @@ async fn main() -> Result<(), Error> {
             error!("Error: {}", e.to_string());
         }
 
-        delay_for(timeout).await;
+        delay_for(interval).await;
     }
 }
