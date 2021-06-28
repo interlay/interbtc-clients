@@ -57,14 +57,14 @@ async fn compute_start_height(backing: &impl Backing, issuing: &impl Issuing) ->
 
 #[derive(Default)]
 pub struct Config {
-    // initialization height, if unset will use `get_block_count`
+    /// Initialization height, if unset will use `get_block_count`
     pub start_height: Option<u32>,
-    // maximum number of headers to collect on catchup
+    /// Maximum number of headers to collect on catchup
     pub max_batch_size: u32,
-    // thread sleep duration
-    pub timeout: Option<Duration>,
-    ///Number of confirmations a block needs to have before it is submitted.
-    pub required_btc_confirmations: u32,
+    /// Thread sleep duration
+    pub interval: Option<Duration>,
+    /// Number of confirmations a block needs to have before it is submitted.
+    pub btc_confirmations: u32,
 }
 
 /// Runner implements the main loop for the relayer
@@ -73,8 +73,8 @@ pub struct Runner<B: Backing, I: Issuing> {
     issuing: I,
     start_height: Option<u32>,
     max_batch_size: u32,
-    timeout: Duration,
-    required_btc_confirmations: u32,
+    interval: Duration,
+    btc_confirmations: u32,
 }
 
 impl<B: Backing, I: Issuing> Runner<B, I> {
@@ -84,8 +84,8 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
             issuing,
             start_height: conf.start_height,
             max_batch_size: conf.max_batch_size,
-            timeout: conf.timeout.unwrap_or_else(|| SLEEP_TIME),
-            required_btc_confirmations: conf.required_btc_confirmations,
+            interval: conf.interval.unwrap_or_else(|| SLEEP_TIME),
+            btc_confirmations: conf.btc_confirmations,
         }
     }
 
@@ -95,8 +95,8 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
             match self.backing.get_block_header(height).await? {
                 Some(header) => return Ok(header),
                 None => {
-                    tracing::trace!("No block found at height {}, sleeping for {:?}", height, self.timeout);
-                    delay_for(self.timeout).await
+                    tracing::trace!("No block found at height {}, sleeping for {:?}", height, self.interval);
+                    delay_for(self.interval).await
                 }
             };
         }
@@ -107,7 +107,7 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
             .backing
             .get_block_count()
             .await?
-            .saturating_sub(self.required_btc_confirmations))
+            .saturating_sub(self.btc_confirmations))
     }
 
     /// Submit the next block(s) or initialize the relay,
@@ -139,7 +139,7 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
             0 => {
                 // nothing to submit right now. Wait a little while
                 tracing::trace!("Waiting for the next Bitcoin block...");
-                delay_for(self.timeout).await;
+                delay_for(self.interval).await;
             }
             1 => {
                 // submit a single block header
@@ -373,8 +373,8 @@ mod tests {
             Config {
                 start_height: None,
                 max_batch_size: 1,
-                timeout: None,
-                required_btc_confirmations: 0,
+                interval: None,
+                btc_confirmations: 0,
             },
         );
 
@@ -394,8 +394,8 @@ mod tests {
             Config {
                 start_height: Some(0),
                 max_batch_size: 16,
-                timeout: None,
-                required_btc_confirmations: 0,
+                interval: None,
+                btc_confirmations: 0,
             },
         );
 
@@ -427,8 +427,8 @@ mod tests {
             Config {
                 start_height: None,
                 max_batch_size: 1,
-                timeout: None,
-                required_btc_confirmations: 0,
+                interval: None,
+                btc_confirmations: 0,
             },
         );
 
@@ -455,9 +455,9 @@ mod tests {
             issuing,
             Config {
                 start_height: None,
-                timeout: Some(Duration::from_secs(0)),
+                interval: Some(Duration::from_secs(0)),
                 max_batch_size: 16,
-                required_btc_confirmations: 1,
+                btc_confirmations: 1,
             },
         );
 
@@ -488,8 +488,8 @@ mod tests {
             Config {
                 start_height: None,
                 max_batch_size: 1,
-                timeout: Some(Duration::from_secs(0)),
-                required_btc_confirmations: 1,
+                interval: Some(Duration::from_secs(0)),
+                btc_confirmations: 1,
             },
         );
 
@@ -521,8 +521,8 @@ mod tests {
             Config {
                 start_height: None,
                 max_batch_size: 1,
-                timeout: Some(Duration::from_secs(0)),
-                required_btc_confirmations: 2,
+                interval: Some(Duration::from_secs(0)),
+                btc_confirmations: 2,
             },
         );
 

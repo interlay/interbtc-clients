@@ -10301,32 +10301,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
-name = "staked-relayer"
-version = "0.7.0"
-dependencies = [
- "async-trait",
- "bitcoin 0.7.0",
- "clap 3.0.0-beta.2",
- "futures 0.3.15",
- "git-version",
- "hex 0.4.3",
- "jsonrpc-core 17.1.0",
- "jsonrpc-core-client 17.1.0",
- "mockall",
- "parity-scale-codec",
- "runtime",
- "serde",
- "service",
- "sp-core 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
- "sp-keyring",
- "thiserror",
- "tokio 0.2.25",
- "tracing",
- "tracing-futures",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "staked-relayers"
 version = "0.8.0"
 source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"

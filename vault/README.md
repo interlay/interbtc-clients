@@ -21,6 +21,10 @@
   - Request Replace
   - Execute Replace
 
+- Receive block headers from [Bitcoin Core](https://github.com/bitcoin/bitcoin)
+- Submit block headers to the [BTC Parachain](https://github.com/interlay/interbtc)
+- Monitor the BTC addresses of vaults to report BTC thefts
+
 ## Prerequisites
 
 Download and start [Bitcoin Core](https://bitcoin.org/en/bitcoin-core/):

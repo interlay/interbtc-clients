@@ -1,12 +1,13 @@
 use crate::{
-    collateral::lock_required_collateral, faucet, issue, service::*, Error, IssueRequests, RequestEvent,
-    CHAIN_HEIGHT_POLLING_INTERVAL,
+    collateral::lock_required_collateral, faucet, issue, relay::run_relayer, service::*, Error, IssueRequests,
+    RequestEvent, Vaults, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use futures::{
     channel::{mpsc, mpsc::Sender},
+    executor::block_on,
     SinkExt,
 };
 use git_version::git_version;
@@ -27,10 +28,6 @@ pub const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
 
 #[derive(Clap, Clone, Debug)]
 pub struct VaultServiceConfig {
-    /// Comma separated list of allowed origins.
-    #[clap(long, default_value = "*")]
-    pub rpc_cors_domain: String,
-
     /// Automatically register the vault with the given amount of collateral and a newly generated address.
     #[clap(long)]
     pub auto_register_with_collateral: Option<u128>,
@@ -73,6 +70,28 @@ pub struct VaultServiceConfig {
     /// Minimum time to the the redeem/replace execution deadline to make the bitcoin payment.
     #[clap(long, parse(try_from_str = parse_duration_minutes), default_value = "120")]
     pub payment_margin_minutes: Duration,
+
+    /// Starting height for vault theft checks, if not defined
+    /// automatically start from the chain tip.
+    #[clap(long)]
+    pub bitcoin_theft_start_height: Option<u32>,
+
+    /// Timeout in milliseconds to poll Bitcoin.
+    #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "6000")]
+    pub bitcoin_poll_interval_ms: Duration,
+
+    /// Starting height to relay block headers, if not defined
+    /// use the best height as reported by the relay module.
+    #[clap(long)]
+    pub bitcoin_relay_start_height: Option<u32>,
+
+    /// Max batch size for combined block header submission.
+    #[clap(long, default_value = "16")]
+    pub max_batch_size: u32,
+
+    /// Number of confirmations a block needs to have before it is submitted.
+    #[clap(long, default_value = "0")]
+    pub bitcoin_relay_confirmations: u32,
 }
 
 async fn active_block_listener(
@@ -355,6 +374,66 @@ impl VaultService {
             Ok(())
         });
 
+        tracing::info!("Fetching all active vaults...");
+        let vaults = self
+            .btc_parachain
+            .get_all_vaults()
+            .await?
+            .into_iter()
+            .flat_map(|vault| {
+                vault
+                    .wallet
+                    .addresses
+                    .iter()
+                    .map(|addr| (*addr, vault.id.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
+        // store vaults in Arc<RwLock>
+        let vaults = Arc::new(Vaults::from(vaults));
+
+        // scan from custom height or the current tip
+        let bitcoin_theft_start_height = self
+            .config
+            .bitcoin_theft_start_height
+            .unwrap_or(bitcoin_core.get_block_count().await? as u32 + 1);
+
+        let vaults_listener = wait_or_shutdown(
+            self.shutdown.clone(),
+            report_vault_thefts(
+                bitcoin_core.clone(),
+                self.btc_parachain.clone(),
+                bitcoin_theft_start_height,
+                vaults.clone(),
+            ),
+        );
+
+        let vaults_registration_listener = wait_or_shutdown(
+            self.shutdown.clone(),
+            listen_for_vaults_registered(self.btc_parachain.clone(), vaults.clone()),
+        );
+
+        let wallet_update_listener = wait_or_shutdown(
+            self.shutdown.clone(),
+            listen_for_wallet_updates(self.btc_parachain.clone(), vaults.clone()),
+        );
+
+        // relayer process
+        let relayer = wait_or_shutdown(
+            self.shutdown.clone(),
+            run_relayer(Runner::new(
+                bitcoin_core.clone(),
+                self.btc_parachain.clone(),
+                Config {
+                    start_height: self.config.bitcoin_relay_start_height,
+                    max_batch_size: self.config.max_batch_size,
+                    interval: Some(self.config.bitcoin_poll_interval_ms),
+                    btc_confirmations: self.config.bitcoin_relay_confirmations,
+                },
+            )),
+        );
+
         // misc copies of variables to move into spawn closures
         let no_issue_execution = self.config.no_issue_execution;
 
@@ -390,6 +469,14 @@ impl VaultService {
             tokio::spawn(async move { redeem_listener.await }),
             // refund handling
             tokio::spawn(async move { refund_listener.await }),
+            // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
+            tokio::spawn(async move { vaults_registration_listener.await }),
+            // keep vault wallets up-to-date
+            tokio::spawn(async move { wallet_update_listener.await }),
+            // runs vault theft checks
+            tokio::spawn(async move { vaults_listener.await }),
+            // relayer process
+            tokio::task::spawn_blocking(move || block_on(relayer))
         );
 
         Ok(())

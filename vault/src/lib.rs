@@ -8,9 +8,11 @@ mod faucet;
 mod issue;
 mod redeem;
 mod refund;
+mod relay;
 mod replace;
 mod system;
 mod types;
+mod vaults;
 
 use runtime::{InterBtcParachain, VaultRegistryPallet};
 use std::time::Duration;
@@ -25,10 +27,13 @@ pub mod service {
         },
         redeem::listen_for_redeem_requests,
         refund::listen_for_refund_requests,
+        relay::{Config, Runner},
         replace::{listen_for_accept_replace, listen_for_execute_replace, listen_for_replace_requests},
+        vaults::{listen_for_vaults_registered, listen_for_wallet_updates, report_vault_thefts},
     };
 }
 pub use crate::{cancellation::RequestEvent, error::Error, system::*, types::IssueRequests};
+pub use vaults::Vaults;
 
 pub(crate) async fn deposit_collateral(api: &InterBtcParachain, amount: u128) -> Result<(), Error> {
     let result = api.deposit_collateral(amount).await;
