@@ -83,6 +83,7 @@ pub enum RewardPool {
 }
 
 #[derive(Encode, Decode, Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Copy, Serialize, Deserialize)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum CurrencyId {
     DOT,
     KSM,
