@@ -1,20 +1,20 @@
 use crate::{
-    collateral::lock_required_collateral, faucet, issue, relay::run_relayer, service::*, Error, IssueRequests,
-    RequestEvent, Vaults, CHAIN_HEIGHT_POLLING_INTERVAL,
+    collateral::lock_required_collateral, faucet, issue, relay::run_relayer, service::*, Error, Event, IssueRequests,
+    Vaults, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
-use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use bitcoin::{stream_blocks, BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use futures::{
     channel::{mpsc, mpsc::Sender},
     executor::block_on,
-    Future, SinkExt,
+    Future, SinkExt, TryStreamExt,
 };
 use git_version::git_version;
 use runtime::{
     cli::{parse_duration_minutes, parse_duration_ms},
     pallets::{security::UpdateActiveBlockEvent, sla::UpdateVaultSLAEvent},
-    AccountId, BlockNumber, BtcRelayPallet, Error as RuntimeError, InterBtcParachain, InterBtcRuntime, UtilFuncs,
+    AccountId, BtcRelayPallet, Error as RuntimeError, InterBtcParachain, InterBtcRuntime, UtilFuncs,
     VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
@@ -102,15 +102,12 @@ pub struct VaultServiceConfig {
     pub no_vault_theft_report: bool,
 }
 
-async fn active_block_listener(
-    parachain_rpc: InterBtcParachain,
-    block_tx: Sender<BlockNumber>,
-) -> Result<(), ServiceError> {
+async fn active_block_listener(parachain_rpc: InterBtcParachain, block_tx: Sender<Event>) -> Result<(), ServiceError> {
     let block_tx = &block_tx;
     parachain_rpc
         .on_event::<UpdateActiveBlockEvent<InterBtcRuntime>, _, _, _>(
             |event| async move {
-                let _ = block_tx.clone().send(event.height).await;
+                let _ = block_tx.clone().send(Event::ParachainBlock(event.height)).await;
             },
             |err| tracing::error!("Error (UpdateActiveBlockEvent): {}", err.to_string()),
         )
@@ -253,10 +250,11 @@ impl VaultService {
 
         // issue handling
         let issue_set = Arc::new(IssueRequests::new());
-        let btc_start_height = issue::initialize_issue_set(&bitcoin_core, &self.btc_parachain, &issue_set).await?;
+        let oldest_issue_btc_height =
+            issue::initialize_issue_set(&bitcoin_core, &self.btc_parachain, &issue_set).await?;
+        let initial_btc_height = bitcoin_core.get_block_count().await? as u32;
 
-        let (issue_event_tx, issue_event_rx) = mpsc::channel::<RequestEvent>(32);
-        let (issue_block_tx, issue_block_rx) = mpsc::channel::<BlockNumber>(16);
+        let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
 
         let issue_request_listener = wait_or_shutdown(
             self.shutdown.clone(),
@@ -278,16 +276,21 @@ impl VaultService {
             listen_for_issue_cancels(self.btc_parachain.clone(), issue_set.clone()),
         );
 
-        let mut issue_cancellation_scheduler = CancellationScheduler::new(self.btc_parachain.clone(), vault_id.clone());
+        let mut issue_cancellation_scheduler = CancellationScheduler::new(
+            self.btc_parachain.clone(),
+            startup_height,
+            initial_btc_height,
+            vault_id.clone(),
+        );
 
         let issue_block_listener = wait_or_shutdown(
             self.shutdown.clone(),
-            active_block_listener(self.btc_parachain.clone(), issue_block_tx),
+            active_block_listener(self.btc_parachain.clone(), issue_event_tx.clone()),
         );
 
         let issue_cancel_scheduler = wait_or_shutdown(self.shutdown.clone(), async move {
             issue_cancellation_scheduler
-                .handle_cancellation::<IssueCanceller>(issue_block_rx, issue_event_rx)
+                .handle_cancellation::<IssueCanceller>(issue_event_rx)
                 .await?;
             Ok(())
         });
@@ -300,15 +303,14 @@ impl VaultService {
                     bitcoin_core.clone(),
                     self.btc_parachain.clone(),
                     issue_set.clone(),
-                    btc_start_height,
+                    oldest_issue_btc_height,
                     num_confirmations,
                 ),
             ),
         );
 
         // replace handling
-        let (replace_event_tx, replace_event_rx) = mpsc::channel::<RequestEvent>(16);
-        let (replace_block_tx, replace_block_rx) = mpsc::channel::<BlockNumber>(16);
+        let (replace_event_tx, replace_event_rx) = mpsc::channel::<Event>(16);
 
         let request_replace_listener = wait_or_shutdown(
             self.shutdown.clone(),
@@ -335,19 +337,38 @@ impl VaultService {
             listen_for_execute_replace(self.btc_parachain.clone(), replace_event_tx.clone()),
         );
 
-        let mut replace_cancellation_scheduler =
-            CancellationScheduler::new(self.btc_parachain.clone(), vault_id.clone());
+        let mut replace_cancellation_scheduler = CancellationScheduler::new(
+            self.btc_parachain.clone(),
+            startup_height,
+            initial_btc_height,
+            vault_id.clone(),
+        );
 
         let replace_block_listener = wait_or_shutdown(
             self.shutdown.clone(),
-            active_block_listener(self.btc_parachain.clone(), replace_block_tx),
+            active_block_listener(self.btc_parachain.clone(), replace_event_tx.clone()),
         );
 
         let replace_cancel_scheduler = wait_or_shutdown(self.shutdown.clone(), async move {
             replace_cancellation_scheduler
-                .handle_cancellation::<ReplaceCanceller>(replace_block_rx, replace_event_rx)
+                .handle_cancellation::<ReplaceCanceller>(replace_event_rx)
                 .await?;
             Ok(())
+        });
+
+        // listen for bitcoin blocks, used for cancellation
+        let bitcoin_block_listener_btc_rpc = bitcoin_core.clone();
+        let bitcoin_block_listener = wait_or_shutdown(self.shutdown.clone(), async move {
+            stream_blocks(bitcoin_block_listener_btc_rpc.clone(), initial_btc_height, 1)
+                .await
+                .try_for_each(|_| async {
+                    let height = bitcoin_block_listener_btc_rpc.get_block_count().await? as u32;
+                    let _ = replace_event_tx.clone().send(Event::BitcoinBlock(height)).await;
+                    let _ = issue_event_tx.clone().send(Event::BitcoinBlock(height)).await;
+                    Ok(())
+                })
+                .await
+                .map_err(Into::into)
         });
 
         // redeem handling
@@ -423,6 +444,8 @@ impl VaultService {
             tokio::spawn(async move {
                 collateral_maintainer.await;
             }),
+            // replace & issue cancellation helper
+            tokio::spawn(async move { bitcoin_block_listener.await }),
             // issue handling
             tokio::spawn(async move { issue_request_listener.await }),
             tokio::spawn(async move { issue_execute_listener.await }),

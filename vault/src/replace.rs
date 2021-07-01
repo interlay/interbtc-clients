@@ -1,4 +1,4 @@
-use crate::{cancellation::RequestEvent, error::Error, execution::Request};
+use crate::{cancellation::Event, error::Error, execution::Request};
 use bitcoin::BitcoinCoreApi;
 use futures::{channel::mpsc::Sender, future::try_join3, SinkExt};
 use runtime::{
@@ -81,7 +81,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
 pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone>(
     parachain_rpc: InterBtcParachain,
     btc_rpc: B,
-    event_channel: Sender<RequestEvent>,
+    event_channel: Sender<Event>,
     accept_replace_requests: bool,
 ) -> Result<(), ServiceError> {
     let parachain_rpc = &parachain_rpc;
@@ -107,7 +107,7 @@ pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone>(
                             tracing::info!("Accepted replace request from {}", event.old_vault_id);
                             // try to send the event, but ignore the returned result since
                             // the only way it can fail is if the channel is closed
-                            let _ = event_channel.clone().send(RequestEvent::Opened).await;
+                            let _ = event_channel.clone().send(Event::Opened).await;
                         }
                         Err(e) => tracing::error!(
                             "Failed to accept replace request from {}: {}",
@@ -164,7 +164,7 @@ pub async fn handle_replace_request<
 /// * `event_channel` - the channel over which to signal events
 pub async fn listen_for_execute_replace(
     parachain_rpc: InterBtcParachain,
-    event_channel: Sender<RequestEvent>,
+    event_channel: Sender<Event>,
 ) -> Result<(), ServiceError> {
     let event_channel = &event_channel;
     let parachain_rpc = &parachain_rpc;
@@ -175,10 +175,7 @@ pub async fn listen_for_execute_replace(
                     tracing::info!("Received event: execute replace #{:?}", event.replace_id);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
-                    let _ = event_channel
-                        .clone()
-                        .send(RequestEvent::Executed(event.replace_id))
-                        .await;
+                    let _ = event_channel.clone().send(Event::Executed(event.replace_id)).await;
                 }
             },
             |error| tracing::error!("Error reading redeem event: {}", error.to_string()),
