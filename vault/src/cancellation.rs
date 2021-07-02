@@ -285,11 +285,6 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
                      parachain_open_height,
                      bitcoin_open_height,
                  }| {
-                    // invalid open_time. Return an error so we will retry the operation later
-                    if *parachain_open_height > self.parachain_height || *bitcoin_open_height > self.bitcoin_height {
-                        return Err(Error::InvalidOpenTime);
-                    }
-
                     let parachain_deadline_height = parachain_open_height
                         .checked_add(period)
                         .ok_or(Error::ArithmeticOverflow)?;
@@ -488,29 +483,6 @@ mod tests {
                     bitcoin_deadline_height: 110,
                 },
             ]
-        );
-    }
-
-    #[tokio::test]
-    async fn test_get_open_process_delays_with_invalid_opentime_fails() {
-        // if current_block is 5 and the issue was open at 10, something went wrong...
-        let mut parachain_rpc = MockProvider::default();
-        parachain_rpc.expect_get_vault_issue_requests().times(1).returning(|_| {
-            Ok(vec![(
-                H256::from_slice(&[1; 32]),
-                InterBtcIssueRequest {
-                    opentime: 10,
-                    ..Default::default()
-                },
-            )])
-        });
-
-        parachain_rpc.expect_get_issue_period().returning(|| Ok(10));
-
-        let mut canceller = CancellationScheduler::new(parachain_rpc, 0, 0, Default::default());
-        assert_err!(
-            canceller.get_open_requests::<IssueCanceller>().await,
-            Error::InvalidOpenTime
         );
     }
 

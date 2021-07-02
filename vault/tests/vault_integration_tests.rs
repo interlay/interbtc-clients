@@ -305,13 +305,13 @@ async fn test_cancellation_succeeds() {
     let mut issue_cancellation_scheduler = vault::service::CancellationScheduler::new(
         new_vault_provider.clone(),
         new_vault_provider.get_current_chain_height().await.unwrap(),
-        btc_rpc.get_block_count().await.unwrap() as u32,
+        100, // bitcoin expired
         new_vault_provider.get_account_id().clone(),
     );
     let mut replace_cancellation_scheduler = vault::service::CancellationScheduler::new(
         new_vault_provider.clone(),
         new_vault_provider.get_current_chain_height().await.unwrap(),
-        btc_rpc.get_block_count().await.unwrap() as u32,
+        100, // bitcoin expired
         new_vault_provider.get_account_id().clone(),
     );
     let issue_canceller =

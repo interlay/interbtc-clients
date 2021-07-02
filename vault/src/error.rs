@@ -13,8 +13,6 @@ pub enum Error {
     InsufficientFunds,
     #[error("Value below dust amount")]
     BelowDustAmount,
-    #[error("Open time inconsistent with chain height")]
-    InvalidOpenTime,
     #[error("Failed to load or create bitcoin wallet: {0}")]
     WalletInitializationFailure(BitcoinError),
     #[error("Transaction contains more than one return-to-self uxto")]
