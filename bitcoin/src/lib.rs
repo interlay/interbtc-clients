@@ -40,6 +40,8 @@ use tokio::{
 #[macro_use]
 extern crate num_derive;
 
+pub const BLOCK_INTERVAL: Duration = Duration::from_secs(600); // 10 minutes
+
 const NOT_IN_MEMPOOL_ERROR_CODE: i32 = BitcoinRpcError::RpcInvalidAddressOrKey as i32;
 
 const RETRY_DURATION: Duration = Duration::from_millis(1000);

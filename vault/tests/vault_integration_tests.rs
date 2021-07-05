@@ -11,13 +11,13 @@ use runtime::{
     pallets::{
         issue::*, redeem::*, refund::*, replace::*, security::UpdateActiveBlockEvent, tokens::*, vault_registry::*,
     },
-    BlockNumber, BtcAddress, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, InterBtcParachain,
-    InterBtcRedeemRequest, InterBtcRuntime, IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    BtcAddress, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRedeemRequest,
+    InterBtcRuntime, IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
 use std::{sync::Arc, time::Duration};
-use vault::{self, IssueRequests, RequestEvent};
+use vault::{self, Event as CancellationEvent, IssueRequests};
 
 const TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -100,7 +100,7 @@ async fn test_replace_succeeds() {
     let old_vault_id = old_vault_provider.get_account_id().clone();
     let new_vault_id = new_vault_provider.get_account_id().clone();
 
-    let (replace_event_tx, _) = mpsc::channel::<RequestEvent>(16);
+    let (replace_event_tx, _) = mpsc::channel::<CancellationEvent>(16);
     test_service(
         join(
             vault::service::listen_for_replace_requests(
@@ -289,11 +289,8 @@ async fn test_cancellation_succeeds() {
     root_provider.set_replace_period(1).await.unwrap();
     root_provider.set_redeem_period(1).await.unwrap();
 
-    let (issue_block_tx, issue_block_rx) = mpsc::channel::<BlockNumber>(16);
-    let (replace_event_tx, replace_event_rx) = mpsc::channel::<RequestEvent>(16);
-
-    let (replace_block_tx, replace_block_rx) = mpsc::channel::<BlockNumber>(16);
-    let (issue_event_tx, issue_event_rx) = mpsc::channel::<RequestEvent>(16);
+    let (issue_cancellation_event_tx, issue_cancellation_rx) = mpsc::channel::<CancellationEvent>(16);
+    let (replace_cancellation_event_tx, replace_cancellation_rx) = mpsc::channel::<CancellationEvent>(16);
 
     let block_listener = new_vault_provider.clone();
     let issue_set = Arc::new(IssueRequests::new());
@@ -301,33 +298,45 @@ async fn test_cancellation_succeeds() {
     let issue_request_listener = vault::service::listen_for_issue_requests(
         btc_rpc.clone(),
         new_vault_provider.clone(),
-        issue_event_tx.clone(),
+        issue_cancellation_event_tx.clone(),
         issue_set.clone(),
     );
 
     let mut issue_cancellation_scheduler = vault::service::CancellationScheduler::new(
         new_vault_provider.clone(),
+        new_vault_provider.get_current_chain_height().await.unwrap(),
+        100, // bitcoin expired
         new_vault_provider.get_account_id().clone(),
     );
     let mut replace_cancellation_scheduler = vault::service::CancellationScheduler::new(
         new_vault_provider.clone(),
+        new_vault_provider.get_current_chain_height().await.unwrap(),
+        100, // bitcoin expired
         new_vault_provider.get_account_id().clone(),
     );
-    let issue_canceller = issue_cancellation_scheduler
-        .handle_cancellation::<vault::service::IssueCanceller>(issue_block_rx, issue_event_rx);
-    let replace_canceller = replace_cancellation_scheduler
-        .handle_cancellation::<vault::service::ReplaceCanceller>(replace_block_rx, replace_event_rx);
+    let issue_canceller =
+        issue_cancellation_scheduler.handle_cancellation::<vault::service::IssueCanceller>(issue_cancellation_rx);
+    let replace_canceller =
+        replace_cancellation_scheduler.handle_cancellation::<vault::service::ReplaceCanceller>(replace_cancellation_rx);
 
-    let block_listener = async move {
-        let issue_block_tx = &issue_block_tx;
-        let replace_block_tx = &replace_block_tx;
+    let block_listener = async {
+        let issue_block_tx = &issue_cancellation_event_tx.clone();
+        let replace_block_tx = &replace_cancellation_event_tx.clone();
 
         block_listener
             .clone()
             .on_event::<UpdateActiveBlockEvent<InterBtcRuntime>, _, _, _>(
                 |event| async move {
-                    issue_block_tx.clone().send(event.height).await.unwrap();
-                    replace_block_tx.clone().send(event.height).await.unwrap();
+                    issue_block_tx
+                        .clone()
+                        .send(CancellationEvent::ParachainBlock(event.height))
+                        .await
+                        .unwrap();
+                    replace_block_tx
+                        .clone()
+                        .send(CancellationEvent::ParachainBlock(event.height))
+                        .await
+                        .unwrap();
                 },
                 |_err| (),
             )
@@ -364,7 +373,11 @@ async fn test_cancellation_succeeds() {
                         .accept_replace(&old_vault_id, 10000000u32.into(), 0u32.into(), address)
                         .await
                         .unwrap();
-                    replace_event_tx.clone().send(RequestEvent::Opened).await.unwrap();
+                    replace_cancellation_event_tx
+                        .clone()
+                        .send(CancellationEvent::Opened)
+                        .await
+                        .unwrap();
 
                     // setup the to-be-cancelled issue
                     user_provider
@@ -566,7 +579,7 @@ async fn test_automatic_issue_execution_succeeds() {
     };
 
     let issue_set = Arc::new(IssueRequests::new());
-    let (issue_event_tx, _issue_event_rx) = mpsc::channel::<RequestEvent>(16);
+    let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
     let service = join(
         vault::service::listen_for_issue_requests(
             btc_rpc.clone(),

@@ -1,4 +1,5 @@
 use super::Error;
+use crate::execution::parachain_blocks_to_bitcoin_blocks_rounded_up;
 use async_trait::async_trait;
 use futures::{channel::mpsc::Receiver, *};
 use runtime::{
@@ -8,33 +9,34 @@ use runtime::{
 use sp_core::H256;
 use std::marker::{Send, Sync};
 
-pub enum RequestEvent {
+pub enum Event {
     /// new issue requested / replace accepted
     Opened,
     /// issue / replace successfully executed
     Executed(H256),
+    ParachainBlock(BlockNumber),
+    BitcoinBlock(u32),
 }
 
 pub struct CancellationScheduler<P: IssuePallet + ReplacePallet + UtilFuncs + Clone> {
     parachain_rpc: P,
     vault_id: AccountId,
     period: Option<u32>,
+    parachain_height: BlockNumber,
+    bitcoin_height: u32,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct ActiveRequest {
     id: H256,
-    end_time: u32,
+    parachain_deadline_height: u32,
+    bitcoin_deadline_height: u32,
 }
 
 pub struct UnconvertedOpenTime {
     id: H256,
-    open_time: u32,
-}
-
-enum BlockOrEvent {
-    Block(BlockNumber),
-    Event(RequestEvent),
+    parachain_open_height: u32,
+    bitcoin_open_height: u32,
 }
 
 #[derive(PartialEq, Debug)]
@@ -82,7 +84,8 @@ impl<P: IssuePallet + ReplacePallet + Clone + Send + Sync> Canceller<P> for Issu
             .filter(|(_, issue)| issue.status == IssueRequestStatus::Pending)
             .map(|(id, issue)| UnconvertedOpenTime {
                 id: *id,
-                open_time: issue.opentime,
+                parachain_open_height: issue.opentime,
+                bitcoin_open_height: issue.btc_height,
             })
             .collect();
         Ok(ret)
@@ -120,7 +123,8 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for ReplaceCance
             .filter(|(_, replace)| replace.status == ReplaceRequestStatus::Pending)
             .map(|(id, replace)| UnconvertedOpenTime {
                 id: *id,
-                open_time: replace.accept_time,
+                parachain_open_height: replace.accept_time,
+                bitcoin_open_height: replace.btc_height,
             })
             .collect();
         Ok(ret)
@@ -141,49 +145,12 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for ReplaceCance
     }
 }
 
-/// Trait to allow us to mock the `select_events` function
-#[async_trait]
-trait EventSelector {
-    /// Sleep until either the timeout has occurred or an event has been received, and return
-    /// which event woke us up
-    async fn select_event(
-        self,
-        block_listener: &mut Receiver<BlockNumber>,
-        event_listener: &mut Receiver<RequestEvent>,
-    ) -> Result<BlockOrEvent, RuntimeError>;
-}
-
-struct ProductionEventSelector;
-
-#[async_trait]
-impl EventSelector for ProductionEventSelector {
-    async fn select_event(
-        self,
-        block_listener: &mut Receiver<BlockNumber>,
-        event_listener: &mut Receiver<RequestEvent>,
-    ) -> Result<BlockOrEvent, RuntimeError> {
-        // fuse and pin the tasks, required for select! macro
-        let task_block = block_listener.next().fuse();
-        let task_event = event_listener.next().fuse();
-        pin_mut!(task_block, task_event);
-
-        select! {
-            h = task_block => match h {
-                Some(block) => Ok(BlockOrEvent::Block(block)),
-                _ => Err(RuntimeError::ChannelClosed)
-            },
-            e = task_event => match e {
-                Some(event) => Ok(BlockOrEvent::Event(event)),
-                _ => Err(RuntimeError::ChannelClosed)
-            }
-        }
-    }
-}
-
 // verbose drain_filter
-fn drain_expired(requests: &mut Vec<ActiveRequest>, current_height: u32) -> Vec<ActiveRequest> {
+fn drain_expired(requests: &mut Vec<ActiveRequest>, current_height: u32, bitcoin_height: u32) -> Vec<ActiveRequest> {
     let mut expired = Vec::new();
-    let has_expired = |request: &ActiveRequest| request.end_time < current_height;
+    let has_expired = |request: &ActiveRequest| {
+        current_height > request.parachain_deadline_height && bitcoin_height > request.bitcoin_deadline_height
+    };
     let mut i = 0;
     while i != requests.len() {
         if has_expired(&requests[i]) {
@@ -198,11 +165,18 @@ fn drain_expired(requests: &mut Vec<ActiveRequest>, current_height: u32) -> Vec<
 
 /// The actual cancellation scheduling and handling
 impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> CancellationScheduler<P> {
-    pub fn new(parachain_rpc: P, vault_id: AccountId) -> CancellationScheduler<P> {
+    pub fn new(
+        parachain_rpc: P,
+        parachain_height: BlockNumber,
+        bitcoin_height: u32,
+        vault_id: AccountId,
+    ) -> CancellationScheduler<P> {
         CancellationScheduler {
             parachain_rpc,
             vault_id,
             period: None,
+            bitcoin_height,
+            parachain_height,
         }
     }
 
@@ -216,34 +190,41 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
     /// *`event_listener`: channel that signals relevant events _for this vault_.
     pub async fn handle_cancellation<T: Canceller<P>>(
         &mut self,
-        mut block_listener: Receiver<BlockNumber>,
-        mut event_listener: Receiver<RequestEvent>,
+        mut event_listener: Receiver<Event>,
     ) -> Result<(), RuntimeError> {
         let mut list_state = ListState::Invalid;
         let mut active_requests: Vec<ActiveRequest> = vec![];
 
         loop {
-            list_state = self
-                .wait_for_event::<T, _>(
-                    &mut block_listener,
-                    &mut event_listener,
-                    &mut active_requests,
-                    list_state,
-                    ProductionEventSelector,
-                )
-                .await?;
+            let event = event_listener.next().await.ok_or(RuntimeError::ChannelClosed)?;
+
+            list_state = self.process_event::<T>(event, &mut active_requests, list_state).await?;
         }
+    }
+
+    async fn cancel_requests<T: Canceller<P>>(&self, active_requests: &mut Vec<ActiveRequest>) -> ListState {
+        let cancellable_requests = drain_expired(active_requests, self.parachain_height, self.bitcoin_height);
+
+        for request in cancellable_requests {
+            match T::cancel_request(&self.parachain_rpc, request.id).await {
+                Ok(_) => tracing::info!("Canceled {} #{:?}", T::TYPE_NAME, request.id),
+                Err(e) => {
+                    // failed to cancel; get up-to-date request list in next iteration
+                    tracing::error!("Failed to cancel {}: {}", T::TYPE_NAME, e);
+                    return ListState::Invalid;
+                }
+            }
+        }
+        ListState::Valid
     }
 
     /// Handles one timeout or event_listener event. This method is split from handle_cancellation for
     /// testing purposes
-    async fn wait_for_event<T: Canceller<P>, U: EventSelector>(
+    async fn process_event<T: Canceller<P>>(
         &mut self,
-        block_listener: &mut Receiver<BlockNumber>,
-        event_listener: &mut Receiver<RequestEvent>,
+        event: Event,
         active_requests: &mut Vec<ActiveRequest>,
         list_state: ListState,
-        selector: U,
     ) -> Result<ListState, RuntimeError> {
         // try to get an up-to-date list of requests if we don't have it yet
         if let ListState::Invalid = list_state {
@@ -258,35 +239,27 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
             }
         }
 
-        match selector.select_event(block_listener, event_listener).await? {
-            BlockOrEvent::Block(height) => {
+        match event {
+            Event::ParachainBlock(height) => {
                 tracing::trace!(
                     "Received parachain block at active height {} for {}",
                     height,
                     T::TYPE_NAME
                 );
-
-                let cancellable_requests = drain_expired(active_requests, height);
-
-                for request in cancellable_requests {
-                    match T::cancel_request(&self.parachain_rpc, request.id).await {
-                        Ok(_) => tracing::info!("Canceled {} #{:?}", T::TYPE_NAME, request.id),
-                        Err(e) => {
-                            // failed to cancel; get up-to-date request list in next iteration
-                            tracing::error!("Failed to cancel {}: {}", T::TYPE_NAME, e);
-                            return Ok(ListState::Invalid);
-                        }
-                    }
-                }
-
-                Ok(ListState::Valid)
+                self.parachain_height = height;
+                Ok(self.cancel_requests::<T>(active_requests).await)
             }
-            BlockOrEvent::Event(RequestEvent::Executed(id)) => {
+            Event::BitcoinBlock(height) => {
+                tracing::trace!("Received Bitcoin block at height {} for {}", height, T::TYPE_NAME);
+                self.bitcoin_height = height;
+                Ok(self.cancel_requests::<T>(active_requests).await)
+            }
+            Event::Executed(id) => {
                 tracing::debug!("Received event: executed {} #{}", T::TYPE_NAME, id);
                 active_requests.retain(|x| x.id != id);
                 Ok(ListState::Valid)
             }
-            BlockOrEvent::Event(RequestEvent::Opened) => {
+            Event::Opened => {
                 tracing::debug!("Received event: opened {}", T::TYPE_NAME);
                 Ok(ListState::Invalid)
             }
@@ -302,33 +275,32 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
         }
 
         // get current block height and request period
-        let active_block_number = self.parachain_rpc.get_current_active_block_number().await?;
         let period = self.get_cached_period::<T>().await?;
 
-        let mut ret = open_requests
+        let ret = open_requests
             .iter()
-            .map(|UnconvertedOpenTime { id, open_time }| {
-                // invalid open_time. Return an error so we will retry the operation later
-                if *open_time > active_block_number {
-                    return Err(Error::InvalidOpenTime);
-                }
+            .map(
+                |UnconvertedOpenTime {
+                     id,
+                     parachain_open_height,
+                     bitcoin_open_height,
+                 }| {
+                    let parachain_deadline_height = parachain_open_height
+                        .checked_add(period)
+                        .ok_or(Error::ArithmeticOverflow)?;
 
-                let deadline_block = open_time + period;
+                    let bitcoin_deadline_height = bitcoin_open_height
+                        .checked_add(parachain_blocks_to_bitcoin_blocks_rounded_up(period)?)
+                        .ok_or(Error::ArithmeticOverflow)?;
 
-                let end_time = if active_block_number < deadline_block {
-                    deadline_block
-                } else {
-                    // deadline has already passed, should cancel ASAP
-                    // this branch can occur when e.g. the vault has been restarted
-                    0
-                };
-
-                Ok(ActiveRequest { id: *id, end_time })
-            })
+                    Ok(ActiveRequest {
+                        id: *id,
+                        parachain_deadline_height,
+                        bitcoin_deadline_height,
+                    })
+                },
+            )
             .collect::<Result<Vec<ActiveRequest>, Error>>()?;
-
-        // sort by ascending duration
-        ret.sort_by(|a, b| a.end_time.partial_cmp(&b.end_time).unwrap());
 
         Ok(ret)
     }
@@ -367,30 +339,6 @@ mod tests {
                 _ => panic!("expected: Err($err)"),
             }
         }};
-    }
-
-    struct TestEventSelector<F>
-    where
-        F: Fn(&mut Receiver<BlockNumber>, &mut Receiver<RequestEvent>) -> Result<BlockOrEvent, RuntimeError>,
-    {
-        on_event: F,
-    }
-
-    #[async_trait]
-    impl<F> EventSelector for TestEventSelector<F>
-    where
-        F: Fn(&mut Receiver<BlockNumber>, &mut Receiver<RequestEvent>) -> Result<BlockOrEvent, RuntimeError>
-            + std::marker::Send,
-    {
-        /// Sleep until either the timeout has occured or an event has been received, and return
-        /// which event woke us up
-        async fn select_event(
-            self,
-            block_listener: &mut Receiver<BlockNumber>,
-            event_listener: &mut Receiver<RequestEvent>,
-        ) -> Result<BlockOrEvent, RuntimeError> {
-            (self.on_event)(block_listener, event_listener)
-        }
     }
 
     mockall::mock! {
@@ -479,129 +427,105 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_open_process_delays_succeeds() {
-        // open_time = 95, current_block = 100, period = 10: remaining = 5 + margin
-        // open_time = 10,  current_block = 100, period = 10: remaining = 0
-        // open_time = 85,  current_block = 100, period = 10: remaining = -5 + margin
+        // parachain_open_time = 9_500, btc_start_height=100  current_block = 10_000, period = 1_000
+        // parachain_open_time = 1_000, btc_start_height=100  current_block = 10_000, period = 1_000
+        // parachain_open_time = 8_500, btc_start_height=100  current_block = 10_000, period = 1_000
         let mut parachain_rpc = MockProvider::default();
         parachain_rpc.expect_get_vault_issue_requests().times(1).returning(|_| {
             Ok(vec![
                 (
                     H256::from_slice(&[1; 32]),
                     InterBtcIssueRequest {
-                        opentime: 95,
+                        opentime: 9_500,
+                        btc_height: 100,
                         ..Default::default()
                     },
                 ),
                 (
                     H256::from_slice(&[2; 32]),
                     InterBtcIssueRequest {
-                        opentime: 10,
+                        opentime: 1_000,
+                        btc_height: 100,
                         ..Default::default()
                     },
                 ),
                 (
                     H256::from_slice(&[3; 32]),
                     InterBtcIssueRequest {
-                        opentime: 85,
+                        opentime: 8_500,
+                        btc_height: 100,
                         ..Default::default()
                     },
                 ),
             ])
         });
-        parachain_rpc
-            .expect_get_current_active_block_number()
-            .times(1)
-            .returning(|| Ok(100));
-        parachain_rpc.expect_get_issue_period().times(1).returning(|| Ok(10));
+        parachain_rpc.expect_get_issue_period().times(1).returning(|| Ok(1_000));
 
-        let mut canceller = CancellationScheduler::new(parachain_rpc, Default::default());
+        let mut canceller = CancellationScheduler::new(parachain_rpc, 10_000, 150, Default::default());
 
-        // checks that the delay is calculated correctly, and that the vec is sorted
+        // checks that the delay is calculated correctly
         assert_eq!(
             canceller.get_open_requests::<IssueCanceller>().await.unwrap(),
             vec![
                 ActiveRequest {
+                    id: H256::from_slice(&[1; 32]),
+                    parachain_deadline_height: 10_500,
+                    bitcoin_deadline_height: 110,
+                },
+                ActiveRequest {
                     id: H256::from_slice(&[2; 32]),
-                    end_time: 0
+                    parachain_deadline_height: 2_000,
+                    bitcoin_deadline_height: 110,
                 },
                 ActiveRequest {
                     id: H256::from_slice(&[3; 32]),
-                    end_time: 0
-                },
-                ActiveRequest {
-                    id: H256::from_slice(&[1; 32]),
-                    end_time: 105
+                    parachain_deadline_height: 9_500,
+                    bitcoin_deadline_height: 110,
                 },
             ]
         );
     }
-    #[tokio::test]
-    async fn test_get_open_process_delays_with_invalid_opentime_fails() {
-        // if current_block is 5 and the issue was open at 10, something went wrong...
-        let mut parachain_rpc = MockProvider::default();
-        parachain_rpc.expect_get_vault_issue_requests().times(1).returning(|_| {
-            Ok(vec![(
-                H256::from_slice(&[1; 32]),
-                InterBtcIssueRequest {
-                    opentime: 10,
-                    ..Default::default()
-                },
-            )])
-        });
-        parachain_rpc
-            .expect_get_current_active_block_number()
-            .times(1)
-            .returning(|| Ok(5));
-        parachain_rpc.expect_get_issue_period().returning(|| Ok(10));
-
-        let mut canceller = CancellationScheduler::new(parachain_rpc, Default::default());
-        assert_err!(
-            canceller.get_open_requests::<IssueCanceller>().await,
-            Error::InvalidOpenTime
-        );
-    }
 
     #[tokio::test]
-    async fn test_wait_for_event_succeeds() {
+    async fn test_process_event_succeeds() {
         // check that we actually cancel the issue when it expires
         let mut parachain_rpc = MockProvider::default();
-        parachain_rpc.expect_get_vault_issue_requests().times(1).returning(|_| {
+        parachain_rpc.expect_get_vault_issue_requests().returning(|_| {
             Ok(vec![(
                 H256::from_slice(&[1; 32]),
                 InterBtcIssueRequest {
-                    opentime: 10,
+                    opentime: 10_000,
                     ..Default::default()
                 },
             )])
         });
-        parachain_rpc
-            .expect_get_current_active_block_number()
-            .times(1)
-            .returning(|| Ok(15));
-        parachain_rpc.expect_get_issue_period().returning(|| Ok(10));
+
+        parachain_rpc.expect_get_issue_period().returning(|| Ok(100));
 
         // check that it cancels the issue
-        parachain_rpc.expect_cancel_issue().times(1).returning(|_| Ok(()));
+        parachain_rpc.expect_cancel_issue().returning(|_| Ok(()));
 
-        let (_, mut block_listener) = mpsc::channel::<BlockNumber>(16);
-        let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
         let mut active_processes: Vec<ActiveRequest> = vec![];
-        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, AccountId::default());
-
-        // simulate that we have a a new block
-        let selector = TestEventSelector {
-            on_event: |_, _| Ok(BlockOrEvent::Block(30)),
-        };
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
 
         assert_eq!(
             cancellation_scheduler
-                .wait_for_event::<IssueCanceller, _>(
-                    &mut block_listener,
-                    &mut event_listener,
+                .process_event::<IssueCanceller>(
+                    Event::ParachainBlock(15000),
                     &mut active_processes,
                     ListState::Invalid,
-                    selector
                 )
+                .await
+                .unwrap(),
+            ListState::Valid
+        );
+
+        // not empty yet..
+        assert!(!active_processes.is_empty());
+
+        assert_eq!(
+            cancellation_scheduler
+                .process_event::<IssueCanceller>(Event::BitcoinBlock(2), &mut active_processes, ListState::Valid,)
                 .await
                 .unwrap(),
             ListState::Valid
@@ -612,45 +536,106 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_wait_for_event_remove_from_list() {
+    async fn test_process_event_only_removes_when_both_parachain_and_bitcoin_expired() {
+        // check that we actually cancel the issue when it expires
+        let mut parachain_rpc = MockProvider::default();
+        parachain_rpc.expect_get_vault_issue_requests().returning(|_| {
+            Ok(vec![(
+                H256::from_slice(&[1; 32]),
+                InterBtcIssueRequest {
+                    opentime: 10_000,
+                    btc_height: 100,
+                    ..Default::default()
+                },
+            )])
+        });
+
+        parachain_rpc.expect_get_issue_period().returning(|| Ok(1000));
+
+        // check that it cancels the issue
+        parachain_rpc.expect_cancel_issue().returning(|_| Ok(()));
+
+        let mut active_processes: Vec<ActiveRequest> = vec![];
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 10_001, 101, AccountId::default());
+
+        // deadline is at parachain_height = 11_000 and bitcoin_height = 110
+
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::ParachainBlock(10500), &mut active_processes, ListState::Invalid)
+            .await
+            .unwrap();
+        assert!(!active_processes.is_empty());
+
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::BitcoinBlock(110), &mut active_processes, ListState::Valid)
+            .await
+            .unwrap();
+
+        // not removed yet, both not yet expired
+        assert!(!active_processes.is_empty());
+
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::ParachainBlock(11001), &mut active_processes, ListState::Valid)
+            .await
+            .unwrap();
+
+        // not removed yet; bitcoin not expired
+        assert!(!active_processes.is_empty());
+
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::ParachainBlock(11000), &mut active_processes, ListState::Valid)
+            .await
+            .unwrap();
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::BitcoinBlock(111), &mut active_processes, ListState::Valid)
+            .await
+            .unwrap();
+
+        // not removed yet - parachain not expired
+        assert!(!active_processes.is_empty());
+
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::ParachainBlock(11001), &mut active_processes, ListState::Valid)
+            .await
+            .unwrap();
+
+        // both parachain and bitcoin expired, should be removed now
+        assert!(active_processes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_process_event_remove_from_list() {
         // checks that we don't query for new issues, and that when the issue gets executed, it
         // is removed from the list
         let parachain_rpc = MockProvider::default();
 
-        let (_, mut block_listener) = mpsc::channel::<BlockNumber>(16);
-        let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
         let mut active_processes: Vec<ActiveRequest> = vec![
             ActiveRequest {
                 id: H256::from_slice(&[1; 32]),
-                end_time: 0,
+                parachain_deadline_height: 0,
+                bitcoin_deadline_height: 0,
             },
             ActiveRequest {
                 id: H256::from_slice(&[2; 32]),
-                end_time: 0,
+                parachain_deadline_height: 0,
+                bitcoin_deadline_height: 0,
             },
             ActiveRequest {
                 id: H256::from_slice(&[3; 32]),
-                end_time: 0,
+                parachain_deadline_height: 0,
+                bitcoin_deadline_height: 0,
             },
         ];
 
-        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, AccountId::default());
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
 
         // simulate that the issue gets executed
-        let selector = TestEventSelector {
-            on_event: |_, _| Ok(BlockOrEvent::Event(RequestEvent::Executed(H256::from_slice(&[2; 32])))),
-        };
+        let event = Event::Executed(H256::from_slice(&[2; 32]));
 
         // simulate that the issue gets executed
         assert_eq!(
             cancellation_scheduler
-                .wait_for_event::<IssueCanceller, _>(
-                    &mut block_listener,
-                    &mut event_listener,
-                    &mut active_processes,
-                    ListState::Valid,
-                    selector
-                )
+                .process_event::<IssueCanceller>(event, &mut active_processes, ListState::Valid)
                 .await
                 .unwrap(),
             ListState::Valid
@@ -664,7 +649,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_wait_for_event_get_new_list() {
+    async fn test_process_event_get_new_list() {
         // checks that we query for new issues, and that when the issue gets executed, it
         // is removed from the list
         let mut parachain_rpc = MockProvider::default();
@@ -677,31 +662,17 @@ mod tests {
                 },
             )])
         });
-        parachain_rpc
-            .expect_get_current_active_block_number()
-            .times(1)
-            .returning(|| Ok(15));
         parachain_rpc.expect_get_issue_period().returning(|| Ok(10));
 
-        let (_, mut block_listener) = mpsc::channel::<BlockNumber>(16);
-        let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
         let mut active_processes: Vec<ActiveRequest> = vec![];
-        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, AccountId::default());
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 15, 0, AccountId::default());
 
         // simulate that the issue gets executed
-        let selector = TestEventSelector {
-            on_event: |_, _| Ok(BlockOrEvent::Event(RequestEvent::Executed(H256::from_slice(&[1; 32])))),
-        };
+        let event = Event::Executed(H256::from_slice(&[1; 32]));
 
         assert_eq!(
             cancellation_scheduler
-                .wait_for_event::<IssueCanceller, _>(
-                    &mut block_listener,
-                    &mut event_listener,
-                    &mut active_processes,
-                    ListState::Invalid,
-                    selector
-                )
+                .process_event::<IssueCanceller>(event, &mut active_processes, ListState::Invalid)
                 .await
                 .unwrap(),
             ListState::Valid
@@ -712,7 +683,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_wait_for_event_timeout() {
+    async fn test_process_event_timeout() {
         // check that if we fail to get the issue list, we return Invalid, but not Err
         let mut parachain_rpc = MockProvider::default();
         parachain_rpc
@@ -720,26 +691,16 @@ mod tests {
             .times(1)
             .returning(|_| Err(RuntimeError::BlockNotFound));
 
-        let (_, mut block_listener) = mpsc::channel::<BlockNumber>(16);
-        let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
         let mut active_processes: Vec<ActiveRequest> = vec![];
-        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, AccountId::default());
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
 
         // simulate that we have a timeout (new issue request opened)
-        let selector = TestEventSelector {
-            on_event: |_, _| Ok(BlockOrEvent::Event(RequestEvent::Opened)),
-        };
+        let event = Event::Opened;
 
         // state should remain invalid
         assert_eq!(
             cancellation_scheduler
-                .wait_for_event::<IssueCanceller, _>(
-                    &mut block_listener,
-                    &mut event_listener,
-                    &mut active_processes,
-                    ListState::Invalid,
-                    selector
-                )
+                .process_event::<IssueCanceller>(event, &mut active_processes, ListState::Invalid)
                 .await
                 .unwrap(),
             ListState::Invalid
@@ -747,29 +708,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_wait_for_event_shutdown() {
+    async fn test_process_event_shutdown() {
         // check that if the selector fails, the error is propagated
         let parachain_rpc = MockProvider::default();
 
-        let (_, mut block_listener) = mpsc::channel::<BlockNumber>(16);
-        let (_, mut event_listener) = mpsc::channel::<RequestEvent>(16);
-        let mut active_processes: Vec<ActiveRequest> = vec![];
-        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, AccountId::default());
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
 
-        // simulate that we have a timeout
-        let selector = TestEventSelector {
-            on_event: |_, _| Err(RuntimeError::ChannelClosed),
-        };
+        // dropping the tx immediately - this effectively closes the channel
+        let (_, replace_event_rx) = mpsc::channel::<Event>(16);
 
         assert_err!(
             cancellation_scheduler
-                .wait_for_event::<IssueCanceller, _>(
-                    &mut block_listener,
-                    &mut event_listener,
-                    &mut active_processes,
-                    ListState::Valid,
-                    selector
-                )
+                .handle_cancellation::<IssueCanceller>(replace_event_rx)
                 .await,
             RuntimeError::ChannelClosed
         );

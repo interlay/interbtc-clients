@@ -1,4 +1,4 @@
-use crate::{Error, IssueRequests, RequestEvent};
+use crate::{Error, Event, IssueRequests};
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt};
 use runtime::{
@@ -193,7 +193,7 @@ async fn add_new_deposit_key<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
 pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     bitcoin_core: B,
     btc_parachain: InterBtcParachain,
-    event_channel: Sender<RequestEvent>,
+    event_channel: Sender<Event>,
     issue_set: Arc<IssueRequests>,
 ) -> Result<(), ServiceError> {
     let bitcoin_core = &bitcoin_core;
@@ -207,7 +207,7 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
                     tracing::info!("Received request issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
-                    let _ = event_channel.clone().send(RequestEvent::Opened).await;
+                    let _ = event_channel.clone().send(Event::Opened).await;
 
                     if let Err(e) = add_new_deposit_key(bitcoin_core, event.issue_id, event.vault_public_key).await {
                         tracing::error!("Failed to add new deposit key #{}: {}", event.issue_id, e.to_string());
@@ -237,7 +237,7 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
 /// * `issue_set` - all issue ids observed since vault started
 pub async fn listen_for_issue_executes(
     btc_parachain: InterBtcParachain,
-    event_channel: Sender<RequestEvent>,
+    event_channel: Sender<Event>,
     issue_set: Arc<IssueRequests>,
 ) -> Result<(), ServiceError> {
     let btc_parachain = &btc_parachain;
@@ -250,7 +250,7 @@ pub async fn listen_for_issue_executes(
                     tracing::info!("Received execute issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
-                    let _ = event_channel.clone().send(RequestEvent::Executed(event.issue_id)).await;
+                    let _ = event_channel.clone().send(Event::Executed(event.issue_id)).await;
                 }
 
                 tracing::trace!("issue #{} executed, no longer watching", event.issue_id);

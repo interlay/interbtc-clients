@@ -1,5 +1,7 @@
 use crate::error::Error;
-use bitcoin::{BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata};
+use bitcoin::{
+    BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata, BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
+};
 use futures::{stream::StreamExt, try_join};
 use runtime::{
     pallets::refund::RequestRefundEvent, BtcAddress, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRedeemRequest,
@@ -11,15 +13,40 @@ use std::{collections::HashMap, convert::TryInto, time::Duration};
 use tokio::time::delay_for;
 const ON_FORK_RETRY_DELAY: Duration = Duration::from_secs(10);
 
+#[derive(Debug, Clone, PartialEq)]
+struct Deadline {
+    parachain: u32,
+    bitcoin: u32,
+}
+
 #[derive(Debug, Clone)]
 pub struct Request {
     hash: H256,
     btc_height: Option<u32>,
     /// Deadline (unit: active block number) after which payments will no longer be attempted.
-    deadline: Option<u32>,
+    deadline: Option<Deadline>,
     amount: u128,
     btc_address: BtcAddress,
     request_type: RequestType,
+}
+
+pub fn parachain_blocks_to_bitcoin_blocks_rounded_up(parachain_blocks: u32) -> Result<u32, Error> {
+    let millis = (parachain_blocks as u64)
+        .checked_mul(runtime::MILLISECS_PER_BLOCK)
+        .ok_or(Error::ArithmeticOverflow)?;
+
+    let denominator = BITCOIN_BLOCK_INTERVAL.as_millis();
+
+    // do -num_bitcoin_blocks = ceil(millis / demoninator)
+    let num_bitcoin_blocks = (millis as u128)
+        .checked_add(denominator)
+        .ok_or(Error::ArithmeticOverflow)?
+        .checked_sub(1)
+        .ok_or(Error::ArithmeticUnderflow)?
+        .checked_div(denominator)
+        .ok_or(Error::ArithmeticUnderflow)?;
+
+    Ok(num_bitcoin_blocks.try_into()?)
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -30,19 +57,36 @@ pub enum RequestType {
 }
 
 impl Request {
-    fn duration_to_blocks(duration: Duration) -> Result<u32, Error> {
+    fn duration_to_parachain_blocks(duration: Duration) -> Result<u32, Error> {
         let num_blocks = duration.as_millis() / (runtime::MILLISECS_PER_BLOCK as u128);
         Ok(num_blocks.try_into()?)
     }
 
-    fn calculate_deadline(opentime: u32, period: u32, payment_margin: Duration) -> Result<u32, Error> {
+    fn calculate_deadline(
+        opentime: u32,
+        btc_start_height: u32,
+        period: u32,
+        payment_margin: Duration,
+    ) -> Result<Deadline, Error> {
+        let margin_parachain_blocks = Self::duration_to_parachain_blocks(payment_margin)?;
         // if margin > period, we allow deadline to be before opentime. The rest of the code
         // can deal with the expired deadline as normal.
-        opentime
+        let parachain_deadline = opentime
             .checked_add(period)
             .ok_or(Error::ArithmeticOverflow)?
-            .checked_sub(Self::duration_to_blocks(payment_margin)?)
-            .ok_or(Error::ArithmeticUnderflow)
+            .checked_sub(margin_parachain_blocks)
+            .ok_or(Error::ArithmeticUnderflow)?;
+
+        let bitcoin_deadline = btc_start_height
+            .checked_add(parachain_blocks_to_bitcoin_blocks_rounded_up(period)?)
+            .ok_or(Error::ArithmeticOverflow)?
+            .checked_sub(parachain_blocks_to_bitcoin_blocks_rounded_up(margin_parachain_blocks)?)
+            .ok_or(Error::ArithmeticUnderflow)?;
+
+        Ok(Deadline {
+            bitcoin: bitcoin_deadline,
+            parachain: parachain_deadline,
+        })
     }
 
     /// Constructs a Request for the given InterBtcRedeemRequest
@@ -55,6 +99,7 @@ impl Request {
             hash,
             deadline: Some(Self::calculate_deadline(
                 request.opentime,
+                request.btc_height,
                 request.period,
                 payment_margin,
             )?),
@@ -75,6 +120,7 @@ impl Request {
             hash,
             deadline: Some(Self::calculate_deadline(
                 request.accept_time,
+                request.btc_height,
                 request.period,
                 payment_margin,
             )?),
@@ -129,9 +175,10 @@ impl Request {
         num_confirmations: u32,
     ) -> Result<(), Error> {
         // ensure the deadline has not expired yet
-        // TODO: subtract a (configurable) safety margin so we don't make payments too close to deadline
-        if let Some(deadline) = self.deadline {
-            if parachain_rpc.get_current_active_block_number().await? >= deadline {
+        if let Some(ref deadline) = self.deadline {
+            if parachain_rpc.get_current_active_block_number().await? >= deadline.parachain
+                && btc_rpc.get_block_count().await? >= deadline.bitcoin as u64
+            {
                 return Err(Error::DeadlineExpired);
             }
         }
@@ -641,85 +688,132 @@ mod tests {
 
     #[test]
     fn calculate_deadline_behavior() {
+        let margin = Duration::from_secs(60 * 60); // 1 hour
+        let parachain_blocks = margin.as_millis() as u32 / (runtime::MILLISECS_PER_BLOCK as u32);
+        let bitcoin_blocks = parachain_blocks / 100;
+
         assert_ok!(
-            Request::calculate_deadline(100, 50, Duration::from_millis(runtime::MILLISECS_PER_BLOCK)),
-            149
+            Request::calculate_deadline(0, 0, 3 * parachain_blocks, margin),
+            Deadline {
+                parachain: 2 * parachain_blocks,
+                bitcoin: 2 * bitcoin_blocks
+            }
         );
+
         assert_ok!(
-            Request::calculate_deadline(100, 50, 25 * Duration::from_millis(runtime::MILLISECS_PER_BLOCK)),
-            125
-        );
-        assert_ok!(
-            Request::calculate_deadline(100, 50, 50 * Duration::from_millis(runtime::MILLISECS_PER_BLOCK)),
-            100
+            Request::calculate_deadline(100, 50, 3 * parachain_blocks, margin),
+            Deadline {
+                parachain: 100 + 2 * parachain_blocks,
+                bitcoin: 50 + 2 * bitcoin_blocks
+            }
         );
 
         // if margin > period, deadline will be before opentime. The rest of the code will deal with the expired
         // deadline as normal.
         assert_ok!(
-            Request::calculate_deadline(100, 50, 60 * Duration::from_millis(runtime::MILLISECS_PER_BLOCK)),
-            90
+            Request::calculate_deadline(10_000, 10_000, 0, margin),
+            Deadline {
+                parachain: 10_000 - parachain_blocks,
+                bitcoin: 10_000 - bitcoin_blocks
+            }
         );
 
         // if margin > period + opentime, the result would be negative, so we expect an error.
-        assert_err!(
-            Request::calculate_deadline(100, 50, 175 * Duration::from_millis(runtime::MILLISECS_PER_BLOCK)),
-            Error::ArithmeticUnderflow
-        );
+        assert_err!(Request::calculate_deadline(0, 0, 0, margin), Error::ArithmeticUnderflow);
     }
 
-    #[tokio::test]
-    async fn should_pay_and_execute_redeem() {
-        let mut parachain_rpc = MockProvider::default();
-        parachain_rpc
-            .expect_get_current_active_block_number()
-            .times(1)
-            .returning(|| Ok(50));
-        parachain_rpc
-            .expect_execute_redeem()
-            .times(1)
-            .returning(|_, _, _| Ok(()));
-        parachain_rpc
-            .expect_wait_for_block_in_relay()
-            .times(1)
-            .returning(|_, _| Ok(()));
+    mod pay_and_execute_redeem_tests {
+        use super::*;
 
-        let mut btc_rpc = MockBitcoin::default();
-        btc_rpc.expect_create_transaction::<BtcAddress>().returning(|_, _, _| {
-            Ok(LockedTransaction::new(
-                Transaction {
-                    version: 0,
-                    lock_time: 0,
-                    input: vec![],
-                    output: vec![],
-                },
-                Default::default(),
-                None,
-            ))
-        });
+        fn should_pay_and_execute_with_deadlines(
+            parachain_deadline: u32,
+            current_parachain_height: u32,
+            bitcoin_deadline: u32,
+            current_bitcoin_height: u32,
+        ) -> (Request, MockProvider, MockBitcoin) {
+            let mut parachain_rpc = MockProvider::default();
+            parachain_rpc
+                .expect_get_current_active_block_number()
+                .returning(move || Ok(current_parachain_height));
+            parachain_rpc.expect_execute_redeem().returning(|_, _, _| Ok(()));
+            parachain_rpc.expect_wait_for_block_in_relay().returning(|_, _| Ok(()));
 
-        btc_rpc.expect_send_transaction().returning(|_| Ok(Txid::default()));
+            let mut btc_rpc = MockBitcoin::default();
 
-        btc_rpc.expect_wait_for_transaction_metadata().returning(|_, _| {
-            Ok(TransactionMetadata {
-                txid: Txid::default(),
-                proof: vec![],
-                raw_tx: vec![],
-                block_height: 0,
-                block_hash: BlockHash::default(),
-            })
-        });
+            btc_rpc
+                .expect_get_block_count()
+                .returning(move || Ok(current_bitcoin_height as u64));
 
-        let request = Request {
-            amount: 100,
-            deadline: Some(100),
-            btc_address: BtcAddress::P2SH(H160::from_slice(&[1; 20])),
-            hash: H256::from_slice(&[1; 32]),
-            btc_height: None,
-            request_type: RequestType::Redeem,
-        };
+            btc_rpc.expect_create_transaction::<BtcAddress>().returning(|_, _, _| {
+                Ok(LockedTransaction::new(
+                    Transaction {
+                        version: 0,
+                        lock_time: 0,
+                        input: vec![],
+                        output: vec![],
+                    },
+                    Default::default(),
+                    None,
+                ))
+            });
 
-        assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
+            btc_rpc.expect_send_transaction().returning(|_| Ok(Txid::default()));
+
+            btc_rpc.expect_wait_for_transaction_metadata().returning(|_, _| {
+                Ok(TransactionMetadata {
+                    txid: Txid::default(),
+                    proof: vec![],
+                    raw_tx: vec![],
+                    block_height: 0,
+                    block_hash: BlockHash::default(),
+                })
+            });
+
+            let request = Request {
+                amount: 100,
+                deadline: Some(Deadline {
+                    parachain: parachain_deadline,
+                    bitcoin: bitcoin_deadline,
+                }),
+                btc_address: BtcAddress::P2SH(H160::from_slice(&[1; 20])),
+                hash: H256::from_slice(&[1; 32]),
+                btc_height: None,
+                request_type: RequestType::Redeem,
+            };
+
+            (request, parachain_rpc, btc_rpc)
+        }
+
+        #[tokio::test]
+        async fn should_pay_and_execute_redeem_if_neither_parachain_nor_bitcoin_deadlines_expired() {
+            let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 50, 100, 50);
+
+            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
+        }
+
+        #[tokio::test]
+        async fn should_pay_and_execute_redeem_if_only_parachain_deadline_expired() {
+            let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 101, 100, 50);
+
+            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
+        }
+
+        #[tokio::test]
+        async fn should_pay_and_execute_redeem_if_only_bitcoin_deadline_expired() {
+            let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 50, 100, 101);
+
+            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
+        }
+
+        #[tokio::test]
+        async fn should_not_pay_and_execute_redeem_if_both_deadlines_expired() {
+            let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 101, 100, 101);
+
+            assert_err!(
+                request.pay_and_execute(parachain_rpc, btc_rpc, 6).await,
+                Error::DeadlineExpired
+            );
+        }
     }
 
     #[tokio::test]
@@ -729,12 +823,16 @@ mod tests {
             .expect_get_current_active_block_number()
             .times(1)
             .returning(|| Ok(110));
-        let btc_rpc = MockBitcoin::default();
+        let mut btc_rpc = MockBitcoin::default();
+        btc_rpc.expect_get_block_count().times(1).returning(|| Ok(110));
         // omitting other mocks to test that they do not get called
 
         let request = Request {
             amount: 100,
-            deadline: Some(100),
+            deadline: Some(Deadline {
+                parachain: 100,
+                bitcoin: 100,
+            }),
             btc_address: BtcAddress::P2SH(H160::from_slice(&[1; 20])),
             hash: H256::from_slice(&[1; 32]),
             btc_height: None,
@@ -791,7 +889,10 @@ mod tests {
 
         let request = Request {
             amount: 100,
-            deadline: Some(100),
+            deadline: Some(Deadline {
+                parachain: 100,
+                bitcoin: 100,
+            }),
             btc_address: BtcAddress::P2SH(H160::from_slice(&[1; 20])),
             hash: H256::from_slice(&[1; 32]),
             btc_height: None,

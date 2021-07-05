@@ -32,7 +32,7 @@ pub mod service {
         vaults::{listen_for_vaults_registered, listen_for_wallet_updates, report_vault_thefts},
     };
 }
-pub use crate::{cancellation::RequestEvent, error::Error, system::*, types::IssueRequests};
+pub use crate::{cancellation::Event, error::Error, system::*, types::IssueRequests};
 pub use vaults::Vaults;
 
 pub(crate) async fn deposit_collateral(api: &InterBtcParachain, amount: u128) -> Result<(), Error> {
