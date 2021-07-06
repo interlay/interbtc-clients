@@ -32,8 +32,8 @@ hyper = "0.10"
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.5" }
 
 [dependencies.interbtc-bitcoin]
-git = "ssh://git@github.com/interlay/interbtc.git"
-branch = "master"
+git = "https://github.com/interlay/interbtc"
+rev = "46637ab87025e7df1bfd828d353d6e854183c2ac"
 package = "bitcoin"
 optional = true
 

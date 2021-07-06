@@ -88,6 +88,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "739f4a8db6605981345c5654f3a85b056ce52f37a39d34da03f25bf2151ea16e"
 
 [[package]]
+name = "ahash"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43bb833f0bf979d8475d38fbf09ed3b8a55e1885fe93ad3f93239fc6a4f17b98"
+dependencies = [
+ "getrandom 0.2.3",
+ "once_cell",
+ "version_check 0.9.3",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -119,15 +130,6 @@ name = "anyhow"
 version = "1.0.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "15af2628f6890fe2609a3b91bef4c83450512802e59489f9c1cb1fa5df064a61"
-
-[[package]]
-name = "approx"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f2a05fd1bd10b2527e20a2cd32d8873d115b8b39fe219ee25f42a8aca6ba278"
-dependencies = [
- "num-traits",
-]
 
 [[package]]
 name = "approx"
@@ -214,12 +216,11 @@ dependencies = [
 
 [[package]]
 name = "async-io"
-version = "1.4.1"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bbfd5cf2794b1e908ea8457e6c45f8f8f1f6ec5f74617bf4662623f47503c3b"
+checksum = "a811e6a479f2439f0c04038796b5cfb3d2ad56c230e0f2d3f7b04d68cfee607b"
 dependencies = [
  "concurrent-queue",
- "fastrand",
  "futures-lite",
  "libc",
  "log 0.4.14",
@@ -289,7 +290,7 @@ dependencies = [
  "memchr",
  "num_cpus",
  "once_cell",
- "pin-project-lite 0.2.6",
+ "pin-project-lite 0.2.7",
  "pin-utils",
  "slab",
  "wasm-bindgen-futures",
@@ -349,7 +350,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "memchr",
- "pin-project-lite 0.2.6",
+ "pin-project-lite 0.2.7",
 ]
 
 [[package]]
@@ -362,7 +363,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "memchr",
- "pin-project-lite 0.2.6",
+ "pin-project-lite 0.2.7",
 ]
 
 [[package]]
@@ -545,7 +546,7 @@ dependencies = [
 [[package]]
 name = "bitcoin"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "bitcoin_hashes 0.7.6",
  "frame-support",
@@ -769,7 +770,7 @@ checksum = "bd769563b4ea2953e2825c9e6b7470a5f55f67e0be00030bf3e390a2a6071f64"
 [[package]]
 name = "btc-parachain"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "bitcoin 0.8.0",
  "btc-parachain-rpc",
@@ -798,7 +799,7 @@ dependencies = [
 [[package]]
 name = "btc-parachain-primitives"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "bitcoin 0.8.0",
  "bstringify",
@@ -816,7 +817,7 @@ dependencies = [
 [[package]]
 name = "btc-parachain-rpc"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "btc-parachain-primitives",
  "jsonrpc-core 15.1.0",
@@ -843,7 +844,7 @@ dependencies = [
 [[package]]
 name = "btc-parachain-runtime"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "btc-parachain-primitives",
  "btc-relay",
@@ -876,6 +877,9 @@ dependencies = [
  "nomination",
  "orml-tokens",
  "orml-traits",
+ "orml-unknown-tokens",
+ "orml-xcm-support",
+ "orml-xtokens",
  "pallet-aura",
  "pallet-balances",
  "pallet-collective",
@@ -922,7 +926,7 @@ dependencies = [
 [[package]]
 name = "btc-parachain-service"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "btc-parachain-rpc",
  "btc-parachain-runtime",
@@ -968,7 +972,7 @@ dependencies = [
 [[package]]
 name = "btc-relay"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "bitcoin 0.8.0",
  "frame-benchmarking",
@@ -981,6 +985,7 @@ dependencies = [
  "sp-arithmetic 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
  "sp-core 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
  "sp-io 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
+ "sp-runtime 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
  "sp-std 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
 ]
 
@@ -1318,9 +1323,9 @@ dependencies = [
 
 [[package]]
 name = "cpufeatures"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed00c67cb5d0a7d64a44f6ad2668db7e7530311dd53ea79bcd4fb022c64911c8"
+checksum = "66c99696f6c9dd7f35d486b9d04d7e6e202aa3e8c40d553f2fdf5e7e0c6a71ef"
 dependencies = [
  "libc",
 ]
@@ -1770,7 +1775,7 @@ dependencies = [
 [[package]]
 name = "currency"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -2164,7 +2169,7 @@ checksum = "f7531096570974c3a9dcf9e4b8e1cede1ec26cf5046219fb3b9d897503b9be59"
 [[package]]
 name = "exchange-rate-oracle"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -2267,7 +2272,7 @@ dependencies = [
 [[package]]
 name = "fee"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "currency",
  "frame-benchmarking",
@@ -2715,7 +2720,7 @@ dependencies = [
  "futures-io",
  "memchr",
  "parking",
- "pin-project-lite 0.2.6",
+ "pin-project-lite 0.2.7",
  "waker-fn",
 ]
 
@@ -2782,7 +2787,7 @@ dependencies = [
  "futures-sink",
  "futures-task",
  "memchr",
- "pin-project-lite 0.2.6",
+ "pin-project-lite 0.2.7",
  "pin-utils",
  "proc-macro-hack",
  "proc-macro-nested",
@@ -2972,7 +2977,7 @@ dependencies = [
  "http 0.2.4",
  "indexmap",
  "slab",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tokio-util 0.6.7",
  "tracing",
 ]
@@ -3012,7 +3017,16 @@ version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
 dependencies = [
- "ahash",
+ "ahash 0.4.7",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
+dependencies = [
+ "ahash 0.7.4",
 ]
 
 [[package]]
@@ -3026,9 +3040,9 @@ dependencies = [
 
 [[package]]
 name = "hermit-abi"
-version = "0.1.18"
+version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "322f4de77956e22ed0e5032c359a0f1273f1f7f0d79bfa3b8ffbc730d7fbcc5c"
+checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
 dependencies = [
  "libc",
 ]
@@ -3057,9 +3071,9 @@ dependencies = [
 
 [[package]]
 name = "hex-literal"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5af1f635ef1bc545d78392b136bfe1c9809e029023c84a3638a864a10b8819c8"
+checksum = "76505e26b6ca3bbdbbb360b68472abbb80998c5fa5dc43672eca34f28258e138"
 
 [[package]]
 name = "hex-literal-impl"
@@ -3170,7 +3184,7 @@ checksum = "60daa14be0e0786db0f03a9e57cb404c9d756eed2b6c62b9ea98ec5743ec75a9"
 dependencies = [
  "bytes 1.0.1",
  "http 0.2.4",
- "pin-project-lite 0.2.6",
+ "pin-project-lite 0.2.7",
 ]
 
 [[package]]
@@ -3295,9 +3309,9 @@ dependencies = [
  "httparse",
  "httpdate 1.0.1",
  "itoa",
- "pin-project-lite 0.2.6",
+ "pin-project-lite 0.2.7",
  "socket2 0.4.0",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tower-service",
  "tracing",
  "want 0.3.0",
@@ -3333,7 +3347,7 @@ dependencies = [
  "log 0.4.14",
  "rustls 0.19.1",
  "rustls-native-certs 0.5.0",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tokio-rustls 0.22.0",
  "webpki 0.21.4",
 ]
@@ -3412,9 +3426,9 @@ dependencies = [
 
 [[package]]
 name = "impl-codec"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df170efa359aebdd5cb7fe78edcc67107748e4737bdca8a8fb40d15ea7a877ed"
+checksum = "161ebdfec3c8e3b52bf61c4f3550a1eea4f9579d10dc1b936f3171ebdcd6c443"
 dependencies = [
  "parity-scale-codec",
 ]
@@ -3450,12 +3464,12 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.6.2"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "824845a0bf897a9042383849b02c1bc219c2383772efcd5c6f9766fa4b81aef3"
+checksum = "bc633605454125dec4b66843673f01c7df2b89479b32e0ed634e43a91cff62a5"
 dependencies = [
  "autocfg 1.0.1",
- "hashbrown",
+ "hashbrown 0.11.2",
  "serde",
 ]
 
@@ -3475,6 +3489,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "276ec31bcb4a9ee45f58bec6f9ec700ae4cf4f4f8f2fa7e06cb406bd5ffdd770"
 dependencies = [
  "num-traits",
+]
+
+[[package]]
+name = "interbtc-telemetry-types"
+version = "0.3.0"
+source = "git+https://github.com/interlay/interbtc-telemetry?rev=8e47786#8e477861277956ea802842559a8a607048e1474e"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sp-core 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
 ]
 
 [[package]]
@@ -3523,7 +3547,7 @@ checksum = "68f2d64f2edebec4ce84ad108148e67e1064789bee435edc5b60ad398714a3a9"
 [[package]]
 name = "issue"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "bitcoin 0.8.0",
  "btc-relay",
@@ -4519,11 +4543,11 @@ dependencies = [
 
 [[package]]
 name = "linregress"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1ff7f341d23e1275eec0656a9a07225fcc86216c4322392868adffe59023d1a"
+checksum = "1e6e407dadb4ca4b31bc69c27aff00e7ca4534fdcee855159b039a7cebb5f395"
 dependencies = [
- "nalgebra 0.27.1",
+ "nalgebra",
  "statrs",
 ]
 
@@ -4570,7 +4594,7 @@ version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f374d42cdfc1d7dbf3d3dec28afab2eb97ffbf43a3234d795b5986dbf4b90ba"
 dependencies = [
- "hashbrown",
+ "hashbrown 0.9.1",
 ]
 
 [[package]]
@@ -4695,7 +4719,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "814bbecfc0451fc314eeea34f05bbcd5b98a7ad7af37faee088b86a1e633f1d4"
 dependencies = [
  "hash-db",
- "hashbrown",
+ "hashbrown 0.9.1",
  "parity-util-mem",
 ]
 
@@ -4890,7 +4914,7 @@ dependencies = [
 [[package]]
 name = "module-btc-relay-rpc"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -4905,7 +4929,7 @@ dependencies = [
 [[package]]
 name = "module-btc-relay-rpc-runtime-api"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4916,7 +4940,7 @@ dependencies = [
 [[package]]
 name = "module-exchange-rate-oracle-rpc"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -4931,7 +4955,7 @@ dependencies = [
 [[package]]
 name = "module-exchange-rate-oracle-rpc-runtime-api"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4943,7 +4967,7 @@ dependencies = [
 [[package]]
 name = "module-issue-rpc"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -4958,7 +4982,7 @@ dependencies = [
 [[package]]
 name = "module-issue-rpc-runtime-api"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4969,7 +4993,7 @@ dependencies = [
 [[package]]
 name = "module-redeem-rpc"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -4984,7 +5008,7 @@ dependencies = [
 [[package]]
 name = "module-redeem-rpc-runtime-api"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4995,7 +5019,7 @@ dependencies = [
 [[package]]
 name = "module-refund-rpc"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -5010,7 +5034,7 @@ dependencies = [
 [[package]]
 name = "module-refund-rpc-runtime-api"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -5021,7 +5045,7 @@ dependencies = [
 [[package]]
 name = "module-replace-rpc"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -5036,7 +5060,7 @@ dependencies = [
 [[package]]
 name = "module-replace-rpc-runtime-api"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -5047,7 +5071,7 @@ dependencies = [
 [[package]]
 name = "module-staked-relayers-rpc"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -5062,7 +5086,7 @@ dependencies = [
 [[package]]
 name = "module-staked-relayers-rpc-runtime-api"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -5073,7 +5097,7 @@ dependencies = [
 [[package]]
 name = "module-vault-registry-rpc"
 version = "0.3.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client 15.1.0",
@@ -5089,7 +5113,7 @@ dependencies = [
 [[package]]
 name = "module-vault-registry-rpc-runtime-api"
 version = "0.3.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "frame-support",
  "module-exchange-rate-oracle-rpc-runtime-api",
@@ -5168,34 +5192,19 @@ dependencies = [
 
 [[package]]
 name = "nalgebra"
-version = "0.26.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "476d1d59fe02fe54c86356e91650cd892f392782a1cb9fc524ec84f7aa9e1d06"
-dependencies = [
- "approx 0.4.0",
- "matrixmultiply",
- "num-complex 0.3.1",
- "num-rational 0.3.2",
- "num-traits",
- "rand 0.8.4",
- "rand_distr",
- "simba 0.4.0",
- "typenum",
-]
-
-[[package]]
-name = "nalgebra"
 version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "462fffe4002f4f2e1f6a9dcf12cc1a6fc0e15989014efc02a941d3e0f5dc2120"
 dependencies = [
- "approx 0.5.0",
+ "approx",
  "matrixmultiply",
  "nalgebra-macros",
  "num-complex 0.4.0",
  "num-rational 0.4.0",
  "num-traits",
- "simba 0.5.1",
+ "rand 0.8.4",
+ "rand_distr",
+ "simba",
  "typenum",
 ]
 
@@ -5273,7 +5282,7 @@ dependencies = [
 [[package]]
 name = "nomination"
 version = "0.5.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "currency",
  "exchange-rate-oracle",
@@ -5348,15 +5357,6 @@ dependencies = [
 
 [[package]]
 name = "num-complex"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "747d632c0c558b87dbabbe6a82f3b4ae03720d0646ac5b7b4dae89394be5f2c5"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
-name = "num-complex"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26873667bbbb7c5182d4a37c1add32cdf09f841af72da53318fdb81543c15085"
@@ -5404,17 +5404,6 @@ checksum = "5c000134b5dbf44adc5cb772486d335293351644b801551abe8f75c84cfa4aef"
 dependencies = [
  "autocfg 1.0.1",
  "num-bigint",
- "num-integer",
- "num-traits",
-]
-
-[[package]]
-name = "num-rational"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12ac428b1cb17fce6f731001d307d351ec70a6d202fc2e60f7d4c5e42d8f4f07"
-dependencies = [
- "autocfg 1.0.1",
  "num-integer",
  "num-traits",
 ]
@@ -5512,9 +5501,9 @@ checksum = "28988d872ab76095a6e6ac88d99b54fd267702734fd7ffe610ca27f533ddb95a"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.64"
+version = "0.9.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "209efc2fe0e980c8849efacdb567f975a1c80245c4f6980d6f012733bfa851af"
+checksum = "7a7907e3bfa08bb85105209cdfcb6c63d109f8f6c1ed6ca318fff5c1853fbc1d"
 dependencies = [
  "autocfg 1.0.1",
  "cc",
@@ -5541,7 +5530,7 @@ dependencies = [
 [[package]]
 name = "orml-tokens"
 version = "0.4.1-dev"
-source = "git+https://github.com/interlay/open-runtime-module-library?rev=189dfe2#189dfe2d53917fdbd418cd4cb92ef6f2ad5a6494"
+source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev=bb6ad7a#bb6ad7a629ac53ed138d30583d36971b3030322d"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -5556,7 +5545,7 @@ dependencies = [
 [[package]]
 name = "orml-traits"
 version = "0.4.1-dev"
-source = "git+https://github.com/interlay/open-runtime-module-library?rev=189dfe2#189dfe2d53917fdbd418cd4cb92ef6f2ad5a6494"
+source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev=bb6ad7a#bb6ad7a629ac53ed138d30583d36971b3030322d"
 dependencies = [
  "frame-support",
  "impl-trait-for-tuples",
@@ -5571,9 +5560,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "orml-unknown-tokens"
+version = "0.4.1-dev"
+source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev=bb6ad7a#bb6ad7a629ac53ed138d30583d36971b3030322d"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "orml-xcm-support",
+ "parity-scale-codec",
+ "serde",
+ "sp-std 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
+ "xcm 0.9.5",
+]
+
+[[package]]
 name = "orml-utilities"
 version = "0.4.1-dev"
-source = "git+https://github.com/interlay/open-runtime-module-library?rev=189dfe2#189dfe2d53917fdbd418cd4cb92ef6f2ad5a6494"
+source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev=bb6ad7a#bb6ad7a629ac53ed138d30583d36971b3030322d"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -5581,6 +5584,39 @@ dependencies = [
  "sp-io 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
  "sp-runtime 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
  "sp-std 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
+]
+
+[[package]]
+name = "orml-xcm-support"
+version = "0.4.1-dev"
+source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev=bb6ad7a#bb6ad7a629ac53ed138d30583d36971b3030322d"
+dependencies = [
+ "frame-support",
+ "orml-traits",
+ "parity-scale-codec",
+ "sp-runtime 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
+ "sp-std 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
+ "xcm 0.9.5",
+ "xcm-executor",
+]
+
+[[package]]
+name = "orml-xtokens"
+version = "0.4.1-dev"
+source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev=bb6ad7a#bb6ad7a629ac53ed138d30583d36971b3030322d"
+dependencies = [
+ "cumulus-primitives-core",
+ "frame-support",
+ "frame-system",
+ "orml-traits",
+ "orml-xcm-support",
+ "parity-scale-codec",
+ "serde",
+ "sp-io 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
+ "sp-runtime 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
+ "sp-std 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
+ "xcm 0.9.5",
+ "xcm-executor",
 ]
 
 [[package]]
@@ -6192,7 +6228,7 @@ dependencies = [
 [[package]]
 name = "parachain-info"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "cumulus-primitives-core",
  "frame-support",
@@ -6237,22 +6273,23 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "2.1.3"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b310f220c335f9df1b3d2e9fbe3890bbfeef5030dad771620f48c5c229877cd3"
+checksum = "8975095a2a03bbbdc70a74ab11a4f76a6d0b84680d87c68d722531b0ac28e8a9"
 dependencies = [
  "arrayvec 0.7.1",
  "bitvec",
  "byte-slice-cast",
+ "impl-trait-for-tuples",
  "parity-scale-codec-derive",
  "serde",
 ]
 
 [[package]]
 name = "parity-scale-codec-derive"
-version = "2.1.3"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81038e13ca2c32587201d544ea2e6b6c47120f1e4eae04478f9f60b6bcb89145"
+checksum = "40dbbfef7f0a1143c5b06e0d76a6278e25dac0bc1af4be51a0fbb73f07e7ad09"
 dependencies = [
  "proc-macro-crate 1.0.0",
  "proc-macro2",
@@ -6293,7 +6330,7 @@ checksum = "664a8c6b8e62d8f9f2f937e391982eb433ab285b4cd9545b342441e04a906e42"
 dependencies = [
  "cfg-if 1.0.0",
  "ethereum-types",
- "hashbrown",
+ "hashbrown 0.9.1",
  "impl-trait-for-tuples",
  "lru",
  "parity-util-mem-derive",
@@ -6584,9 +6621,9 @@ checksum = "257b64915a082f7811703966789728173279bdebb956b143dbcd23f6f970a777"
 
 [[package]]
 name = "pin-project-lite"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc0e1f259c92177c30a4c9d177246edd0a3568b25756a977d0632cf8fa37e905"
+checksum = "8d31d11c69a6b52a174b42bdc0c30e5e11670f90788b2c471c31c1d17d449443"
 
 [[package]]
 name = "pin-utils"
@@ -6605,16 +6642,6 @@ name = "platforms"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "989d43012e2ca1c4a02507c67282691a0a3207f9dc67cec596b43fe925b3d325"
-
-[[package]]
-name = "polkabtc-telemetry-types"
-version = "0.2.0"
-source = "git+https://github.com/interlay/polkabtc-telemetry?rev=5871517#5871517ec4a107c6dca27cbed27eb98db5f3d68a"
-dependencies = [
- "serde",
- "serde_json",
- "sp-core 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.5)",
-]
 
 [[package]]
 name = "polkadot-client"
@@ -6706,7 +6733,7 @@ source = "git+https://github.com/paritytech/polkadot?branch=release-v0.9.5#3ce09
 dependencies = [
  "bitvec",
  "frame-system",
- "hex-literal 0.3.1",
+ "hex-literal 0.3.2",
  "parity-scale-codec",
  "parity-util-mem",
  "polkadot-core-primitives 0.9.5",
@@ -6951,9 +6978,9 @@ dependencies = [
 
 [[package]]
 name = "primitive-types"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2415937401cb030a2a0a4d922483f945fa068f52a7dbb22ce0fe5f2b6f6adace"
+checksum = "06345ee39fbccfb06ab45f3a1a5798d9dafa04cb8921a76d227040003a234b0e"
 dependencies = [
  "fixed-hash",
  "impl-codec",
@@ -7422,7 +7449,7 @@ dependencies = [
 [[package]]
 name = "redeem"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "bitcoin 0.8.0",
  "btc-relay",
@@ -7493,7 +7520,7 @@ dependencies = [
 [[package]]
 name = "refund"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "bitcoin 0.8.0",
  "btc-relay",
@@ -7577,7 +7604,7 @@ dependencies = [
 [[package]]
 name = "replace"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "bitcoin 0.8.0",
  "btc-relay",
@@ -7624,7 +7651,7 @@ dependencies = [
  "mime_guess",
  "native-tls",
  "percent-encoding 2.1.0",
- "pin-project-lite 0.2.6",
+ "pin-project-lite 0.2.7",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -7655,8 +7682,8 @@ checksum = "e9c17925a9027d298a4603d286befe3f9dc0e8ed02523141914eb628798d6e5b"
 
 [[package]]
 name = "reward"
-version = "0.6.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+version = "0.8.0"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -7840,9 +7867,9 @@ dependencies = [
 
 [[package]]
 name = "ruzstd"
-version = "0.2.2"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d425143485a37727c7a46e689bbe3b883a00f42b4a52c4ac0f44855c1009b00"
+checksum = "8cada0ef59efa6a5f4dc5e491f93d9f31e3fc7758df421ff1de8a706338e1100"
 dependencies = [
  "byteorder",
  "twox-hash",
@@ -8882,7 +8909,7 @@ dependencies = [
 [[package]]
 name = "security"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -9035,7 +9062,7 @@ dependencies = [
  "futures 0.3.15",
  "hyper 0.13.10",
  "hyper-tls",
- "polkabtc-telemetry-types",
+ "interbtc-telemetry-types",
  "runtime",
  "serde",
  "serde_json",
@@ -9145,21 +9172,9 @@ dependencies = [
 
 [[package]]
 name = "signature"
-version = "1.3.0"
+version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f0242b8e50dd9accdd56170e94ca1ebd223b098eb9c83539a6e367d0f36ae68"
-
-[[package]]
-name = "simba"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5132a955559188f3d13c9ba831e77c802ddc8782783f050ed0c52f5988b95f4c"
-dependencies = [
- "approx 0.4.0",
- "num-complex 0.3.1",
- "num-traits",
- "paste",
-]
+checksum = "c19772be3c4dd2ceaacf03cb41d5885f2a02c4d8804884918e3a258480803335"
 
 [[package]]
 name = "simba"
@@ -9167,7 +9182,7 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e82063457853d00243beda9952e910b82593e4b07ae9f721b9278a99a0d3d5c"
 dependencies = [
- "approx 0.5.0",
+ "approx",
  "num-complex 0.4.0",
  "num-traits",
  "paste",
@@ -9176,7 +9191,7 @@ dependencies = [
 [[package]]
 name = "sla"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -10303,7 +10318,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 [[package]]
 name = "staked-relayers"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "bitcoin 0.8.0",
  "btc-relay",
@@ -10337,13 +10352,13 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "statrs"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e0c1f144861fbfd2a8cc82d564ccbf7fb3b7834d4fa128b84e9c2a73371aead"
+checksum = "05bdbb8e4e78216a85785a85d3ec3183144f98d0097b9281802c019bb07a6f05"
 dependencies = [
- "approx 0.4.0",
+ "approx",
  "lazy_static",
- "nalgebra 0.26.2",
+ "nalgebra",
  "num-traits",
  "rand 0.8.4",
 ]
@@ -10381,9 +10396,9 @@ checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "structopt"
-version = "0.3.21"
+version = "0.3.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5277acd7ee46e63e5168a80734c9f6ee81b1367a7d8772a2d765df2a3705d28c"
+checksum = "69b041cdcb67226aca307e6e7be44c8806423d83e018bd662360a93dabce4d71"
 dependencies = [
  "clap 2.33.3",
  "lazy_static",
@@ -10392,9 +10407,9 @@ dependencies = [
 
 [[package]]
 name = "structopt-derive"
-version = "0.4.14"
+version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ba9cdfda491b814720b6b06e0cac513d922fc407582032e8706e9f137976f90"
+checksum = "7813934aecf5f51a54775e00068c237de98489463968231a51746bbbc03f9c10"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -10686,18 +10701,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.25"
+version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa6f76457f59514c7eeb4e59d891395fab0b2fd1d40723ae737d64153392e9c6"
+checksum = "93119e4feac1cbe6c798c34d3a53ea0026b0b1de6a120deef895137c0529bfe2"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.25"
+version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a36768c0fbf1bb15eca10defa29526bda730a2376c2ab4393ccfa16fb1a318d"
+checksum = "060d69a0afe7796bf42e9e2ff91f5ee691fb15c53d38b4b62a9a53eb23164745"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10825,16 +10840,16 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.7.1"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fb2ed024293bb19f7a5dc54fe83bf86532a44c12a2bb8ba40d64a4509395ca2"
+checksum = "570c2eb13b3ab38208130eccd41be92520388791207fde783bda7c1e8ace28d4"
 dependencies = [
  "autocfg 1.0.1",
  "bytes 1.0.1",
  "libc",
  "memchr",
  "mio 0.7.13",
- "pin-project-lite 0.2.6",
+ "pin-project-lite 0.2.7",
  "winapi 0.3.9",
 ]
 
@@ -10964,7 +10979,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
 dependencies = [
  "rustls 0.19.1",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "webpki 0.21.4",
 ]
 
@@ -11097,8 +11112,8 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "log 0.4.14",
- "pin-project-lite 0.2.6",
- "tokio 1.7.1",
+ "pin-project-lite 0.2.7",
+ "tokio 1.8.0",
 ]
 
 [[package]]
@@ -11124,7 +11139,7 @@ checksum = "09adeb8c97449311ccd28a427f96fb563e7fd31aabf994189879d9da2394b89d"
 dependencies = [
  "cfg-if 1.0.0",
  "log 0.4.14",
- "pin-project-lite 0.2.6",
+ "pin-project-lite 0.2.7",
  "tracing-attributes",
  "tracing-core",
 ]
@@ -11182,9 +11197,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.2.18"
+version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa5553bf0883ba7c9cbe493b085c29926bd41b66afc31ff72cf17ff4fb60dcd5"
+checksum = "ab69019741fca4d98be3c62d2b75254528b5432233fd8a4d2739fec20278de48"
 dependencies = [
  "ansi_term 0.12.1",
  "chrono",
@@ -11216,12 +11231,12 @@ checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
 
 [[package]]
 name = "trie-db"
-version = "0.22.5"
+version = "0.22.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd81fe0c8bc2b528a51c9d2c31dae4483367a26a723a3c9a4a8120311d7774e3"
+checksum = "9eac131e334e81b6b3be07399482042838adcd7957aa0010231d0813e39e02fa"
 dependencies = [
  "hash-db",
- "hashbrown",
+ "hashbrown 0.11.2",
  "log 0.4.14",
  "rustc-hex",
  "smallvec 1.6.1",
@@ -11316,9 +11331,9 @@ checksum = "56dee185309b50d1f11bfedef0fe6d036842e3fb77413abef29f8f8d1c5d4c1c"
 
 [[package]]
 name = "uint"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e11fe9a9348741cf134085ad57c249508345fe16411b3d7fb4ff2da2f1d6382e"
+checksum = "6470ab50f482bde894a037a57064480a246dbfdd5960bd65a44824693f08da5f"
 dependencies = [
  "byteorder",
  "crunchy",
@@ -11364,9 +11379,9 @@ dependencies = [
 
 [[package]]
 name = "unicode-segmentation"
-version = "1.7.1"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb0d2e7be6ae3a5fa87eed5fb451aff96f2573d2694942e40543ae0bbe19c796"
+checksum = "8895849a949e7845e06bd6dc1aa51731a103c42707010a5b591c0038fb73385b"
 
 [[package]]
 name = "unicode-width"
@@ -11490,7 +11505,7 @@ dependencies = [
 [[package]]
 name = "vault-registry"
 version = "0.8.0"
-source = "git+ssh://git@github.com/interlay/interbtc.git?branch=master#97982105749f3c2b3f6253df030cf66ab770542b"
+source = "git+https://github.com/interlay/interbtc?rev=46637ab87025e7df1bfd828d353d6e854183c2ac#46637ab87025e7df1bfd828d353d6e854183c2ac"
 dependencies = [
  "bitcoin 0.8.0",
  "currency",
