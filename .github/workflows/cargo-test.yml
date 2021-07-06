@@ -13,9 +13,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: git fetch --prune --unshallow
-      - uses: webfactory/ssh-agent@v0.5.3
-        with:
-            ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_INTERBTC }}
       - name: Install System Dependencies
         run: |
             sudo apt-get update && sudo apt-get install -y \
