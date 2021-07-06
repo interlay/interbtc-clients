@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::Error;
 use hyper::{client::HttpConnector, Body, Client, Method, Request, StatusCode};
 use hyper_tls::HttpsConnector;
-use polkabtc_telemetry::{ClientInfo, Message, Payload};
+use interbtc_telemetry::{ClientInfo, Message, Payload};
 use runtime::InterBtcSigner;
 use sp_core::sr25519::Pair;
 use tokio::time;
