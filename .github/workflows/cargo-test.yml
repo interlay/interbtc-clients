@@ -39,6 +39,8 @@ jobs:
           args: --release --workspace
       - name: test
         uses: actions-rs/cargo@v1
+        env:
+          RUST_LOG: info,regalloc=warn
         with:
           command: test
           args: --release --workspace
