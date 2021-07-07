@@ -33,9 +33,9 @@ runtime = { path = "../runtime" }
 service = { path = "../service" }
 
 # Substrate dependencies
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.5" }
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.5" }
-sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.5" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.7" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.7" }
+sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.7" }
 
 [dev-dependencies]
 mockall = "0.8.1"
