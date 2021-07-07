@@ -1,6 +1,6 @@
 use super::Error;
 use async_trait::async_trait;
-use runtime::{BtcRelayPallet, H256Le, InterBtcParachain, RawBlockHeader, StakedRelayerPallet};
+use runtime::{BtcRelayPallet, H256Le, InterBtcParachain, RawBlockHeader, RelayPallet};
 
 #[async_trait]
 pub trait Issuing {
@@ -61,7 +61,7 @@ impl Issuing for InterBtcParachain {
     }
 
     async fn initialize(&self, header: Vec<u8>, height: u32) -> Result<(), Error> {
-        StakedRelayerPallet::initialize_btc_relay(self, encode_raw_header(header)?, height)
+        RelayPallet::initialize_btc_relay(self, encode_raw_header(header)?, height)
             .await
             .map_err(Into::into)
     }
@@ -75,14 +75,14 @@ impl Issuing for InterBtcParachain {
         {
             return Ok(());
         }
-        StakedRelayerPallet::store_block_header(self, raw_block_header)
+        RelayPallet::store_block_header(self, raw_block_header)
             .await
             .map_err(Into::into)
     }
 
     #[tracing::instrument(name = "submit_block_header_batch", skip(self, headers))]
     async fn submit_block_header_batch(&self, headers: Vec<Vec<u8>>) -> Result<(), Error> {
-        StakedRelayerPallet::store_block_headers(
+        RelayPallet::store_block_headers(
             self,
             headers
                 .iter()

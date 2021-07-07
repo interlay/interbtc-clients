@@ -17,9 +17,9 @@ use substrate_subxt::{
 use tokio::{sync::RwLock, time::delay_for};
 
 use crate::{
-    btc_relay::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*, refund::*, replace::*,
-    retry::*, security::*, staked_relayers::*, timestamp::*, tokens::*, types::*, utility::*, vault_registry::*,
-    AccountId, BlockNumber, CurrencyId, Error, InterBtcRuntime, BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS,
+    btc_relay::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*, refund::*, relay::*,
+    replace::*, retry::*, security::*, timestamp::*, tokens::*, types::*, utility::*, vault_registry::*, AccountId,
+    BlockNumber, CurrencyId, Error, InterBtcRuntime, BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS,
     STABLE_PARACHAIN_CONFIRMATIONS,
 };
 
@@ -682,7 +682,7 @@ impl ExchangeRateOraclePallet for InterBtcParachain {
 }
 
 #[async_trait]
-pub trait StakedRelayerPallet {
+pub trait RelayPallet {
     async fn report_vault_theft(&self, vault_id: &AccountId, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error>;
 
     async fn is_transaction_invalid(&self, vault_id: &AccountId, raw_tx: &[u8]) -> Result<bool, Error>;
@@ -695,7 +695,7 @@ pub trait StakedRelayerPallet {
 }
 
 #[async_trait]
-impl StakedRelayerPallet for InterBtcParachain {
+impl RelayPallet for InterBtcParachain {
     /// Submit extrinsic to report vault theft, consumer should
     /// first check `is_transaction_invalid` to ensure this call
     /// succeeds.

@@ -2,7 +2,7 @@
 
 use super::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, ExchangeRateOraclePallet, FixedPointNumber,
-    FixedU128, ReplacePallet, SecurityPallet, StakedRelayerPallet, StatusCode, VaultRegistryPallet,
+    FixedU128, RelayPallet, ReplacePallet, SecurityPallet, StatusCode, VaultRegistryPallet,
 };
 use crate::{exchange_rate_oracle::SetExchangeRateEvent, integration::*, InterBtcRuntime};
 use module_bitcoin::{

@@ -18,8 +18,8 @@ pub use pallets::*;
 pub use retry::{notify_retry, RetryPolicy};
 pub use rpc::{
     BtcRelayPallet, BtcTxFeesPerByte, CollateralBalancesPallet, ExchangeRateOraclePallet, FeePallet, InterBtcParachain,
-    IssuePallet, RedeemPallet, RefundPallet, ReplacePallet, SecurityPallet, StakedRelayerPallet, TimestampPallet,
-    UtilFuncs, VaultRegistryPallet,
+    IssuePallet, RedeemPallet, RefundPallet, RelayPallet, ReplacePallet, SecurityPallet, TimestampPallet, UtilFuncs,
+    VaultRegistryPallet,
 };
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
 pub use sp_runtime;
@@ -139,7 +139,7 @@ impl btc_relay::BTCRelay for InterBtcRuntime {}
 
 impl security::Security for InterBtcRuntime {}
 
-impl staked_relayers::StakedRelayers for InterBtcRuntime {}
+impl relay::Relay for InterBtcRuntime {}
 
 impl vault_registry::VaultRegistry for InterBtcRuntime {}
 

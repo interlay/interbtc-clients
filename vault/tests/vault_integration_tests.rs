@@ -1,10 +1,10 @@
 // #![cfg(feature = "integration")]
 
-use bitcoin::BitcoinCoreApi;
+use bitcoin::{stream_blocks, BitcoinCoreApi};
 use futures::{
     channel::mpsc,
-    future::{join, join3, join4},
-    FutureExt, SinkExt,
+    future::{join, join3, join5},
+    FutureExt, SinkExt, TryStreamExt,
 };
 use runtime::{
     integration::*,
@@ -305,13 +305,13 @@ async fn test_cancellation_succeeds() {
     let mut issue_cancellation_scheduler = vault::service::CancellationScheduler::new(
         new_vault_provider.clone(),
         new_vault_provider.get_current_chain_height().await.unwrap(),
-        100, // bitcoin expired
+        0,
         new_vault_provider.get_account_id().clone(),
     );
     let mut replace_cancellation_scheduler = vault::service::CancellationScheduler::new(
         new_vault_provider.clone(),
         new_vault_provider.get_current_chain_height().await.unwrap(),
-        100, // bitcoin expired
+        0,
         new_vault_provider.get_account_id().clone(),
     );
     let issue_canceller =
@@ -319,7 +319,7 @@ async fn test_cancellation_succeeds() {
     let replace_canceller =
         replace_cancellation_scheduler.handle_cancellation::<vault::service::ReplaceCanceller>(replace_cancellation_rx);
 
-    let block_listener = async {
+    let parachain_block_listener = async {
         let issue_block_tx = &issue_cancellation_event_tx.clone();
         let replace_block_tx = &replace_cancellation_event_tx.clone();
 
@@ -344,14 +344,37 @@ async fn test_cancellation_succeeds() {
             .unwrap();
     };
 
+    let initial_btc_height = btc_rpc.get_block_count().await.unwrap() as u32;
+    let bitcoin_block_listener = async {
+        let issue_block_tx = &issue_cancellation_event_tx.clone();
+        let replace_block_tx = &replace_cancellation_event_tx.clone();
+
+        stream_blocks(btc_rpc.clone(), initial_btc_height, 1)
+            .await
+            .try_for_each(|_| async {
+                let height = btc_rpc.get_block_count().await? as u32;
+                let _ = issue_block_tx
+                    .clone()
+                    .send(CancellationEvent::BitcoinBlock(height))
+                    .await;
+                let _ = replace_block_tx
+                    .clone()
+                    .send(CancellationEvent::BitcoinBlock(height))
+                    .await;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    };
     let old_vault_id = old_vault_provider.get_account_id();
 
     test_service(
-        join4(
+        join5(
             issue_canceller.map(Result::unwrap),
             replace_canceller.map(Result::unwrap),
             issue_request_listener.map(Result::unwrap),
-            block_listener,
+            parachain_block_listener,
+            bitcoin_block_listener,
         ),
         async {
             let address = BtcAddress::P2PKH(H160::from_slice(&[2; 20]));
@@ -384,6 +407,13 @@ async fn test_cancellation_succeeds() {
                         .request_issue(issue_amount, new_vault_provider.get_account_id(), 10000)
                         .await
                         .unwrap();
+
+                    for _ in 0u32..2 {
+                        btc_rpc
+                            .send_to_address(BtcAddress::P2PKH(H160::from_slice(&[0; 20])), 100_000, None, 1)
+                            .await
+                            .unwrap();
+                    }
                 },
                 assert_event::<CancelIssueEvent<InterBtcRuntime>, _>(
                     Duration::from_secs(120),
