@@ -4,7 +4,7 @@ use futures::stream::{iter, StreamExt};
 use runtime::{
     pallets::vault_registry::{RegisterAddressEvent, RegisterVaultEvent},
     AccountId, BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcRuntime,
-    InterBtcVault, StakedRelayerPallet, VaultRegistryPallet,
+    InterBtcVault, RelayPallet, VaultRegistryPallet,
 };
 use service::Error as ServiceError;
 use sp_core::crypto::Ss58Codec;
@@ -36,7 +36,7 @@ impl Vaults {
     }
 }
 
-pub async fn report_vault_thefts<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone>(
+pub async fn report_vault_thefts<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone>(
     bitcoin_core: B,
     btc_parachain: P,
     btc_height: u32,
@@ -51,14 +51,14 @@ pub async fn report_vault_thefts<P: StakedRelayerPallet + BtcRelayPallet, B: Bit
     }
 }
 
-pub struct VaultTheftMonitor<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> {
+pub struct VaultTheftMonitor<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> {
     bitcoin_core: B,
     btc_parachain: P,
     btc_height: u32,
     vaults: Arc<Vaults>,
 }
 
-impl<P: StakedRelayerPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonitor<P, B> {
+impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonitor<P, B> {
     pub fn new(bitcoin_core: B, btc_parachain: P, btc_height: u32, vaults: Arc<Vaults>) -> Self {
         Self {
             bitcoin_core,
@@ -193,7 +193,7 @@ mod tests {
         Provider {}
 
         #[async_trait]
-        pub trait StakedRelayerPallet {
+        pub trait RelayPallet {
             async fn report_vault_theft(
                 &self,
                 vault_id: &AccountId,

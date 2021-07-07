@@ -11,11 +11,11 @@ use futures::{
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
 use runtime::{
-    pallets::staked_relayers::*,
+    pallets::relay::*,
     substrate_subxt::{Event, PairSigner},
     BtcAddress, BtcRelayPallet, ErrorCode, ExchangeRateOraclePallet, FeePallet, FixedPointNumber, FixedU128, H256Le,
-    InterBtcParachain, InterBtcRuntime, IssuePallet, RedeemPallet, ReplacePallet, StakedRelayerPallet, StatusCode,
-    UtilFuncs, VaultRegistryPallet,
+    InterBtcParachain, InterBtcRuntime, IssuePallet, RedeemPallet, RelayPallet, ReplacePallet, StatusCode, UtilFuncs,
+    VaultRegistryPallet,
 };
 use sp_core::H160;
 use sp_keyring::AccountKeyring;

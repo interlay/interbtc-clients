@@ -5,10 +5,10 @@ pub mod frame_system;
 pub mod issue;
 pub mod redeem;
 pub mod refund;
+pub mod relay;
 pub mod replace;
 pub mod security;
 pub mod sla;
-pub mod staked_relayers;
 pub mod timestamp;
 pub mod tokens;
 pub mod utility;
@@ -19,9 +19,9 @@ pub use module_btc_relay::{BtcAddress, BtcPublicKey, RichBlockHeader, MAIN_CHAIN
 pub use module_issue::{IssueRequest, IssueRequestStatus};
 pub use module_redeem::{RedeemRequest, RedeemRequestStatus};
 pub use module_refund::RefundRequest;
+pub use module_relay::Error as RelayError;
 pub use module_replace::{ReplaceRequest, ReplaceRequestStatus};
 pub use module_security::{ErrorCode, StatusCode};
-pub use module_staked_relayers::Error as StakedRelayersError;
 pub use module_vault_registry::{Vault, VaultStatus};
 
 pub use sp_core::{H160, H256, U256};

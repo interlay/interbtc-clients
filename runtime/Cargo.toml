@@ -50,69 +50,69 @@ parachain = { package = "polkadot-parachain", git = "https://github.com/parityte
 # Dependencies for the testing utils for integration tests
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "ceef243f8700fb2f4ded9461a9d725af1a333aac", optional = true }
 tempdir = {version = "0.3.7", optional = true }
-btc-parachain = { git = "https://github.com/interlay/interbtc", rev = "46637ab87025e7df1bfd828d353d6e854183c2ac", features = ["aura-grandpa"], optional = true }
-btc-parachain-service = { git = "https://github.com/interlay/interbtc", rev = "46637ab87025e7df1bfd828d353d6e854183c2ac", features = ["aura-grandpa"], optional = true }
+btc-parachain = { git = "https://github.com/interlay/interbtc", rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c", features = ["aura-grandpa"], optional = true }
+btc-parachain-service = { git = "https://github.com/interlay/interbtc", rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c", features = ["aura-grandpa"], optional = true }
 bitcoin = { path = "../bitcoin", optional = true }
 rand = { version = "0.7", optional = true }
 
 [dependencies.module-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "46637ab87025e7df1bfd828d353d6e854183c2ac"
+rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c"
 package = "bitcoin"
 
 [dependencies.module-refund]
 git = "https://github.com/interlay/interbtc"
-rev = "46637ab87025e7df1bfd828d353d6e854183c2ac"
+rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c"
 package = "refund"
 
 [dependencies.module-btc-relay]
 git = "https://github.com/interlay/interbtc"
-rev = "46637ab87025e7df1bfd828d353d6e854183c2ac"
+rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c"
 package = "btc-relay"
 
 [dependencies.module-security]
 git = "https://github.com/interlay/interbtc"
-rev = "46637ab87025e7df1bfd828d353d6e854183c2ac"
+rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c"
 package = "security"
 
-[dependencies.module-staked-relayers]
+[dependencies.module-relay]
 git = "https://github.com/interlay/interbtc"
-rev = "46637ab87025e7df1bfd828d353d6e854183c2ac"
-package = "staked-relayers"
+rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c"
+package = "relay"
 
 [dependencies.module-vault-registry]
 git = "https://github.com/interlay/interbtc"
-rev = "46637ab87025e7df1bfd828d353d6e854183c2ac"
+rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c"
 package = "vault-registry"
 
 [dependencies.module-exchange-rate-oracle-rpc-runtime-api]
 git = "https://github.com/interlay/interbtc"
-rev = "46637ab87025e7df1bfd828d353d6e854183c2ac"
+rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c"
 package = "module-exchange-rate-oracle-rpc-runtime-api"
 
 [dependencies.module-issue]
 git = "https://github.com/interlay/interbtc"
-rev = "46637ab87025e7df1bfd828d353d6e854183c2ac"
+rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c"
 package = "issue"
 
 [dependencies.module-redeem]
 git = "https://github.com/interlay/interbtc"
-rev = "46637ab87025e7df1bfd828d353d6e854183c2ac"
+rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c"
 package = "redeem"
 
 [dependencies.module-replace]
 git = "https://github.com/interlay/interbtc"
-rev = "46637ab87025e7df1bfd828d353d6e854183c2ac"
+rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c"
 package = "replace"
 
 [dependencies.module-exchange-rate-oracle]
 git = "https://github.com/interlay/interbtc"
-rev = "46637ab87025e7df1bfd828d353d6e854183c2ac"
+rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c"
 package = "exchange-rate-oracle"
 
 [dev-dependencies]
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "ceef243f8700fb2f4ded9461a9d725af1a333aac" }
-btc-parachain = { git = "https://github.com/interlay/interbtc", rev = "46637ab87025e7df1bfd828d353d6e854183c2ac", features = ["aura-grandpa"] }
-btc-parachain-service = { git = "https://github.com/interlay/interbtc", rev = "46637ab87025e7df1bfd828d353d6e854183c2ac", features = ["aura-grandpa"] }
+btc-parachain = { git = "https://github.com/interlay/interbtc", rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c", features = ["aura-grandpa"] }
+btc-parachain-service = { git = "https://github.com/interlay/interbtc", rev = "c4e21c3b9f7f4ab2899e1221911ac044a5aa933c", features = ["aura-grandpa"] }
 tempdir = "0.3.7"
 env_logger = "0.8.3"
