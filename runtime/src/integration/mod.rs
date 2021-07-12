@@ -60,7 +60,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
             path: tmp.path().join("keystore"),
             password: None,
         },
-        chain_spec: btc_parachain::chain_spec::development_config(),
+        chain_spec: interbtc::chain_spec::development_config(),
         role: Role::Authority(key),
         telemetry: None,
         wasm_method: WasmExecutionMethod::Compiled,
@@ -70,7 +70,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
     let mut service_config = config.into_service_config();
     service_config.offchain_worker.enabled = true;
 
-    let (task_manager, rpc_handlers) = btc_parachain_service::new_full(service_config).unwrap();
+    let (task_manager, rpc_handlers) = interbtc::service::new_full(service_config).unwrap();
     let client = SubxtClient::new(task_manager, rpc_handlers);
 
     let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;

@@ -52,7 +52,7 @@ pub struct WithdrawCollateralEvent<T: VaultRegistry> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct VaultsStore<T: VaultRegistry> {
-    #[store(returns = Vault<T::AccountId, T::BlockNumber, T::Wrapped, T::Collateral, T::SignedFixedPoint>)]
+    #[store(returns = Vault<T::AccountId, T::BlockNumber, T::Wrapped, T::Collateral>)]
     pub _runtime: PhantomData<T>,
     pub account_id: T::AccountId,
 }
