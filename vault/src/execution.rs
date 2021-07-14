@@ -502,6 +502,7 @@ mod tests {
             async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;
             async fn get_required_collateral_for_wrapped(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
+            async fn get_vault_total_collateral(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
         }
 
         #[async_trait]

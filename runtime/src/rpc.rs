@@ -1218,6 +1218,8 @@ pub trait VaultRegistryPallet {
     async fn get_required_collateral_for_wrapped(&self, amount_btc: u128) -> Result<u128, Error>;
 
     async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, Error>;
+
+    async fn get_vault_total_collateral(&self, vault_id: AccountId) -> Result<u128, Error>;
 }
 
 #[async_trait]
@@ -1362,6 +1364,19 @@ impl VaultRegistryPallet for InterBtcParachain {
             .rpc_client
             .request(
                 "vaultRegistry_getRequiredCollateralForVault",
+                &[to_json_value(vault_id)?, to_json_value(head)?],
+            )
+            .await?;
+
+        Ok(result.amount)
+    }
+
+    async fn get_vault_total_collateral(&self, vault_id: AccountId) -> Result<u128, Error> {
+        let head = self.get_latest_block_hash().await?;
+        let result: BalanceWrapper<_> = self
+            .rpc_client
+            .request(
+                "vaultRegistry_getVaultTotalCollateral",
                 &[to_json_value(vault_id)?, to_json_value(head)?],
             )
             .await?;

@@ -113,7 +113,7 @@ async fn test_btc_relay() {
     let mut height = 0;
 
     let block = BlockBuilder::new()
-        .with_version(2)
+        .with_version(4)
         .with_coinbase(&address, 50, 3)
         .with_timestamp(1588813835)
         .mine(U256::from(2).pow(254.into()))
@@ -134,7 +134,7 @@ async fn test_btc_relay() {
 
         let block = BlockBuilder::new()
             .with_previous_hash(block_hash)
-            .with_version(2)
+            .with_version(4)
             .with_coinbase(&address, 50, height - 1)
             .with_timestamp(1588813835)
             .mine(U256::from(2).pow(254.into()))

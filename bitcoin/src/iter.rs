@@ -290,7 +290,7 @@ mod tests {
         Block {
             txdata: transactions.into_iter().map(dummy_tx).collect(),
             header: BlockHeader {
-                version: 1,
+                version: 4,
                 bits: 0,
                 nonce: 0,
                 time: 0,

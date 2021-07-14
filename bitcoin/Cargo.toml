@@ -33,7 +33,7 @@ sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-
 
 [dependencies.interbtc-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "f556917a852d68e39005297a878acf72fbce0c68"
+rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb"
 package = "bitcoin"
 optional = true
 

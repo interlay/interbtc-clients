@@ -107,7 +107,7 @@ impl MockBitcoinCore {
                 transaction.clone(),
             ],
             header: BlockHeader {
-                version: 2,
+                version: 4,
                 merkle_root: Default::default(),
                 bits: BlockHeader::compact_target_from_u256(&target),
                 nonce: 0,
@@ -183,7 +183,7 @@ impl MockBitcoinCore {
                 value: reward,
             }],
             lock_time: height,
-            version: 1,
+            version: 2,
         }
     }
 

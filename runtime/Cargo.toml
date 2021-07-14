@@ -10,8 +10,7 @@ testing-utils = [
     "substrate-subxt/client",
     "substrate-subxt-client",
     "tempdir",
-    "btc-parachain",
-    "btc-parachain-service",
+    "interbtc",
     "bitcoin",
     "rand",
 ]
@@ -50,69 +49,67 @@ parachain = { package = "polkadot-parachain", git = "https://github.com/parityte
 # Dependencies for the testing utils for integration tests
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "3db5ecbd1ca00ecc02d2e8a511aad77445ef0a33", optional = true }
 tempdir = {version = "0.3.7", optional = true }
-btc-parachain = { git = "https://github.com/interlay/interbtc", rev = "f556917a852d68e39005297a878acf72fbce0c68", features = ["aura-grandpa"], optional = true }
-btc-parachain-service = { git = "https://github.com/interlay/interbtc", rev = "f556917a852d68e39005297a878acf72fbce0c68", features = ["aura-grandpa"], optional = true }
+interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb", optional = true }
 bitcoin = { path = "../bitcoin", optional = true }
 rand = { version = "0.7", optional = true }
 
 [dependencies.module-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "f556917a852d68e39005297a878acf72fbce0c68"
+rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb"
 package = "bitcoin"
 
 [dependencies.module-refund]
 git = "https://github.com/interlay/interbtc"
-rev = "f556917a852d68e39005297a878acf72fbce0c68"
+rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb"
 package = "refund"
 
 [dependencies.module-btc-relay]
 git = "https://github.com/interlay/interbtc"
-rev = "f556917a852d68e39005297a878acf72fbce0c68"
+rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb"
 package = "btc-relay"
 
 [dependencies.module-security]
 git = "https://github.com/interlay/interbtc"
-rev = "f556917a852d68e39005297a878acf72fbce0c68"
+rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb"
 package = "security"
 
 [dependencies.module-relay]
 git = "https://github.com/interlay/interbtc"
-rev = "f556917a852d68e39005297a878acf72fbce0c68"
+rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb"
 package = "relay"
 
 [dependencies.module-vault-registry]
 git = "https://github.com/interlay/interbtc"
-rev = "f556917a852d68e39005297a878acf72fbce0c68"
+rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb"
 package = "vault-registry"
 
 [dependencies.module-exchange-rate-oracle-rpc-runtime-api]
 git = "https://github.com/interlay/interbtc"
-rev = "f556917a852d68e39005297a878acf72fbce0c68"
+rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb"
 package = "module-exchange-rate-oracle-rpc-runtime-api"
 
 [dependencies.module-issue]
 git = "https://github.com/interlay/interbtc"
-rev = "f556917a852d68e39005297a878acf72fbce0c68"
+rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb"
 package = "issue"
 
 [dependencies.module-redeem]
 git = "https://github.com/interlay/interbtc"
-rev = "f556917a852d68e39005297a878acf72fbce0c68"
+rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb"
 package = "redeem"
 
 [dependencies.module-replace]
 git = "https://github.com/interlay/interbtc"
-rev = "f556917a852d68e39005297a878acf72fbce0c68"
+rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb"
 package = "replace"
 
 [dependencies.module-exchange-rate-oracle]
 git = "https://github.com/interlay/interbtc"
-rev = "f556917a852d68e39005297a878acf72fbce0c68"
+rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb"
 package = "exchange-rate-oracle"
 
 [dev-dependencies]
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "3db5ecbd1ca00ecc02d2e8a511aad77445ef0a33" }
-btc-parachain = { git = "https://github.com/interlay/interbtc", rev = "f556917a852d68e39005297a878acf72fbce0c68", features = ["aura-grandpa"] }
-btc-parachain-service = { git = "https://github.com/interlay/interbtc", rev = "f556917a852d68e39005297a878acf72fbce0c68", features = ["aura-grandpa"] }
+interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb" }
 tempdir = "0.3.7"
 env_logger = "0.8.3"

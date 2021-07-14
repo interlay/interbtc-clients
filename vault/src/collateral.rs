@@ -60,7 +60,7 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + CollateralBalance
         return Err(Error::RuntimeError(runtime::Error::VaultNotFound));
     }
 
-    let actual_collateral = vault.backing_collateral;
+    let actual_collateral = parachain_rpc.get_vault_total_collateral(vault_id.clone()).await?;
 
     let (required_collateral, maximum_collateral) = future::try_join(
         async { Ok(parachain_rpc.get_required_collateral_for_vault(vault_id).await?) },
@@ -163,6 +163,7 @@ mod tests {
             async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;
             async fn get_required_collateral_for_wrapped(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
+            async fn get_vault_total_collateral(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
         }
 
         #[async_trait]
@@ -191,11 +192,14 @@ mod tests {
         parachain_rpc.expect_get_vault().returning(move |x| {
             Ok(InterBtcVault {
                 id: x,
-                backing_collateral: actual,
                 status: VaultStatus::Active(true),
                 ..Default::default()
             })
         });
+
+        parachain_rpc
+            .expect_get_vault_total_collateral()
+            .returning(move |_| Ok(actual));
 
         parachain_rpc
     }
