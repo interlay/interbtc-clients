@@ -96,6 +96,7 @@ build-docker-images:
     variables:
         DOCKER_REGISTRY_IMAGE: interlayhq/interbtc-clients
     script:
+        - env
         - echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"auth\":\"$DOCKER_HUB_TOKEN\"}}}" > /kaniko/.docker/config.json
         - |
             /kaniko/executor \
@@ -104,8 +105,8 @@ build-docker-images:
                 --build-arg PROFILE="x86_64-unknown-linux-gnu/release" \
                 --context ${CI_PROJECT_DIR} \
                 --dockerfile ${CI_PROJECT_DIR}/.deploy/Dockerfile \
-                --destination ${DOCKER_REGISTRY_IMAGE}:${ARTIFACT_BIN_PATH}-${CI_COMMIT_SHORT_SHA}-$(date +%s) \
-                --destination ${DOCKER_REGISTRY_IMAGE}:${ARTIFACT_BIN_PATH}
+                --destination ${DOCKER_REGISTRY_IMAGE}:${ARTIFACT_BIN_PATH}-${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}-$(date +%s) \
+                --destination ${DOCKER_REGISTRY_IMAGE}:${ARTIFACT_BIN_PATH}-${CI_COMMIT_REF_SLUG}
     # <<: *only_refs
 
 release-github:
