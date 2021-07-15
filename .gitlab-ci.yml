@@ -99,7 +99,7 @@ build-docker-images:
         - echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"auth\":\"$DOCKER_HUB_TOKEN\"}}}" > /kaniko/.docker/config.json
         - |
             /kaniko/executor \
-                --verbosity=debug
+                --verbosity=debug \
                 --build-arg BINARY=${ARTIFACT_BIN_PATH} \
                 --build-arg PROFILE="x86_64-unknown-linux-gnu/release" \
                 --context ${CI_PROJECT_DIR} \
