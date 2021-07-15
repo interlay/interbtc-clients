@@ -93,6 +93,8 @@ build-docker-images:
     image:
         name: gcr.io/kaniko-project/executor:debug
         entrypoint: [""]
+    variables:
+        DOCKER_REGISTRY_IMAGE: interlayhq/interbtc-clients
     script:
         - echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"auth\":\"$DOCKER_HUB_TOKEN\"}}}" > /kaniko/.docker/config.json
         - |
