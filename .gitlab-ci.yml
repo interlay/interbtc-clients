@@ -65,6 +65,8 @@ build-clients:
         - cargo check --workspace --release --target $PLATFORM
         - cargo build --workspace --release --target $PLATFORM
         - ls -l target/$PLATFORM/release/
+    variables:
+        DOCKER_REGISTRY_IMAGE: interlayhq/interbtc-clients
     parallel:
         matrix:
             - PLATFORM: x86_64-unknown-linux-gnu
@@ -82,7 +84,7 @@ build-docker-images:
     stage: deploy
     parallel:
         matrix:
-            - IMAGE:
+            - ARTIFACT_BIN_PATH:
                   [
                       "oracle",
                       "vault",
@@ -92,15 +94,15 @@ build-docker-images:
         name: gcr.io/kaniko-project/executor:debug
         entrypoint: [""]
     script:
-        - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+        - echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"auth\":\"$DOCKER_HUB_TOKEN\"}}}" > /kaniko/.docker/config.json
         - |
             /kaniko/executor \
-                --build-arg BINARY=${IMAGE} \
+                --build-arg BINARY=${ARTIFACT_BIN_PATH} \
                 --build-arg PROFILE="x86_64-unknown-linux-gnu/release" \
                 --context ${CI_PROJECT_DIR} \
                 --dockerfile ${CI_PROJECT_DIR}/.deploy/Dockerfile \
-                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_REF_NAME}-${CI_COMMIT_SHORT_SHA}-$(date +%s) \
-                --destination ${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_REF_NAME}
+                --destination ${DOCKER_REGISTRY_IMAGE}:${ARTIFACT_BIN_PATH}-${CI_COMMIT_REF_NAME}-${CI_COMMIT_SHORT_SHA}-$(date +%s) \
+                --destination ${DOCKER_REGISTRY_IMAGE}:${ARTIFACT_BIN_PATH}-${CI_COMMIT_REF_NAME}
     <<: *only_refs
 
 release-github:
