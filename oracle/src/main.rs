@@ -9,7 +9,7 @@ use runtime::{
     InterBtcParachain, InterBtcRuntime,
 };
 use std::{collections::HashMap, time::Duration};
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 const VERSION: &str = git_version!(args = ["--tags"]);
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -97,7 +97,7 @@ async fn main() -> Result<(), Error> {
                 }
                 Err(err) => {
                     error!("Could not get exchange rate from CoinGecko: {}", err);
-                    delay_for(ERR_RETRY_WAIT).await;
+                    sleep(ERR_RETRY_WAIT).await;
                     continue;
                 }
             }
@@ -128,6 +128,6 @@ async fn main() -> Result<(), Error> {
             error!("Error: {}", e.to_string());
         }
 
-        delay_for(interval).await;
+        sleep(interval).await;
     }
 }

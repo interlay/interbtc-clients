@@ -34,7 +34,7 @@ use sp_core::H256;
 use std::{future::Future, io::ErrorKind as IoErrorKind, sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, OwnedMutexGuard},
-    time::{delay_for, timeout},
+    time::{sleep, timeout},
 };
 
 #[macro_use]
@@ -200,7 +200,7 @@ impl BitcoinCore {
                         if err.kind() == IoErrorKind::ConnectionRefused =>
                     {
                         trace!("could not connect to bitcoin-core");
-                        delay_for(RETRY_DURATION).await;
+                        sleep(RETRY_DURATION).await;
                         continue;
                     }
                     Err(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
@@ -208,7 +208,7 @@ impl BitcoinCore {
                     {
                         // may be loading block index or verifying wallet
                         trace!("bitcoin-core still in warm up");
-                        delay_for(RETRY_DURATION).await;
+                        sleep(RETRY_DURATION).await;
                         continue;
                     }
                     Err(BitcoinError::JsonRpc(JsonRpcError::Json(err)))
@@ -216,7 +216,7 @@ impl BitcoinCore {
                     {
                         // invalid response, can happen if server is in shutdown
                         trace!("bitcoin-core gave an invalid response: {}", err);
-                        delay_for(RETRY_DURATION).await;
+                        sleep(RETRY_DURATION).await;
                         continue;
                     }
                     Ok(_) => {
@@ -241,7 +241,7 @@ impl BitcoinCore {
                 return Ok(());
             }
             trace!("bitcoin-core not synced");
-            delay_for(RETRY_DURATION).await;
+            sleep(RETRY_DURATION).await;
         }
     }
 
@@ -298,7 +298,7 @@ impl BitcoinCore {
                 Some(wait) => {
                     // error occurred, sleep before retrying
                     log::warn!("{:?} - next retry in {:.3} s", err, wait.as_secs_f64());
-                    tokio::time::delay_for(wait).await;
+                    tokio::time::sleep(wait).await;
                 }
                 None => break Err(Error::ConnectionRefused),
             }
@@ -333,7 +333,7 @@ impl BitcoinCoreApi for BitcoinCore {
                     if info.confirmations >= num_confirmations {
                         return Ok(self.rpc.get_block(&hash)?);
                     } else {
-                        delay_for(RETRY_DURATION).await;
+                        sleep(RETRY_DURATION).await;
                         continue;
                     }
                 }
@@ -341,7 +341,7 @@ impl BitcoinCoreApi for BitcoinCore {
                     if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcInvalidParameter =>
                 {
                     // block does not exist yet
-                    delay_for(RETRY_DURATION).await;
+                    sleep(RETRY_DURATION).await;
                     continue;
                 }
                 Err(err) => return Err(err.into()),

@@ -15,7 +15,7 @@ use sp_core::{H160, H256, U256};
 use std::{convert::TryInto, sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, RwLock},
-    time::delay_for,
+    time::sleep,
 };
 
 /// A simulated bitcoin-core interface. It combines the roles of bitcoin-core and the
@@ -210,7 +210,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
                 return Ok(block.clone());
             }
             drop(blocks); // release the lock
-            delay_for(Duration::from_secs(1)).await;
+            sleep(Duration::from_secs(1)).await;
         }
     }
     async fn get_block_count(&self) -> Result<u64, BitcoinError> {
@@ -345,7 +345,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
             if let Some(x) = blocks.iter().enumerate().find(|x| x.1.txdata[1].txid() == txid) {
                 break (x.0, x.1.clone());
             }
-            tokio::time::delay_for(Duration::from_secs(1)).await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
         };
         let block_hash = block.block_hash();
         let proof = self.get_proof(txid, &block_hash).await.unwrap();

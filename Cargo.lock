@@ -527,7 +527,7 @@ dependencies = [
  "serde_json",
  "sp-core",
  "thiserror",
- "tokio 0.2.25",
+ "tokio 1.8.1",
 ]
 
 [[package]]
@@ -1803,7 +1803,7 @@ dependencies = [
  "futures 0.3.15",
  "git-version",
  "hex 0.4.3",
- "jsonrpc-http-server 17.1.0",
+ "jsonrpc-http-server 18.0.0",
  "kv",
  "log 0.4.14",
  "parity-scale-codec",
@@ -1813,7 +1813,7 @@ dependencies = [
  "service",
  "sp-keyring",
  "thiserror",
- "tokio 0.2.25",
+ "tokio 1.8.1",
 ]
 
 [[package]]
@@ -2904,6 +2904,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyper-tls"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
+dependencies = [
+ "bytes 1.0.1",
+ "hyper 0.14.9",
+ "native-tls",
+ "tokio 1.8.1",
+ "tokio-native-tls",
+]
+
+[[package]]
 name = "idna"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3334,20 +3347,20 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-client-transports"
-version = "17.1.0"
+version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2f81014e2706fde057e9dcb1036cf6bbf9418d972c597be5c7158c984656722"
+checksum = "d2b99d4207e2a04fb4581746903c2bb7eb376f88de9c699d0f3e10feeac0cd3a"
 dependencies = [
  "derive_more",
  "futures 0.3.15",
- "hyper 0.13.10",
- "hyper-tls",
- "jsonrpc-core 17.1.0",
- "jsonrpc-pubsub 17.1.0",
+ "hyper 0.14.9",
+ "hyper-tls 0.5.0",
+ "jsonrpc-core 18.0.0",
+ "jsonrpc-pubsub 18.0.0",
  "log 0.4.14",
  "serde",
  "serde_json",
- "tokio 0.2.25",
+ "tokio 1.8.1",
  "url 1.7.2",
 ]
 
@@ -3366,9 +3379,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-core"
-version = "17.1.0"
+version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4467ab6dfa369b69e52bd0692e480c4d117410538526a57a304a0f2250fd95e"
+checksum = "14f7f76aef2d054868398427f6c54943cf3d1caa9a7ec7d0c38d69df97a965eb"
 dependencies = [
  "futures 0.3.15",
  "futures-executor",
@@ -3390,12 +3403,12 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-core-client"
-version = "17.1.0"
+version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c366c092d6bccc6e7ab44dd635a0f22ab2f201215339915fb7ff9508404f431"
+checksum = "b51da17abecbdab3e3d4f26b01c5ec075e88d3abe3ab3b05dc9aa69392764ec0"
 dependencies = [
  "futures 0.3.15",
- "jsonrpc-client-transports 17.1.0",
+ "jsonrpc-client-transports 18.0.0",
 ]
 
 [[package]]
@@ -3427,14 +3440,14 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-http-server"
-version = "17.1.0"
+version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "522a047cac0958097ee71d047dd71cb84979fd2fa21c7a68fbe12736bef870a2"
+checksum = "e1dea6e07251d9ce6a552abfb5d7ad6bc290a4596c8dcc3d795fae2bbdc1f3ff"
 dependencies = [
  "futures 0.3.15",
- "hyper 0.13.10",
- "jsonrpc-core 17.1.0",
- "jsonrpc-server-utils 17.1.0",
+ "hyper 0.14.9",
+ "jsonrpc-core 18.0.0",
+ "jsonrpc-server-utils 18.0.0",
  "log 0.4.14",
  "net2",
  "parking_lot 0.11.1",
@@ -3470,12 +3483,12 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-pubsub"
-version = "17.1.0"
+version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14739e5523a40739882cc34a44ab2dd9356bce5ce102513f5984a9efbe342f3d"
+checksum = "240f87695e6c6f62fb37f05c02c04953cf68d6408b8c1c89de85c7a0125b1011"
 dependencies = [
  "futures 0.3.15",
- "jsonrpc-core 17.1.0",
+ "jsonrpc-core 18.0.0",
  "lazy_static",
  "log 0.4.14",
  "parking_lot 0.11.1",
@@ -3501,18 +3514,19 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-server-utils"
-version = "17.1.0"
+version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bce68fa279a2822b3619369cd024f8a4f8e5ce485468834f8679a3c7919aae2d"
+checksum = "fa4fdea130485b572c39a460d50888beb00afb3e35de23ccd7fad8ff19f0e0d4"
 dependencies = [
- "bytes 0.5.6",
+ "bytes 1.0.1",
  "futures 0.3.15",
  "globset",
- "jsonrpc-core 17.1.0",
+ "jsonrpc-core 18.0.0",
  "lazy_static",
  "log 0.4.14",
- "tokio 0.2.25",
- "tokio-util 0.3.1",
+ "tokio 1.8.1",
+ "tokio-stream",
+ "tokio-util 0.6.7",
  "unicase 2.6.0",
 ]
 
@@ -5216,7 +5230,7 @@ dependencies = [
  "reqwest",
  "runtime",
  "thiserror",
- "tokio 0.2.25",
+ "tokio 1.8.1",
 ]
 
 [[package]]
@@ -6696,7 +6710,7 @@ dependencies = [
  "http 0.2.4",
  "http-body 0.3.1",
  "hyper 0.13.10",
- "hyper-tls",
+ "hyper-tls 0.4.3",
  "ipnet",
  "js-sys",
  "lazy_static",
@@ -6835,7 +6849,7 @@ dependencies = [
  "substrate-subxt-proc-macro",
  "tempdir",
  "thiserror",
- "tokio 0.2.25",
+ "tokio 1.8.1",
  "url 2.2.2",
  "vault-registry",
  "xcm",
@@ -8113,14 +8127,14 @@ dependencies = [
  "clap 3.0.0-beta.2",
  "futures 0.3.15",
  "hyper 0.13.10",
- "hyper-tls",
+ "hyper-tls 0.4.3",
  "interbtc-telemetry-types",
  "runtime",
  "serde",
  "serde_json",
  "sp-core",
  "thiserror",
- "tokio 0.2.25",
+ "tokio 1.8.1",
  "tracing",
  "tracing-futures",
  "tracing-subscriber",
@@ -9555,13 +9569,11 @@ dependencies = [
  "libc",
  "memchr",
  "mio 0.6.23",
- "mio-named-pipes",
  "mio-uds",
  "num_cpus",
  "pin-project-lite 0.1.12",
  "signal-hook-registry",
  "slab",
- "tokio-macros",
  "winapi 0.3.9",
 ]
 
@@ -9576,7 +9588,12 @@ dependencies = [
  "libc",
  "memchr",
  "mio 0.7.13",
+ "num_cpus",
+ "once_cell",
+ "parking_lot 0.11.1",
  "pin-project-lite 0.2.7",
+ "signal-hook-registry",
+ "tokio-macros",
  "winapi 0.3.9",
 ]
 
@@ -9646,9 +9663,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "0.2.6"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e44da00bfc73a25f814cd8d7e57a68a5c31b74b3152a0a1d1f590c97ed06265a"
+checksum = "54473be61f4ebe4efd09cec9bd5d16fa51d70ea0192213d754d2d500457db110"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9666,6 +9683,16 @@ dependencies = [
  "mio 0.6.23",
  "mio-named-pipes",
  "tokio 0.1.22",
+]
+
+[[package]]
+name = "tokio-native-tls"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7d995660bd2b7f8c1568414c1126076c13fbb725c40112dc0120b78eb9b717b"
+dependencies = [
+ "native-tls",
+ "tokio 1.8.1",
 ]
 
 [[package]]
@@ -9717,6 +9744,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24da22d077e0f15f55162bdbdc661228c1581892f52074fb242678d015b45162"
 dependencies = [
  "futures 0.1.31",
+]
+
+[[package]]
+name = "tokio-stream"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b2f3f698253f03119ac0102beaa64f67a67e08074d03a22d18784104543727f"
+dependencies = [
+ "futures-core",
+ "pin-project-lite 0.2.7",
+ "tokio 1.8.1",
 ]
 
 [[package]]
@@ -10211,8 +10249,8 @@ dependencies = [
  "futures 0.3.15",
  "git-version",
  "hex 0.4.3",
- "jsonrpc-core 17.1.0",
- "jsonrpc-core-client 17.1.0",
+ "jsonrpc-core 18.0.0",
+ "jsonrpc-core-client 18.0.0",
  "mockall",
  "parity-scale-codec",
  "runtime",
@@ -10223,7 +10261,7 @@ dependencies = [
  "sp-core",
  "sp-keyring",
  "thiserror",
- "tokio 0.2.25",
+ "tokio 1.8.1",
  "tracing",
  "tracing-futures",
  "tracing-subscriber",

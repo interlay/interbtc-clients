@@ -16,7 +16,7 @@ use sp_core::crypto::SecretStringError;
 use std::{array::TryFromSliceError, io::Error as IoError, num::TryFromIntError};
 use substrate_subxt::{ModuleError as SubxtModuleError, RuntimeError as SubxtRuntimeError};
 use thiserror::Error;
-use tokio::time::Elapsed;
+use tokio::time::error::Elapsed;
 use url::ParseError as UrlParseError;
 
 #[derive(Error, Debug)]
