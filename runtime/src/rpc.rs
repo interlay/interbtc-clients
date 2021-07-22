@@ -14,7 +14,7 @@ use substrate_subxt::{
     sudo::*, Call, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Error as SubxtError, Event,
     EventSubscription, EventTypeRegistry, EventsDecoder, RpcClient, RuntimeError as SubxtRuntimeError, Signer,
 };
-use tokio::{sync::RwLock, time::delay_for};
+use tokio::{sync::RwLock, time::sleep};
 
 use crate::{
     btc_relay::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*, refund::*, relay::*,
@@ -1172,7 +1172,7 @@ impl BtcRelayPallet for InterBtcParachain {
                         block_hash,
                         BLOCK_WAIT_TIMEOUT
                     );
-                    delay_for(Duration::from_secs(BLOCK_WAIT_TIMEOUT)).await;
+                    sleep(Duration::from_secs(BLOCK_WAIT_TIMEOUT)).await;
                 }
             };
         }

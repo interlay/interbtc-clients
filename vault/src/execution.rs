@@ -10,7 +10,8 @@ use runtime::{
 };
 use sp_core::H256;
 use std::{collections::HashMap, convert::TryInto, time::Duration};
-use tokio::time::delay_for;
+use tokio::time::sleep;
+
 const ON_FORK_RETRY_DELAY: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, PartialEq)]
@@ -253,7 +254,7 @@ impl Request {
                 }
                 Err(e) if e.is_invalid_chain_id() => {
                     // small delay to prevent spamming
-                    delay_for(ON_FORK_RETRY_DELAY).await;
+                    sleep(ON_FORK_RETRY_DELAY).await;
                     // re-fetch the metadata - it might be in a different block now
                     continue;
                 }

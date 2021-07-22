@@ -13,7 +13,7 @@ use hyper::Error as HyperError;
 use serde_json::Error as SerdeJsonError;
 use std::io::ErrorKind as IoErrorKind;
 use thiserror::Error;
-use tokio::time::Elapsed;
+use tokio::time::error::Elapsed;
 
 #[derive(Error, Debug)]
 pub enum Error {

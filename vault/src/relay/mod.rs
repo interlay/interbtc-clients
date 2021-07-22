@@ -2,7 +2,7 @@ use bitcoin::BitcoinCore;
 use runtime::InterBtcParachain;
 use service::Error as ServiceError;
 use std::time::Duration;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 mod backing;
 mod error;
@@ -96,7 +96,7 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
                 Some(header) => return Ok(header),
                 None => {
                     tracing::trace!("No block found at height {}, sleeping for {:?}", height, self.interval);
-                    delay_for(self.interval).await
+                    sleep(self.interval).await
                 }
             };
         }
@@ -139,7 +139,7 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
             0 => {
                 // nothing to submit right now. Wait a little while
                 tracing::trace!("Waiting for the next Bitcoin block...");
-                delay_for(self.interval).await;
+                sleep(self.interval).await;
             }
             1 => {
                 // submit a single block header

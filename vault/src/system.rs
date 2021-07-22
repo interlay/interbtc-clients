@@ -19,7 +19,7 @@ use runtime::{
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 pub const VERSION: &str = git_version!(args = ["--tags"]);
 pub const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -244,7 +244,7 @@ impl VaultService {
         tracing::info!("Waiting for new block...");
         let startup_height = self.btc_parachain.get_current_chain_height().await?;
         while startup_height == self.btc_parachain.get_current_chain_height().await? {
-            delay_for(CHAIN_HEIGHT_POLLING_INTERVAL).await;
+            sleep(CHAIN_HEIGHT_POLLING_INTERVAL).await;
         }
         tracing::info!("Got new block...");
 

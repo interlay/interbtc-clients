@@ -1,7 +1,7 @@
 use crate::{error::JsonRpseeError, Error};
 use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use std::time::Duration;
-use tokio::time::{delay_for, timeout};
+use tokio::time::{sleep, timeout};
 
 const RETRY_TIMEOUT: Duration = Duration::from_millis(1000);
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
@@ -36,7 +36,7 @@ pub(crate) async fn new_websocket_client_with_retry(
             match new_websocket_client(url, max_concurrent_requests, max_notifs_per_subscription).await {
                 Err(Error::JsonRpseeError(JsonRpseeError::TransportError(err))) => {
                     log::trace!("could not connect to parachain: {}", err);
-                    delay_for(RETRY_TIMEOUT).await;
+                    sleep(RETRY_TIMEOUT).await;
                     continue;
                 }
                 Ok(rpc) => {
