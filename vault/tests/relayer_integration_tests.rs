@@ -25,7 +25,7 @@ use vault;
 
 const TIMEOUT: Duration = Duration::from_secs(45);
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_report_vault_theft_succeeds() {
     service::init_subscriber();
 

@@ -21,7 +21,7 @@ use vault::{self, Event as CancellationEvent, IssueRequests};
 
 const TIMEOUT: Duration = Duration::from_secs(60);
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_redeem_succeeds() {
     service::init_subscriber();
 
@@ -60,7 +60,7 @@ async fn test_redeem_succeeds() {
     .await;
 }
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_replace_succeeds() {
     service::init_subscriber();
 
@@ -136,7 +136,7 @@ async fn test_replace_succeeds() {
     .await;
 }
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_maintain_collateral_succeeds() {
     service::init_subscriber();
 
@@ -180,7 +180,7 @@ async fn test_maintain_collateral_succeeds() {
     .await;
 }
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_withdraw_replace_succeeds() {
     service::init_subscriber();
 
@@ -243,7 +243,7 @@ async fn test_withdraw_replace_succeeds() {
         .is_err());
 }
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_cancellation_succeeds() {
     // tests cancellation of issue, redeem and replace.
     // issue and replace cancellation is tested through the vault's cancellation service.
@@ -435,7 +435,7 @@ async fn test_cancellation_succeeds() {
     .await;
 }
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_refund_succeeds() {
     service::init_subscriber();
 
@@ -496,7 +496,7 @@ async fn test_refund_succeeds() {
     test_service(refund_service, fut_user).await;
 }
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_issue_overpayment_succeeds() {
     service::init_subscriber();
 
@@ -560,7 +560,7 @@ async fn test_issue_overpayment_succeeds() {
     test_service(refund_service, fut_user).await;
 }
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_automatic_issue_execution_succeeds() {
     service::init_subscriber();
 
@@ -623,7 +623,7 @@ async fn test_automatic_issue_execution_succeeds() {
     test_service(service, fut_user).await;
 }
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_execute_open_requests_succeeds() {
     service::init_subscriber();
 
@@ -692,7 +692,7 @@ async fn test_execute_open_requests_succeeds() {
     assert_redeem_event(TIMEOUT, user_provider, redeem_ids[1]).await;
 }
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_off_chain_liquidation() {
     service::init_subscriber();
 
