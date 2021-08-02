@@ -116,7 +116,7 @@ impl InterBtcParachain {
             |result| async {
                 match result.map_err(Into::<Error>::into) {
                     Ok(ok) => Ok(ok),
-                    Err(err) if err.is_outdated_nonce() => {
+                    Err(err) if err.is_invalid_transaction() => {
                         self.refresh_nonce().await;
                         Err(RetryPolicy::Skip(Error::InvalidTransaction))
                     }
@@ -144,7 +144,7 @@ impl InterBtcParachain {
     {
         let mut sub = self.ext_client.subscribe_finalized_blocks().await?;
         loop {
-            on_block(sub.next().await.ok_or(Error::ChannelClosed)?).await?;
+            on_block(sub.next().await?.ok_or(Error::ChannelClosed)?).await?;
         }
     }
 
