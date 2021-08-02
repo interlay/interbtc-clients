@@ -11,11 +11,7 @@ pub(crate) async fn new_websocket_client(
     max_concurrent_requests: Option<usize>,
     max_notifs_per_subscription: Option<usize>,
 ) -> Result<WsClient, Error> {
-    let parsed_url = url::Url::parse(&url)?;
-    let path = parsed_url.path().to_string();
-
     let ws_client = WsClientBuilder::default()
-        .handshake_url(path.into())
         .connection_timeout(CONNECTION_TIMEOUT)
         .max_concurrent_requests(max_concurrent_requests.unwrap_or(1024))
         .max_notifs_per_subscription(max_notifs_per_subscription.unwrap_or(256))
@@ -34,7 +30,7 @@ pub(crate) async fn new_websocket_client_with_retry(
     timeout(connection_timeout, async move {
         loop {
             match new_websocket_client(url, max_concurrent_requests, max_notifs_per_subscription).await {
-                Err(Error::JsonRpseeError(JsonRpseeError::TransportError(err))) => {
+                Err(Error::JsonRpseeError(JsonRpseeError::Transport(err))) => {
                     log::trace!("could not connect to parachain: {}", err);
                     sleep(RETRY_TIMEOUT).await;
                     continue;

@@ -62,7 +62,7 @@ async fn test_outdated_nonce_matching() {
         .unwrap();
     let err = parachain_rpc.get_outdated_nonce_error().await;
     log::error!("Error: {:?}", err);
-    assert!(err.is_outdated_nonce())
+    assert!(err.is_invalid_transaction())
 }
 
 #[tokio::test]
