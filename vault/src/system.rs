@@ -3,15 +3,16 @@ use crate::{
     Vaults, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
-use bitcoin::{stream_blocks, BitcoinCore, BitcoinCoreApi};
+use bitcoin::{BitcoinCore, BitcoinCoreApi};
 use clap::Clap;
 use futures::{
     channel::{mpsc, mpsc::Sender},
     executor::block_on,
-    Future, SinkExt, TryStreamExt,
+    Future, SinkExt,
 };
 use git_version::git_version;
 use runtime::{
+    btc_relay::StoreMainChainHeaderEvent,
     cli::{parse_duration_minutes, parse_duration_ms},
     pallets::{security::UpdateActiveBlockEvent, sla::UpdateVaultSLAEvent},
     AccountId, BtcRelayPallet, Error as RuntimeError, InterBtcParachain, InterBtcRuntime, UtilFuncs,
@@ -102,14 +103,39 @@ pub struct VaultServiceConfig {
     pub no_vault_theft_report: bool,
 }
 
-async fn active_block_listener(parachain_rpc: InterBtcParachain, block_tx: Sender<Event>) -> Result<(), ServiceError> {
-    let block_tx = &block_tx;
+async fn active_block_listener(
+    parachain_rpc: InterBtcParachain,
+    issue_tx: Sender<Event>,
+    replace_tx: Sender<Event>,
+) -> Result<(), ServiceError> {
+    let issue_tx = &issue_tx;
+    let replace_tx = &replace_tx;
     parachain_rpc
         .on_event::<UpdateActiveBlockEvent<InterBtcRuntime>, _, _, _>(
             |event| async move {
-                let _ = block_tx.clone().send(Event::ParachainBlock(event.height)).await;
+                let _ = issue_tx.clone().send(Event::ParachainBlock(event.height)).await;
+                let _ = replace_tx.clone().send(Event::ParachainBlock(event.height)).await;
             },
             |err| tracing::error!("Error (UpdateActiveBlockEvent): {}", err.to_string()),
+        )
+        .await?;
+    Ok(())
+}
+
+async fn relay_block_listener(
+    parachain_rpc: InterBtcParachain,
+    issue_tx: Sender<Event>,
+    replace_tx: Sender<Event>,
+) -> Result<(), ServiceError> {
+    let issue_tx = &issue_tx;
+    let replace_tx = &replace_tx;
+    parachain_rpc
+        .on_event::<StoreMainChainHeaderEvent<InterBtcRuntime>, _, _, _>(
+            |event| async move {
+                let _ = issue_tx.clone().send(Event::BitcoinBlock(event.block_height)).await;
+                let _ = replace_tx.clone().send(Event::BitcoinBlock(event.block_height)).await;
+            },
+            |err| tracing::error!("Error (StoreMainChainHeaderEvent): {}", err.to_string()),
         )
         .await?;
     Ok(())
@@ -283,11 +309,6 @@ impl VaultService {
             vault_id.clone(),
         );
 
-        let issue_block_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            active_block_listener(self.btc_parachain.clone(), issue_event_tx.clone()),
-        );
-
         let issue_cancel_scheduler = wait_or_shutdown(self.shutdown.clone(), async move {
             issue_cancellation_scheduler
                 .handle_cancellation::<IssueCanceller>(issue_event_rx)
@@ -344,11 +365,6 @@ impl VaultService {
             vault_id.clone(),
         );
 
-        let replace_block_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            active_block_listener(self.btc_parachain.clone(), replace_event_tx.clone()),
-        );
-
         let replace_cancel_scheduler = wait_or_shutdown(self.shutdown.clone(), async move {
             replace_cancellation_scheduler
                 .handle_cancellation::<ReplaceCanceller>(replace_event_rx)
@@ -356,20 +372,25 @@ impl VaultService {
             Ok(())
         });
 
+        // listen for parachain blocks, used for cancellation
+        let parachain_block_listener = wait_or_shutdown(
+            self.shutdown.clone(),
+            active_block_listener(
+                self.btc_parachain.clone(),
+                issue_event_tx.clone(),
+                replace_event_tx.clone(),
+            ),
+        );
+
         // listen for bitcoin blocks, used for cancellation
-        let bitcoin_block_listener_btc_rpc = bitcoin_core.clone();
-        let bitcoin_block_listener = wait_or_shutdown(self.shutdown.clone(), async move {
-            stream_blocks(bitcoin_block_listener_btc_rpc.clone(), initial_btc_height, 1)
-                .await
-                .try_for_each(|_| async {
-                    let height = bitcoin_block_listener_btc_rpc.get_block_count().await? as u32;
-                    let _ = replace_event_tx.clone().send(Event::BitcoinBlock(height)).await;
-                    let _ = issue_event_tx.clone().send(Event::BitcoinBlock(height)).await;
-                    Ok(())
-                })
-                .await
-                .map_err(Into::into)
-        });
+        let bitcoin_block_listener = wait_or_shutdown(
+            self.shutdown.clone(),
+            relay_block_listener(
+                self.btc_parachain.clone(),
+                issue_event_tx.clone(),
+                replace_event_tx.clone(),
+            ),
+        );
 
         // redeem handling
         let redeem_listener = wait_or_shutdown(
@@ -444,20 +465,19 @@ impl VaultService {
             tokio::spawn(async move {
                 collateral_maintainer.await;
             }),
-            // replace & issue cancellation helper
+            // replace & issue cancellation helpers
+            tokio::spawn(async move { parachain_block_listener.await }),
             tokio::spawn(async move { bitcoin_block_listener.await }),
             // issue handling
             tokio::spawn(async move { issue_request_listener.await }),
             tokio::spawn(async move { issue_execute_listener.await }),
             tokio::spawn(async move { issue_cancel_listener.await }),
-            tokio::spawn(async move { issue_block_listener.await }),
             tokio::spawn(async move { issue_cancel_scheduler.await }),
             tokio::spawn(async move { issue_executor.await }),
             // replace handling
             tokio::spawn(async move { request_replace_listener.await }),
             tokio::spawn(async move { accept_replace_listener.await }),
             tokio::spawn(async move { execute_replace_listener.await }),
-            tokio::spawn(async move { replace_block_listener.await }),
             tokio::spawn(async move { replace_cancel_scheduler.await }),
             // redeem handling
             tokio::spawn(async move { redeem_listener.await }),
