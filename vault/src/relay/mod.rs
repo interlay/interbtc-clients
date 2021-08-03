@@ -84,7 +84,7 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
             issuing,
             start_height: conf.start_height,
             max_batch_size: conf.max_batch_size,
-            interval: conf.interval.unwrap_or_else(|| SLEEP_TIME),
+            interval: conf.interval.unwrap_or(SLEEP_TIME),
             btc_confirmations: conf.btc_confirmations,
         }
     }
