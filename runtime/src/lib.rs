@@ -40,7 +40,7 @@ use substrate_subxt::{
 };
 
 // cumulus / polkadot types
-use parachain::primitives::{Id as ParaId, RelayChainBlockNumber};
+use polkadot_parachain::primitives::{Id as ParaId, RelayChainBlockNumber};
 use xcm::v0::{Error as XcmError, NetworkId};
 
 pub const TX_FEES: u128 = 2000000000;
