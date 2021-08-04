@@ -85,6 +85,9 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonit
         block_hash: BlockHash,
         num_confirmations: u32,
     ) -> Result<(), Error> {
+        let tx_id = tx.txid();
+        tracing::debug!("Checking transaction: {}", tx_id);
+
         // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
         // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
         self.btc_parachain
@@ -113,8 +116,6 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonit
             bitcoin::stream_in_chain_transactions(self.bitcoin_core.clone(), self.btc_height, num_confirmations).await;
 
         while let Some(Ok((block_hash, tx))) = stream.next().await {
-            tracing::debug!("Checking transaction");
-
             if let Err(err) = self.check_transaction(tx, block_hash, num_confirmations).await {
                 tracing::error!("Failed to check transaction: {}", err);
             }
