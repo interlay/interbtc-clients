@@ -71,6 +71,13 @@ impl Error {
         matches!(self, Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Json(_))))
     }
 
+    pub fn is_wallet_error(&self) -> bool {
+        matches!(self,
+            Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
+                if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcWalletError
+        )
+    }
+
     pub fn is_wallet_not_found(&self) -> bool {
         matches!(self,
             Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
