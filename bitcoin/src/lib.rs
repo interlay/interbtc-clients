@@ -7,7 +7,7 @@ mod iter;
 
 pub use addr::PartialAddress;
 use async_trait::async_trait;
-use backoff::{backoff::Backoff, future::FutureOperation as _, ExponentialBackoff};
+use backoff::{backoff::Backoff, future::retry, ExponentialBackoff};
 pub use bitcoincore_rpc::{
     bitcoin::{
         blockdata::{opcodes::all as opcodes, script::Builder},
@@ -489,7 +489,7 @@ impl BitcoinCoreApi for BitcoinCore {
         txid: Txid,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
-        let (block_height, block_hash) = (|| async {
+        let (block_height, block_hash) = retry(get_exponential_backoff(), || async {
             Ok(match self.rpc.get_transaction(&txid, None) {
                 Ok(GetTransactionResult {
                     info:
@@ -505,16 +505,17 @@ impl BitcoinCoreApi for BitcoinCore {
                 Err(e) => Err(e.into()),
             }?)
         })
-        .retry(get_exponential_backoff())
         .await?;
 
-        let proof = (|| async { Ok(self.get_proof(txid, &block_hash).await?) })
-            .retry(get_exponential_backoff())
-            .await?;
+        let proof = retry(get_exponential_backoff(), || async {
+            Ok(self.get_proof(txid, &block_hash).await?)
+        })
+        .await?;
 
-        let raw_tx = (|| async { Ok(self.get_raw_tx(&txid, &block_hash).await?) })
-            .retry(get_exponential_backoff())
-            .await?;
+        let raw_tx = retry(get_exponential_backoff(), || async {
+            Ok(self.get_raw_tx(&txid, &block_hash).await?)
+        })
+        .await?;
 
         Ok(TransactionMetadata {
             txid,

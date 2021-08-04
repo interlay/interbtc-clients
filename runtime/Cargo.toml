@@ -22,7 +22,7 @@ async-trait = "0.1.40"
 thiserror = "1.0"
 serde_json = "1.0.57"
 tokio = { version = "1.0", features = ["full"] }
-backoff = { version = "0.2.1", features = ["tokio"] }
+backoff = { version = "0.3.0", features = ["tokio"] }
 futures = "0.3.5"
 clap = "3.0.0-beta.2"
 log = "0.4.0"
@@ -44,7 +44,7 @@ jsonrpsee-ws-client = "0.3.0"
 
 # Polkadot dependencies
 xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.7" }
-parachain = { package = "polkadot-parachain", git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.7" }
+polkadot-parachain = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.7" }
 
 # Dependencies for the testing utils for integration tests
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "8bfaa511d34169b55888c5ad4288c8bafd203f24", optional = true }
