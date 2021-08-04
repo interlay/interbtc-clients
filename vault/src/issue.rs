@@ -84,7 +84,10 @@ pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send +
     }
 
     tracing::info!("Rescanning bitcoin chain from height {}...", btc_start_height);
-    bitcoin_core.rescan_blockchain(btc_start_height).await?;
+    if let Err(err) = bitcoin_core.rescan_blockchain(btc_start_height).await {
+        // invalid start height or other
+        tracing::error!("Unable to rescan blockchain: {}", err);
+    }
 
     Ok(())
 }
