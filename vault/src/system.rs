@@ -274,11 +274,13 @@ impl VaultService {
         }
         tracing::info!("Got new block...");
 
+        // get the relay chain tip but don't error because the relay may not be initialized
+        let initial_btc_height = self.btc_parachain.get_best_block_height().await.unwrap_or_default();
+
         // issue handling
         let issue_set = Arc::new(IssueRequests::new());
         let oldest_issue_btc_height =
             issue::initialize_issue_set(&bitcoin_core, &self.btc_parachain, &issue_set).await?;
-        let initial_btc_height = bitcoin_core.get_block_count().await? as u32;
 
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
 
