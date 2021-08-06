@@ -288,7 +288,12 @@ impl BitcoinCore {
         loop {
             let err = match call().await.map_err(Error::from) {
                 Err(inner) if inner.is_wallet_not_found() => {
+                    // wallet not loaded (e.g. daemon restarted)
                     self.create_or_load_wallet().await?;
+                    inner
+                }
+                Err(inner) if inner.is_wallet_error() => {
+                    // fee estimation failed or other
                     inner
                 }
                 result => return result,
