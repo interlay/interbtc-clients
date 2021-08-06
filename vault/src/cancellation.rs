@@ -14,7 +14,9 @@ pub enum Event {
     Opened,
     /// issue / replace successfully executed
     Executed(H256),
+    /// new *active* parachain block
     ParachainBlock(BlockNumber),
+    /// new bitcoin block included in relay
     BitcoinBlock(u32),
 }
 
