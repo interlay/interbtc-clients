@@ -40,14 +40,13 @@ pub trait Core: System {
     type Collateral: Codec + EncodeLike + Member + Default + PartialOrd + Saturating + AtLeast32Bit;
     type Wrapped: Codec + EncodeLike + Member + Default + AtLeast32Bit;
     type Balance: Parameter + AtLeast32Bit + Codec + EncodeLike + Member + Default;
-    type BTCBalance: Codec + EncodeLike + Member + Default;
     type RichBlockHeader: Codec + EncodeLike + Member + Default;
     type H256Le: Codec + EncodeLike + Member + Default;
     type H256: Codec + EncodeLike + Member + Default;
     type H160: Codec + EncodeLike + Member + Default;
     type BtcAddress: Codec + EncodeLike + Member + Default;
     type BtcPublicKey: Codec + EncodeLike + Member + Default;
-    type ErrorCodes: Codec + EncodeLike + Member + Default;
+    type ErrorCodeSet: Codec + EncodeLike + Member + Default;
     type ErrorCode: Codec + EncodeLike + Member + Default;
     type StatusCode: Codec + EncodeLike + Member + Default;
     type SignedFixedPoint: Codec + EncodeLike + Member + Default;
@@ -55,7 +54,7 @@ pub trait Core: System {
     type VaultStatus: Codec + EncodeLike + Default + Send + Sync;
     type RedeemRequestStatus: Codec + EncodeLike + Default + Send + Sync;
     type CurrencyId: Codec + EncodeLike + Send + Sync;
-    type RewardPool: Codec + EncodeLike + Send + Sync;
+    type OracleKey: Codec + EncodeLike + Send + Sync;
 
     // cumulus / polkadot types
     type XcmError: Codec + EncodeLike + Member;

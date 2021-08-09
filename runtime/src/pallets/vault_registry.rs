@@ -66,7 +66,7 @@ pub struct LiquidationCollateralThresholdStore<T: VaultRegistry> {
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct IncreaseToBeIssuedTokensEvent<T: VaultRegistry> {
     pub vault_id: T::AccountId,
-    pub tokens: T::BTCBalance,
+    pub tokens: T::Balance,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
@@ -94,11 +94,11 @@ pub struct RegisterAddressEvent<T: VaultRegistry> {
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct LiquidateVaultEvent<T: VaultRegistry> {
     pub vault_id: T::AccountId,
-    pub issued_tokens: T::BTCBalance,
-    pub to_be_issued_tokens: T::BTCBalance,
-    pub to_be_redeemed_tokens: T::BTCBalance,
-    pub to_be_replaced_tokens: T::BTCBalance,
-    pub backing_collateral: T::Collateral,
+    pub issued_tokens: T::Balance,
+    pub to_be_issued_tokens: T::Balance,
+    pub to_be_redeemed_tokens: T::Balance,
+    pub to_be_replaced_tokens: T::Balance,
+    pub backing_collateral: T::Balance,
     pub status: VaultStatus,
-    pub replace_collateral: T::Collateral,
+    pub replace_collateral: T::Balance,
 }

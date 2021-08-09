@@ -27,7 +27,6 @@ pub use sp_runtime;
 pub use substrate_subxt;
 pub use types::*;
 
-use codec::{Decode, Encode};
 use sp_runtime::{
     generic::Header,
     traits::{BlakeTwo256, IdentifyAccount, Verify},
@@ -76,12 +75,6 @@ pub type BlockNumber = u32;
 /// Some way of identifying an account on the chain.
 pub type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 
-#[derive(Encode, Decode)]
-pub enum RewardPool {
-    Global,
-    Local(AccountId),
-}
-
 // TODO: use types from actual runtime
 impl system::System for InterBtcRuntime {
     type Index = Index;
@@ -99,7 +92,6 @@ impl pallets::Core for InterBtcRuntime {
     type Balance = Balance;
     type Collateral = Balance;
     type Wrapped = Balance;
-    type BTCBalance = Balance;
     type RichBlockHeader = InterBtcRichBlockHeader;
     type H256Le = H256Le;
     type H160 = H160;
@@ -107,14 +99,14 @@ impl pallets::Core for InterBtcRuntime {
     type BtcAddress = BtcAddress;
     type BtcPublicKey = BtcPublicKey;
     type ErrorCode = ErrorCode;
-    type ErrorCodes = BTreeSet<ErrorCode>;
+    type ErrorCodeSet = BTreeSet<ErrorCode>;
     type StatusCode = StatusCode;
     type SignedFixedPoint = FixedI128;
     type UnsignedFixedPoint = FixedU128;
     type VaultStatus = VaultStatus;
     type RedeemRequestStatus = RedeemRequestStatus;
     type CurrencyId = CurrencyId;
-    type RewardPool = RewardPool;
+    type OracleKey = OracleKey;
 
     // cumulus / polkadot types
     type XcmError = XcmError;
