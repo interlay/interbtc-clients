@@ -1,11 +1,14 @@
 use codec::Encode;
-pub use module_exchange_rate_oracle::BtcTxFeesPerByte;
 
 use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures::{stream::StreamExt, FutureExt, SinkExt};
 use jsonrpsee_types::to_json_value;
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
+use primitives::{
+    oracle::{BitcoinInclusionTime, Key as OracleKey},
+    CurrencyId,
+};
 use sp_arithmetic::FixedU128;
 use sp_core::H256;
 use sp_runtime::DispatchError;
@@ -19,7 +22,7 @@ use tokio::{sync::RwLock, time::sleep};
 use crate::{
     btc_relay::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*, refund::*, relay::*,
     replace::*, retry::*, security::*, timestamp::*, tokens::*, types::*, utility::*, vault_registry::*, AccountId,
-    BlockNumber, CurrencyId, Error, InterBtcRuntime, BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS,
+    BlockNumber, Error, InterBtcRuntime, BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS,
     STABLE_PARACHAIN_CONFIRMATIONS,
 };
 
@@ -568,15 +571,15 @@ impl TimestampPallet for InterBtcParachain {
 
 #[async_trait]
 pub trait ExchangeRateOraclePallet {
-    async fn get_exchange_rate_info(&self) -> Result<(FixedU128, u64, u64), Error>;
+    async fn get_exchange_rate(&self) -> Result<FixedU128, Error>;
 
-    async fn set_exchange_rate_info(&self, collateral_per_wrapped: FixedU128) -> Result<(), Error>;
+    async fn set_exchange_rate(&self, value: FixedU128) -> Result<(), Error>;
 
     async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error>;
 
-    async fn set_btc_tx_fees_per_byte(&self, fast: u32, half: u32, hour: u32) -> Result<(), Error>;
+    async fn set_bitcoin_fees(&self, fast: FixedU128) -> Result<(), Error>;
 
-    async fn get_btc_tx_fees_per_byte(&self) -> Result<BtcTxFeesPerByte, Error>;
+    async fn get_bitcoin_fees(&self) -> Result<FixedU128, Error>;
 
     async fn wrapped_to_collateral(&self, amount: u128) -> Result<u128, Error>;
 
@@ -587,26 +590,22 @@ pub trait ExchangeRateOraclePallet {
 impl ExchangeRateOraclePallet for InterBtcParachain {
     /// Returns the last exchange rate in planck per satoshis, the time at which it was set
     /// and the configured max delay.
-    async fn get_exchange_rate_info(&self) -> Result<(FixedU128, u64, u64), Error> {
+    async fn get_exchange_rate(&self) -> Result<FixedU128, Error> {
         let head = self.get_latest_block_hash().await?;
-        let get_rate = self.ext_client.exchange_rate(head);
-        let get_time = self.ext_client.last_exchange_rate_time(head);
-        let get_delay = self.ext_client.max_delay(head);
-
-        match tokio::try_join!(get_rate, get_time, get_delay) {
-            Ok((rate, time, delay)) => Ok((rate, time, delay)),
-            Err(_) => Err(Error::ExchangeRateInfo),
-        }
+        Ok(self
+            .ext_client
+            .aggregate(OracleKey::ExchangeRate(CurrencyId::DOT), head)
+            .await?)
     }
 
     /// Sets the current exchange rate (i.e. DOT/BTC)
     ///
     /// # Arguments
-    /// * `collateral_per_wrapped` - the current exchange rate
-    async fn set_exchange_rate_info(&self, collateral_per_wrapped: FixedU128) -> Result<(), Error> {
+    /// * `value` - the current exchange rate
+    async fn set_exchange_rate(&self, value: FixedU128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .set_exchange_rate_and_watch(&signer, collateral_per_wrapped)
+                .feed_values_and_watch(&signer, vec![(OracleKey::ExchangeRate(CurrencyId::DOT), value)])
                 .await
         })
         .await?;
@@ -632,13 +631,14 @@ impl ExchangeRateOraclePallet for InterBtcParachain {
     /// in the next x blocks
     ///
     /// # Arguments
-    /// * `fast` - The estimated Satoshis per bytes to get included in the next block (~10 min)
-    /// * `half` - The estimated Satoshis per bytes to get included in the next 3 blocks (~half hour)
-    /// * `hour` - The estimated Satoshis per bytes to get included in the next 6 blocks (~hour)
-    async fn set_btc_tx_fees_per_byte(&self, fast: u32, half: u32, hour: u32) -> Result<(), Error> {
+    /// * `fast` - the estimated Satoshis per bytes to get included in the next block (~10 min)
+    async fn set_bitcoin_fees(&self, value: FixedU128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .set_btc_tx_fees_per_byte_and_watch(&signer, fast, half, hour)
+                .feed_values_and_watch(
+                    &signer,
+                    vec![(OracleKey::FeeEstimation(BitcoinInclusionTime::Fast), value)],
+                )
                 .await
         })
         .await?;
@@ -647,9 +647,12 @@ impl ExchangeRateOraclePallet for InterBtcParachain {
 
     /// Gets the estimated Satoshis per bytes required to get a Bitcoin transaction included in
     /// in the next x blocks
-    async fn get_btc_tx_fees_per_byte(&self) -> Result<BtcTxFeesPerByte, Error> {
+    async fn get_bitcoin_fees(&self) -> Result<FixedU128, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.satoshi_per_bytes(head).await?)
+        Ok(self
+            .ext_client
+            .aggregate(OracleKey::FeeEstimation(BitcoinInclusionTime::Fast), head)
+            .await?)
     }
 
     /// Converts the amount in btc to dot, based on the current set exchange rate.

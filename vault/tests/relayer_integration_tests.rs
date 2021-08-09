@@ -37,7 +37,7 @@ async fn test_report_vault_theft_succeeds() {
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
     relayer_provider
-        .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
+        .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
         .await
         .unwrap();
 

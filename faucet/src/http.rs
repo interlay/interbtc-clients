@@ -329,7 +329,7 @@ mod tests {
     async fn set_exchange_rate(client: SubxtClient) {
         let oracle_provider = setup_provider(client, AccountKeyring::Bob).await;
         oracle_provider
-            .set_exchange_rate_info(FixedU128::saturating_from_rational(1u128, 100u128))
+            .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
             .await
             .expect("Unable to set exchange rate");
     }

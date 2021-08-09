@@ -121,7 +121,7 @@ async fn main() -> Result<(), Error> {
             Duration::from_millis(opts.connection_timeout_ms),
         )
         .await?
-        .set_exchange_rate_info(exchange_rate)
+        .set_exchange_rate(exchange_rate)
         .await;
 
         if let Err(e) = result {

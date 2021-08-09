@@ -29,11 +29,11 @@ log = "0.4.0"
 hyper = "0.10"
 
 # Substrate dependencies
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.7" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.8" }
 
 [dependencies.interbtc-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "39565ae0a5402a00dc1f222ea322a13303cab9fb"
+rev = "cd2a3a2bc47ef2f894a55181048a67611945065a"
 package = "bitcoin"
 optional = true
 

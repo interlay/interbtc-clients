@@ -15,10 +15,11 @@ pub mod integration;
 
 pub use error::{Error, SubxtError};
 pub use pallets::*;
+pub use primitives::{oracle::Key as OracleKey, CurrencyId};
 pub use retry::{notify_retry, RetryPolicy};
 pub use rpc::{
-    BtcRelayPallet, BtcTxFeesPerByte, CollateralBalancesPallet, ExchangeRateOraclePallet, FeePallet, InterBtcParachain,
-    IssuePallet, RedeemPallet, RefundPallet, RelayPallet, ReplacePallet, SecurityPallet, TimestampPallet, UtilFuncs,
+    BtcRelayPallet, CollateralBalancesPallet, ExchangeRateOraclePallet, FeePallet, InterBtcParachain, IssuePallet,
+    RedeemPallet, RefundPallet, RelayPallet, ReplacePallet, SecurityPallet, TimestampPallet, UtilFuncs,
     VaultRegistryPallet,
 };
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
@@ -27,7 +28,6 @@ pub use substrate_subxt;
 pub use types::*;
 
 use codec::{Decode, Encode};
-use serde::{Deserialize, Serialize};
 use sp_runtime::{
     generic::Header,
     traits::{BlakeTwo256, IdentifyAccount, Verify},
@@ -80,14 +80,6 @@ pub type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::Ac
 pub enum RewardPool {
     Global,
     Local(AccountId),
-}
-
-#[derive(Encode, Decode, Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Copy, Serialize, Deserialize)]
-#[allow(clippy::upper_case_acronyms)]
-pub enum CurrencyId {
-    DOT,
-    KSM,
-    INTERBTC,
 }
 
 // TODO: use types from actual runtime
