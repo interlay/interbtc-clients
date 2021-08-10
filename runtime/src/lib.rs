@@ -61,6 +61,8 @@ impl Runtime for InterBtcRuntime {
     type Extra = DefaultExtra<Self>;
 
     fn register_type_sizes(registry: &mut EventTypeRegistry<Self>) {
+        // TODO: resolve bug in metadata generation
+        registry.register_type_size::<FixedU128>("T::UnsignedFixedPoint");
         registry.with_core();
         registry.with_system();
         register_default_type_sizes(registry);
