@@ -32,20 +32,19 @@ async fn set_exchange_rate(client: SubxtClient) {
 async fn test_getters() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
-    set_exchange_rate(client.clone()).await;
 
     tokio::join!(
         async {
             assert_eq!(parachain_rpc.get_free_balance().await.unwrap(), 1 << 60);
         },
         async {
-            assert_eq!(parachain_rpc.get_parachain_status().await.unwrap(), StatusCode::Running);
+            assert_eq!(parachain_rpc.get_parachain_status().await.unwrap(), StatusCode::Error);
         },
         async {
             assert!(parachain_rpc.get_replace_dust_amount().await.unwrap() > 0);
         },
         async {
-            assert!(parachain_rpc.get_current_active_block_number().await.unwrap() > 0);
+            assert!(parachain_rpc.get_current_active_block_number().await.unwrap() == 0);
         }
     );
 }
