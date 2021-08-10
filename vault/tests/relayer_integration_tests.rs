@@ -36,10 +36,7 @@ async fn test_report_vault_theft_succeeds() {
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-    relayer_provider
-        .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
-        .await
-        .unwrap();
+    set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
 
     try_join(
         root_provider.set_bitcoin_confirmations(0),

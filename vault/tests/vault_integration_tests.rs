@@ -33,10 +33,7 @@ async fn test_redeem_succeeds() {
 
     let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
-    relayer_provider
-        .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100))
-        .await
-        .unwrap();
+    set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
 
     let issue_amount = 100000;
     let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
@@ -73,10 +70,7 @@ async fn test_replace_succeeds() {
 
     let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
-    relayer_provider
-        .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
-        .await
-        .unwrap();
+    set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
 
     let issue_amount = 100000;
     let vault_collateral = get_required_vault_collateral_for_issue(&old_vault_provider, issue_amount).await;
@@ -148,10 +142,7 @@ async fn test_maintain_collateral_succeeds() {
 
     let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
-    relayer_provider
-        .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
-        .await
-        .unwrap();
+    set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
 
     let issue_amount = 100000;
     let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
@@ -166,10 +157,12 @@ async fn test_maintain_collateral_succeeds() {
         vault::service::maintain_collateralization_rate(vault_provider.clone(), Some(1000000000)),
         async {
             // dot per btc increases by 10%
-            relayer_provider
-                .set_exchange_rate(FixedU128::saturating_from_rational(110u128, 10000u128))
-                .await
-                .unwrap();
+            set_exchange_rate(
+                &relayer_provider,
+                FixedU128::saturating_from_rational(110u128, 10000u128),
+            )
+            .await;
+
             assert_event::<DepositCollateralEvent<InterBtcRuntime>, _>(TIMEOUT, vault_provider.clone(), |e| {
                 assert_eq!(e.new_collateral, vault_collateral / 10);
                 true
@@ -193,10 +186,7 @@ async fn test_withdraw_replace_succeeds() {
 
     let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
-    relayer_provider
-        .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
-        .await
-        .unwrap();
+    set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
 
     let issue_amount = 100000;
     let vault_collateral = get_required_vault_collateral_for_issue(&old_vault_provider, issue_amount).await;
@@ -260,10 +250,7 @@ async fn test_cancellation_succeeds() {
 
     let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
-    relayer_provider
-        .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
-        .await
-        .unwrap();
+    set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
 
     let issue_amount = 100000;
     let vault_collateral = get_required_vault_collateral_for_issue(&old_vault_provider, issue_amount * 10).await;
@@ -447,10 +434,7 @@ async fn test_refund_succeeds() {
 
     let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
-    relayer_provider
-        .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
-        .await
-        .unwrap();
+    set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
 
     let refund_service = vault::service::listen_for_refund_requests(vault_provider.clone(), btc_rpc.clone(), 0);
 
@@ -508,10 +492,7 @@ async fn test_issue_overpayment_succeeds() {
 
     let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
-    relayer_provider
-        .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
-        .await
-        .unwrap();
+    set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
 
     let refund_service = vault::service::listen_for_refund_requests(vault_provider.clone(), btc_rpc.clone(), 0);
 
@@ -573,10 +554,7 @@ async fn test_automatic_issue_execution_succeeds() {
 
     let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
-    relayer_provider
-        .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
-        .await
-        .unwrap();
+    set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
 
     let issue_amount = 100000;
     let vault_collateral = get_required_vault_collateral_for_issue(&vault1_provider, issue_amount).await;
@@ -635,10 +613,7 @@ async fn test_execute_open_requests_succeeds() {
 
     let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
-    relayer_provider
-        .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
-        .await
-        .unwrap();
+    set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
 
     let issue_amount = 100000;
     let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
@@ -704,10 +679,7 @@ async fn test_off_chain_liquidation() {
 
     let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
-    relayer_provider
-        .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100))
-        .await
-        .unwrap();
+    set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
 
     let issue_amount = 100000;
     let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
@@ -718,7 +690,7 @@ async fn test_off_chain_liquidation() {
 
     assert_issue(&user_provider, &btc_rpc, vault_provider.get_account_id(), issue_amount).await;
 
-    relayer_provider.set_exchange_rate(FixedU128::from(10)).await.unwrap();
+    set_exchange_rate(&relayer_provider, FixedU128::from(10)).await;
 
     assert_event::<LiquidateVaultEvent<InterBtcRuntime>, _>(TIMEOUT, vault_provider.clone(), |_| true).await;
 }

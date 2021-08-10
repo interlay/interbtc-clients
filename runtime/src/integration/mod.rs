@@ -3,20 +3,22 @@
 mod bitcoin_simulator;
 
 use crate::{
-    rpc::{IssuePallet, VaultRegistryPallet},
-    AccountId, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime,
+    rpc::{ExchangeRateOraclePallet, IssuePallet, SecurityPallet, VaultRegistryPallet},
+    AccountId, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime, StatusCode,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
+use frame_support::assert_ok;
 use futures::{
     future::{try_join, Either},
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
 use sp_keyring::AccountKeyring;
+use sp_runtime::FixedU128;
 use std::time::Duration;
 use substrate_subxt::{Event, PairSigner};
 use substrate_subxt_client::{DatabaseConfig, KeystoreConfig, Role, SubxtClientConfig, WasmExecutionMethod};
 use tempdir::TempDir;
-use tokio::time::timeout;
+use tokio::time::{sleep, timeout};
 
 pub use substrate_subxt_client::SubxtClient;
 
@@ -110,6 +112,20 @@ pub async fn assert_issue(
         .execute_issue(issue.issue_id, &metadata.proof, &metadata.raw_tx)
         .await
         .unwrap();
+}
+
+const SLEEP_DURATION: Duration = Duration::from_millis(1000);
+const TIMEOUT_DURATION: Duration = Duration::from_secs(20);
+
+pub async fn wait_for_parachain_running(parachain_rpc: &InterBtcParachain) {
+    while !matches!(parachain_rpc.get_parachain_status().await.unwrap(), StatusCode::Running) {
+        sleep(SLEEP_DURATION).await;
+    }
+}
+
+pub async fn set_exchange_rate(parachain_rpc: &InterBtcParachain, value: FixedU128) {
+    parachain_rpc.set_exchange_rate(value).await.unwrap();
+    assert_ok!(timeout(TIMEOUT_DURATION, wait_for_parachain_running(parachain_rpc)).await);
 }
 
 /// calculate how much collateral the vault requires to accept an issue of the given size
