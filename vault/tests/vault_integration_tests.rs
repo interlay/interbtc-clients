@@ -83,14 +83,16 @@ async fn test_replace_succeeds() {
 
         let issue_amount = 100000;
         let vault_collateral = get_required_vault_collateral_for_issue(&old_vault_provider, issue_amount).await;
-        old_vault_provider
-            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
-            .await
-            .unwrap();
-        new_vault_provider
-            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
-            .await
-            .unwrap();
+        assert_ok!(
+            old_vault_provider
+                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .await
+        );
+        assert_ok!(
+            new_vault_provider
+                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .await
+        );
 
         assert_issue(
             &user_provider,
@@ -152,10 +154,11 @@ async fn test_maintain_collateral_succeeds() {
 
         let issue_amount = 100000;
         let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
-        vault_provider
-            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
-            .await
-            .unwrap();
+        assert_ok!(
+            vault_provider
+                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .await
+        );
 
         assert_issue(&user_provider, &btc_rpc, vault_provider.get_account_id(), issue_amount).await;
 
@@ -163,6 +166,11 @@ async fn test_maintain_collateral_succeeds() {
             vault::service::maintain_collateralization_rate(vault_provider.clone(), Some(1000000000)),
             async {
                 // dot per btc increases by 10%
+                set_exchange_rate(
+                    &relayer_provider,
+                    FixedU128::saturating_from_rational(110u128, 10000u128),
+                )
+                .await;
                 set_exchange_rate(
                     &relayer_provider,
                     FixedU128::saturating_from_rational(110u128, 10000u128),
@@ -193,14 +201,16 @@ async fn test_withdraw_replace_succeeds() {
 
         let issue_amount = 100000;
         let vault_collateral = get_required_vault_collateral_for_issue(&old_vault_provider, issue_amount).await;
-        old_vault_provider
-            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
-            .await
-            .unwrap();
-        new_vault_provider
-            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
-            .await
-            .unwrap();
+        assert_ok!(
+            old_vault_provider
+                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .await
+        );
+        assert_ok!(
+            new_vault_provider
+                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .await
+        );
 
         assert_issue(
             &user_provider,
@@ -254,14 +264,16 @@ async fn test_cancellation_succeeds() {
 
         let issue_amount = 100000;
         let vault_collateral = get_required_vault_collateral_for_issue(&old_vault_provider, issue_amount * 10).await;
-        old_vault_provider
-            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
-            .await
-            .unwrap();
-        new_vault_provider
-            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
-            .await
-            .unwrap();
+        assert_ok!(
+            old_vault_provider
+                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .await
+        );
+        assert_ok!(
+            new_vault_provider
+                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .await
+        );
 
         assert_issue(
             &user_provider,
@@ -272,9 +284,9 @@ async fn test_cancellation_succeeds() {
         .await;
 
         // set low timeout periods
-        root_provider.set_issue_period(1).await.unwrap();
-        root_provider.set_replace_period(1).await.unwrap();
-        root_provider.set_redeem_period(1).await.unwrap();
+        assert_ok!(root_provider.set_issue_period(1).await);
+        assert_ok!(root_provider.set_replace_period(1).await);
+        assert_ok!(root_provider.set_redeem_period(1).await);
 
         let (issue_cancellation_event_tx, issue_cancellation_rx) = mpsc::channel::<CancellationEvent>(16);
         let (replace_cancellation_event_tx, replace_cancellation_rx) = mpsc::channel::<CancellationEvent>(16);
@@ -314,16 +326,18 @@ async fn test_cancellation_succeeds() {
                 .clone()
                 .on_event::<UpdateActiveBlockEvent<InterBtcRuntime>, _, _, _>(
                     |event| async move {
-                        issue_block_tx
-                            .clone()
-                            .send(CancellationEvent::ParachainBlock(event.height))
-                            .await
-                            .unwrap();
-                        replace_block_tx
-                            .clone()
-                            .send(CancellationEvent::ParachainBlock(event.height))
-                            .await
-                            .unwrap();
+                        assert_ok!(
+                            issue_block_tx
+                                .clone()
+                                .send(CancellationEvent::ParachainBlock(event.height))
+                                .await
+                        );
+                        assert_ok!(
+                            replace_block_tx
+                                .clone()
+                                .send(CancellationEvent::ParachainBlock(event.height))
+                                .await
+                        );
                     },
                     |_err| (),
                 )
@@ -375,31 +389,32 @@ async fn test_cancellation_succeeds() {
                 join3(
                     async {
                         // setup the to-be-cancelled replace
-                        old_vault_provider
-                            .request_replace(issue_amount / 2, 1000000)
-                            .await
-                            .unwrap();
-                        new_vault_provider
-                            .accept_replace(&old_vault_id, 10000000u32.into(), 0u32.into(), address)
-                            .await
-                            .unwrap();
-                        replace_cancellation_event_tx
-                            .clone()
-                            .send(CancellationEvent::Opened)
-                            .await
-                            .unwrap();
+                        assert_ok!(old_vault_provider.request_replace(issue_amount / 2, 1000000).await);
+                        assert_ok!(
+                            new_vault_provider
+                                .accept_replace(&old_vault_id, 10000000u32.into(), 0u32.into(), address)
+                                .await
+                        );
+                        assert_ok!(
+                            replace_cancellation_event_tx
+                                .clone()
+                                .send(CancellationEvent::Opened)
+                                .await
+                        );
 
                         // setup the to-be-cancelled issue
-                        user_provider
-                            .request_issue(issue_amount, new_vault_provider.get_account_id(), 10000)
-                            .await
-                            .unwrap();
+                        assert_ok!(
+                            user_provider
+                                .request_issue(issue_amount, new_vault_provider.get_account_id(), 10000)
+                                .await
+                        );
 
                         for _ in 0u32..2 {
-                            btc_rpc
-                                .send_to_address(BtcAddress::P2PKH(H160::from_slice(&[0; 20])), 100_000, None, 1)
-                                .await
-                                .unwrap();
+                            assert_ok!(
+                                btc_rpc
+                                    .send_to_address(BtcAddress::P2PKH(H160::from_slice(&[0; 20])), 100_000, None, 1)
+                                    .await
+                            );
                         }
                     },
                     assert_event::<CancelIssueEvent<InterBtcRuntime>, _>(
@@ -415,8 +430,8 @@ async fn test_cancellation_succeeds() {
                 )
                 .await;
 
-                // not make sure we can cancel the redeem
-                user_provider.cancel_redeem(redeem_id, true).await.unwrap();
+                // now make sure we can cancel the redeem
+                assert_ok!(user_provider.cancel_redeem(redeem_id, true).await);
             },
         )
         .await;
@@ -437,10 +452,11 @@ async fn test_refund_succeeds() {
 
         let issue_amount = 100000;
         let vault_collateral = 2 * get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
-        vault_provider
-            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
-            .await
-            .unwrap();
+        assert_ok!(
+            vault_provider
+                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .await
+        );
 
         let vault_id = vault_provider.get_account_id().clone();
         let fut_user = async {
@@ -494,10 +510,11 @@ async fn test_issue_overpayment_succeeds() {
         let over_payment_factor = 3;
         let vault_collateral =
             get_required_vault_collateral_for_issue(&vault_provider, issue_amount * over_payment_factor).await;
-        vault_provider
-            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
-            .await
-            .unwrap();
+        assert_ok!(
+            vault_provider
+                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .await
+        );
 
         let _vault_id = vault_provider.get_account_id().clone();
         let fut_user = async {
@@ -549,14 +566,16 @@ async fn test_automatic_issue_execution_succeeds() {
 
         let issue_amount = 100000;
         let vault_collateral = get_required_vault_collateral_for_issue(&vault1_provider, issue_amount).await;
-        vault1_provider
-            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
-            .await
-            .unwrap();
-        vault2_provider
-            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
-            .await
-            .unwrap();
+        assert_ok!(
+            vault1_provider
+                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .await
+        );
+        assert_ok!(
+            vault2_provider
+                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .await
+        );
 
         let fut_user = async {
             let issue = user_provider
@@ -564,10 +583,11 @@ async fn test_automatic_issue_execution_succeeds() {
                 .await
                 .unwrap();
 
-            btc_rpc
-                .send_to_address(issue.vault_btc_address, (issue.amount_btc + issue.fee) as u64, None, 0)
-                .await
-                .unwrap();
+            assert_ok!(
+                btc_rpc
+                    .send_to_address(issue.vault_btc_address, (issue.amount_btc + issue.fee) as u64, None, 0)
+                    .await
+            );
 
             // wait for vault2 to execute this issue
             let vault_id = vault1_provider.get_account_id().clone();
@@ -605,10 +625,11 @@ async fn test_execute_open_requests_succeeds() {
 
         let issue_amount = 100000;
         let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
-        vault_provider
-            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
-            .await
-            .unwrap();
+        assert_ok!(
+            vault_provider
+                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .await
+        );
 
         assert_issue(&user_provider, &btc_rpc, vault_provider.get_account_id(), issue_amount).await;
 
@@ -630,10 +651,11 @@ async fn test_execute_open_requests_succeeds() {
                 .collect::<Vec<_>>();
 
         // send btc for redeem 0
-        btc_rpc
-            .send_to_address(address, redeems[0].amount_btc as u64, Some(redeem_ids[0]), 0)
-            .await
-            .unwrap();
+        assert_ok!(
+            btc_rpc
+                .send_to_address(address, redeems[0].amount_btc as u64, Some(redeem_ids[0]), 0)
+                .await
+        );
 
         let transaction = btc_rpc
             .create_transaction(address, redeems[1].amount_btc as u64, Some(redeem_ids[1]))
@@ -668,10 +690,11 @@ async fn test_off_chain_liquidation() {
 
         let issue_amount = 100000;
         let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
-        vault_provider
-            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
-            .await
-            .unwrap();
+        assert_ok!(
+            vault_provider
+                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .await
+        );
 
         assert_issue(&user_provider, &btc_rpc, vault_provider.get_account_id(), issue_amount).await;
 

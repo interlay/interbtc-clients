@@ -5,6 +5,7 @@
 use runtime::integration::*;
 
 use bitcoin::{BitcoinCoreApi, BlockHash, Hash, TransactionExt, Txid};
+use frame_support::assert_ok;
 use futures::{
     channel::mpsc,
     future::{join, try_join, Either},
@@ -38,21 +39,23 @@ async fn test_report_vault_theft_succeeds() {
 
     set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
 
-    try_join(
-        root_provider.set_bitcoin_confirmations(0),
-        root_provider.set_parachain_confirmations(0),
-    )
-    .await
-    .unwrap();
+    assert_ok!(
+        try_join(
+            root_provider.set_bitcoin_confirmations(0),
+            root_provider.set_parachain_confirmations(0),
+        )
+        .await
+    );
 
     let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
     let issue_amount = 100000;
     let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
-    vault_provider
-        .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
-        .await
-        .unwrap();
+    assert_ok!(
+        vault_provider
+            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+            .await
+    );
 
     let vaults = Arc::new(vault::Vaults::from(Default::default()));
 
@@ -82,10 +85,10 @@ async fn test_report_vault_theft_succeeds() {
             // extract the public address corresponding to the input script
             let input_address = transaction.transaction.extract_input_addresses::<BtcAddress>()[0];
             // now make the vault register it
-            vault_provider.register_address(input_address).await.unwrap();
+            assert_ok!(vault_provider.register_address(input_address).await);
 
             // now perform the theft
-            btc_rpc.send_transaction(transaction).await.unwrap();
+            assert_ok!(btc_rpc.send_transaction(transaction).await);
 
             assert_event::<VaultTheftEvent<InterBtcRuntime>, _>(TIMEOUT, vault_provider, |_| true).await;
         },
