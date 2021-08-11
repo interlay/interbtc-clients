@@ -12,8 +12,8 @@ use runtime::{
     pallets::{
         issue::*, redeem::*, refund::*, replace::*, security::UpdateActiveBlockEvent, tokens::*, vault_registry::*,
     },
-    BtcAddress, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRedeemRequest,
-    InterBtcRuntime, IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    BtcAddress, BtcRelayPallet, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, InterBtcParachain,
+    InterBtcRedeemRequest, InterBtcRuntime, IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
@@ -442,6 +442,7 @@ async fn test_cancellation_succeeds() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_refund_succeeds() {
     test_with(|client| async move {
+        let sudo_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
@@ -449,6 +450,8 @@ async fn test_refund_succeeds() {
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
 
         let refund_service = vault::service::listen_for_refund_requests(vault_provider.clone(), btc_rpc.clone(), 0);
+
+        assert_ok!(sudo_provider.set_parachain_confirmations(0).await);
 
         let issue_amount = 100000;
         let vault_collateral = 2 * get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
@@ -479,9 +482,11 @@ async fn test_refund_succeeds() {
 
             let (_, refund_request, refund_execution) = join3(
                 user_provider.execute_issue(issue.issue_id, &metadata.proof, &metadata.raw_tx),
+                // overpayment on execute_issue should emit this event
                 assert_event::<RequestRefundEvent<InterBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |x| {
                     x.vault_id == vault_id
                 }),
+                // the vault should execute the refund request automatically
                 assert_event::<ExecuteRefundEvent<InterBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |_| true),
             )
             .await;
