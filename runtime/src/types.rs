@@ -20,8 +20,7 @@ pub type InterBtcBalance = <InterBtcRuntime as Core>::Balance;
 
 pub type InterBtcBlock = SignedBlock<Block<InterBtcHeader, <InterBtcRuntime as System>::Extrinsic>>;
 
-pub type InterBtcVault =
-    Vault<AccountId, BlockNumber, <InterBtcRuntime as Core>::Wrapped, <InterBtcRuntime as Core>::Collateral>;
+pub type InterBtcVault = Vault<AccountId, BlockNumber, <InterBtcRuntime as Core>::Balance>;
 
 pub type InterBtcIssueRequest =
     IssueRequest<AccountId, BlockNumber, <InterBtcRuntime as Core>::Wrapped, <InterBtcRuntime as Core>::Collateral>;

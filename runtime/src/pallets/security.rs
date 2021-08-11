@@ -22,7 +22,7 @@ pub struct ParachainStatusStore<T: Security> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct ErrorsStore<T: Security> {
-    #[store(returns = T::ErrorCodes)]
+    #[store(returns = T::ErrorCodeSet)]
     pub _runtime: PhantomData<T>,
 }
 
