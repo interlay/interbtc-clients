@@ -1,8 +1,8 @@
 use crate::error::Error;
 use futures::future;
 use runtime::{
-    pallets::exchange_rate_oracle::FeedValuesEvent, AccountId, CollateralBalancesPallet, CurrencyId, InterBtcParachain,
-    InterBtcRuntime, OracleKey, UtilFuncs, VaultRegistryPallet, VaultStatus,
+    pallets::exchange_rate_oracle::FeedValuesEvent, AccountId, CollateralBalancesPallet, InterBtcParachain,
+    InterBtcRuntime, OracleKey, UtilFuncs, VaultRegistryPallet, VaultStatus, RELAY_CHAIN_CURRENCY,
 };
 use service::Error as ServiceError;
 
@@ -18,7 +18,7 @@ pub async fn maintain_collateralization_rate(
                 if !event
                     .values
                     .iter()
-                    .any(|(key, _)| *key == OracleKey::ExchangeRate(CurrencyId::DOT))
+                    .any(|(key, _)| *key == OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY))
                 {
                     tracing::debug!("Not exchange rate update");
                     return;

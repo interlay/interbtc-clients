@@ -5,10 +5,7 @@ use core::marker::PhantomData;
 use futures::{stream::StreamExt, FutureExt, SinkExt};
 use jsonrpsee_types::to_json_value;
 use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
-use primitives::{
-    oracle::{BitcoinInclusionTime, Key as OracleKey},
-    CurrencyId,
-};
+use primitives::oracle::Key as OracleKey;
 use sp_arithmetic::FixedU128;
 use sp_core::H256;
 use sp_runtime::DispatchError;
@@ -22,8 +19,8 @@ use tokio::{sync::RwLock, time::sleep};
 use crate::{
     btc_relay::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*, refund::*, relay::*,
     replace::*, retry::*, security::*, timestamp::*, tokens::*, types::*, utility::*, vault_registry::*, AccountId,
-    BlockNumber, Error, InterBtcRuntime, BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS,
-    STABLE_PARACHAIN_CONFIRMATIONS,
+    BlockNumber, Error, InterBtcRuntime, BTC_RELAY_MODULE, DEFAULT_INCLUSION_TIME, RELAY_CHAIN_CURRENCY,
+    STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CONFIRMATIONS,
 };
 
 #[derive(Clone)]
@@ -334,7 +331,11 @@ impl CollateralBalancesPallet for InterBtcParachain {
 
     async fn get_free_balance_for_id(&self, id: AccountId) -> Result<<InterBtcRuntime as Core>::Balance, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.accounts(id.clone(), CurrencyId::DOT, head).await?.free)
+        Ok(self
+            .ext_client
+            .accounts(id.clone(), RELAY_CHAIN_CURRENCY, head)
+            .await?
+            .free)
     }
 
     async fn get_reserved_balance(&self) -> Result<<InterBtcRuntime as Core>::Balance, Error> {
@@ -345,7 +346,7 @@ impl CollateralBalancesPallet for InterBtcParachain {
         let head = self.get_latest_block_hash().await?;
         Ok(self
             .ext_client
-            .accounts(id.clone(), CurrencyId::DOT, head)
+            .accounts(id.clone(), RELAY_CHAIN_CURRENCY, head)
             .await?
             .reserved)
     }
@@ -353,7 +354,7 @@ impl CollateralBalancesPallet for InterBtcParachain {
     async fn transfer_to(&self, recipient: &AccountId, amount: u128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .transfer_and_watch(&signer, &recipient, CurrencyId::DOT, amount)
+                .transfer_and_watch(&signer, &recipient, RELAY_CHAIN_CURRENCY, amount)
                 .await
         })
         .await?;
@@ -584,6 +585,8 @@ pub trait ExchangeRateOraclePallet {
     async fn wrapped_to_collateral(&self, amount: u128) -> Result<u128, Error>;
 
     async fn collateral_to_wrapped(&self, amount: u128) -> Result<u128, Error>;
+
+    async fn has_updated(&self, key: &OracleKey) -> Result<bool, Error>;
 }
 
 #[async_trait]
@@ -594,7 +597,7 @@ impl ExchangeRateOraclePallet for InterBtcParachain {
         let head = self.get_latest_block_hash().await?;
         Ok(self
             .ext_client
-            .aggregate(OracleKey::ExchangeRate(CurrencyId::DOT), head)
+            .aggregate(OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY), head)
             .await?)
     }
 
@@ -605,7 +608,7 @@ impl ExchangeRateOraclePallet for InterBtcParachain {
     async fn set_exchange_rate(&self, value: FixedU128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .feed_values_and_watch(&signer, vec![(OracleKey::ExchangeRate(CurrencyId::DOT), value)])
+                .feed_values_and_watch(&signer, vec![(OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY), value)])
                 .await
         })
         .await?;
@@ -635,10 +638,7 @@ impl ExchangeRateOraclePallet for InterBtcParachain {
     async fn set_bitcoin_fees(&self, value: FixedU128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .feed_values_and_watch(
-                    &signer,
-                    vec![(OracleKey::FeeEstimation(BitcoinInclusionTime::Fast), value)],
-                )
+                .feed_values_and_watch(&signer, vec![(OracleKey::FeeEstimation(DEFAULT_INCLUSION_TIME), value)])
                 .await
         })
         .await?;
@@ -651,7 +651,7 @@ impl ExchangeRateOraclePallet for InterBtcParachain {
         let head = self.get_latest_block_hash().await?;
         Ok(self
             .ext_client
-            .aggregate(OracleKey::FeeEstimation(BitcoinInclusionTime::Fast), head)
+            .aggregate(OracleKey::FeeEstimation(DEFAULT_INCLUSION_TIME), head)
             .await?)
     }
 
@@ -681,6 +681,11 @@ impl ExchangeRateOraclePallet for InterBtcParachain {
             .await?;
 
         Ok(result.amount)
+    }
+
+    async fn has_updated(&self, key: &OracleKey) -> Result<bool, Error> {
+        let head = self.get_latest_block_hash().await?;
+        Ok(self.ext_client.raw_values_updated(key, head).await?)
     }
 }
 

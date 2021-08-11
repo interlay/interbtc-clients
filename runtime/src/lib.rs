@@ -15,7 +15,10 @@ pub mod integration;
 
 pub use error::{Error, SubxtError};
 pub use pallets::*;
-pub use primitives::{oracle::Key as OracleKey, CurrencyId};
+pub use primitives::{
+    oracle::{BitcoinInclusionTime, Key as OracleKey},
+    CurrencyId,
+};
 pub use retry::{notify_retry, RetryPolicy};
 pub use rpc::{
     BtcRelayPallet, CollateralBalancesPallet, ExchangeRateOraclePallet, FeePallet, InterBtcParachain, IssuePallet,
@@ -50,6 +53,9 @@ pub const MILLISECS_PER_BLOCK: u64 = 6000;
 // These time units are defined in number of blocks.
 pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
+
+pub const RELAY_CHAIN_CURRENCY: CurrencyId = CurrencyId::DOT;
+pub const DEFAULT_INCLUSION_TIME: BitcoinInclusionTime = BitcoinInclusionTime::Fast;
 
 pub type Balance = u128;
 
