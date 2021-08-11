@@ -41,3 +41,10 @@ pub struct FeedValuesEvent<T: ExchangeRateOracle> {
     pub account_id: T::AccountId,
     pub values: Vec<(OracleKey, T::UnsignedFixedPoint)>,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct RawValuesUpdatedStore<'a, T: ExchangeRateOracle> {
+    #[store(returns = bool)]
+    pub _runtime: PhantomData<T>,
+    pub key: &'a OracleKey,
+}

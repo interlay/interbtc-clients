@@ -3,8 +3,9 @@
 mod bitcoin_simulator;
 
 use crate::{
-    rpc::{ExchangeRateOraclePallet, IssuePallet, SecurityPallet, VaultRegistryPallet},
-    AccountId, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime, StatusCode,
+    rpc::{ExchangeRateOraclePallet, IssuePallet, VaultRegistryPallet},
+    AccountId, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey, DEFAULT_INCLUSION_TIME,
+    RELAY_CHAIN_CURRENCY,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
 use frame_support::assert_ok;
@@ -117,16 +118,33 @@ pub async fn assert_issue(
 const SLEEP_DURATION: Duration = Duration::from_millis(1000);
 const TIMEOUT_DURATION: Duration = Duration::from_secs(20);
 
-// TODO: wait for aggregate to be populated
-pub async fn wait_for_parachain_running(parachain_rpc: &InterBtcParachain) {
-    while !matches!(parachain_rpc.get_parachain_status().await.unwrap(), StatusCode::Running) {
+async fn wait_for_aggregate(parachain_rpc: &InterBtcParachain, key: &OracleKey) {
+    while parachain_rpc.has_updated(key).await.unwrap() {
+        // should be false upon aggregate update
         sleep(SLEEP_DURATION).await;
     }
 }
 
 pub async fn set_exchange_rate(parachain_rpc: &InterBtcParachain, value: FixedU128) {
-    parachain_rpc.set_exchange_rate(value).await.unwrap();
-    assert_ok!(timeout(TIMEOUT_DURATION, wait_for_parachain_running(parachain_rpc)).await);
+    assert_ok!(parachain_rpc.set_exchange_rate(value).await);
+    assert_ok!(
+        timeout(
+            TIMEOUT_DURATION,
+            wait_for_aggregate(parachain_rpc, &OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY))
+        )
+        .await
+    );
+}
+
+pub async fn set_bitcoin_fees(parachain_rpc: &InterBtcParachain, value: FixedU128) {
+    assert_ok!(parachain_rpc.set_bitcoin_fees(value).await);
+    assert_ok!(
+        timeout(
+            TIMEOUT_DURATION,
+            wait_for_aggregate(parachain_rpc, &OracleKey::FeeEstimation(DEFAULT_INCLUSION_TIME))
+        )
+        .await
+    );
 }
 
 /// calculate how much collateral the vault requires to accept an issue of the given size

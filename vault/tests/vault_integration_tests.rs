@@ -12,8 +12,8 @@ use runtime::{
     pallets::{
         issue::*, redeem::*, refund::*, replace::*, security::UpdateActiveBlockEvent, tokens::*, vault_registry::*,
     },
-    BtcAddress, BtcRelayPallet, ExchangeRateOraclePallet, FixedPointNumber, FixedU128, InterBtcParachain,
-    InterBtcRedeemRequest, InterBtcRuntime, IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    BtcAddress, BtcRelayPallet, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRedeemRequest, InterBtcRuntime,
+    IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
@@ -32,7 +32,7 @@ where
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Bob).await;
 
     set_exchange_rate(&parachain_rpc, FixedU128::saturating_from_rational(1u128, 100u128)).await;
-    assert_ok!(parachain_rpc.set_bitcoin_fees(FixedU128::from(0)).await);
+    set_bitcoin_fees(&parachain_rpc, FixedU128::from(0)).await;
 
     execute(client).await
 }
