@@ -577,7 +577,7 @@ pub trait ExchangeRateOraclePallet {
 
     async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error>;
 
-    async fn set_bitcoin_fees(&self, fast: FixedU128) -> Result<(), Error>;
+    async fn set_bitcoin_fees(&self, value: FixedU128) -> Result<(), Error>;
 
     async fn get_bitcoin_fees(&self) -> Result<FixedU128, Error>;
 
@@ -628,10 +628,10 @@ impl ExchangeRateOraclePallet for InterBtcParachain {
     }
 
     /// Sets the estimated Satoshis per bytes required to get a Bitcoin transaction included in
-    /// in the next x blocks
+    /// in the next block (~10 min)
     ///
     /// # Arguments
-    /// * `fast` - the estimated Satoshis per bytes to get included in the next block (~10 min)
+    /// * `value` - the estimated fee rate
     async fn set_bitcoin_fees(&self, value: FixedU128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.ext_client

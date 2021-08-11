@@ -117,6 +117,7 @@ pub async fn assert_issue(
 const SLEEP_DURATION: Duration = Duration::from_millis(1000);
 const TIMEOUT_DURATION: Duration = Duration::from_secs(20);
 
+// TODO: wait for aggregate to be populated
 pub async fn wait_for_parachain_running(parachain_rpc: &InterBtcParachain) {
     while !matches!(parachain_rpc.get_parachain_status().await.unwrap(), StatusCode::Running) {
         sleep(SLEEP_DURATION).await;

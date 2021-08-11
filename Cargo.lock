@@ -10641,6 +10641,7 @@ dependencies = [
  "async-trait",
  "bitcoin 0.7.0",
  "clap 3.0.0-beta.2",
+ "frame-support",
  "futures 0.3.16",
  "git-version",
  "hex 0.4.3",
