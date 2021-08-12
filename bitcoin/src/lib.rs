@@ -150,12 +150,9 @@ impl LockedTransaction {
 
 fn get_exponential_backoff() -> ExponentialBackoff {
     ExponentialBackoff {
-        max_elapsed_time: Some(Duration::from_secs(24 * 60 * 60)),
-        max_interval: Duration::from_secs(5 * 60), // wait at most 5 minutes before retrying
-        initial_interval: Duration::from_secs(1),
-        current_interval: Duration::from_secs(1),
-        multiplier: 2.0,            // delay doubles every time
-        randomization_factor: 0.25, // random value between 25% below and 25% above the ideal delay
+        max_elapsed_time: Some(Duration::from_secs(24 * 60 * 60)), // elapse after 24 hours
+        max_interval: Duration::from_secs(5 * 60),                 // wait at most 5 minutes before retrying
+        multiplier: 2.0,                                           // delay doubles every time
         ..Default::default()
     }
 }
