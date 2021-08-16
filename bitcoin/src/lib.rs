@@ -40,11 +40,40 @@ use tokio::{
 #[macro_use]
 extern crate num_derive;
 
+/// Average time to mine a Bitcoin block.
 pub const BLOCK_INTERVAL: Duration = Duration::from_secs(600); // 10 minutes
 
 const NOT_IN_MEMPOOL_ERROR_CODE: i32 = BitcoinRpcError::RpcInvalidAddressOrKey as i32;
 
+// Time to sleep before retry on startup.
 const RETRY_DURATION: Duration = Duration::from_millis(1000);
+
+// The default initial interval value (1 second).
+const INITIAL_INTERVAL: Duration = Duration::from_millis(1000);
+
+// The default maximum elapsed time (24 hours).
+const MAX_ELAPSED_TIME: Duration = Duration::from_secs(24 * 60 * 60);
+
+// The default maximum back off time (5 minutes).
+const MAX_INTERVAL: Duration = Duration::from_secs(5 * 60);
+
+// The default multiplier value (delay doubles every time).
+const MULTIPLIER: f64 = 2.0;
+
+// Random value between 25% below and 25% above the ideal delay.
+const RANDOMIZATION_FACTOR: f64 = 0.25;
+
+fn get_exponential_backoff() -> ExponentialBackoff {
+    ExponentialBackoff {
+        current_interval: INITIAL_INTERVAL,
+        initial_interval: INITIAL_INTERVAL,
+        max_elapsed_time: Some(MAX_ELAPSED_TIME),
+        max_interval: MAX_INTERVAL,
+        multiplier: MULTIPLIER,
+        randomization_factor: RANDOMIZATION_FACTOR,
+        ..Default::default()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct TransactionMetadata {
@@ -145,15 +174,6 @@ impl LockedTransaction {
             recipient,
             _lock: lock,
         }
-    }
-}
-
-fn get_exponential_backoff() -> ExponentialBackoff {
-    ExponentialBackoff {
-        max_elapsed_time: Some(Duration::from_secs(24 * 60 * 60)), // elapse after 24 hours
-        max_interval: Duration::from_secs(5 * 60),                 // wait at most 5 minutes before retrying
-        multiplier: 2.0,                                           // delay doubles every time
-        ..Default::default()
     }
 }
 
