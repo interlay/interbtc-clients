@@ -1,6 +1,6 @@
 mod error;
 
-use backoff::{future::retry, ExponentialBackoff};
+use backoff::{future::retry_notify, ExponentialBackoff};
 use clap::Clap;
 use error::Error;
 use git_version::git_version;
@@ -12,7 +12,7 @@ use runtime::{
     FixedPointTraits::CheckedMul,
     FixedU128, InterBtcParachain, InterBtcRuntime,
 };
-use std::{collections::HashMap, future::Future, time::Duration};
+use std::{collections::HashMap, time::Duration};
 use tokio::{join, time::sleep};
 
 const VERSION: &str = git_version!(args = ["--tags"]);
@@ -123,11 +123,8 @@ async fn submit_exchange_rate(
 ) -> Result<(), Error> {
     let exchange_rate = match url_or_def {
         UrlOrDefault::Url(url) => {
-            retry(get_exponential_backoff(), || async {
-                // exchange_rate given in BTC/DOT so convert after
-                Ok(get_exchange_rate_from_coingecko(&url).await?)
-            })
-            .await?
+            // exchange_rate given in BTC/DOT so convert after
+            get_exchange_rate_from_coingecko(&url).await?
         }
         UrlOrDefault::Def(def) => def,
     };
@@ -142,11 +139,7 @@ async fn submit_exchange_rate(
         chrono::offset::Local::now()
     );
 
-    if let Err(e) = parachain_rpc.set_exchange_rate(exchange_rate).await {
-        log::error!("Error: {}", e.to_string());
-    }
-
-    Ok(())
+    Ok(parachain_rpc.set_exchange_rate(exchange_rate).await?)
 }
 
 /// Fetches the Bitcoin fee estimate from Blockstream or uses the provided default.
@@ -156,12 +149,7 @@ async fn submit_bitcoin_fees(
     url_or_def: UrlOrDefault<FixedU128>,
 ) -> Result<(), Error> {
     let bitcoin_fee = match url_or_def {
-        UrlOrDefault::Url(url) => {
-            retry(get_exponential_backoff(), || async {
-                Ok(get_bitcoin_fee_estimate_from_blockstream(&url).await?)
-            })
-            .await?
-        }
+        UrlOrDefault::Url(url) => get_bitcoin_fee_estimate_from_blockstream(&url).await?,
         UrlOrDefault::Def(def) => def,
     };
 
@@ -171,20 +159,7 @@ async fn submit_bitcoin_fees(
         chrono::offset::Local::now()
     );
 
-    if let Err(e) = parachain_rpc.set_bitcoin_fees(bitcoin_fee).await {
-        log::error!("Error: {}", e.to_string());
-    }
-
-    Ok(())
-}
-
-async fn do_and_report<F: Future<Output = Result<(), Error>>>(call: F) -> Result<(), Error> {
-    if let Err(err) = call.await {
-        log::error!("{}", err);
-        Err(err)
-    } else {
-        Ok(())
-    }
+    Ok(parachain_rpc.set_bitcoin_fees(bitcoin_fee).await?)
 }
 
 #[tokio::main]
@@ -221,19 +196,38 @@ async fn main() -> Result<(), Error> {
             InterBtcParachain::from_url_with_retry(&opts.btc_parachain_url, signer.clone(), opts.connection_timeout_ms)
                 .await?;
 
+        let bitcoin_fee = opts.bitcoin_fee;
+        let exchange_rate = opts.exchange_rate;
+
         let (left, right) = join!(
-            do_and_report(submit_bitcoin_fees(
-                &parachain_rpc,
-                UrlOrDefault::from_args(blockstream_url.clone(), opts.bitcoin_fee)
-            )),
-            do_and_report(submit_exchange_rate(
-                &parachain_rpc,
-                UrlOrDefault::from_args(coingecko_url.clone(), opts.exchange_rate),
-                conversion_factor
-            ))
+            retry_notify(
+                get_exponential_backoff(),
+                || async {
+                    Ok(submit_bitcoin_fees(
+                        &parachain_rpc,
+                        UrlOrDefault::from_args(blockstream_url.clone(), bitcoin_fee),
+                    )
+                    .await?)
+                },
+                |err, _| log::error!("Error: {}", err),
+            ),
+            retry_notify(
+                get_exponential_backoff(),
+                || async {
+                    Ok(submit_exchange_rate(
+                        &parachain_rpc,
+                        UrlOrDefault::from_args(coingecko_url.clone(), exchange_rate),
+                        conversion_factor,
+                    )
+                    .await?)
+                },
+                |err, _| log::error!("Error: {}", err),
+            ),
         );
 
         if left.is_err() || right.is_err() {
+            // exit if either task failed after backoff
+            // error should already be logged
             return Err(Error::Shutdown);
         }
 
