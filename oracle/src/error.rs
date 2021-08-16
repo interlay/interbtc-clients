@@ -5,6 +5,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("Shutdown")]
+    Shutdown,
     #[error("Invalid response")]
     InvalidResponse,
     #[error("Invalid exchange rate")]

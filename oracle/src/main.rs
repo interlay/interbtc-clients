@@ -12,8 +12,8 @@ use runtime::{
     FixedPointTraits::CheckedMul,
     FixedU128, InterBtcParachain, InterBtcRuntime,
 };
-use std::{collections::HashMap, time::Duration};
-use tokio::{time::sleep, try_join};
+use std::{collections::HashMap, future::Future, time::Duration};
+use tokio::{join, time::sleep};
 
 const VERSION: &str = git_version!(args = ["--tags"]);
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -178,6 +178,15 @@ async fn submit_bitcoin_fees(
     Ok(())
 }
 
+async fn do_and_report<F: Future<Output = Result<(), Error>>>(call: F) -> Result<(), Error> {
+    if let Err(err) = call.await {
+        log::error!("{}", err);
+        Err(err)
+    } else {
+        Ok(())
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     env_logger::init_from_env(
@@ -212,18 +221,20 @@ async fn main() -> Result<(), Error> {
             InterBtcParachain::from_url_with_retry(&opts.btc_parachain_url, signer.clone(), opts.connection_timeout_ms)
                 .await?;
 
-        if let Err(err) = try_join!(
-            submit_bitcoin_fees(
+        let (left, right) = join!(
+            do_and_report(submit_bitcoin_fees(
                 &parachain_rpc,
                 UrlOrDefault::from_args(blockstream_url.clone(), opts.bitcoin_fee)
-            ),
-            submit_exchange_rate(
+            )),
+            do_and_report(submit_exchange_rate(
                 &parachain_rpc,
                 UrlOrDefault::from_args(coingecko_url.clone(), opts.exchange_rate),
                 conversion_factor
-            )
-        ) {
-            return Err(err);
+            ))
+        );
+
+        if left.is_err() || right.is_err() {
+            return Err(Error::Shutdown);
         }
 
         sleep(opts.interval_ms).await;
