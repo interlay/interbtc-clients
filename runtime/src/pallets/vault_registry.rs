@@ -15,6 +15,7 @@ pub struct RegisterVaultCall<T: VaultRegistry> {
     #[codec(compact)]
     pub collateral: T::Collateral,
     pub public_key: T::BtcPublicKey,
+    pub currency_id: T::CurrencyId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
@@ -52,15 +53,9 @@ pub struct WithdrawCollateralEvent<T: VaultRegistry> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct VaultsStore<T: VaultRegistry> {
-    #[store(returns = Vault<T::AccountId, T::BlockNumber, T::Balance>)]
+    #[store(returns = Option<Vault<T::AccountId, T::BlockNumber, T::Balance, T::CurrencyId>>)]
     pub _runtime: PhantomData<T>,
     pub account_id: T::AccountId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct LiquidationCollateralThresholdStore<T: VaultRegistry> {
-    #[store(returns = u128)]
-    pub _runtime: PhantomData<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]

@@ -4,8 +4,7 @@ mod bitcoin_simulator;
 
 use crate::{
     rpc::{ExchangeRateOraclePallet, IssuePallet, VaultRegistryPallet},
-    AccountId, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey, DEFAULT_INCLUSION_TIME,
-    RELAY_CHAIN_CURRENCY,
+    AccountId, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey, RELAY_CHAIN_CURRENCY,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
 use frame_support::assert_ok;
@@ -141,7 +140,7 @@ pub async fn set_bitcoin_fees(parachain_rpc: &InterBtcParachain, value: FixedU12
     assert_ok!(
         timeout(
             TIMEOUT_DURATION,
-            wait_for_aggregate(parachain_rpc, &OracleKey::FeeEstimation(DEFAULT_INCLUSION_TIME))
+            wait_for_aggregate(parachain_rpc, &OracleKey::FeeEstimation)
         )
         .await
     );

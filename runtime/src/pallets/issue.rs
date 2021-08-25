@@ -62,7 +62,7 @@ pub struct CancelIssueEvent<T: Issue> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct IssueRequestsStore<T: Issue> {
-    #[store(returns = IssueRequest<T::AccountId, T::BlockNumber, T::Wrapped, T::Collateral>)]
+    #[store(returns = IssueRequest<T::AccountId, T::BlockNumber, T::Balance>)]
     pub _runtime: PhantomData<T>,
     pub issue_id: T::H256,
 }

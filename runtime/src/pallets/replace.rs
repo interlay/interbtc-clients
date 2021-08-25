@@ -97,7 +97,7 @@ pub struct ReplaceBtcDustValueStore<T: Replace> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct ReplaceRequestsStore<T: Replace> {
-    #[store(returns = ReplaceRequest<T::AccountId, T::BlockNumber, T::Wrapped, T::Collateral>)]
+    #[store(returns = ReplaceRequest<T::AccountId, T::BlockNumber, T::Balance>)]
     pub _runtime: PhantomData<T>,
     pub replace_id: T::H256,
 }

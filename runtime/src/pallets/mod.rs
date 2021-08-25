@@ -22,7 +22,7 @@ pub use module_refund::RefundRequest;
 pub use module_relay::Error as RelayError;
 pub use module_replace::{ReplaceRequest, ReplaceRequestStatus};
 pub use module_security::{ErrorCode, StatusCode};
-pub use module_vault_registry::{Vault, VaultStatus};
+pub use module_vault_registry::{Vault, VaultStatus, Wallet};
 
 pub use sp_core::{H160, H256, U256};
 
