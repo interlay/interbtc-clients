@@ -65,7 +65,7 @@ pub struct CancelRedeemEvent<T: Redeem> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct RedeemRequestsStore<T: Redeem> {
-    #[store(returns = RedeemRequest<T::AccountId, T::BlockNumber, T::Wrapped, T::Collateral>)]
+    #[store(returns = RedeemRequest<T::AccountId, T::BlockNumber, T::Balance>)]
     pub _runtime: PhantomData<T>,
     pub redeem_id: T::H256,
 }

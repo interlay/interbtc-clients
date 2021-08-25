@@ -19,9 +19,11 @@ use tokio::{sync::RwLock, time::sleep};
 use crate::{
     btc_relay::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*, refund::*, relay::*,
     replace::*, retry::*, security::*, timestamp::*, tokens::*, types::*, utility::*, vault_registry::*, AccountId,
-    BlockNumber, Error, InterBtcRuntime, BTC_RELAY_MODULE, DEFAULT_INCLUSION_TIME, RELAY_CHAIN_CURRENCY,
+    BlockNumber, CurrencyId, Error, InterBtcRuntime, BTC_RELAY_MODULE, RELAY_CHAIN_CURRENCY,
     STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CONFIRMATIONS,
 };
+
+const DEFAULT_COLLATERAL_CURRENCY: CurrencyId = CurrencyId::DOT;
 
 #[derive(Clone)]
 pub struct InterBtcParachain {
@@ -638,7 +640,7 @@ impl ExchangeRateOraclePallet for InterBtcParachain {
     async fn set_bitcoin_fees(&self, value: FixedU128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .feed_values_and_watch(&signer, vec![(OracleKey::FeeEstimation(DEFAULT_INCLUSION_TIME), value)])
+                .feed_values_and_watch(&signer, vec![(OracleKey::FeeEstimation, value)])
                 .await
         })
         .await?;
@@ -649,10 +651,7 @@ impl ExchangeRateOraclePallet for InterBtcParachain {
     /// in the next x blocks
     async fn get_bitcoin_fees(&self) -> Result<FixedU128, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self
-            .ext_client
-            .aggregate(OracleKey::FeeEstimation(DEFAULT_INCLUSION_TIME), head)
-            .await?)
+        Ok(self.ext_client.aggregate(OracleKey::FeeEstimation, head).await?)
     }
 
     /// Converts the amount in btc to dot, based on the current set exchange rate.
@@ -662,7 +661,11 @@ impl ExchangeRateOraclePallet for InterBtcParachain {
             .rpc_client
             .request(
                 "exchangeRateOracle_wrappedToCollateral",
-                &[to_json_value(BalanceWrapper { amount })?, to_json_value(head)?],
+                &[
+                    to_json_value(BalanceWrapper { amount })?,
+                    to_json_value(DEFAULT_COLLATERAL_CURRENCY)?,
+                    to_json_value(head)?,
+                ],
             )
             .await?;
 
@@ -676,7 +679,11 @@ impl ExchangeRateOraclePallet for InterBtcParachain {
             .rpc_client
             .request(
                 "exchangeRateOracle_collateralToWrapped",
-                &[to_json_value(BalanceWrapper { amount })?, to_json_value(head)?],
+                &[
+                    to_json_value(BalanceWrapper { amount })?,
+                    to_json_value(DEFAULT_COLLATERAL_CURRENCY)?,
+                    to_json_value(head)?,
+                ],
             )
             .await?;
 
@@ -1243,18 +1250,17 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// * `VaultCommittedTheft` - if the vault is stole BTC
     async fn get_vault(&self, vault_id: AccountId) -> Result<InterBtcVault, Error> {
         let head = self.get_latest_block_hash().await?;
-        match self.ext_client.vaults(vault_id.clone(), head).await {
-            Ok(InterBtcVault {
+        match self.ext_client.vaults(vault_id.clone(), head).await? {
+            Some(InterBtcVault {
                 status: VaultStatus::Liquidated,
                 ..
             }) => Err(Error::VaultLiquidated),
-            Ok(InterBtcVault {
+            Some(InterBtcVault {
                 status: VaultStatus::CommittedTheft,
                 ..
             }) => Err(Error::VaultCommittedTheft),
-            Ok(vault) if vault.id == vault_id => Ok(vault),
-            Ok(_) => Err(Error::VaultNotFound),
-            Err(err) => Err(err.into()),
+            Some(vault) if vault.id == vault_id => Ok(vault),
+            _ => Err(Error::VaultNotFound),
         }
     }
 
@@ -1280,7 +1286,7 @@ impl VaultRegistryPallet for InterBtcParachain {
         let public_key = &public_key.clone();
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .register_vault_and_watch(&signer, collateral, public_key.clone())
+                .register_vault_and_watch(&signer, collateral, public_key.clone(), DEFAULT_COLLATERAL_CURRENCY)
                 .await
         })
         .await?;
@@ -1356,6 +1362,7 @@ impl VaultRegistryPallet for InterBtcParachain {
                 "vaultRegistry_getRequiredCollateralForWrapped",
                 &[
                     to_json_value(BalanceWrapper { amount: amount_btc })?,
+                    to_json_value(DEFAULT_COLLATERAL_CURRENCY)?,
                     to_json_value(head)?,
                 ],
             )

@@ -7,7 +7,7 @@ use crate::{
         issue::RequestIssueEvent, Core, IssueRequest, RedeemRequest, RefundRequest, ReplaceRequest, RichBlockHeader,
         Vault,
     },
-    InterBtcRuntime,
+    CurrencyId, InterBtcRuntime,
 };
 
 type AccountId = <InterBtcRuntime as System>::AccountId;
@@ -20,20 +20,17 @@ pub type InterBtcBalance = <InterBtcRuntime as Core>::Balance;
 
 pub type InterBtcBlock = SignedBlock<Block<InterBtcHeader, <InterBtcRuntime as System>::Extrinsic>>;
 
-pub type InterBtcVault = Vault<AccountId, BlockNumber, <InterBtcRuntime as Core>::Balance>;
+pub type InterBtcVault = Vault<AccountId, BlockNumber, InterBtcBalance, CurrencyId>;
 
-pub type InterBtcIssueRequest =
-    IssueRequest<AccountId, BlockNumber, <InterBtcRuntime as Core>::Wrapped, <InterBtcRuntime as Core>::Collateral>;
+pub type InterBtcIssueRequest = IssueRequest<AccountId, BlockNumber, InterBtcBalance>;
 
 pub type InterBtcRequestIssueEvent = RequestIssueEvent<InterBtcRuntime>;
 
-pub type InterBtcRedeemRequest =
-    RedeemRequest<AccountId, BlockNumber, <InterBtcRuntime as Core>::Wrapped, <InterBtcRuntime as Core>::Collateral>;
+pub type InterBtcRedeemRequest = RedeemRequest<AccountId, BlockNumber, InterBtcBalance>;
 
 pub type InterBtcRefundRequest = RefundRequest<AccountId, <InterBtcRuntime as Core>::Wrapped>;
 
-pub type InterBtcReplaceRequest =
-    ReplaceRequest<AccountId, BlockNumber, <InterBtcRuntime as Core>::Wrapped, <InterBtcRuntime as Core>::Collateral>;
+pub type InterBtcReplaceRequest = ReplaceRequest<AccountId, BlockNumber, InterBtcBalance>;
 
 pub type InterBtcRichBlockHeader = RichBlockHeader<BlockNumber>;
 

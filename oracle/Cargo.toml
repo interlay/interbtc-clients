@@ -1,6 +1,6 @@
 [package]
 name = "oracle"
-version = "0.10.0"
+version = "0.11.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 description = "Liveness service to update the exchange rate periodically."

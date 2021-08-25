@@ -1,8 +1,8 @@
 use crate::error::Error;
 use futures::future;
 use runtime::{
-    pallets::exchange_rate_oracle::FeedValuesEvent, AccountId, CollateralBalancesPallet, InterBtcParachain,
-    InterBtcRuntime, OracleKey, UtilFuncs, VaultRegistryPallet, VaultStatus, RELAY_CHAIN_CURRENCY,
+    pallets::exchange_rate_oracle::FeedValuesEvent, AccountId, CollateralBalancesPallet, CurrencyId, InterBtcParachain,
+    InterBtcRuntime, OracleKey, UtilFuncs, VaultRegistryPallet, VaultStatus, Wallet, RELAY_CHAIN_CURRENCY,
 };
 use service::Error as ServiceError;
 
@@ -200,8 +200,16 @@ mod tests {
         parachain_rpc.expect_get_vault().returning(move |x| {
             Ok(InterBtcVault {
                 id: x,
+                wallet: Wallet::new(BtcPublicKey::default()),
                 status: VaultStatus::Active(true),
-                ..Default::default()
+                banned_until: None,
+                to_be_issued_tokens: 0,
+                issued_tokens: 0,
+                to_be_redeemed_tokens: 0,
+                to_be_replaced_tokens: 0,
+                replace_collateral: 0,
+                liquidated_collateral: 0,
+                currency_id: CurrencyId::DOT,
             })
         });
 
@@ -308,11 +316,19 @@ mod tests {
     #[tokio::test]
     async fn test_lock_required_collateral_with_unregistered_vault_fails() {
         let mut parachain_rpc = MockProvider::default();
-        parachain_rpc.expect_get_vault().returning(|x| {
+        parachain_rpc.expect_get_vault().returning(move |x| {
             Ok(InterBtcVault {
                 id: x,
+                wallet: Wallet::new(BtcPublicKey::default()),
                 status: VaultStatus::CommittedTheft,
-                ..Default::default()
+                banned_until: None,
+                to_be_issued_tokens: 0,
+                issued_tokens: 0,
+                to_be_redeemed_tokens: 0,
+                to_be_replaced_tokens: 0,
+                replace_collateral: 0,
+                liquidated_collateral: 0,
+                currency_id: CurrencyId::DOT,
             })
         });
 
