@@ -1,6 +1,6 @@
 [package]
 name = "bitcoin"
-version = "0.11.0"
+version = "0.12.0"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 
@@ -33,7 +33,7 @@ sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-
 
 [dependencies.interbtc-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "612b88ff88600cdcdc98ed8db216bb1270a959bb"
+rev = "29751e3f69733486df0fab33d0f8fb3d1bdb0c14"
 package = "bitcoin"
 optional = true
 

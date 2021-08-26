@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures::{stream::StreamExt, FutureExt, SinkExt};
 use jsonrpsee_types::to_json_value;
-use module_exchange_rate_oracle_rpc_runtime_api::BalanceWrapper;
+use module_oracle_rpc_runtime_api::BalanceWrapper;
 use primitives::oracle::Key as OracleKey;
 use sp_arithmetic::FixedU128;
 use sp_core::H256;
@@ -573,7 +573,7 @@ impl TimestampPallet for InterBtcParachain {
 }
 
 #[async_trait]
-pub trait ExchangeRateOraclePallet {
+pub trait OraclePallet {
     async fn get_exchange_rate(&self) -> Result<FixedU128, Error>;
 
     async fn set_exchange_rate(&self, value: FixedU128) -> Result<(), Error>;
@@ -592,7 +592,7 @@ pub trait ExchangeRateOraclePallet {
 }
 
 #[async_trait]
-impl ExchangeRateOraclePallet for InterBtcParachain {
+impl OraclePallet for InterBtcParachain {
     /// Returns the last exchange rate in planck per satoshis, the time at which it was set
     /// and the configured max delay.
     async fn get_exchange_rate(&self) -> Result<FixedU128, Error> {

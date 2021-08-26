@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use super::{
-    BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, ExchangeRateOraclePallet, FixedPointNumber,
-    FixedU128, RelayPallet, ReplacePallet, SecurityPallet, StatusCode, VaultRegistryPallet,
+    BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, FixedPointNumber, FixedU128, OraclePallet,
+    RelayPallet, ReplacePallet, SecurityPallet, StatusCode, VaultRegistryPallet,
 };
 use crate::{exchange_rate_oracle::FeedValuesEvent, integration::*, InterBtcRuntime};
 use module_bitcoin::{

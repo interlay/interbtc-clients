@@ -8,9 +8,9 @@ use reqwest::Url;
 use runtime::{
     cli::{parse_duration_ms, ProviderUserOpts},
     substrate_subxt::PairSigner,
-    ExchangeRateOraclePallet, FixedPointNumber,
+    FixedPointNumber,
     FixedPointTraits::CheckedMul,
-    FixedU128, InterBtcParachain, InterBtcRuntime,
+    FixedU128, InterBtcParachain, InterBtcRuntime, OraclePallet,
 };
 use std::{collections::HashMap, time::Duration};
 use tokio::{join, time::sleep};

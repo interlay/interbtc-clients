@@ -16,13 +16,14 @@ pub mod vault_registry;
 
 pub use module_bitcoin::{formatter::Formattable, types::*};
 pub use module_btc_relay::{BtcAddress, BtcPublicKey, RichBlockHeader, MAIN_CHAIN_ID};
-pub use module_issue::{IssueRequest, IssueRequestStatus};
-pub use module_redeem::{RedeemRequest, RedeemRequestStatus};
-pub use module_refund::RefundRequest;
-pub use module_relay::Error as RelayError;
-pub use module_replace::{ReplaceRequest, ReplaceRequestStatus};
 pub use module_security::{ErrorCode, StatusCode};
 pub use module_vault_registry::{Vault, VaultStatus, Wallet};
+pub use primitives::{
+    issue::{IssueRequest, IssueRequestStatus},
+    redeem::{RedeemRequest, RedeemRequestStatus},
+    refund::RefundRequest,
+    replace::{ReplaceRequest, ReplaceRequestStatus},
+};
 
 pub use sp_core::{H160, H256, U256};
 
