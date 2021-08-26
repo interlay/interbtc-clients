@@ -522,24 +522,6 @@ dependencies = [
 [[package]]
 name = "bitcoin"
 version = "0.12.0"
-source = "git+https://github.com/interlay/interbtc?rev=a943c00c7e3221411de9ab2c47327a6e75e697a0#a943c00c7e3221411de9ab2c47327a6e75e697a0"
-dependencies = [
- "bitcoin_hashes 0.7.6",
- "frame-support",
- "hex 0.4.3",
- "impl-serde",
- "parity-scale-codec",
- "secp256k1",
- "serde",
- "sha2 0.8.2",
- "sp-core 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.8)",
- "sp-std 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.8)",
- "spin 0.7.1",
-]
-
-[[package]]
-name = "bitcoin"
-version = "0.12.0"
 dependencies = [
  "async-trait",
  "backoff",
@@ -559,6 +541,24 @@ dependencies = [
  "sp-core 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.8)",
  "thiserror",
  "tokio 1.9.0",
+]
+
+[[package]]
+name = "bitcoin"
+version = "0.12.0"
+source = "git+https://github.com/interlay/interbtc?rev=a943c00c7e3221411de9ab2c47327a6e75e697a0#a943c00c7e3221411de9ab2c47327a6e75e697a0"
+dependencies = [
+ "bitcoin_hashes 0.7.6",
+ "frame-support",
+ "hex 0.4.3",
+ "impl-serde",
+ "parity-scale-codec",
+ "secp256k1",
+ "serde",
+ "sha2 0.8.2",
+ "sp-core 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.8)",
+ "sp-std 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.8)",
+ "spin 0.7.1",
 ]
 
 [[package]]
@@ -5259,6 +5259,22 @@ dependencies = [
 [[package]]
 name = "oracle"
 version = "0.12.0"
+dependencies = [
+ "backoff",
+ "chrono",
+ "clap 3.0.0-beta.2",
+ "env_logger 0.7.1",
+ "git-version",
+ "log 0.4.14",
+ "reqwest",
+ "runtime",
+ "thiserror",
+ "tokio 1.9.0",
+]
+
+[[package]]
+name = "oracle"
+version = "0.12.0"
 source = "git+https://github.com/interlay/interbtc?rev=a943c00c7e3221411de9ab2c47327a6e75e697a0#a943c00c7e3221411de9ab2c47327a6e75e697a0"
 dependencies = [
  "currency",
@@ -5275,22 +5291,6 @@ dependencies = [
  "sp-runtime 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.8)",
  "sp-std 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.8)",
  "staking",
-]
-
-[[package]]
-name = "oracle"
-version = "0.12.0"
-dependencies = [
- "backoff",
- "chrono",
- "clap 3.0.0-beta.2",
- "env_logger 0.7.1",
- "git-version",
- "log 0.4.14",
- "reqwest",
- "runtime",
- "thiserror",
- "tokio 1.9.0",
 ]
 
 [[package]]

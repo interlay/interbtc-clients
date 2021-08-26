@@ -241,7 +241,7 @@ impl InterBtcParachain {
         Ok(())
     }
 
-    async fn sudo<C: Call<InterBtcRuntime> + Clone>(&self, call: C) -> Result<(), Error> {
+    pub async fn sudo<C: Call<InterBtcRuntime> + Clone>(&self, call: C) -> Result<(), Error> {
         let encoded_call = &self.ext_client.encode(call.clone())?;
         self.with_unique_signer(|signer| async move { self.ext_client.sudo_and_watch(&signer, encoded_call).await })
             .await?;

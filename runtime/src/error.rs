@@ -3,7 +3,7 @@ pub use substrate_subxt::Error as SubxtError;
 
 use crate::{
     BTC_RELAY_MODULE, COMMIT_PERIOD_EXPIRED_ERROR, DUPLICATE_BLOCK_ERROR, INVALID_CHAIN_ID_ERROR,
-    ISSUE_COMPLETED_ERROR, ISSUE_MODULE, REDEEM_MODULE,
+    ISSUE_COMPLETED_ERROR, ISSUE_MODULE, PARACHAIN_SHUTDOWN_ERROR, REDEEM_MODULE, SECURITY_MODULE,
 };
 use codec::Error as CodecError;
 use jsonrpsee_types::{error::Error as RequestError, CallError};
@@ -116,6 +116,15 @@ impl Error {
 
     pub fn is_rpc_error(&self) -> bool {
         matches!(self, Error::SubxtError(SubxtError::Rpc(_)))
+    }
+
+    pub fn is_parachain_shutdown_error(&self) -> bool {
+        matches!(self,
+            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
+                ref module,
+                ref error,
+            }))) if module == SECURITY_MODULE && error == PARACHAIN_SHUTDOWN_ERROR
+        )
     }
 }
 
