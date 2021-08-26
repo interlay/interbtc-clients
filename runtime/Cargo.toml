@@ -49,42 +49,42 @@ polkadot-parachain = { git = "https://github.com/paritytech/polkadot", branch = 
 # Dependencies for the testing utils for integration tests
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "f1d4be57a17b23aa86c4b407371bc6b7fc32cc00", optional = true }
 tempdir = {version = "0.3.7", optional = true }
-interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "29751e3f69733486df0fab33d0f8fb3d1bdb0c14", optional = true }
+interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "a943c00c7e3221411de9ab2c47327a6e75e697a0", optional = true }
 bitcoin = { path = "../bitcoin", optional = true }
 rand = { version = "0.7", optional = true }
 
 [dependencies.primitives]
 git = "https://github.com/interlay/interbtc"
-rev = "29751e3f69733486df0fab33d0f8fb3d1bdb0c14"
+rev = "a943c00c7e3221411de9ab2c47327a6e75e697a0"
 package = "interbtc-primitives"
 
 [dependencies.module-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "29751e3f69733486df0fab33d0f8fb3d1bdb0c14"
+rev = "a943c00c7e3221411de9ab2c47327a6e75e697a0"
 package = "bitcoin"
 
 [dependencies.module-btc-relay]
 git = "https://github.com/interlay/interbtc"
-rev = "29751e3f69733486df0fab33d0f8fb3d1bdb0c14"
+rev = "a943c00c7e3221411de9ab2c47327a6e75e697a0"
 package = "btc-relay"
 
 [dependencies.module-security]
 git = "https://github.com/interlay/interbtc"
-rev = "29751e3f69733486df0fab33d0f8fb3d1bdb0c14"
+rev = "a943c00c7e3221411de9ab2c47327a6e75e697a0"
 package = "security"
 
 [dependencies.module-vault-registry]
 git = "https://github.com/interlay/interbtc"
-rev = "29751e3f69733486df0fab33d0f8fb3d1bdb0c14"
+rev = "a943c00c7e3221411de9ab2c47327a6e75e697a0"
 package = "vault-registry"
 
 [dependencies.module-oracle-rpc-runtime-api]
 git = "https://github.com/interlay/interbtc"
-rev = "29751e3f69733486df0fab33d0f8fb3d1bdb0c14"
+rev = "a943c00c7e3221411de9ab2c47327a6e75e697a0"
 package = "module-oracle-rpc-runtime-api"
 
 [dev-dependencies]
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "f1d4be57a17b23aa86c4b407371bc6b7fc32cc00" }
-interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "29751e3f69733486df0fab33d0f8fb3d1bdb0c14" }
+interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "a943c00c7e3221411de9ab2c47327a6e75e697a0" }
 tempdir = "0.3.7"
 env_logger = "0.8.3"
