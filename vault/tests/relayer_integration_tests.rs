@@ -14,8 +14,8 @@ use futures::{
 use runtime::{
     pallets::relay::*,
     substrate_subxt::{Event, PairSigner},
-    BtcAddress, BtcRelayPallet, ErrorCode, ExchangeRateOraclePallet, FeePallet, FixedPointNumber, FixedU128, H256Le,
-    InterBtcParachain, InterBtcRuntime, IssuePallet, RedeemPallet, RelayPallet, ReplacePallet, StatusCode, UtilFuncs,
+    BtcAddress, BtcRelayPallet, ErrorCode, FeePallet, FixedPointNumber, FixedU128, H256Le, InterBtcParachain,
+    InterBtcRuntime, IssuePallet, OraclePallet, RedeemPallet, RelayPallet, ReplacePallet, StatusCode, UtilFuncs,
     VaultRegistryPallet,
 };
 use sp_core::H160;

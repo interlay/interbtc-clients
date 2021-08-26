@@ -18,9 +18,8 @@ pub use pallets::*;
 pub use primitives::{oracle::Key as OracleKey, CurrencyId};
 pub use retry::{notify_retry, RetryPolicy};
 pub use rpc::{
-    BtcRelayPallet, CollateralBalancesPallet, ExchangeRateOraclePallet, FeePallet, InterBtcParachain, IssuePallet,
-    RedeemPallet, RefundPallet, RelayPallet, ReplacePallet, SecurityPallet, TimestampPallet, UtilFuncs,
-    VaultRegistryPallet,
+    BtcRelayPallet, CollateralBalancesPallet, FeePallet, InterBtcParachain, IssuePallet, OraclePallet, RedeemPallet,
+    RefundPallet, RelayPallet, ReplacePallet, SecurityPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
 };
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
 pub use sp_runtime;
@@ -135,7 +134,7 @@ impl timestamp::Timestamp for InterBtcRuntime {
     type Moment = u64;
 }
 
-impl exchange_rate_oracle::ExchangeRateOracle for InterBtcRuntime {}
+impl exchange_rate_oracle::Oracle for InterBtcRuntime {}
 
 impl tokens::Tokens for InterBtcRuntime {}
 

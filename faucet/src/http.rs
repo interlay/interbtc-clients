@@ -300,8 +300,7 @@ mod tests {
     };
     use kv::{Config, Store};
     use runtime::{
-        integration::*, AccountId, BtcPublicKey, ExchangeRateOraclePallet, FixedPointNumber, FixedU128,
-        VaultRegistryPallet,
+        integration::*, AccountId, BtcPublicKey, FixedPointNumber, FixedU128, OraclePallet, VaultRegistryPallet,
     };
     use sp_keyring::AccountKeyring;
 

@@ -1,8 +1,8 @@
 use crate::error::Error;
 use futures::future;
 use runtime::{
-    pallets::exchange_rate_oracle::FeedValuesEvent, AccountId, CollateralBalancesPallet, CurrencyId, InterBtcParachain,
-    InterBtcRuntime, OracleKey, UtilFuncs, VaultRegistryPallet, VaultStatus, Wallet, RELAY_CHAIN_CURRENCY,
+    pallets::exchange_rate_oracle::FeedValuesEvent, AccountId, CollateralBalancesPallet, InterBtcParachain,
+    InterBtcRuntime, OracleKey, UtilFuncs, VaultRegistryPallet, VaultStatus, RELAY_CHAIN_CURRENCY,
 };
 use service::Error as ServiceError;
 
@@ -132,7 +132,9 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + CollateralBalance
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use runtime::{AccountId, BtcAddress, BtcPublicKey, Error as RuntimeError, InterBtcBalance, InterBtcVault};
+    use runtime::{
+        AccountId, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcBalance, InterBtcVault, Wallet,
+    };
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {

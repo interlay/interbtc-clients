@@ -3,7 +3,7 @@
 mod bitcoin_simulator;
 
 use crate::{
-    rpc::{ExchangeRateOraclePallet, IssuePallet, VaultRegistryPallet},
+    rpc::{IssuePallet, OraclePallet, VaultRegistryPallet},
     AccountId, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey, RELAY_CHAIN_CURRENCY,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
