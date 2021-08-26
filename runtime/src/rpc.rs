@@ -660,7 +660,7 @@ impl OraclePallet for InterBtcParachain {
         let result: BalanceWrapper<_> = self
             .rpc_client
             .request(
-                "exchangeRateOracle_wrappedToCollateral",
+                "oracle_wrappedToCollateral",
                 &[
                     to_json_value(BalanceWrapper { amount })?,
                     to_json_value(DEFAULT_COLLATERAL_CURRENCY)?,
@@ -678,7 +678,7 @@ impl OraclePallet for InterBtcParachain {
         let result: BalanceWrapper<_> = self
             .rpc_client
             .request(
-                "exchangeRateOracle_collateralToWrapped",
+                "oracle_collateralToWrapped",
                 &[
                     to_json_value(BalanceWrapper { amount })?,
                     to_json_value(DEFAULT_COLLATERAL_CURRENCY)?,
@@ -744,7 +744,7 @@ impl RelayPallet for InterBtcParachain {
         Ok(matches!(
             self.rpc_client
                 .request(
-                    "stakedRelayers_isTransactionInvalid",
+                    "relay_isTransactionInvalid",
                     &[to_json_value(vault_id)?, to_json_value(raw_tx)?, to_json_value(head)?],
                 )
                 .await,
