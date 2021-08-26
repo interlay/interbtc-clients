@@ -1,9 +1,10 @@
 use super::Core;
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
+pub use module_security::StatusCode;
 use sp_core::U256;
 use std::fmt::Debug;
-use substrate_subxt_proc_macro::{module, Event, Store};
+use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
 #[module]
 pub trait Security: Core {}
@@ -41,4 +42,10 @@ pub struct ActiveBlockCountStore<T: Security> {
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct UpdateActiveBlockEvent<T: Security> {
     pub height: T::BlockNumber,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct SetParachainStatusCall<T: Security> {
+    pub status_code: StatusCode,
+    pub _runtime: PhantomData<T>,
 }

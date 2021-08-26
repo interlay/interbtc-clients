@@ -9,15 +9,13 @@ use futures::{
 };
 use runtime::{
     integration::*,
-    pallets::{
-        issue::*, redeem::*, refund::*, replace::*, security::UpdateActiveBlockEvent, tokens::*, vault_registry::*,
-    },
+    pallets::{issue::*, redeem::*, refund::*, replace::*, security::*, tokens::*, vault_registry::*},
     BtcAddress, BtcRelayPallet, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRedeemRequest, InterBtcRuntime,
     IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
-use std::{sync::Arc, time::Duration};
+use std::{marker::PhantomData, sync::Arc, time::Duration};
 use vault::{self, Event as CancellationEvent, IssueRequests};
 
 const TIMEOUT: Duration = Duration::from_secs(60);
@@ -706,6 +704,55 @@ async fn test_off_chain_liquidation() {
         set_exchange_rate(&relayer_provider, FixedU128::from(10)).await;
 
         assert_event::<LiquidateVaultEvent<InterBtcRuntime>, _>(TIMEOUT, vault_provider.clone(), |_| true).await;
+    })
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_shutdown() {
+    test_with(|client| async move {
+        let sudo_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+        let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
+
+        // register a vault..
+        let btc_rpc = MockBitcoinCore::new(sudo_provider.clone()).await;
+        assert_ok!(
+            sudo_provider
+                .register_vault(1000000, btc_rpc.get_new_public_key().await.unwrap())
+                .await
+        );
+
+        // shutdown chain..
+        assert_ok!(
+            sudo_provider
+                .sudo(SetParachainStatusCall {
+                    status_code: StatusCode::Shutdown,
+                    _runtime: PhantomData {},
+                })
+                .await
+        );
+
+        // request issue should fail:
+        assert!(user_provider
+            .request_issue(10000, sudo_provider.get_account_id(), 10000)
+            .await
+            .unwrap_err()
+            .is_parachain_shutdown_error());
+
+        // restore parachain status and check that we can issue now
+        assert_ok!(
+            sudo_provider
+                .sudo(SetParachainStatusCall {
+                    status_code: StatusCode::Running,
+                    _runtime: PhantomData {},
+                })
+                .await
+        );
+        assert_ok!(
+            user_provider
+                .request_issue(10000, sudo_provider.get_account_id(), 10000)
+                .await
+        );
     })
     .await;
 }
