@@ -13,8 +13,6 @@ pub enum Error {
     InvalidExchangeRate,
     #[error("Invalid fee estimate")]
     InvalidFeeEstimate,
-    #[error("Invalid currency")]
-    InvalidCurrency,
 
     #[error("ReqwestError: {0}")]
     ReqwestError(#[from] ReqwestError),

@@ -15,11 +15,11 @@ use runtime::{
     btc_relay::StoreMainChainHeaderEvent,
     cli::{parse_duration_minutes, parse_duration_ms},
     pallets::{security::UpdateActiveBlockEvent, sla::UpdateVaultSLAEvent},
-    AccountId, BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, InterBtcRuntime, UtilFuncs,
-    VaultRegistryPallet,
+    parse_collateral_currency, AccountId, BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain,
+    InterBtcRuntime, UtilFuncs, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
-use std::{convert::TryFrom, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
 
 pub const VERSION: &str = git_version!(args = ["--tags"]);
@@ -102,12 +102,8 @@ pub struct VaultServiceConfig {
     #[clap(long)]
     pub no_vault_theft_report: bool,
 
-    #[clap(long, parse(try_from_str = parse_currency_id))]
+    #[clap(long, parse(try_from_str = parse_collateral_currency))]
     pub currency_id: CurrencyId,
-}
-
-fn parse_currency_id(src: &str) -> Result<CurrencyId, Error> {
-    CurrencyId::try_from(src.as_bytes().to_vec()).map_err(|_| Error::ArgumentParsingError)
 }
 
 async fn active_block_listener(

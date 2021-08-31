@@ -7,6 +7,7 @@ use git_version::git_version;
 use reqwest::Url;
 use runtime::{
     cli::{parse_duration_ms, ProviderUserOpts},
+    parse_collateral_currency,
     substrate_subxt::PairSigner,
     CurrencyId, CurrencyInfo, FixedPointNumber,
     FixedPointTraits::{CheckedDiv, CheckedMul, One},
@@ -55,14 +56,6 @@ fn parse_fixed_point(src: &str) -> Result<FixedU128, Error> {
     FixedU128::checked_from_integer(src.parse::<u128>()?).ok_or(Error::InvalidExchangeRate)
 }
 
-fn parse_currency_id(src: &str) -> Result<CurrencyId, Error> {
-    match src.to_uppercase().as_str() {
-        id if id == CurrencyId::KSM.symbol() => Ok(CurrencyId::KSM),
-        id if id == CurrencyId::DOT.symbol() => Ok(CurrencyId::DOT),
-        _ => Err(Error::InvalidCurrency),
-    }
-}
-
 #[derive(Clap)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
 struct Opts {
@@ -81,7 +74,7 @@ struct Opts {
     exchange_rate: FixedU128,
 
     /// Collateral type for exchange rates.
-    #[clap(long, parse(try_from_str = parse_currency_id))]
+    #[clap(long, parse(try_from_str = parse_collateral_currency))]
     currency_id: CurrencyId,
 
     /// Interval for exchange rate setter, default 25 minutes.
