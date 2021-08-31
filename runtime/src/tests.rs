@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use super::{
-    BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, FixedPointNumber, FixedU128, OraclePallet,
-    RelayPallet, ReplacePallet, SecurityPallet, StatusCode, VaultRegistryPallet,
+    BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, FixedPointNumber, FixedU128,
+    OraclePallet, RelayPallet, ReplacePallet, SecurityPallet, StatusCode, VaultRegistryPallet,
 };
 use crate::{exchange_rate_oracle::FeedValuesEvent, integration::*, InterBtcRuntime};
 use module_bitcoin::{
@@ -12,6 +12,8 @@ use module_bitcoin::{
 use sp_core::{H160, U256};
 use sp_keyring::AccountKeyring;
 use std::time::Duration;
+
+const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
 
 fn dummy_public_key() -> BtcPublicKey {
     BtcPublicKey([
@@ -94,7 +96,10 @@ async fn test_register_vault() {
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
     set_exchange_rate(client.clone()).await;
 
-    parachain_rpc.register_vault(100, dummy_public_key()).await.unwrap();
+    parachain_rpc
+        .register_vault(100, dummy_public_key(), DEFAULT_TESTING_CURRENCY)
+        .await
+        .unwrap();
     let vault = parachain_rpc
         .get_vault(AccountKeyring::Alice.to_account_id())
         .await

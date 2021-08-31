@@ -10,8 +10,8 @@ use futures::{
 use runtime::{
     integration::*,
     pallets::{issue::*, redeem::*, refund::*, replace::*, security::*, tokens::*, vault_registry::*},
-    BtcAddress, BtcRelayPallet, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRedeemRequest, InterBtcRuntime,
-    IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
+    BtcAddress, BtcRelayPallet, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRedeemRequest,
+    InterBtcRuntime, IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
@@ -19,6 +19,7 @@ use std::{marker::PhantomData, sync::Arc, time::Duration};
 use vault::{self, Event as CancellationEvent, IssueRequests};
 
 const TIMEOUT: Duration = Duration::from_secs(60);
+const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
 
 async fn test_with<F, R>(execute: impl FnOnce(SubxtClient) -> F) -> R
 where
@@ -48,7 +49,11 @@ async fn test_redeem_succeeds() {
         let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
         assert_ok!(
             vault_provider
-                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
 
@@ -83,12 +88,20 @@ async fn test_replace_succeeds() {
         let vault_collateral = get_required_vault_collateral_for_issue(&old_vault_provider, issue_amount).await;
         assert_ok!(
             old_vault_provider
-                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
         assert_ok!(
             new_vault_provider
-                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
 
@@ -154,7 +167,11 @@ async fn test_maintain_collateral_succeeds() {
         let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
         assert_ok!(
             vault_provider
-                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
 
@@ -201,12 +218,20 @@ async fn test_withdraw_replace_succeeds() {
         let vault_collateral = get_required_vault_collateral_for_issue(&old_vault_provider, issue_amount).await;
         assert_ok!(
             old_vault_provider
-                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
         assert_ok!(
             new_vault_provider
-                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
 
@@ -264,12 +289,20 @@ async fn test_cancellation_succeeds() {
         let vault_collateral = get_required_vault_collateral_for_issue(&old_vault_provider, issue_amount * 10).await;
         assert_ok!(
             old_vault_provider
-                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
         assert_ok!(
             new_vault_provider
-                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
 
@@ -455,7 +488,11 @@ async fn test_refund_succeeds() {
         let vault_collateral = 2 * get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
         assert_ok!(
             vault_provider
-                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
 
@@ -515,7 +552,11 @@ async fn test_issue_overpayment_succeeds() {
             get_required_vault_collateral_for_issue(&vault_provider, issue_amount * over_payment_factor).await;
         assert_ok!(
             vault_provider
-                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
 
@@ -571,12 +612,20 @@ async fn test_automatic_issue_execution_succeeds() {
         let vault_collateral = get_required_vault_collateral_for_issue(&vault1_provider, issue_amount).await;
         assert_ok!(
             vault1_provider
-                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
         assert_ok!(
             vault2_provider
-                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
 
@@ -630,7 +679,11 @@ async fn test_execute_open_requests_succeeds() {
         let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
         assert_ok!(
             vault_provider
-                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
 
@@ -695,7 +748,11 @@ async fn test_off_chain_liquidation() {
         let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
         assert_ok!(
             vault_provider
-                .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
 
@@ -718,7 +775,11 @@ async fn test_shutdown() {
         let btc_rpc = MockBitcoinCore::new(sudo_provider.clone()).await;
         assert_ok!(
             sudo_provider
-                .register_vault(1000000, btc_rpc.get_new_public_key().await.unwrap())
+                .register_vault(
+                    1000000,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
                 .await
         );
 

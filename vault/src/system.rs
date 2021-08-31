@@ -15,8 +15,8 @@ use runtime::{
     btc_relay::StoreMainChainHeaderEvent,
     cli::{parse_duration_minutes, parse_duration_ms},
     pallets::{security::UpdateActiveBlockEvent, sla::UpdateVaultSLAEvent},
-    AccountId, BtcRelayPallet, Error as RuntimeError, InterBtcParachain, InterBtcRuntime, UtilFuncs,
-    VaultRegistryPallet,
+    parse_collateral_currency, AccountId, BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain,
+    InterBtcRuntime, UtilFuncs, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
@@ -101,6 +101,9 @@ pub struct VaultServiceConfig {
     /// Don't monitor vault thefts.
     #[clap(long)]
     pub no_vault_theft_report: bool,
+
+    #[clap(long, parse(try_from_str = parse_collateral_currency))]
+    pub currency_id: CurrencyId,
 }
 
 async fn active_block_listener(
@@ -210,20 +213,23 @@ impl VaultService {
         };
         tracing::info!("Using {} bitcoin confirmations", num_confirmations);
 
-        if let Some(collateral) = self.config.auto_register_with_collateral {
-            if !is_registered(&self.btc_parachain, vault_id.clone()).await? {
-                tracing::info!("Automatically registering vault");
-                // bitcoin core is currently blocking, no need to try_join
-                let public_key = bitcoin_core.get_new_public_key().await?;
-                self.btc_parachain.register_vault(collateral, public_key).await?;
-            } else {
+        match get_vault_registration_status(&self.btc_parachain, vault_id.clone()).await? {
+            VaultRegistrationStatus::Registered(currency_id) if currency_id != self.config.currency_id => {
+                return Err(Error::InvalidCurrency(self.config.currency_id, currency_id))
+            }
+            VaultRegistrationStatus::Registered(_) => {
                 tracing::info!("Not registering vault -- already registered");
             }
-        } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
-            if !is_registered(&self.btc_parachain, vault_id.clone()).await? {
-                faucet::fund_and_register(&self.btc_parachain, &bitcoin_core, faucet_url, vault_id.clone()).await?;
-            } else {
-                tracing::info!("Not registering vault -- already registered");
+            VaultRegistrationStatus::Unregistered => {
+                tracing::info!("Automatically registering vault");
+                if let Some(collateral) = self.config.auto_register_with_collateral {
+                    let public_key = bitcoin_core.get_new_public_key().await?;
+                    self.btc_parachain
+                        .register_vault(collateral, public_key, self.config.currency_id)
+                        .await?;
+                } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
+                    faucet::fund_and_register(&self.btc_parachain, &bitcoin_core, faucet_url, vault_id.clone()).await?;
+                }
             }
         }
 
@@ -551,10 +557,18 @@ impl VaultService {
     }
 }
 
-pub(crate) async fn is_registered(parachain_rpc: &InterBtcParachain, vault_id: AccountId) -> Result<bool, Error> {
+pub(crate) enum VaultRegistrationStatus {
+    Unregistered,
+    Registered(CurrencyId),
+}
+
+pub(crate) async fn get_vault_registration_status(
+    parachain_rpc: &InterBtcParachain,
+    vault_id: AccountId,
+) -> Result<VaultRegistrationStatus, Error> {
     match parachain_rpc.get_vault(vault_id).await {
-        Ok(_) => Ok(true),
-        Err(RuntimeError::VaultNotFound) => Ok(false),
+        Ok(vault) => Ok(VaultRegistrationStatus::Registered(vault.currency_id)),
+        Err(RuntimeError::VaultNotFound) => Ok(VaultRegistrationStatus::Unregistered),
         Err(err) => Err(err.into()),
     }
 }

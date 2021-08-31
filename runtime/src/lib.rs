@@ -169,3 +169,11 @@ pub const INVALID_CHAIN_ID_ERROR: &str = "InvalidChainID";
 pub const ISSUE_COMPLETED_ERROR: &str = "IssueCompleted";
 pub const COMMIT_PERIOD_EXPIRED_ERROR: &str = "CommitPeriodExpired";
 pub const PARACHAIN_SHUTDOWN_ERROR: &str = "ParachainShutdown";
+
+pub fn parse_collateral_currency(src: &str) -> Result<CurrencyId, Error> {
+    match src.to_uppercase().as_str() {
+        id if id == CurrencyId::KSM.symbol() => Ok(CurrencyId::KSM),
+        id if id == CurrencyId::DOT.symbol() => Ok(CurrencyId::DOT),
+        _ => Err(Error::InvalidCurrency),
+    }
+}
