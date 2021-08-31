@@ -166,7 +166,7 @@ mod tests {
         pub trait VaultRegistryPallet {
             async fn get_vault(&self, vault_id: AccountId) -> Result<InterBtcVault, RuntimeError>;
             async fn get_all_vaults(&self) -> Result<Vec<InterBtcVault>, RuntimeError>;
-            async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
+            async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey, currency_id: CurrencyId) -> Result<(), RuntimeError>;
             async fn deposit_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
             async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;

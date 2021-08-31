@@ -1220,7 +1220,12 @@ pub trait VaultRegistryPallet {
 
     async fn get_all_vaults(&self) -> Result<Vec<InterBtcVault>, Error>;
 
-    async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey) -> Result<(), Error>;
+    async fn register_vault(
+        &self,
+        collateral: u128,
+        public_key: BtcPublicKey,
+        currency_id: CurrencyId,
+    ) -> Result<(), Error>;
 
     async fn deposit_collateral(&self, amount: u128) -> Result<(), Error>;
 
@@ -1282,11 +1287,16 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// # Arguments
     /// * `collateral` - deposit
     /// * `public_key` - Bitcoin public key
-    async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey) -> Result<(), Error> {
+    async fn register_vault(
+        &self,
+        collateral: u128,
+        public_key: BtcPublicKey,
+        currency_id: CurrencyId,
+    ) -> Result<(), Error> {
         let public_key = &public_key.clone();
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .register_vault_and_watch(&signer, collateral, public_key.clone(), DEFAULT_COLLATERAL_CURRENCY)
+                .register_vault_and_watch(&signer, collateral, public_key.clone(), currency_id)
                 .await
         })
         .await?;

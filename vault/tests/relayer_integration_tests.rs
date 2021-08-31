@@ -14,9 +14,9 @@ use futures::{
 use runtime::{
     pallets::relay::*,
     substrate_subxt::{Event, PairSigner},
-    BtcAddress, BtcRelayPallet, ErrorCode, FeePallet, FixedPointNumber, FixedU128, H256Le, InterBtcParachain,
-    InterBtcRuntime, IssuePallet, OraclePallet, RedeemPallet, RelayPallet, ReplacePallet, StatusCode, UtilFuncs,
-    VaultRegistryPallet,
+    BtcAddress, BtcRelayPallet, CurrencyId, ErrorCode, FeePallet, FixedPointNumber, FixedU128, H256Le,
+    InterBtcParachain, InterBtcRuntime, IssuePallet, OraclePallet, RedeemPallet, RelayPallet, ReplacePallet,
+    StatusCode, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H160;
 use sp_keyring::AccountKeyring;
@@ -25,6 +25,7 @@ use tokio::time::timeout;
 use vault;
 
 const TIMEOUT: Duration = Duration::from_secs(45);
+const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_report_vault_theft_succeeds() {
@@ -53,7 +54,11 @@ async fn test_report_vault_theft_succeeds() {
     let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
     assert_ok!(
         vault_provider
-            .register_vault(vault_collateral, btc_rpc.get_new_public_key().await.unwrap())
+            .register_vault(
+                vault_collateral,
+                btc_rpc.get_new_public_key().await.unwrap(),
+                DEFAULT_TESTING_CURRENCY
+            )
             .await
     );
 

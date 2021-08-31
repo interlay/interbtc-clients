@@ -4,8 +4,10 @@ use hex::FromHex;
 use jsonrpc_core::Value;
 use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use parity_scale_codec::{Decode, Encode};
-use runtime::{AccountId, InterBtcParachain, VaultRegistryPallet, PLANCK_PER_DOT, TX_FEES};
+use runtime::{AccountId, CurrencyId, InterBtcParachain, VaultRegistryPallet, PLANCK_PER_DOT, TX_FEES};
 use serde::{Deserialize, Deserializer};
+
+const DEFAULT_FAUCET_CURRENCY: CurrencyId = CurrencyId::DOT;
 
 #[derive(Debug, Clone, Deserialize)]
 struct RawBytes(#[serde(deserialize_with = "hex_to_buffer")] Vec<u8>);
@@ -64,7 +66,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
     tracing::info!("Registering the vault");
     let public_key = bitcoin_core.get_new_public_key().await?;
     parachain_rpc
-        .register_vault(registration_collateral, public_key)
+        .register_vault(registration_collateral, public_key, DEFAULT_FAUCET_CURRENCY)
         .await?;
 
     // Receive vault allowance from faucet
