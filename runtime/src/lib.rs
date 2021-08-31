@@ -15,7 +15,7 @@ pub mod integration;
 
 pub use error::{Error, SubxtError};
 pub use pallets::*;
-pub use primitives::{oracle::Key as OracleKey, CurrencyId};
+pub use primitives::{oracle::Key as OracleKey, CurrencyId, CurrencyInfo};
 pub use retry::{notify_retry, RetryPolicy};
 pub use rpc::{
     BtcRelayPallet, CollateralBalancesPallet, FeePallet, InterBtcParachain, IssuePallet, OraclePallet, RedeemPallet,
