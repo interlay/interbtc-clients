@@ -8,8 +8,8 @@ use reqwest::Url;
 use runtime::{
     cli::{parse_duration_ms, ProviderUserOpts},
     substrate_subxt::PairSigner,
-    FixedPointNumber,
-    FixedPointTraits::CheckedMul,
+    CurrencyId, CurrencyInfo, FixedPointNumber,
+    FixedPointTraits::{CheckedDiv, CheckedMul, One},
     FixedU128, InterBtcParachain, InterBtcRuntime, OraclePallet,
 };
 use std::{collections::HashMap, time::Duration};
@@ -21,23 +21,26 @@ const NAME: &str = env!("CARGO_PKG_NAME");
 const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
 
 const CONFIRMATION_TARGET: u32 = 1;
-const BTC_DECIMALS: u32 = 8;
-const DOT_DECIMALS: u32 = 10;
 
-async fn get_exchange_rate_from_coingecko(url: &Url) -> Result<FixedU128, Error> {
+const BTC_DECIMALS: u32 = 8;
+const BTC_CURRENCY: &str = "btc";
+
+async fn get_exchange_rate_from_coingecko(currency_id: CurrencyId, url: &Url) -> Result<FixedU128, Error> {
     // https://www.coingecko.com/api/documentations/v3
     let resp = reqwest::get(url.clone())
         .await?
-        .json::<HashMap<String, HashMap<String, u128>>>()
+        .json::<HashMap<String, HashMap<String, f64>>>()
         .await?;
 
     let exchange_rate = *resp
-        .get("bitcoin")
+        .get(&currency_id.name().to_lowercase())
         .ok_or(Error::InvalidResponse)?
-        .get("dot")
+        .get(BTC_CURRENCY)
         .ok_or(Error::InvalidResponse)?;
 
-    FixedU128::checked_from_integer(exchange_rate).ok_or(Error::InvalidExchangeRate)
+    FixedU128::one()
+        .checked_div(&FixedU128::from_float(exchange_rate))
+        .ok_or(Error::InvalidExchangeRate)
 }
 
 async fn get_bitcoin_fee_estimate_from_blockstream(url: &Url) -> Result<FixedU128, Error> {
@@ -48,8 +51,16 @@ async fn get_bitcoin_fee_estimate_from_blockstream(url: &Url) -> Result<FixedU12
     FixedU128::checked_from_integer(fee_estimate.round() as u128).ok_or(Error::InvalidFeeEstimate)
 }
 
-pub fn parse_fixed_point(src: &str) -> Result<FixedU128, Error> {
+fn parse_fixed_point(src: &str) -> Result<FixedU128, Error> {
     FixedU128::checked_from_integer(src.parse::<u128>()?).ok_or(Error::InvalidExchangeRate)
+}
+
+fn parse_currency_id(src: &str) -> Result<CurrencyId, Error> {
+    match src.to_uppercase().as_str() {
+        id if id == CurrencyId::KSM.symbol() => Ok(CurrencyId::KSM),
+        id if id == CurrencyId::DOT.symbol() => Ok(CurrencyId::DOT),
+        _ => Err(Error::InvalidCurrency),
+    }
 }
 
 #[derive(Clap)]
@@ -68,6 +79,10 @@ struct Opts {
     /// the wrapped currency - i.e. 1 BTC = 2308 DOT.
     #[clap(long, parse(try_from_str = parse_fixed_point), default_value = "2308")]
     exchange_rate: FixedU128,
+
+    /// Collateral type for exchange rates.
+    #[clap(long, parse(try_from_str = parse_currency_id))]
+    currency_id: CurrencyId,
 
     /// Interval for exchange rate setter, default 25 minutes.
     #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "1500000")]
@@ -119,12 +134,13 @@ fn get_exponential_backoff() -> ExponentialBackoff {
 async fn submit_exchange_rate(
     parachain_rpc: &InterBtcParachain,
     url_or_def: UrlOrDefault<FixedU128>,
+    currency_id: CurrencyId,
     conversion_factor: FixedU128,
 ) -> Result<(), Error> {
     let exchange_rate = match url_or_def {
         UrlOrDefault::Url(url) => {
             // exchange_rate given in BTC/DOT so convert after
-            get_exchange_rate_from_coingecko(&url).await?
+            get_exchange_rate_from_coingecko(currency_id, &url).await?
         }
         UrlOrDefault::Def(def) => def,
     };
@@ -179,17 +195,22 @@ async fn main() -> Result<(), Error> {
         None
     };
 
-    // TODO: configurable collateral currencies
+    let currency_id = opts.currency_id;
     let coingecko_url = if let Some(mut url) = opts.coingecko {
         url.set_path(&format!("{}/simple/price", url.path()));
-        url.set_query(Some("ids=bitcoin&vs_currencies=dot"));
+        url.set_query(Some(&format!(
+            "ids={}&vs_currencies={}",
+            currency_id.name().to_lowercase(),
+            BTC_CURRENCY
+        )));
         Some(url)
     } else {
         None
     };
 
     let conversion_factor =
-        FixedU128::checked_from_rational(10_u128.pow(DOT_DECIMALS), 10_u128.pow(BTC_DECIMALS)).unwrap();
+        FixedU128::checked_from_rational(10_u128.pow(currency_id.decimals() as u32), 10_u128.pow(BTC_DECIMALS))
+            .unwrap();
 
     loop {
         let parachain_rpc =
@@ -217,6 +238,7 @@ async fn main() -> Result<(), Error> {
                     Ok(submit_exchange_rate(
                         &parachain_rpc,
                         UrlOrDefault::from_args(coingecko_url.clone(), exchange_rate),
+                        currency_id,
                         conversion_factor,
                     )
                     .await?)
