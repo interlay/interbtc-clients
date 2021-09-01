@@ -26,12 +26,13 @@ pub use bitcoincore_rpc::{
     Auth, Client, Error as BitcoinError, RpcApi,
 };
 pub use error::{BitcoinRpcError, ConversionError, Error};
+use esplora_btc_api::apis::configuration::Configuration as ElectrsConfiguration;
 use hyper::Error as HyperError;
 pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
 use log::{info, trace};
 use serde_json::error::Category as SerdeJsonCategory;
 use sp_core::H256;
-use std::{future::Future, io::ErrorKind as IoErrorKind, sync::Arc, time::Duration};
+use std::{convert::TryInto, future::Future, io::ErrorKind as IoErrorKind, str::FromStr, sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, OwnedMutexGuard},
     time::{sleep, timeout},
@@ -62,6 +63,10 @@ const MULTIPLIER: f64 = 2.0;
 
 // Random value between 25% below and 25% above the ideal delay.
 const RANDOMIZATION_FACTOR: f64 = 0.25;
+
+const ELECTRS_TESTNET_URL: &str = "https://btc-testnet.interlay.io";
+const ELECTRS_MAINNET_URL: &str = "https://btc-mainnet.interlay.io";
+const ELECTRS_LOCALHOST_URL: &str = "http://localhost:3002";
 
 fn get_exponential_backoff() -> ExponentialBackoff {
     ExponentialBackoff {
@@ -159,6 +164,8 @@ pub trait BitcoinCoreApi {
     async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error>;
 
     async fn rescan_blockchain(&self, start_height: usize) -> Result<(), Error>;
+
+    async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
 }
 
 pub struct LockedTransaction {
@@ -184,6 +191,7 @@ pub struct BitcoinCore {
     network: Network,
     transaction_creation_lock: Arc<Mutex<()>>,
     connection_timeout: Duration,
+    electrs_config: ElectrsConfiguration,
 }
 
 impl BitcoinCore {
@@ -204,6 +212,15 @@ impl BitcoinCore {
             network,
             transaction_creation_lock: Arc::new(Mutex::new(())),
             connection_timeout,
+            electrs_config: ElectrsConfiguration {
+                base_path: match network {
+                    Network::Bitcoin => ELECTRS_MAINNET_URL,
+                    Network::Testnet => ELECTRS_TESTNET_URL,
+                    _ => ELECTRS_LOCALHOST_URL,
+                }
+                .to_owned(),
+                ..Default::default()
+            },
         })
     }
 
@@ -693,11 +710,45 @@ impl BitcoinCoreApi for BitcoinCore {
         self.rpc.rescan_blockchain(Some(start_height), None)?;
         Ok(())
     }
+
+    async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error> {
+        let op_return_bytes = transaction.get_op_return_bytes().unwrap();
+        let script_hash = bitcoincore_rpc::bitcoin::hashes::sha256::Hash::hash(&op_return_bytes);
+        let txs = esplora_btc_api::apis::scripthash_api::get_txs_by_scripthash(
+            &self.electrs_config,
+            &hex::encode(script_hash),
+        )
+        .await?;
+
+        let extract_block_hash = |tx: &esplora_btc_api::models::Transaction| {
+            if let Some(status) = &tx.status {
+                if let Some(block_hash) = &status.block_hash {
+                    return Ok(BlockHash::from_str(block_hash)?);
+                }
+            }
+            Err(ConversionError::BlockHashError)
+        };
+        let extract_data = |tx: &esplora_btc_api::models::Transaction| {
+            let txid = Txid::from_str(&tx.txid)?;
+            let block_hash = extract_block_hash(tx)?;
+            Ok((txid, block_hash))
+        };
+
+        let ret: Result<Vec<_>, ConversionError> = txs
+            .iter()
+            .filter_map(|x| match extract_data(x) {
+                Ok((txid, _)) if txid == transaction.txid() => None,
+                ret => Some(ret),
+            })
+            .collect();
+        Ok(ret?)
+    }
 }
 
 /// Extension trait for transaction, adding methods to help to match the Transaction to Replace/Redeem requests
 pub trait TransactionExt {
     fn get_op_return(&self) -> Option<H256>;
+    fn get_op_return_bytes(&self) -> Option<[u8; 34]>;
     fn get_payment_amount_to<A: PartialAddress + PartialEq>(&self, dest: A) -> Option<u64>;
     fn extract_input_addresses<A: PartialAddress>(&self) -> Vec<A>;
     fn extract_output_addresses<A: PartialAddress>(&self) -> Vec<A>;
@@ -706,12 +757,18 @@ pub trait TransactionExt {
 impl TransactionExt for Transaction {
     /// Extract the hash from the OP_RETURN uxto, if present
     fn get_op_return(&self) -> Option<H256> {
+        self.get_op_return_bytes().map(|x| H256::from_slice(&x[2..]))
+    }
+
+    /// Extract the bytes of the OP_RETURN uxto, if present
+    fn get_op_return_bytes(&self) -> Option<[u8; 34]> {
         // we only consider the first three items because the parachain only checks the first 3 positions
         self.output.iter().take(3).find_map(|x| {
-            // match a slice that starts with op_return (0x6a), then has 32 as
-            // the length indicator, and then has 32 bytes (the H256)
-            match x.script_pubkey.to_bytes().as_slice() {
-                [0x6a, 32, rest @ ..] if rest.len() == 32 => Some(H256::from_slice(rest)),
+            // check that the length is 34 bytes
+            let arr: [u8; 34] = x.script_pubkey.to_bytes().as_slice().try_into().ok()?;
+            // check that it starts with op_return (0x6a), then 32 as the length indicator
+            match arr {
+                [0x6a, 32, ..] => Some(arr),
                 _ => None,
             }
         })
@@ -821,7 +878,76 @@ fn vin_to_address<A: PartialAddress>(vin: TxIn) -> Result<A, Error> {
 mod tests {
     use super::*;
 
-    use bitcoincore_rpc::bitcoin::{OutPoint, Script, Transaction};
+    use bitcoincore_rpc::bitcoin::{hashes::hex::FromHex, OutPoint, Script, Transaction};
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_find_duplicate_payments_succeeds() {
+        let bitcoin_core = BitcoinCore::new(
+            "".to_string(),
+            Auth::None,
+            None,
+            Network::Testnet,
+            Duration::from_secs(5),
+        )
+        .unwrap();
+
+        let raw_tx = Vec::from_hex("020000000001011f876af6685f6e872b18d288a614adfd21d0246f52e3ca086cdb15d125837a270100000000fdffffff020000000000000000226a208b26f7cf49e1ad4d9f81d237933da8810644a85ac25b3c22a6a2324e1ba02efcba0e0000000000001600148cb0d2c0597a4b496370f94c2e1424d6d1e3432d02473044022023159d039a42095066036b25f08bf77dbf8a8813bf3d842aa998f7437e0da5d002202a102568194e3bba597a31f432c8d3beb5fca9129366f115831b4abba356aa4001210223a4dbc56f6d53a2014dfb106e754323da8e9c095cf9d68f627169f7c059d07a08e71f00").unwrap();
+        let transaction: Transaction = deserialize(&raw_tx).unwrap();
+        let result = bitcoin_core.find_duplicate_payments(&transaction).await.unwrap();
+        // check that the transaction arg is excluded from the results
+        assert!(!result.iter().any(|(txid, _)| txid == &transaction.txid()));
+        // check that it does find the other transaction with the same op_return
+        assert!(result.iter().any(|(txid, _)| txid
+            == &Txid::from_hex("8bb6dacf9fca12550c2be9350994737e45cdcbd05d3ce6132141b0872661baec").unwrap()));
+    }
+
+    async fn test_electrs(url: &str, script_hex: &str, expected_txid: &str) {
+        let config = ElectrsConfiguration {
+            base_path: url.to_owned(),
+            ..Default::default()
+        };
+
+        let script_bytes = Vec::from_hex(script_hex).unwrap();
+        let script_hash = bitcoincore_rpc::bitcoin::hashes::sha256::Hash::hash(&script_bytes);
+
+        let txs = esplora_btc_api::apis::scripthash_api::get_txs_by_scripthash(&config, &hex::encode(script_hash))
+            .await
+            .unwrap();
+        assert!(txs.iter().any(|tx| { &tx.txid == expected_txid }));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore] // disabled until mainnet electrs is up and running
+    async fn test_find_esplora_mainnet() {
+        let script_hex = "6a24aa21a9ed932d00baa7d428106db4f785d398d60d0b9c1369c38448717db4a8f36d2512e3";
+        let expected_txid = "d734d56c70ee7ac67d31a22f4b9a781619c5cff1803942b52036cd7eab1692e7";
+        test_electrs(ELECTRS_MAINNET_URL, script_hex, expected_txid).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_find_esplora_testnet() {
+        let script_hex = "6a208b26f7cf49e1ad4d9f81d237933da8810644a85ac25b3c22a6a2324e1ba02efc";
+        let expected_txid = "ec736ccba2cb7d1a97145a7e98d32f8eec362cd140e917ce40842a492f43b49b";
+        test_electrs(ELECTRS_TESTNET_URL, script_hex, expected_txid).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_find_esplora_testnet2() {
+        let script_hex = "6a4c5054325b0f43c54432b8df76322d225c9759359f73b283e108441862c2ee6fe4a021f6825bee72311ec0f53dd7197d0e325dca9a45aa3af296294b42c667b6db214a5174001fe7f40004001f7a07000b02";
+        let expected_txid = "ddfaa4f63b9cbdf72299b91074fbff13b02816f2a29109b2fecfd912a7476807";
+        test_electrs(ELECTRS_TESTNET_URL, script_hex, expected_txid).await;
+    }
+
+    #[test]
+    fn test_op_return_hashing() {
+        let raw = Vec::from_hex("6a208703723a787b0f989110b49fd5e1cf1c2571525d564bf384b5aa9e340c9ad8bd").unwrap();
+        let script_hash = bitcoincore_rpc::bitcoin::hashes::sha256::Hash::hash(&raw);
+
+        let expected = "6ed3928fdcf7375b9622746eb46f8e97a2832a0c43000e3d86774fecb74ee67e";
+        let expected = bitcoincore_rpc::bitcoin::hashes::sha256::Hash::from_hex(expected).unwrap();
+
+        assert_eq!(expected, script_hash);
+    }
 
     #[test]
     fn test_vin_to_address() {

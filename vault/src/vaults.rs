@@ -68,12 +68,34 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonit
         }
     }
 
-    async fn report_invalid(&self, vault_id: &AccountId, proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
+    async fn report_invalid(
+        &self,
+        vault_id: &AccountId,
+        proof: &[u8],
+        raw_tx: &[u8],
+        transaction: &Transaction,
+    ) -> Result<(), Error> {
         tracing::info!("Found tx from vault {}", vault_id.to_ss58check());
         // check if matching redeem or replace request
-        if self.btc_parachain.is_transaction_invalid(vault_id, &raw_tx).await? {
+        if self.btc_parachain.is_transaction_invalid(vault_id, raw_tx).await? {
             tracing::info!("Transaction is invalid");
             self.btc_parachain.report_vault_theft(vault_id, proof, raw_tx).await?;
+        } else {
+            // valid payment.. but check that it is not a duplicate payment
+            for (txid, block_hash) in self.bitcoin_core.find_duplicate_payments(transaction).await? {
+                let raw_tx_2 = self.bitcoin_core.get_raw_tx(&txid, &block_hash).await?;
+                let proof_2 = self.bitcoin_core.get_proof(txid, &block_hash).await?;
+                if !self.btc_parachain.is_transaction_invalid(vault_id, &raw_tx_2).await? {
+                    tracing::info!("Found a double payment - reporting...");
+                    self.btc_parachain
+                        .report_vault_double_payment(
+                            vault_id,
+                            (proof.to_vec(), proof_2.to_vec()),
+                            (raw_tx.to_vec(), raw_tx_2.to_vec()),
+                        )
+                        .await?;
+                }
+            }
         }
 
         Ok(())
@@ -103,7 +125,7 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonit
         let vault_ids = filter_matching_vaults(addresses, &self.vaults).await;
 
         for vault_id in vault_ids {
-            self.report_invalid(&vault_id, &proof, &raw_tx).await?;
+            self.report_invalid(&vault_id, &proof, &raw_tx, &tx).await?;
         }
 
         Ok(())
@@ -201,6 +223,12 @@ mod tests {
                 merkle_proof: &[u8],
                 raw_tx: &[u8],
             ) -> Result<(), RuntimeError>;
+            async fn report_vault_double_payment(
+                &self,
+                vault_id: &AccountId,
+                merkle_proofs: (Vec<u8>, Vec<u8>),
+                raw_txs: (Vec<u8>, Vec<u8>),
+            ) -> Result<(), RuntimeError>;
             async fn is_transaction_invalid(&self, vault_id: &AccountId, raw_tx: &[u8]) -> Result<bool, RuntimeError>;
             async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), RuntimeError>;
             async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), RuntimeError>;
@@ -289,6 +317,7 @@ mod tests {
                     P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), BitcoinError>;
             async fn rescan_blockchain(&self, start_height: usize) -> Result<(), BitcoinError>;
+            async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError>;
         }
     }
 
@@ -321,6 +350,15 @@ mod tests {
         );
     }
 
+    fn dummy_tx() -> Transaction {
+        Transaction {
+            version: 2,
+            lock_time: 1,
+            input: vec![],
+            output: vec![],
+        }
+    }
+
     #[tokio::test]
     async fn test_report_valid_transaction() {
         let mut parachain = MockProvider::default();
@@ -330,10 +368,13 @@ mod tests {
             .never()
             .returning(|_, _, _| Ok(()));
 
-        let monitor = VaultTheftMonitor::new(MockBitcoin::default(), parachain, 0, Arc::new(Vaults::default()));
+        let mut bitcoin_core = MockBitcoin::default();
+        bitcoin_core.expect_find_duplicate_payments().returning(|_| Ok(vec![]));
+
+        let monitor = VaultTheftMonitor::new(bitcoin_core, parachain, 0, Arc::new(Vaults::default()));
 
         monitor
-            .report_invalid(&AccountKeyring::Bob.to_account_id(), &vec![], &vec![])
+            .report_invalid(&AccountKeyring::Bob.to_account_id(), &vec![], &vec![], &dummy_tx())
             .await
             .unwrap();
     }
@@ -347,7 +388,7 @@ mod tests {
         let monitor = VaultTheftMonitor::new(MockBitcoin::default(), parachain, 0, Arc::new(Vaults::default()));
 
         monitor
-            .report_invalid(&AccountKeyring::Bob.to_account_id(), &vec![], &vec![])
+            .report_invalid(&AccountKeyring::Bob.to_account_id(), &vec![], &vec![], &dummy_tx())
             .await
             .unwrap();
     }

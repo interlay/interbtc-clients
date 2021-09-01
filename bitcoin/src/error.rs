@@ -2,7 +2,7 @@ use crate::BitcoinError;
 use bitcoincore_rpc::{
     bitcoin::{
         consensus::encode::Error as BitcoinEncodeError,
-        hashes::Error as HashesError,
+        hashes::{hex::Error as HashHexError, Error as HashesError},
         secp256k1::Error as Secp256k1Error,
         util::{address::Error as AddressError, key::Error as KeyError},
     },
@@ -14,6 +14,8 @@ use serde_json::Error as SerdeJsonError;
 use std::io::ErrorKind as IoErrorKind;
 use thiserror::Error;
 use tokio::time::error::Elapsed;
+
+pub type ElectrsError = esplora_btc_api::apis::Error<esplora_btc_api::apis::scripthash_api::GetTxsByScripthashError>;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -33,6 +35,8 @@ pub enum Error {
     KeyError(#[from] KeyError),
     #[error("Timeout: {0}")]
     TimeElapsed(#[from] Elapsed),
+    #[error("ElectrsError: {0}")]
+    ElectrsError(#[from] ElectrsError),
 
     #[error("Could not confirm transaction")]
     ConfirmationError,
@@ -101,6 +105,8 @@ pub enum ConversionError {
     AddressError(#[from] AddressError),
     #[error("HashesError: {0}")]
     HashesError(#[from] HashesError),
+    #[error("HashHexError: {0}")]
+    HashHexError(#[from] HashHexError),
     #[error("Invalid format")]
     InvalidFormat,
     #[error("Invalid payload")]

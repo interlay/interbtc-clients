@@ -533,30 +533,13 @@ dependencies = [
 [[package]]
 name = "bitcoin"
 version = "1.0.0"
-source = "git+https://github.com/interlay/interbtc?rev=9051d0d2f0c4584c1c9c70f21edcab1881655cb4#9051d0d2f0c4584c1c9c70f21edcab1881655cb4"
-dependencies = [
- "bitcoin_hashes 0.7.6",
- "frame-support",
- "hex 0.4.3",
- "impl-serde",
- "parity-scale-codec",
- "secp256k1",
- "serde",
- "sha2 0.8.2",
- "sp-core 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.8)",
- "sp-std 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.8)",
- "spin 0.7.1",
-]
-
-[[package]]
-name = "bitcoin"
-version = "1.0.0"
 dependencies = [
  "async-trait",
  "backoff",
  "bitcoin 1.0.0 (git+https://github.com/interlay/interbtc?rev=9051d0d2f0c4584c1c9c70f21edcab1881655cb4)",
  "bitcoincore-rpc",
  "clap 3.0.0-beta.2",
+ "esplora-btc-api",
  "futures 0.3.16",
  "hex 0.4.3",
  "hyper 0.10.16",
@@ -570,6 +553,24 @@ dependencies = [
  "sp-core 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.8)",
  "thiserror",
  "tokio 1.9.0",
+]
+
+[[package]]
+name = "bitcoin"
+version = "1.0.0"
+source = "git+https://github.com/interlay/interbtc?rev=9051d0d2f0c4584c1c9c70f21edcab1881655cb4#9051d0d2f0c4584c1c9c70f21edcab1881655cb4"
+dependencies = [
+ "bitcoin_hashes 0.7.6",
+ "frame-support",
+ "hex 0.4.3",
+ "impl-serde",
+ "parity-scale-codec",
+ "secp256k1",
+ "serde",
+ "sha2 0.8.2",
+ "sp-core 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.8)",
+ "sp-std 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.8)",
+ "spin 0.7.1",
 ]
 
 [[package]]
@@ -1713,6 +1714,19 @@ checksum = "14ca354e36190500e1e1fb267c647932382b54053c50b14970856c0b00a35067"
 dependencies = [
  "gcc",
  "libc",
+]
+
+[[package]]
+name = "esplora-btc-api"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f90cdbd5ce99c6d2c98fa05214a17a0c33d584dac07d026ceabe10a88c205865"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -4491,6 +4505,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a60c7ce501c71e03a9c9c0d35b861413ae925bd979cc7a4e30d060069aaac8d"
 
 [[package]]
+name = "mime_guess"
+version = "2.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2684d4c2e97d99848d30b324b00c8fcc7e5c897b7cbb5819b09e7c90e8baf212"
+dependencies = [
+ "mime 0.3.16",
+ "unicase 2.6.0",
+]
+
+[[package]]
 name = "minicbor"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5261,6 +5285,22 @@ dependencies = [
 [[package]]
 name = "oracle"
 version = "1.0.0"
+dependencies = [
+ "backoff",
+ "chrono",
+ "clap 3.0.0-beta.2",
+ "env_logger 0.7.1",
+ "git-version",
+ "log 0.4.14",
+ "reqwest",
+ "runtime",
+ "thiserror",
+ "tokio 1.9.0",
+]
+
+[[package]]
+name = "oracle"
+version = "1.0.0"
 source = "git+https://github.com/interlay/interbtc?rev=9051d0d2f0c4584c1c9c70f21edcab1881655cb4#9051d0d2f0c4584c1c9c70f21edcab1881655cb4"
 dependencies = [
  "currency",
@@ -5277,22 +5317,6 @@ dependencies = [
  "sp-runtime 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.8)",
  "sp-std 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.8)",
  "staking",
-]
-
-[[package]]
-name = "oracle"
-version = "1.0.0"
-dependencies = [
- "backoff",
- "chrono",
- "clap 3.0.0-beta.2",
- "env_logger 0.7.1",
- "git-version",
- "log 0.4.14",
- "reqwest",
- "runtime",
- "thiserror",
- "tokio 1.9.0",
 ]
 
 [[package]]
@@ -6831,6 +6855,7 @@ dependencies = [
  "lazy_static",
  "log 0.4.14",
  "mime 0.3.16",
+ "mime_guess",
  "native-tls",
  "percent-encoding 2.1.0",
  "pin-project-lite 0.2.7",

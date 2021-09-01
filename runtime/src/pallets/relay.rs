@@ -18,10 +18,24 @@ pub struct ReportVaultTheftCall<'a, T: Relay> {
     pub raw_tx: &'a [u8],
 }
 
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct ReportVaultDoublePaymentCall<T: Relay> {
+    pub vault_id: T::AccountId,
+    pub raw_merkle_proofs: (Vec<u8>, Vec<u8>),
+    pub raw_txs: (Vec<u8>, Vec<u8>),
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct VaultTheftEvent<T: Relay> {
     pub vault_id: T::AccountId,
     pub txid: T::H256Le,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct VaultDoublePaymentEvent<T: Relay> {
+    pub vault_id: T::AccountId,
+    pub txid_1: T::H256Le,
+    pub txid_2: T::H256Le,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
