@@ -103,6 +103,9 @@ OPTIONS:
         --collateral-timeout-ms <collateral-timeout-ms>
             Timeout in milliseconds to repeat collateralization checks [default: 5000]
 
+        --currency-id <currency-id>
+            The currency to use for the collateral, e.g. "DOT" or "KSM"
+
         --keyfile <keyfile>
             Path to the json file containing key pairs in a map. Valid content of this file is e.g.
             `{ "MyUser1": "<Polkadot Account Mnemonic>", "MyUser2": "<Polkadot Account Mnemonic>" }`

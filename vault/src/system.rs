@@ -102,6 +102,7 @@ pub struct VaultServiceConfig {
     #[clap(long)]
     pub no_vault_theft_report: bool,
 
+    /// The currency to use for the collateral, e.g. "DOT" or "KSM".
     #[clap(long, parse(try_from_str = parse_collateral_currency))]
     pub currency_id: CurrencyId,
 }
