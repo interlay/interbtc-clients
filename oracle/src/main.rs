@@ -73,7 +73,7 @@ struct Opts {
     #[clap(long, parse(try_from_str = parse_fixed_point), default_value = "2308")]
     exchange_rate: FixedU128,
 
-    /// Collateral type for exchange rates.
+    /// Collateral type for exchange rates, e.g. "DOT" or "KSM".
     #[clap(long, parse(try_from_str = parse_collateral_currency))]
     currency_id: CurrencyId,
 

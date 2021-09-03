@@ -43,6 +43,9 @@ OPTIONS:
         --connection-timeout-ms <connection-timeout-ms>
             Timeout in milliseconds to wait for connection to btc-parachain [default: 60000]
 
+        --currency-id <currency-id>
+            Collateral type for exchange rates, e.g. "DOT" or "KSM"
+
         --exchange-rate <exchange-rate>
             Exchange rate from the collateral currency to the wrapped currency - i.e. 1 BTC = 2308
             DOT [default: 2308]
