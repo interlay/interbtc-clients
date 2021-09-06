@@ -82,9 +82,9 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonit
             self.btc_parachain.report_vault_theft(vault_id, proof, raw_tx).await?;
         } else {
             // valid payment.. but check that it is not a duplicate payment
-            for (txid, block_hash) in self.bitcoin_core.find_duplicate_payments(transaction).await? {
-                let raw_tx_2 = self.bitcoin_core.get_raw_tx(&txid, &block_hash).await?;
-                let proof_2 = self.bitcoin_core.get_proof(txid, &block_hash).await?;
+            for (txid_2, block_hash) in self.bitcoin_core.find_duplicate_payments(transaction).await? {
+                let raw_tx_2 = self.bitcoin_core.get_raw_tx(&txid_2, &block_hash).await?;
+                let proof_2 = self.bitcoin_core.get_proof(txid_2, &block_hash).await?;
                 if !self.btc_parachain.is_transaction_invalid(vault_id, &raw_tx_2).await? {
                     tracing::info!("Found a double payment - reporting...");
                     self.btc_parachain
