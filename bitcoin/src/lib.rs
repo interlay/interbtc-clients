@@ -201,6 +201,7 @@ impl BitcoinCore {
         wallet_name: Option<String>,
         network: Network,
         connection_timeout: Duration,
+        electrs_url: Option<String>,
     ) -> Result<Self, Error> {
         let url = match wallet_name {
             Some(ref x) => format!("{}/wallet/{}", url, x),
@@ -213,12 +214,14 @@ impl BitcoinCore {
             transaction_creation_lock: Arc::new(Mutex::new(())),
             connection_timeout,
             electrs_config: ElectrsConfiguration {
-                base_path: match network {
-                    Network::Bitcoin => ELECTRS_MAINNET_URL,
-                    Network::Testnet => ELECTRS_TESTNET_URL,
-                    _ => ELECTRS_LOCALHOST_URL,
-                }
-                .to_owned(),
+                base_path: electrs_url.unwrap_or(
+                    match network {
+                        Network::Bitcoin => ELECTRS_MAINNET_URL,
+                        Network::Testnet => ELECTRS_TESTNET_URL,
+                        _ => ELECTRS_LOCALHOST_URL,
+                    }
+                    .to_owned(),
+                ),
                 ..Default::default()
             },
         })
@@ -888,6 +891,7 @@ mod tests {
             None,
             Network::Testnet,
             Duration::from_secs(5),
+            None,
         )
         .unwrap();
 

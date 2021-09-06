@@ -106,6 +106,10 @@ OPTIONS:
         --currency-id <currency-id>
             The currency to use for the collateral, e.g. "DOT" or "KSM"
 
+        --electrs-url <electrs-url>
+            Url of the electrs server - used for theft reporting. If unset, a default fallback is
+            used depending on the network argument
+
         --keyfile <keyfile>
             Path to the json file containing key pairs in a map. Valid content of this file is e.g.
             `{ "MyUser1": "<Polkadot Account Mnemonic>", "MyUser2": "<Polkadot Account Mnemonic>" }`

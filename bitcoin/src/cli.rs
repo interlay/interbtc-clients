@@ -36,6 +36,11 @@ pub struct BitcoinOpts {
     /// Bitcoin network type for address encoding.
     #[clap(long, default_value = "regtest")]
     pub network: BitcoinNetwork,
+
+    /// Url of the electrs server - used for theft reporting. If unset, a default
+    /// fallback is used depending on the network argument.
+    #[clap(long)]
+    pub electrs_url: Option<String>,
 }
 
 impl BitcoinOpts {
@@ -50,6 +55,7 @@ impl BitcoinOpts {
             wallet_name,
             self.network.0,
             Duration::from_millis(self.bitcoin_connection_timeout_ms),
+            self.electrs_url.clone(),
         )
     }
 }
