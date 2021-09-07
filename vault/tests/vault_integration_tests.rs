@@ -1,15 +1,15 @@
 // #![cfg(feature = "integration")]
 
-use bitcoin::{stream_blocks, BitcoinCoreApi};
+use bitcoin::{stream_blocks, BitcoinCoreApi, TransactionExt};
 use frame_support::assert_ok;
 use futures::{
     channel::mpsc,
-    future::{join, join3, join5},
+    future::{join, join3, join4, join5, try_join},
     Future, FutureExt, SinkExt, TryStreamExt,
 };
 use runtime::{
     integration::*,
-    pallets::{issue::*, redeem::*, refund::*, replace::*, security::*, tokens::*, vault_registry::*},
+    pallets::{issue::*, redeem::*, refund::*, relay::*, replace::*, security::*, tokens::*, vault_registry::*},
     BtcAddress, BtcRelayPallet, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRedeemRequest,
     InterBtcRuntime, IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultRegistryPallet,
 };
@@ -34,6 +34,193 @@ where
     set_bitcoin_fees(&parachain_rpc, FixedU128::from(0)).await;
 
     execute(client).await
+}
+
+// seed is to make txid unique for each payment
+async fn pay_redeem_from_vault_wallet(vault_provider: InterBtcParachain, btc_rpc: MockBitcoinCore, addr_seed: u8) {
+    // Theft detection works by extracting the public address from transaction inputs,
+    // and comparing them to registered vault addresses.
+    // We can't easily create a spending input corresponding to a output address, because
+    // the input script does not contain the public key; rather, it contains a hash `x`
+    // such that `hash(x)` is equal to the output address.
+    // To work around this, we create an arbitrary spending script, and then calculate the
+    // corresponding output address. Then, we make the vault register the address and we
+    // proceed to spend it.
+
+    let btc_rpc = &btc_rpc;
+    let vault_provider = &vault_provider;
+    vault_provider
+        .on_event::<RequestRedeemEvent<InterBtcRuntime>, _, _, _>(
+            |event| async move {
+                tracing::error!("Event {}", addr_seed);
+                let request = vault_provider
+                    .get_redeem_request(event.redeem_id.clone())
+                    .await
+                    .unwrap();
+                // step 1: create a spending transaction from some arbitrary address
+                let mut transaction = btc_rpc
+                    .create_transaction(request.btc_address, request.amount_btc as u64, Some(event.redeem_id))
+                    .await
+                    .unwrap();
+                let mut x = [3; 33];
+                x[1] = addr_seed;
+                // set the hash in the input script. Note: p2wpkh needs to start with 2 or 3
+                transaction.transaction.input[0].witness = vec![vec![], x.to_vec()];
+                // make txid unique
+                transaction.transaction.input[0].previous_output.vout = addr_seed as u32;
+
+                // extract the public address corresponding to the input script
+                let input_address = transaction.transaction.extract_input_addresses::<BtcAddress>()[0];
+                tracing::error!("txid {} {}", addr_seed, transaction.transaction.txid());
+                // now make the vault register it
+                assert_ok!(vault_provider.register_address(input_address).await);
+                tracing::error!("Registered {}", addr_seed);
+                // now perform the theft
+                assert_ok!(btc_rpc.send_transaction(transaction).await);
+                tracing::error!("sent {}", addr_seed);
+            },
+            |_err| (),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_report_vault_theft_succeeds() {
+    service::init_subscriber();
+
+    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+
+    let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
+
+    set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
+
+    assert_ok!(
+        try_join(
+            root_provider.set_bitcoin_confirmations(0),
+            root_provider.set_parachain_confirmations(0),
+        )
+        .await
+    );
+
+    let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+
+    let issue_amount = 100000;
+    let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
+    assert_ok!(
+        vault_provider
+            .register_vault(
+                vault_collateral,
+                btc_rpc.get_new_public_key().await.unwrap(),
+                DEFAULT_TESTING_CURRENCY
+            )
+            .await
+    );
+
+    let vaults = Arc::new(vault::Vaults::from(Default::default()));
+
+    test_service(
+        join(
+            vault::service::report_vault_thefts(btc_rpc.clone(), relayer_provider.clone(), 0, vaults.clone()),
+            vault::service::listen_for_wallet_updates(relayer_provider.clone(), vaults.clone()),
+        ),
+        async {
+            // Theft detection works by extracting the public address from transaction inputs,
+            // and comparing them to registered vault addresses.
+            // We can't easily create a spending input corresponding to a output address, because
+            // the input script does not contain the public key; rather, it contains a hash `x`
+            // such that `hash(x)` is equal to the output address.
+            // To work around this, we create an arbitrary spending script, and then calculate the
+            // corresponding output address. Then, we make the vault register the address and we
+            // proceed to spend it.
+
+            // step 1: create a spending transaction from some arbitrary address
+            let mut transaction = btc_rpc
+                .create_transaction(BtcAddress::P2PKH(H160::from_slice(&[4; 20])), 1500, None)
+                .await
+                .unwrap();
+            // set the hash in the input script. Note: p2wpkh needs to start with 2 or 3
+            transaction.transaction.input[0].witness = vec![vec![], vec![3; 33]];
+
+            // extract the public address corresponding to the input script
+            let input_address = transaction.transaction.extract_input_addresses::<BtcAddress>()[0];
+            // now make the vault register it
+            assert_ok!(vault_provider.register_address(input_address).await);
+
+            // now perform the theft
+            assert_ok!(btc_rpc.send_transaction(transaction).await);
+
+            assert_event::<VaultTheftEvent<InterBtcRuntime>, _>(TIMEOUT, vault_provider, |_| true).await;
+        },
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_report_vault_double_payment_succeeds() {
+    test_with(|client| async move {
+        let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+        let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+        let vault_provider = &setup_provider(client.clone(), AccountKeyring::Charlie).await;
+        let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
+
+        // set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
+
+        assert_ok!(
+            try_join(
+                root_provider.set_bitcoin_confirmations(0),
+                root_provider.set_parachain_confirmations(0),
+            )
+            .await
+        );
+
+        let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+
+        let issue_amount = 100000;
+        let vault_collateral = get_required_vault_collateral_for_issue(&vault_provider, issue_amount).await;
+        assert_ok!(
+            vault_provider
+                .register_vault(
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                    DEFAULT_TESTING_CURRENCY
+                )
+                .await
+        );
+        assert_issue(&user_provider, &btc_rpc, vault_provider.get_account_id(), issue_amount).await;
+
+        let vaults = Arc::new(vault::Vaults::from(Default::default()));
+
+        // we make the vault start two listen_for_redeem_requests processes, this way there will be a double payment
+        // that should be reported
+        test_service(
+            join4(
+                vault::service::report_vault_thefts(btc_rpc.clone(), relayer_provider.clone(), 0, vaults.clone()),
+                vault::service::listen_for_wallet_updates(relayer_provider.clone(), vaults.clone()),
+                pay_redeem_from_vault_wallet(vault_provider.clone(), btc_rpc.clone(), 2),
+                pay_redeem_from_vault_wallet(vault_provider.clone(), btc_rpc.clone(), 3),
+            ),
+            async {
+                let address = BtcAddress::P2PKH(H160::from_slice(&[2; 20]));
+                let vault_id = vault_provider.clone().get_account_id().clone();
+                user_provider
+                    .request_redeem(issue_amount / 2, address, &vault_id)
+                    .await
+                    .unwrap();
+
+                assert_event::<VaultDoublePaymentEvent<InterBtcRuntime>, _>(
+                    Duration::from_secs(120),
+                    root_provider,
+                    |_| true,
+                )
+                .await;
+            },
+        )
+        .await;
+    })
+    .await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

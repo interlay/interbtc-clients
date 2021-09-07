@@ -8,7 +8,7 @@ use bitcoin::{
     secp256k1::{rand::rngs::OsRng, PublicKey, Secp256k1, SecretKey},
     serialize, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, Hash,
     LockedTransaction, Network, OutPoint, PartialAddress, PartialMerkleTree, PrivateKey, Script, Transaction,
-    TransactionMetadata, TxIn, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
+    TransactionExt, TransactionMetadata, TxIn, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
 };
 use rand::{thread_rng, Rng};
 use sp_core::{H160, H256, U256};
@@ -430,5 +430,15 @@ impl BitcoinCoreApi for MockBitcoinCore {
     }
     async fn rescan_blockchain(&self, start_height: usize) -> Result<(), BitcoinError> {
         Ok(())
+    }
+    async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError> {
+        let op_return = transaction.get_op_return().unwrap();
+        Ok((*self.blocks.read().await)
+            .clone()
+            .iter()
+            .filter(|block| block.txdata[1].txid() != transaction.txid()) // filter self
+            .filter(|block| block.txdata[1].get_op_return() == Some(op_return))
+            .map(|block| (block.txdata[1].txid(), block.block_hash()))
+            .collect())
     }
 }

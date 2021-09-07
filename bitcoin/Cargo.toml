@@ -27,6 +27,7 @@ futures = "0.3.5"
 serde_json = "1"
 log = "0.4.0"
 hyper = "0.10"
+esplora-btc-api = "1.0.3"
 
 # Substrate dependencies
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.8" }

@@ -16,6 +16,7 @@ fn new_bitcoin_core(wallet: Option<String>) -> Result<BitcoinCore, Error> {
         wallet,
         Network::Regtest,
         Default::default(),
+        None,
     )?)
 }
 
