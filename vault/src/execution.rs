@@ -138,7 +138,7 @@ impl Request {
             hash,
             deadline: None,
             btc_height: None,
-            amount: request.amount_btc,
+            amount: request.amount_wrapped,
             btc_address: request.btc_address,
             request_type: RequestType::Refund,
         }
