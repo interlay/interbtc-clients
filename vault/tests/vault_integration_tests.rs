@@ -30,7 +30,7 @@ where
 
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Bob).await;
 
-    set_exchange_rate(&parachain_rpc, FixedU128::saturating_from_rational(1u128, 100u128)).await;
+    set_exchange_rate_and_wait(&parachain_rpc, FixedU128::saturating_from_rational(1u128, 100u128)).await;
     set_bitcoin_fees(&parachain_rpc, FixedU128::from(0)).await;
 
     execute(client).await
@@ -95,7 +95,7 @@ async fn test_report_vault_theft_succeeds() {
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
 
-    set_exchange_rate(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
+    set_exchange_rate_and_wait(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
 
     assert_ok!(
         try_join(
@@ -368,12 +368,12 @@ async fn test_maintain_collateral_succeeds() {
             vault::service::maintain_collateralization_rate(vault_provider.clone(), Some(1000000000)),
             async {
                 // dot per btc increases by 10%
-                set_exchange_rate(
+                set_exchange_rate_and_wait(
                     &relayer_provider,
                     FixedU128::saturating_from_rational(110u128, 10000u128),
                 )
                 .await;
-                set_exchange_rate(
+                set_exchange_rate_and_wait(
                     &relayer_provider,
                     FixedU128::saturating_from_rational(110u128, 10000u128),
                 )
@@ -945,7 +945,7 @@ async fn test_off_chain_liquidation() {
 
         assert_issue(&user_provider, &btc_rpc, vault_provider.get_account_id(), issue_amount).await;
 
-        set_exchange_rate(&relayer_provider, FixedU128::from(10)).await;
+        set_exchange_rate_and_wait(&relayer_provider, FixedU128::from(10)).await;
 
         assert_event::<LiquidateVaultEvent<InterBtcRuntime>, _>(TIMEOUT, vault_provider.clone(), |_| true).await;
     })

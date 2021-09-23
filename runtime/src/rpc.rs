@@ -576,7 +576,7 @@ impl TimestampPallet for InterBtcParachain {
 pub trait OraclePallet {
     async fn get_exchange_rate(&self) -> Result<FixedU128, Error>;
 
-    async fn set_exchange_rate(&self, value: FixedU128) -> Result<(), Error>;
+    async fn feed_values(&self, values: Vec<(OracleKey, FixedU128)>) -> Result<(), Error>;
 
     async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error>;
 
@@ -607,11 +607,10 @@ impl OraclePallet for InterBtcParachain {
     ///
     /// # Arguments
     /// * `value` - the current exchange rate
-    async fn set_exchange_rate(&self, value: FixedU128) -> Result<(), Error> {
+    async fn feed_values(&self, values: Vec<(OracleKey, FixedU128)>) -> Result<(), Error> {
+        let values = &values;
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .feed_values_and_watch(&signer, vec![(OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY), value)])
-                .await
+            self.ext_client.feed_values_and_watch(&signer, values.clone()).await
         })
         .await?;
         Ok(())

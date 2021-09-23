@@ -124,8 +124,9 @@ async fn wait_for_aggregate(parachain_rpc: &InterBtcParachain, key: &OracleKey) 
     }
 }
 
-pub async fn set_exchange_rate(parachain_rpc: &InterBtcParachain, value: FixedU128) {
-    assert_ok!(parachain_rpc.set_exchange_rate(value).await);
+pub async fn set_exchange_rate_and_wait(parachain_rpc: &InterBtcParachain, value: FixedU128) {
+    let key = OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY);
+    assert_ok!(parachain_rpc.feed_values(vec![(key, value)]).await);
     assert_ok!(
         timeout(
             TIMEOUT_DURATION,
