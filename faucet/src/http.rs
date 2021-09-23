@@ -292,7 +292,7 @@ pub async fn start_http(
 #[cfg(test)]
 mod tests {
     use crate::Error;
-    use runtime::CurrencyId;
+    use runtime::{CurrencyId, OracleKey, RELAY_CHAIN_CURRENCY};
     use std::{collections::HashMap, sync::Arc};
 
     const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
@@ -330,8 +330,11 @@ mod tests {
 
     async fn set_exchange_rate(client: SubxtClient) {
         let oracle_provider = setup_provider(client, AccountKeyring::Bob).await;
+        let key = OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY);
+        let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
+
         oracle_provider
-            .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
+            .feed_values(vec![(key, exchange_rate)])
             .await
             .expect("Unable to set exchange rate");
     }

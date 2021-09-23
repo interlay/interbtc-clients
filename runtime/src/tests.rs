@@ -4,7 +4,7 @@ use super::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, FixedPointNumber, FixedU128,
     OraclePallet, RelayPallet, ReplacePallet, SecurityPallet, StatusCode, VaultRegistryPallet,
 };
-use crate::{exchange_rate_oracle::FeedValuesEvent, integration::*, InterBtcRuntime};
+use crate::{exchange_rate_oracle::FeedValuesEvent, integration::*, InterBtcRuntime, OracleKey, RELAY_CHAIN_CURRENCY};
 use module_bitcoin::{
     formatter::TryFormattable,
     types::{BlockBuilder, RawBlockHeader},
@@ -24,8 +24,10 @@ fn dummy_public_key() -> BtcPublicKey {
 
 async fn set_exchange_rate(client: SubxtClient) {
     let oracle_provider = setup_provider(client, AccountKeyring::Bob).await;
+    let key = OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY);
+    let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
     oracle_provider
-        .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
+        .feed_values(vec![(key, exchange_rate)])
         .await
         .expect("Unable to set exchange rate");
 }
@@ -57,10 +59,9 @@ async fn test_outdated_nonce_matching() {
     env_logger::init();
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
-    parachain_rpc
-        .set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
-        .await
-        .unwrap();
+    let key = OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY);
+    let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
+    parachain_rpc.feed_values(vec![(key, exchange_rate)]).await.unwrap();
     let err = parachain_rpc.get_outdated_nonce_error().await;
     log::error!("Error: {:?}", err);
     assert!(err.is_invalid_transaction())
@@ -79,10 +80,14 @@ async fn test_subxt_processing_events_after_dispatch_error() {
         parachain_rpc.clone(),
         |_| true,
     );
+
+    let key = OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY);
+    let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
+
     let result = tokio::join!(
         event_listener,
-        invalid_oracle.set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128)),
-        oracle_provider.set_exchange_rate(FixedU128::saturating_from_rational(1u128, 100u128))
+        invalid_oracle.feed_values(vec![(key.clone(), exchange_rate.clone())]),
+        oracle_provider.feed_values(vec![(key, exchange_rate)])
     );
 
     // ensure first set_exchange_rate failed and second succeeded.

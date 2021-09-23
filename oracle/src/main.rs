@@ -11,7 +11,7 @@ use runtime::{
     substrate_subxt::PairSigner,
     CurrencyId, CurrencyInfo, FixedPointNumber,
     FixedPointTraits::{CheckedDiv, CheckedMul, One},
-    FixedU128, InterBtcParachain, InterBtcRuntime, OraclePallet,
+    FixedU128, InterBtcParachain, InterBtcRuntime, OracleKey, OraclePallet,
 };
 use std::{collections::HashMap, time::Duration};
 use tokio::{join, time::sleep};
@@ -148,7 +148,8 @@ async fn submit_exchange_rate(
         chrono::offset::Local::now()
     );
 
-    Ok(parachain_rpc.set_exchange_rate(exchange_rate).await?)
+    let key = OracleKey::ExchangeRate(currency_id);
+    Ok(parachain_rpc.feed_values(vec![(key, exchange_rate)]).await?)
 }
 
 /// Fetches the Bitcoin fee estimate from Blockstream or uses the provided default.
