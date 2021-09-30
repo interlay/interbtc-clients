@@ -11,36 +11,38 @@
 
 _This project is currently under active development_.
 
-## Prerequisites
+## Getting started
 
-Download and start [Bitcoin Core](https://bitcoin.org/en/bitcoin-core/):
-
-```
-bitcoind -regtest -server
-```
-
-Build and run the [BTC Parachain](https://github.com/interlay/interbtc):
+### Prerequisites
 
 ```
-git clone git@gitlab.com:interlay/btc-parachain.git
-cd btc-parachain
-cargo run --release -- --dev
+curl https://sh.rustup.rs -sSf | sh
 ```
 
-Generate an address and mine some blocks:
+Please also install the following dependencies:
 
-```bash
-address=`bitcoin-cli -regtest getnewaddress`
-bitcoin-cli -regtest generatetoaddress 101 $address
-```
+- `cmake`
+- `clang` (>=10.0.0)
+- `clang-dev`
+- `libc6-dev`
+- `libssl-dev`
+- `pkg-config` (on Ubuntu)
 
-> Note: This may require `rpcuser` and `rpcpassword` to be set.
+### Installation
 
-Alternatively run `bitcoin-cli` from docker: 
+#### Oracle
 
-```bash
-docker run --network host --entrypoint bitcoin-cli ruimarinho/bitcoin-core:0.20 -regtest -rpcuser=rpcuser -rpcpassword=rpcpassword ${COMMAND}
-```
+The interBTC bridge requires a price oracle to calculate collateralization rates, for local development we can run this client
+to automatically update the exchange rate at a pre-determined time interval.
+
+To start the Oracle follow the instructions contained in the [Oracle README](./oracle/README.md).
+
+#### Vault
+
+The [Vault](./vault/README.md) client is used to intermediate assets between Bitcoin and the BTC Parachain.
+It is also capable of submitting Bitcoin block headers to the BTC Parachain.
+
+To start the Vault follow the instructions contained in the [Vault README](./vault/README.md).
 
 ### Development
 
@@ -52,26 +54,6 @@ Running `rustup show` from the root directory of this repo should be enough to
 set up the toolchain and you can inspect the output to verify that it matches
 the version specified in the override file.
 
-## Getting Started
-
-### Oracle
-
-The BTC Parachain requires a price oracle to calculate collateralization rates, for local development we can run this client
-to automatically update the exchange rate at a pre-determined time interval.
-
-```bash
-cargo run --bin oracle
-```
-
-### Vault
-
-The [Vault](./vault/README.md) client is used to intermediate assets between Bitcoin and the BTC Parachain.
-It is also capable of submitting Bitcoin block headers to the BTC Parachain.
-
-```bash
-source .env
-cargo run --bin vault
-```
 
 <p align="center">
   <a href="https://web3.foundation/grants/">
