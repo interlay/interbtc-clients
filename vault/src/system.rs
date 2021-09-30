@@ -234,11 +234,14 @@ impl VaultService {
             }
         }
 
+        tracing::info!("going to check public key");
+
         if let Ok(vault) = self.btc_parachain.get_vault(vault_id.clone()).await {
             if !bitcoin_core.wallet_has_public_key(vault.wallet.public_key.0).await? {
                 return Err(bitcoin::Error::MissingPublicKey.into());
             }
         }
+        tracing::info!("public key ok");
 
         issue::add_keys_from_past_issue_request(&bitcoin_core, &self.btc_parachain).await?;
 

@@ -29,6 +29,11 @@ log = "0.4.0"
 hyper = "0.10"
 esplora-btc-api = "1.0.3"
 
+
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.2.12", features = ["registry", "env-filter", "fmt"] }
+tracing-futures = { version = "0.2.5" }
+
 # Substrate dependencies
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.8" }
 

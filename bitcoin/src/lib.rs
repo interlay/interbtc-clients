@@ -697,7 +697,10 @@ impl BitcoinCoreApi for BitcoinCore {
         self.with_wallet(|| async {
             let address = Address::p2wpkh(&PublicKey::from_slice(&public_key.clone().into())?, self.network)
                 .map_err(ConversionError::from)?;
+            tracing::info!("Getting address info for {}", address.to_string());
             let address_info = self.rpc.get_address_info(&address)?;
+            tracing::info!("got address info");
+
             let wallet_pubkey = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
             Ok(P::from(wallet_pubkey.key.serialize()) == public_key)
         })
