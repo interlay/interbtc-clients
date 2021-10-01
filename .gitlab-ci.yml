@@ -60,7 +60,6 @@ build-clients:
     stage: build
     extends:
         - .rust-base-job
-    <<: *only_refs
     script:
         - cargo check --workspace --release --target $PLATFORM
         - cargo build --workspace --release --target $PLATFORM
@@ -75,6 +74,7 @@ build-clients:
 #              FILE_EXTENSION: [".exe"]
     artifacts:
         name: "${CI_COMMIT_REF_SLUG}"
+        expire_in: 30 days
         paths:
             - target/$PLATFORM/release/oracle${FILE_EXTENSION}
             - target/$PLATFORM/release/vault${FILE_EXTENSION}
