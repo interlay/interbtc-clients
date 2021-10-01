@@ -44,11 +44,21 @@ jobs:
         with:
           command: test
           args: --release --workspace
-      - name: upload artifacts
+      - name: upload artifacts - vault
         uses: actions/upload-artifact@v2
         with:
-          name: binaries
-          path: |
-            target/release/vault
-            target/release/oracle
-            target/release/faucet
+          name: vault-${{ github.sha }}
+          path: target/release/vault
+          retention-days: 10
+      - name: upload artifacts - oracle
+        uses: actions/upload-artifact@v2
+        with:
+          name: oracle-${{ github.sha }}
+          path: target/release/oracle
+          retention-days: 10
+      - name: upload artifacts - faucet
+        uses: actions/upload-artifact@v2
+        with:
+          name: faucet-${{ github.sha }}
+          path: target/release/faucet
+          retention-days: 10
