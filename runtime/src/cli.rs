@@ -5,12 +5,12 @@ use crate::{
 use clap::Clap;
 use sp_core::{sr25519::Pair, Pair as _};
 use sp_keyring::AccountKeyring;
-use std::{collections::HashMap, num::ParseIntError, time::Duration};
+use std::{collections::HashMap, num::ParseIntError, str::FromStr, time::Duration};
 
 #[derive(Clap, Debug, Clone)]
 pub struct ProviderUserOpts {
     /// Keyring to use, mutually exclusive with keyfile.
-    #[clap(long)]
+    #[clap(long, parse(try_from_str = parse_account_keyring))]
     pub keyring: Option<AccountKeyring>,
 
     /// Path to the json file containing key pairs in a map.
@@ -52,6 +52,10 @@ fn get_credentials_from_file(file_path: &str, keyname: &str) -> Result<Pair, Key
     let pair_str = map.get(keyname).ok_or(KeyLoadingError::KeyNotFound)?;
     let pair = Pair::from_string(pair_str, None).map_err(KeyLoadingError::SecretStringError)?;
     Ok(pair)
+}
+
+pub fn parse_account_keyring(src: &str) -> Result<AccountKeyring, Error> {
+    AccountKeyring::from_str(src).map_err(|_| Error::KeyringAccountParsingError)
 }
 
 pub fn parse_duration_ms(src: &str) -> Result<Duration, ParseIntError> {

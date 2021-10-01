@@ -3,7 +3,7 @@ use bitcoin::Error as BitcoinError;
 use hex::FromHexError;
 use jsonrpc_core_client::RpcError;
 use parity_scale_codec::Error as CodecError;
-use runtime::{substrate_subxt::Error as SubxtError, CurrencyId, Error as RuntimeError};
+use runtime::{substrate_subxt::Error as SubxtError, Error as RuntimeError};
 use service::Error as ServiceError;
 use thiserror::Error;
 
@@ -27,8 +27,6 @@ pub enum Error {
     DeadlineExpired,
     #[error("Failed to parse argument; argument not valid")]
     ArgumentParsingError,
-    #[error("Attempted to start vault with currency {0:?}, but it is already registered with currency {1:?}")]
-    InvalidCurrency(CurrencyId, CurrencyId),
 
     #[error("ServiceError: {0}")]
     ServiceError(#[from] ServiceError),

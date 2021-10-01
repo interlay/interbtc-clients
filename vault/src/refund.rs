@@ -1,6 +1,6 @@
-use crate::execution::*;
+use crate::{execution::*, VaultIdManager};
 use bitcoin::BitcoinCoreApi;
-use runtime::{pallets::refund::RequestRefundEvent, InterBtcParachain, InterBtcRuntime, UtilFuncs};
+use runtime::{pallets::refund::RequestRefundEvent, InterBtcParachain, InterBtcRuntime};
 use service::Error as ServiceError;
 
 /// Listen for RequestRefundEvent directed at this vault; upon reception, transfer
@@ -14,15 +14,16 @@ use service::Error as ServiceError;
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     parachain_rpc: InterBtcParachain,
-    btc_rpc: B,
+    btc_rpc: VaultIdManager<B>,
     num_confirmations: u32,
 ) -> Result<(), ServiceError> {
     parachain_rpc
         .on_event::<RequestRefundEvent<InterBtcRuntime>, _, _, _>(
             |event| async {
-                if &event.vault_id != parachain_rpc.get_account_id() {
-                    return;
-                }
+                let btc_rpc = match btc_rpc.get_bitcoin_rpc(&event.vault_id).await {
+                    Some(x) => x,
+                    None => return, // event not directed at this vault
+                };
                 tracing::info!("Received refund request: {:?}", event);
 
                 // within this event callback, we captured the arguments of listen_for_refund_requests

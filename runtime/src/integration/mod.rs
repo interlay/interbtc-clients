@@ -4,7 +4,7 @@ mod bitcoin_simulator;
 
 use crate::{
     rpc::{IssuePallet, OraclePallet, VaultRegistryPallet},
-    AccountId, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey, RELAY_CHAIN_CURRENCY,
+    BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey, VaultId, RELAY_CHAIN_CURRENCY,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
 use frame_support::assert_ok;
@@ -12,6 +12,7 @@ use futures::{
     future::{try_join, Either},
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
+use primitives::CurrencyId;
 use sp_keyring::AccountKeyring;
 use sp_runtime::FixedU128;
 use std::time::Duration;
@@ -98,7 +99,7 @@ pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> InterBt
 pub async fn assert_issue(
     parachain_rpc: &InterBtcParachain,
     btc_rpc: &MockBitcoinCore,
-    vault_id: &AccountId,
+    vault_id: &VaultId,
     amount: u128,
 ) {
     let issue = parachain_rpc.request_issue(amount, vault_id, 10000).await.unwrap();
@@ -148,8 +149,15 @@ pub async fn set_bitcoin_fees(parachain_rpc: &InterBtcParachain, value: FixedU12
 }
 
 /// calculate how much collateral the vault requires to accept an issue of the given size
-pub async fn get_required_vault_collateral_for_issue(parachain_rpc: &InterBtcParachain, amount: u128) -> u128 {
-    parachain_rpc.get_required_collateral_for_wrapped(amount).await.unwrap()
+pub async fn get_required_vault_collateral_for_issue(
+    parachain_rpc: &InterBtcParachain,
+    amount: u128,
+    collateral_currency: CurrencyId,
+) -> u128 {
+    parachain_rpc
+        .get_required_collateral_for_wrapped(amount, collateral_currency)
+        .await
+        .unwrap()
 }
 
 /// wait for an event to occur. After the specified error, this will panic. This returns the event.

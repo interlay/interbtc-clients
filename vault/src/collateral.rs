@@ -1,41 +1,41 @@
-use crate::error::Error;
+use crate::{error::Error, VaultIdManager};
+use bitcoin::BitcoinCoreApi;
 use futures::future;
 use runtime::{
-    pallets::exchange_rate_oracle::FeedValuesEvent, AccountId, CollateralBalancesPallet, InterBtcParachain,
-    InterBtcRuntime, OracleKey, UtilFuncs, VaultRegistryPallet, VaultStatus, RELAY_CHAIN_CURRENCY,
+    pallets::exchange_rate_oracle::FeedValuesEvent, CollateralBalancesPallet, CurrencyInfo, InterBtcParachain,
+    InterBtcRuntime, OracleKey, VaultId, VaultRegistryPallet, VaultStatus,
 };
 use service::Error as ServiceError;
 
-pub async fn maintain_collateralization_rate(
+pub async fn maintain_collateralization_rate<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     parachain_rpc: InterBtcParachain,
-    maximum_collateral: Option<u128>,
+    vault_id_manager: VaultIdManager<B>,
 ) -> Result<(), ServiceError> {
     let parachain_rpc = &parachain_rpc;
+    let vault_id_manager = &vault_id_manager;
     parachain_rpc
         .on_event::<FeedValuesEvent<InterBtcRuntime>, _, _, _>(
             |event| async move {
-                tracing::info!("Received FeedValuesEvent");
-                if !event
-                    .values
-                    .iter()
-                    .any(|(key, _)| *key == OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY))
-                {
-                    tracing::debug!("Not exchange rate update");
-                    return;
-                }
+                let updated_currencies = event.values.iter().filter_map(|(key, _value)| match key {
+                    OracleKey::ExchangeRate(currency_id) => Some(currency_id),
+                    _ => None,
+                });
+                let vault_ids = vault_id_manager.get_vault_ids().await;
+                for currency_id in updated_currencies {
+                    match vault_ids
+                        .iter()
+                        .find(|vault_id| vault_id.collateral_currency() == *currency_id)
+                    {
+                        None => tracing::debug!("Ignoring exchange rate update for {}", currency_id.symbol()),
+                        Some(vault_id) => {
+                            tracing::info!("Received FeedValuesEvent for {}", currency_id.symbol());
 
-                // TODO: implement retrying
-                match lock_required_collateral(
-                    parachain_rpc.clone(),
-                    parachain_rpc.get_account_id().clone(),
-                    maximum_collateral,
-                )
-                .await
-                {
-                    // vault not being registered is ok, no need to log it
-                    Err(Error::RuntimeError(runtime::Error::VaultNotFound)) => {}
-                    Err(e) => tracing::error!("Failed to maintain collateral level: {}", e),
-                    _ => {} // success
+                            // TODO: implement retrying
+                            if let Err(e) = lock_required_collateral(parachain_rpc.clone(), vault_id.clone()).await {
+                                tracing::error!("Failed to maintain collateral level: {}", e);
+                            }
+                        }
+                    }
                 }
             },
             |error| tracing::error!("Error reading SetExchangeRate event: {}", error.to_string()),
@@ -59,11 +59,10 @@ pub async fn maintain_collateralization_rate(
 /// * `maximum_collateral` - the upperbound of total collateral that is allowed to be placed
 pub async fn lock_required_collateral<P: VaultRegistryPallet + CollateralBalancesPallet>(
     parachain_rpc: P,
-    vault_id: AccountId,
-    maximum_collateral: Option<u128>,
+    vault_id: VaultId,
 ) -> Result<(), Error> {
     // check that the vault is registered and active
-    let vault = parachain_rpc.get_vault(vault_id.clone()).await?;
+    let vault = parachain_rpc.get_vault(&vault_id).await?;
     if !matches!(vault.status, VaultStatus::Active(..)) {
         return Err(Error::RuntimeError(runtime::Error::VaultNotFound));
     }
@@ -71,15 +70,15 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + CollateralBalance
     let actual_collateral = parachain_rpc.get_vault_total_collateral(vault_id.clone()).await?;
 
     let (required_collateral, maximum_collateral) = future::try_join(
-        async { Ok(parachain_rpc.get_required_collateral_for_vault(vault_id).await?) },
         async {
-            if let Some(max) = maximum_collateral {
-                Ok(max)
-            } else {
-                // allow all balance to be used as collateral
-                let free = parachain_rpc.get_free_balance().await?;
-                free.checked_add(actual_collateral).ok_or(Error::ArithmeticOverflow)
-            }
+            Ok(parachain_rpc
+                .get_required_collateral_for_vault(vault_id.clone())
+                .await?)
+        },
+        async {
+            // allow all balance to be used as collateral
+            let free = parachain_rpc.get_free_balance(vault_id.collateral_currency()).await?;
+            free.checked_add(actual_collateral).ok_or(Error::ArithmeticOverflow)
         },
     )
     .await?;
@@ -116,7 +115,7 @@ pub async fn lock_required_collateral<P: VaultRegistryPallet + CollateralBalance
         // cases 5 & 6
         let amount_to_increase = target_collateral - actual_collateral;
         tracing::info!("Locking additional collateral");
-        parachain_rpc.deposit_collateral(amount_to_increase).await?;
+        parachain_rpc.deposit_collateral(&vault_id, amount_to_increase).await?;
     }
 
     // if we were unable to add the required amount, return error
@@ -164,24 +163,25 @@ mod tests {
 
         #[async_trait]
         pub trait VaultRegistryPallet {
-            async fn get_vault(&self, vault_id: AccountId) -> Result<InterBtcVault, RuntimeError>;
+            async fn get_vault(&self, vault_id: &VaultId) -> Result<InterBtcVault, RuntimeError>;
+            async fn get_vaults_by_account_id(&self, account_id: &AccountId) -> Result<Vec<VaultId>, RuntimeError>;
             async fn get_all_vaults(&self) -> Result<Vec<InterBtcVault>, RuntimeError>;
-            async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey, currency_id: CurrencyId) -> Result<(), RuntimeError>;
-            async fn deposit_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
-            async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
-            async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
-            async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-            async fn get_required_collateral_for_wrapped(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
-            async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
-            async fn get_vault_total_collateral(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
+            async fn register_vault(&self, vault_id: &VaultId, collateral: u128, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
+            async fn deposit_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
+            async fn withdraw_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
+            async fn update_public_key(&self, vault_id: &VaultId, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
+            async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), RuntimeError>;
+            async fn get_required_collateral_for_wrapped(&self, amount_btc: u128, collateral_currency: CurrencyId) -> Result<u128, RuntimeError>;
+            async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
+            async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
         }
 
         #[async_trait]
         pub trait CollateralBalancesPallet {
-            async fn get_free_balance(&self) -> Result<InterBtcBalance, RuntimeError>;
-            async fn get_free_balance_for_id(&self, id: AccountId) -> Result<InterBtcBalance, RuntimeError>;
-            async fn get_reserved_balance(&self) -> Result<InterBtcBalance, RuntimeError>;
-            async fn get_reserved_balance_for_id(&self, id: AccountId) -> Result<InterBtcBalance, RuntimeError>;
+            async fn get_free_balance(&self, currency_id: CurrencyId) -> Result<InterBtcBalance, RuntimeError>;
+            async fn get_free_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<InterBtcBalance, RuntimeError>;
+            async fn get_reserved_balance(&self, currency_id: CurrencyId) -> Result<InterBtcBalance, RuntimeError>;
+            async fn get_reserved_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<InterBtcBalance, RuntimeError>;
             async fn transfer_to(&self, recipient: &AccountId, amount: u128) -> Result<(), RuntimeError>;
         }
     }
@@ -193,7 +193,7 @@ mod tests {
         }
     }
 
-    fn setup_mocks(required: u128, actual: u128) -> MockProvider {
+    fn setup_mocks(required: u128, actual: u128, max: u128) -> MockProvider {
         let mut parachain_rpc = MockProvider::default();
         parachain_rpc
             .expect_get_required_collateral_for_vault()
@@ -201,7 +201,7 @@ mod tests {
 
         parachain_rpc.expect_get_vault().returning(move |x| {
             Ok(InterBtcVault {
-                id: x,
+                id: x.clone(),
                 wallet: Wallet::new(BtcPublicKey::default()),
                 status: VaultStatus::Active(true),
                 banned_until: None,
@@ -211,7 +211,7 @@ mod tests {
                 to_be_replaced_tokens: 0,
                 replace_collateral: 0,
                 liquidated_collateral: 0,
-                currency_id: CurrencyId::DOT,
+                active_replace_collateral: 0,
             })
         });
 
@@ -220,15 +220,24 @@ mod tests {
             .returning(move |_| Ok(actual));
 
         parachain_rpc
+            .expect_get_free_balance()
+            .returning(move |_| Ok(if max > actual { max - actual } else { 0 }));
+
+        parachain_rpc
     }
+
+    fn dummy_vault_id() -> VaultId {
+        VaultId::new(Default::default(), CurrencyId::DOT, CurrencyId::INTERBTC)
+    }
+
     #[tokio::test]
     async fn test_lock_required_collateral_case_1() {
         // case 1: required <= actual <= limit -- do nothing (already enough)
         // required = 50, actual = 75, max = 100:
         // check that deposit_collateral is not called
-        let parachain_rpc = setup_mocks(50, 75);
+        let parachain_rpc = setup_mocks(50, 75, 100);
 
-        assert_ok!(lock_required_collateral(parachain_rpc, AccountId::default(), Some(100)).await);
+        assert_ok!(lock_required_collateral(parachain_rpc, dummy_vault_id()).await);
     }
 
     #[tokio::test]
@@ -236,9 +245,9 @@ mod tests {
         // case 2: required <= limit <= actual -- do nothing (already enough)
         // required = 100, actual = 200, max = 150:
         // check that deposit_collateral is not called
-        let parachain_rpc = setup_mocks(100, 200);
+        let parachain_rpc = setup_mocks(100, 200, 150);
 
-        assert_ok!(lock_required_collateral(parachain_rpc, AccountId::default(), Some(150)).await);
+        assert_ok!(lock_required_collateral(parachain_rpc, dummy_vault_id()).await);
     }
 
     #[tokio::test]
@@ -246,9 +255,9 @@ mod tests {
         // case 3: limit <= required <= actual -- do nothing (already enough)
         // required = 100, actual = 150, max = 75:
         // check that deposit_collateral is not called
-        let parachain_rpc = setup_mocks(100, 150);
+        let parachain_rpc = setup_mocks(100, 150, 75);
 
-        assert_ok!(lock_required_collateral(parachain_rpc, AccountId::default(), Some(75)).await);
+        assert_ok!(lock_required_collateral(parachain_rpc, dummy_vault_id()).await);
     }
 
     #[tokio::test]
@@ -256,10 +265,10 @@ mod tests {
         // case 4: limit <= actual <= required -- do nothing (return error)
         // required = 100, actual = 75, max = 50:
         // check that deposit_collateral is not called
-        let parachain_rpc = setup_mocks(100, 75);
+        let parachain_rpc = setup_mocks(100, 75, 50);
 
         assert_err!(
-            lock_required_collateral(parachain_rpc, AccountId::default(), Some(50)).await,
+            lock_required_collateral(parachain_rpc, dummy_vault_id()).await,
             Error::InsufficientFunds
         );
     }
@@ -268,15 +277,15 @@ mod tests {
     async fn test_lock_required_collateral_case_5() {
         // case 5: actual <= limit <= required -- increase to limit (return error)
         // required = 100, actual = 25, max = 75: should add 50, but return err
-        let mut parachain_rpc = setup_mocks(100, 25);
+        let mut parachain_rpc = setup_mocks(100, 25, 75);
         parachain_rpc
             .expect_deposit_collateral()
-            .withf(|&amount| amount == 50)
+            .withf(|_, &amount| amount == 50)
             .times(1)
-            .returning(|_| Ok(()));
+            .returning(|_, _| Ok(()));
 
         assert_err!(
-            lock_required_collateral(parachain_rpc, AccountId::default(), Some(75)).await,
+            lock_required_collateral(parachain_rpc, dummy_vault_id()).await,
             Error::InsufficientFunds
         );
     }
@@ -284,24 +293,24 @@ mod tests {
     async fn test_lock_required_collateral_case_6() {
         // case 6: actual <= required <= limit -- increase to required (return ok)
         // required = 100, actual = 25, max = 200: should add 75
-        let mut parachain_rpc = setup_mocks(100, 25);
+        let mut parachain_rpc = setup_mocks(100, 25, 200);
         parachain_rpc
             .expect_deposit_collateral()
-            .withf(|&amount| amount == 75)
+            .withf(|_, &amount| amount == 75)
             .times(1)
-            .returning(|_| Ok(()));
+            .returning(|_, _| Ok(()));
 
-        assert_ok!(lock_required_collateral(parachain_rpc, AccountId::default(), Some(200)).await);
+        assert_ok!(lock_required_collateral(parachain_rpc, dummy_vault_id()).await);
     }
 
     #[tokio::test]
     async fn test_lock_required_collateral_at_max_fails() {
         // required = 100, actual = 25, max = 25:
         // check that deposit_collateral is not called with amount 0
-        let parachain_rpc = setup_mocks(100, 25);
+        let parachain_rpc = setup_mocks(100, 25, 25);
 
         assert_err!(
-            lock_required_collateral(parachain_rpc, AccountId::default(), Some(25)).await,
+            lock_required_collateral(parachain_rpc, dummy_vault_id()).await,
             Error::InsufficientFunds
         );
     }
@@ -310,9 +319,9 @@ mod tests {
     async fn test_lock_required_collateral_at_required_succeeds() {
         // required = 100, actual = 100, max = 200:
         // check that deposit_collateral is not called with amount 0
-        let parachain_rpc = setup_mocks(100, 100);
+        let parachain_rpc = setup_mocks(100, 100, 200);
 
-        assert_ok!(lock_required_collateral(parachain_rpc, AccountId::default(), Some(200)).await);
+        assert_ok!(lock_required_collateral(parachain_rpc, dummy_vault_id()).await);
     }
 
     #[tokio::test]
@@ -320,7 +329,7 @@ mod tests {
         let mut parachain_rpc = MockProvider::default();
         parachain_rpc.expect_get_vault().returning(move |x| {
             Ok(InterBtcVault {
-                id: x,
+                id: x.clone(),
                 wallet: Wallet::new(BtcPublicKey::default()),
                 status: VaultStatus::CommittedTheft,
                 banned_until: None,
@@ -330,12 +339,12 @@ mod tests {
                 to_be_replaced_tokens: 0,
                 replace_collateral: 0,
                 liquidated_collateral: 0,
-                currency_id: CurrencyId::DOT,
+                active_replace_collateral: 0,
             })
         });
 
         assert_err!(
-            lock_required_collateral(parachain_rpc, AccountId::default(), Some(75)).await,
+            lock_required_collateral(parachain_rpc, dummy_vault_id()).await,
             Error::RuntimeError(runtime::Error::VaultNotFound)
         );
     }

@@ -19,7 +19,7 @@ use tokio::{sync::RwLock, time::sleep};
 use crate::{
     btc_relay::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*, refund::*, relay::*,
     replace::*, retry::*, security::*, timestamp::*, tokens::*, types::*, utility::*, vault_registry::*, AccountId,
-    BlockNumber, CurrencyId, Error, InterBtcRuntime, BTC_RELAY_MODULE, RELAY_CHAIN_CURRENCY,
+    BlockNumber, CurrencyId, Error, InterBtcRuntime, VaultId, BTC_RELAY_MODULE, RELAY_CHAIN_CURRENCY,
     STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CONFIRMATIONS,
 };
 
@@ -274,13 +274,22 @@ impl InterBtcParachain {
 
     #[cfg(test)]
     pub async fn get_outdated_nonce_error(&self) -> Error {
+        use primitives::VaultCurrencyPair;
+
         let signer: InterBtcSigner = {
             let mut signer = self.signer.write().await;
             signer.set_nonce(0);
             signer.clone()
         };
         self.ext_client
-            .withdraw_replace_and_watch(&signer, 23)
+            .withdraw_replace_and_watch(
+                &signer,
+                VaultCurrencyPair {
+                    collateral: CurrencyId::DOT,
+                    wrapped: CurrencyId::INTERBTC,
+                },
+                23,
+            )
             .await
             .unwrap_err()
             .into()
@@ -294,6 +303,8 @@ pub trait UtilFuncs {
 
     /// Get the address of the configured signer.
     fn get_account_id(&self) -> &AccountId;
+
+    fn is_this_vault(&self, vault_id: &VaultId) -> bool;
 }
 
 #[async_trait]
@@ -310,47 +321,51 @@ impl UtilFuncs for InterBtcParachain {
     fn get_account_id(&self) -> &AccountId {
         &self.account_id
     }
+
+    fn is_this_vault(&self, vault_id: &VaultId) -> bool {
+        &vault_id.account_id == self.get_account_id()
+    }
 }
 
 #[async_trait]
 pub trait CollateralBalancesPallet {
-    async fn get_free_balance(&self) -> Result<<InterBtcRuntime as Core>::Balance, Error>;
+    async fn get_free_balance(&self, currency_id: CurrencyId) -> Result<InterBtcBalance, Error>;
 
-    async fn get_free_balance_for_id(&self, id: AccountId) -> Result<<InterBtcRuntime as Core>::Balance, Error>;
+    async fn get_free_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<InterBtcBalance, Error>;
 
-    async fn get_reserved_balance(&self) -> Result<<InterBtcRuntime as Core>::Balance, Error>;
+    async fn get_reserved_balance(&self, currency_id: CurrencyId) -> Result<InterBtcBalance, Error>;
 
-    async fn get_reserved_balance_for_id(&self, id: AccountId) -> Result<<InterBtcRuntime as Core>::Balance, Error>;
+    async fn get_reserved_balance_for_id(
+        &self,
+        id: AccountId,
+        currency_id: CurrencyId,
+    ) -> Result<InterBtcBalance, Error>;
 
     async fn transfer_to(&self, recipient: &AccountId, amount: u128) -> Result<(), Error>;
 }
 
 #[async_trait]
 impl CollateralBalancesPallet for InterBtcParachain {
-    async fn get_free_balance(&self) -> Result<<InterBtcRuntime as Core>::Balance, Error> {
-        Ok(Self::get_free_balance_for_id(&self, self.account_id.clone()).await?)
+    async fn get_free_balance(&self, currency_id: CurrencyId) -> Result<InterBtcBalance, Error> {
+        Ok(Self::get_free_balance_for_id(&self, self.account_id.clone(), currency_id).await?)
     }
 
-    async fn get_free_balance_for_id(&self, id: AccountId) -> Result<<InterBtcRuntime as Core>::Balance, Error> {
+    async fn get_free_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<InterBtcBalance, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self
-            .ext_client
-            .accounts(id.clone(), RELAY_CHAIN_CURRENCY, head)
-            .await?
-            .free)
+        Ok(self.ext_client.accounts(id.clone(), currency_id, head).await?.free)
     }
 
-    async fn get_reserved_balance(&self) -> Result<<InterBtcRuntime as Core>::Balance, Error> {
-        Ok(Self::get_reserved_balance_for_id(&self, self.account_id.clone()).await?)
+    async fn get_reserved_balance(&self, currency_id: CurrencyId) -> Result<InterBtcBalance, Error> {
+        Ok(Self::get_reserved_balance_for_id(&self, self.account_id.clone(), currency_id).await?)
     }
 
-    async fn get_reserved_balance_for_id(&self, id: AccountId) -> Result<<InterBtcRuntime as Core>::Balance, Error> {
+    async fn get_reserved_balance_for_id(
+        &self,
+        id: AccountId,
+        currency_id: CurrencyId,
+    ) -> Result<InterBtcBalance, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self
-            .ext_client
-            .accounts(id.clone(), RELAY_CHAIN_CURRENCY, head)
-            .await?
-            .reserved)
+        Ok(self.ext_client.accounts(id.clone(), currency_id, head).await?.reserved)
     }
 
     async fn transfer_to(&self, recipient: &AccountId, amount: u128) -> Result<(), Error> {
@@ -373,7 +388,7 @@ pub trait ReplacePallet {
     /// * `&self` - sender of the transaction
     /// * `amount` - amount of [Wrapped]
     /// * `griefing_collateral` - amount of griefing collateral
-    async fn request_replace(&self, amount: u128, griefing_collateral: u128) -> Result<(), Error>;
+    async fn request_replace(&self, vault_id: &VaultId, amount: u128, griefing_collateral: u128) -> Result<(), Error>;
 
     /// Withdraw a request of vault replacement
     ///
@@ -381,7 +396,7 @@ pub trait ReplacePallet {
     ///
     /// * `&self` - sender of the transaction: the old vault
     /// * `amount` - the amount of [Wrapped] to replace
-    async fn withdraw_replace(&self, amount: u128) -> Result<(), Error>;
+    async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error>;
 
     /// Accept request of vault replacement
     ///
@@ -394,7 +409,8 @@ pub trait ReplacePallet {
     /// * `btc_address` - the address to send funds to
     async fn accept_replace(
         &self,
-        old_vault: &AccountId,
+        new_vault: &VaultId,
+        old_vault: &VaultId,
         amount_btc: u128,
         collateral: u128,
         btc_address: BtcAddress,
@@ -447,34 +463,44 @@ pub trait ReplacePallet {
 
 #[async_trait]
 impl ReplacePallet for InterBtcParachain {
-    async fn request_replace(&self, amount: u128, griefing_collateral: u128) -> Result<(), Error> {
+    async fn request_replace(&self, vault_id: &VaultId, amount: u128, griefing_collateral: u128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .request_replace_and_watch(&signer, amount, griefing_collateral)
+                .request_replace_and_watch(&signer, vault_id.currencies.clone(), amount, griefing_collateral)
                 .await
         })
         .await?;
         Ok(())
     }
 
-    async fn withdraw_replace(&self, amount: u128) -> Result<(), Error> {
-        self.with_unique_signer(
-            |signer| async move { self.ext_client.withdraw_replace_and_watch(&signer, amount).await },
-        )
+    async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
+        self.with_unique_signer(|signer| async move {
+            self.ext_client
+                .withdraw_replace_and_watch(&signer, vault_id.currencies.clone(), amount)
+                .await
+        })
         .await?;
         Ok(())
     }
 
     async fn accept_replace(
         &self,
-        old_vault: &AccountId,
+        new_vault: &VaultId,
+        old_vault: &VaultId,
         amount_btc: u128,
         collateral: u128,
         btc_address: BtcAddress,
     ) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .accept_replace_and_watch(&signer, old_vault, amount_btc, collateral, btc_address)
+                .accept_replace_and_watch(
+                    &signer,
+                    new_vault.currencies.clone(),
+                    old_vault,
+                    amount_btc,
+                    collateral,
+                    btc_address,
+                )
                 .await
         })
         .await?;
@@ -697,16 +723,16 @@ impl OraclePallet for InterBtcParachain {
 
 #[async_trait]
 pub trait RelayPallet {
-    async fn report_vault_theft(&self, vault_id: &AccountId, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error>;
+    async fn report_vault_theft(&self, vault_id: &VaultId, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error>;
 
     async fn report_vault_double_payment(
         &self,
-        vault_id: &AccountId,
+        vault_id: &VaultId,
         merkle_proofs: (Vec<u8>, Vec<u8>),
         raw_txs: (Vec<u8>, Vec<u8>),
     ) -> Result<(), Error>;
 
-    async fn is_transaction_invalid(&self, vault_id: &AccountId, raw_tx: &[u8]) -> Result<bool, Error>;
+    async fn is_transaction_invalid(&self, vault_id: &VaultId, raw_tx: &[u8]) -> Result<bool, Error>;
 
     async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), Error>;
 
@@ -725,7 +751,7 @@ impl RelayPallet for InterBtcParachain {
     /// * `vault_id` - account id for the malicious vault
     /// * `merkle_proof` - merkle proof to verify inclusion
     /// * `raw_tx` - raw transaction
-    async fn report_vault_theft(&self, vault_id: &AccountId, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
+    async fn report_vault_theft(&self, vault_id: &VaultId, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.ext_client
                 .report_vault_theft_and_watch(&signer, vault_id, merkle_proof, raw_tx)
@@ -743,7 +769,7 @@ impl RelayPallet for InterBtcParachain {
     /// * `raw_txs` - raw transaction
     async fn report_vault_double_payment(
         &self,
-        vault_id: &AccountId,
+        vault_id: &VaultId,
         merkle_proofs: (Vec<u8>, Vec<u8>),
         raw_txs: (Vec<u8>, Vec<u8>),
     ) -> Result<(), Error> {
@@ -773,7 +799,7 @@ impl RelayPallet for InterBtcParachain {
     /// # Arguments
     /// * `vault_id` - vault account which features in vin
     /// * `raw_tx` - raw Bitcoin transaction
-    async fn is_transaction_invalid(&self, vault_id: &AccountId, raw_tx: &[u8]) -> Result<bool, Error> {
+    async fn is_transaction_invalid(&self, vault_id: &VaultId, raw_tx: &[u8]) -> Result<bool, Error> {
         let head = self.get_latest_block_hash().await?;
         Ok(matches!(
             self.rpc_client
@@ -870,7 +896,7 @@ pub trait IssuePallet {
     async fn request_issue(
         &self,
         amount: u128,
-        vault_id: &AccountId,
+        vault_id: &VaultId,
         griefing_collateral: u128,
     ) -> Result<InterBtcRequestIssueEvent, Error>;
 
@@ -897,7 +923,7 @@ impl IssuePallet for InterBtcParachain {
     async fn request_issue(
         &self,
         amount: u128,
-        vault_id: &AccountId,
+        vault_id: &VaultId,
         griefing_collateral: u128,
     ) -> Result<InterBtcRequestIssueEvent, Error> {
         let result = self
@@ -985,7 +1011,7 @@ impl IssuePallet for InterBtcParachain {
 #[async_trait]
 pub trait RedeemPallet {
     /// Request a new redeem
-    async fn request_redeem(&self, amount: u128, btc_address: BtcAddress, vault_id: &AccountId) -> Result<H256, Error>;
+    async fn request_redeem(&self, amount: u128, btc_address: BtcAddress, vault_id: &VaultId) -> Result<H256, Error>;
 
     /// Execute a redeem request by providing a Bitcoin transaction inclusion proof
     async fn execute_redeem(&self, redeem_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error>;
@@ -1008,7 +1034,7 @@ pub trait RedeemPallet {
 
 #[async_trait]
 impl RedeemPallet for InterBtcParachain {
-    async fn request_redeem(&self, amount: u128, btc_address: BtcAddress, vault_id: &AccountId) -> Result<H256, Error> {
+    async fn request_redeem(&self, amount: u128, btc_address: BtcAddress, vault_id: &VaultId) -> Result<H256, Error> {
         let result = self
             .with_unique_signer(|signer| async move {
                 self.ext_client
@@ -1250,30 +1276,32 @@ impl BtcRelayPallet for InterBtcParachain {
 
 #[async_trait]
 pub trait VaultRegistryPallet {
-    async fn get_vault(&self, vault_id: AccountId) -> Result<InterBtcVault, Error>;
+    async fn get_vault(&self, vault_id: &VaultId) -> Result<InterBtcVault, Error>;
+
+    async fn get_vaults_by_account_id(&self, account_id: &AccountId) -> Result<Vec<VaultId>, Error>;
 
     async fn get_all_vaults(&self) -> Result<Vec<InterBtcVault>, Error>;
 
-    async fn register_vault(
+    async fn register_vault(&self, vault_id: &VaultId, collateral: u128, public_key: BtcPublicKey)
+        -> Result<(), Error>;
+
+    async fn deposit_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error>;
+
+    async fn withdraw_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error>;
+
+    async fn update_public_key(&self, vault_id: &VaultId, public_key: BtcPublicKey) -> Result<(), Error>;
+
+    async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), Error>;
+
+    async fn get_required_collateral_for_wrapped(
         &self,
-        collateral: u128,
-        public_key: BtcPublicKey,
-        currency_id: CurrencyId,
-    ) -> Result<(), Error>;
+        amount_btc: u128,
+        collateral_currency: CurrencyId,
+    ) -> Result<u128, Error>;
 
-    async fn deposit_collateral(&self, amount: u128) -> Result<(), Error>;
+    async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, Error>;
 
-    async fn withdraw_collateral(&self, amount: u128) -> Result<(), Error>;
-
-    async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), Error>;
-
-    async fn register_address(&self, btc_address: BtcAddress) -> Result<(), Error>;
-
-    async fn get_required_collateral_for_wrapped(&self, amount_btc: u128) -> Result<u128, Error>;
-
-    async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, Error>;
-
-    async fn get_vault_total_collateral(&self, vault_id: AccountId) -> Result<u128, Error>;
+    async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, Error>;
 }
 
 #[async_trait]
@@ -1287,7 +1315,7 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// * `VaultNotFound` - if the rpc returned a default value rather than the vault we want
     /// * `VaultLiquidated` - if the vault is liquidated
     /// * `VaultCommittedTheft` - if the vault is stole BTC
-    async fn get_vault(&self, vault_id: AccountId) -> Result<InterBtcVault, Error> {
+    async fn get_vault(&self, vault_id: &VaultId) -> Result<InterBtcVault, Error> {
         let head = self.get_latest_block_hash().await?;
         match self.ext_client.vaults(vault_id.clone(), head).await? {
             Some(InterBtcVault {
@@ -1298,9 +1326,22 @@ impl VaultRegistryPallet for InterBtcParachain {
                 status: VaultStatus::CommittedTheft,
                 ..
             }) => Err(Error::VaultCommittedTheft),
-            Some(vault) if vault.id == vault_id => Ok(vault),
+            Some(vault) if &vault.id == vault_id => Ok(vault),
             _ => Err(Error::VaultNotFound),
         }
+    }
+
+    async fn get_vaults_by_account_id(&self, account_id: &AccountId) -> Result<Vec<VaultId>, Error> {
+        let head = self.get_latest_block_hash().await?;
+        let result = self
+            .rpc_client
+            .request(
+                "vaultRegistry_getVaultsByAccountId",
+                &[to_json_value(account_id)?, to_json_value(head)?],
+            )
+            .await?;
+
+        Ok(result)
     }
 
     /// Fetch all active vaults.
@@ -1323,14 +1364,14 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// * `public_key` - Bitcoin public key
     async fn register_vault(
         &self,
+        vault_id: &VaultId,
         collateral: u128,
         public_key: BtcPublicKey,
-        currency_id: CurrencyId,
     ) -> Result<(), Error> {
         let public_key = &public_key.clone();
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .register_vault_and_watch(&signer, collateral, public_key.clone(), currency_id)
+                .register_vault_and_watch(&signer, vault_id.currencies.clone(), collateral, public_key.clone())
                 .await
         })
         .await?;
@@ -1342,10 +1383,12 @@ impl VaultRegistryPallet for InterBtcParachain {
     ///
     /// # Arguments
     /// * `amount` - the amount of extra collateral to lock
-    async fn deposit_collateral(&self, amount: u128) -> Result<(), Error> {
-        self.with_unique_signer(
-            |signer| async move { self.ext_client.deposit_collateral_and_watch(&signer, amount).await },
-        )
+    async fn deposit_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
+        self.with_unique_signer(|signer| async move {
+            self.ext_client
+                .deposit_collateral_and_watch(&signer, vault_id.currencies.clone(), amount)
+                .await
+        })
         .await?;
         Ok(())
     }
@@ -1359,9 +1402,11 @@ impl VaultRegistryPallet for InterBtcParachain {
     ///
     /// # Arguments
     /// * `amount` - the amount of collateral to withdraw
-    async fn withdraw_collateral(&self, amount: u128) -> Result<(), Error> {
+    async fn withdraw_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client.withdraw_collateral_and_watch(&signer, amount).await
+            self.ext_client
+                .withdraw_collateral_and_watch(&signer, vault_id.currencies.clone(), amount)
+                .await
         })
         .await?;
         Ok(())
@@ -1371,11 +1416,11 @@ impl VaultRegistryPallet for InterBtcParachain {
     ///
     /// # Arguments
     /// * `public_key` - the new public key of the vault
-    async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), Error> {
+    async fn update_public_key(&self, vault_id: &VaultId, public_key: BtcPublicKey) -> Result<(), Error> {
         let public_key = &public_key.clone();
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .update_public_key_and_watch(&signer, public_key.clone())
+                .update_public_key_and_watch(&signer, vault_id.currencies.clone(), public_key.clone())
                 .await
         })
         .await?;
@@ -1386,9 +1431,11 @@ impl VaultRegistryPallet for InterBtcParachain {
     ///
     /// # Arguments
     /// * `btc_address` - the new btc address of the vault
-    async fn register_address(&self, btc_address: BtcAddress) -> Result<(), Error> {
+    async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client.register_address_and_watch(&signer, btc_address).await
+            self.ext_client
+                .register_address_and_watch(&signer, vault_id.currencies.clone(), btc_address)
+                .await
         })
         .await?;
         Ok(())
@@ -1398,7 +1445,11 @@ impl VaultRegistryPallet for InterBtcParachain {
     ///
     /// # Arguments
     /// * `amount_btc` - amount of btc to cover
-    async fn get_required_collateral_for_wrapped(&self, amount_btc: u128) -> Result<u128, Error> {
+    async fn get_required_collateral_for_wrapped(
+        &self,
+        amount_btc: u128,
+        collateral_currency: CurrencyId,
+    ) -> Result<u128, Error> {
         let head = self.get_latest_block_hash().await?;
         let result: BalanceWrapper<_> = self
             .rpc_client
@@ -1406,7 +1457,7 @@ impl VaultRegistryPallet for InterBtcParachain {
                 "vaultRegistry_getRequiredCollateralForWrapped",
                 &[
                     to_json_value(BalanceWrapper { amount: amount_btc })?,
-                    to_json_value(DEFAULT_COLLATERAL_CURRENCY)?,
+                    to_json_value(collateral_currency)?,
                     to_json_value(head)?,
                 ],
             )
@@ -1417,7 +1468,7 @@ impl VaultRegistryPallet for InterBtcParachain {
 
     /// Get the amount of collateral required for the given vault to be at the
     /// current SecureCollateralThreshold with the current exchange rate
-    async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, Error> {
+    async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, Error> {
         let head = self.get_latest_block_hash().await?;
         let result: BalanceWrapper<_> = self
             .rpc_client
@@ -1430,7 +1481,7 @@ impl VaultRegistryPallet for InterBtcParachain {
         Ok(result.amount)
     }
 
-    async fn get_vault_total_collateral(&self, vault_id: AccountId) -> Result<u128, Error> {
+    async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, Error> {
         let head = self.get_latest_block_hash().await?;
         let result: BalanceWrapper<_> = self
             .rpc_client

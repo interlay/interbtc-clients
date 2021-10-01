@@ -2,6 +2,7 @@ use super::Core;
 use crate::RefundRequest;
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
+use primitives::VaultId;
 use serde::Serialize;
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
@@ -14,7 +15,7 @@ pub struct RequestRefundEvent<T: Refund> {
     pub refund_id: T::H256,
     pub refundee: T::AccountId,
     pub amount: T::Wrapped,
-    pub vault_id: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
     pub btc_address: T::BtcAddress,
     pub issue_id: T::H256,
     pub fee: T::Wrapped,
@@ -32,14 +33,14 @@ pub struct ExecuteRefundCall<'a, T: Refund> {
 pub struct ExecuteRefundEvent<T: Refund> {
     pub refund_id: T::H256,
     pub refundee: T::AccountId,
-    pub vault_id: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
     pub amount: T::Wrapped,
     pub fee: T::Wrapped,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct RefundRequestsStore<T: Refund> {
-    #[store(returns = RefundRequest<T::AccountId, T::Wrapped>)]
+    #[store(returns = RefundRequest<T::AccountId, T::Wrapped, T::CurrencyId>)]
     pub _runtime: PhantomData<T>,
     pub refund_id: T::H256,
 }

@@ -22,15 +22,15 @@ pub type InterBtcBlock = SignedBlock<Block<InterBtcHeader, <InterBtcRuntime as S
 
 pub type InterBtcVault = Vault<AccountId, BlockNumber, InterBtcBalance, CurrencyId>;
 
-pub type InterBtcIssueRequest = IssueRequest<AccountId, BlockNumber, InterBtcBalance>;
+pub type InterBtcIssueRequest = IssueRequest<AccountId, BlockNumber, InterBtcBalance, CurrencyId>;
 
 pub type InterBtcRequestIssueEvent = RequestIssueEvent<InterBtcRuntime>;
 
-pub type InterBtcRedeemRequest = RedeemRequest<AccountId, BlockNumber, InterBtcBalance>;
+pub type InterBtcRedeemRequest = RedeemRequest<AccountId, BlockNumber, InterBtcBalance, CurrencyId>;
 
-pub type InterBtcRefundRequest = RefundRequest<AccountId, <InterBtcRuntime as Core>::Wrapped>;
+pub type InterBtcRefundRequest = RefundRequest<AccountId, <InterBtcRuntime as Core>::Wrapped, CurrencyId>;
 
-pub type InterBtcReplaceRequest = ReplaceRequest<AccountId, BlockNumber, InterBtcBalance>;
+pub type InterBtcReplaceRequest = ReplaceRequest<AccountId, BlockNumber, InterBtcBalance, CurrencyId>;
 
 pub type InterBtcRichBlockHeader = RichBlockHeader<BlockNumber>;
 

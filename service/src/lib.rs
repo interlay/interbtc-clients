@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCore};
 use futures::{future::Either, Future, FutureExt};
 use runtime::{
-    cli::ConnectionOpts as ParachainConfig, substrate_subxt::Signer, Error as RuntimeError,
-    InterBtcParachain as BtcParachain, InterBtcSigner,
+    cli::ConnectionOpts as ParachainConfig, substrate_subxt::Signer, CurrencyInfo, Error as RuntimeError,
+    InterBtcParachain as BtcParachain, InterBtcSigner, VaultId,
 };
 use sp_core::crypto::Ss58Codec;
 use std::marker::PhantomData;
@@ -31,6 +31,7 @@ pub trait Service<Config> {
         bitcoin_core: BitcoinCore,
         config: Config,
         shutdown: ShutdownSender,
+        constructor: Box<dyn Fn(VaultId) -> BitcoinCore + Send + Sync>,
     ) -> Self;
     async fn start(&self) -> Result<(), Error>;
 }
@@ -80,7 +81,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             let config = self.config.clone();
             let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
 
-            let bitcoin_core = self.bitcoin_config.new_client(self.wallet_name.clone())?;
+            let bitcoin_core = self.bitcoin_config.new_client(None)?;
             bitcoin_core.connect().await?;
             bitcoin_core.sync().await?;
 
@@ -95,7 +96,20 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             )
             .await?;
 
-            let service = S::new_service(btc_parachain, bitcoin_core, config, shutdown_tx);
+            let config_copy = self.bitcoin_config.clone();
+            let prefix = self.wallet_name.clone().unwrap_or("vault".to_string());
+            let constructor = move |vault_id: VaultId| {
+                let wallet_name = format!(
+                    "{}-{}-{}",
+                    prefix,
+                    vault_id.collateral_currency().symbol(),
+                    vault_id.wrapped_currency().symbol()
+                );
+                config_copy.new_client(Some(wallet_name)).unwrap();
+                todo!()
+            };
+
+            let service = S::new_service(btc_parachain, bitcoin_core, config, shutdown_tx, Box::new(constructor));
             if let Err(outer) = service.start().await {
                 match outer {
                     Error::BitcoinError(ref inner)

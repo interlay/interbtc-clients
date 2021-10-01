@@ -6,7 +6,7 @@ use futures::{stream::StreamExt, try_join};
 use runtime::{
     pallets::refund::RequestRefundEvent, BtcAddress, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRedeemRequest,
     InterBtcRefundRequest, InterBtcReplaceRequest, InterBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet,
-    ReplacePallet, ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultRegistryPallet,
+    ReplacePallet, ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet,
 };
 use sp_core::H256;
 use std::{collections::HashMap, convert::TryInto, time::Duration};
@@ -29,6 +29,7 @@ pub struct Request {
     amount: u128,
     btc_address: BtcAddress,
     request_type: RequestType,
+    vault_id: VaultId,
 }
 
 pub fn parachain_blocks_to_bitcoin_blocks_rounded_up(parachain_blocks: u32) -> Result<u32, Error> {
@@ -108,6 +109,7 @@ impl Request {
             amount: request.amount_btc,
             btc_address: request.btc_address,
             request_type: RequestType::Redeem,
+            vault_id: request.vault,
         })
     }
 
@@ -129,6 +131,7 @@ impl Request {
             amount: request.amount,
             btc_address: request.btc_address,
             request_type: RequestType::Replace,
+            vault_id: request.old_vault,
         })
     }
 
@@ -138,9 +141,10 @@ impl Request {
             hash,
             deadline: None,
             btc_height: None,
-            amount: request.amount_wrapped,
+            amount: request.amount_btc,
             btc_address: request.btc_address,
             request_type: RequestType::Refund,
+            vault_id: request.vault,
         }
     }
 
@@ -153,6 +157,7 @@ impl Request {
             btc_height: None,
             deadline: None,
             request_type: RequestType::Refund,
+            vault_id: request.vault_id.clone(),
         }
     }
 
@@ -184,7 +189,9 @@ impl Request {
             }
         }
 
-        let tx_metadata = self.transfer_btc(&parachain_rpc, btc_rpc, num_confirmations).await?;
+        let tx_metadata = self
+            .transfer_btc(&parachain_rpc, btc_rpc, num_confirmations, self.vault_id.clone())
+            .await?;
         self.execute(parachain_rpc, tx_metadata).await
     }
 
@@ -205,6 +212,7 @@ impl Request {
         parachain_rpc: &P,
         btc_rpc: B,
         num_confirmations: u32,
+        vault_id: VaultId,
     ) -> Result<TransactionMetadata, Error> {
         let tx = btc_rpc
             .create_transaction(self.btc_address, self.amount as u64, Some(self.hash))
@@ -224,11 +232,10 @@ impl Request {
             [] => {} // no return-to-self
             [address] => {
                 // one return-to-self address, make sure it is registered
-                let vault_id = parachain_rpc.get_account_id().clone();
-                let wallet = parachain_rpc.get_vault(vault_id).await?.wallet;
+                let wallet = parachain_rpc.get_vault(&vault_id).await?.wallet;
                 if !wallet.has_btc_address(&address) {
                     tracing::info!("Registering address {:?}", address);
-                    parachain_rpc.register_address(*address).await?;
+                    parachain_rpc.register_address(&vault_id, *address).await?;
                 }
             }
             _ => return Err(Error::TooManyReturnToSelfAddresses),
@@ -490,20 +497,21 @@ mod tests {
         pub trait UtilFuncs {
             async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
             fn get_account_id(&self) -> &AccountId;
+            fn is_this_vault(&self, vault_id: &VaultId) -> bool;
         }
-
         #[async_trait]
         pub trait VaultRegistryPallet {
-            async fn get_vault(&self, vault_id: AccountId) -> Result<InterBtcVault, RuntimeError>;
+            async fn get_vault(&self, vault_id: &VaultId) -> Result<InterBtcVault, RuntimeError>;
+            async fn get_vaults_by_account_id(&self, account_id: &AccountId) -> Result<Vec<VaultId>, RuntimeError>;
             async fn get_all_vaults(&self) -> Result<Vec<InterBtcVault>, RuntimeError>;
-            async fn register_vault(&self, collateral: u128, public_key: BtcPublicKey, currency_id: CurrencyId) -> Result<(), RuntimeError>;
-            async fn deposit_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
-            async fn withdraw_collateral(&self, amount: u128) -> Result<(), RuntimeError>;
-            async fn update_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
-            async fn register_address(&self, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-            async fn get_required_collateral_for_wrapped(&self, amount_btc: u128) -> Result<u128, RuntimeError>;
-            async fn get_required_collateral_for_vault(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
-            async fn get_vault_total_collateral(&self, vault_id: AccountId) -> Result<u128, RuntimeError>;
+            async fn register_vault(&self, vault_id: &VaultId, collateral: u128, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
+            async fn deposit_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
+            async fn withdraw_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
+            async fn update_public_key(&self, vault_id: &VaultId, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
+            async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), RuntimeError>;
+            async fn get_required_collateral_for_wrapped(&self, amount_btc: u128, collateral_currency: CurrencyId) -> Result<u128, RuntimeError>;
+            async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
+            async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
         }
 
         #[async_trait]
@@ -512,7 +520,7 @@ mod tests {
                 &self,
                 amount: u128,
                 btc_address: BtcAddress,
-                vault_id: &AccountId,
+                vault_id: &VaultId,
             ) -> Result<H256, RuntimeError>;
             async fn execute_redeem(
                 &self,
@@ -532,35 +540,19 @@ mod tests {
 
         #[async_trait]
         pub trait ReplacePallet {
-            async fn request_replace(&self, amount: u128, griefing_collateral: u128) -> Result<(), RuntimeError>;
-            async fn withdraw_replace(&self, amount: u128) -> Result<(), RuntimeError>;
-            async fn accept_replace(
-                &self,
-                old_vault: &AccountId,
-                amount_btc: u128,
-                collateral: u128,
-                btc_address: BtcAddress,
-            ) -> Result<(), RuntimeError>;
-            async fn execute_replace(
-                &self,
-                replace_id: H256,
-                merkle_proof: &[u8],
-                raw_tx: &[u8],
-            ) -> Result<(), RuntimeError>;
+            async fn request_replace(&self, vault_id: &VaultId, amount: u128, griefing_collateral: u128) -> Result<(), RuntimeError>;
+            async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
+            async fn accept_replace(&self, new_vault: &VaultId, old_vault: &VaultId, amount_btc: u128, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
+            async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
-            async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
-            async fn get_new_vault_replace_requests(
-                &self,
-                account_id: AccountId,
-            ) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
-            async fn get_old_vault_replace_requests(
-                &self,
-                account_id: AccountId,
-            ) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
+            async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
+            async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
             async fn set_replace_period(&self, period: u32) -> Result<(), RuntimeError>;
+            async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
             async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;
         }
+
 
         #[async_trait]
         pub trait RefundPallet {
@@ -689,6 +681,10 @@ mod tests {
         }};
     }
 
+    fn dummy_vault_id() -> VaultId {
+        VaultId::new(Default::default(), CurrencyId::DOT, CurrencyId::INTERBTC)
+    }
+
     #[test]
     fn calculate_deadline_behavior() {
         let margin = Duration::from_secs(60 * 60); // 1 hour
@@ -782,6 +778,7 @@ mod tests {
                 hash: H256::from_slice(&[1; 32]),
                 btc_height: None,
                 request_type: RequestType::Redeem,
+                vault_id: dummy_vault_id(),
             };
 
             (request, parachain_rpc, btc_rpc)
@@ -840,6 +837,7 @@ mod tests {
             hash: H256::from_slice(&[1; 32]),
             btc_height: None,
             request_type: RequestType::Redeem,
+            vault_id: dummy_vault_id(),
         };
 
         assert_err!(
@@ -900,6 +898,7 @@ mod tests {
             hash: H256::from_slice(&[1; 32]),
             btc_height: None,
             request_type: RequestType::Replace,
+            vault_id: dummy_vault_id(),
         };
 
         assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);

@@ -2,6 +2,7 @@ use super::Core;
 use crate::IssueRequest;
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
+use primitives::VaultId;
 use serde::Serialize;
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
@@ -13,7 +14,7 @@ pub trait Issue: Core {}
 pub struct RequestIssueCall<'a, T: Issue> {
     #[codec(compact)]
     pub amount: T::Wrapped,
-    pub vault_id: &'a T::AccountId,
+    pub vault_id: &'a VaultId<T::AccountId, T::CurrencyId>,
     #[codec(compact)]
     pub griefing_collateral: T::Collateral,
 }
@@ -25,7 +26,7 @@ pub struct RequestIssueEvent<T: Issue> {
     pub amount_btc: T::Wrapped, //add _btc
     pub fee: T::Wrapped,
     pub griefing_collateral: T::Collateral,
-    pub vault_id: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
     pub vault_btc_address: T::BtcAddress,
     pub vault_public_key: T::BtcPublicKey,
 }
@@ -42,8 +43,8 @@ pub struct ExecuteIssueCall<'a, T: Issue> {
 pub struct ExecuteIssueEvent<T: Issue> {
     pub issue_id: T::H256,
     pub requester: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
     pub executed_amount: T::Wrapped,
-    pub vault_id: T::AccountId,
     pub fee: T::Wrapped,
 }
 
@@ -62,7 +63,7 @@ pub struct CancelIssueEvent<T: Issue> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct IssueRequestsStore<T: Issue> {
-    #[store(returns = IssueRequest<T::AccountId, T::BlockNumber, T::Balance>)]
+    #[store(returns = IssueRequest<T::AccountId, T::BlockNumber, T::Balance, T::CurrencyId>)]
     pub _runtime: PhantomData<T>,
     pub issue_id: T::H256,
 }

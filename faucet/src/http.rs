@@ -8,7 +8,8 @@ use jsonrpc_http_server::{
 use kv::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    AccountId, CollateralBalancesPallet, Error as RuntimeError, InterBtcParachain, VaultRegistryPallet, PLANCK_PER_DOT,
+    AccountId, CollateralBalancesPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, VaultRegistryPallet,
+    PLANCK_PER_DOT,
 };
 use serde::{Deserialize, Deserializer};
 use std::{collections::HashMap, net::SocketAddr, time::Duration};
@@ -67,6 +68,7 @@ async fn _system_health(parachain_rpc: &InterBtcParachain) -> Result<(), Error> 
 #[derive(Encode, Decode, Debug, Clone)]
 struct FundAccountJsonRpcRequest {
     pub account_id: AccountId,
+    pub currency_id: CurrencyId,
 }
 
 #[derive(PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -93,10 +95,10 @@ async fn get_account_type(
     parachain_rpc: &InterBtcParachain,
     account_id: AccountId,
 ) -> Result<FundingRequestAccountType, Error> {
-    if parachain_rpc.get_vault(account_id.clone()).await.is_ok() {
-        return Ok(FundingRequestAccountType::Vault);
+    match parachain_rpc.get_vaults_by_account_id(&account_id).await {
+        Ok(x) if x.len() > 0 => Ok(FundingRequestAccountType::Vault),
+        _ => Ok(FundingRequestAccountType::User),
     }
-    Ok(FundingRequestAccountType::User)
 }
 
 fn open_kv_store<'a>(store: Store) -> Result<Bucket<'a, String, Json<FaucetRequest>>, Error> {
@@ -145,11 +147,16 @@ fn has_request_expired(
 async fn ensure_funding_allowed(
     parachain_rpc: &InterBtcParachain,
     account_id: AccountId,
+    currency_id: CurrencyId,
     last_request_json: Option<Json<FaucetRequest>>,
     account_type: FundingRequestAccountType,
 ) -> Result<(), Error> {
-    let free_balance = parachain_rpc.get_free_balance_for_id(account_id.clone()).await?;
-    let reserved_balance = parachain_rpc.get_reserved_balance_for_id(account_id.clone()).await?;
+    let free_balance = parachain_rpc
+        .get_free_balance_for_id(account_id.clone(), currency_id)
+        .await?;
+    let reserved_balance = parachain_rpc
+        .get_reserved_balance_for_id(account_id.clone(), currency_id)
+        .await?;
     if free_balance + reserved_balance > MAX_FUNDABLE_CLIENT_BALANCE {
         log::warn!(
             "User {} has enough funds: {:?}",
@@ -189,6 +196,7 @@ async fn atomic_faucet_funding(
     parachain_rpc: &InterBtcParachain,
     kv: Bucket<'_, String, Json<FaucetRequest>>,
     account_id: AccountId,
+    currency_id: CurrencyId,
     allowances: HashMap<FundingRequestAccountType, u128>,
 ) -> Result<(), Error> {
     let last_request_json = kv.get(account_id.to_string())?;
@@ -196,6 +204,7 @@ async fn atomic_faucet_funding(
     ensure_funding_allowed(
         parachain_rpc,
         account_id.clone(),
+        currency_id,
         last_request_json,
         account_type.clone(),
     )
@@ -229,7 +238,7 @@ async fn fund_account(
 ) -> Result<(), Error> {
     let parachain_rpc = parachain_rpc.clone();
     let kv = open_kv_store(store)?;
-    atomic_faucet_funding(&parachain_rpc, kv, req.account_id.clone(), allowances).await?;
+    atomic_faucet_funding(&parachain_rpc, kv, req.account_id.clone(), req.currency_id, allowances).await?;
     Ok(())
 }
 
@@ -292,10 +301,11 @@ pub async fn start_http(
 #[cfg(test)]
 mod tests {
     use crate::Error;
-    use runtime::{CurrencyId, OracleKey, RELAY_CHAIN_CURRENCY};
+    use runtime::{CurrencyId, OracleKey, VaultId, RELAY_CHAIN_CURRENCY};
     use std::{collections::HashMap, sync::Arc};
 
     const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
+    const DEFAULT_WRAPPED_CURRENCY: CurrencyId = CurrencyId::INTERBTC;
 
     use super::{
         fund_account, open_kv_store, CollateralBalancesPallet, FundAccountJsonRpcRequest, FundingRequestAccountType,
@@ -359,18 +369,22 @@ mod tests {
 
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         let bob_funds_before = alice_provider
-            .get_free_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone(), DEFAULT_TESTING_CURRENCY)
             .await
             .unwrap();
         let req = FundAccountJsonRpcRequest {
             account_id: bob_account_id.clone(),
+            currency_id: DEFAULT_TESTING_CURRENCY,
         };
 
         fund_account(&Arc::from(alice_provider.clone()), req, store, allowances)
             .await
             .expect("Funding the account failed");
 
-        let bob_funds_after = alice_provider.get_free_balance_for_id(bob_account_id).await.unwrap();
+        let bob_funds_after = alice_provider
+            .get_free_balance_for_id(bob_account_id, DEFAULT_TESTING_CURRENCY)
+            .await
+            .unwrap();
 
         assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
     }
@@ -396,6 +410,7 @@ mod tests {
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         let req = FundAccountJsonRpcRequest {
             account_id: bob_account_id.clone(),
+            currency_id: DEFAULT_TESTING_CURRENCY,
         };
 
         assert_err!(
@@ -410,6 +425,11 @@ mod tests {
         set_exchange_rate(client.clone()).await;
 
         let bob_account_id = AccountKeyring::Bob.to_account_id();
+        let bob_vault_id = VaultId::new(
+            bob_account_id.clone(),
+            DEFAULT_TESTING_CURRENCY,
+            DEFAULT_WRAPPED_CURRENCY,
+        );
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
         let one_dot: u128 = 10u128.pow(10);
@@ -428,7 +448,7 @@ mod tests {
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding
         let bob_prefunded_amount = bob_provider
-            .get_free_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone(), DEFAULT_TESTING_CURRENCY)
             .await
             .unwrap();
         bob_provider
@@ -438,6 +458,7 @@ mod tests {
 
         let req = FundAccountJsonRpcRequest {
             account_id: bob_account_id.clone(),
+            currency_id: DEFAULT_TESTING_CURRENCY,
         };
 
         fund_account(
@@ -450,12 +471,12 @@ mod tests {
         .expect("Funding the account failed");
 
         bob_provider
-            .register_vault(100, dummy_public_key(), DEFAULT_TESTING_CURRENCY)
+            .register_vault(&bob_vault_id, 100, dummy_public_key())
             .await
             .unwrap();
 
         let bob_funds_before = alice_provider
-            .get_free_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone(), DEFAULT_TESTING_CURRENCY)
             .await
             .unwrap();
 
@@ -463,7 +484,10 @@ mod tests {
             .await
             .expect("Funding the account failed");
 
-        let bob_funds_after = alice_provider.get_free_balance_for_id(bob_account_id).await.unwrap();
+        let bob_funds_after = alice_provider
+            .get_free_balance_for_id(bob_account_id, DEFAULT_TESTING_CURRENCY)
+            .await
+            .unwrap();
         assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
     }
 
@@ -487,11 +511,12 @@ mod tests {
 
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         let bob_funds_before = alice_provider
-            .get_free_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone(), DEFAULT_TESTING_CURRENCY)
             .await
             .unwrap();
         let req = FundAccountJsonRpcRequest {
             account_id: bob_account_id.clone(),
+            currency_id: DEFAULT_TESTING_CURRENCY,
         };
 
         fund_account(
@@ -503,7 +528,10 @@ mod tests {
         .await
         .expect("Funding the account failed");
 
-        let bob_funds_after = alice_provider.get_free_balance_for_id(bob_account_id).await.unwrap();
+        let bob_funds_after = alice_provider
+            .get_free_balance_for_id(bob_account_id, DEFAULT_TESTING_CURRENCY)
+            .await
+            .unwrap();
         assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
 
         assert_err!(
@@ -518,6 +546,11 @@ mod tests {
         set_exchange_rate(client.clone()).await;
 
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
+        let bob_vault_id = VaultId::new(
+            bob_account_id.clone(),
+            DEFAULT_TESTING_CURRENCY,
+            DEFAULT_WRAPPED_CURRENCY,
+        );
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
         let one_dot: u128 = 10u128.pow(10);
@@ -530,7 +563,7 @@ mod tests {
 
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         bob_provider
-            .register_vault(100, dummy_public_key(), DEFAULT_TESTING_CURRENCY)
+            .register_vault(&bob_vault_id, 100, dummy_public_key())
             .await
             .unwrap();
 
@@ -538,7 +571,7 @@ mod tests {
 
         // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding
         let bob_prefunded_amount = bob_provider
-            .get_free_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone(), DEFAULT_TESTING_CURRENCY)
             .await
             .unwrap();
         bob_provider
@@ -547,11 +580,12 @@ mod tests {
             .expect("Unable to transfer funds");
 
         let bob_funds_before = bob_provider
-            .get_free_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone(), DEFAULT_TESTING_CURRENCY)
             .await
             .unwrap();
         let req = FundAccountJsonRpcRequest {
             account_id: bob_account_id.clone(),
+            currency_id: DEFAULT_TESTING_CURRENCY,
         };
 
         let store = Store::new(Config::new(tmp_dir.path().join("kv4"))).expect("Unable to open kv store");
@@ -561,7 +595,10 @@ mod tests {
             .await
             .expect("Funding the account failed");
 
-        let bob_funds_after = alice_provider.get_free_balance_for_id(bob_account_id).await.unwrap();
+        let bob_funds_after = alice_provider
+            .get_free_balance_for_id(bob_account_id, DEFAULT_TESTING_CURRENCY)
+            .await
+            .unwrap();
 
         assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
     }
@@ -572,6 +609,11 @@ mod tests {
         set_exchange_rate(client.clone()).await;
 
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
+        let bob_vault_id = VaultId::new(
+            bob_account_id.clone(),
+            DEFAULT_TESTING_CURRENCY,
+            DEFAULT_WRAPPED_CURRENCY,
+        );
         let user_allowance_dot: u128 = 1;
         let vault_allowance_dot: u128 = 500;
         let one_dot: u128 = 10u128.pow(10);
@@ -584,14 +626,14 @@ mod tests {
 
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         bob_provider
-            .register_vault(100, dummy_public_key(), DEFAULT_TESTING_CURRENCY)
+            .register_vault(&bob_vault_id, 100, dummy_public_key())
             .await
             .unwrap();
 
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding
         let bob_prefunded_amount = bob_provider
-            .get_free_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone(), DEFAULT_TESTING_CURRENCY)
             .await
             .unwrap();
         bob_provider
@@ -600,11 +642,12 @@ mod tests {
             .expect("Unable to transfer funds");
 
         let bob_funds_before = alice_provider
-            .get_free_balance_for_id(bob_account_id.clone())
+            .get_free_balance_for_id(bob_account_id.clone(), DEFAULT_TESTING_CURRENCY)
             .await
             .unwrap();
         let req = FundAccountJsonRpcRequest {
             account_id: bob_account_id.clone(),
+            currency_id: DEFAULT_TESTING_CURRENCY,
         };
 
         let store = Store::new(Config::new(tmp_dir.path().join("kv5"))).expect("Unable to open kv store");
@@ -619,7 +662,10 @@ mod tests {
         .await
         .expect("Funding the account failed");
 
-        let bob_funds_after = alice_provider.get_free_balance_for_id(bob_account_id).await.unwrap();
+        let bob_funds_after = alice_provider
+            .get_free_balance_for_id(bob_account_id, DEFAULT_TESTING_CURRENCY)
+            .await
+            .unwrap();
 
         assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
 

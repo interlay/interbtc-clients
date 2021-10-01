@@ -43,6 +43,8 @@ pub enum Error {
     BlockNotInRelayMainChain,
     #[error("Invalid currency")]
     InvalidCurrency,
+    #[error("Failed to parse keyring account")]
+    KeyringAccountParsingError,
 
     #[error("Failed to load credentials from file: {0}")]
     KeyLoadingFailure(#[from] KeyLoadingError),

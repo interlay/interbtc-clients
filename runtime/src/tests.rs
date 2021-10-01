@@ -4,7 +4,9 @@ use super::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, FixedPointNumber, FixedU128,
     OraclePallet, RelayPallet, ReplacePallet, SecurityPallet, StatusCode, VaultRegistryPallet,
 };
-use crate::{exchange_rate_oracle::FeedValuesEvent, integration::*, InterBtcRuntime, OracleKey, RELAY_CHAIN_CURRENCY};
+use crate::{
+    exchange_rate_oracle::FeedValuesEvent, integration::*, InterBtcRuntime, OracleKey, VaultId, RELAY_CHAIN_CURRENCY,
+};
 use module_bitcoin::{
     formatter::TryFormattable,
     types::{BlockBuilder, RawBlockHeader},
@@ -39,7 +41,7 @@ async fn test_getters() {
 
     tokio::join!(
         async {
-            assert_eq!(parachain_rpc.get_free_balance().await.unwrap(), 1 << 60);
+            assert_eq!(parachain_rpc.get_free_balance(CurrencyId::DOT).await.unwrap(), 1 << 60);
         },
         async {
             assert_eq!(parachain_rpc.get_parachain_status().await.unwrap(), StatusCode::Error);
@@ -101,14 +103,13 @@ async fn test_register_vault() {
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
     set_exchange_rate(client.clone()).await;
 
+    let vault_id = VaultId::new(AccountKeyring::Alice.into(), CurrencyId::DOT, CurrencyId::INTERBTC);
+
     parachain_rpc
-        .register_vault(100, dummy_public_key(), DEFAULT_TESTING_CURRENCY)
+        .register_vault(&vault_id, 100, dummy_public_key())
         .await
         .unwrap();
-    let vault = parachain_rpc
-        .get_vault(AccountKeyring::Alice.to_account_id())
-        .await
-        .unwrap();
+    let vault = parachain_rpc.get_vault(&vault_id).await.unwrap();
     assert_eq!(vault.wallet.public_key, dummy_public_key());
 }
 

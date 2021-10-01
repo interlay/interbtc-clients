@@ -12,7 +12,7 @@ integration = []
 thiserror = "1.0"
 clap = "3.0.0-beta.2"
 tokio = { version = "1.0", features = ["full"] }
-serde = "1.0.116"
+serde = "1.0.130"
 parity-scale-codec = "2.0.0"
 hex = "0.4.2"
 futures = "0.3.5"
@@ -33,9 +33,9 @@ runtime = { path = "../runtime" }
 service = { path = "../service" }
 
 # Substrate dependencies
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.8" }
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.8" }
-sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.8" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.10" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.10" }
+sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.10" }
 
 [dev-dependencies]
 mockall = "0.8.1"
@@ -44,4 +44,4 @@ mockall = "0.8.1"
 runtime = { path = "../runtime", features = ["testing-utils"] }
 
 # Substrate dependencies
-frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.8" }
+frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.10" }

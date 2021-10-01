@@ -4,10 +4,8 @@ use hex::FromHex;
 use jsonrpc_core::Value;
 use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use parity_scale_codec::{Decode, Encode};
-use runtime::{AccountId, CurrencyId, InterBtcParachain, VaultRegistryPallet, PLANCK_PER_DOT, TX_FEES};
+use runtime::{InterBtcParachain, VaultId, VaultRegistryPallet, PLANCK_PER_DOT, TX_FEES};
 use serde::{Deserialize, Deserializer};
-
-const DEFAULT_FAUCET_CURRENCY: CurrencyId = CurrencyId::DOT;
 
 #[derive(Debug, Clone, Deserialize)]
 struct RawBytes(#[serde(deserialize_with = "hex_to_buffer")] Vec<u8>);
@@ -23,7 +21,7 @@ where
 
 #[derive(Encode, Decode, Debug, Clone, serde::Serialize)]
 struct FundAccountJsonRpcRequest {
-    pub account_id: AccountId,
+    pub vault_id: VaultId,
 }
 
 async fn get_faucet_allowance(faucet_connection: TypedClient, allowance_type: &str) -> Result<u128, Error> {
@@ -33,8 +31,8 @@ async fn get_faucet_allowance(faucet_connection: TypedClient, allowance_type: &s
     Ok(Decode::decode(&mut &raw_allowance.0[..])?)
 }
 
-async fn get_funding(faucet_connection: TypedClient, vault_id: AccountId) -> Result<(), Error> {
-    let funding_request = FundAccountJsonRpcRequest { account_id: vault_id };
+async fn get_funding(faucet_connection: TypedClient, vault_id: VaultId) -> Result<(), Error> {
+    let funding_request = FundAccountJsonRpcRequest { vault_id };
     let eq = format!("0x{}", hex::encode(funding_request.encode()));
     faucet_connection
         .call_method::<Vec<String>, Value>("fund_account", "", vec![eq.clone()])
@@ -46,7 +44,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
     parachain_rpc: &InterBtcParachain,
     bitcoin_core: &B,
     faucet_url: &str,
-    vault_id: AccountId,
+    vault_id: &VaultId,
 ) -> Result<(), Error> {
     tracing::info!("Connecting to the faucet");
     let connection = jsonrpc_http::connect::<TypedClient>(faucet_url).await?;
@@ -66,11 +64,11 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
     tracing::info!("Registering the vault");
     let public_key = bitcoin_core.get_new_public_key().await?;
     parachain_rpc
-        .register_vault(registration_collateral, public_key, DEFAULT_FAUCET_CURRENCY)
+        .register_vault(vault_id, registration_collateral, public_key)
         .await?;
 
     // Receive vault allowance from faucet
-    get_funding(connection.clone(), vault_id).await?;
+    get_funding(connection.clone(), vault_id.clone()).await?;
 
     // TODO: faucet allowance should return planck
     let vault_allowance_in_dot: u128 = get_faucet_allowance(connection.clone(), "vault_allowance").await?;
@@ -83,7 +81,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
         .checked_mul(2)
         .unwrap_or_default();
 
-    deposit_collateral(&parachain_rpc, operational_collateral).await?;
+    deposit_collateral(&parachain_rpc, vault_id, operational_collateral).await?;
 
     Ok(())
 }

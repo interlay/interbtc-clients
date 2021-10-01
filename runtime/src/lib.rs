@@ -26,6 +26,7 @@ pub use sp_runtime;
 pub use substrate_subxt;
 pub use types::*;
 
+use sp_core::crypto::Ss58Codec;
 use sp_runtime::{
     generic::Header,
     traits::{BlakeTwo256, IdentifyAccount, Verify},
@@ -51,6 +52,7 @@ pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 
 pub const RELAY_CHAIN_CURRENCY: CurrencyId = CurrencyId::DOT;
+pub const RELAY_CHAIN_WRAPPED_CURRENCY: CurrencyId = CurrencyId::KBTC;
 
 pub type Balance = u128;
 
@@ -77,6 +79,7 @@ pub type BlockNumber = u32;
 
 /// Some way of identifying an account on the chain.
 pub type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
+pub type VaultId = primitives::VaultId<AccountId, CurrencyId>;
 
 // TODO: use types from actual runtime
 impl system::System for InterBtcRuntime {
@@ -110,6 +113,7 @@ impl pallets::Core for InterBtcRuntime {
     type RedeemRequestStatus = RedeemRequestStatus;
     type CurrencyId = CurrencyId;
     type OracleKey = OracleKey;
+    type VaultId = VaultId;
 
     // cumulus / polkadot types
     type XcmError = XcmError;
@@ -175,5 +179,20 @@ pub fn parse_collateral_currency(src: &str) -> Result<CurrencyId, Error> {
         id if id == CurrencyId::KSM.symbol() => Ok(CurrencyId::KSM),
         id if id == CurrencyId::DOT.symbol() => Ok(CurrencyId::DOT),
         _ => Err(Error::InvalidCurrency),
+    }
+}
+
+pub trait VaultIdFormatter {
+    fn pretty_printed(&self) -> String;
+}
+
+impl VaultIdFormatter for VaultId {
+    fn pretty_printed(&self) -> String {
+        format!(
+            "{}[{}->{}]",
+            self.account_id.to_ss58check(),
+            self.currencies.collateral.name(),
+            self.currencies.wrapped.name()
+        )
     }
 }
