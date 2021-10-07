@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, KeyLoadingError},
-    InterBtcParachain, InterBtcSigner,
+    parse_collateral_currency, CurrencyId, InterBtcParachain, InterBtcSigner,
 };
 use clap::Clap;
 use sp_core::{sr25519::Pair, Pair as _};
@@ -79,6 +79,10 @@ pub struct ConnectionOpts {
     /// Maximum notification capacity for each subscription
     #[clap(long)]
     pub max_notifs_per_subscription: Option<usize>,
+
+    /// The currency to use for the collateral, e.g. "DOT" or "KSM".
+    #[clap(long, parse(try_from_str = parse_collateral_currency))]
+    pub currency_id: CurrencyId,
 }
 
 impl ConnectionOpts {
@@ -86,6 +90,7 @@ impl ConnectionOpts {
         InterBtcParachain::from_url_and_config_with_retry(
             &self.btc_parachain_url,
             signer,
+            self.currency_id,
             self.max_concurrent_requests,
             self.max_notifs_per_subscription,
             self.btc_parachain_connection_timeout_ms,

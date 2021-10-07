@@ -41,6 +41,7 @@ use substrate_subxt::{
 use polkadot_parachain::primitives::{Id as ParaId, RelayChainBlockNumber};
 use xcm::v0::{Error as XcmError, NetworkId};
 
+// TODO: calculate based on collateral currency
 pub const TX_FEES: u128 = 2000000000;
 pub const PLANCK_PER_DOT: u128 = 10000000000;
 
@@ -49,8 +50,6 @@ pub const MILLISECS_PER_BLOCK: u64 = 6000;
 // These time units are defined in number of blocks.
 pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
-
-pub const RELAY_CHAIN_CURRENCY: CurrencyId = CurrencyId::DOT;
 
 pub type Balance = u128;
 
