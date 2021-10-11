@@ -123,9 +123,6 @@ OPTIONS:
         --logging-format <logging-format>
             Logging output format [default: full]
 
-        --max-collateral <max-collateral>
-            Maximum total collateral to keep the vault securely collateralized [default: 1000000]
-
         --max-concurrent-requests <max-concurrent-requests>
             Maximum number of concurrent requests
 

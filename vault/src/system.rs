@@ -44,10 +44,6 @@ pub struct VaultServiceConfig {
     #[clap(long)]
     pub no_auto_replace: bool,
 
-    /// Don't check the collateralization rate at startup.
-    #[clap(long)]
-    pub no_startup_collateral_increase: bool,
-
     /// Don't try to execute issues.
     #[clap(long)]
     pub no_issue_execution: bool,
@@ -55,11 +51,6 @@ pub struct VaultServiceConfig {
     /// Don't run the RPC API.
     #[clap(long)]
     pub no_api: bool,
-
-    /// Maximum total collateral to keep the vault securely collateralized.
-    /// If unset, this will default to the account's total free balance.
-    #[clap(long)]
-    pub max_collateral: Option<u128>,
 
     /// Timeout in milliseconds to repeat collateralization checks.
     #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "5000")]
@@ -327,9 +318,7 @@ impl VaultService {
         self.maybe_register_vault().await?;
 
         // purposefully _after_ maybe_register_vault
-        self.vault_id_manager
-            .fetch_vault_ids(!self.config.no_startup_collateral_increase)
-            .await?;
+        self.vault_id_manager.fetch_vault_ids(false).await?;
 
         let startup_height = self.await_parachain_block().await?;
 
