@@ -89,7 +89,6 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             let btc_parachain = BtcParachain::from_url_and_config_with_retry(
                 &self.parachain_config.btc_parachain_url,
                 signer,
-                self.parachain_config.currency_id,
                 self.parachain_config.max_concurrent_requests,
                 self.parachain_config.max_notifs_per_subscription,
                 self.parachain_config.btc_parachain_connection_timeout_ms,

@@ -207,13 +207,9 @@ async fn main() -> Result<(), Error> {
             .unwrap();
 
     loop {
-        let parachain_rpc = InterBtcParachain::from_url_with_retry(
-            &opts.btc_parachain_url,
-            signer.clone(),
-            opts.currency_id,
-            opts.connection_timeout_ms,
-        )
-        .await?;
+        let parachain_rpc =
+            InterBtcParachain::from_url_with_retry(&opts.btc_parachain_url, signer.clone(), opts.connection_timeout_ms)
+                .await?;
 
         let bitcoin_fee = opts.bitcoin_fee;
         let exchange_rate = opts.exchange_rate;

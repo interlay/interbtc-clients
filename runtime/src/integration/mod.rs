@@ -4,7 +4,7 @@ mod bitcoin_simulator;
 
 use crate::{
     rpc::{IssuePallet, OraclePallet, VaultRegistryPallet},
-    AccountId, BtcRelayPallet, CurrencyId, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey,
+    AccountId, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey, RELAY_CHAIN_CURRENCY,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
 use frame_support::assert_ok;
@@ -24,8 +24,6 @@ pub use substrate_subxt_client::SubxtClient;
 
 // export the mocked bitcoin interface
 pub use bitcoin_simulator::MockBitcoinCore;
-
-const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
 
 /// Trait to help between different types used by the two bitcoin libraries
 pub trait Translate {
@@ -91,7 +89,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
 /// Create a new parachain_rpc with the given keyring
 pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> InterBtcParachain {
     let signer = PairSigner::<InterBtcRuntime, _>::new(key.pair());
-    InterBtcParachain::new(client, signer, DEFAULT_TESTING_CURRENCY)
+    InterBtcParachain::new(client, signer)
         .await
         .expect("Error creating parachain_rpc")
 }
@@ -127,12 +125,12 @@ async fn wait_for_aggregate(parachain_rpc: &InterBtcParachain, key: &OracleKey) 
 }
 
 pub async fn set_exchange_rate_and_wait(parachain_rpc: &InterBtcParachain, value: FixedU128) {
-    let key = OracleKey::ExchangeRate(DEFAULT_TESTING_CURRENCY);
+    let key = OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY);
     assert_ok!(parachain_rpc.feed_values(vec![(key, value)]).await);
     assert_ok!(
         timeout(
             TIMEOUT_DURATION,
-            wait_for_aggregate(parachain_rpc, &OracleKey::ExchangeRate(DEFAULT_TESTING_CURRENCY))
+            wait_for_aggregate(parachain_rpc, &OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY))
         )
         .await
     );

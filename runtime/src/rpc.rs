@@ -19,8 +19,8 @@ use tokio::{sync::RwLock, time::sleep};
 use crate::{
     btc_relay::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*, refund::*, relay::*,
     replace::*, retry::*, security::*, timestamp::*, tokens::*, types::*, utility::*, vault_registry::*, AccountId,
-    BlockNumber, CurrencyId, Error, InterBtcRuntime, BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS,
-    STABLE_PARACHAIN_CONFIRMATIONS,
+    BlockNumber, CurrencyId, Error, InterBtcRuntime, BTC_RELAY_MODULE, RELAY_CHAIN_CURRENCY,
+    STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CONFIRMATIONS,
 };
 
 const DEFAULT_COLLATERAL_CURRENCY: CurrencyId = CurrencyId::DOT;
@@ -31,15 +31,10 @@ pub struct InterBtcParachain {
     ext_client: SubxtClient<InterBtcRuntime>,
     signer: Arc<RwLock<InterBtcSigner>>,
     account_id: AccountId,
-    pub currency_id: CurrencyId,
 }
 
 impl InterBtcParachain {
-    pub async fn new<P: Into<RpcClient>>(
-        rpc_client: P,
-        signer: InterBtcSigner,
-        currency_id: CurrencyId,
-    ) -> Result<Self, Error> {
+    pub async fn new<P: Into<RpcClient>>(rpc_client: P, signer: InterBtcSigner) -> Result<Self, Error> {
         let account_id = signer.account_id().clone();
         let rpc_client = rpc_client.into();
         let ext_client = SubxtClientBuilder::<InterBtcRuntime>::new()
@@ -52,30 +47,27 @@ impl InterBtcParachain {
             ext_client,
             signer: Arc::new(RwLock::new(signer)),
             account_id,
-            currency_id,
         };
         parachain_rpc.refresh_nonce().await;
         Ok(parachain_rpc)
     }
 
-    pub async fn from_url(url: &str, signer: InterBtcSigner, currency_id: CurrencyId) -> Result<Self, Error> {
+    pub async fn from_url(url: &str, signer: InterBtcSigner) -> Result<Self, Error> {
         let ws_client = new_websocket_client(url, None, None).await?;
-        Self::new(ws_client, signer, currency_id).await
+        Self::new(ws_client, signer).await
     }
 
     pub async fn from_url_with_retry(
         url: &str,
         signer: InterBtcSigner,
-        currency_id: CurrencyId,
         connection_timeout: Duration,
     ) -> Result<Self, Error> {
-        Self::from_url_and_config_with_retry(url, signer, currency_id, None, None, connection_timeout).await
+        Self::from_url_and_config_with_retry(url, signer, None, None, connection_timeout).await
     }
 
     pub async fn from_url_and_config_with_retry(
         url: &str,
         signer: InterBtcSigner,
-        currency_id: CurrencyId,
         max_concurrent_requests: Option<usize>,
         max_notifs_per_subscription: Option<usize>,
         connection_timeout: Duration,
@@ -87,7 +79,7 @@ impl InterBtcParachain {
             connection_timeout,
         )
         .await?;
-        Self::new(ws_client, signer, currency_id).await
+        Self::new(ws_client, signer).await
     }
 
     async fn refresh_nonce(&self) {
@@ -341,7 +333,11 @@ impl CollateralBalancesPallet for InterBtcParachain {
 
     async fn get_free_balance_for_id(&self, id: AccountId) -> Result<<InterBtcRuntime as Core>::Balance, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.accounts(id.clone(), self.currency_id, head).await?.free)
+        Ok(self
+            .ext_client
+            .accounts(id.clone(), RELAY_CHAIN_CURRENCY, head)
+            .await?
+            .free)
     }
 
     async fn get_reserved_balance(&self) -> Result<<InterBtcRuntime as Core>::Balance, Error> {
@@ -352,7 +348,7 @@ impl CollateralBalancesPallet for InterBtcParachain {
         let head = self.get_latest_block_hash().await?;
         Ok(self
             .ext_client
-            .accounts(id.clone(), self.currency_id, head)
+            .accounts(id.clone(), RELAY_CHAIN_CURRENCY, head)
             .await?
             .reserved)
     }
@@ -360,7 +356,7 @@ impl CollateralBalancesPallet for InterBtcParachain {
     async fn transfer_to(&self, recipient: &AccountId, amount: u128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .transfer_and_watch(&signer, &recipient, self.currency_id, amount)
+                .transfer_and_watch(&signer, &recipient, RELAY_CHAIN_CURRENCY, amount)
                 .await
         })
         .await?;
@@ -603,7 +599,7 @@ impl OraclePallet for InterBtcParachain {
         let head = self.get_latest_block_hash().await?;
         Ok(self
             .ext_client
-            .aggregate(OracleKey::ExchangeRate(self.currency_id), head)
+            .aggregate(OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY), head)
             .await?)
     }
 

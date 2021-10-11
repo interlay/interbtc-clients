@@ -15,8 +15,8 @@ use runtime::{
     btc_relay::StoreMainChainHeaderEvent,
     cli::{parse_duration_minutes, parse_duration_ms},
     pallets::{security::UpdateActiveBlockEvent, sla::UpdateVaultSLAEvent},
-    AccountId, BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, InterBtcRuntime, UtilFuncs,
-    VaultRegistryPallet,
+    parse_collateral_currency, AccountId, BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain,
+    InterBtcRuntime, UtilFuncs, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
@@ -101,6 +101,10 @@ pub struct VaultServiceConfig {
     /// Don't monitor vault thefts.
     #[clap(long)]
     pub no_vault_theft_report: bool,
+
+    /// The currency to use for the collateral, e.g. "DOT" or "KSM".
+    #[clap(long, parse(try_from_str = parse_collateral_currency))]
+    pub currency_id: CurrencyId,
 }
 
 async fn active_block_listener(
@@ -211,8 +215,8 @@ impl VaultService {
         tracing::info!("Using {} bitcoin confirmations", num_confirmations);
 
         match get_vault_registration_status(&self.btc_parachain, vault_id.clone()).await? {
-            VaultRegistrationStatus::Registered(currency_id) if currency_id != self.btc_parachain.currency_id => {
-                return Err(Error::InvalidCurrency(self.btc_parachain.currency_id, currency_id))
+            VaultRegistrationStatus::Registered(currency_id) if currency_id != self.config.currency_id => {
+                return Err(Error::InvalidCurrency(self.config.currency_id, currency_id))
             }
             VaultRegistrationStatus::Registered(_) => {
                 tracing::info!("Not registering vault -- already registered");
@@ -222,7 +226,7 @@ impl VaultService {
                 if let Some(collateral) = self.config.auto_register_with_collateral {
                     let public_key = bitcoin_core.get_new_public_key().await?;
                     self.btc_parachain
-                        .register_vault(collateral, public_key, self.btc_parachain.currency_id)
+                        .register_vault(collateral, public_key, self.config.currency_id)
                         .await?;
                 } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
                     faucet::fund_and_register(&self.btc_parachain, &bitcoin_core, faucet_url, vault_id.clone()).await?;
