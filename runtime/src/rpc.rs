@@ -341,7 +341,7 @@ pub trait CollateralBalancesPallet {
         currency_id: CurrencyId,
     ) -> Result<InterBtcBalance, Error>;
 
-    async fn transfer_to(&self, recipient: &AccountId, amount: u128) -> Result<(), Error>;
+    async fn transfer_to(&self, recipient: &AccountId, amount: u128, currency_id: CurrencyId) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -368,10 +368,10 @@ impl CollateralBalancesPallet for InterBtcParachain {
         Ok(self.ext_client.accounts(id.clone(), currency_id, head).await?.reserved)
     }
 
-    async fn transfer_to(&self, recipient: &AccountId, amount: u128) -> Result<(), Error> {
+    async fn transfer_to(&self, recipient: &AccountId, amount: u128, currency_id: CurrencyId) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .transfer_and_watch(&signer, &recipient, RELAY_CHAIN_CURRENCY, amount)
+                .transfer_and_watch(&signer, &recipient, currency_id, amount)
                 .await
         })
         .await?;
