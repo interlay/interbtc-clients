@@ -11,7 +11,7 @@ use runtime::{
     integration::*,
     pallets::{issue::*, redeem::*, refund::*, relay::*, replace::*, security::*, tokens::*, vault_registry::*},
     BtcAddress, BtcRelayPallet, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRedeemRequest,
-    InterBtcRuntime, IssuePallet, RedeemPallet, ReplacePallet, UtilFuncs, VaultId, VaultRegistryPallet,
+    InterBtcRuntime, IssuePallet, RedeemPallet, RelayPallet, ReplacePallet, UtilFuncs, VaultId, VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
@@ -727,12 +727,29 @@ async fn test_refund_succeeds() {
                     x.vault_id == vault_id
                 }),
                 // the vault should execute the refund request automatically
-                assert_event::<ExecuteRefundEvent<InterBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |_| true),
+                assert_event::<ExecuteRefundEvent<InterBtcRuntime>, _>(2 * TIMEOUT, user_provider.clone(), |_| true),
             )
             .await;
 
             assert_eq!(refund_request.refund_id, refund_execution.refund_id);
             assert_eq!(refund_execution.amount, (over_payment as f64 / 1.005) as u128);
+
+            // fetch the tx that was used to execute the redeem
+            let tx = btc_rpc
+                .get_transaction(|tx| tx.get_op_return() == Some(refund_request.refund_id))
+                .await
+                .unwrap();
+
+            // make the vault register the input used in that transaction
+            let input_address = tx.extract_input_addresses::<BtcAddress>()[0];
+            assert_ok!(vault_provider.register_address(&vault_id, input_address).await);
+
+            // check that it is not seen as theft
+            let metadata = btc_rpc.wait_for_transaction_metadata(tx.txid(), 0).await.unwrap();
+            let result = user_provider
+                .report_vault_theft(&vault_id, &metadata.proof, &metadata.raw_tx)
+                .await;
+            assert!(result.unwrap_err().is_valid_refund());
         };
 
         test_service(refund_service, fut_user).await;

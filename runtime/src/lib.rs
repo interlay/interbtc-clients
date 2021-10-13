@@ -163,6 +163,7 @@ impl utility::Utility for InterBtcRuntime {}
 pub const BTC_RELAY_MODULE: &str = "BTCRelay";
 pub const ISSUE_MODULE: &str = "Issue";
 pub const REDEEM_MODULE: &str = "Redeem";
+pub const RELAY_MODULE: &str = "Relay";
 pub const SECURITY_MODULE: &str = "Security";
 
 pub const STABLE_BITCOIN_CONFIRMATIONS: &str = "StableBitcoinConfirmations";
@@ -173,6 +174,7 @@ pub const INVALID_CHAIN_ID_ERROR: &str = "InvalidChainID";
 pub const ISSUE_COMPLETED_ERROR: &str = "IssueCompleted";
 pub const COMMIT_PERIOD_EXPIRED_ERROR: &str = "CommitPeriodExpired";
 pub const PARACHAIN_SHUTDOWN_ERROR: &str = "ParachainShutdown";
+pub const VALID_REFUND_TRANSACTION_ERROR: &str = "ValidRefundTransaction";
 
 pub fn parse_collateral_currency(src: &str) -> Result<CurrencyId, Error> {
     match src.to_uppercase().as_str() {

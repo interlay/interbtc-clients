@@ -3,7 +3,8 @@ pub use substrate_subxt::Error as SubxtError;
 
 use crate::{
     BTC_RELAY_MODULE, COMMIT_PERIOD_EXPIRED_ERROR, DUPLICATE_BLOCK_ERROR, INVALID_CHAIN_ID_ERROR,
-    ISSUE_COMPLETED_ERROR, ISSUE_MODULE, PARACHAIN_SHUTDOWN_ERROR, REDEEM_MODULE, SECURITY_MODULE,
+    ISSUE_COMPLETED_ERROR, ISSUE_MODULE, PARACHAIN_SHUTDOWN_ERROR, REDEEM_MODULE, RELAY_MODULE, SECURITY_MODULE,
+    VALID_REFUND_TRANSACTION_ERROR,
 };
 use codec::Error as CodecError;
 use jsonrpsee_types::{error::Error as RequestError, CallError};
@@ -91,6 +92,15 @@ impl Error {
                 ref module,
                 ref error,
             }))) if module == ISSUE_MODULE && error == ISSUE_COMPLETED_ERROR
+        )
+    }
+
+    pub fn is_valid_refund(&self) -> bool {
+        matches!(self,
+            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
+                ref module,
+                ref error,
+            }))) if module == RELAY_MODULE && error == VALID_REFUND_TRANSACTION_ERROR
         )
     }
 
