@@ -67,7 +67,7 @@ impl MockBitcoinCore {
             .read()
             .await
             .iter()
-            .find_map(|block| block.txdata.iter().find(|x| f(x.clone())))
+            .find_map(|block| block.txdata.iter().find(|x| f(x)))
             .cloned()
     }
 

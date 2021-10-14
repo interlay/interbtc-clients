@@ -347,7 +347,7 @@ pub trait CollateralBalancesPallet {
 #[async_trait]
 impl CollateralBalancesPallet for InterBtcParachain {
     async fn get_free_balance(&self, currency_id: CurrencyId) -> Result<InterBtcBalance, Error> {
-        Ok(Self::get_free_balance_for_id(&self, self.account_id.clone(), currency_id).await?)
+        Ok(Self::get_free_balance_for_id(self, self.account_id.clone(), currency_id).await?)
     }
 
     async fn get_free_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<InterBtcBalance, Error> {
@@ -356,7 +356,7 @@ impl CollateralBalancesPallet for InterBtcParachain {
     }
 
     async fn get_reserved_balance(&self, currency_id: CurrencyId) -> Result<InterBtcBalance, Error> {
-        Ok(Self::get_reserved_balance_for_id(&self, self.account_id.clone(), currency_id).await?)
+        Ok(Self::get_reserved_balance_for_id(self, self.account_id.clone(), currency_id).await?)
     }
 
     async fn get_reserved_balance_for_id(
@@ -371,7 +371,7 @@ impl CollateralBalancesPallet for InterBtcParachain {
     async fn transfer_to(&self, recipient: &AccountId, amount: u128, currency_id: CurrencyId) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.ext_client
-                .transfer_and_watch(&signer, &recipient, currency_id, amount)
+                .transfer_and_watch(&signer, recipient, currency_id, amount)
                 .await
         })
         .await?;

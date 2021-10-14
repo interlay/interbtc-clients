@@ -30,7 +30,7 @@ impl ProviderUserOpts {
         // load parachain credentials
         let (pair, user_name) = match (self.keyfile.as_ref(), self.keyname.as_ref(), &self.keyring) {
             (Some(file_path), Some(keyname), None) => {
-                (get_credentials_from_file(&file_path, &keyname)?, keyname.to_string())
+                (get_credentials_from_file(file_path, keyname)?, keyname.to_string())
             }
             (None, None, Some(keyring)) => (keyring.pair(), format!("{}", keyring)),
             _ => panic!("Invalid arguments"), // should never occur, due to clap constraints
