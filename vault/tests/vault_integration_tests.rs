@@ -18,7 +18,7 @@ use sp_keyring::AccountKeyring;
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager};
 
-const TIMEOUT: Duration = Duration::from_secs(60);
+const TIMEOUT: Duration = Duration::from_secs(90);
 const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
 
 async fn test_with<F, R>(execute: impl FnOnce(SubxtClient) -> F) -> R
@@ -98,6 +98,16 @@ async fn pay_redeem_from_vault_wallet(
                 // now make the vault register it
                 assert_ok!(vault_provider.register_address(&vault_id, input_address).await);
                 tracing::error!("Registered {}", addr_seed);
+                let return_to_self_address = transaction.transaction.extract_output_addresses::<BtcAddress>()[1];
+                // register return-to-self address if it hasnt been yet
+                let wallet = vault_provider.get_vault(&vault_id).await.unwrap().wallet;
+                if !wallet.has_btc_address(&return_to_self_address) {
+                    vault_provider
+                        .register_address(&vault_id, return_to_self_address)
+                        .await
+                        .unwrap();
+                }
+
                 // now perform the theft
                 assert_ok!(btc_rpc.send_transaction(transaction).await);
                 tracing::error!("sent {}", addr_seed);
