@@ -3,7 +3,7 @@ use crate::{
     Vaults, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
-use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use bitcoin::{BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
 use clap::Clap;
 use futures::{
     channel::{mpsc, mpsc::Sender},
@@ -142,11 +142,11 @@ async fn relay_block_listener(
 pub struct VaultIdManager<T: BitcoinCoreApi + Clone + Send + Sync + 'static> {
     bitcoin_rpcs: Arc<RwLock<std::collections::HashMap<VaultId, T>>>,
     btc_parachain: InterBtcParachain,
-    constructor: Arc<Box<dyn Fn(VaultId) -> T + Send + Sync>>,
+    constructor: Arc<Box<dyn Fn(VaultId) -> Result<T, BitcoinError> + Send + Sync>>,
 }
 
 impl<T: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<T> {
-    pub fn new(btc_parachain: InterBtcParachain, constructor: impl Fn(VaultId) -> T + Send + Sync + 'static) -> Self {
+    pub fn new(btc_parachain: InterBtcParachain, constructor: impl Fn(VaultId) -> Result<T, BitcoinError> + Send + Sync + 'static) -> Self {
         Self {
             bitcoin_rpcs: Arc::new(RwLock::new(std::collections::HashMap::new())),
             constructor: Arc::new(Box::new(constructor)),
@@ -164,7 +164,7 @@ impl<T: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<T> {
     }
 
     async fn add_vault_id(&self, vault_id: VaultId) -> Result<(), Error> {
-        let btc_rpc = (*self.constructor)(vault_id.clone());
+        let btc_rpc = (*self.constructor)(vault_id.clone())?;
 
         // load wallet. Exit on failure, since without wallet we can't do a lot
         btc_rpc
@@ -266,7 +266,7 @@ impl Service<VaultServiceConfig> for VaultService {
         bitcoin_core: BitcoinCore,
         config: VaultServiceConfig,
         shutdown: ShutdownSender,
-        constructor: Box<dyn Fn(VaultId) -> BitcoinCore + Send + Sync>,
+        constructor: Box<dyn Fn(VaultId) -> Result<BitcoinCore, BitcoinError> + Send + Sync>,
     ) -> Self {
         VaultService::new(btc_parachain, bitcoin_core, config, shutdown, constructor)
     }
@@ -293,7 +293,7 @@ impl VaultService {
         bitcoin_core: BitcoinCore,
         config: VaultServiceConfig,
         shutdown: ShutdownSender,
-        constructor: impl Fn(VaultId) -> BitcoinCore + Send + Sync + 'static,
+        constructor: impl Fn(VaultId) -> Result<BitcoinCore, BitcoinError> + Send + Sync + 'static,
     ) -> Self {
         Self {
             btc_parachain: btc_parachain.clone(),

@@ -18,6 +18,7 @@ use telemetry::TelemetryClient;
 pub use cli::{LoggingFormat, RestartPolicy, ServiceConfig};
 pub use error::Error;
 pub use trace::init_subscriber;
+use bitcoin::Error as BitcoinError;
 
 pub type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
 
@@ -31,7 +32,7 @@ pub trait Service<Config> {
         bitcoin_core: BitcoinCore,
         config: Config,
         shutdown: ShutdownSender,
-        constructor: Box<dyn Fn(VaultId) -> BitcoinCore + Send + Sync>,
+        constructor: Box<dyn Fn(VaultId) -> Result<BitcoinCore, BitcoinError> + Send + Sync>,
     ) -> Self;
     async fn start(&self) -> Result<(), Error>;
 }
@@ -105,8 +106,8 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
                     vault_id.collateral_currency().symbol(),
                     vault_id.wrapped_currency().symbol()
                 );
-                config_copy.new_client(Some(wallet_name)).unwrap();
-                todo!()
+                let btc_rpc = config_copy.new_client(Some(wallet_name))?;
+                Ok(btc_rpc)
             };
 
             let service = S::new_service(btc_parachain, bitcoin_core, config, shutdown_tx, Box::new(constructor));
