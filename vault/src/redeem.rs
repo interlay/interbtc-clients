@@ -1,6 +1,6 @@
-use crate::execution::*;
+use crate::{execution::*, VaultIdManager};
 use bitcoin::BitcoinCoreApi;
-use runtime::{pallets::redeem::RequestRedeemEvent, InterBtcParachain, InterBtcRuntime, RedeemPallet, UtilFuncs};
+use runtime::{pallets::redeem::RequestRedeemEvent, InterBtcParachain, InterBtcRuntime, RedeemPallet};
 use service::Error as ServiceError;
 use std::time::Duration;
 
@@ -15,23 +15,24 @@ use std::time::Duration;
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     parachain_rpc: InterBtcParachain,
-    btc_rpc: B,
+    btc_rpc: VaultIdManager<B>,
     num_confirmations: u32,
     payment_margin: Duration,
 ) -> Result<(), ServiceError> {
     parachain_rpc
         .on_event::<RequestRedeemEvent<InterBtcRuntime>, _, _, _>(
             |event| async {
-                if &event.vault_id != parachain_rpc.get_account_id() {
-                    return;
-                }
+                let btc_rpc = match btc_rpc.get_bitcoin_rpc(&event.vault_id).await {
+                    Some(x) => x,
+                    None => return, // event not directed at this vault
+                };
+
                 tracing::info!("Received redeem request: {:?}", event);
 
                 // within this event callback, we captured the arguments of listen_for_redeem_requests
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
                 // arguments by value rather than by reference, so clone these:
                 let parachain_rpc = parachain_rpc.clone();
-                let btc_rpc = btc_rpc.clone();
                 // Spawn a new task so that we handle these events concurrently
                 tokio::spawn(async move {
                     tracing::info!("Executing redeem #{:?}", event.redeem_id);

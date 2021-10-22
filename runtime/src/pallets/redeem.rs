@@ -2,6 +2,7 @@ use super::Core;
 use crate::RedeemRequest;
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
+use primitives::VaultId;
 use serde::Serialize;
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
@@ -14,7 +15,7 @@ pub struct RequestRedeemCall<'a, T: Redeem> {
     #[codec(compact)]
     pub amount: T::Wrapped,
     pub btc_address: T::BtcAddress,
-    pub vault_id: &'a T::AccountId,
+    pub vault_id: &'a VaultId<T::AccountId, T::CurrencyId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
@@ -24,7 +25,7 @@ pub struct RequestRedeemEvent<T: Redeem> {
     pub amount: T::Wrapped,
     pub fee: T::Wrapped,
     pub premium: T::Collateral,
-    pub vault_id: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
     pub user_btc_address: T::BtcAddress,
     pub transfer_fee: T::Wrapped,
 }
@@ -41,9 +42,9 @@ pub struct ExecuteRedeemCall<'a, T: Redeem> {
 pub struct ExecuteRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
     pub amount: T::Wrapped,
     pub fee: T::Wrapped,
-    pub vault_id: T::AccountId,
     pub transfer_fee_btc: T::Wrapped,
 }
 
@@ -58,14 +59,14 @@ pub struct CancelRedeemCall<T: Redeem> {
 pub struct CancelRedeemEvent<T: Redeem> {
     pub redeem_id: T::H256,
     pub redeemer: T::AccountId,
-    pub vault_id: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
     pub slashing_amount: T::Collateral,
     pub reimburse: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct RedeemRequestsStore<T: Redeem> {
-    #[store(returns = RedeemRequest<T::AccountId, T::BlockNumber, T::Balance>)]
+    #[store(returns = RedeemRequest<T::AccountId, T::BlockNumber, T::Balance, T::CurrencyId>)]
     pub _runtime: PhantomData<T>,
     pub redeem_id: T::H256,
 }

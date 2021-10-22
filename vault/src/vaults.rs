@@ -3,8 +3,8 @@ use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _};
 use futures::stream::{iter, StreamExt};
 use runtime::{
     pallets::vault_registry::{RegisterAddressEvent, RegisterVaultEvent},
-    AccountId, BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcRuntime,
-    InterBtcVault, RelayPallet, VaultRegistryPallet,
+    BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcRuntime, InterBtcVault,
+    RelayPallet, VaultId, VaultIdFormatter, VaultRegistryPallet,
 };
 use service::Error as ServiceError;
 use sp_core::crypto::Ss58Codec;
@@ -12,14 +12,14 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
 #[derive(Default)]
-pub struct Vaults(RwLock<HashMap<BtcAddress, AccountId>>);
+pub struct Vaults(RwLock<HashMap<BtcAddress, VaultId>>);
 
 impl Vaults {
-    pub fn from(vaults: HashMap<BtcAddress, AccountId>) -> Self {
+    pub fn from(vaults: HashMap<BtcAddress, VaultId>) -> Self {
         Self(RwLock::new(vaults))
     }
 
-    pub async fn write(&self, key: BtcAddress, value: AccountId) {
+    pub async fn write(&self, key: BtcAddress, value: VaultId) {
         self.0.write().await.insert(key, value);
     }
 
@@ -30,7 +30,7 @@ impl Vaults {
         }
     }
 
-    pub async fn contains_key(&self, key: BtcAddress) -> Option<AccountId> {
+    pub async fn contains_key(&self, key: BtcAddress) -> Option<VaultId> {
         let vaults = self.0.read().await;
         vaults.get(&key).cloned()
     }
@@ -70,12 +70,12 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonit
 
     async fn report_invalid(
         &self,
-        vault_id: &AccountId,
+        vault_id: &VaultId,
         proof: &[u8],
         raw_tx: &[u8],
         transaction: &Transaction,
     ) -> Result<(), Error> {
-        tracing::info!("Found tx from vault {}", vault_id.to_ss58check());
+        tracing::info!("Found tx from vault {}", vault_id.pretty_printed());
         // check if matching redeem or replace request
         if self.btc_parachain.is_transaction_invalid(vault_id, raw_tx).await? {
             tracing::info!("Transaction is invalid");
@@ -159,7 +159,7 @@ pub async fn listen_for_wallet_updates(
                 tracing::info!(
                     "Added new btc address {:?} for vault {}",
                     event.btc_address,
-                    event.vault_id.to_ss58check()
+                    event.vault_id.account_id.to_ss58check()
                 );
                 vaults.write(event.btc_address, event.vault_id).await;
             },
@@ -176,9 +176,10 @@ pub async fn listen_for_vaults_registered(
     btc_parachain
         .on_event::<RegisterVaultEvent<InterBtcRuntime>, _, _, _>(
             |event| async {
-                match btc_parachain.get_vault(event.account_id).await {
+                let vault_id = event.vault_id;
+                match btc_parachain.get_vault(&vault_id).await {
                     Ok(vault) => {
-                        tracing::info!("Vault registered: {}", vault.id.to_ss58check());
+                        tracing::info!("Vault registered: {}", vault.id.pretty_printed());
                         vaults.add_vault(vault).await;
                     }
                     Err(err) => tracing::error!("Error getting vault: {}", err.to_string()),
@@ -190,10 +191,10 @@ pub async fn listen_for_vaults_registered(
     Ok(())
 }
 
-async fn filter_matching_vaults(addresses: Vec<BtcAddress>, vaults: &Vaults) -> Vec<AccountId> {
+async fn filter_matching_vaults(addresses: Vec<BtcAddress>, vaults: &Vaults) -> Vec<VaultId> {
     iter(addresses)
         .filter_map(|addr| vaults.contains_key(addr))
-        .collect::<Vec<AccountId>>()
+        .collect::<Vec<VaultId>>()
         .await
 }
 
@@ -206,11 +207,10 @@ mod tests {
         Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
-        AccountId, BitcoinBlockHeight, BlockNumber, Error as RuntimeError, H256Le, InterBtcRichBlockHeader,
+        BitcoinBlockHeight, BlockNumber, CurrencyId, Error as RuntimeError, H256Le, InterBtcRichBlockHeader,
         RawBlockHeader,
     };
     use sp_core::{H160, H256};
-    use sp_keyring::AccountKeyring;
 
     mockall::mock! {
         Provider {}
@@ -219,17 +219,17 @@ mod tests {
         pub trait RelayPallet {
             async fn report_vault_theft(
                 &self,
-                vault_id: &AccountId,
+                vault_id: &VaultId,
                 merkle_proof: &[u8],
                 raw_tx: &[u8],
             ) -> Result<(), RuntimeError>;
             async fn report_vault_double_payment(
                 &self,
-                vault_id: &AccountId,
+                vault_id: &VaultId,
                 merkle_proofs: (Vec<u8>, Vec<u8>),
                 raw_txs: (Vec<u8>, Vec<u8>),
             ) -> Result<(), RuntimeError>;
-            async fn is_transaction_invalid(&self, vault_id: &AccountId, raw_tx: &[u8]) -> Result<bool, RuntimeError>;
+            async fn is_transaction_invalid(&self, vault_id: &VaultId, raw_tx: &[u8]) -> Result<bool, RuntimeError>;
             async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), RuntimeError>;
             async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), RuntimeError>;
             async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), RuntimeError>;
@@ -328,20 +328,22 @@ mod tests {
         }
     }
 
+    fn dummy_vault_id() -> VaultId {
+        VaultId::new(Default::default(), CurrencyId::DOT, CurrencyId::INTERBTC)
+    }
+
     #[tokio::test]
     async fn test_filter_matching_vaults() {
+        let dummy_vault = dummy_vault_id();
         let vaults = Vaults::from(
-            vec![(
-                BtcAddress::P2PKH(H160::from_slice(&[0; 20])),
-                AccountKeyring::Bob.to_account_id(),
-            )]
-            .into_iter()
-            .collect(),
+            vec![(BtcAddress::P2PKH(H160::from_slice(&[0; 20])), dummy_vault.clone())]
+                .into_iter()
+                .collect(),
         );
 
         assert_eq!(
             filter_matching_vaults(vec![BtcAddress::P2PKH(H160::from_slice(&[0; 20]))], &vaults).await,
-            vec![AccountKeyring::Bob.to_account_id()],
+            vec![dummy_vault],
         );
 
         assert_eq!(
@@ -374,7 +376,7 @@ mod tests {
         let monitor = VaultTheftMonitor::new(bitcoin_core, parachain, 0, Arc::new(Vaults::default()));
 
         monitor
-            .report_invalid(&AccountKeyring::Bob.to_account_id(), &vec![], &vec![], &dummy_tx())
+            .report_invalid(&dummy_vault_id(), &vec![], &vec![], &dummy_tx())
             .await
             .unwrap();
     }
@@ -388,7 +390,7 @@ mod tests {
         let monitor = VaultTheftMonitor::new(MockBitcoin::default(), parachain, 0, Arc::new(Vaults::default()));
 
         monitor
-            .report_invalid(&AccountKeyring::Bob.to_account_id(), &vec![], &vec![], &dummy_tx())
+            .report_invalid(&dummy_vault_id(), &vec![], &vec![], &dummy_tx())
             .await
             .unwrap();
     }

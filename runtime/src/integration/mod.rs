@@ -4,7 +4,7 @@ mod bitcoin_simulator;
 
 use crate::{
     rpc::{IssuePallet, OraclePallet, VaultRegistryPallet},
-    AccountId, BtcRelayPallet, CurrencyId, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey,
+    BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey, VaultId,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
 use frame_support::assert_ok;
@@ -12,6 +12,7 @@ use futures::{
     future::{try_join, Either},
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
+use primitives::CurrencyId;
 use sp_keyring::AccountKeyring;
 use sp_runtime::FixedU128;
 use std::time::Duration;
@@ -24,8 +25,6 @@ pub use substrate_subxt_client::SubxtClient;
 
 // export the mocked bitcoin interface
 pub use bitcoin_simulator::MockBitcoinCore;
-
-const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
 
 /// Trait to help between different types used by the two bitcoin libraries
 pub trait Translate {
@@ -91,7 +90,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
 /// Create a new parachain_rpc with the given keyring
 pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> InterBtcParachain {
     let signer = PairSigner::<InterBtcRuntime, _>::new(key.pair());
-    InterBtcParachain::new(client, signer, DEFAULT_TESTING_CURRENCY)
+    InterBtcParachain::new(client, signer)
         .await
         .expect("Error creating parachain_rpc")
 }
@@ -100,7 +99,7 @@ pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> InterBt
 pub async fn assert_issue(
     parachain_rpc: &InterBtcParachain,
     btc_rpc: &MockBitcoinCore,
-    vault_id: &AccountId,
+    vault_id: &VaultId,
     amount: u128,
 ) {
     let issue = parachain_rpc.request_issue(amount, vault_id, 10000).await.unwrap();
@@ -126,16 +125,10 @@ async fn wait_for_aggregate(parachain_rpc: &InterBtcParachain, key: &OracleKey) 
     }
 }
 
-pub async fn set_exchange_rate_and_wait(parachain_rpc: &InterBtcParachain, value: FixedU128) {
-    let key = OracleKey::ExchangeRate(DEFAULT_TESTING_CURRENCY);
-    assert_ok!(parachain_rpc.feed_values(vec![(key, value)]).await);
-    assert_ok!(
-        timeout(
-            TIMEOUT_DURATION,
-            wait_for_aggregate(parachain_rpc, &OracleKey::ExchangeRate(DEFAULT_TESTING_CURRENCY))
-        )
-        .await
-    );
+pub async fn set_exchange_rate_and_wait(parachain_rpc: &InterBtcParachain, currency_id: CurrencyId, value: FixedU128) {
+    let key = OracleKey::ExchangeRate(currency_id);
+    assert_ok!(parachain_rpc.feed_values(vec![(key.clone(), value)]).await);
+    assert_ok!(timeout(TIMEOUT_DURATION, wait_for_aggregate(parachain_rpc, &key)).await);
 }
 
 pub async fn set_bitcoin_fees(parachain_rpc: &InterBtcParachain, value: FixedU128) {
@@ -150,8 +143,15 @@ pub async fn set_bitcoin_fees(parachain_rpc: &InterBtcParachain, value: FixedU12
 }
 
 /// calculate how much collateral the vault requires to accept an issue of the given size
-pub async fn get_required_vault_collateral_for_issue(parachain_rpc: &InterBtcParachain, amount: u128) -> u128 {
-    parachain_rpc.get_required_collateral_for_wrapped(amount).await.unwrap()
+pub async fn get_required_vault_collateral_for_issue(
+    parachain_rpc: &InterBtcParachain,
+    amount: u128,
+    collateral_currency: CurrencyId,
+) -> u128 {
+    parachain_rpc
+        .get_required_collateral_for_wrapped(amount, collateral_currency)
+        .await
+        .unwrap()
 }
 
 /// wait for an event to occur. After the specified error, this will panic. This returns the event.

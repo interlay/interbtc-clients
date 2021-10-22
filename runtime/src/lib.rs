@@ -26,6 +26,7 @@ pub use sp_runtime;
 pub use substrate_subxt;
 pub use types::*;
 
+use sp_core::crypto::Ss58Codec;
 use sp_runtime::{
     generic::Header,
     traits::{BlakeTwo256, IdentifyAccount, Verify},
@@ -41,15 +42,15 @@ use substrate_subxt::{
 use polkadot_parachain::primitives::{Id as ParaId, RelayChainBlockNumber};
 use xcm::v0::{Error as XcmError, NetworkId};
 
-// TODO: calculate based on collateral currency
 pub const TX_FEES: u128 = 2000000000;
-pub const PLANCK_PER_DOT: u128 = 10000000000;
 
 pub const MILLISECS_PER_BLOCK: u64 = 6000;
 
 // These time units are defined in number of blocks.
 pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
+
+pub const RELAY_CHAIN_WRAPPED_CURRENCY: CurrencyId = CurrencyId::KBTC;
 
 pub type Balance = u128;
 
@@ -76,6 +77,7 @@ pub type BlockNumber = u32;
 
 /// Some way of identifying an account on the chain.
 pub type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
+pub type VaultId = primitives::VaultId<AccountId, CurrencyId>;
 
 // TODO: use types from actual runtime
 impl system::System for InterBtcRuntime {
@@ -109,6 +111,7 @@ impl pallets::Core for InterBtcRuntime {
     type RedeemRequestStatus = RedeemRequestStatus;
     type CurrencyId = CurrencyId;
     type OracleKey = OracleKey;
+    type VaultId = VaultId;
 
     // cumulus / polkadot types
     type XcmError = XcmError;
@@ -158,6 +161,7 @@ impl utility::Utility for InterBtcRuntime {}
 pub const BTC_RELAY_MODULE: &str = "BTCRelay";
 pub const ISSUE_MODULE: &str = "Issue";
 pub const REDEEM_MODULE: &str = "Redeem";
+pub const RELAY_MODULE: &str = "Relay";
 pub const SECURITY_MODULE: &str = "Security";
 
 pub const STABLE_BITCOIN_CONFIRMATIONS: &str = "StableBitcoinConfirmations";
@@ -168,11 +172,27 @@ pub const INVALID_CHAIN_ID_ERROR: &str = "InvalidChainID";
 pub const ISSUE_COMPLETED_ERROR: &str = "IssueCompleted";
 pub const COMMIT_PERIOD_EXPIRED_ERROR: &str = "CommitPeriodExpired";
 pub const PARACHAIN_SHUTDOWN_ERROR: &str = "ParachainShutdown";
+pub const VALID_REFUND_TRANSACTION_ERROR: &str = "ValidRefundTransaction";
 
 pub fn parse_collateral_currency(src: &str) -> Result<CurrencyId, Error> {
     match src.to_uppercase().as_str() {
         id if id == CurrencyId::KSM.symbol() => Ok(CurrencyId::KSM),
         id if id == CurrencyId::DOT.symbol() => Ok(CurrencyId::DOT),
         _ => Err(Error::InvalidCurrency),
+    }
+}
+
+pub trait VaultIdFormatter {
+    fn pretty_printed(&self) -> String;
+}
+
+impl VaultIdFormatter for VaultId {
+    fn pretty_printed(&self) -> String {
+        format!(
+            "{}[{}->{}]",
+            self.account_id.to_ss58check(),
+            self.currencies.collateral.name(),
+            self.currencies.wrapped.name()
+        )
     }
 }

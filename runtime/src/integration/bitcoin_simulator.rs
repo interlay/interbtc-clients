@@ -62,6 +62,15 @@ impl MockBitcoinCore {
         ret
     }
 
+    pub async fn get_transaction(&self, f: impl Fn(&Transaction) -> bool) -> Option<Transaction> {
+        self.blocks
+            .read()
+            .await
+            .iter()
+            .find_map(|block| block.txdata.iter().find(|x| f(x)))
+            .cloned()
+    }
+
     /// Creates a new instance, but does not initializes parachain's btc-relay
     pub async fn new_uninitialized(parachain_rpc: InterBtcParachain) -> Self {
         Self {
@@ -133,6 +142,9 @@ impl MockBitcoinCore {
         let address: BtcAddress = BtcAddress::decode_str(&address.encode_str(Network::Regtest).unwrap()).unwrap();
         let address = Script::from(address.to_script_pub_key().as_bytes().to_vec());
 
+        let return_to_self_address = BtcAddress::P2PKH(H160::from_slice(&[20; 20]));
+        let return_to_self_address = Script::from(return_to_self_address.to_script_pub_key().as_bytes().to_vec());
+
         Transaction {
             input: vec![TxIn {
                 previous_output: OutPoint {
@@ -157,10 +169,16 @@ impl MockBitcoinCore {
                 // not checked
                 sequence: 0,
             }],
-            output: vec![TxOut {
-                script_pubkey: address,
-                value: reward,
-            }],
+            output: vec![
+                TxOut {
+                    script_pubkey: address,
+                    value: reward,
+                },
+                TxOut {
+                    script_pubkey: return_to_self_address,
+                    value: 42,
+                },
+            ],
             lock_time: 0,
             version: 2,
         }

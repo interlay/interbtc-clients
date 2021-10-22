@@ -4,6 +4,7 @@ use super::Core;
 use crate::{Vault, VaultStatus};
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
+use primitives::{VaultCurrencyPair, VaultId};
 use std::fmt::Debug;
 use substrate_subxt_proc_macro::{module, Call, Event, Store};
 
@@ -12,27 +13,28 @@ pub trait VaultRegistry: Core {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RegisterVaultCall<T: VaultRegistry> {
+    pub currency_pair: VaultCurrencyPair<T::CurrencyId>,
     #[codec(compact)]
     pub collateral: T::Collateral,
     pub public_key: T::BtcPublicKey,
-    pub currency_id: T::CurrencyId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct RegisterVaultEvent<T: VaultRegistry> {
-    pub account_id: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
     pub collateral: T::Collateral,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct DepositCollateralCall<T: VaultRegistry> {
+    pub currency_pair: VaultCurrencyPair<T::CurrencyId>,
     #[codec(compact)]
     pub amount: T::Collateral,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct DepositCollateralEvent<T: VaultRegistry> {
-    pub vault_id: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
     pub new_collateral: T::Collateral,
     pub total_collateral: T::Collateral,
     pub free_collateral: T::Collateral,
@@ -40,13 +42,14 @@ pub struct DepositCollateralEvent<T: VaultRegistry> {
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WithdrawCollateralCall<T: VaultRegistry> {
+    pub currency_pair: VaultCurrencyPair<T::CurrencyId>,
     #[codec(compact)]
     pub amount: T::Collateral,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct WithdrawCollateralEvent<T: VaultRegistry> {
-    pub vault_id: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
     pub withdrawn_collateral: T::Collateral,
     pub total_collateral: T::Collateral,
 }
@@ -55,40 +58,42 @@ pub struct WithdrawCollateralEvent<T: VaultRegistry> {
 pub struct VaultsStore<T: VaultRegistry> {
     #[store(returns = Option<Vault<T::AccountId, T::BlockNumber, T::Balance, T::CurrencyId>>)]
     pub _runtime: PhantomData<T>,
-    pub account_id: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct IncreaseToBeIssuedTokensEvent<T: VaultRegistry> {
-    pub vault_id: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
     pub tokens: T::Balance,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct UpdatePublicKeyCall<T: VaultRegistry> {
+    pub currency_pair: VaultCurrencyPair<T::CurrencyId>,
     pub public_key: T::BtcPublicKey,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct UpdatePublicKeyEvent<T: VaultRegistry> {
-    pub vault_id: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
     pub public_key: T::BtcPublicKey,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct RegisterAddressCall<T: VaultRegistry> {
+    pub currency_pair: VaultCurrencyPair<T::CurrencyId>,
     pub btc_address: T::BtcAddress,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct RegisterAddressEvent<T: VaultRegistry> {
-    pub vault_id: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
     pub btc_address: T::BtcAddress,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct LiquidateVaultEvent<T: VaultRegistry> {
-    pub vault_id: T::AccountId,
+    pub vault_id: VaultId<T::AccountId, T::CurrencyId>,
     pub issued_tokens: T::Balance,
     pub to_be_issued_tokens: T::Balance,
     pub to_be_redeemed_tokens: T::Balance,

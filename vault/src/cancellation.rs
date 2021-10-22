@@ -327,8 +327,8 @@ mod tests {
     use async_trait::async_trait;
     use futures::channel::mpsc;
     use runtime::{
-        AccountId, BtcAddress, ErrorCode, InterBtcIssueRequest, InterBtcReplaceRequest, InterBtcRequestIssueEvent,
-        StatusCode,
+        AccountId, BtcAddress, CurrencyId, ErrorCode, InterBtcIssueRequest, InterBtcReplaceRequest,
+        InterBtcRequestIssueEvent, StatusCode, VaultId,
     };
     use sp_core::H256;
     use std::collections::BTreeSet;
@@ -348,58 +348,29 @@ mod tests {
 
         #[async_trait]
         pub trait IssuePallet {
-            async fn request_issue(
-                &self,
-                amount: u128,
-                vault_id: &AccountId,
-                griefing_collateral: u128,
-            ) -> Result<InterBtcRequestIssueEvent, RuntimeError>;
-            async fn execute_issue(
-                &self,
-                issue_id: H256,
-                merkle_proof: &[u8],
-                raw_tx: &[u8],
-            ) -> Result<(), RuntimeError>;
+            async fn request_issue(&self, amount: u128, vault_id: &VaultId, griefing_collateral: u128) -> Result<InterBtcRequestIssueEvent, RuntimeError>;
+            async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
             async fn cancel_issue(&self, issue_id: H256) -> Result<(), RuntimeError>;
             async fn get_issue_request(&self, issue_id: H256) -> Result<InterBtcIssueRequest, RuntimeError>;
-            async fn get_vault_issue_requests(
-                &self,
-                account_id: AccountId,
-            ) -> Result<Vec<(H256, InterBtcIssueRequest)>, RuntimeError>;
+            async fn get_vault_issue_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcIssueRequest)>, RuntimeError>;
             async fn get_issue_period(&self) -> Result<u32, RuntimeError>;
             async fn set_issue_period(&self, period: u32) -> Result<(), RuntimeError>;
             async fn get_all_active_issues(&self) -> Result<Vec<(H256, InterBtcIssueRequest)>, RuntimeError>;
         }
 
+
         #[async_trait]
         pub trait ReplacePallet {
-            async fn request_replace(&self, amount: u128, griefing_collateral: u128) -> Result<(), RuntimeError>;
-            async fn withdraw_replace(&self, amount: u128) -> Result<(), RuntimeError>;
-            async fn accept_replace(
-                &self,
-                old_vault: &AccountId,
-                amount_btc: u128,
-                collateral: u128,
-                btc_address: BtcAddress,
-            ) -> Result<(), RuntimeError>;
-            async fn execute_replace(
-                &self,
-                replace_id: H256,
-                merkle_proof: &[u8],
-                raw_tx: &[u8],
-            ) -> Result<(), RuntimeError>;
+            async fn request_replace(&self, vault_id: &VaultId, amount: u128, griefing_collateral: u128) -> Result<(), RuntimeError>;
+            async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
+            async fn accept_replace(&self, new_vault: &VaultId, old_vault: &VaultId, amount_btc: u128, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
+            async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
-            async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
-            async fn get_new_vault_replace_requests(
-                &self,
-                account_id: AccountId,
-            ) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
-            async fn get_old_vault_replace_requests(
-                &self,
-                account_id: AccountId,
-            ) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
+            async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
+            async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
             async fn set_replace_period(&self, period: u32) -> Result<(), RuntimeError>;
+            async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
             async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;
         }
 
@@ -407,6 +378,7 @@ mod tests {
         pub trait UtilFuncs {
             async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
             fn get_account_id(&self) -> &AccountId;
+            fn is_this_vault(&self, vault_id: &VaultId) -> bool;
         }
 
         #[async_trait]
@@ -427,6 +399,22 @@ mod tests {
         }
     }
 
+    fn default_issue_request() -> InterBtcIssueRequest {
+        InterBtcIssueRequest {
+            amount: Default::default(),
+            btc_address: Default::default(),
+            btc_height: Default::default(),
+            fee: Default::default(),
+            griefing_collateral: Default::default(),
+            opentime: Default::default(),
+            period: Default::default(),
+            requester: Default::default(),
+            btc_public_key: Default::default(),
+            status: Default::default(),
+            vault: VaultId::new(Default::default(), CurrencyId::DOT, runtime::CurrencyId::INTERBTC),
+        }
+    }
+
     #[tokio::test]
     async fn test_get_open_process_delays_succeeds() {
         // parachain_open_time = 9_500, btc_start_height=100  current_block = 10_000, period = 1_000
@@ -440,7 +428,7 @@ mod tests {
                     InterBtcIssueRequest {
                         opentime: 9_500,
                         btc_height: 100,
-                        ..Default::default()
+                        ..default_issue_request()
                     },
                 ),
                 (
@@ -448,7 +436,7 @@ mod tests {
                     InterBtcIssueRequest {
                         opentime: 1_000,
                         btc_height: 100,
-                        ..Default::default()
+                        ..default_issue_request()
                     },
                 ),
                 (
@@ -456,7 +444,7 @@ mod tests {
                     InterBtcIssueRequest {
                         opentime: 8_500,
                         btc_height: 100,
-                        ..Default::default()
+                        ..default_issue_request()
                     },
                 ),
             ])
@@ -497,7 +485,7 @@ mod tests {
                 H256::from_slice(&[1; 32]),
                 InterBtcIssueRequest {
                     opentime: 10_000,
-                    ..Default::default()
+                    ..default_issue_request()
                 },
             )])
         });
@@ -547,7 +535,7 @@ mod tests {
                 InterBtcIssueRequest {
                     opentime: 10_000,
                     btc_height: 100,
-                    ..Default::default()
+                    ..default_issue_request()
                 },
             )])
         });
@@ -660,7 +648,7 @@ mod tests {
                 H256::from_slice(&[1; 32]),
                 InterBtcIssueRequest {
                     opentime: 10,
-                    ..Default::default()
+                    ..default_issue_request()
                 },
             )])
         });

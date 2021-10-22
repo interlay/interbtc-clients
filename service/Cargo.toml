@@ -14,18 +14,18 @@ tokio = { version = "1.0", features = ["full"] }
 hyper = { version = "0.14.11" }
 hyper-tls = "0.5.0"
 
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0"
 
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.2.12", features = ["registry", "env-filter", "fmt"] }
 tracing-futures = { version = "0.2.5" }
 
-interbtc-telemetry = { package = "interbtc-telemetry-types", git = "https://github.com/interlay/interbtc-telemetry", rev = "991db5d302984ea3d13a070a2a5b50b2e213d1cd" }
+interbtc-telemetry = { package = "interbtc-telemetry-types", git = "https://github.com/interlay/interbtc-telemetry", rev = "453c79162982adb1d10d5893126ddb9b8ade7147" }
 
 # Workspace dependencies
 bitcoin = { path = "../bitcoin", features = ["cli"] }
 runtime = { path = "../runtime" }
 
 # Substrate dependencies
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.8" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.10" }

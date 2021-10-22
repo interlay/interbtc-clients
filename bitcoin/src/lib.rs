@@ -214,14 +214,14 @@ impl BitcoinCore {
             transaction_creation_lock: Arc::new(Mutex::new(())),
             connection_timeout,
             electrs_config: ElectrsConfiguration {
-                base_path: electrs_url.unwrap_or(
+                base_path: electrs_url.unwrap_or_else(|| {
                     match network {
                         Network::Bitcoin => ELECTRS_MAINNET_URL,
                         Network::Testnet => ELECTRS_TESTNET_URL,
                         _ => ELECTRS_LOCALHOST_URL,
                     }
-                    .to_owned(),
-                ),
+                    .to_owned()
+                }),
                 ..Default::default()
             },
         })
@@ -817,17 +817,17 @@ fn parse_compact_uint(varint: &[u8]) -> Result<(u64, usize), Error> {
     match varint.get(0).ok_or(Error::ParsingError)? {
         0xfd => {
             let mut num_bytes: [u8; 2] = Default::default();
-            num_bytes.copy_from_slice(&varint.get(1..3).ok_or(Error::ParsingError)?);
+            num_bytes.copy_from_slice(varint.get(1..3).ok_or(Error::ParsingError)?);
             Ok((u16::from_le_bytes(num_bytes) as u64, 3))
         }
         0xfe => {
             let mut num_bytes: [u8; 4] = Default::default();
-            num_bytes.copy_from_slice(&varint.get(1..5).ok_or(Error::ParsingError)?);
+            num_bytes.copy_from_slice(varint.get(1..5).ok_or(Error::ParsingError)?);
             Ok((u32::from_le_bytes(num_bytes) as u64, 5))
         }
         0xff => {
             let mut num_bytes: [u8; 8] = Default::default();
-            num_bytes.copy_from_slice(&varint.get(1..9).ok_or(Error::ParsingError)?);
+            num_bytes.copy_from_slice(varint.get(1..9).ok_or(Error::ParsingError)?);
             Ok((u64::from_le_bytes(num_bytes) as u64, 9))
         }
         _ => Ok((varint[0] as u64, 1)),

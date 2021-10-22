@@ -3,7 +3,7 @@ use crate::{
     Vaults, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
-use bitcoin::{BitcoinCore, BitcoinCoreApi};
+use bitcoin::{BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
 use clap::Clap;
 use futures::{
     channel::{mpsc, mpsc::Sender},
@@ -14,13 +14,15 @@ use git_version::git_version;
 use runtime::{
     btc_relay::StoreMainChainHeaderEvent,
     cli::{parse_duration_minutes, parse_duration_ms},
-    pallets::{security::UpdateActiveBlockEvent, sla::UpdateVaultSLAEvent},
-    AccountId, BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, InterBtcRuntime, UtilFuncs,
-    VaultRegistryPallet,
+    pallets::security::UpdateActiveBlockEvent,
+    parse_collateral_currency,
+    vault_registry::RegisterVaultEvent,
+    BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, InterBtcRuntime, UtilFuncs, VaultId,
+    VaultIdFormatter, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
-use tokio::time::sleep;
+use tokio::{sync::RwLock, time::sleep};
 
 pub const VERSION: &str = git_version!(args = ["--tags"]);
 pub const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -42,10 +44,6 @@ pub struct VaultServiceConfig {
     #[clap(long)]
     pub no_auto_replace: bool,
 
-    /// Don't check the collateralization rate at startup.
-    #[clap(long)]
-    pub no_startup_collateral_increase: bool,
-
     /// Don't try to execute issues.
     #[clap(long)]
     pub no_issue_execution: bool,
@@ -53,11 +51,6 @@ pub struct VaultServiceConfig {
     /// Don't run the RPC API.
     #[clap(long)]
     pub no_api: bool,
-
-    /// Maximum total collateral to keep the vault securely collateralized.
-    /// If unset, this will default to the account's total free balance.
-    #[clap(long)]
-    pub max_collateral: Option<u128>,
 
     /// Timeout in milliseconds to repeat collateralization checks.
     #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "5000")]
@@ -101,6 +94,10 @@ pub struct VaultServiceConfig {
     /// Don't monitor vault thefts.
     #[clap(long)]
     pub no_vault_theft_report: bool,
+
+    /// The currency to use for the collateral, e.g. "DOT" or "KSM".
+    #[clap(long, parse(try_from_str = parse_collateral_currency))]
+    pub currency_id: Option<CurrencyId>,
 }
 
 async fn active_block_listener(
@@ -141,11 +138,120 @@ async fn relay_block_listener(
     Ok(())
 }
 
+#[derive(Clone)]
+pub struct VaultIdManager<T: BitcoinCoreApi + Clone + Send + Sync + 'static> {
+    bitcoin_rpcs: Arc<RwLock<std::collections::HashMap<VaultId, T>>>,
+    btc_parachain: InterBtcParachain,
+    constructor: Arc<Box<dyn Fn(VaultId) -> Result<T, BitcoinError> + Send + Sync>>,
+}
+
+impl<T: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<T> {
+    pub fn new(
+        btc_parachain: InterBtcParachain,
+        constructor: impl Fn(VaultId) -> Result<T, BitcoinError> + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            bitcoin_rpcs: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            constructor: Arc::new(Box::new(constructor)),
+            btc_parachain,
+        }
+    }
+
+    // used for testing only
+    pub fn from_map(btc_parachain: InterBtcParachain, map: std::collections::HashMap<VaultId, T>) -> Self {
+        Self {
+            bitcoin_rpcs: Arc::new(RwLock::new(map)),
+            constructor: Arc::new(Box::new(|_| unimplemented!())),
+            btc_parachain,
+        }
+    }
+
+    async fn add_vault_id(&self, vault_id: VaultId) -> Result<(), Error> {
+        let btc_rpc = (*self.constructor)(vault_id.clone())?;
+
+        // load wallet. Exit on failure, since without wallet we can't do a lot
+        btc_rpc
+            .create_or_load_wallet()
+            .await
+            .map_err(Error::WalletInitializationFailure)?;
+
+        if let Ok(vault) = self.btc_parachain.get_vault(&vault_id).await {
+            if !btc_rpc.wallet_has_public_key(vault.wallet.public_key.0).await? {
+                return Err(bitcoin::Error::MissingPublicKey.into());
+            }
+        }
+        issue::add_keys_from_past_issue_request(&btc_rpc, &self.btc_parachain).await?;
+
+        self.bitcoin_rpcs.write().await.insert(vault_id, btc_rpc);
+
+        Ok(())
+    }
+
+    pub async fn fetch_vault_ids(&self, startup_collateral_increase: bool) -> Result<(), Error> {
+        for vault_id in self
+            .btc_parachain
+            .get_vaults_by_account_id(self.btc_parachain.get_account_id())
+            .await?
+        {
+            self.add_vault_id(vault_id.clone()).await?;
+
+            if startup_collateral_increase {
+                // check if the vault is registered
+                match lock_required_collateral(self.btc_parachain.clone(), vault_id).await {
+                    Err(Error::RuntimeError(runtime::Error::VaultNotFound)) => {} // not registered
+                    Err(e) => tracing::error!("Failed to lock required additional collateral: {}", e),
+                    _ => {} // collateral level now OK
+                };
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn listen_for_vault_id_registrations(self) -> Result<(), ServiceError> {
+        Ok(self
+            .btc_parachain
+            .on_event::<RegisterVaultEvent<InterBtcRuntime>, _, _, _>(
+                |event| async {
+                    let vault_id = event.vault_id;
+                    if self.btc_parachain.is_this_vault(&vault_id) {
+                        tracing::info!("New vault registered: {}", vault_id.pretty_printed());
+                        let _ = self.add_vault_id(vault_id).await;
+                    }
+                },
+                |err| tracing::error!("Error (RegisterVaultEvent): {}", err.to_string()),
+            )
+            .await?)
+    }
+
+    pub async fn get_bitcoin_rpc(&self, vault_id: &VaultId) -> Option<T> {
+        self.bitcoin_rpcs.read().await.get(vault_id).cloned()
+    }
+
+    pub async fn get_vault_ids(&self) -> Vec<VaultId> {
+        self.bitcoin_rpcs
+            .read()
+            .await
+            .iter()
+            .map(|(vault_id, _)| vault_id.clone())
+            .collect()
+    }
+
+    pub async fn get_vault_btc_rpcs(&self) -> Vec<(VaultId, T)> {
+        self.bitcoin_rpcs
+            .read()
+            .await
+            .iter()
+            .map(|(vault_id, btc_rpc)| (vault_id.clone(), btc_rpc.clone()))
+            .collect()
+    }
+}
+
 pub struct VaultService {
     btc_parachain: InterBtcParachain,
     bitcoin_core: BitcoinCore,
     config: VaultServiceConfig,
     shutdown: ShutdownSender,
+    vault_id_manager: VaultIdManager<BitcoinCore>,
 }
 
 #[async_trait]
@@ -158,8 +264,9 @@ impl Service<VaultServiceConfig> for VaultService {
         bitcoin_core: BitcoinCore,
         config: VaultServiceConfig,
         shutdown: ShutdownSender,
+        constructor: Box<dyn Fn(VaultId) -> Result<BitcoinCore, BitcoinError> + Send + Sync>,
     ) -> Self {
-        VaultService::new(btc_parachain, bitcoin_core, config, shutdown)
+        VaultService::new(btc_parachain, bitcoin_core, config, shutdown, constructor)
     }
 
     async fn start(&self) -> Result<(), ServiceError> {
@@ -184,25 +291,21 @@ impl VaultService {
         bitcoin_core: BitcoinCore,
         config: VaultServiceConfig,
         shutdown: ShutdownSender,
+        constructor: impl Fn(VaultId) -> Result<BitcoinCore, BitcoinError> + Send + Sync + 'static,
     ) -> Self {
         Self {
-            btc_parachain,
+            btc_parachain: btc_parachain.clone(),
             bitcoin_core,
             config,
             shutdown,
+            vault_id_manager: VaultIdManager::new(btc_parachain, constructor),
         }
     }
 
     async fn run_service(&self) -> Result<(), Error> {
-        let bitcoin_core = self.bitcoin_core.clone();
+        let walletless_btc_rpc = self.bitcoin_core.clone();
 
-        // load wallet. Exit on failure, since without wallet we can't do a lot
-        bitcoin_core
-            .create_or_load_wallet()
-            .await
-            .map_err(Error::WalletInitializationFailure)?;
-
-        let vault_id = self.btc_parachain.get_account_id().clone();
+        let account_id = self.btc_parachain.get_account_id().clone();
 
         let num_confirmations = match self.config.btc_confirmations {
             Some(x) => x,
@@ -210,37 +313,16 @@ impl VaultService {
         };
         tracing::info!("Using {} bitcoin confirmations", num_confirmations);
 
-        match get_vault_registration_status(&self.btc_parachain, vault_id.clone()).await? {
-            VaultRegistrationStatus::Registered(currency_id) if currency_id != self.btc_parachain.currency_id => {
-                return Err(Error::InvalidCurrency(self.btc_parachain.currency_id, currency_id))
-            }
-            VaultRegistrationStatus::Registered(_) => {
-                tracing::info!("Not registering vault -- already registered");
-            }
-            VaultRegistrationStatus::Unregistered => {
-                tracing::info!("Automatically registering vault");
-                if let Some(collateral) = self.config.auto_register_with_collateral {
-                    let public_key = bitcoin_core.get_new_public_key().await?;
-                    self.btc_parachain
-                        .register_vault(collateral, public_key, self.btc_parachain.currency_id)
-                        .await?;
-                } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
-                    faucet::fund_and_register(&self.btc_parachain, &bitcoin_core, faucet_url, vault_id.clone()).await?;
-                }
-            }
-        }
+        self.maybe_register_vault().await?;
 
-        if let Ok(vault) = self.btc_parachain.get_vault(vault_id.clone()).await {
-            if !bitcoin_core.wallet_has_public_key(vault.wallet.public_key.0).await? {
-                return Err(bitcoin::Error::MissingPublicKey.into());
-            }
-        }
+        // purposefully _after_ maybe_register_vault
+        self.vault_id_manager.fetch_vault_ids(false).await?;
 
-        issue::add_keys_from_past_issue_request(&bitcoin_core, &self.btc_parachain).await?;
+        let startup_height = self.await_parachain_block().await?;
 
         let open_request_executor = execute_open_requests(
             self.btc_parachain.clone(),
-            bitcoin_core.clone(),
+            walletless_btc_rpc.clone(),
             num_confirmations,
             self.config.payment_margin_minutes,
         );
@@ -252,45 +334,20 @@ impl VaultService {
             }
         });
 
-        if !self.config.no_startup_collateral_increase {
-            // check if the vault is registered
-            match lock_required_collateral(self.btc_parachain.clone(), vault_id.clone(), self.config.max_collateral)
-                .await
-            {
-                Err(Error::RuntimeError(runtime::Error::VaultNotFound)) => {} // not registered
-                Err(e) => tracing::error!("Failed to lock required additional collateral: {}", e),
-                _ => {} // collateral level now OK
-            };
-        }
-
-        let collateral_maintainer = wait_or_shutdown(
-            self.shutdown.clone(),
-            maintain_collateralization_rate(self.btc_parachain.clone(), self.config.max_collateral),
-        );
-
-        // wait for a new block to arrive, to prevent processing an event that potentially
-        // has been processed already prior to restarting
-        tracing::info!("Waiting for new block...");
-        let startup_height = self.btc_parachain.get_current_chain_height().await?;
-        while startup_height == self.btc_parachain.get_current_chain_height().await? {
-            sleep(CHAIN_HEIGHT_POLLING_INTERVAL).await;
-        }
-        tracing::info!("Got new block...");
-
         // get the relay chain tip but don't error because the relay may not be initialized
         let initial_btc_height = self.btc_parachain.get_best_block_height().await.unwrap_or_default();
 
         // issue handling
         let issue_set = Arc::new(IssueRequests::new());
         let oldest_issue_btc_height =
-            issue::initialize_issue_set(&bitcoin_core, &self.btc_parachain, &issue_set).await?;
+            issue::initialize_issue_set(&walletless_btc_rpc, &self.btc_parachain, &issue_set).await?;
 
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
 
         let issue_request_listener = wait_or_shutdown(
             self.shutdown.clone(),
             listen_for_issue_requests(
-                bitcoin_core.clone(),
+                walletless_btc_rpc.clone(),
                 self.btc_parachain.clone(),
                 issue_event_tx.clone(),
                 issue_set.clone(),
@@ -311,7 +368,7 @@ impl VaultService {
             self.btc_parachain.clone(),
             startup_height,
             initial_btc_height,
-            vault_id.clone(),
+            account_id.clone(),
         );
 
         let issue_cancel_scheduler = wait_or_shutdown(self.shutdown.clone(), async move {
@@ -326,7 +383,7 @@ impl VaultService {
             wait_or_shutdown(
                 self.shutdown.clone(),
                 issue::process_issue_requests(
-                    bitcoin_core.clone(),
+                    walletless_btc_rpc.clone(),
                     self.btc_parachain.clone(),
                     issue_set.clone(),
                     oldest_issue_btc_height,
@@ -342,7 +399,7 @@ impl VaultService {
             self.shutdown.clone(),
             listen_for_replace_requests(
                 self.btc_parachain.clone(),
-                bitcoin_core.clone(),
+                self.vault_id_manager.clone(),
                 replace_event_tx.clone(),
                 !self.config.no_auto_replace,
             ),
@@ -352,7 +409,7 @@ impl VaultService {
             self.shutdown.clone(),
             listen_for_accept_replace(
                 self.btc_parachain.clone(),
-                bitcoin_core.clone(),
+                self.vault_id_manager.clone(),
                 num_confirmations,
                 self.config.payment_margin_minutes,
             ),
@@ -367,7 +424,7 @@ impl VaultService {
             self.btc_parachain.clone(),
             startup_height,
             initial_btc_height,
-            vault_id.clone(),
+            account_id.clone(),
         );
 
         let replace_cancel_scheduler = wait_or_shutdown(self.shutdown.clone(), async move {
@@ -402,7 +459,7 @@ impl VaultService {
             self.shutdown.clone(),
             listen_for_redeem_requests(
                 self.btc_parachain.clone(),
-                bitcoin_core.clone(),
+                self.vault_id_manager.clone(),
                 num_confirmations,
                 self.config.payment_margin_minutes,
             ),
@@ -411,24 +468,12 @@ impl VaultService {
         // refund handling
         let refund_listener = wait_or_shutdown(
             self.shutdown.clone(),
-            listen_for_refund_requests(self.btc_parachain.clone(), bitcoin_core.clone(), num_confirmations),
+            listen_for_refund_requests(
+                self.btc_parachain.clone(),
+                self.vault_id_manager.clone(),
+                num_confirmations,
+            ),
         );
-
-        let sla_provider = self.btc_parachain.clone();
-        let sla_listener = wait_or_shutdown(self.shutdown.clone(), async move {
-            let vault_id = sla_provider.get_account_id();
-            sla_provider
-                .on_event::<UpdateVaultSLAEvent<InterBtcRuntime>, _, _, _>(
-                    |event| async move {
-                        if &event.vault_id == vault_id {
-                            tracing::info!("Received event: new total SLA score = {:?}", event.new_sla);
-                        }
-                    },
-                    |err| tracing::error!("Error (UpdateVaultSLAEvent): {}", err.to_string()),
-                )
-                .await?;
-            Ok(())
-        });
 
         let err_provider = self.btc_parachain.clone();
         let err_listener = wait_or_shutdown(self.shutdown.clone(), async move {
@@ -441,13 +486,18 @@ impl VaultService {
         // watch vault address registration and report potential thefts
         let vaults_listener = maybe_run_task(!self.config.no_vault_theft_report, self.start_theft_reporting().await?);
 
+        let vault_id_registration_listener = wait_or_shutdown(
+            self.shutdown.clone(),
+            self.vault_id_manager.clone().listen_for_vault_id_registrations(),
+        );
+
         // relay bitcoin block headers to the relay
         let relayer = maybe_run_task(
             !self.config.no_bitcoin_block_relay,
             wait_or_shutdown(
                 self.shutdown.clone(),
                 run_relayer(Runner::new(
-                    bitcoin_core.clone(),
+                    walletless_btc_rpc.clone(),
                     self.btc_parachain.clone(),
                     Config {
                         start_height: self.config.bitcoin_relay_start_height,
@@ -464,12 +514,8 @@ impl VaultService {
         let _ = tokio::join!(
             // runs error listener to log errors
             tokio::spawn(async move { err_listener.await }),
-            // runs sla listener to log events
-            tokio::spawn(async move { sla_listener.await }),
-            // maintain collateralization rate
-            tokio::spawn(async move {
-                collateral_maintainer.await;
-            }),
+            // handles new registrations of this vault done externally
+            tokio::spawn(async move { vault_id_registration_listener.await }),
             // replace & issue cancellation helpers
             tokio::spawn(async move { parachain_block_listener.await }),
             tokio::spawn(async move { bitcoin_block_listener.await }),
@@ -497,6 +543,52 @@ impl VaultService {
         Ok(())
     }
 
+    async fn maybe_register_vault(&self) -> Result<(), Error> {
+        let account_id = self.btc_parachain.get_account_id();
+        let collateral_currency = match self.config.currency_id {
+            Some(x) => x,
+            None => {
+                tracing::info!("Not registering vault -- currency-id not configured");
+                return Ok(());
+            }
+        };
+
+        let vault_id = VaultId::new(
+            account_id.clone(),
+            collateral_currency,
+            runtime::RELAY_CHAIN_WRAPPED_CURRENCY, // TODO: fetch this from parachain metadata
+        );
+
+        if is_vault_registered(&self.btc_parachain, &vault_id).await? {
+            tracing::info!(
+                "[{}] Not registering vault -- already registered",
+                vault_id.pretty_printed()
+            );
+        } else {
+            tracing::info!("[{}] Automatically registering vault", vault_id.pretty_printed());
+            if let Some(collateral) = self.config.auto_register_with_collateral {
+                let public_key = self.bitcoin_core.get_new_public_key().await?;
+                self.btc_parachain
+                    .register_vault(&vault_id, collateral, public_key)
+                    .await?;
+            } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
+                faucet::fund_and_register(&self.btc_parachain, &self.bitcoin_core, faucet_url, &vault_id).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn await_parachain_block(&self) -> Result<u32, Error> {
+        // wait for a new block to arrive, to prevent processing an event that potentially
+        // has been processed already prior to restarting
+        tracing::info!("Waiting for new block...");
+        let startup_height = self.btc_parachain.get_current_chain_height().await?;
+        while startup_height == self.btc_parachain.get_current_chain_height().await? {
+            sleep(CHAIN_HEIGHT_POLLING_INTERVAL).await;
+        }
+        tracing::info!("Got new block...");
+        Ok(startup_height)
+    }
     pub(crate) async fn start_theft_reporting(&self) -> Result<impl Future, Error> {
         // TODO: don't fetch vaults if reporting is disabled
         tracing::info!("Fetching all active vaults...");
@@ -554,18 +646,10 @@ impl VaultService {
     }
 }
 
-pub(crate) enum VaultRegistrationStatus {
-    Unregistered,
-    Registered(CurrencyId),
-}
-
-pub(crate) async fn get_vault_registration_status(
-    parachain_rpc: &InterBtcParachain,
-    vault_id: AccountId,
-) -> Result<VaultRegistrationStatus, Error> {
+pub(crate) async fn is_vault_registered(parachain_rpc: &InterBtcParachain, vault_id: &VaultId) -> Result<bool, Error> {
     match parachain_rpc.get_vault(vault_id).await {
-        Ok(vault) => Ok(VaultRegistrationStatus::Registered(vault.currency_id)),
-        Err(RuntimeError::VaultNotFound) => Ok(VaultRegistrationStatus::Unregistered),
+        Ok(_) => Ok(true),
+        Err(RuntimeError::VaultNotFound) => Ok(false),
         Err(err) => Err(err.into()),
     }
 }

@@ -1,16 +1,16 @@
 use crate::{
     error::{Error, KeyLoadingError},
-    parse_collateral_currency, CurrencyId, InterBtcParachain, InterBtcSigner,
+    InterBtcParachain, InterBtcSigner,
 };
 use clap::Clap;
 use sp_core::{sr25519::Pair, Pair as _};
 use sp_keyring::AccountKeyring;
-use std::{collections::HashMap, num::ParseIntError, time::Duration};
+use std::{collections::HashMap, num::ParseIntError, str::FromStr, time::Duration};
 
 #[derive(Clap, Debug, Clone)]
 pub struct ProviderUserOpts {
     /// Keyring to use, mutually exclusive with keyfile.
-    #[clap(long)]
+    #[clap(long, parse(try_from_str = parse_account_keyring))]
     pub keyring: Option<AccountKeyring>,
 
     /// Path to the json file containing key pairs in a map.
@@ -30,7 +30,7 @@ impl ProviderUserOpts {
         // load parachain credentials
         let (pair, user_name) = match (self.keyfile.as_ref(), self.keyname.as_ref(), &self.keyring) {
             (Some(file_path), Some(keyname), None) => {
-                (get_credentials_from_file(&file_path, &keyname)?, keyname.to_string())
+                (get_credentials_from_file(file_path, keyname)?, keyname.to_string())
             }
             (None, None, Some(keyring)) => (keyring.pair(), format!("{}", keyring)),
             _ => panic!("Invalid arguments"), // should never occur, due to clap constraints
@@ -52,6 +52,10 @@ fn get_credentials_from_file(file_path: &str, keyname: &str) -> Result<Pair, Key
     let pair_str = map.get(keyname).ok_or(KeyLoadingError::KeyNotFound)?;
     let pair = Pair::from_string(pair_str, None).map_err(KeyLoadingError::SecretStringError)?;
     Ok(pair)
+}
+
+pub fn parse_account_keyring(src: &str) -> Result<AccountKeyring, Error> {
+    AccountKeyring::from_str(src).map_err(|_| Error::KeyringAccountParsingError)
 }
 
 pub fn parse_duration_ms(src: &str) -> Result<Duration, ParseIntError> {
@@ -79,10 +83,6 @@ pub struct ConnectionOpts {
     /// Maximum notification capacity for each subscription
     #[clap(long)]
     pub max_notifs_per_subscription: Option<usize>,
-
-    /// The currency to use for the collateral, e.g. "DOT" or "KSM".
-    #[clap(long, parse(try_from_str = parse_collateral_currency))]
-    pub currency_id: CurrencyId,
 }
 
 impl ConnectionOpts {
@@ -90,7 +90,6 @@ impl ConnectionOpts {
         InterBtcParachain::from_url_and_config_with_retry(
             &self.btc_parachain_url,
             signer,
-            self.currency_id,
             self.max_concurrent_requests,
             self.max_notifs_per_subscription,
             self.btc_parachain_connection_timeout_ms,

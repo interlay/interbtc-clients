@@ -206,7 +206,7 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
     btc_parachain
         .on_event::<RequestIssueEvent<InterBtcRuntime>, _, _, _>(
             |event| async move {
-                if &event.vault_id == btc_parachain.get_account_id() {
+                if &event.vault_id.account_id == btc_parachain.get_account_id() {
                     tracing::info!("Received request issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
@@ -249,7 +249,7 @@ pub async fn listen_for_issue_executes(
     btc_parachain
         .on_event::<ExecuteIssueEvent<InterBtcRuntime>, _, _, _>(
             |event| async move {
-                if &event.vault_id == btc_parachain.get_account_id() {
+                if &event.vault_id.account_id == btc_parachain.get_account_id() {
                     tracing::info!("Received execute issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed

@@ -14,7 +14,7 @@ mod system;
 mod types;
 mod vaults;
 
-use runtime::{InterBtcParachain, VaultRegistryPallet};
+use runtime::{InterBtcParachain, VaultId, VaultRegistryPallet};
 use std::time::Duration;
 
 pub mod service {
@@ -35,8 +35,8 @@ pub mod service {
 pub use crate::{cancellation::Event, error::Error, system::*, types::IssueRequests};
 pub use vaults::Vaults;
 
-pub(crate) async fn deposit_collateral(api: &InterBtcParachain, amount: u128) -> Result<(), Error> {
-    let result = api.deposit_collateral(amount).await;
+pub(crate) async fn deposit_collateral(api: &InterBtcParachain, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
+    let result = api.deposit_collateral(vault_id, amount).await;
     tracing::info!("Locking additional collateral; amount {}: {:?}", amount, result);
     Ok(result?)
 }

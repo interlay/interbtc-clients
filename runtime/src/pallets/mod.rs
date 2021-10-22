@@ -25,6 +25,7 @@ pub use primitives::{
     replace::{ReplaceRequest, ReplaceRequestStatus},
 };
 
+use serde::Serialize;
 pub use sp_core::{H160, H256, U256};
 
 use codec::{Codec, EncodeLike};
@@ -54,8 +55,9 @@ pub trait Core: System {
     type UnsignedFixedPoint: Codec + EncodeLike + Member + Default;
     type VaultStatus: Codec + EncodeLike + Default + Send + Sync;
     type RedeemRequestStatus: Codec + EncodeLike + Default + Send + Sync;
-    type CurrencyId: Codec + EncodeLike + Send + Sync;
+    type CurrencyId: Codec + EncodeLike + Send + Sync + Copy + Serialize;
     type OracleKey: Codec + EncodeLike + Send + Sync;
+    type VaultId: Codec + EncodeLike + Member;
 
     // cumulus / polkadot types
     type XcmError: Codec + EncodeLike + Member;
