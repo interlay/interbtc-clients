@@ -29,7 +29,12 @@ where
 
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Bob).await;
 
-    set_exchange_rate_and_wait(&parachain_rpc, FixedU128::saturating_from_rational(1u128, 100u128)).await;
+    set_exchange_rate_and_wait(
+        &parachain_rpc,
+        CurrencyId::DOT,
+        FixedU128::saturating_from_rational(1u128, 100u128),
+    )
+    .await;
     set_bitcoin_fees(&parachain_rpc, FixedU128::from(0)).await;
 
     execute(client).await
@@ -44,7 +49,12 @@ where
 
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Bob).await;
 
-    set_exchange_rate_and_wait(&parachain_rpc, FixedU128::saturating_from_rational(1u128, 100u128)).await;
+    set_exchange_rate_and_wait(
+        &parachain_rpc,
+        CurrencyId::DOT,
+        FixedU128::saturating_from_rational(1u128, 100u128),
+    )
+    .await;
     set_bitcoin_fees(&parachain_rpc, FixedU128::from(0)).await;
 
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
@@ -128,7 +138,12 @@ async fn test_report_vault_theft_succeeds() {
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let vault_id = VaultId::new(AccountKeyring::Charlie.into(), CurrencyId::DOT, CurrencyId::INTERBTC);
 
-    set_exchange_rate_and_wait(&relayer_provider, FixedU128::saturating_from_rational(1u128, 100u128)).await;
+    set_exchange_rate_and_wait(
+        &relayer_provider,
+        CurrencyId::DOT,
+        FixedU128::saturating_from_rational(1u128, 100u128),
+    )
+    .await;
 
     assert_ok!(
         try_join(
@@ -407,6 +422,7 @@ async fn test_maintain_collateral_succeeds() {
                 // dot per btc increases by 10%
                 set_exchange_rate_and_wait(
                     &relayer_provider,
+                    CurrencyId::DOT,
                     FixedU128::saturating_from_rational(110u128, 10000u128),
                 )
                 .await;
@@ -985,7 +1001,7 @@ async fn test_off_chain_liquidation() {
 
         assert_issue(&user_provider, &btc_rpc, &vault_id, issue_amount).await;
 
-        set_exchange_rate_and_wait(&relayer_provider, FixedU128::from(10)).await;
+        set_exchange_rate_and_wait(&relayer_provider, CurrencyId::DOT, FixedU128::from(10)).await;
 
         assert_event::<LiquidateVaultEvent<InterBtcRuntime>, _>(TIMEOUT, vault_provider.clone(), |_| true).await;
     })

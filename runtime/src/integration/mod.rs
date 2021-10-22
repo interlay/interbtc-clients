@@ -4,7 +4,7 @@ mod bitcoin_simulator;
 
 use crate::{
     rpc::{IssuePallet, OraclePallet, VaultRegistryPallet},
-    BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey, VaultId, RELAY_CHAIN_CURRENCY,
+    BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey, VaultId,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
 use frame_support::assert_ok;
@@ -125,16 +125,10 @@ async fn wait_for_aggregate(parachain_rpc: &InterBtcParachain, key: &OracleKey) 
     }
 }
 
-pub async fn set_exchange_rate_and_wait(parachain_rpc: &InterBtcParachain, value: FixedU128) {
-    let key = OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY);
-    assert_ok!(parachain_rpc.feed_values(vec![(key, value)]).await);
-    assert_ok!(
-        timeout(
-            TIMEOUT_DURATION,
-            wait_for_aggregate(parachain_rpc, &OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY))
-        )
-        .await
-    );
+pub async fn set_exchange_rate_and_wait(parachain_rpc: &InterBtcParachain, currency_id: CurrencyId, value: FixedU128) {
+    let key = OracleKey::ExchangeRate(currency_id);
+    assert_ok!(parachain_rpc.feed_values(vec![(key.clone(), value)]).await);
+    assert_ok!(timeout(TIMEOUT_DURATION, wait_for_aggregate(parachain_rpc, &key)).await);
 }
 
 pub async fn set_bitcoin_fees(parachain_rpc: &InterBtcParachain, value: FixedU128) {

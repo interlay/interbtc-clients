@@ -50,7 +50,6 @@ pub const MILLISECS_PER_BLOCK: u64 = 6000;
 pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 
-pub const RELAY_CHAIN_CURRENCY: CurrencyId = CurrencyId::DOT;
 pub const RELAY_CHAIN_WRAPPED_CURRENCY: CurrencyId = CurrencyId::KBTC;
 
 pub type Balance = u128;
