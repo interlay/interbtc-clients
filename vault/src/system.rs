@@ -97,7 +97,7 @@ pub struct VaultServiceConfig {
 
     /// The currency to use for the collateral, e.g. "DOT" or "KSM".
     #[clap(long, parse(try_from_str = parse_collateral_currency))]
-    pub currency_id: CurrencyId,
+    pub currency_id: Option<CurrencyId>,
 }
 
 async fn active_block_listener(
@@ -549,9 +549,17 @@ impl VaultService {
 
     async fn maybe_register_vault(&self) -> Result<(), Error> {
         let account_id = self.btc_parachain.get_account_id();
+        let collateral_currency = match self.config.currency_id {
+            Some(x) => x,
+            None => {
+                tracing::info!("Not registering vault -- currency-id not configured");
+                return Ok(())
+            }
+        };
+        
         let vault_id = VaultId::new(
             account_id.clone(),
-            self.config.currency_id,
+            collateral_currency,
             runtime::RELAY_CHAIN_WRAPPED_CURRENCY,
         );
 
