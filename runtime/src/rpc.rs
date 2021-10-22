@@ -19,8 +19,8 @@ use tokio::{sync::RwLock, time::sleep};
 use crate::{
     btc_relay::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*, refund::*, relay::*,
     replace::*, retry::*, security::*, timestamp::*, tokens::*, types::*, utility::*, vault_registry::*, AccountId,
-    BlockNumber, CurrencyId, Error, InterBtcRuntime, VaultId, BTC_RELAY_MODULE, RELAY_CHAIN_CURRENCY,
-    STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CONFIRMATIONS,
+    BlockNumber, CurrencyId, Error, InterBtcRuntime, VaultId, BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS,
+    STABLE_PARACHAIN_CONFIRMATIONS,
 };
 
 const DEFAULT_COLLATERAL_CURRENCY: CurrencyId = CurrencyId::DOT;
@@ -600,7 +600,7 @@ impl TimestampPallet for InterBtcParachain {
 
 #[async_trait]
 pub trait OraclePallet {
-    async fn get_exchange_rate(&self) -> Result<FixedU128, Error>;
+    async fn get_exchange_rate(&self, currency_id: CurrencyId) -> Result<FixedU128, Error>;
 
     async fn feed_values(&self, values: Vec<(OracleKey, FixedU128)>) -> Result<(), Error>;
 
@@ -621,11 +621,11 @@ pub trait OraclePallet {
 impl OraclePallet for InterBtcParachain {
     /// Returns the last exchange rate in planck per satoshis, the time at which it was set
     /// and the configured max delay.
-    async fn get_exchange_rate(&self) -> Result<FixedU128, Error> {
+    async fn get_exchange_rate(&self, currency_id: CurrencyId) -> Result<FixedU128, Error> {
         let head = self.get_latest_block_hash().await?;
         Ok(self
             .ext_client
-            .aggregate(OracleKey::ExchangeRate(RELAY_CHAIN_CURRENCY), head)
+            .aggregate(OracleKey::ExchangeRate(currency_id), head)
             .await?)
     }
 
