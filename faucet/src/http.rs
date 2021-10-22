@@ -561,7 +561,7 @@ mod tests {
             let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
             allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
             allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-            let expected_amount_planck: u128 = vault_allowance_dot * DEFAULT_TESTING_CURRENCY.one();
+            let expected_amount_planck: u128 = vault_allowance_dot * currency_id.one();
 
             let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
             bob_provider
