@@ -19,7 +19,6 @@ use std::{marker::PhantomData, sync::Arc, time::Duration};
 use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager};
 
 const TIMEOUT: Duration = Duration::from_secs(90);
-const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
 
 async fn test_with<F, R>(execute: impl FnOnce(SubxtClient) -> F) -> R
 where
@@ -301,7 +300,7 @@ async fn test_replace_succeeds() {
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpcs = vec![(new_vault_id.clone(), btc_rpc.clone())].into_iter().collect();
-        let vault_id_manager = VaultIdManager::from_map(new_vault_provider.clone(), btc_rpcs);
+        let _vault_id_manager = VaultIdManager::from_map(new_vault_provider.clone(), btc_rpcs);
         let btc_rpcs = vec![
             (old_vault_id.clone(), btc_rpc.clone()),
             (new_vault_id.clone(), btc_rpc.clone()),
@@ -832,7 +831,7 @@ async fn test_issue_overpayment_succeeds() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_automatic_issue_execution_succeeds() {
-    test_with_vault(|client, vault1_id, vault1_provider| async move {
+    test_with_vault(|client, vault1_id, _vault1_provider| async move {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         let vault1_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
         let vault2_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;

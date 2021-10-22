@@ -15,8 +15,6 @@ use sp_core::{H160, U256};
 use sp_keyring::AccountKeyring;
 use std::time::Duration;
 
-const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
-
 fn dummy_public_key() -> BtcPublicKey {
     BtcPublicKey([
         2, 205, 114, 218, 156, 16, 235, 172, 106, 37, 18, 153, 202, 140, 176, 91, 207, 51, 187, 55, 18, 45, 222, 180,

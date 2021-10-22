@@ -9,7 +9,7 @@ use kv::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     AccountId, CollateralBalancesPallet, CurrencyId, CurrencyInfo, Error as RuntimeError, InterBtcParachain,
-    VaultRegistryPallet, PLANCK_PER_DOT,
+    VaultRegistryPallet, 
 };
 use serde::{Deserialize, Deserializer};
 use std::{collections::HashMap, net::SocketAddr, time::Duration};
@@ -214,7 +214,7 @@ async fn atomic_faucet_funding(
     let amount = allowances
         .get(&account_type)
         .ok_or(Error::NoFaucetAllowance)?
-        .checked_mul(PLANCK_PER_DOT)
+        .checked_mul(currency_id.one())
         .ok_or(Error::MathError)?;
 
     log::info!(
@@ -310,7 +310,6 @@ mod tests {
 
     use super::{
         fund_account, open_kv_store, CollateralBalancesPallet, FundAccountJsonRpcRequest, FundingRequestAccountType,
-        PLANCK_PER_DOT,
     };
     use kv::{Config, Store};
     use runtime::{
@@ -335,9 +334,6 @@ mod tests {
         ])
     }
 
-    fn dot_to_planck(dot: u128) -> u128 {
-        dot.checked_mul(PLANCK_PER_DOT).unwrap()
-    }
 
     async fn set_exchange_rate(client: SubxtClient) {
         let oracle_provider = setup_provider(client, AccountKeyring::Bob).await;
@@ -363,7 +359,7 @@ mod tests {
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
         allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        let expected_amount_planck: u128 = dot_to_planck(user_allowance_dot);
+        let expected_amount_planck: u128 = user_allowance_dot * DEFAULT_TESTING_CURRENCY.one();
 
         let store = Store::new(Config::new(tmp_dir.path().join("kv1"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
@@ -440,7 +436,7 @@ mod tests {
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
         allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        let expected_amount_planck: u128 = dot_to_planck(vault_allowance_dot);
+        let expected_amount_planck: u128 = vault_allowance_dot * DEFAULT_TESTING_CURRENCY.one();
 
         let store = Store::new(Config::new(tmp_dir.path().join("kv3"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
@@ -509,7 +505,7 @@ mod tests {
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
         allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        let expected_amount_planck: u128 = dot_to_planck(user_allowance_dot);
+        let expected_amount_planck: u128 = user_allowance_dot * DEFAULT_TESTING_CURRENCY.one();
 
         let store = Store::new(Config::new(tmp_dir.path().join("kv3"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
@@ -566,7 +562,7 @@ mod tests {
             let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
             allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
             allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-            let expected_amount_planck: u128 = dot_to_planck(vault_allowance_dot);
+            let expected_amount_planck: u128 = vault_allowance_dot * DEFAULT_TESTING_CURRENCY.one();
 
             let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
             bob_provider
@@ -627,7 +623,7 @@ mod tests {
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
         allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        let expected_amount_planck: u128 = dot_to_planck(vault_allowance_dot);
+        let expected_amount_planck: u128 = vault_allowance_dot * DEFAULT_TESTING_CURRENCY.one();
 
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         bob_provider

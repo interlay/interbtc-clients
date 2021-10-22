@@ -43,7 +43,6 @@ use polkadot_parachain::primitives::{Id as ParaId, RelayChainBlockNumber};
 use xcm::v0::{Error as XcmError, NetworkId};
 
 pub const TX_FEES: u128 = 2000000000;
-pub const PLANCK_PER_DOT: u128 = 10000000000;
 
 pub const MILLISECS_PER_BLOCK: u64 = 6000;
 
