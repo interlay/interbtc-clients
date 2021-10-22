@@ -84,6 +84,7 @@ rev = "61fa80433215d92702b83d429a47184da227aba6"
 package = "module-oracle-rpc-runtime-api"
 
 [dev-dependencies]
+runtime = { path = ".", features = ["testing-utils"] }
 substrate-subxt-client = { git = "https://github.com/interlay/substrate-subxt", rev = "37a943510b98b365012e735ba6ded85adf291120" }
 interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "61fa80433215d92702b83d429a47184da227aba6" }
 tempdir = "0.3.7"

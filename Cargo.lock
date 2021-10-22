@@ -7015,6 +7015,7 @@ dependencies = [
  "parity-scale-codec",
  "polkadot-parachain",
  "rand 0.7.3",
+ "runtime",
  "security",
  "serde",
  "serde_json",
