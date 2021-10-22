@@ -241,11 +241,6 @@ impl<T: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<T> {
             .map(|(vault_id, btc_rpc)| (vault_id.clone(), btc_rpc.clone()))
             .collect()
     }
-    //
-    //     pub async fn update_vault_ids(&self) -> Result<(), Error>{
-    //         let vault_ids = self.btc_parachain.get_vault_ids().await;
-    //         vaul
-    //     }
 }
 
 pub struct VaultService {
@@ -321,8 +316,6 @@ impl VaultService {
         self.vault_id_manager.fetch_vault_ids(false).await?;
 
         let startup_height = self.await_parachain_block().await?;
-
-        self.start_vault_id_monitor().await?;
 
         let open_request_executor = execute_open_requests(
             self.btc_parachain.clone(),
@@ -560,7 +553,7 @@ impl VaultService {
         let vault_id = VaultId::new(
             account_id.clone(),
             collateral_currency,
-            runtime::RELAY_CHAIN_WRAPPED_CURRENCY,
+            runtime::RELAY_CHAIN_WRAPPED_CURRENCY, // TODO: fetch this from parachain metadata
         );
 
         if is_vault_registered(&self.btc_parachain, &vault_id).await? {
@@ -647,17 +640,6 @@ impl VaultService {
             vaults_registration_listener,
             wallet_update_listener,
         ))
-    }
-
-    pub(crate) async fn start_vault_id_monitor(&self) -> Result<(), Error> {
-        // if let Ok(vault) = self.btc_parachain.get_vault(account_id.clone()).await {
-        //     if !bitcoin_core.wallet_has_public_key(vault.wallet.public_key.0).await? {
-        //         return Err(bitcoin::Error::MissingPublicKey.into());
-        //     }
-        // }
-        // issue::add_keys_from_past_issue_request(&bitcoin_core, &self.btc_parachain).await?;
-
-        todo!()
     }
 }
 
