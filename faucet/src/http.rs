@@ -9,7 +9,7 @@ use kv::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     AccountId, CollateralBalancesPallet, CurrencyId, CurrencyInfo, Error as RuntimeError, InterBtcParachain,
-    VaultRegistryPallet, 
+    VaultRegistryPallet,
 };
 use serde::{Deserialize, Deserializer};
 use std::{collections::HashMap, net::SocketAddr, time::Duration};
@@ -333,7 +333,6 @@ mod tests {
             180, 119, 54, 243, 97, 173, 150, 161, 169, 230,
         ])
     }
-
 
     async fn set_exchange_rate(client: SubxtClient) {
         let oracle_provider = setup_provider(client, AccountKeyring::Bob).await;

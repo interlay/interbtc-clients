@@ -146,7 +146,10 @@ pub struct VaultIdManager<T: BitcoinCoreApi + Clone + Send + Sync + 'static> {
 }
 
 impl<T: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<T> {
-    pub fn new(btc_parachain: InterBtcParachain, constructor: impl Fn(VaultId) -> Result<T, BitcoinError> + Send + Sync + 'static) -> Self {
+    pub fn new(
+        btc_parachain: InterBtcParachain,
+        constructor: impl Fn(VaultId) -> Result<T, BitcoinError> + Send + Sync + 'static,
+    ) -> Self {
         Self {
             bitcoin_rpcs: Arc::new(RwLock::new(std::collections::HashMap::new())),
             constructor: Arc::new(Box::new(constructor)),
@@ -546,10 +549,10 @@ impl VaultService {
             Some(x) => x,
             None => {
                 tracing::info!("Not registering vault -- currency-id not configured");
-                return Ok(())
+                return Ok(());
             }
         };
-        
+
         let vault_id = VaultId::new(
             account_id.clone(),
             collateral_currency,

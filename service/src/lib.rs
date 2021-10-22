@@ -15,10 +15,10 @@ mod trace;
 
 use telemetry::TelemetryClient;
 
+use bitcoin::Error as BitcoinError;
 pub use cli::{LoggingFormat, RestartPolicy, ServiceConfig};
 pub use error::Error;
 pub use trace::init_subscriber;
-use bitcoin::Error as BitcoinError;
 
 pub type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
 

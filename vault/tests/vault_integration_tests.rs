@@ -20,8 +20,8 @@ use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager};
 
 const TIMEOUT: Duration = Duration::from_secs(90);
 
-const DEFAULT_TESTING_CURRENCY:CurrencyId = CurrencyId::DOT;
-const DEFAULT_WRAPPED_CURRENCY:CurrencyId = CurrencyId::INTERBTC;
+const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
+const DEFAULT_WRAPPED_CURRENCY: CurrencyId = CurrencyId::INTERBTC;
 
 async fn test_with<F, R>(execute: impl FnOnce(SubxtClient) -> F) -> R
 where
@@ -61,7 +61,11 @@ where
     set_bitcoin_fees(&parachain_rpc, FixedU128::from(0)).await;
 
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
-    let vault_id = VaultId::new(AccountKeyring::Charlie.into(), DEFAULT_TESTING_CURRENCY, DEFAULT_WRAPPED_CURRENCY);
+    let vault_id = VaultId::new(
+        AccountKeyring::Charlie.into(),
+        DEFAULT_TESTING_CURRENCY,
+        DEFAULT_WRAPPED_CURRENCY,
+    );
 
     execute(client, vault_id, vault_provider).await
 }
@@ -139,7 +143,11 @@ async fn test_report_vault_theft_succeeds() {
     let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
     let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
-    let vault_id = VaultId::new(AccountKeyring::Charlie.into(), DEFAULT_TESTING_CURRENCY, DEFAULT_WRAPPED_CURRENCY);
+    let vault_id = VaultId::new(
+        AccountKeyring::Charlie.into(),
+        DEFAULT_TESTING_CURRENCY,
+        DEFAULT_WRAPPED_CURRENCY,
+    );
 
     set_exchange_rate_and_wait(
         &relayer_provider,
@@ -313,7 +321,11 @@ async fn test_replace_succeeds() {
     test_with_vault(|client, old_vault_id, old_vault_provider| async move {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         let new_vault_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
-        let new_vault_id = VaultId::new(AccountKeyring::Eve.into(), DEFAULT_TESTING_CURRENCY, DEFAULT_WRAPPED_CURRENCY);
+        let new_vault_id = VaultId::new(
+            AccountKeyring::Eve.into(),
+            DEFAULT_TESTING_CURRENCY,
+            DEFAULT_WRAPPED_CURRENCY,
+        );
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
@@ -447,7 +459,11 @@ async fn test_withdraw_replace_succeeds() {
     test_with_vault(|client, old_vault_id, old_vault_provider| async move {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         let new_vault_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
-        let new_vault_id = VaultId::new(AccountKeyring::Eve.into(), DEFAULT_TESTING_CURRENCY, DEFAULT_WRAPPED_CURRENCY);
+        let new_vault_id = VaultId::new(
+            AccountKeyring::Eve.into(),
+            DEFAULT_TESTING_CURRENCY,
+            DEFAULT_WRAPPED_CURRENCY,
+        );
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
@@ -517,7 +533,11 @@ async fn test_cancellation_succeeds() {
         let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         let new_vault_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
-        let new_vault_id = VaultId::new(AccountKeyring::Eve.into(), DEFAULT_TESTING_CURRENCY, DEFAULT_WRAPPED_CURRENCY);
+        let new_vault_id = VaultId::new(
+            AccountKeyring::Eve.into(),
+            DEFAULT_TESTING_CURRENCY,
+            DEFAULT_WRAPPED_CURRENCY,
+        );
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
@@ -854,7 +874,11 @@ async fn test_automatic_issue_execution_succeeds() {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         let vault1_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
         let vault2_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
-        let vault2_id = VaultId::new(AccountKeyring::Eve.into(), DEFAULT_TESTING_CURRENCY, DEFAULT_WRAPPED_CURRENCY);
+        let vault2_id = VaultId::new(
+            AccountKeyring::Eve.into(),
+            DEFAULT_TESTING_CURRENCY,
+            DEFAULT_WRAPPED_CURRENCY,
+        );
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
@@ -1016,7 +1040,11 @@ async fn test_shutdown() {
     test_with(|client| async move {
         let sudo_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
-        let sudo_vault_id = VaultId::new(AccountKeyring::Alice.into(), DEFAULT_TESTING_CURRENCY, DEFAULT_WRAPPED_CURRENCY);
+        let sudo_vault_id = VaultId::new(
+            AccountKeyring::Alice.into(),
+            DEFAULT_TESTING_CURRENCY,
+            DEFAULT_WRAPPED_CURRENCY,
+        );
 
         // register a vault..
         let btc_rpc = MockBitcoinCore::new(sudo_provider.clone()).await;
