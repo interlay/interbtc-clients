@@ -7,11 +7,9 @@ use git_version::git_version;
 use reqwest::Url;
 use runtime::{
     cli::{parse_duration_ms, ProviderUserOpts},
-    parse_collateral_currency,
-    substrate_subxt::PairSigner,
-    CurrencyId, CurrencyInfo, FixedPointNumber,
+    parse_collateral_currency, CurrencyId, CurrencyInfo, FixedPointNumber,
     FixedPointTraits::{CheckedDiv, CheckedMul, One},
-    FixedU128, InterBtcParachain, InterBtcRuntime, OracleKey, OraclePallet,
+    FixedU128, InterBtcParachain, InterBtcRuntime, OracleKey, OraclePallet, PairSigner, RichCurrencyId,
 };
 use std::{collections::HashMap, time::Duration};
 use tokio::{join, time::sleep};
@@ -27,6 +25,7 @@ const BTC_DECIMALS: u32 = 8;
 const BTC_CURRENCY: &str = "btc";
 
 async fn get_exchange_rate_from_coingecko(currency_id: CurrencyId, url: &Url) -> Result<FixedU128, Error> {
+    let currency_id: RichCurrencyId = currency_id.into();
     // https://www.coingecko.com/api/documentations/v3
     let resp = reqwest::get(url.clone())
         .await?
@@ -190,11 +189,12 @@ async fn main() -> Result<(), Error> {
     };
 
     let currency_id = opts.currency_id;
+    let rich_currency_id: RichCurrencyId = currency_id.clone().into();
     let coingecko_url = if let Some(mut url) = opts.coingecko {
         url.set_path(&format!("{}/simple/price", url.path()));
         url.set_query(Some(&format!(
             "ids={}&vs_currencies={}",
-            currency_id.name().to_lowercase(),
+            rich_currency_id.name().to_lowercase(),
             BTC_CURRENCY
         )));
         Some(url)
@@ -202,9 +202,11 @@ async fn main() -> Result<(), Error> {
         None
     };
 
-    let conversion_factor =
-        FixedU128::checked_from_rational(10_u128.pow(currency_id.decimals() as u32), 10_u128.pow(BTC_DECIMALS))
-            .unwrap();
+    let conversion_factor = FixedU128::checked_from_rational(
+        10_u128.pow(rich_currency_id.decimals() as u32),
+        10_u128.pow(BTC_DECIMALS),
+    )
+    .unwrap();
 
     loop {
         let parachain_rpc =

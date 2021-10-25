@@ -3,9 +3,9 @@ use crate::{
     InterBtcParachain, InterBtcSigner,
 };
 use clap::Clap;
-use sp_core::{sr25519::Pair, Pair as _};
 use sp_keyring::AccountKeyring;
 use std::{collections::HashMap, num::ParseIntError, str::FromStr, time::Duration};
+use subxt::sp_core::{sr25519::Pair, Pair as _};
 
 #[derive(Clap, Debug, Clone)]
 pub struct ProviderUserOpts {

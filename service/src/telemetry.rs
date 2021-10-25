@@ -4,8 +4,7 @@ use crate::Error;
 use hyper::{client::HttpConnector, Body, Client, Method, Request, StatusCode};
 use hyper_tls::HttpsConnector;
 use interbtc_telemetry::{ClientInfo, Message, Payload};
-use runtime::InterBtcSigner;
-use sp_core::sr25519::Pair;
+use runtime::{InterBtcSigner, Pair};
 use tokio::time;
 
 const TELEMETRY_PERIOD: Duration = Duration::from_secs(3600);

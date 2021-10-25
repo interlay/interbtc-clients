@@ -1,6 +1,6 @@
-use crate::{execution::*, VaultIdManager};
+use crate::{execution::*, system::VaultIdManager};
 use bitcoin::BitcoinCoreApi;
-use runtime::{pallets::redeem::RequestRedeemEvent, InterBtcParachain, InterBtcRuntime, RedeemPallet};
+use runtime::{InterBtcParachain, RedeemPallet, RequestRedeemEvent};
 use service::Error as ServiceError;
 use std::time::Duration;
 
@@ -20,7 +20,7 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
     payment_margin: Duration,
 ) -> Result<(), ServiceError> {
     parachain_rpc
-        .on_event::<RequestRedeemEvent<InterBtcRuntime>, _, _, _>(
+        .on_event::<RequestRedeemEvent, _, _, _>(
             |event| async {
                 let btc_rpc = match btc_rpc.get_bitcoin_rpc(&event.vault_id).await {
                     Some(x) => x,

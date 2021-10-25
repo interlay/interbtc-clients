@@ -1,5 +1,5 @@
 use clap::Clap;
-use runtime::{substrate_subxt::PairSigner, InterBtcRuntime};
+use runtime::{InterBtcRuntime, PairSigner};
 use service::{ConnectionManager, ServiceConfig};
 
 use vault::{Error, VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION};

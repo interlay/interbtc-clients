@@ -2,12 +2,10 @@ use crate::error::Error;
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _};
 use futures::stream::{iter, StreamExt};
 use runtime::{
-    pallets::vault_registry::{RegisterAddressEvent, RegisterVaultEvent},
-    BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcRuntime, InterBtcVault,
-    RelayPallet, VaultId, VaultIdFormatter, VaultRegistryPallet,
+    BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcVault, RegisterAddressEvent,
+    RegisterVaultEvent, RelayPallet, Ss58Codec, VaultId, VaultRegistryPallet,
 };
 use service::Error as ServiceError;
-use sp_core::crypto::Ss58Codec;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
@@ -154,14 +152,14 @@ pub async fn listen_for_wallet_updates(
 ) -> Result<(), ServiceError> {
     let vaults = &vaults;
     btc_parachain
-        .on_event::<RegisterAddressEvent<InterBtcRuntime>, _, _, _>(
+        .on_event::<RegisterAddressEvent, _, _, _>(
             |event| async move {
                 tracing::info!(
                     "Added new btc address {:?} for vault {}",
-                    event.btc_address,
+                    event.address,
                     event.vault_id.account_id.to_ss58check()
                 );
-                vaults.write(event.btc_address, event.vault_id).await;
+                vaults.write(event.address, event.vault_id).await;
             },
             |err| tracing::error!("Error (RegisterAddressEvent): {}", err.to_string()),
         )
@@ -174,7 +172,7 @@ pub async fn listen_for_vaults_registered(
     vaults: Arc<Vaults>,
 ) -> Result<(), ServiceError> {
     btc_parachain
-        .on_event::<RegisterVaultEvent<InterBtcRuntime>, _, _, _>(
+        .on_event::<RegisterVaultEvent, _, _, _>(
             |event| async {
                 let vault_id = event.vault_id;
                 match btc_parachain.get_vault(&vault_id).await {

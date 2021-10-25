@@ -1,3 +1,5 @@
+#![cfg(feature = "cli")]
+
 use crate::{BitcoinCore, Error};
 use bitcoincore_rpc::{bitcoin::Network, Auth};
 use clap::Clap;

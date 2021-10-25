@@ -3,8 +3,8 @@
 mod bitcoin_simulator;
 
 use crate::{
-    rpc::{IssuePallet, OraclePallet, VaultRegistryPallet},
-    BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey, VaultId,
+    rpc::{BtcRelayPallet, IssuePallet, OraclePallet, VaultRegistryPallet},
+    CurrencyId, FixedU128, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey, VaultId,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
 use frame_support::assert_ok;
@@ -12,16 +12,14 @@ use futures::{
     future::{try_join, Either},
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
-use primitives::CurrencyId;
 use sp_keyring::AccountKeyring;
-use sp_runtime::FixedU128;
 use std::time::Duration;
-use substrate_subxt::{Event, PairSigner};
-use substrate_subxt_client::{DatabaseConfig, KeystoreConfig, Role, SubxtClientConfig, WasmExecutionMethod};
+use subxt::{Event, PairSigner};
+use subxt_client::{DatabaseSource, KeystoreConfig, Role, SubxtClientConfig, WasmExecutionMethod};
 use tempdir::TempDir;
 use tokio::time::{sleep, timeout};
 
-pub use substrate_subxt_client::SubxtClient;
+pub use subxt_client::SubxtClient;
 
 // export the mocked bitcoin interface
 pub use bitcoin_simulator::MockBitcoinCore;
@@ -56,7 +54,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
         impl_version: "0.0.1",
         author: "Interlay Ltd",
         copyright_start_year: 2020,
-        db: DatabaseConfig::ParityDb {
+        db: DatabaseSource::ParityDb {
             path: tmp.path().join("db"),
         },
         keystore: KeystoreConfig::Path {
@@ -67,6 +65,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
         role: Role::Authority(key),
         telemetry: None,
         wasm_method: WasmExecutionMethod::Compiled,
+        tokio_handle: tokio::runtime::Handle::current(),
     };
 
     // enable off chain workers
@@ -74,6 +73,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
     service_config.offchain_worker.enabled = true;
 
     let (task_manager, rpc_handlers) = interbtc::service::new_full(service_config).unwrap();
+
     let client = SubxtClient::new(task_manager, rpc_handlers);
 
     let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
@@ -105,7 +105,7 @@ pub async fn assert_issue(
     let issue = parachain_rpc.request_issue(amount, vault_id, 10000).await.unwrap();
 
     let metadata = btc_rpc
-        .send_to_address(issue.vault_btc_address, (issue.amount_btc + issue.fee) as u64, None, 0)
+        .send_to_address(issue.vault_address, (issue.amount + issue.fee) as u64, None, 0)
         .await
         .unwrap();
 
@@ -157,7 +157,7 @@ pub async fn get_required_vault_collateral_for_issue(
 /// wait for an event to occur. After the specified error, this will panic. This returns the event.
 pub async fn assert_event<T, F>(duration: Duration, parachain_rpc: InterBtcParachain, f: F) -> T
 where
-    T: Event<InterBtcRuntime> + Clone + std::fmt::Debug,
+    T: Event + Clone + std::fmt::Debug,
     F: Fn(T) -> bool,
 {
     let (tx, mut rx) = futures::channel::mpsc::channel(1);
@@ -181,7 +181,7 @@ where
         }
     })
     .await
-    .unwrap_or_else(|_| panic!("could not find event: {}::{}", T::MODULE, T::EVENT))
+    .unwrap_or_else(|_| panic!("could not find event: {}::{}", T::PALLET, T::EVENT))
 }
 
 /// run `service` in the background, and run `fut`. If the service completes before the

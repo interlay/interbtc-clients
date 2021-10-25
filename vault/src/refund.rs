@@ -1,6 +1,6 @@
-use crate::{execution::*, VaultIdManager};
+use crate::{execution::*, system::VaultIdManager};
 use bitcoin::BitcoinCoreApi;
-use runtime::{pallets::refund::RequestRefundEvent, InterBtcParachain, InterBtcRuntime};
+use runtime::{InterBtcParachain, RequestRefundEvent};
 use service::Error as ServiceError;
 
 /// Listen for RequestRefundEvent directed at this vault; upon reception, transfer
@@ -20,7 +20,7 @@ pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync 
     process_refunds: bool,
 ) -> Result<(), ServiceError> {
     parachain_rpc
-        .on_event::<RequestRefundEvent<InterBtcRuntime>, _, _, _>(
+        .on_event::<RequestRefundEvent, _, _, _>(
             |event| async {
                 let btc_rpc = match btc_rpc.get_bitcoin_rpc(&event.vault_id).await {
                     Some(x) => x,

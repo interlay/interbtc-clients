@@ -30,6 +30,7 @@ service = { path = "../service" }
 
 # Workspace dependencies
 runtime = { path = "../runtime", features = ["testing-utils"] }
+procedural = { path = "../procedural"}
 
 # Substrate dependencies
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.10" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.11" }

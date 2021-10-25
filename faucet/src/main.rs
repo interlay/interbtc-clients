@@ -4,7 +4,7 @@ mod http;
 use clap::Clap;
 use error::Error;
 use git_version::git_version;
-use runtime::{substrate_subxt::PairSigner, InterBtcRuntime};
+use runtime::{InterBtcRuntime, PairSigner};
 use service::{on_shutdown, wait_or_shutdown};
 use std::net::SocketAddr;
 

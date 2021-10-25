@@ -1,6 +1,6 @@
 use crate::{
-    collateral::lock_required_collateral, faucet, issue, relay::run_relayer, service::*, Error, Event, IssueRequests,
-    Vaults, CHAIN_HEIGHT_POLLING_INTERVAL,
+    collateral::lock_required_collateral, error::Error, faucet, issue, relay::run_relayer, service::*, vaults::Vaults,
+    Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
@@ -12,13 +12,10 @@ use futures::{
 };
 use git_version::git_version;
 use runtime::{
-    btc_relay::StoreMainChainHeaderEvent,
     cli::{parse_duration_minutes, parse_duration_ms},
-    pallets::security::UpdateActiveBlockEvent,
-    parse_collateral_currency,
-    vault_registry::RegisterVaultEvent,
-    BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, InterBtcRuntime, UtilFuncs, VaultId,
-    VaultIdFormatter, VaultRegistryPallet,
+    parse_collateral_currency, BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain,
+    RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair, VaultId,
+    VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
@@ -112,10 +109,10 @@ async fn active_block_listener(
     let issue_tx = &issue_tx;
     let replace_tx = &replace_tx;
     parachain_rpc
-        .on_event::<UpdateActiveBlockEvent<InterBtcRuntime>, _, _, _>(
+        .on_event::<UpdateActiveBlockEvent, _, _, _>(
             |event| async move {
-                let _ = issue_tx.clone().send(Event::ParachainBlock(event.height)).await;
-                let _ = replace_tx.clone().send(Event::ParachainBlock(event.height)).await;
+                let _ = issue_tx.clone().send(Event::ParachainBlock(event.block_number)).await;
+                let _ = replace_tx.clone().send(Event::ParachainBlock(event.block_number)).await;
             },
             |err| tracing::error!("Error (UpdateActiveBlockEvent): {}", err.to_string()),
         )
@@ -131,7 +128,7 @@ async fn relay_block_listener(
     let issue_tx = &issue_tx;
     let replace_tx = &replace_tx;
     parachain_rpc
-        .on_event::<StoreMainChainHeaderEvent<InterBtcRuntime>, _, _, _>(
+        .on_event::<StoreMainChainHeaderEvent, _, _, _>(
             |event| async move {
                 let _ = issue_tx.clone().send(Event::BitcoinBlock(event.block_height)).await;
                 let _ = replace_tx.clone().send(Event::BitcoinBlock(event.block_height)).await;
@@ -214,7 +211,7 @@ impl<T: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<T> {
     pub async fn listen_for_vault_id_registrations(self) -> Result<(), ServiceError> {
         Ok(self
             .btc_parachain
-            .on_event::<RegisterVaultEvent<InterBtcRuntime>, _, _, _>(
+            .on_event::<RegisterVaultEvent, _, _, _>(
                 |event| async {
                     let vault_id = event.vault_id;
                     if self.btc_parachain.is_this_vault(&vault_id) {
@@ -559,11 +556,13 @@ impl VaultService {
             }
         };
 
-        let vault_id = VaultId::new(
-            account_id.clone(),
-            collateral_currency,
-            runtime::RELAY_CHAIN_WRAPPED_CURRENCY, // TODO: fetch this from parachain metadata
-        );
+        let vault_id = VaultId {
+            account_id: account_id.clone(),
+            currencies: VaultCurrencyPair {
+                collateral: collateral_currency,
+                wrapped: runtime::RELAY_CHAIN_WRAPPED_CURRENCY, // TODO: fetch this from parachain metadata
+            },
+        };
 
         if is_vault_registered(&self.btc_parachain, &vault_id).await? {
             tracing::info!(
@@ -608,7 +607,7 @@ impl VaultService {
                     .wallet
                     .addresses
                     .iter()
-                    .map(|addr| (*addr, vault.id.clone()))
+                    .map(|addr| (addr.clone(), vault.id.clone()))
                     .collect::<Vec<_>>()
             })
             .collect();

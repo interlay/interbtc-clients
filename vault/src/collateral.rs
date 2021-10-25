@@ -1,9 +1,9 @@
-use crate::{error::Error, VaultIdManager};
+use crate::{error::Error, system::VaultIdManager};
 use bitcoin::BitcoinCoreApi;
 use futures::future;
 use runtime::{
-    pallets::exchange_rate_oracle::FeedValuesEvent, CollateralBalancesPallet, CurrencyInfo, InterBtcParachain,
-    InterBtcRuntime, OracleKey, VaultId, VaultRegistryPallet, VaultStatus,
+    CollateralBalancesPallet, CurrencyInfo, FeedValuesEvent, InterBtcParachain, OracleKey, RichCurrencyId, VaultId,
+    VaultRegistryPallet, VaultStatus,
 };
 use service::Error as ServiceError;
 
@@ -14,7 +14,7 @@ pub async fn maintain_collateralization_rate<B: BitcoinCoreApi + Clone + Send + 
     let parachain_rpc = &parachain_rpc;
     let vault_id_manager = &vault_id_manager;
     parachain_rpc
-        .on_event::<FeedValuesEvent<InterBtcRuntime>, _, _, _>(
+        .on_event::<FeedValuesEvent, _, _, _>(
             |event| async move {
                 let updated_currencies = event.values.iter().filter_map(|(key, _value)| match key {
                     OracleKey::ExchangeRate(currency_id) => Some(currency_id),
@@ -22,13 +22,14 @@ pub async fn maintain_collateralization_rate<B: BitcoinCoreApi + Clone + Send + 
                 });
                 let vault_ids = vault_id_manager.get_vault_ids().await;
                 for currency_id in updated_currencies {
+                    let rich_currency_id: RichCurrencyId = currency_id.clone().into();
                     match vault_ids
                         .iter()
-                        .find(|vault_id| vault_id.collateral_currency() == *currency_id)
+                        .find(|vault_id| &vault_id.collateral_currency() == currency_id)
                     {
-                        None => tracing::debug!("Ignoring exchange rate update for {}", currency_id.symbol()),
+                        None => tracing::debug!("Ignoring exchange rate update for {}", rich_currency_id.symbol()),
                         Some(vault_id) => {
-                            tracing::info!("Received FeedValuesEvent for {}", currency_id.symbol());
+                            tracing::info!("Received FeedValuesEvent for {}", rich_currency_id.symbol());
 
                             // TODO: implement retrying
                             if let Err(e) = lock_required_collateral(parachain_rpc.clone(), vault_id.clone()).await {
@@ -132,7 +133,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use runtime::{
-        AccountId, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcBalance, InterBtcVault, Wallet,
+        AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcVault, Wallet,
     };
 
     macro_rules! assert_ok {
@@ -178,10 +179,10 @@ mod tests {
 
         #[async_trait]
         pub trait CollateralBalancesPallet {
-            async fn get_free_balance(&self, currency_id: CurrencyId) -> Result<InterBtcBalance, RuntimeError>;
-            async fn get_free_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<InterBtcBalance, RuntimeError>;
-            async fn get_reserved_balance(&self, currency_id: CurrencyId) -> Result<InterBtcBalance, RuntimeError>;
-            async fn get_reserved_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<InterBtcBalance, RuntimeError>;
+            async fn get_free_balance(&self, currency_id: CurrencyId) -> Result<Balance, RuntimeError>;
+            async fn get_free_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<Balance, RuntimeError>;
+            async fn get_reserved_balance(&self, currency_id: CurrencyId) -> Result<Balance, RuntimeError>;
+            async fn get_reserved_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<Balance, RuntimeError>;
             async fn transfer_to(&self, recipient: &AccountId, amount: u128, currency_id: CurrencyId) -> Result<(), RuntimeError>;
         }
     }
@@ -202,7 +203,10 @@ mod tests {
         parachain_rpc.expect_get_vault().returning(move |x| {
             Ok(InterBtcVault {
                 id: x.clone(),
-                wallet: Wallet::new(BtcPublicKey::default()),
+                wallet: Wallet {
+                    addresses: Default::default(),
+                    public_key: BtcPublicKey { 0: [0; 33] },
+                },
                 status: VaultStatus::Active(true),
                 banned_until: None,
                 to_be_issued_tokens: 0,
@@ -330,7 +334,10 @@ mod tests {
         parachain_rpc.expect_get_vault().returning(move |x| {
             Ok(InterBtcVault {
                 id: x.clone(),
-                wallet: Wallet::new(BtcPublicKey::default()),
+                wallet: Wallet {
+                    addresses: Default::default(),
+                    public_key: BtcPublicKey { 0: [0; 33] },
+                },
                 status: VaultStatus::CommittedTheft,
                 banned_until: None,
                 to_be_issued_tokens: 0,

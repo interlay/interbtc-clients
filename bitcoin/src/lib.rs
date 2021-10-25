@@ -1,4 +1,3 @@
-#[cfg(feature = "cli")]
 pub mod cli;
 
 mod addr;

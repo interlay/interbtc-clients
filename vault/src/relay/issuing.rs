@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use super::Error;
 use async_trait::async_trait;
 use runtime::{BtcRelayPallet, H256Le, InterBtcParachain, RawBlockHeader, RelayPallet};
@@ -50,7 +52,8 @@ pub trait Issuing {
 }
 
 fn encode_raw_header(bytes: Vec<u8>) -> Result<RawBlockHeader, Error> {
-    RawBlockHeader::from_bytes(bytes).map_err(|_| Error::SerializeHeader)
+    let raw = bytes.try_into().map_err(|_| Error::SerializeHeader)?;
+    Ok(RawBlockHeader { 0: raw })
 }
 
 #[async_trait]
@@ -69,6 +72,7 @@ impl Issuing for InterBtcParachain {
     #[tracing::instrument(name = "submit_block_header", skip(self, header))]
     async fn submit_block_header(&self, header: Vec<u8>) -> Result<(), Error> {
         let raw_block_header = encode_raw_header(header)?;
+
         if self
             .is_block_stored(raw_block_header.hash().to_bytes_le().to_vec())
             .await?

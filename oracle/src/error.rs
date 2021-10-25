@@ -1,5 +1,5 @@
 use reqwest::Error as ReqwestError;
-use runtime::{substrate_subxt::Error as SubxtError, Error as RuntimeError};
+use runtime::{Error as RuntimeError, SubxtError};
 use std::num::ParseIntError;
 use thiserror::Error;
 
