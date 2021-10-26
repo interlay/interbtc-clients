@@ -736,7 +736,8 @@ async fn test_refund_succeeds() {
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpcs);
 
-        let refund_service = vault::service::listen_for_refund_requests(vault_provider.clone(), vault_id_manager, 0);
+        let refund_service =
+            vault::service::listen_for_refund_requests(vault_provider.clone(), vault_id_manager, 0, true);
 
         assert_ok!(sudo_provider.set_parachain_confirmations(0).await);
 
@@ -815,7 +816,8 @@ async fn test_issue_overpayment_succeeds() {
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpcs);
 
-        let refund_service = vault::service::listen_for_refund_requests(vault_provider.clone(), vault_id_manager, 0);
+        let refund_service =
+            vault::service::listen_for_refund_requests(vault_provider.clone(), vault_id_manager, 0, true);
 
         let issue_amount = 100000;
         let over_payment_factor = 3;
@@ -994,7 +996,7 @@ async fn test_execute_open_requests_succeeds() {
         btc_rpc.send_to_mempool(transaction).await;
 
         join3(
-            vault::service::execute_open_requests(vault_provider, btc_rpc.clone(), 0, Duration::from_secs(0))
+            vault::service::execute_open_requests(vault_provider, btc_rpc.clone(), 0, Duration::from_secs(0), true)
                 .map(Result::unwrap),
             assert_redeem_event(TIMEOUT, user_provider.clone(), redeem_ids[0]),
             assert_redeem_event(TIMEOUT, user_provider.clone(), redeem_ids[2]),

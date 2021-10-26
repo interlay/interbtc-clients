@@ -12,10 +12,12 @@ use service::Error as ServiceError;
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
+/// * `process_refunds` - if true, we will process refund requests
 pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     parachain_rpc: InterBtcParachain,
     btc_rpc: VaultIdManager<B>,
     num_confirmations: u32,
+    process_refunds: bool,
 ) -> Result<(), ServiceError> {
     parachain_rpc
         .on_event::<RequestRefundEvent<InterBtcRuntime>, _, _, _>(
@@ -25,6 +27,11 @@ pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                     None => return, // event not directed at this vault
                 };
                 tracing::info!("Received refund request: {:?}", event);
+
+                if !process_refunds {
+                    tracing::info!("Not processing refund");
+                    return;
+                }
 
                 // within this event callback, we captured the arguments of listen_for_refund_requests
                 // by reference. Since spawn requires static lifetimes, we will need to capture the

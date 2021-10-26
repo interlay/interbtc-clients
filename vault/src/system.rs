@@ -95,6 +95,10 @@ pub struct VaultServiceConfig {
     #[clap(long)]
     pub no_vault_theft_report: bool,
 
+    /// Don't refund overpayments.
+    #[clap(long)]
+    pub no_auto_refund: bool,
+
     /// The currency to use for the collateral, e.g. "DOT" or "KSM".
     #[clap(long, parse(try_from_str = parse_collateral_currency))]
     pub currency_id: Option<CurrencyId>,
@@ -325,6 +329,7 @@ impl VaultService {
             walletless_btc_rpc.clone(),
             num_confirmations,
             self.config.payment_margin_minutes,
+            !self.config.no_auto_refund,
         );
         tokio::spawn(async move {
             tracing::info!("Checking for open requests...");
@@ -472,6 +477,7 @@ impl VaultService {
                 self.btc_parachain.clone(),
                 self.vault_id_manager.clone(),
                 num_confirmations,
+                !self.config.no_auto_refund,
             ),
         );
 
