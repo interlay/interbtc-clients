@@ -310,6 +310,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
     btc_rpc: B,
     num_confirmations: u32,
     payment_margin: Duration,
+    process_refunds: bool,
 ) -> Result<(), Error> {
     let vault_id = parachain_rpc.get_account_id().clone();
 
@@ -317,7 +318,13 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
     let (redeem_requests, replace_requests, refund_requests) = try_join!(
         parachain_rpc.get_vault_redeem_requests(vault_id.clone()),
         parachain_rpc.get_old_vault_replace_requests(vault_id.clone()),
-        parachain_rpc.get_vault_refund_requests(vault_id),
+        async {
+            if process_refunds {
+                parachain_rpc.get_vault_refund_requests(vault_id).await
+            } else {
+                Ok(Default::default())
+            }
+        },
     )?;
 
     let open_redeems = redeem_requests
