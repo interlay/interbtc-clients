@@ -170,7 +170,7 @@ impl<T: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<T> {
         }
     }
 
-    async fn add_vault_id(&self, vault_id: VaultId) -> Result<(), Error> {
+    async fn add_vault_id(&self, vault_id: VaultId) -> Result<T, Error> {
         let btc_rpc = (*self.constructor)(vault_id.clone())?;
 
         // load wallet. Exit on failure, since without wallet we can't do a lot
@@ -186,9 +186,9 @@ impl<T: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<T> {
         }
         issue::add_keys_from_past_issue_request(&btc_rpc, &self.btc_parachain).await?;
 
-        self.bitcoin_rpcs.write().await.insert(vault_id, btc_rpc);
+        self.bitcoin_rpcs.write().await.insert(vault_id, btc_rpc.clone());
 
-        Ok(())
+        Ok(btc_rpc)
     }
 
     pub async fn fetch_vault_ids(&self, startup_collateral_increase: bool) -> Result<(), Error> {
@@ -573,7 +573,8 @@ impl VaultService {
         } else {
             tracing::info!("[{}] Automatically registering vault", vault_id.pretty_printed());
             if let Some(collateral) = self.config.auto_register_with_collateral {
-                let public_key = self.bitcoin_core.get_new_public_key().await?;
+                let bitcoin_core_with_wallet = self.vault_id_manager.add_vault_id(vault_id.clone()).await?;
+                let public_key = bitcoin_core_with_wallet.get_new_public_key().await?;
                 self.btc_parachain
                     .register_vault(&vault_id, collateral, public_key)
                     .await?;
