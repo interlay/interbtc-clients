@@ -182,6 +182,14 @@ pub fn parse_collateral_currency(src: &str) -> Result<CurrencyId, Error> {
     }
 }
 
+pub fn parse_wrapped_currency(src: &str) -> Result<CurrencyId, Error> {
+    match src.to_uppercase().as_str() {
+        id if id == CurrencyId::KBTC.symbol() => Ok(CurrencyId::KBTC),
+        id if id == CurrencyId::INTERBTC.symbol() => Ok(CurrencyId::INTERBTC),
+        _ => Err(Error::InvalidCurrency),
+    }
+}
+
 pub trait VaultIdFormatter {
     fn pretty_printed(&self) -> String;
 }

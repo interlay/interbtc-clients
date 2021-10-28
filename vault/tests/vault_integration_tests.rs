@@ -541,6 +541,8 @@ async fn test_cancellation_succeeds() {
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let btc_rpcs = vec![(new_vault_id.clone(), btc_rpc.clone())].into_iter().collect();
+        let vault_id_manager = VaultIdManager::from_map(new_vault_provider.clone(), btc_rpcs);
 
         let issue_amount = 100000;
         let vault_collateral = get_required_vault_collateral_for_issue(
@@ -582,7 +584,7 @@ async fn test_cancellation_succeeds() {
         let issue_set = Arc::new(IssueRequests::new());
 
         let issue_request_listener = vault::service::listen_for_issue_requests(
-            btc_rpc.clone(),
+            vault_id_manager.clone(),
             new_vault_provider.clone(),
             issue_cancellation_event_tx.clone(),
             issue_set.clone(),
@@ -884,6 +886,8 @@ async fn test_automatic_issue_execution_succeeds() {
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let btc_rpcs = vec![(vault2_id.clone(), btc_rpc.clone())].into_iter().collect();
+        let vault_id_manager = VaultIdManager::from_map(vault2_provider.clone(), btc_rpcs);
 
         let issue_amount = 100000;
         let vault_collateral =
@@ -932,7 +936,7 @@ async fn test_automatic_issue_execution_succeeds() {
         let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
         let service = join(
             vault::service::listen_for_issue_requests(
-                btc_rpc.clone(),
+                vault_id_manager.clone(),
                 vault2_provider.clone(),
                 issue_event_tx.clone(),
                 issue_set.clone(),
