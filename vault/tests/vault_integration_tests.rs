@@ -91,10 +91,7 @@ async fn pay_redeem_from_vault_wallet(
         .on_event::<RequestRedeemEvent, _, _, _>(
             |event| async move {
                 tracing::error!("Event {}", addr_seed);
-                let request = vault_provider
-                    .get_redeem_request(event.redeem_id.clone())
-                    .await
-                    .unwrap();
+                let request = vault_provider.get_redeem_request(event.redeem_id).await.unwrap();
                 // step 1: create a spending transaction from some arbitrary address
                 let mut transaction = btc_rpc
                     .create_transaction(request.btc_address, request.amount_btc as u64, Some(event.redeem_id))
@@ -123,14 +120,14 @@ async fn pay_redeem_from_vault_wallet(
                 let input_address = transaction.transaction.extract_input_addresses::<BtcAddress>()[0];
                 tracing::error!("txid {} {}", addr_seed, transaction.transaction.txid());
                 // now make the vault register it
-                assert_ok!(vault_provider.register_address(&vault_id, input_address).await);
+                assert_ok!(vault_provider.register_address(vault_id, input_address).await);
                 tracing::error!("Registered {}", addr_seed);
                 let return_to_self_address = transaction.transaction.extract_output_addresses::<BtcAddress>()[1];
                 // register return-to-self address if it hasnt been yet
-                let wallet = vault_provider.get_vault(&vault_id).await.unwrap().wallet;
+                let wallet = vault_provider.get_vault(vault_id).await.unwrap().wallet;
                 if !wallet.addresses.contains(&return_to_self_address) {
                     vault_provider
-                        .register_address(&vault_id, return_to_self_address)
+                        .register_address(vault_id, return_to_self_address)
                         .await
                         .unwrap();
                 }
@@ -991,7 +988,7 @@ async fn test_execute_open_requests_succeeds() {
                 .collect::<Vec<_>>();
 
         let redeems: Vec<InterBtcRedeemRequest> =
-            futures::future::join_all(redeem_ids.iter().map(|id| user_provider.get_redeem_request(id.clone())))
+            futures::future::join_all(redeem_ids.iter().map(|id| user_provider.get_redeem_request(*id)))
                 .await
                 .into_iter()
                 .map(|x| x.unwrap())

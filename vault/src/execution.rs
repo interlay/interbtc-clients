@@ -232,9 +232,9 @@ impl Request {
             [address] => {
                 // one return-to-self address, make sure it is registered
                 let wallet = parachain_rpc.get_vault(&vault_id).await?.wallet;
-                if !wallet.addresses.contains(&address) {
+                if !wallet.addresses.contains(address) {
                     tracing::info!("Registering address {:?}", address);
-                    parachain_rpc.register_address(&vault_id, address.clone()).await?;
+                    parachain_rpc.register_address(&vault_id, *address).await?;
                 }
             }
             _ => return Err(Error::TooManyReturnToSelfAddresses),

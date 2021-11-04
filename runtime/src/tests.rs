@@ -73,7 +73,7 @@ async fn test_is_transaction_invalid() {
     let key = OracleKey::ExchangeRate(DEFAULT_TESTING_CURRENCY);
     let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
     parachain_rpc
-        .feed_values(vec![(key.clone(), exchange_rate.clone())])
+        .feed_values(vec![(key.clone(), exchange_rate)])
         .await
         .unwrap();
     parachain_rpc.feed_values(vec![(key, exchange_rate)]).await.unwrap();
@@ -112,7 +112,7 @@ async fn test_subxt_processing_events_after_dispatch_error() {
 
     let result = tokio::join!(
         event_listener,
-        invalid_oracle.feed_values(vec![(key.clone(), exchange_rate.clone())]),
+        invalid_oracle.feed_values(vec![(key.clone(), exchange_rate)]),
         oracle_provider.feed_values(vec![(key, exchange_rate)])
     );
 
@@ -150,7 +150,7 @@ async fn test_btc_relay() {
 
     let block = BlockBuilder::new()
         .with_version(4)
-        .with_coinbase(&address.into(), 50, 3)
+        .with_coinbase(&address, 50, 3)
         .with_timestamp(1588813835)
         .mine(U256::from(2).pow(254.into()))
         .unwrap();
@@ -170,7 +170,7 @@ async fn test_btc_relay() {
         let block = BlockBuilder::new()
             .with_previous_hash(block_hash)
             .with_version(4)
-            .with_coinbase(&address.into(), 50, height - 1)
+            .with_coinbase(&address, 50, height - 1)
             .with_timestamp(1588813835)
             .mine(U256::from(2).pow(254.into()))
             .unwrap();

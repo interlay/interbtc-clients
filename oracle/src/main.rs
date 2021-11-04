@@ -189,7 +189,7 @@ async fn main() -> Result<(), Error> {
     };
 
     let currency_id = opts.currency_id;
-    let rich_currency_id: RichCurrencyId = currency_id.clone().into();
+    let rich_currency_id: RichCurrencyId = currency_id.into();
     let coingecko_url = if let Some(mut url) = opts.coingecko {
         url.set_path(&format!("{}/simple/price", url.path()));
         url.set_query(Some(&format!(

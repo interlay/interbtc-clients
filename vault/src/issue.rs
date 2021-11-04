@@ -104,11 +104,11 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
     let mut issue_requests = issue_set.lock().await;
     if let Some((issue_id, address)) = addresses.iter().find_map(|address| {
         let issue_id = issue_requests.get_key_for_value(address)?;
-        Some((*issue_id, address.clone()))
+        Some((*issue_id, *address))
     }) {
         let issue = btc_parachain.get_issue_request(issue_id).await?;
         // tx has output to address
-        match transaction.get_payment_amount_to(address.clone()) {
+        match transaction.get_payment_amount_to(address) {
             None => {
                 // this should never happen, so use WARN
                 tracing::warn!(

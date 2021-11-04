@@ -26,7 +26,7 @@ struct FundAccountJsonRpcRequest {
 
 async fn get_faucet_allowance(faucet_connection: TypedClient, allowance_type: &str) -> Result<u128, Error> {
     let raw_allowance = faucet_connection
-        .call_method::<(), RawBytes>(&allowance_type, "", ())
+        .call_method::<(), RawBytes>(allowance_type, "", ())
         .await?;
     Ok(Decode::decode(&mut &raw_allowance.0[..])?)
 }
@@ -82,7 +82,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
         .checked_mul(2)
         .unwrap_or_default();
 
-    deposit_collateral(&parachain_rpc, vault_id, operational_collateral).await?;
+    deposit_collateral(parachain_rpc, vault_id, operational_collateral).await?;
 
     Ok(())
 }

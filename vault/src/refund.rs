@@ -37,7 +37,6 @@ pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
                 // arguments by value rather than by reference, so clone these:
                 let parachain_rpc = parachain_rpc.clone();
-                let btc_rpc = btc_rpc.clone();
                 // Spawn a new task so that we handle these events concurrently
                 tokio::spawn(async move {
                     tracing::info!("Executing refund #{:?}", event.refund_id);

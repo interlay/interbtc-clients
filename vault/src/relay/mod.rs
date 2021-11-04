@@ -261,19 +261,16 @@ mod tests {
             self.get_headers()
                 .keys()
                 .max()
-                .map(|v| *v)
+                .copied()
                 .ok_or(Error::CannotFetchBestHeight)
         }
 
         async fn get_block_hash(&self, height: u32) -> Result<Vec<u8>, Error> {
-            self.get_headers()
-                .get(&height)
-                .map(|v| v.clone())
-                .ok_or(Error::BlockHashNotFound)
+            self.get_headers().get(&height).cloned().ok_or(Error::BlockHashNotFound)
         }
 
         async fn is_block_stored(&self, hash: Vec<u8>) -> Result<bool, Error> {
-            Ok(self.get_headers().iter().find(|&(_, h)| &h[..] == &hash[..]).is_some())
+            Ok(self.get_headers().iter().any(|(_, h)| &h[..] == &hash[..]))
         }
     }
 
@@ -290,18 +287,15 @@ mod tests {
     #[async_trait]
     impl Backing for DummyBacking {
         async fn get_block_count(&self) -> Result<u32, Error> {
-            self.hashes.keys().max().map(|v| *v).ok_or(Error::CannotFetchBestHeight)
+            self.hashes.keys().max().copied().ok_or(Error::CannotFetchBestHeight)
         }
 
         async fn get_block_header(&self, height: u32) -> Result<Option<Vec<u8>>, Error> {
-            Ok(self.hashes.get(&height).map(|v| v.clone()))
+            Ok(self.hashes.get(&height).cloned())
         }
 
         async fn get_block_hash(&self, height: u32) -> Result<Vec<u8>, Error> {
-            self.hashes
-                .get(&height)
-                .map(|v| v.clone())
-                .ok_or(Error::BlockHashNotFound)
+            self.hashes.get(&height).cloned().ok_or(Error::BlockHashNotFound)
         }
     }
 

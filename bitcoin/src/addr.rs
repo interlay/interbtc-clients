@@ -116,7 +116,7 @@ mod tests {
         let vault_public_key = PublicKey::from_secret_key(&secp, &vault_secret_key);
 
         // D = V * c
-        let mut deposit_public_key = vault_public_key.clone();
+        let mut deposit_public_key = vault_public_key;
         deposit_public_key.mul_assign(&secp, &secret_key[..]).unwrap();
 
         // d = v * c

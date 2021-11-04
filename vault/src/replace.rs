@@ -37,7 +37,6 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
                 // arguments by value rather than by reference, so clone these:
                 let parachain_rpc = parachain_rpc.clone();
-                let btc_rpc = btc_rpc.clone();
                 // Spawn a new task so that we handle these events concurrently
                 tokio::spawn(async move {
                     tracing::info!("Executing accept replace #{:?}", event.replace_id);
@@ -159,7 +158,7 @@ pub async fn handle_replace_request<
     } else {
         Ok(parachain_rpc
             .accept_replace(
-                &vault_id,
+                vault_id,
                 &event.old_vault_id,
                 event.amount,
                 required_collateral,

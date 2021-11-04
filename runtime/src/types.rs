@@ -155,7 +155,7 @@ mod currency_id {
         where
             S: serde::Serializer,
         {
-            let value: primitives::CurrencyId = self.clone().into();
+            let value: primitives::CurrencyId = (*self).into();
             value.serialize(serializer)
         }
     }
@@ -179,11 +179,11 @@ mod vault_id {
         }
 
         pub fn collateral_currency(&self) -> CurrencyId {
-            self.currencies.collateral.clone()
+            self.currencies.collateral
         }
 
         pub fn wrapped_currency(&self) -> CurrencyId {
-            self.currencies.wrapped.clone()
+            self.currencies.wrapped
         }
 
         pub fn pretty_printed(&self) -> String {
@@ -273,7 +273,7 @@ mod h256_le {
             RichH256Le::from_bytes_le(bytes).into()
         }
         pub fn to_bytes_le(&self) -> [u8; 32] {
-            RichH256Le::to_bytes_le(&self.clone().into()).into()
+            RichH256Le::to_bytes_le(&self.clone().into())
         }
         pub fn is_zero(&self) -> bool {
             RichH256Le::is_zero(&self.clone().into())

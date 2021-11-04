@@ -87,7 +87,7 @@ impl InterBtcParachain {
             .api
             .storage()
             .system()
-            .account(self.account_id.clone().into(), None)
+            .account(self.account_id.clone(), None)
             .await
             .map(|x| x.nonce)
             .unwrap_or(0);
@@ -285,7 +285,7 @@ impl InterBtcParachain {
         self.api
             .tx()
             .oracle()
-            .feed_values(vec![(key.clone(), exchange_rate.clone())])
+            .feed_values(vec![(key.clone(), exchange_rate)])
             .sign_and_submit_then_watch(&signer.clone())
             .await
             .unwrap();
@@ -377,12 +377,11 @@ impl CollateralBalancesPallet for InterBtcParachain {
     }
 
     async fn transfer_to(&self, recipient: &AccountId, amount: u128, currency_id: CurrencyId) -> Result<(), Error> {
-        let currency_id = &currency_id;
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
                 .tokens()
-                .transfer(recipient.clone(), currency_id.clone(), amount)
+                .transfer(recipient.clone(), currency_id, amount)
                 .sign_and_submit_then_watch(&signer)
                 .await
         })
@@ -480,7 +479,7 @@ impl ReplacePallet for InterBtcParachain {
             self.api
                 .tx()
                 .replace()
-                .request_replace(vault_id.currencies.clone().into(), amount, griefing_collateral)
+                .request_replace(vault_id.currencies.clone(), amount, griefing_collateral)
                 .sign_and_submit_then_watch(&signer)
                 .await
         })
@@ -493,7 +492,7 @@ impl ReplacePallet for InterBtcParachain {
             self.api
                 .tx()
                 .replace()
-                .withdraw_replace(vault_id.currencies.clone().into(), amount)
+                .withdraw_replace(vault_id.currencies.clone(), amount)
                 .sign_and_submit_then_watch(&signer)
                 .await
         })
@@ -514,8 +513,8 @@ impl ReplacePallet for InterBtcParachain {
                 .tx()
                 .replace()
                 .accept_replace(
-                    new_vault.currencies.clone().into(),
-                    old_vault.clone().into(),
+                    new_vault.currencies.clone(),
+                    old_vault.clone(),
                     amount_btc,
                     collateral,
                     btc_address,
@@ -569,7 +568,7 @@ impl ReplacePallet for InterBtcParachain {
         join_all(
             result
                 .into_iter()
-                .map(|key| async move { self.get_replace_request(key.clone()).await.map(|value| (key, value)) }),
+                .map(|key| async move { self.get_replace_request(key).await.map(|value| (key, value)) }),
         )
         .await
         .into_iter()
@@ -592,7 +591,7 @@ impl ReplacePallet for InterBtcParachain {
         join_all(
             result
                 .into_iter()
-                .map(|key| async move { self.get_replace_request(key.clone()).await.map(|value| (key, value)) }),
+                .map(|key| async move { self.get_replace_request(key).await.map(|value| (key, value)) }),
         )
         .await
         .into_iter()
@@ -825,11 +824,7 @@ impl RelayPallet for InterBtcParachain {
             self.api
                 .tx()
                 .relay()
-                .report_vault_theft(
-                    vault_id.clone().into(),
-                    merkle_proof.clone().into(),
-                    raw_tx.clone().into(),
-                )
+                .report_vault_theft(vault_id.clone(), merkle_proof.into(), raw_tx.into())
                 .sign_and_submit_then_watch(&signer)
                 .await
         })
@@ -855,11 +850,7 @@ impl RelayPallet for InterBtcParachain {
             self.api
                 .tx()
                 .relay()
-                .report_vault_double_payment(
-                    vault_id.clone().into(),
-                    merkle_proofs.clone().into(),
-                    raw_txs.clone().into(),
-                )
+                .report_vault_double_payment(vault_id.clone(), merkle_proofs.clone(), raw_txs.clone())
                 .sign_and_submit_then_watch(&signer)
                 .await
         })
@@ -1022,7 +1013,7 @@ impl IssuePallet for InterBtcParachain {
                 self.api
                     .tx()
                     .issue()
-                    .request_issue(amount, vault_id.clone().into(), griefing_collateral)
+                    .request_issue(amount, vault_id.clone(), griefing_collateral)
                     .sign_and_submit_then_watch(&signer)
                     .await
             })
@@ -1084,7 +1075,7 @@ impl IssuePallet for InterBtcParachain {
         join_all(
             result
                 .into_iter()
-                .map(|key| async move { self.get_issue_request(key.clone()).await.map(|value| (key, value)) }),
+                .map(|key| async move { self.get_issue_request(key).await.map(|value| (key, value)) }),
         )
         .await
         .into_iter()
@@ -1156,7 +1147,7 @@ impl RedeemPallet for InterBtcParachain {
                 self.api
                     .tx()
                     .redeem()
-                    .request_redeem(amount, btc_address, vault_id.clone().into())
+                    .request_redeem(amount, btc_address, vault_id.clone())
                     .sign_and_submit_then_watch(&signer)
                     .await
             })
@@ -1220,7 +1211,7 @@ impl RedeemPallet for InterBtcParachain {
         join_all(
             result
                 .into_iter()
-                .map(|key| async move { self.get_redeem_request(key.clone()).await.map(|value| (key, value)) }),
+                .map(|key| async move { self.get_redeem_request(key).await.map(|value| (key, value)) }),
         )
         .await
         .into_iter()
@@ -1297,7 +1288,7 @@ impl RefundPallet for InterBtcParachain {
         join_all(
             result
                 .into_iter()
-                .map(|key| async move { self.get_refund_request(key.clone()).await.map(|value| (key, value)) }),
+                .map(|key| async move { self.get_refund_request(key).await.map(|value| (key, value)) }),
         )
         .await
         .into_iter()
@@ -1339,7 +1330,7 @@ impl BtcRelayPallet for InterBtcParachain {
     /// Get the hash of the current best tip.
     async fn get_best_block(&self) -> Result<H256Le, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.api.storage().btc_relay().best_block(head).await?.into())
+        Ok(self.api.storage().btc_relay().best_block(head).await?)
     }
 
     /// Get the current best known height.
@@ -1354,13 +1345,7 @@ impl BtcRelayPallet for InterBtcParachain {
     /// * `height` - chain height
     async fn get_block_hash(&self, height: u32) -> Result<H256Le, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self
-            .api
-            .storage()
-            .btc_relay()
-            .chains_hashes(0, height, head)
-            .await?
-            .into())
+        Ok(self.api.storage().btc_relay().chains_hashes(0, height, head).await?)
     }
 
     /// Get the corresponding block header for the given hash.
@@ -1369,7 +1354,7 @@ impl BtcRelayPallet for InterBtcParachain {
     /// * `hash` - little endian block hash
     async fn get_block_header(&self, hash: H256Le) -> Result<InterBtcRichBlockHeader, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.api.storage().btc_relay().block_headers(hash.into(), head).await?)
+        Ok(self.api.storage().btc_relay().block_headers(hash, head).await?)
     }
 
     /// Get the global security parameter k for stable Bitcoin transactions
@@ -1499,7 +1484,7 @@ impl VaultRegistryPallet for InterBtcParachain {
             .api
             .storage()
             .vault_registry()
-            .vaults(vault_id.clone().into(), head)
+            .vaults(vault_id.clone(), head)
             .await?
         {
             Some(InterBtcVault {
@@ -1510,7 +1495,7 @@ impl VaultRegistryPallet for InterBtcParachain {
                 status: VaultStatus::CommittedTheft,
                 ..
             }) => Err(Error::VaultCommittedTheft),
-            Some(vault) if &vault.id == &(vault_id.clone().into()) => Ok(vault),
+            Some(vault) if &vault.id == vault_id => Ok(vault),
             _ => Err(Error::VaultNotFound),
         }
     }
@@ -1557,7 +1542,7 @@ impl VaultRegistryPallet for InterBtcParachain {
             self.api
                 .tx()
                 .vault_registry()
-                .register_vault(vault_id.currencies.clone().into(), collateral, public_key.clone())
+                .register_vault(vault_id.currencies.clone(), collateral, public_key.clone())
                 .sign_and_submit_then_watch(&signer)
                 .await
         })
@@ -1575,7 +1560,7 @@ impl VaultRegistryPallet for InterBtcParachain {
             self.api
                 .tx()
                 .vault_registry()
-                .deposit_collateral(vault_id.currencies.clone().into(), amount)
+                .deposit_collateral(vault_id.currencies.clone(), amount)
                 .sign_and_submit_then_watch(&signer)
                 .await
         })
@@ -1597,7 +1582,7 @@ impl VaultRegistryPallet for InterBtcParachain {
             self.api
                 .tx()
                 .vault_registry()
-                .withdraw_collateral(vault_id.currencies.clone().into(), amount)
+                .withdraw_collateral(vault_id.currencies.clone(), amount)
                 .sign_and_submit_then_watch(&signer)
                 .await
         })
@@ -1615,7 +1600,7 @@ impl VaultRegistryPallet for InterBtcParachain {
             self.api
                 .tx()
                 .vault_registry()
-                .update_public_key(vault_id.currencies.clone().into(), public_key.clone())
+                .update_public_key(vault_id.currencies.clone(), public_key.clone())
                 .sign_and_submit_then_watch(&signer)
                 .await
         })
@@ -1632,7 +1617,7 @@ impl VaultRegistryPallet for InterBtcParachain {
             self.api
                 .tx()
                 .vault_registry()
-                .register_address(vault_id.currencies.clone().into(), btc_address)
+                .register_address(vault_id.currencies.clone(), btc_address)
                 .sign_and_submit_then_watch(&signer)
                 .await
         })

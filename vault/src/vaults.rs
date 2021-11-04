@@ -374,7 +374,7 @@ mod tests {
         let monitor = VaultTheftMonitor::new(bitcoin_core, parachain, 0, Arc::new(Vaults::default()));
 
         monitor
-            .report_invalid(&dummy_vault_id(), &vec![], &vec![], &dummy_tx())
+            .report_invalid(&dummy_vault_id(), &[], &[], &dummy_tx())
             .await
             .unwrap();
     }
@@ -388,7 +388,7 @@ mod tests {
         let monitor = VaultTheftMonitor::new(MockBitcoin::default(), parachain, 0, Arc::new(Vaults::default()));
 
         monitor
-            .report_invalid(&dummy_vault_id(), &vec![], &vec![], &dummy_tx())
+            .report_invalid(&dummy_vault_id(), &[], &[], &dummy_tx())
             .await
             .unwrap();
     }

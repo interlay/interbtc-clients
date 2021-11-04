@@ -96,7 +96,7 @@ async fn get_account_type(
     account_id: AccountId,
 ) -> Result<FundingRequestAccountType, Error> {
     match parachain_rpc.get_vaults_by_account_id(&account_id).await {
-        Ok(x) if x.len() > 0 => Ok(FundingRequestAccountType::Vault),
+        Ok(x) if !x.is_empty() => Ok(FundingRequestAccountType::Vault),
         _ => Ok(FundingRequestAccountType::User),
     }
 }
@@ -199,10 +199,10 @@ async fn atomic_faucet_funding(
     currency_id: CurrencyId,
     allowances: HashMap<FundingRequestAccountType, u128>,
 ) -> Result<(), Error> {
-    let rich_currency_id: RichCurrencyId = currency_id.clone().into();
+    let rich_currency_id: RichCurrencyId = currency_id.into();
     let account_str = format!("{}-{}", account_id, rich_currency_id.symbol());
     let last_request_json = kv.get(account_str.clone())?;
-    let account_type = get_account_type(&parachain_rpc, account_id.clone()).await?;
+    let account_type = get_account_type(parachain_rpc, account_id.clone()).await?;
     ensure_funding_allowed(
         parachain_rpc,
         account_id.clone(),
@@ -344,7 +344,7 @@ mod tests {
         let ksm_key = OracleKey::ExchangeRate(CurrencyId::KSM);
 
         oracle_provider
-            .feed_values(vec![(key, exchange_rate.clone()), (ksm_key, exchange_rate)])
+            .feed_values(vec![(key, exchange_rate), (ksm_key, exchange_rate)])
             .await
             .expect("Unable to set exchange rate");
     }

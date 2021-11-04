@@ -22,7 +22,7 @@ pub async fn maintain_collateralization_rate<B: BitcoinCoreApi + Clone + Send + 
                 });
                 let vault_ids = vault_id_manager.get_vault_ids().await;
                 for currency_id in updated_currencies {
-                    let rich_currency_id: RichCurrencyId = currency_id.clone().into();
+                    let rich_currency_id: RichCurrencyId = (*currency_id).into();
                     match vault_ids
                         .iter()
                         .find(|vault_id| &vault_id.collateral_currency() == currency_id)
