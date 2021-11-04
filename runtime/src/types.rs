@@ -120,59 +120,6 @@ impl From<[u8; 33]> for crate::BtcPublicKey {
         crate::BtcPublicKey { 0: input }
     }
 }
-//
-// mod btc_address {
-//     impl Copy for crate::BtcAddress {}
-//
-//     impl crate::BtcAddress {
-//         pub fn to_script_pub_key(&self) -> Vec<u8> {
-//             let value: module_btc_relay::BtcAddress = self.clone().into();
-//             value.to_script_pub_key().as_bytes().to_vec()
-//         }
-//     }
-//
-//     impl Into<module_btc_relay::BtcAddress> for crate::BtcAddress {
-//         fn into(self) -> module_btc_relay::BtcAddress {
-//             match self {
-//                 Self::P2PKH(hash) => module_btc_relay::BtcAddress::P2PKH(hash),
-//                 Self::P2SH(hash) => module_btc_relay::BtcAddress::P2SH(hash),
-//                 Self::P2WPKHv0(hash) => module_btc_relay::BtcAddress::P2WPKHv0(hash),
-//                 Self::P2WSHv0(hash) => module_btc_relay::BtcAddress::P2WSHv0(hash),
-//             }
-//         }
-//     }
-//
-//     impl From<module_btc_relay::BtcAddress> for crate::BtcAddress {
-//         fn from(value: module_btc_relay::BtcAddress) -> Self {
-//             match value {
-//                 module_btc_relay::BtcAddress::P2PKH(hash) => Self::P2PKH(hash),
-//                 module_btc_relay::BtcAddress::P2SH(hash) => Self::P2SH(hash),
-//                 module_btc_relay::BtcAddress::P2WPKHv0(hash) => Self::P2WPKHv0(hash),
-//                 module_btc_relay::BtcAddress::P2WSHv0(hash) => Self::P2WSHv0(hash),
-//             }
-//         }
-//     }
-//
-//     impl std::hash::Hash for crate::BtcAddress {
-//         fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-//             let value: module_btc_relay::BtcAddress = self.clone().into();
-//             value.hash(state)
-//         }
-//     }
-//
-//     impl bitcoin::PartialAddress for crate::BtcAddress {
-//         fn decode_str(btc_address: &str) -> Result<Self, bitcoin::ConversionError> {
-//             Ok(module_btc_relay::BtcAddress::decode_str(btc_address)?.into())
-//         }
-//         fn encode_str(&self, network: bitcoin::Network) -> Result<String, bitcoin::ConversionError> {
-//             let value: module_btc_relay::BtcAddress = self.clone().into();
-//             value.encode_str(network)
-//         }
-//         fn from_payload(payload: bitcoin::Payload) -> Result<Self, bitcoin::ConversionError> {
-//             Ok(module_btc_relay::BtcAddress::from_payload(payload)?.into())
-//         }
-//     }
-// }
 
 mod currency_id {
     impl Copy for crate::CurrencyId {}
