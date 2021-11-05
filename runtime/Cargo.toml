@@ -86,5 +86,4 @@ package = "module-oracle-rpc-runtime-api"
 [dev-dependencies]
 runtime = { path = ".", features = ["testing-utils"] }
 tempdir = "0.3.7"
-procedural = { path = "../procedural"}
 env_logger = "0.8.3"

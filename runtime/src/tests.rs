@@ -37,7 +37,6 @@ async fn set_exchange_rate(client: SubxtClient) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[procedural::with_big_stack]
 async fn test_getters() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
@@ -59,7 +58,6 @@ async fn test_getters() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[procedural::with_big_stack]
 async fn test_is_transaction_invalid() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
@@ -82,7 +80,6 @@ async fn test_is_transaction_invalid() {
 }
 
 #[tokio::test]
-#[procedural::with_big_stack]
 #[ignore]
 async fn test_outdated_nonce_matching() {
     env_logger::init();
@@ -94,7 +91,6 @@ async fn test_outdated_nonce_matching() {
 }
 
 #[tokio::test]
-#[procedural::with_big_stack]
 async fn test_subxt_processing_events_after_dispatch_error() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
@@ -122,7 +118,6 @@ async fn test_subxt_processing_events_after_dispatch_error() {
 }
 
 #[tokio::test]
-#[procedural::with_big_stack]
 async fn test_register_vault() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
@@ -139,7 +134,6 @@ async fn test_register_vault() {
 }
 
 #[tokio::test]
-#[procedural::with_big_stack]
 async fn test_btc_relay() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;

@@ -143,7 +143,6 @@ async fn pay_redeem_from_vault_wallet(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[procedural::with_big_stack]
 async fn test_report_vault_theft_succeeds() {
     service::init_subscriber();
 
@@ -235,7 +234,6 @@ async fn test_report_vault_theft_succeeds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[procedural::with_big_stack]
 async fn test_report_vault_double_payment_succeeds() {
     test_with_vault(|client, vault_id, vault_provider| async move {
         let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
@@ -292,7 +290,6 @@ async fn test_report_vault_double_payment_succeeds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[procedural::with_big_stack]
 async fn test_redeem_succeeds() {
     test_with_vault(|client, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
@@ -334,7 +331,6 @@ async fn test_redeem_succeeds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[procedural::with_big_stack]
 async fn test_replace_succeeds() {
     test_with_vault(|client, old_vault_id, old_vault_provider| async move {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
@@ -428,7 +424,6 @@ async fn test_replace_succeeds() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
-#[procedural::with_big_stack]
 async fn test_maintain_collateral_succeeds() {
     test_with_vault(|client, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
@@ -474,7 +469,6 @@ async fn test_maintain_collateral_succeeds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[procedural::with_big_stack]
 async fn test_withdraw_replace_succeeds() {
     test_with_vault(|client, old_vault_id, old_vault_provider| async move {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
@@ -545,7 +539,6 @@ async fn test_withdraw_replace_succeeds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[procedural::with_big_stack]
 async fn test_cancellation_succeeds() {
     // tests cancellation of issue, redeem and replace.
     // issue and replace cancellation is tested through the vault's cancellation service.
@@ -739,7 +732,6 @@ async fn test_cancellation_succeeds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[procedural::with_big_stack]
 async fn test_refund_succeeds() {
     test_with_vault(|client, vault_id, vault_provider| async move {
         let sudo_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
@@ -819,7 +811,6 @@ async fn test_refund_succeeds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[procedural::with_big_stack]
 async fn test_issue_overpayment_succeeds() {
     test_with_vault(|client, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
@@ -884,7 +875,6 @@ async fn test_issue_overpayment_succeeds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[procedural::with_big_stack]
 async fn test_automatic_issue_execution_succeeds() {
     test_with_vault(|client, vault1_id, _vault1_provider| async move {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
@@ -958,7 +948,6 @@ async fn test_automatic_issue_execution_succeeds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[procedural::with_big_stack]
 async fn test_execute_open_requests_succeeds() {
     test_with_vault(|client, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
@@ -1024,7 +1013,6 @@ async fn test_execute_open_requests_succeeds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[procedural::with_big_stack]
 async fn test_off_chain_liquidation() {
     test_with_vault(|client, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
@@ -1052,7 +1040,6 @@ async fn test_off_chain_liquidation() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[procedural::with_big_stack]
 async fn test_shutdown() {
     test_with(|client| async move {
         let sudo_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;

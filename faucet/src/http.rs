@@ -350,7 +350,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[procedural::with_big_stack]
     async fn test_fund_user_once_succeeds() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
@@ -392,7 +391,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[procedural::with_big_stack]
     async fn test_fund_rich_user_fails() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
@@ -423,7 +421,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[procedural::with_big_stack]
     async fn test_fund_user_immediately_after_registering_as_vault_succeeds() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
@@ -501,7 +498,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[procedural::with_big_stack]
     async fn test_fund_user_twice_in_a_row_fails() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
@@ -552,7 +548,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[procedural::with_big_stack]
     async fn test_fund_vault_once_succeeds() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
@@ -616,7 +611,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[procedural::with_big_stack]
     async fn test_fund_vault_twice_in_a_row_fails() {
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
