@@ -19,7 +19,7 @@ hex = "0.4.2"
 async-trait = "0.1.40"
 tokio = { version = "1.0", features = ["full"] }
 backoff = { version = "0.3.0", features = ["tokio"] }
-clap = { version = "3.0.0-beta.2", optional = true }
+clap = { version = "= 3.0.0-beta.4", features = ["derive", "std"], optional = true }
 num = "0.2"
 num-traits = "0.2"
 num-derive = "0.3"
@@ -30,11 +30,11 @@ hyper = "0.10"
 esplora-btc-api = "1.0.3"
 
 # Substrate dependencies
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.10" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.11" }
 
 [dependencies.interbtc-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "61fa80433215d92702b83d429a47184da227aba6"
+rev = "0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
 package = "bitcoin"
 optional = true
 

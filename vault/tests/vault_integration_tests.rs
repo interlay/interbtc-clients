@@ -8,14 +8,13 @@ use futures::{
     Future, FutureExt, SinkExt, TryStreamExt,
 };
 use runtime::{
-    integration::*,
-    pallets::{issue::*, redeem::*, refund::*, relay::*, replace::*, security::*, tokens::*, vault_registry::*},
-    BtcAddress, BtcRelayPallet, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRedeemRequest,
-    InterBtcRuntime, IssuePallet, RedeemPallet, RelayPallet, ReplacePallet, UtilFuncs, VaultId, VaultRegistryPallet,
+    integration::*, types::*, BtcAddress, BtcRelayPallet, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain,
+    InterBtcRedeemRequest, IssuePallet, RedeemPallet, RelayPallet, ReplacePallet, UtilFuncs, VaultId,
+    VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
-use std::{marker::PhantomData, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager};
 
 const TIMEOUT: Duration = Duration::from_secs(90);
@@ -89,13 +88,10 @@ async fn pay_redeem_from_vault_wallet(
     let vault_provider = &vault_provider;
     let vault_id = &vault_id;
     vault_provider
-        .on_event::<RequestRedeemEvent<InterBtcRuntime>, _, _, _>(
+        .on_event::<RequestRedeemEvent, _, _, _>(
             |event| async move {
                 tracing::error!("Event {}", addr_seed);
-                let request = vault_provider
-                    .get_redeem_request(event.redeem_id.clone())
-                    .await
-                    .unwrap();
+                let request = vault_provider.get_redeem_request(event.redeem_id).await.unwrap();
                 // step 1: create a spending transaction from some arbitrary address
                 let mut transaction = btc_rpc
                     .create_transaction(request.btc_address, request.amount_btc as u64, Some(event.redeem_id))
@@ -107,19 +103,31 @@ async fn pay_redeem_from_vault_wallet(
                 transaction.transaction.input[0].witness = vec![vec![], x.to_vec()];
                 // make txid unique
                 transaction.transaction.input[0].previous_output.vout = addr_seed as u32;
+                // first byte of the script needs to be non-zero in order to be parsed as p2wpkh. If we don't overwrite
+                // this, the client will parse the input as p2wpkh, while the parachain parses is as a script hash
+                // address
+                transaction.transaction.input[0].script_sig = bitcoin::Script::from(vec![
+                    1, 71, 48, 68, 2, 32, 91, 128, 41, 150, 96, 53, 187, 63, 230, 129, 53, 234, 210, 186, 21, 187, 98,
+                    38, 255, 112, 30, 27, 228, 29, 132, 140, 155, 62, 123, 216, 232, 168, 2, 32, 72, 126, 179, 207,
+                    142, 8, 99, 8, 32, 78, 244, 166, 106, 160, 207, 227, 61, 210, 172, 234, 234, 93, 59, 159, 79, 12,
+                    194, 240, 212, 3, 120, 50, 1, 71, 81, 33, 3, 113, 209, 131, 177, 9, 29, 242, 229, 15, 217, 247,
+                    165, 78, 111, 80, 79, 50, 200, 117, 80, 30, 233, 210, 167, 133, 175, 62, 253, 134, 127, 212, 51,
+                    33, 2, 128, 200, 184, 235, 148, 25, 43, 34, 28, 173, 55, 54, 189, 164, 187, 243, 243, 152, 7, 84,
+                    210, 85, 156, 238, 77, 97, 188, 240, 162, 197, 105, 62, 82, 174,
+                ]);
 
                 // extract the public address corresponding to the input script
                 let input_address = transaction.transaction.extract_input_addresses::<BtcAddress>()[0];
                 tracing::error!("txid {} {}", addr_seed, transaction.transaction.txid());
                 // now make the vault register it
-                assert_ok!(vault_provider.register_address(&vault_id, input_address).await);
+                assert_ok!(vault_provider.register_address(vault_id, input_address).await);
                 tracing::error!("Registered {}", addr_seed);
                 let return_to_self_address = transaction.transaction.extract_output_addresses::<BtcAddress>()[1];
                 // register return-to-self address if it hasnt been yet
-                let wallet = vault_provider.get_vault(&vault_id).await.unwrap().wallet;
-                if !wallet.has_btc_address(&return_to_self_address) {
+                let wallet = vault_provider.get_vault(vault_id).await.unwrap().wallet;
+                if !wallet.addresses.contains(&return_to_self_address) {
                     vault_provider
-                        .register_address(&vault_id, return_to_self_address)
+                        .register_address(vault_id, return_to_self_address)
                         .await
                         .unwrap();
                 }
@@ -199,6 +207,17 @@ async fn test_report_vault_theft_succeeds() {
                 .unwrap();
             // set the hash in the input script. Note: p2wpkh needs to start with 2 or 3
             transaction.transaction.input[0].witness = vec![vec![], vec![3; 33]];
+            // first byte of the script needs to be non-zero in order to be parsed as p2wpkh. If we don't overwrite
+            // this, the client will parse the input as p2wpkh, while the parachain parses is as a script hash address
+            transaction.transaction.input[0].script_sig = bitcoin::Script::from(vec![
+                1, 71, 48, 68, 2, 32, 91, 128, 41, 150, 96, 53, 187, 63, 230, 129, 53, 234, 210, 186, 21, 187, 98, 38,
+                255, 112, 30, 27, 228, 29, 132, 140, 155, 62, 123, 216, 232, 168, 2, 32, 72, 126, 179, 207, 142, 8, 99,
+                8, 32, 78, 244, 166, 106, 160, 207, 227, 61, 210, 172, 234, 234, 93, 59, 159, 79, 12, 194, 240, 212, 3,
+                120, 50, 1, 71, 81, 33, 3, 113, 209, 131, 177, 9, 29, 242, 229, 15, 217, 247, 165, 78, 111, 80, 79, 50,
+                200, 117, 80, 30, 233, 210, 167, 133, 175, 62, 253, 134, 127, 212, 51, 33, 2, 128, 200, 184, 235, 148,
+                25, 43, 34, 28, 173, 55, 54, 189, 164, 187, 243, 243, 152, 7, 84, 210, 85, 156, 238, 77, 97, 188, 240,
+                162, 197, 105, 62, 82, 174,
+            ]);
 
             // extract the public address corresponding to the input script
             let input_address = transaction.transaction.extract_input_addresses::<BtcAddress>()[0];
@@ -208,7 +227,7 @@ async fn test_report_vault_theft_succeeds() {
             // now perform the theft
             assert_ok!(btc_rpc.send_transaction(transaction).await);
 
-            assert_event::<VaultTheftEvent<InterBtcRuntime>, _>(TIMEOUT, vault_provider, |_| true).await;
+            assert_event::<VaultTheftEvent, _>(TIMEOUT, vault_provider, |_| true).await;
         },
     )
     .await
@@ -262,12 +281,7 @@ async fn test_report_vault_double_payment_succeeds() {
                     .await
                     .unwrap();
 
-                assert_event::<VaultDoublePaymentEvent<InterBtcRuntime>, _>(
-                    Duration::from_secs(120),
-                    root_provider,
-                    |_| true,
-                )
-                .await;
+                assert_event::<VaultDoublePaymentEvent, _>(Duration::from_secs(120), root_provider, |_| true).await;
             },
         )
         .await;
@@ -389,13 +403,13 @@ async fn test_replace_succeeds() {
                     .await
                     .unwrap();
 
-                assert_event::<AcceptReplaceEvent<InterBtcRuntime>, _>(TIMEOUT, old_vault_provider.clone(), |e| {
+                assert_event::<AcceptReplaceEvent, _>(TIMEOUT, old_vault_provider.clone(), |e| {
                     assert_eq!(e.old_vault_id, old_vault_id);
                     assert_eq!(e.new_vault_id, new_vault_id);
                     true
                 })
                 .await;
-                assert_event::<ExecuteReplaceEvent<InterBtcRuntime>, _>(TIMEOUT, old_vault_provider.clone(), |e| {
+                assert_event::<ExecuteReplaceEvent, _>(TIMEOUT, old_vault_provider.clone(), |e| {
                     assert_eq!(e.old_vault_id, old_vault_id);
                     assert_eq!(e.new_vault_id, new_vault_id);
                     true
@@ -442,7 +456,7 @@ async fn test_maintain_collateral_succeeds() {
                 )
                 .await;
 
-                assert_event::<DepositCollateralEvent<InterBtcRuntime>, _>(TIMEOUT, vault_provider.clone(), |e| {
+                assert_event::<DepositCollateralEvent, _>(TIMEOUT, vault_provider.clone(), |e| {
                     assert_eq!(e.new_collateral, vault_collateral / 10);
                     true
                 })
@@ -500,7 +514,7 @@ async fn test_withdraw_replace_succeeds() {
             old_vault_provider
                 .request_replace(&old_vault_id, issue_amount, 1000000)
                 .map(Result::unwrap),
-            assert_event::<RequestReplaceEvent<InterBtcRuntime>, _>(TIMEOUT, old_vault_provider.clone(), |_| true),
+            assert_event::<RequestReplaceEvent, _>(TIMEOUT, old_vault_provider.clone(), |_| true),
         )
         .await;
 
@@ -508,7 +522,7 @@ async fn test_withdraw_replace_succeeds() {
             old_vault_provider
                 .withdraw_replace(&old_vault_id, issue_amount)
                 .map(Result::unwrap),
-            assert_event::<WithdrawReplaceEvent<InterBtcRuntime>, _>(TIMEOUT, old_vault_provider.clone(), |e| {
+            assert_event::<WithdrawReplaceEvent, _>(TIMEOUT, old_vault_provider.clone(), |e| {
                 assert_eq!(e.old_vault_id, old_vault_id);
                 true
             }),
@@ -611,18 +625,18 @@ async fn test_cancellation_succeeds() {
 
             block_listener
                 .clone()
-                .on_event::<UpdateActiveBlockEvent<InterBtcRuntime>, _, _, _>(
+                .on_event::<UpdateActiveBlockEvent, _, _, _>(
                     |event| async move {
                         assert_ok!(
                             issue_block_tx
                                 .clone()
-                                .send(CancellationEvent::ParachainBlock(event.height))
+                                .send(CancellationEvent::ParachainBlock(event.block_number))
                                 .await
                         );
                         assert_ok!(
                             replace_block_tx
                                 .clone()
-                                .send(CancellationEvent::ParachainBlock(event.height))
+                                .send(CancellationEvent::ParachainBlock(event.block_number))
                                 .await
                         );
                     },
@@ -703,16 +717,8 @@ async fn test_cancellation_succeeds() {
                             );
                         }
                     },
-                    assert_event::<CancelIssueEvent<InterBtcRuntime>, _>(
-                        Duration::from_secs(120),
-                        user_provider.clone(),
-                        |_| true,
-                    ),
-                    assert_event::<CancelReplaceEvent<InterBtcRuntime>, _>(
-                        Duration::from_secs(120),
-                        user_provider.clone(),
-                        |_| true,
-                    ),
+                    assert_event::<CancelIssueEvent, _>(Duration::from_secs(120), user_provider.clone(), |_| true),
+                    assert_event::<CancelReplaceEvent, _>(Duration::from_secs(120), user_provider.clone(), |_| true),
                 )
                 .await;
 
@@ -761,8 +767,8 @@ async fn test_refund_succeeds() {
 
             let metadata = btc_rpc
                 .send_to_address(
-                    issue.vault_btc_address,
-                    (issue.amount_btc + issue.fee) as u64 + over_payment,
+                    issue.vault_address,
+                    (issue.amount + issue.fee) as u64 + over_payment,
                     None,
                     0,
                 )
@@ -772,11 +778,9 @@ async fn test_refund_succeeds() {
             let (_, refund_request, refund_execution) = join3(
                 user_provider.execute_issue(issue.issue_id, &metadata.proof, &metadata.raw_tx),
                 // overpayment on execute_issue should emit this event
-                assert_event::<RequestRefundEvent<InterBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |x| {
-                    x.vault_id == vault_id
-                }),
+                assert_event::<RequestRefundEvent, _>(TIMEOUT, user_provider.clone(), |x| x.vault_id == vault_id),
                 // the vault should execute the refund request automatically
-                assert_event::<ExecuteRefundEvent<InterBtcRuntime>, _>(2 * TIMEOUT, user_provider.clone(), |_| true),
+                assert_event::<ExecuteRefundEvent, _>(2 * TIMEOUT, user_provider.clone(), |_| true),
             )
             .await;
 
@@ -841,8 +845,8 @@ async fn test_issue_overpayment_succeeds() {
 
             let metadata = btc_rpc
                 .send_to_address(
-                    issue.vault_btc_address,
-                    (issue.amount_btc + issue.fee) as u64 * over_payment_factor as u64,
+                    issue.vault_address,
+                    (issue.amount + issue.fee) as u64 * over_payment_factor as u64,
                     None,
                     0,
                 )
@@ -850,9 +854,9 @@ async fn test_issue_overpayment_succeeds() {
                 .unwrap();
 
             join(
-                assert_event::<EndowedEvent<InterBtcRuntime>, _>(TIMEOUT, user_provider.clone(), |x| {
-                    if &x.account_id == user_provider.get_account_id() {
-                        assert_eq!(x.balance, issue.amount_btc * over_payment_factor);
+                assert_event::<EndowedEvent, _>(TIMEOUT, user_provider.clone(), |x| {
+                    if &x.1 == user_provider.get_account_id() {
+                        assert_eq!(x.2, issue.amount * over_payment_factor);
                         true
                     } else {
                         false
@@ -917,15 +921,13 @@ async fn test_automatic_issue_execution_succeeds() {
 
             assert_ok!(
                 btc_rpc
-                    .send_to_address(issue.vault_btc_address, (issue.amount_btc + issue.fee) as u64, None, 0)
+                    .send_to_address(issue.vault_address, (issue.amount + issue.fee) as u64, None, 0)
                     .await
             );
 
             // wait for vault2 to execute this issue
-            assert_event::<ExecuteIssueEvent<InterBtcRuntime>, _>(TIMEOUT, user_provider.clone(), move |x| {
-                x.vault_id == vault1_id
-            })
-            .await;
+            assert_event::<ExecuteIssueEvent, _>(TIMEOUT, user_provider.clone(), move |x| x.vault_id == vault1_id)
+                .await;
         };
 
         let issue_set = Arc::new(IssueRequests::new());
@@ -975,7 +977,7 @@ async fn test_execute_open_requests_succeeds() {
                 .collect::<Vec<_>>();
 
         let redeems: Vec<InterBtcRedeemRequest> =
-            futures::future::join_all(redeem_ids.iter().map(|id| user_provider.get_redeem_request(id.clone())))
+            futures::future::join_all(redeem_ids.iter().map(|id| user_provider.get_redeem_request(*id)))
                 .await
                 .into_iter()
                 .map(|x| x.unwrap())
@@ -1032,7 +1034,7 @@ async fn test_off_chain_liquidation() {
 
         set_exchange_rate_and_wait(&relayer_provider, DEFAULT_TESTING_CURRENCY, FixedU128::from(10)).await;
 
-        assert_event::<LiquidateVaultEvent<InterBtcRuntime>, _>(TIMEOUT, vault_provider.clone(), |_| true).await;
+        assert_event::<LiquidateVaultEvent, _>(TIMEOUT, vault_provider.clone(), |_| true).await;
     })
     .await;
 }
@@ -1059,10 +1061,9 @@ async fn test_shutdown() {
         // shutdown chain..
         assert_ok!(
             sudo_provider
-                .sudo(SetParachainStatusCall {
+                .sudo(EncodedCall::Security(SecurityCall::set_parachain_status {
                     status_code: StatusCode::Shutdown,
-                    _runtime: PhantomData {},
-                })
+                }))
                 .await
         );
 
@@ -1076,10 +1077,9 @@ async fn test_shutdown() {
         // restore parachain status and check that we can issue now
         assert_ok!(
             sudo_provider
-                .sudo(SetParachainStatusCall {
+                .sudo(EncodedCall::Security(SecurityCall::set_parachain_status {
                     status_code: StatusCode::Running,
-                    _runtime: PhantomData {},
-                })
+                }))
                 .await
         );
         assert_ok!(user_provider.request_issue(10000, &sudo_vault_id, 10000).await);
@@ -1091,6 +1091,6 @@ async fn assert_redeem_event(
     duration: Duration,
     parachain_rpc: InterBtcParachain,
     redeem_id: H256,
-) -> ExecuteRedeemEvent<InterBtcRuntime> {
-    assert_event::<ExecuteRedeemEvent<InterBtcRuntime>, _>(duration, parachain_rpc, |x| x.redeem_id == redeem_id).await
+) -> ExecuteRedeemEvent {
+    assert_event::<ExecuteRedeemEvent, _>(duration, parachain_rpc, |x| x.redeem_id == redeem_id).await
 }
