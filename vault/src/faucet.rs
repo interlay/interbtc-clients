@@ -4,7 +4,7 @@ use hex::FromHex;
 use jsonrpc_core::Value;
 use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use parity_scale_codec::{Decode, Encode};
-use runtime::{InterBtcParachain, VaultId, VaultRegistryPallet, TX_FEES};
+use runtime::{InterBtcParachain, RichCurrencyId, VaultId, VaultRegistryPallet, TX_FEES};
 use serde::{Deserialize, Deserializer};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -26,7 +26,7 @@ struct FundAccountJsonRpcRequest {
 
 async fn get_faucet_allowance(faucet_connection: TypedClient, allowance_type: &str) -> Result<u128, Error> {
     let raw_allowance = faucet_connection
-        .call_method::<(), RawBytes>(&allowance_type, "", ())
+        .call_method::<(), RawBytes>(allowance_type, "", ())
         .await?;
     Ok(Decode::decode(&mut &raw_allowance.0[..])?)
 }
@@ -48,7 +48,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
 ) -> Result<(), Error> {
     tracing::info!("Connecting to the faucet");
     let connection = jsonrpc_http::connect::<TypedClient>(faucet_url).await?;
-    let currency_id = vault_id.collateral_currency();
+    let currency_id: RichCurrencyId = vault_id.collateral_currency().into();
 
     // Receive user allowance from faucet
     if let Err(e) = get_funding(connection.clone(), vault_id.clone()).await {
@@ -82,7 +82,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
         .checked_mul(2)
         .unwrap_or_default();
 
-    deposit_collateral(&parachain_rpc, vault_id, operational_collateral).await?;
+    deposit_collateral(parachain_rpc, vault_id, operational_collateral).await?;
 
     Ok(())
 }

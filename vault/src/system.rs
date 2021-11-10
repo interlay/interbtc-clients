@@ -1,6 +1,6 @@
 use crate::{
-    collateral::lock_required_collateral, faucet, issue, relay::run_relayer, service::*, Error, Event, IssueRequests,
-    Vaults, CHAIN_HEIGHT_POLLING_INTERVAL,
+    collateral::lock_required_collateral, error::Error, faucet, issue, relay::run_relayer, service::*, vaults::Vaults,
+    Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
@@ -11,15 +11,7 @@ use futures::{
     Future, SinkExt,
 };
 use git_version::git_version;
-use runtime::{
-    btc_relay::StoreMainChainHeaderEvent,
-    cli::{parse_duration_minutes, parse_duration_ms},
-    pallets::security::UpdateActiveBlockEvent,
-    parse_collateral_currency, parse_wrapped_currency,
-    vault_registry::RegisterVaultEvent,
-    BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, InterBtcRuntime, UtilFuncs, VaultId,
-    VaultIdFormatter, VaultRegistryPallet,
-};
+use runtime::{BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair, VaultId, VaultRegistryPallet, cli::{parse_duration_minutes, parse_duration_ms}, parse_collateral_currency, parse_wrapped_currency};
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
 use tokio::{sync::RwLock, time::sleep};
@@ -116,10 +108,10 @@ async fn active_block_listener(
     let issue_tx = &issue_tx;
     let replace_tx = &replace_tx;
     parachain_rpc
-        .on_event::<UpdateActiveBlockEvent<InterBtcRuntime>, _, _, _>(
+        .on_event::<UpdateActiveBlockEvent, _, _, _>(
             |event| async move {
-                let _ = issue_tx.clone().send(Event::ParachainBlock(event.height)).await;
-                let _ = replace_tx.clone().send(Event::ParachainBlock(event.height)).await;
+                let _ = issue_tx.clone().send(Event::ParachainBlock(event.block_number)).await;
+                let _ = replace_tx.clone().send(Event::ParachainBlock(event.block_number)).await;
             },
             |err| tracing::error!("Error (UpdateActiveBlockEvent): {}", err.to_string()),
         )
@@ -135,7 +127,7 @@ async fn relay_block_listener(
     let issue_tx = &issue_tx;
     let replace_tx = &replace_tx;
     parachain_rpc
-        .on_event::<StoreMainChainHeaderEvent<InterBtcRuntime>, _, _, _>(
+        .on_event::<StoreMainChainHeaderEvent, _, _, _>(
             |event| async move {
                 let _ = issue_tx.clone().send(Event::BitcoinBlock(event.block_height)).await;
                 let _ = replace_tx.clone().send(Event::BitcoinBlock(event.block_height)).await;
@@ -218,7 +210,7 @@ impl<T: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<T> {
     pub async fn listen_for_vault_id_registrations(self) -> Result<(), ServiceError> {
         Ok(self
             .btc_parachain
-            .on_event::<RegisterVaultEvent<InterBtcRuntime>, _, _, _>(
+            .on_event::<RegisterVaultEvent, _, _, _>(
                 |event| async {
                     let vault_id = event.vault_id;
                     if self.btc_parachain.is_this_vault(&vault_id) {
@@ -555,7 +547,7 @@ impl VaultService {
 
     async fn maybe_register_vault(&self) -> Result<(), Error> {
         let account_id = self.btc_parachain.get_account_id();
-        let (collateral_currency, wrapped_currency) =
+        let (collateral_currency, _wrapped_currency) =
             match (self.config.collateral_currency_id, self.config.wrapped_currency_id) {
                 (Some(x), Some(y)) => (x, y),
                 _ => {
@@ -566,11 +558,13 @@ impl VaultService {
                 }
             };
 
-        let vault_id = VaultId::new(
-            account_id.clone(),
-            collateral_currency,
-            wrapped_currency, // TODO: fetch this from parachain metadata
-        );
+        let vault_id = VaultId {
+            account_id: account_id.clone(),
+            currencies: VaultCurrencyPair {
+                collateral: collateral_currency,
+                wrapped: runtime::RELAY_CHAIN_WRAPPED_CURRENCY, // TODO: fetch this from parachain metadata
+            },
+        };
 
         if is_vault_registered(&self.btc_parachain, &vault_id).await? {
             tracing::info!(

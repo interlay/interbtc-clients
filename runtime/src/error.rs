@@ -1,17 +1,12 @@
 pub use jsonrpsee_types::error::Error as JsonRpseeError;
-pub use substrate_subxt::Error as SubxtError;
+pub use subxt::Error as SubxtError;
 
-use crate::{
-    BTC_RELAY_MODULE, COMMIT_PERIOD_EXPIRED_ERROR, DUPLICATE_BLOCK_ERROR, INVALID_CHAIN_ID_ERROR,
-    ISSUE_COMPLETED_ERROR, ISSUE_MODULE, PARACHAIN_SHUTDOWN_ERROR, REDEEM_MODULE, RELAY_MODULE, SECURITY_MODULE,
-    VALID_REFUND_TRANSACTION_ERROR,
-};
+use crate::{types::*, BTC_RELAY_MODULE, ISSUE_MODULE, REDEEM_MODULE, RELAY_MODULE};
 use codec::Error as CodecError;
 use jsonrpsee_types::{error::Error as RequestError, CallError};
 use serde_json::Error as SerdeJsonError;
-use sp_core::crypto::SecretStringError;
 use std::{array::TryFromSliceError, io::Error as IoError, num::TryFromIntError};
-use substrate_subxt::{ModuleError as SubxtModuleError, RuntimeError as SubxtRuntimeError};
+use subxt::{sp_core::crypto::SecretStringError, PalletError as SubxtPalletError, RuntimeError as SubxtRuntimeError};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
 use url::ParseError as UrlParseError;
@@ -46,6 +41,8 @@ pub enum Error {
     InvalidCurrency,
     #[error("Failed to parse keyring account")]
     KeyringAccountParsingError,
+    #[error("Storage item not found")]
+    StorageItemNotFound,
 
     #[error("Failed to load credentials from file: {0}")]
     KeyLoadingFailure(#[from] KeyLoadingError),
@@ -70,38 +67,42 @@ pub enum Error {
 impl Error {
     pub fn is_duplicate_block(&self) -> bool {
         matches!(self,
-            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
-                ref module,
+            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtPalletError {
+                ref pallet,
                 ref error,
-            }))) if module == BTC_RELAY_MODULE && error == DUPLICATE_BLOCK_ERROR
+                ..
+            }))) if pallet == BTC_RELAY_MODULE && error == &format!("{:?}", BtcRelayPalletError::DuplicateBlock)
         )
     }
 
     pub fn is_invalid_chain_id(&self) -> bool {
         matches!(self,
-            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
-                ref module,
+            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtPalletError {
+                ref pallet,
                 ref error,
-            }))) if module == BTC_RELAY_MODULE && error == INVALID_CHAIN_ID_ERROR
+                ..
+            }))) if pallet == BTC_RELAY_MODULE && error == &format!("{:?}", BtcRelayPalletError::InvalidChainID)
         )
     }
 
     pub fn is_issue_completed(&self) -> bool {
         matches!(self,
-            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
-                ref module,
+            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtPalletError {
+                ref pallet,
                 ref error,
-            }))) if module == ISSUE_MODULE && error == ISSUE_COMPLETED_ERROR
+                ..
+            }))) if pallet == ISSUE_MODULE && error == &format!("{:?}", IssuePalletError::IssueCompleted)
         )
     }
 
     pub fn is_valid_refund(&self) -> bool {
         matches!(self,
-            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
-                ref module,
-                ref error,
-            }))) if module == RELAY_MODULE && error == VALID_REFUND_TRANSACTION_ERROR
-        )
+                Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtPalletError {
+                    ref pallet,
+                    ref error,
+                    ..
+                }))) if pallet == RELAY_MODULE && error == &format!("{:?}", RelayPalletError::ValidRefundTransaction)
+            )
     }
 
     pub fn is_invalid_transaction(&self) -> bool {
@@ -114,10 +115,11 @@ impl Error {
 
     pub fn is_commit_period_expired(&self) -> bool {
         matches!(self,
-            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
-                ref module,
+            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtPalletError {
+                ref pallet,
                 ref error,
-            }))) if module == REDEEM_MODULE && error == COMMIT_PERIOD_EXPIRED_ERROR
+                ..
+            }))) if pallet == REDEEM_MODULE && error == &format!("{:?}", RedeemPalletError::CommitPeriodExpired)
         )
     }
 
@@ -133,11 +135,9 @@ impl Error {
     }
 
     pub fn is_parachain_shutdown_error(&self) -> bool {
-        matches!(self,
-            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::Module(SubxtModuleError {
-                ref module,
-                ref error,
-            }))) if module == SECURITY_MODULE && error == PARACHAIN_SHUTDOWN_ERROR
+        matches!(
+            self,
+            Error::SubxtError(SubxtError::Runtime(SubxtRuntimeError::BadOrigin))
         )
     }
 }

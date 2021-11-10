@@ -4,11 +4,10 @@ use bitcoin::{
 };
 use futures::{stream::StreamExt, try_join};
 use runtime::{
-    pallets::refund::RequestRefundEvent, BtcAddress, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRedeemRequest,
-    InterBtcRefundRequest, InterBtcReplaceRequest, InterBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet,
-    ReplacePallet, ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet,
+    BtcAddress, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRedeemRequest, InterBtcRefundRequest,
+    InterBtcReplaceRequest, RedeemPallet, RedeemRequestStatus, RefundPallet, ReplacePallet, ReplaceRequestStatus,
+    RequestRefundEvent, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
-use sp_core::H256;
 use std::{collections::HashMap, convert::TryInto, time::Duration};
 use tokio::time::sleep;
 
@@ -149,7 +148,7 @@ impl Request {
     }
 
     /// Constructs a Request for the given RequestRefundEvent
-    pub fn from_refund_request_event(request: &RequestRefundEvent<InterBtcRuntime>) -> Request {
+    pub fn from_refund_request_event(request: &RequestRefundEvent) -> Request {
         Request {
             btc_address: request.btc_address,
             amount: request.amount,
@@ -233,7 +232,7 @@ impl Request {
             [address] => {
                 // one return-to-self address, make sure it is registered
                 let wallet = parachain_rpc.get_vault(&vault_id).await?.wallet;
-                if !wallet.has_btc_address(&address) {
+                if !wallet.addresses.contains(address) {
                     tracing::info!("Registering address {:?}", address);
                     parachain_rpc.register_address(&vault_id, *address).await?;
                 }
@@ -523,24 +522,11 @@ mod tests {
 
         #[async_trait]
         pub trait RedeemPallet {
-            async fn request_redeem(
-                &self,
-                amount: u128,
-                btc_address: BtcAddress,
-                vault_id: &VaultId,
-            ) -> Result<H256, RuntimeError>;
-            async fn execute_redeem(
-                &self,
-                redeem_id: H256,
-                merkle_proof: &[u8],
-                raw_tx: &[u8],
-            ) -> Result<(), RuntimeError>;
+            async fn request_redeem(&self, amount: u128, btc_address: BtcAddress, vault_id: &VaultId) -> Result<H256, RuntimeError>;
+            async fn execute_redeem(&self, redeem_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
             async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), RuntimeError>;
             async fn get_redeem_request(&self, redeem_id: H256) -> Result<InterBtcRedeemRequest, RuntimeError>;
-            async fn get_vault_redeem_requests(
-                &self,
-                account_id: AccountId,
-            ) -> Result<Vec<(H256, InterBtcRedeemRequest)>, RuntimeError>;
+            async fn get_vault_redeem_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcRedeemRequest)>, RuntimeError>;
             async fn get_redeem_period(&self) -> Result<BlockNumber, RuntimeError>;
             async fn set_redeem_period(&self, period: u32) -> Result<(), RuntimeError>;
         }
@@ -563,16 +549,9 @@ mod tests {
 
         #[async_trait]
         pub trait RefundPallet {
-            async fn execute_refund(
-                &self,
-                refund_id: H256,
-                merkle_proof: &[u8],
-                raw_tx: &[u8],
-            ) -> Result<(), RuntimeError>;
-            async fn get_vault_refund_requests(
-                &self,
-                account_id: AccountId,
-            ) -> Result<Vec<(H256, InterBtcRefundRequest)>, RuntimeError>;
+            async fn execute_refund(&self, refund_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
+            async fn get_refund_request(&self, refund_id: H256) -> Result<InterBtcRefundRequest, RuntimeError>;
+            async fn get_vault_refund_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcRefundRequest)>, RuntimeError>;
         }
 
         #[async_trait]
@@ -585,21 +564,14 @@ mod tests {
             async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), RuntimeError>;
             async fn get_parachain_confirmations(&self) -> Result<BlockNumber, RuntimeError>;
             async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), RuntimeError>;
-            async fn wait_for_block_in_relay(
-                &self,
-                block_hash: H256Le,
-                btc_confirmations: Option<BlockNumber>,
-            ) -> Result<(), RuntimeError>;
+            async fn wait_for_block_in_relay(&self, block_hash: H256Le, btc_confirmations: Option<BlockNumber>) -> Result<(), RuntimeError>;
             async fn verify_block_header_inclusion(&self, block_hash: H256Le) -> Result<(), RuntimeError>;
         }
 
         #[async_trait]
         pub trait SecurityPallet {
             async fn get_parachain_status(&self) -> Result<StatusCode, RuntimeError>;
-
             async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, RuntimeError>;
-
-            /// Gets the current active block number of the parachain
             async fn get_current_active_block_number(&self) -> Result<u32, RuntimeError>;
         }
     }
@@ -624,47 +596,19 @@ mod tests {
             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
             async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError>;
             async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, BitcoinError>;
-            async fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
-                &self,
-                public_key: P,
-                secret_key: Vec<u8>,
-            ) -> Result<(), BitcoinError>;
+            async fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(&self, public_key: P, secret_key: Vec<u8>) -> Result<(), BitcoinError>;
             async fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
             async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
             async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, BitcoinError>;
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
-            async fn get_mempool_transactions<'a>(
-                &'a self,
-            ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>;
-            async fn wait_for_transaction_metadata(
-                &self,
-                txid: Txid,
-                num_confirmations: u32,
-            ) -> Result<TransactionMetadata, BitcoinError>;
-            async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
-                &self,
-                address: A,
-                sat: u64,
-                request_id: Option<H256>,
-            ) -> Result<LockedTransaction, BitcoinError>;
+            async fn get_mempool_transactions<'a>(&'a self) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>;
+            async fn wait_for_transaction_metadata(&self, txid: Txid, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
+            async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>) -> Result<LockedTransaction, BitcoinError>;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
-            async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
-                &self,
-                address: A,
-                sat: u64,
-                request_id: Option<H256>,
-            ) -> Result<Txid, BitcoinError>;
-            async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
-                &self,
-                address: A,
-                sat: u64,
-                request_id: Option<H256>,
-                num_confirmations: u32,
-            ) -> Result<TransactionMetadata, BitcoinError>;
+            async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>) -> Result<Txid, BitcoinError>;
+            async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;
-            async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError>
-                where
-                    P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
+            async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError> where P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), BitcoinError>;
             async fn rescan_blockchain(&self, start_height: usize) -> Result<(), BitcoinError>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError>;

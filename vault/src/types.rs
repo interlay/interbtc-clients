@@ -1,5 +1,4 @@
-use runtime::BtcAddress;
-use sp_core::H256;
+use runtime::{BtcAddress, H256};
 use std::{borrow::Borrow, collections::HashMap, hash::Hash};
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -8,18 +7,18 @@ pub struct ReversibleHashMap<K, V>((HashMap<K, V>, HashMap<V, K>));
 
 impl<K, V> ReversibleHashMap<K, V>
 where
-    K: Hash + Eq + Copy + Default,
-    V: Hash + Eq + Copy + Default,
+    K: Hash + Eq + Clone,
+    V: Hash + Eq + Clone,
 {
     pub fn new() -> ReversibleHashMap<K, V> {
-        Default::default()
+        ReversibleHashMap((HashMap::new(), HashMap::new()))
     }
 
     /// Inserts a reversible key-value pair into the map.
     ///
     /// If the map did not have a key present, None is returned.
     pub fn insert(&mut self, k: K, v: V) -> (Option<K>, Option<V>) {
-        let k1 = self.0 .0.insert(k, v);
+        let k1 = self.0 .0.insert(k.clone(), v.clone());
         let k2 = self.0 .1.insert(v, k);
         (k2, k1)
     }

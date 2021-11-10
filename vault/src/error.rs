@@ -1,9 +1,9 @@
-use crate::relay::Error as RelayError;
+// use crate::relay::Error as RelayError;
 use bitcoin::Error as BitcoinError;
 use hex::FromHexError;
 use jsonrpc_core_client::RpcError;
 use parity_scale_codec::Error as CodecError;
-use runtime::{substrate_subxt::Error as SubxtError, Error as RuntimeError};
+use runtime::{Error as RuntimeError, SubxtError};
 use service::Error as ServiceError;
 use thiserror::Error;
 
@@ -42,6 +42,6 @@ pub enum Error {
     SubxtError(#[from] SubxtError),
     #[error("CodecError: {0}")]
     CodecError(#[from] CodecError),
-    #[error("RelayError: {0}")]
-    RelayError(#[from] RelayError),
+    /* #[error("RelayError: {0}")]
+     * RelayError(#[from] RelayError), */
 }

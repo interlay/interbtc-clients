@@ -1,27 +1,21 @@
-use codec::Encode;
-
+use crate::{
+    conn::{new_websocket_client, new_websocket_client_with_retry},
+    metadata, notify_retry,
+    types::*,
+    AccountId, CurrencyId, Error, InterBtcRuntime, InterBtcSigner, RetryPolicy, RichH256Le, SubxtError,
+    BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CONFIRMATIONS,
+};
 use async_trait::async_trait;
-use core::marker::PhantomData;
-use futures::{stream::StreamExt, FutureExt, SinkExt};
+use codec::Encode;
+use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt};
 use jsonrpsee_types::to_json_value;
 use module_oracle_rpc_runtime_api::BalanceWrapper;
-use primitives::oracle::Key as OracleKey;
-use sp_arithmetic::FixedU128;
-use sp_core::H256;
-use sp_runtime::DispatchError;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
-use substrate_subxt::{
-    sudo::*, Call, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Error as SubxtError, Event,
-    EventSubscription, EventTypeRegistry, EventsDecoder, RpcClient, RuntimeError as SubxtRuntimeError, Signer,
+use subxt::{
+    sp_runtime::DispatchError, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Event, EventSubscription,
+    EventsDecoder, Metadata, RpcClient, RuntimeError as SubxtRuntimeError, Signer,
 };
 use tokio::{sync::RwLock, time::sleep};
-
-use crate::{
-    btc_relay::*, conn::*, exchange_rate_oracle::*, fee::*, issue::*, pallets::*, redeem::*, refund::*, relay::*,
-    replace::*, retry::*, security::*, timestamp::*, tokens::*, types::*, utility::*, vault_registry::*, AccountId,
-    BlockNumber, CurrencyId, Error, InterBtcRuntime, VaultId, BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS,
-    STABLE_PARACHAIN_CONFIRMATIONS,
-};
 
 const DEFAULT_COLLATERAL_CURRENCY: CurrencyId = CurrencyId::DOT;
 
@@ -31,20 +25,22 @@ pub struct InterBtcParachain {
     ext_client: SubxtClient<InterBtcRuntime>,
     signer: Arc<RwLock<InterBtcSigner>>,
     account_id: AccountId,
+    api: Arc<metadata::RuntimeApi<InterBtcRuntime>>,
+    metadata: Arc<Metadata>,
 }
 
 impl InterBtcParachain {
     pub async fn new<P: Into<RpcClient>>(rpc_client: P, signer: InterBtcSigner) -> Result<Self, Error> {
         let account_id = signer.account_id().clone();
         let rpc_client = rpc_client.into();
-        let ext_client = SubxtClientBuilder::<InterBtcRuntime>::new()
-            .set_client(rpc_client.clone())
-            .build()
-            .await?;
-
+        let ext_client = SubxtClientBuilder::new().set_client(rpc_client.clone()).build().await?;
+        let api = Arc::new(ext_client.clone().to_runtime_api());
+        let metadata = Arc::new(ext_client.rpc().metadata().await?);
         let parachain_rpc = Self {
             rpc_client,
             ext_client,
+            api,
+            metadata,
             signer: Arc::new(RwLock::new(signer)),
             account_id,
         };
@@ -87,15 +83,17 @@ impl InterBtcParachain {
         // For getting the nonce, use latest, possibly non-finalized block.
         // TODO: we might want to wait until the latest block is actually finalized
         // query account info in order to get the nonce value used for communication
-        let account_info = crate::frame_system::AccountStoreExt::account(
-            &self.ext_client,
-            self.account_id.clone(),
-            Option::<H256>::None,
-        )
-        .await
-        .unwrap_or_default();
-        log::info!("Refreshing nonce: {}", account_info.nonce);
-        signer.set_nonce(account_info.nonce);
+        let account_info = self
+            .api
+            .storage()
+            .system()
+            .account(self.account_id.clone(), None)
+            .await
+            .map(|x| x.nonce)
+            .unwrap_or(0);
+
+        log::info!("Refreshing nonce: {}", account_info);
+        signer.set_nonce(account_info);
     }
 
     /// Gets a copy of the signer with a unique nonce
@@ -130,12 +128,7 @@ impl InterBtcParachain {
     }
 
     pub async fn get_latest_block_hash(&self) -> Result<Option<H256>, Error> {
-        Ok(Some(self.ext_client.finalized_head().await?))
-    }
-
-    pub async fn get_latest_block(&self) -> Result<Option<InterBtcBlock>, Error> {
-        let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.block::<H256>(head).await?)
+        Ok(Some(self.ext_client.rpc().finalized_head().await?))
     }
 
     /// Subscribe to new parachain blocks.
@@ -144,7 +137,7 @@ impl InterBtcParachain {
         F: Fn(InterBtcHeader) -> R,
         R: Future<Output = Result<(), Error>>,
     {
-        let mut sub = self.ext_client.subscribe_finalized_blocks().await?;
+        let mut sub = self.ext_client.rpc().subscribe_finalized_blocks().await?;
         loop {
             on_block(sub.next().await?.ok_or(Error::ChannelClosed)?).await?;
         }
@@ -157,9 +150,8 @@ impl InterBtcParachain {
     /// # Arguments
     /// * `on_error` - callback for decoding errors, is not allowed to take too long
     pub async fn on_event_error<E: Fn(SubxtError)>(&self, on_error: E) -> Result<(), Error> {
-        let sub = self.ext_client.subscribe_finalized_events().await?;
-        let decoder =
-            EventsDecoder::<InterBtcRuntime>::new(self.ext_client.metadata().clone(), EventTypeRegistry::new());
+        let sub = self.ext_client.rpc().subscribe_finalized_events().await?;
+        let decoder = EventsDecoder::<InterBtcRuntime>::new((*self.metadata).clone());
 
         let mut sub = EventSubscription::<InterBtcRuntime>::new(sub, &decoder);
         loop {
@@ -184,14 +176,13 @@ impl InterBtcParachain {
     /// * `on_error` - callback for decoding error, is not allowed to take too long
     pub async fn on_event<T, F, R, E>(&self, mut on_event: F, on_error: E) -> Result<(), Error>
     where
-        T: Event<InterBtcRuntime> + core::fmt::Debug,
+        T: Event + core::fmt::Debug,
         F: FnMut(T) -> R,
         R: Future<Output = ()>,
         E: Fn(SubxtError),
     {
-        let sub = self.ext_client.subscribe_finalized_events().await?;
-        let decoder =
-            EventsDecoder::<InterBtcRuntime>::new(self.ext_client.metadata().clone(), EventTypeRegistry::new());
+        let sub = self.ext_client.rpc().subscribe_finalized_events().await?;
+        let decoder = EventsDecoder::<InterBtcRuntime>::new((*self.metadata).clone());
 
         let mut sub = EventSubscription::<InterBtcRuntime>::new(sub, &decoder);
         sub.filter_event::<T>();
@@ -241,55 +232,72 @@ impl InterBtcParachain {
         Ok(())
     }
 
-    pub async fn sudo<C: Call<InterBtcRuntime> + Clone>(&self, call: C) -> Result<(), Error> {
-        let encoded_call = &self.ext_client.encode(call.clone())?;
-        self.with_unique_signer(|signer| async move { self.ext_client.sudo_and_watch(&signer, encoded_call).await })
-            .await?;
+    pub async fn sudo(&self, call: EncodedCall) -> Result<(), Error> {
+        let call = &call;
+        self.with_unique_signer(|signer| async move {
+            self.api
+                .tx()
+                .sudo()
+                .sudo(call.clone())
+                .sign_and_submit_then_watch(&signer)
+                .await
+        })
+        .await?;
         Ok(())
     }
 
-    async fn batch<C: Call<InterBtcRuntime>>(&self, calls: Vec<C>) -> Result<(), Error> {
-        let encoded_calls = &calls
-            .into_iter()
-            .map(|call| self.ext_client.encode(call))
-            .collect::<Result<Vec<_>, _>>()?;
+    async fn batch(&self, calls: Vec<EncodedCall>) -> Result<(), Error> {
+        let encoded_calls = &calls;
         self.with_unique_signer(|signer| async move {
-            self.ext_client.batch_and_watch(&signer, encoded_calls.clone()).await
+            self.api
+                .tx()
+                .utility()
+                .batch(encoded_calls.clone())
+                .sign_and_submit_then_watch(&signer)
+                .await
         })
         .await?;
         Ok(())
     }
 
     async fn set_storage<V: Encode>(&self, module: &str, key: &str, value: V) -> Result<(), Error> {
-        let module = sp_core::twox_128(module.as_bytes());
-        let item = sp_core::twox_128(key.as_bytes());
+        let module = subxt::sp_core::twox_128(module.as_bytes());
+        let item = subxt::sp_core::twox_128(key.as_bytes());
 
         Ok(self
-            .sudo(crate::frame_system::SetStorageCall {
-                items: vec![([module, item].concat(), value.encode())],
-                _runtime: PhantomData {},
-            })
+            .sudo(EncodedCall::System(
+                metadata::runtime_types::frame_system::pallet::Call::set_storage {
+                    items: vec![([module, item].concat(), value.encode())],
+                },
+            ))
             .await?)
     }
 
     #[cfg(test)]
     pub async fn get_outdated_nonce_error(&self) -> Error {
-        use primitives::VaultCurrencyPair;
+        use sp_arithmetic::FixedPointNumber;
 
-        let signer: InterBtcSigner = {
-            let mut signer = self.signer.write().await;
-            signer.set_nonce(0);
-            signer.clone()
-        };
-        self.ext_client
-            .withdraw_replace_and_watch(
-                &signer,
-                VaultCurrencyPair {
-                    collateral: CurrencyId::DOT,
-                    wrapped: CurrencyId::INTERBTC,
-                },
-                23,
-            )
+        let key = OracleKey::ExchangeRate(CurrencyId::DOT);
+        let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
+
+        let mut signer = self.signer.write().await;
+
+        self.api
+            .tx()
+            .oracle()
+            .feed_values(vec![(key.clone(), exchange_rate)])
+            .sign_and_submit_then_watch(&signer.clone())
+            .await
+            .unwrap();
+
+        signer.set_nonce(0);
+
+        // now call with outdated nonce
+        self.api
+            .tx()
+            .oracle()
+            .feed_values(vec![(key, exchange_rate)])
+            .sign_and_submit_then_watch(&signer.clone())
             .await
             .unwrap_err()
             .into()
@@ -311,11 +319,7 @@ pub trait UtilFuncs {
 impl UtilFuncs for InterBtcParachain {
     async fn get_current_chain_height(&self) -> Result<u32, Error> {
         let head = self.get_latest_block_hash().await?;
-        let query_result = self.ext_client.block(head).await?;
-        match query_result {
-            Some(x) => Ok(x.block.header.number),
-            None => Err(Error::BlockNotFound),
-        }
+        Ok(self.api.storage().system().number(head).await?)
     }
 
     fn get_account_id(&self) -> &AccountId {
@@ -329,49 +333,56 @@ impl UtilFuncs for InterBtcParachain {
 
 #[async_trait]
 pub trait CollateralBalancesPallet {
-    async fn get_free_balance(&self, currency_id: CurrencyId) -> Result<InterBtcBalance, Error>;
+    async fn get_free_balance(&self, currency_id: CurrencyId) -> Result<Balance, Error>;
 
-    async fn get_free_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<InterBtcBalance, Error>;
+    async fn get_free_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<Balance, Error>;
 
-    async fn get_reserved_balance(&self, currency_id: CurrencyId) -> Result<InterBtcBalance, Error>;
+    async fn get_reserved_balance(&self, currency_id: CurrencyId) -> Result<Balance, Error>;
 
-    async fn get_reserved_balance_for_id(
-        &self,
-        id: AccountId,
-        currency_id: CurrencyId,
-    ) -> Result<InterBtcBalance, Error>;
+    async fn get_reserved_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<Balance, Error>;
 
     async fn transfer_to(&self, recipient: &AccountId, amount: u128, currency_id: CurrencyId) -> Result<(), Error>;
 }
 
 #[async_trait]
 impl CollateralBalancesPallet for InterBtcParachain {
-    async fn get_free_balance(&self, currency_id: CurrencyId) -> Result<InterBtcBalance, Error> {
+    async fn get_free_balance(&self, currency_id: CurrencyId) -> Result<Balance, Error> {
         Ok(Self::get_free_balance_for_id(self, self.account_id.clone(), currency_id).await?)
     }
 
-    async fn get_free_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<InterBtcBalance, Error> {
+    async fn get_free_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<Balance, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.accounts(id.clone(), currency_id, head).await?.free)
+        Ok(self
+            .api
+            .storage()
+            .tokens()
+            .accounts(id.clone(), currency_id, head)
+            .await?
+            .free)
     }
 
-    async fn get_reserved_balance(&self, currency_id: CurrencyId) -> Result<InterBtcBalance, Error> {
+    async fn get_reserved_balance(&self, currency_id: CurrencyId) -> Result<Balance, Error> {
         Ok(Self::get_reserved_balance_for_id(self, self.account_id.clone(), currency_id).await?)
     }
 
-    async fn get_reserved_balance_for_id(
-        &self,
-        id: AccountId,
-        currency_id: CurrencyId,
-    ) -> Result<InterBtcBalance, Error> {
+    async fn get_reserved_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<Balance, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.accounts(id.clone(), currency_id, head).await?.reserved)
+        Ok(self
+            .api
+            .storage()
+            .tokens()
+            .accounts(id.clone(), currency_id, head)
+            .await?
+            .reserved)
     }
 
     async fn transfer_to(&self, recipient: &AccountId, amount: u128, currency_id: CurrencyId) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .transfer_and_watch(&signer, recipient, currency_id, amount)
+            self.api
+                .tx()
+                .tokens()
+                .transfer(recipient.clone(), currency_id, amount)
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -415,7 +426,7 @@ pub trait ReplacePallet {
         collateral: u128,
         btc_address: BtcAddress,
     ) -> Result<(), Error>;
-
+    //
     /// Execute vault replacement
     ///
     /// # Arguments
@@ -465,8 +476,11 @@ pub trait ReplacePallet {
 impl ReplacePallet for InterBtcParachain {
     async fn request_replace(&self, vault_id: &VaultId, amount: u128, griefing_collateral: u128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .request_replace_and_watch(&signer, vault_id.currencies.clone(), amount, griefing_collateral)
+            self.api
+                .tx()
+                .replace()
+                .request_replace(vault_id.currencies.clone(), amount, griefing_collateral)
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -475,8 +489,11 @@ impl ReplacePallet for InterBtcParachain {
 
     async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .withdraw_replace_and_watch(&signer, vault_id.currencies.clone(), amount)
+            self.api
+                .tx()
+                .replace()
+                .withdraw_replace(vault_id.currencies.clone(), amount)
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -492,15 +509,17 @@ impl ReplacePallet for InterBtcParachain {
         btc_address: BtcAddress,
     ) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .accept_replace_and_watch(
-                    &signer,
+            self.api
+                .tx()
+                .replace()
+                .accept_replace(
                     new_vault.currencies.clone(),
-                    old_vault,
+                    old_vault.clone(),
                     amount_btc,
                     collateral,
                     btc_address,
                 )
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -509,8 +528,11 @@ impl ReplacePallet for InterBtcParachain {
 
     async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .execute_replace_and_watch(&signer, replace_id, merkle_proof, raw_tx)
+            self.api
+                .tx()
+                .replace()
+                .execute_replace(replace_id, merkle_proof.into(), raw_tx.into())
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -518,9 +540,14 @@ impl ReplacePallet for InterBtcParachain {
     }
 
     async fn cancel_replace(&self, replace_id: H256) -> Result<(), Error> {
-        self.with_unique_signer(
-            |signer| async move { self.ext_client.cancel_replace_and_watch(&signer, replace_id).await },
-        )
+        self.with_unique_signer(|signer| async move {
+            self.api
+                .tx()
+                .replace()
+                .cancel_replace(replace_id)
+                .sign_and_submit_then_watch(&signer)
+                .await
+        })
         .await?;
         Ok(())
     }
@@ -531,15 +558,21 @@ impl ReplacePallet for InterBtcParachain {
         account_id: AccountId,
     ) -> Result<Vec<(H256, InterBtcReplaceRequest)>, Error> {
         let head = self.get_latest_block_hash().await?;
-        let result: Vec<(H256, InterBtcReplaceRequest)> = self
+        let result: Vec<H256> = self
             .rpc_client
             .request(
                 "replace_getNewVaultReplaceRequests",
                 &[to_json_value(account_id)?, to_json_value(head)?],
             )
             .await?;
-
-        Ok(result)
+        join_all(
+            result
+                .into_iter()
+                .map(|key| async move { self.get_replace_request(key).await.map(|value| (key, value)) }),
+        )
+        .await
+        .into_iter()
+        .collect()
     }
 
     /// Get all replace requests made by the given vault
@@ -548,39 +581,50 @@ impl ReplacePallet for InterBtcParachain {
         account_id: AccountId,
     ) -> Result<Vec<(H256, InterBtcReplaceRequest)>, Error> {
         let head = self.get_latest_block_hash().await?;
-        let result: Vec<(H256, InterBtcReplaceRequest)> = self
+        let result: Vec<H256> = self
             .rpc_client
             .request(
                 "replace_getOldVaultReplaceRequests",
                 &[to_json_value(account_id)?, to_json_value(head)?],
             )
             .await?;
-
-        Ok(result)
+        join_all(
+            result
+                .into_iter()
+                .map(|key| async move { self.get_replace_request(key).await.map(|value| (key, value)) }),
+        )
+        .await
+        .into_iter()
+        .collect()
     }
 
     async fn get_replace_period(&self) -> Result<u32, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.replace_period(head).await?)
+        Ok(self.api.storage().replace().replace_period(head).await?)
     }
 
     async fn set_replace_period(&self, period: u32) -> Result<(), Error> {
         Ok(self
-            .sudo(SetReplacePeriodCall {
-                period,
-                _runtime: PhantomData {},
-            })
+            .sudo(EncodedCall::Replace(
+                metadata::runtime_types::replace::pallet::Call::set_replace_period { period },
+            ))
             .await?)
     }
 
     async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.replace_requests(replace_id, head).await?)
+        Ok(self
+            .api
+            .storage()
+            .replace()
+            .replace_requests(replace_id, head)
+            .await?
+            .ok_or(Error::StorageItemNotFound)?)
     }
 
     async fn get_replace_dust_amount(&self) -> Result<u128, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.replace_btc_dust_value(head).await?)
+        Ok(self.api.storage().replace().replace_btc_dust_value(head).await?)
     }
 }
 
@@ -594,13 +638,13 @@ impl TimestampPallet for InterBtcParachain {
     /// Get the current time as defined by the `timestamp` pallet.
     async fn get_time_now(&self) -> Result<u64, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.now(head).await?)
+        Ok(self.api.storage().timestamp().now(head).await?)
     }
 }
-
+//
 #[async_trait]
 pub trait OraclePallet {
-    async fn get_exchange_rate(&self, currency_id: CurrencyId) -> Result<FixedU128, Error>;
+    async fn get_exchange_rate(&self) -> Result<FixedU128, Error>;
 
     async fn feed_values(&self, values: Vec<(OracleKey, FixedU128)>) -> Result<(), Error>;
 
@@ -621,12 +665,15 @@ pub trait OraclePallet {
 impl OraclePallet for InterBtcParachain {
     /// Returns the last exchange rate in planck per satoshis, the time at which it was set
     /// and the configured max delay.
-    async fn get_exchange_rate(&self, currency_id: CurrencyId) -> Result<FixedU128, Error> {
+    async fn get_exchange_rate(&self) -> Result<FixedU128, Error> {
         let head = self.get_latest_block_hash().await?;
         Ok(self
-            .ext_client
-            .aggregate(OracleKey::ExchangeRate(currency_id), head)
-            .await?)
+            .api
+            .storage()
+            .oracle()
+            .aggregate(OracleKey::ExchangeRate(crate::RELAY_CHAIN_CURRENCY), head)
+            .await?
+            .ok_or(Error::StorageItemNotFound)?)
     }
 
     /// Sets the current exchange rate (i.e. DOT/BTC)
@@ -636,7 +683,12 @@ impl OraclePallet for InterBtcParachain {
     async fn feed_values(&self, values: Vec<(OracleKey, FixedU128)>) -> Result<(), Error> {
         let values = &values;
         self.with_unique_signer(|signer| async move {
-            self.ext_client.feed_values_and_watch(&signer, values.clone()).await
+            self.api
+                .tx()
+                .oracle()
+                .feed_values(values.clone())
+                .sign_and_submit_then_watch(&signer)
+                .await
         })
         .await?;
         Ok(())
@@ -649,11 +701,12 @@ impl OraclePallet for InterBtcParachain {
     /// * `name` - The name of the new oracle
     async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error> {
         Ok(self
-            .sudo(InsertAuthorizedOracleCall {
-                account_id,
-                name: name.into_bytes(),
-                _runtime: PhantomData {},
-            })
+            .sudo(EncodedCall::Oracle(
+                metadata::runtime_types::oracle::pallet::Call::insert_authorized_oracle {
+                    account_id,
+                    name: name.into_bytes(),
+                },
+            ))
             .await?)
     }
 
@@ -664,8 +717,11 @@ impl OraclePallet for InterBtcParachain {
     /// * `value` - the estimated fee rate
     async fn set_bitcoin_fees(&self, value: FixedU128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .feed_values_and_watch(&signer, vec![(OracleKey::FeeEstimation, value)])
+            self.api
+                .tx()
+                .oracle()
+                .feed_values(vec![(OracleKey::FeeEstimation, value)])
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -676,7 +732,13 @@ impl OraclePallet for InterBtcParachain {
     /// in the next x blocks
     async fn get_bitcoin_fees(&self) -> Result<FixedU128, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.aggregate(OracleKey::FeeEstimation, head).await?)
+        Ok(self
+            .api
+            .storage()
+            .oracle()
+            .aggregate(OracleKey::FeeEstimation, head)
+            .await?
+            .ok_or(Error::StorageItemNotFound)?)
     }
 
     /// Converts the amount in btc to dot, based on the current set exchange rate.
@@ -717,7 +779,13 @@ impl OraclePallet for InterBtcParachain {
 
     async fn has_updated(&self, key: &OracleKey) -> Result<bool, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.raw_values_updated(key, head).await?)
+        Ok(self
+            .api
+            .storage()
+            .oracle()
+            .raw_values_updated(key.clone(), head)
+            .await?
+            .unwrap_or(false))
     }
 }
 
@@ -753,8 +821,11 @@ impl RelayPallet for InterBtcParachain {
     /// * `raw_tx` - raw transaction
     async fn report_vault_theft(&self, vault_id: &VaultId, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .report_vault_theft_and_watch(&signer, vault_id, merkle_proof, raw_tx)
+            self.api
+                .tx()
+                .relay()
+                .report_vault_theft(vault_id.clone(), merkle_proof.into(), raw_tx.into())
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -776,13 +847,11 @@ impl RelayPallet for InterBtcParachain {
         let merkle_proofs = &merkle_proofs;
         let raw_txs = &raw_txs;
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .report_vault_double_payment_and_watch(
-                    &signer,
-                    vault_id.clone(),
-                    merkle_proofs.clone(),
-                    raw_txs.clone(),
-                )
+            self.api
+                .tx()
+                .relay()
+                .report_vault_double_payment(vault_id.clone(), merkle_proofs.clone(), raw_txs.clone())
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -820,11 +889,17 @@ impl RelayPallet for InterBtcParachain {
     /// * `header` - raw block header
     /// * `height` - starting height
     async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), Error> {
+        let header = &header;
         // TODO: can we initialize the relay through the chain-spec?
         // we would also need to consider re-initialization per governance
-        self.with_unique_signer(
-            |signer| async move { self.ext_client.initialize_and_watch(&signer, header, height).await },
-        )
+        self.with_unique_signer(|signer| async move {
+            self.api
+                .tx()
+                .relay()
+                .initialize(header.clone(), height)
+                .sign_and_submit_then_watch(&signer)
+                .await
+        })
         .await?;
         Ok(())
     }
@@ -834,9 +909,15 @@ impl RelayPallet for InterBtcParachain {
     /// # Arguments
     /// * `header` - raw block header
     async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error> {
-        self.with_unique_signer(
-            |signer| async move { self.ext_client.store_block_header_and_watch(&signer, header).await },
-        )
+        let header = &header;
+        self.with_unique_signer(|signer| async move {
+            self.api
+                .tx()
+                .relay()
+                .store_block_header(header.clone())
+                .sign_and_submit_then_watch(&signer)
+                .await
+        })
         .await?;
         Ok(())
     }
@@ -849,9 +930,10 @@ impl RelayPallet for InterBtcParachain {
         self.batch(
             headers
                 .into_iter()
-                .map(|header| StoreBlockHeaderCall {
-                    _runtime: PhantomData {},
-                    raw_block_header: header,
+                .map(|raw_block_header| {
+                    EncodedCall::Relay(metadata::runtime_types::relay::pallet::Call::store_block_header {
+                        raw_block_header,
+                    })
                 })
                 .collect(),
         )
@@ -875,18 +957,18 @@ impl SecurityPallet for InterBtcParachain {
     /// Should be one of; `Running`, `Error` or `Shutdown`.
     async fn get_parachain_status(&self) -> Result<StatusCode, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.parachain_status(head).await?)
+        Ok(self.api.storage().security().parachain_status(head).await?)
     }
     /// Return any `ErrorCode`s set in the security module.
     async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.errors(head).await?)
+        Ok(self.api.storage().security().errors(head).await?)
     }
 
     /// Gets the current active block number of the parachain
     async fn get_current_active_block_number(&self) -> Result<u32, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.active_block_count(head).await?)
+        Ok(self.api.storage().security().active_block_count(head).await?)
     }
 }
 
@@ -898,7 +980,7 @@ pub trait IssuePallet {
         amount: u128,
         vault_id: &VaultId,
         griefing_collateral: u128,
-    ) -> Result<InterBtcRequestIssueEvent, Error>;
+    ) -> Result<RequestIssueEvent, Error>;
 
     /// Execute a issue request by providing a Bitcoin transaction inclusion proof
     async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error>;
@@ -925,21 +1007,29 @@ impl IssuePallet for InterBtcParachain {
         amount: u128,
         vault_id: &VaultId,
         griefing_collateral: u128,
-    ) -> Result<InterBtcRequestIssueEvent, Error> {
+    ) -> Result<RequestIssueEvent, Error> {
         let result = self
             .with_unique_signer(|signer| async move {
-                self.ext_client
-                    .request_issue_and_watch(&signer, amount, vault_id, griefing_collateral)
+                self.api
+                    .tx()
+                    .issue()
+                    .request_issue(amount, vault_id.clone(), griefing_collateral)
+                    .sign_and_submit_then_watch(&signer)
                     .await
             })
             .await?;
-        result.request_issue()?.ok_or(Error::RequestIssueIDNotFound)
+        result
+            .find_event::<RequestIssueEvent>()?
+            .ok_or(Error::RequestIssueIDNotFound)
     }
 
     async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .execute_issue_and_watch(&signer, issue_id, merkle_proof, raw_tx)
+            self.api
+                .tx()
+                .issue()
+                .execute_issue(issue_id, merkle_proof.into(), raw_tx.into())
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -947,16 +1037,27 @@ impl IssuePallet for InterBtcParachain {
     }
 
     async fn cancel_issue(&self, issue_id: H256) -> Result<(), Error> {
-        self.with_unique_signer(
-            |signer| async move { self.ext_client.cancel_issue_and_watch(&signer, issue_id).await },
-        )
+        self.with_unique_signer(|signer| async move {
+            self.api
+                .tx()
+                .issue()
+                .cancel_issue(issue_id)
+                .sign_and_submit_then_watch(&signer)
+                .await
+        })
         .await?;
         Ok(())
     }
 
     async fn get_issue_request(&self, issue_id: H256) -> Result<InterBtcIssueRequest, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.issue_requests(issue_id, head).await?)
+        Ok(self
+            .api
+            .storage()
+            .issue()
+            .issue_requests(issue_id, head)
+            .await?
+            .ok_or(Error::StorageItemNotFound)?)
     }
 
     async fn get_vault_issue_requests(
@@ -964,28 +1065,34 @@ impl IssuePallet for InterBtcParachain {
         account_id: AccountId,
     ) -> Result<Vec<(H256, InterBtcIssueRequest)>, Error> {
         let head = self.get_latest_block_hash().await?;
-        let result: Vec<(H256, InterBtcIssueRequest)> = self
+        let result: Vec<H256> = self
             .rpc_client
             .request(
                 "issue_getVaultIssueRequests",
                 &[to_json_value(account_id)?, to_json_value(head)?],
             )
             .await?;
-
-        Ok(result)
+        join_all(
+            result
+                .into_iter()
+                .map(|key| async move { self.get_issue_request(key).await.map(|value| (key, value)) }),
+        )
+        .await
+        .into_iter()
+        .collect()
+        // Ok(result)
     }
 
     async fn get_issue_period(&self) -> Result<u32, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.issue_period(head).await?)
+        Ok(self.api.storage().issue().issue_period(head).await?)
     }
 
     async fn set_issue_period(&self, period: u32) -> Result<(), Error> {
         Ok(self
-            .sudo(SetIssuePeriodCall {
-                period,
-                _runtime: PhantomData {},
-            })
+            .sudo(EncodedCall::Issue(
+                metadata::runtime_types::issue::pallet::Call::set_issue_period { period },
+            ))
             .await?)
     }
 
@@ -995,7 +1102,7 @@ impl IssuePallet for InterBtcParachain {
 
         let mut issue_requests = Vec::new();
         let head = self.get_latest_block_hash().await?;
-        let mut iter = self.ext_client.issue_requests_iter(head).await?;
+        let mut iter = self.api.storage().issue().issue_requests_iter(head).await?;
         while let Some((issue_id, request)) = iter.next().await? {
             if request.status == IssueRequestStatus::Pending && request.opentime + issue_period > current_height {
                 let key_hash = issue_id.0.as_slice();
@@ -1037,22 +1144,28 @@ impl RedeemPallet for InterBtcParachain {
     async fn request_redeem(&self, amount: u128, btc_address: BtcAddress, vault_id: &VaultId) -> Result<H256, Error> {
         let result = self
             .with_unique_signer(|signer| async move {
-                self.ext_client
-                    .request_redeem_and_watch(&signer, amount, btc_address, vault_id)
+                self.api
+                    .tx()
+                    .redeem()
+                    .request_redeem(amount, btc_address, vault_id.clone())
+                    .sign_and_submit_then_watch(&signer)
                     .await
             })
             .await?;
-        if let Some(event) = result.request_redeem()? {
-            Ok(event.redeem_id)
-        } else {
-            Err(Error::RequestRedeemIDNotFound)
-        }
+
+        let redeem_event = result
+            .find_event::<RequestRedeemEvent>()?
+            .ok_or(Error::RequestRedeemIDNotFound)?;
+        Ok(redeem_event.redeem_id)
     }
 
     async fn execute_redeem(&self, redeem_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .execute_redeem_and_watch(&signer, redeem_id, merkle_proof, raw_tx)
+            self.api
+                .tx()
+                .redeem()
+                .execute_redeem(redeem_id, merkle_proof.into(), raw_tx.into())
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -1061,8 +1174,11 @@ impl RedeemPallet for InterBtcParachain {
 
     async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .cancel_redeem_and_watch(&signer, redeem_id, reimburse)
+            self.api
+                .tx()
+                .redeem()
+                .cancel_redeem(redeem_id, reimburse)
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -1071,7 +1187,13 @@ impl RedeemPallet for InterBtcParachain {
 
     async fn get_redeem_request(&self, redeem_id: H256) -> Result<InterBtcRedeemRequest, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.redeem_requests(redeem_id, head).await?)
+        Ok(self
+            .api
+            .storage()
+            .redeem()
+            .redeem_requests(redeem_id, head)
+            .await?
+            .ok_or(Error::StorageItemNotFound)?)
     }
 
     async fn get_vault_redeem_requests(
@@ -1079,28 +1201,33 @@ impl RedeemPallet for InterBtcParachain {
         account_id: AccountId,
     ) -> Result<Vec<(H256, InterBtcRedeemRequest)>, Error> {
         let head = self.get_latest_block_hash().await?;
-        let requests: Vec<(H256, InterBtcRedeemRequest)> = self
+        let result: Vec<H256> = self
             .rpc_client
             .request(
                 "redeem_getVaultRedeemRequests",
                 &[to_json_value(account_id)?, to_json_value(head)?],
             )
             .await?;
-
-        Ok(requests)
+        join_all(
+            result
+                .into_iter()
+                .map(|key| async move { self.get_redeem_request(key).await.map(|value| (key, value)) }),
+        )
+        .await
+        .into_iter()
+        .collect()
     }
 
     async fn get_redeem_period(&self) -> Result<BlockNumber, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.redeem_period(head).await?)
+        Ok(self.api.storage().redeem().redeem_period(head).await?)
     }
 
     async fn set_redeem_period(&self, period: BlockNumber) -> Result<(), Error> {
         Ok(self
-            .sudo(SetRedeemPeriodCall {
-                period,
-                _runtime: PhantomData {},
-            })
+            .sudo(EncodedCall::Redeem(
+                metadata::runtime_types::redeem::pallet::Call::set_redeem_period { period },
+            ))
             .await?)
     }
 }
@@ -1109,6 +1236,9 @@ impl RedeemPallet for InterBtcParachain {
 pub trait RefundPallet {
     /// Execute a refund request by providing a Bitcoin transaction inclusion proof
     async fn execute_refund(&self, refund_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error>;
+
+    /// Fetch a refund request from storage
+    async fn get_refund_request(&self, refund_id: H256) -> Result<InterBtcRefundRequest, Error>;
 
     /// Get all open refund requests requested of the given vault
     async fn get_vault_refund_requests(
@@ -1121,12 +1251,26 @@ pub trait RefundPallet {
 impl RefundPallet for InterBtcParachain {
     async fn execute_refund(&self, refund_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .execute_refund_and_watch(&signer, refund_id, merkle_proof, raw_tx)
+            self.api
+                .tx()
+                .refund()
+                .execute_refund(refund_id, merkle_proof.into(), raw_tx.into())
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
         Ok(())
+    }
+
+    async fn get_refund_request(&self, refund_id: H256) -> Result<InterBtcRefundRequest, Error> {
+        let head = self.get_latest_block_hash().await?;
+        Ok(self
+            .api
+            .storage()
+            .refund()
+            .refund_requests(refund_id, head)
+            .await?
+            .ok_or(Error::StorageItemNotFound)?)
     }
 
     async fn get_vault_refund_requests(
@@ -1134,15 +1278,21 @@ impl RefundPallet for InterBtcParachain {
         account_id: AccountId,
     ) -> Result<Vec<(H256, InterBtcRefundRequest)>, Error> {
         let head = self.get_latest_block_hash().await?;
-        let result: Vec<(H256, InterBtcRefundRequest)> = self
+        let result: Vec<H256> = self
             .rpc_client
             .request(
                 "refund_getVaultRefundRequests",
                 &[to_json_value(account_id)?, to_json_value(head)?],
             )
             .await?;
-
-        Ok(result)
+        join_all(
+            result
+                .into_iter()
+                .map(|key| async move { self.get_refund_request(key).await.map(|value| (key, value)) }),
+        )
+        .await
+        .into_iter()
+        .collect()
     }
 }
 
@@ -1180,13 +1330,13 @@ impl BtcRelayPallet for InterBtcParachain {
     /// Get the hash of the current best tip.
     async fn get_best_block(&self) -> Result<H256Le, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.best_block(head).await?)
+        Ok(self.api.storage().btc_relay().best_block(head).await?)
     }
 
     /// Get the current best known height.
     async fn get_best_block_height(&self) -> Result<u32, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.best_block_height(head).await?)
+        Ok(self.api.storage().btc_relay().best_block_height(head).await?)
     }
 
     /// Get the block hash for the main chain at the specified height.
@@ -1195,7 +1345,7 @@ impl BtcRelayPallet for InterBtcParachain {
     /// * `height` - chain height
     async fn get_block_hash(&self, height: u32) -> Result<H256Le, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.chains_hashes(0, height, head).await?)
+        Ok(self.api.storage().btc_relay().chains_hashes(0, height, head).await?)
     }
 
     /// Get the corresponding block header for the given hash.
@@ -1204,13 +1354,18 @@ impl BtcRelayPallet for InterBtcParachain {
     /// * `hash` - little endian block hash
     async fn get_block_header(&self, hash: H256Le) -> Result<InterBtcRichBlockHeader, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.block_headers(hash, head).await?)
+        Ok(self.api.storage().btc_relay().block_headers(hash, head).await?)
     }
 
     /// Get the global security parameter k for stable Bitcoin transactions
     async fn get_bitcoin_confirmations(&self) -> Result<u32, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.stable_bitcoin_confirmations(head).await?)
+        Ok(self
+            .api
+            .storage()
+            .btc_relay()
+            .stable_bitcoin_confirmations(head)
+            .await?)
     }
 
     /// Set the global security parameter k for stable Bitcoin transactions
@@ -1222,7 +1377,12 @@ impl BtcRelayPallet for InterBtcParachain {
     /// Get the global security parameter for stable parachain confirmations
     async fn get_parachain_confirmations(&self) -> Result<BlockNumber, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.stable_parachain_confirmations(head).await?)
+        Ok(self
+            .api
+            .storage()
+            .btc_relay()
+            .stable_parachain_confirmations(head)
+            .await?)
     }
 
     /// Set the global security parameter for stable parachain confirmations
@@ -1238,13 +1398,13 @@ impl BtcRelayPallet for InterBtcParachain {
         _btc_confirmations: Option<BlockNumber>,
     ) -> Result<(), Error> {
         loop {
-            match self.verify_block_header_inclusion(block_hash).await {
+            match self.verify_block_header_inclusion(block_hash.clone()).await {
                 Ok(_) => return Ok(()),
                 Err(e) if e.is_invalid_chain_id() => return Err(e),
                 _ => {
                     log::trace!(
                         "block {} not found or confirmed, waiting for {} seconds",
-                        block_hash,
+                        Into::<RichH256Le>::into(block_hash.clone()),
                         BLOCK_WAIT_TIMEOUT
                     );
                     sleep(Duration::from_secs(BLOCK_WAIT_TIMEOUT)).await;
@@ -1261,7 +1421,10 @@ impl BtcRelayPallet for InterBtcParachain {
             .rpc_client
             .request(
                 "btcRelay_verifyBlockHeaderInclusion",
-                &[to_json_value(block_hash)?, to_json_value(head)?],
+                &[
+                    to_json_value(Into::<RichH256Le>::into(block_hash))?,
+                    to_json_value(head)?,
+                ],
             )
             .await?;
 
@@ -1317,7 +1480,13 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// * `VaultCommittedTheft` - if the vault is stole BTC
     async fn get_vault(&self, vault_id: &VaultId) -> Result<InterBtcVault, Error> {
         let head = self.get_latest_block_hash().await?;
-        match self.ext_client.vaults(vault_id.clone(), head).await? {
+        match self
+            .api
+            .storage()
+            .vault_registry()
+            .vaults(vault_id.clone(), head)
+            .await?
+        {
             Some(InterBtcVault {
                 status: VaultStatus::Liquidated,
                 ..
@@ -1348,7 +1517,7 @@ impl VaultRegistryPallet for InterBtcParachain {
     async fn get_all_vaults(&self) -> Result<Vec<InterBtcVault>, Error> {
         let mut vaults = Vec::new();
         let head = self.get_latest_block_hash().await?;
-        let mut iter = self.ext_client.vaults_iter(head).await?;
+        let mut iter = self.api.storage().vault_registry().vaults_iter(head).await?;
         while let Some((_, account)) = iter.next().await? {
             if let VaultStatus::Active(..) = account.status {
                 vaults.push(account);
@@ -1370,8 +1539,11 @@ impl VaultRegistryPallet for InterBtcParachain {
     ) -> Result<(), Error> {
         let public_key = &public_key.clone();
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .register_vault_and_watch(&signer, vault_id.currencies.clone(), collateral, public_key.clone())
+            self.api
+                .tx()
+                .vault_registry()
+                .register_vault(vault_id.currencies.clone(), collateral, public_key.clone())
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -1385,8 +1557,11 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// * `amount` - the amount of extra collateral to lock
     async fn deposit_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .deposit_collateral_and_watch(&signer, vault_id.currencies.clone(), amount)
+            self.api
+                .tx()
+                .vault_registry()
+                .deposit_collateral(vault_id.currencies.clone(), amount)
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -1404,8 +1579,11 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// * `amount` - the amount of collateral to withdraw
     async fn withdraw_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .withdraw_collateral_and_watch(&signer, vault_id.currencies.clone(), amount)
+            self.api
+                .tx()
+                .vault_registry()
+                .withdraw_collateral(vault_id.currencies.clone(), amount)
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -1419,8 +1597,11 @@ impl VaultRegistryPallet for InterBtcParachain {
     async fn update_public_key(&self, vault_id: &VaultId, public_key: BtcPublicKey) -> Result<(), Error> {
         let public_key = &public_key.clone();
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .update_public_key_and_watch(&signer, vault_id.currencies.clone(), public_key.clone())
+            self.api
+                .tx()
+                .vault_registry()
+                .update_public_key(vault_id.currencies.clone(), public_key.clone())
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -1433,8 +1614,11 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// * `btc_address` - the new btc address of the vault
     async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
-            self.ext_client
-                .register_address_and_watch(&signer, vault_id.currencies.clone(), btc_address)
+            self.api
+                .tx()
+                .vault_registry()
+                .register_address(vault_id.currencies.clone(), btc_address)
+                .sign_and_submit_then_watch(&signer)
                 .await
         })
         .await?;
@@ -1506,16 +1690,16 @@ pub trait FeePallet {
 impl FeePallet for InterBtcParachain {
     async fn get_issue_griefing_collateral(&self) -> Result<FixedU128, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.issue_griefing_collateral(head).await?)
+        Ok(self.api.storage().fee().issue_griefing_collateral(head).await?)
     }
 
     async fn get_issue_fee(&self) -> Result<FixedU128, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.issue_fee(head).await?)
+        Ok(self.api.storage().fee().issue_fee(head).await?)
     }
 
     async fn get_replace_griefing_collateral(&self) -> Result<FixedU128, Error> {
         let head = self.get_latest_block_hash().await?;
-        Ok(self.ext_client.replace_griefing_collateral(head).await?)
+        Ok(self.api.storage().fee().replace_griefing_collateral(head).await?)
     }
 }

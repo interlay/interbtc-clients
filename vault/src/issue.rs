@@ -2,12 +2,11 @@ use crate::{Error, Event, IssueRequests, VaultIdManager};
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt};
 use runtime::{
-    pallets::issue::{CancelIssueEvent, ExecuteIssueEvent, RequestIssueEvent},
-    BtcAddress, BtcPublicKey, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRuntime, IssuePallet, UtilFuncs,
+    BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, ExecuteIssueEvent, H256Le, InterBtcParachain,
+    IssuePallet, RequestIssueEvent, UtilFuncs, H256,
 };
 use service::Error as ServiceError;
 use sha2::{Digest, Sha256};
-use sp_core::H256;
 use std::sync::Arc;
 
 // initialize `issue_set` with currently open issues, and return the block height
@@ -204,7 +203,7 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
     let issue_set = &issue_set;
     let btc_rpc = &btc_rpc;
     btc_parachain
-        .on_event::<RequestIssueEvent<InterBtcRuntime>, _, _, _>(
+        .on_event::<RequestIssueEvent, _, _, _>(
             |event| async move {
                 if &event.vault_id.account_id == btc_parachain.get_account_id() {
                     let bitcoin_core = match btc_rpc.get_bitcoin_rpc(&event.vault_id).await {
@@ -224,9 +223,9 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
                 tracing::trace!(
                     "watching issue #{} for payment to {:?}",
                     event.issue_id,
-                    event.vault_btc_address
+                    event.vault_address
                 );
-                issue_set.insert(event.issue_id, event.vault_btc_address).await;
+                issue_set.insert(event.issue_id, event.vault_address).await;
             },
             |error| tracing::error!("Error reading request issue event: {}", error.to_string()),
         )
@@ -251,7 +250,7 @@ pub async fn listen_for_issue_executes(
     let event_channel = &event_channel;
     let issue_set = &issue_set;
     btc_parachain
-        .on_event::<ExecuteIssueEvent<InterBtcRuntime>, _, _, _>(
+        .on_event::<ExecuteIssueEvent, _, _, _>(
             |event| async move {
                 if &event.vault_id.account_id == btc_parachain.get_account_id() {
                     tracing::info!("Received execute issue event: {:?}", event);
@@ -281,7 +280,7 @@ pub async fn listen_for_issue_cancels(
 ) -> Result<(), ServiceError> {
     let issue_set = &issue_set;
     btc_parachain
-        .on_event::<CancelIssueEvent<InterBtcRuntime>, _, _, _>(
+        .on_event::<CancelIssueEvent, _, _, _>(
             |event| async move {
                 tracing::trace!("issue #{} cancelled, no longer watching", event.issue_id);
                 issue_set.remove(&event.issue_id).await;
