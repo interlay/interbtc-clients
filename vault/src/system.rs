@@ -11,7 +11,12 @@ use futures::{
     Future, SinkExt,
 };
 use git_version::git_version;
-use runtime::{BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair, VaultId, VaultRegistryPallet, cli::{parse_duration_minutes, parse_duration_ms}, parse_collateral_currency, parse_wrapped_currency};
+use runtime::{
+    cli::{parse_duration_minutes, parse_duration_ms},
+    parse_collateral_currency, parse_wrapped_currency, BtcRelayPallet, CurrencyId, Error as RuntimeError,
+    InterBtcParachain, RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs,
+    VaultCurrencyPair, VaultId, VaultRegistryPallet,
+};
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
 use tokio::{sync::RwLock, time::sleep};
