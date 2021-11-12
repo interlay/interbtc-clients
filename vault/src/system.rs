@@ -97,11 +97,11 @@ pub struct VaultServiceConfig {
     pub no_auto_refund: bool,
 
     /// The currency to use for the collateral, e.g. "DOT" or "KSM".
-    #[clap(long, parse(try_from_str = parse_collateral_currency))]
+    #[clap(long, parse(try_from_str = parse_collateral_currency), requires = "wrapped-currency-id")]
     pub collateral_currency_id: Option<CurrencyId>,
 
     /// The currency to use for the wrapping, e.g. "INTERBTC" or "KBTC".
-    #[clap(long, parse(try_from_str = parse_wrapped_currency))]
+    #[clap(long, parse(try_from_str = parse_wrapped_currency), requires = "collateral-currency-id")]
     pub wrapped_currency_id: Option<CurrencyId>,
 }
 
@@ -557,8 +557,8 @@ impl VaultService {
                 (Some(x), Some(y)) => (x, y),
                 _ => {
                     tracing::info!(
-                    "Not registering vault -- collateral-currency-id and wrapped-currency-id must both be configured"
-                );
+                        "Not registering vault -- collateral-currency-id and wrapped-currency-id not configured"
+                    );
                     return Ok(());
                 }
             };
@@ -567,7 +567,11 @@ impl VaultService {
             account_id: account_id.clone(),
             currencies: VaultCurrencyPair {
                 collateral: collateral_currency,
-                wrapped: runtime::RELAY_CHAIN_WRAPPED_CURRENCY, // TODO: fetch this from parachain metadata
+                wrapped: self
+                    .config
+                    .wrapped_currency_id
+                    .unwrap_or_else(|| runtime::RELAY_CHAIN_WRAPPED_CURRENCY), /* TODO: fetch this from parachain
+                                                                                * metadata */
             },
         };
 
