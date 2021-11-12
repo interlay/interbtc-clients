@@ -208,7 +208,13 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
                 if &event.vault_id.account_id == btc_parachain.get_account_id() {
                     let bitcoin_core = match btc_rpc.get_bitcoin_rpc(&event.vault_id).await {
                         Some(x) => x,
-                        None => return, // event not directed at this vault
+                        None => {
+                            tracing::error!(
+                                "No bitcoin_rpc found for vault with id {}",
+                                event.vault_id.pretty_printed()
+                            );
+                            return;
+                        }
                     };
                     tracing::info!("Received request issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
