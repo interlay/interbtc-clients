@@ -13,9 +13,9 @@ use futures::{
 use git_version::git_version;
 use runtime::{
     cli::{parse_duration_minutes, parse_duration_ms},
-    parse_collateral_currency, BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain,
-    RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair, VaultId,
-    VaultRegistryPallet,
+    parse_collateral_currency, parse_wrapped_currency, BtcRelayPallet, CurrencyId, Error as RuntimeError,
+    InterBtcParachain, RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs,
+    VaultCurrencyPair, VaultId, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
 use std::{sync::Arc, time::Duration};
@@ -97,8 +97,12 @@ pub struct VaultServiceConfig {
     pub no_auto_refund: bool,
 
     /// The currency to use for the collateral, e.g. "DOT" or "KSM".
-    #[clap(long, parse(try_from_str = parse_collateral_currency))]
-    pub currency_id: Option<CurrencyId>,
+    #[clap(long, parse(try_from_str = parse_collateral_currency), requires = "wrapped-currency-id")]
+    pub collateral_currency_id: Option<CurrencyId>,
+
+    /// The currency to use for the wrapping, e.g. "INTERBTC" or "KBTC".
+    #[clap(long, parse(try_from_str = parse_wrapped_currency), requires = "collateral-currency-id")]
+    pub wrapped_currency_id: Option<CurrencyId>,
 }
 
 async fn active_block_listener(
@@ -349,7 +353,7 @@ impl VaultService {
         let issue_request_listener = wait_or_shutdown(
             self.shutdown.clone(),
             listen_for_issue_requests(
-                walletless_btc_rpc.clone(),
+                self.vault_id_manager.clone(),
                 self.btc_parachain.clone(),
                 issue_event_tx.clone(),
                 issue_set.clone(),
@@ -548,19 +552,26 @@ impl VaultService {
 
     async fn maybe_register_vault(&self) -> Result<(), Error> {
         let account_id = self.btc_parachain.get_account_id();
-        let collateral_currency = match self.config.currency_id {
-            Some(x) => x,
-            None => {
-                tracing::info!("Not registering vault -- currency-id not configured");
-                return Ok(());
-            }
-        };
+        let (collateral_currency, _wrapped_currency) =
+            match (self.config.collateral_currency_id, self.config.wrapped_currency_id) {
+                (Some(x), Some(y)) => (x, y),
+                _ => {
+                    tracing::info!(
+                        "Not registering vault -- collateral-currency-id and wrapped-currency-id not configured"
+                    );
+                    return Ok(());
+                }
+            };
 
         let vault_id = VaultId {
             account_id: account_id.clone(),
             currencies: VaultCurrencyPair {
                 collateral: collateral_currency,
-                wrapped: runtime::RELAY_CHAIN_WRAPPED_CURRENCY, // TODO: fetch this from parachain metadata
+                wrapped: self
+                    .config
+                    .wrapped_currency_id
+                    .unwrap_or_else(|| runtime::RELAY_CHAIN_WRAPPED_CURRENCY), /* TODO: fetch this from parachain
+                                                                                * metadata */
             },
         };
 

@@ -1,4 +1,4 @@
-use crate::{Error, Event, IssueRequests};
+use crate::{Error, Event, IssueRequests, VaultIdManager};
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt};
 use runtime::{
@@ -193,25 +193,35 @@ async fn add_new_deposit_key<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
 /// * `event_channel` - the channel over which to signal events
 /// * `issue_set` - all issue ids observed since vault started
 pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    bitcoin_core: B,
+    btc_rpc: VaultIdManager<B>,
     btc_parachain: InterBtcParachain,
     event_channel: Sender<Event>,
     issue_set: Arc<IssueRequests>,
 ) -> Result<(), ServiceError> {
-    let bitcoin_core = &bitcoin_core;
     let btc_parachain = &btc_parachain;
     let event_channel = &event_channel;
     let issue_set = &issue_set;
+    let btc_rpc = &btc_rpc;
     btc_parachain
         .on_event::<RequestIssueEvent, _, _, _>(
             |event| async move {
                 if &event.vault_id.account_id == btc_parachain.get_account_id() {
+                    let bitcoin_core = match btc_rpc.get_bitcoin_rpc(&event.vault_id).await {
+                        Some(x) => x,
+                        None => {
+                            tracing::error!(
+                                "No bitcoin_rpc found for vault with id {}",
+                                event.vault_id.pretty_printed()
+                            );
+                            return;
+                        }
+                    };
                     tracing::info!("Received request issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel.clone().send(Event::Opened).await;
 
-                    if let Err(e) = add_new_deposit_key(bitcoin_core, event.issue_id, event.vault_public_key).await {
+                    if let Err(e) = add_new_deposit_key(&bitcoin_core, event.issue_id, event.vault_public_key).await {
                         tracing::error!("Failed to add new deposit key #{}: {}", event.issue_id, e.to_string());
                     }
                 }

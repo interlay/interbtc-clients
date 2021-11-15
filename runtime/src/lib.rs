@@ -117,3 +117,11 @@ pub fn parse_collateral_currency(src: &str) -> Result<CurrencyId, Error> {
         _ => Err(Error::InvalidCurrency),
     }
 }
+
+pub fn parse_wrapped_currency(src: &str) -> Result<CurrencyId, Error> {
+    match src.to_uppercase().as_str() {
+        id if id == RichCurrencyId::KBTC.symbol() => Ok(CurrencyId::KBTC),
+        id if id == RichCurrencyId::INTERBTC.symbol() => Ok(CurrencyId::INTERBTC),
+        _ => Err(Error::InvalidCurrency),
+    }
+}

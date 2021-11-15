@@ -1,7 +1,7 @@
 pub use jsonrpsee_types::error::Error as JsonRpseeError;
 pub use subxt::Error as SubxtError;
 
-use crate::{types::*, BTC_RELAY_MODULE, ISSUE_MODULE, REDEEM_MODULE, RELAY_MODULE, SECURITY_MODULE};
+use crate::{types::*, BTC_RELAY_MODULE, ISSUE_MODULE, REDEEM_MODULE, RELAY_MODULE};
 use codec::Error as CodecError;
 use jsonrpsee_types::{error::Error as RequestError, CallError};
 use serde_json::Error as SerdeJsonError;
