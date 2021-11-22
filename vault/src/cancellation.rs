@@ -322,398 +322,393 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use async_trait::async_trait;
-//     use futures::channel::mpsc;
-//     use runtime::{
-//         AccountId, BtcAddress, CurrencyId, ErrorCode, InterBtcIssueRequest, InterBtcReplaceRequest,
-//         RequestIssueEvent, StatusCode, VaultId,
-//     };
-//     use std::collections::BTreeSet;
-//
-//     macro_rules! assert_err {
-//         ($result:expr, $err:pat) => {{
-//             match $result {
-//                 Err($err) => (),
-//                 Ok(v) => panic!("assertion failed: Ok({:?})", v),
-//                 _ => panic!("expected: Err($err)"),
-//             }
-//         }};
-//     }
-//
-//     mockall::mock! {
-//         Provider {}
-//
-//         #[async_trait]
-//         pub trait IssuePallet {
-//             async fn request_issue(&self, amount: u128, vault_id: &VaultId, griefing_collateral: u128) ->
-// Result<RequestIssueEvent, RuntimeError>;             async fn execute_issue(&self, issue_id: H256, merkle_proof:
-// &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;             async fn cancel_issue(&self, issue_id: H256) ->
-// Result<(), RuntimeError>;             async fn get_issue_request(&self, issue_id: H256) ->
-// Result<InterBtcIssueRequest, RuntimeError>;             async fn get_vault_issue_requests(&self, account_id:
-// AccountId) -> Result<Vec<(H256, InterBtcIssueRequest)>, RuntimeError>;             async fn get_issue_period(&self)
-// -> Result<u32, RuntimeError>;             async fn set_issue_period(&self, period: u32) -> Result<(), RuntimeError>;
-//             async fn get_all_active_issues(&self) -> Result<Vec<(H256, InterBtcIssueRequest)>, RuntimeError>;
-//         }
-//
-//
-//         #[async_trait]
-//         pub trait ReplacePallet {
-//             async fn request_replace(&self, vault_id: &VaultId, amount: u128, griefing_collateral: u128) ->
-// Result<(), RuntimeError>;             async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) ->
-// Result<(), RuntimeError>;             async fn accept_replace(&self, new_vault: &VaultId, old_vault: &VaultId,
-// amount_btc: u128, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;             async fn
-// execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
-// async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;             async fn
-// get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>,
-// RuntimeError>;             async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256,
-// InterBtcReplaceRequest)>, RuntimeError>;             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
-//             async fn set_replace_period(&self, period: u32) -> Result<(), RuntimeError>;
-//             async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
-//             async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;
-//         }
-//
-//         #[async_trait]
-//         pub trait UtilFuncs {
-//             async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
-//             fn get_account_id(&self) -> &AccountId;
-//             fn is_this_vault(&self, vault_id: &VaultId) -> bool;
-//         }
-//
-//         #[async_trait]
-//         pub trait SecurityPallet {
-//             async fn get_parachain_status(&self) -> Result<StatusCode, RuntimeError>;
-//
-//             async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, RuntimeError>;
-//
-//             /// Gets the current active block number of the parachain
-//             async fn get_current_active_block_number(&self) -> Result<u32, RuntimeError>;
-//         }
-//     }
-//
-//     impl Clone for MockProvider {
-//         fn clone(&self) -> Self {
-//             // NOTE: expectations dropped
-//             Self::default()
-//         }
-//     }
-//
-//     fn default_issue_request() -> InterBtcIssueRequest {
-//         InterBtcIssueRequest {
-//             amount: Default::default(),
-//             btc_address: Default::default(),
-//             btc_height: Default::default(),
-//             fee: Default::default(),
-//             griefing_collateral: Default::default(),
-//             opentime: Default::default(),
-//             period: Default::default(),
-//             requester: Default::default(),
-//             btc_public_key: Default::default(),
-//             status: Default::default(),
-//             vault: VaultId::new(Default::default(), CurrencyId::DOT, runtime::CurrencyId::INTERBTC),
-//         }
-//     }
-//
-//     #[tokio::test]
-//     async fn test_get_open_process_delays_succeeds() {
-//         // parachain_open_time = 9_500, btc_start_height=100  current_block = 10_000, period = 1_000
-//         // parachain_open_time = 1_000, btc_start_height=100  current_block = 10_000, period = 1_000
-//         // parachain_open_time = 8_500, btc_start_height=100  current_block = 10_000, period = 1_000
-//         let mut parachain_rpc = MockProvider::default();
-//         parachain_rpc.expect_get_vault_issue_requests().times(1).returning(|_| {
-//             Ok(vec![
-//                 (
-//                     H256::from_slice(&[1; 32]),
-//                     InterBtcIssueRequest {
-//                         opentime: 9_500,
-//                         btc_height: 100,
-//                         ..default_issue_request()
-//                     },
-//                 ),
-//                 (
-//                     H256::from_slice(&[2; 32]),
-//                     InterBtcIssueRequest {
-//                         opentime: 1_000,
-//                         btc_height: 100,
-//                         ..default_issue_request()
-//                     },
-//                 ),
-//                 (
-//                     H256::from_slice(&[3; 32]),
-//                     InterBtcIssueRequest {
-//                         opentime: 8_500,
-//                         btc_height: 100,
-//                         ..default_issue_request()
-//                     },
-//                 ),
-//             ])
-//         });
-//         parachain_rpc.expect_get_issue_period().times(1).returning(|| Ok(1_000));
-//
-//         let mut canceller = CancellationScheduler::new(parachain_rpc, 10_000, 150, Default::default());
-//
-//         // checks that the delay is calculated correctly
-//         assert_eq!(
-//             canceller.get_open_requests::<IssueCanceller>().await.unwrap(),
-//             vec![
-//                 ActiveRequest {
-//                     id: H256::from_slice(&[1; 32]),
-//                     parachain_deadline_height: 10_500,
-//                     bitcoin_deadline_height: 110,
-//                 },
-//                 ActiveRequest {
-//                     id: H256::from_slice(&[2; 32]),
-//                     parachain_deadline_height: 2_000,
-//                     bitcoin_deadline_height: 110,
-//                 },
-//                 ActiveRequest {
-//                     id: H256::from_slice(&[3; 32]),
-//                     parachain_deadline_height: 9_500,
-//                     bitcoin_deadline_height: 110,
-//                 },
-//             ]
-//         );
-//     }
-//
-//     #[tokio::test]
-//     async fn test_process_event_succeeds() {
-//         // check that we actually cancel the issue when it expires
-//         let mut parachain_rpc = MockProvider::default();
-//         parachain_rpc.expect_get_vault_issue_requests().returning(|_| {
-//             Ok(vec![(
-//                 H256::from_slice(&[1; 32]),
-//                 InterBtcIssueRequest {
-//                     opentime: 10_000,
-//                     ..default_issue_request()
-//                 },
-//             )])
-//         });
-//
-//         parachain_rpc.expect_get_issue_period().returning(|| Ok(100));
-//
-//         // check that it cancels the issue
-//         parachain_rpc.expect_cancel_issue().returning(|_| Ok(()));
-//
-//         let mut active_processes: Vec<ActiveRequest> = vec![];
-//         let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
-//
-//         assert_eq!(
-//             cancellation_scheduler
-//                 .process_event::<IssueCanceller>(
-//                     Event::ParachainBlock(15000),
-//                     &mut active_processes,
-//                     ListState::Invalid,
-//                 )
-//                 .await
-//                 .unwrap(),
-//             ListState::Valid
-//         );
-//
-//         // not empty yet..
-//         assert!(!active_processes.is_empty());
-//
-//         assert_eq!(
-//             cancellation_scheduler
-//                 .process_event::<IssueCanceller>(Event::BitcoinBlock(2), &mut active_processes, ListState::Valid,)
-//                 .await
-//                 .unwrap(),
-//             ListState::Valid
-//         );
-//
-//         // issue should have been removed from the list after it has been canceled
-//         assert!(active_processes.is_empty());
-//     }
-//
-//     #[tokio::test]
-//     async fn test_process_event_only_removes_when_both_parachain_and_bitcoin_expired() {
-//         // check that we actually cancel the issue when it expires
-//         let mut parachain_rpc = MockProvider::default();
-//         parachain_rpc.expect_get_vault_issue_requests().returning(|_| {
-//             Ok(vec![(
-//                 H256::from_slice(&[1; 32]),
-//                 InterBtcIssueRequest {
-//                     opentime: 10_000,
-//                     btc_height: 100,
-//                     ..default_issue_request()
-//                 },
-//             )])
-//         });
-//
-//         parachain_rpc.expect_get_issue_period().returning(|| Ok(1000));
-//
-//         // check that it cancels the issue
-//         parachain_rpc.expect_cancel_issue().returning(|_| Ok(()));
-//
-//         let mut active_processes: Vec<ActiveRequest> = vec![];
-//         let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 10_001, 101,
-// AccountId::default());
-//
-//         // deadline is at parachain_height = 11_000 and bitcoin_height = 110
-//
-//         cancellation_scheduler
-//             .process_event::<IssueCanceller>(Event::ParachainBlock(10500), &mut active_processes, ListState::Invalid)
-//             .await
-//             .unwrap();
-//         assert!(!active_processes.is_empty());
-//
-//         cancellation_scheduler
-//             .process_event::<IssueCanceller>(Event::BitcoinBlock(110), &mut active_processes, ListState::Valid)
-//             .await
-//             .unwrap();
-//
-//         // not removed yet, both not yet expired
-//         assert!(!active_processes.is_empty());
-//
-//         cancellation_scheduler
-//             .process_event::<IssueCanceller>(Event::ParachainBlock(11001), &mut active_processes, ListState::Valid)
-//             .await
-//             .unwrap();
-//
-//         // not removed yet; bitcoin not expired
-//         assert!(!active_processes.is_empty());
-//
-//         cancellation_scheduler
-//             .process_event::<IssueCanceller>(Event::ParachainBlock(11000), &mut active_processes, ListState::Valid)
-//             .await
-//             .unwrap();
-//         cancellation_scheduler
-//             .process_event::<IssueCanceller>(Event::BitcoinBlock(111), &mut active_processes, ListState::Valid)
-//             .await
-//             .unwrap();
-//
-//         // not removed yet - parachain not expired
-//         assert!(!active_processes.is_empty());
-//
-//         cancellation_scheduler
-//             .process_event::<IssueCanceller>(Event::ParachainBlock(11001), &mut active_processes, ListState::Valid)
-//             .await
-//             .unwrap();
-//
-//         // both parachain and bitcoin expired, should be removed now
-//         assert!(active_processes.is_empty());
-//     }
-//
-//     #[tokio::test]
-//     async fn test_process_event_remove_from_list() {
-//         // checks that we don't query for new issues, and that when the issue gets executed, it
-//         // is removed from the list
-//         let parachain_rpc = MockProvider::default();
-//
-//         let mut active_processes: Vec<ActiveRequest> = vec![
-//             ActiveRequest {
-//                 id: H256::from_slice(&[1; 32]),
-//                 parachain_deadline_height: 0,
-//                 bitcoin_deadline_height: 0,
-//             },
-//             ActiveRequest {
-//                 id: H256::from_slice(&[2; 32]),
-//                 parachain_deadline_height: 0,
-//                 bitcoin_deadline_height: 0,
-//             },
-//             ActiveRequest {
-//                 id: H256::from_slice(&[3; 32]),
-//                 parachain_deadline_height: 0,
-//                 bitcoin_deadline_height: 0,
-//             },
-//         ];
-//
-//         let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
-//
-//         // simulate that the issue gets executed
-//         let event = Event::Executed(H256::from_slice(&[2; 32]));
-//
-//         // simulate that the issue gets executed
-//         assert_eq!(
-//             cancellation_scheduler
-//                 .process_event::<IssueCanceller>(event, &mut active_processes, ListState::Valid)
-//                 .await
-//                 .unwrap(),
-//             ListState::Valid
-//         );
-//
-//         // check that the process with id 2 was removed
-//         assert_eq!(
-//             active_processes.into_iter().map(|x| x.id).collect::<Vec<H256>>(),
-//             vec![H256::from_slice(&[1; 32]), H256::from_slice(&[3; 32])]
-//         );
-//     }
-//
-//     #[tokio::test]
-//     async fn test_process_event_get_new_list() {
-//         // checks that we query for new issues, and that when the issue gets executed, it
-//         // is removed from the list
-//         let mut parachain_rpc = MockProvider::default();
-//         parachain_rpc.expect_get_vault_issue_requests().times(1).returning(|_| {
-//             Ok(vec![(
-//                 H256::from_slice(&[1; 32]),
-//                 InterBtcIssueRequest {
-//                     opentime: 10,
-//                     ..default_issue_request()
-//                 },
-//             )])
-//         });
-//         parachain_rpc.expect_get_issue_period().returning(|| Ok(10));
-//
-//         let mut active_processes: Vec<ActiveRequest> = vec![];
-//         let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 15, 0, AccountId::default());
-//
-//         // simulate that the issue gets executed
-//         let event = Event::Executed(H256::from_slice(&[1; 32]));
-//
-//         assert_eq!(
-//             cancellation_scheduler
-//                 .process_event::<IssueCanceller>(event, &mut active_processes, ListState::Invalid)
-//                 .await
-//                 .unwrap(),
-//             ListState::Valid
-//         );
-//
-//         // issue should have been removed from the list
-//         assert!(active_processes.is_empty());
-//     }
-//
-//     #[tokio::test]
-//     async fn test_process_event_timeout() {
-//         // check that if we fail to get the issue list, we return Invalid, but not Err
-//         let mut parachain_rpc = MockProvider::default();
-//         parachain_rpc
-//             .expect_get_vault_issue_requests()
-//             .times(1)
-//             .returning(|_| Err(RuntimeError::BlockNotFound));
-//
-//         let mut active_processes: Vec<ActiveRequest> = vec![];
-//         let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
-//
-//         // simulate that we have a timeout (new issue request opened)
-//         let event = Event::Opened;
-//
-//         // state should remain invalid
-//         assert_eq!(
-//             cancellation_scheduler
-//                 .process_event::<IssueCanceller>(event, &mut active_processes, ListState::Invalid)
-//                 .await
-//                 .unwrap(),
-//             ListState::Invalid
-//         );
-//     }
-//
-//     #[tokio::test]
-//     async fn test_process_event_shutdown() {
-//         // check that if the selector fails, the error is propagated
-//         let parachain_rpc = MockProvider::default();
-//
-//         let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
-//
-//         // dropping the tx immediately - this effectively closes the channel
-//         let (_, replace_event_rx) = mpsc::channel::<Event>(16);
-//
-//         assert_err!(
-//             cancellation_scheduler
-//                 .handle_cancellation::<IssueCanceller>(replace_event_rx)
-//                 .await,
-//             RuntimeError::ChannelClosed
-//         );
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use futures::channel::mpsc;
+    use runtime::{
+        AccountId, BtcAddress, BtcPublicKey, CurrencyId, ErrorCode, InterBtcIssueRequest, InterBtcReplaceRequest,
+        IssueRequestStatus, RequestIssueEvent, StatusCode, VaultId,
+    };
+    use std::collections::BTreeSet;
+
+    macro_rules! assert_err {
+        ($result:expr, $err:pat) => {{
+            match $result {
+                Err($err) => (),
+                Ok(v) => panic!("assertion failed: Ok({:?})", v),
+                _ => panic!("expected: Err($err)"),
+            }
+        }};
+    }
+
+    mockall::mock! {
+        Provider {}
+
+        #[async_trait]
+        pub trait IssuePallet {
+            async fn request_issue(&self, amount: u128, vault_id: &VaultId, griefing_collateral: u128) -> Result<RequestIssueEvent, RuntimeError>;
+            async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
+            async fn cancel_issue(&self, issue_id: H256) -> Result<(), RuntimeError>;
+            async fn get_issue_request(&self, issue_id: H256) -> Result<InterBtcIssueRequest, RuntimeError>;
+            async fn get_vault_issue_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcIssueRequest)>, RuntimeError>;
+            async fn get_issue_period(&self) -> Result<u32, RuntimeError>;
+            async fn set_issue_period(&self, period: u32) -> Result<(), RuntimeError>;
+            async fn get_all_active_issues(&self) -> Result<Vec<(H256, InterBtcIssueRequest)>, RuntimeError>;
+        }
+
+
+        #[async_trait]
+        pub trait ReplacePallet {
+            async fn request_replace(&self, vault_id: &VaultId, amount: u128, griefing_collateral: u128) -> Result<(), RuntimeError>;
+            async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
+            async fn accept_replace(&self, new_vault: &VaultId, old_vault: &VaultId, amount_btc: u128, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
+            async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
+            async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
+            async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
+            async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
+            async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
+            async fn set_replace_period(&self, period: u32) -> Result<(), RuntimeError>;
+            async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
+            async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;
+        }
+
+        #[async_trait]
+        pub trait UtilFuncs {
+            async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
+            fn get_account_id(&self) -> &AccountId;
+            fn is_this_vault(&self, vault_id: &VaultId) -> bool;
+        }
+
+        #[async_trait]
+        pub trait SecurityPallet {
+            async fn get_parachain_status(&self) -> Result<StatusCode, RuntimeError>;
+            async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, RuntimeError>;
+            async fn get_current_active_block_number(&self) -> Result<u32, RuntimeError>;
+        }
+    }
+
+    impl Clone for MockProvider {
+        fn clone(&self) -> Self {
+            // NOTE: expectations dropped
+            Self::default()
+        }
+    }
+
+    fn default_issue_request() -> InterBtcIssueRequest {
+        InterBtcIssueRequest {
+            amount: Default::default(),
+            btc_address: Default::default(),
+            btc_height: Default::default(),
+            fee: Default::default(),
+            griefing_collateral: Default::default(),
+            opentime: Default::default(),
+            period: Default::default(),
+            requester: Default::default(),
+            btc_public_key: BtcPublicKey { 0: [0; 33] },
+            status: IssueRequestStatus::Pending,
+            vault: VaultId::new(Default::default(), CurrencyId::DOT, runtime::CurrencyId::INTERBTC),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_open_process_delays_succeeds() {
+        // parachain_open_time = 9_500, btc_start_height=100  current_block = 10_000, period = 1_000
+        // parachain_open_time = 1_000, btc_start_height=100  current_block = 10_000, period = 1_000
+        // parachain_open_time = 8_500, btc_start_height=100  current_block = 10_000, period = 1_000
+        let mut parachain_rpc = MockProvider::default();
+        parachain_rpc.expect_get_vault_issue_requests().times(1).returning(|_| {
+            Ok(vec![
+                (
+                    H256::from_slice(&[1; 32]),
+                    InterBtcIssueRequest {
+                        opentime: 9_500,
+                        btc_height: 100,
+                        ..default_issue_request()
+                    },
+                ),
+                (
+                    H256::from_slice(&[2; 32]),
+                    InterBtcIssueRequest {
+                        opentime: 1_000,
+                        btc_height: 100,
+                        ..default_issue_request()
+                    },
+                ),
+                (
+                    H256::from_slice(&[3; 32]),
+                    InterBtcIssueRequest {
+                        opentime: 8_500,
+                        btc_height: 100,
+                        ..default_issue_request()
+                    },
+                ),
+            ])
+        });
+        parachain_rpc.expect_get_issue_period().times(1).returning(|| Ok(1_000));
+
+        let mut canceller = CancellationScheduler::new(parachain_rpc, 10_000, 150, Default::default());
+
+        // checks that the delay is calculated correctly
+        assert_eq!(
+            canceller.get_open_requests::<IssueCanceller>().await.unwrap(),
+            vec![
+                ActiveRequest {
+                    id: H256::from_slice(&[1; 32]),
+                    parachain_deadline_height: 10_500,
+                    bitcoin_deadline_height: 110,
+                },
+                ActiveRequest {
+                    id: H256::from_slice(&[2; 32]),
+                    parachain_deadline_height: 2_000,
+                    bitcoin_deadline_height: 110,
+                },
+                ActiveRequest {
+                    id: H256::from_slice(&[3; 32]),
+                    parachain_deadline_height: 9_500,
+                    bitcoin_deadline_height: 110,
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_process_event_succeeds() {
+        // check that we actually cancel the issue when it expires
+        let mut parachain_rpc = MockProvider::default();
+        parachain_rpc.expect_get_vault_issue_requests().returning(|_| {
+            Ok(vec![(
+                H256::from_slice(&[1; 32]),
+                InterBtcIssueRequest {
+                    opentime: 10_000,
+                    ..default_issue_request()
+                },
+            )])
+        });
+
+        parachain_rpc.expect_get_issue_period().returning(|| Ok(100));
+
+        // check that it cancels the issue
+        parachain_rpc.expect_cancel_issue().returning(|_| Ok(()));
+
+        let mut active_processes: Vec<ActiveRequest> = vec![];
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
+
+        assert_eq!(
+            cancellation_scheduler
+                .process_event::<IssueCanceller>(
+                    Event::ParachainBlock(15000),
+                    &mut active_processes,
+                    ListState::Invalid,
+                )
+                .await
+                .unwrap(),
+            ListState::Valid
+        );
+
+        // not empty yet..
+        assert!(!active_processes.is_empty());
+
+        assert_eq!(
+            cancellation_scheduler
+                .process_event::<IssueCanceller>(Event::BitcoinBlock(2), &mut active_processes, ListState::Valid,)
+                .await
+                .unwrap(),
+            ListState::Valid
+        );
+
+        // issue should have been removed from the list after it has been canceled
+        assert!(active_processes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_process_event_only_removes_when_both_parachain_and_bitcoin_expired() {
+        // check that we actually cancel the issue when it expires
+        let mut parachain_rpc = MockProvider::default();
+        parachain_rpc.expect_get_vault_issue_requests().returning(|_| {
+            Ok(vec![(
+                H256::from_slice(&[1; 32]),
+                InterBtcIssueRequest {
+                    opentime: 10_000,
+                    btc_height: 100,
+                    ..default_issue_request()
+                },
+            )])
+        });
+
+        parachain_rpc.expect_get_issue_period().returning(|| Ok(1000));
+
+        // check that it cancels the issue
+        parachain_rpc.expect_cancel_issue().returning(|_| Ok(()));
+
+        let mut active_processes: Vec<ActiveRequest> = vec![];
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 10_001, 101, AccountId::default());
+
+        // deadline is at parachain_height = 11_000 and bitcoin_height = 110
+
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::ParachainBlock(10500), &mut active_processes, ListState::Invalid)
+            .await
+            .unwrap();
+        assert!(!active_processes.is_empty());
+
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::BitcoinBlock(110), &mut active_processes, ListState::Valid)
+            .await
+            .unwrap();
+
+        // not removed yet, both not yet expired
+        assert!(!active_processes.is_empty());
+
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::ParachainBlock(11001), &mut active_processes, ListState::Valid)
+            .await
+            .unwrap();
+
+        // not removed yet; bitcoin not expired
+        assert!(!active_processes.is_empty());
+
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::ParachainBlock(11000), &mut active_processes, ListState::Valid)
+            .await
+            .unwrap();
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::BitcoinBlock(111), &mut active_processes, ListState::Valid)
+            .await
+            .unwrap();
+
+        // not removed yet - parachain not expired
+        assert!(!active_processes.is_empty());
+
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::ParachainBlock(11001), &mut active_processes, ListState::Valid)
+            .await
+            .unwrap();
+
+        // both parachain and bitcoin expired, should be removed now
+        assert!(active_processes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_process_event_remove_from_list() {
+        // checks that we don't query for new issues, and that when the issue gets executed, it
+        // is removed from the list
+        let parachain_rpc = MockProvider::default();
+
+        let mut active_processes: Vec<ActiveRequest> = vec![
+            ActiveRequest {
+                id: H256::from_slice(&[1; 32]),
+                parachain_deadline_height: 0,
+                bitcoin_deadline_height: 0,
+            },
+            ActiveRequest {
+                id: H256::from_slice(&[2; 32]),
+                parachain_deadline_height: 0,
+                bitcoin_deadline_height: 0,
+            },
+            ActiveRequest {
+                id: H256::from_slice(&[3; 32]),
+                parachain_deadline_height: 0,
+                bitcoin_deadline_height: 0,
+            },
+        ];
+
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
+
+        // simulate that the issue gets executed
+        let event = Event::Executed(H256::from_slice(&[2; 32]));
+
+        // simulate that the issue gets executed
+        assert_eq!(
+            cancellation_scheduler
+                .process_event::<IssueCanceller>(event, &mut active_processes, ListState::Valid)
+                .await
+                .unwrap(),
+            ListState::Valid
+        );
+
+        // check that the process with id 2 was removed
+        assert_eq!(
+            active_processes.into_iter().map(|x| x.id).collect::<Vec<H256>>(),
+            vec![H256::from_slice(&[1; 32]), H256::from_slice(&[3; 32])]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_process_event_get_new_list() {
+        // checks that we query for new issues, and that when the issue gets executed, it
+        // is removed from the list
+        let mut parachain_rpc = MockProvider::default();
+        parachain_rpc.expect_get_vault_issue_requests().times(1).returning(|_| {
+            Ok(vec![(
+                H256::from_slice(&[1; 32]),
+                InterBtcIssueRequest {
+                    opentime: 10,
+                    ..default_issue_request()
+                },
+            )])
+        });
+        parachain_rpc.expect_get_issue_period().returning(|| Ok(10));
+
+        let mut active_processes: Vec<ActiveRequest> = vec![];
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 15, 0, AccountId::default());
+
+        // simulate that the issue gets executed
+        let event = Event::Executed(H256::from_slice(&[1; 32]));
+
+        assert_eq!(
+            cancellation_scheduler
+                .process_event::<IssueCanceller>(event, &mut active_processes, ListState::Invalid)
+                .await
+                .unwrap(),
+            ListState::Valid
+        );
+
+        // issue should have been removed from the list
+        assert!(active_processes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_process_event_timeout() {
+        // check that if we fail to get the issue list, we return Invalid, but not Err
+        let mut parachain_rpc = MockProvider::default();
+        parachain_rpc
+            .expect_get_vault_issue_requests()
+            .times(1)
+            .returning(|_| Err(RuntimeError::BlockNotFound));
+
+        let mut active_processes: Vec<ActiveRequest> = vec![];
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
+
+        // simulate that we have a timeout (new issue request opened)
+        let event = Event::Opened;
+
+        // state should remain invalid
+        assert_eq!(
+            cancellation_scheduler
+                .process_event::<IssueCanceller>(event, &mut active_processes, ListState::Invalid)
+                .await
+                .unwrap(),
+            ListState::Invalid
+        );
+    }
+
+    #[tokio::test]
+    async fn test_process_event_shutdown() {
+        // check that if the selector fails, the error is propagated
+        let parachain_rpc = MockProvider::default();
+
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
+
+        // dropping the tx immediately - this effectively closes the channel
+        let (_, replace_event_rx) = mpsc::channel::<Event>(16);
+
+        assert_err!(
+            cancellation_scheduler
+                .handle_cancellation::<IssueCanceller>(replace_event_rx)
+                .await,
+            RuntimeError::ChannelClosed
+        );
+    }
+}
