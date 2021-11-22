@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://gitlab.com/interlay/interbtc-clients">
+  <a href="https://github.com/interlay/interbtc-clients">
     <img alt="interBTC Clients" src="media/banner.jpg">
   </a>
   <h2 align="center">interBTC Clients</h2>
