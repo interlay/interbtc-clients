@@ -48,16 +48,16 @@ jobs:
         with:
           command: test
           args: --release --workspace
-      - name: upload artifacts - vault
+      - name: upload artifacts - standalone vault
         uses: actions/upload-artifact@v2
         with:
-          name: vault-${{ github.sha }}
+          name: vault-standalone-${{ github.sha }}
           path: target/release/vault
           retention-days: 10
-      - name: upload artifacts - oracle
+      - name: upload artifacts - standalone oracle
         uses: actions/upload-artifact@v2
         with:
-          name: oracle-${{ github.sha }}
+          name: oracle-standalone-${{ github.sha }}
           path: target/release/oracle
           retention-days: 10
       - name: upload artifacts - faucet
@@ -65,4 +65,21 @@ jobs:
         with:
           name: faucet-${{ github.sha }}
           path: target/release/faucet
+          retention-days: 10
+      - name: build with parachain metadata
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --features use-parachain-metadata
+      - name: upload artifacts - parachain vault
+        uses: actions/upload-artifact@v2
+        with:
+          name: vault-parachain-${{ github.sha }}
+          path: target/release/vault
+          retention-days: 10
+      - name: upload artifacts - parachain oracle
+        uses: actions/upload-artifact@v2
+        with:
+          name: oracle-parachain-${{ github.sha }}
+          path: target/release/oracle
           retention-days: 10
