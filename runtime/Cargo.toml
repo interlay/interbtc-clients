@@ -13,6 +13,7 @@ testing-utils = [
     "interbtc",
     "rand",
 ]
+use-parachain-metadata = []
 
 [dependencies]
 serde = { version = "1.0.130", features = ["derive"] }
@@ -48,7 +49,7 @@ bitcoin = { path = "../bitcoin"}
 
 # Dependencies for the testing utils for integration tests
 tempdir = {version = "0.3.7", optional = true }
-interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "0ce5f7bab9e7b5b15a35c1df7282bb983055deb4", optional = true }
+interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d", optional = true }
 rand = { version = "0.7", optional = true }
 
 [dependencies.primitives]

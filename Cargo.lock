@@ -158,6 +158,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e22d1f4b888c298a027c99dc9048015fac177587de20fc30232a057dfbe24a21"
 
 [[package]]
+name = "assert_matches"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
+
+[[package]]
 name = "async-channel"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -511,7 +517,7 @@ version = "1.1.0"
 dependencies = [
  "async-trait",
  "backoff",
- "bitcoin 1.2.0",
+ "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "bitcoincore-rpc",
  "clap 3.0.0-beta.4",
  "esplora-btc-api",
@@ -534,6 +540,25 @@ dependencies = [
 name = "bitcoin"
 version = "1.2.0"
 source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+dependencies = [
+ "bitcoin_hashes 0.7.6",
+ "frame-support",
+ "hex 0.4.3",
+ "impl-serde",
+ "parity-scale-codec",
+ "scale-info",
+ "secp256k1",
+ "serde",
+ "sha2 0.8.2",
+ "sp-core",
+ "sp-std",
+ "spin 0.7.1",
+]
+
+[[package]]
+name = "bitcoin"
+version = "1.2.0"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "bitcoin_hashes 0.7.6",
  "frame-support",
@@ -752,14 +777,34 @@ name = "btc-relay"
 version = "1.2.0"
 source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
 dependencies = [
- "bitcoin 1.2.0",
+ "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "security",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "btc-relay"
+version = "1.2.0"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
+dependencies = [
+ "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "scale-info",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
@@ -1304,7 +1349,25 @@ source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7
 dependencies = [
  "frame-support",
  "frame-system",
- "interbtc-primitives",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
+ "orml-tokens",
+ "orml-traits",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "currency"
+version = "1.2.0"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "mocktopus",
  "orml-tokens",
  "orml-traits",
@@ -1780,22 +1843,45 @@ name = "fee"
 version = "1.2.0"
 source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
 dependencies = [
- "currency",
+ "currency 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "parity-scale-codec",
- "reward",
+ "reward 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "scale-info",
- "security",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "serde",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
- "staking",
+ "staking 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
+]
+
+[[package]]
+name = "fee"
+version = "1.2.0"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
+dependencies = [
+ "currency 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "parity-scale-codec",
+ "reward 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "scale-info",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "serde",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "staking 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
 ]
 
 [[package]]
@@ -2821,7 +2907,22 @@ name = "interbtc-primitives"
 version = "1.2.0"
 source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
 dependencies = [
- "bitcoin 1.2.0",
+ "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
+ "bstringify",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "interbtc-primitives"
+version = "1.2.0"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
+dependencies = [
+ "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "bstringify",
  "parity-scale-codec",
  "scale-info",
@@ -2834,9 +2935,9 @@ dependencies = [
 [[package]]
 name = "interbtc-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
- "interbtc-primitives",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "jsonrpc-core",
  "module-btc-relay-rpc",
  "module-issue-rpc",
@@ -2856,38 +2957,37 @@ dependencies = [
  "sp-blockchain",
  "sp-core",
  "substrate-frame-rpc-system",
- "vault-registry",
+ "vault-registry 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
 ]
 
 [[package]]
 name = "interbtc-runtime-standalone"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
- "btc-relay",
- "currency",
- "fee",
+ "btc-relay 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "currency 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "fee 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",
  "frame-system",
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
- "interbtc-primitives",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "issue",
  "module-btc-relay-rpc-runtime-api",
  "module-issue-rpc-runtime-api",
- "module-oracle-rpc-runtime-api",
+ "module-oracle-rpc-runtime-api 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "module-redeem-rpc-runtime-api",
  "module-refund-rpc-runtime-api",
  "module-relay-rpc-runtime-api",
  "module-replace-rpc-runtime-api",
  "module-vault-registry-rpc-runtime-api",
  "nomination",
- "oracle 1.2.0",
+ "oracle 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "orml-tokens",
  "orml-traits",
- "pallet-aura",
  "pallet-balances",
  "pallet-collective",
  "pallet-democracy",
@@ -2907,14 +3007,13 @@ dependencies = [
  "refund",
  "relay",
  "replace",
- "reward",
+ "reward 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "scale-info",
- "security",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "serde",
  "sp-api",
  "sp-arithmetic",
  "sp-block-builder",
- "sp-consensus-aura",
  "sp-core",
  "sp-inherents",
  "sp-io",
@@ -2924,30 +3023,42 @@ dependencies = [
  "sp-std",
  "sp-transaction-pool",
  "sp-version",
- "staking",
+ "staking 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "substrate-wasm-builder",
- "vault-registry",
+ "vault-registry 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
 ]
 
 [[package]]
 name = "interbtc-standalone"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
- "bitcoin 1.2.0",
+ "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "frame-benchmarking",
  "frame-benchmarking-cli",
+ "futures 0.3.17",
  "hex-literal",
- "interbtc-primitives",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "interbtc-rpc",
  "interbtc-runtime-standalone",
+ "jsonrpc-core",
  "log 0.4.14",
+ "module-btc-relay-rpc",
+ "module-issue-rpc",
+ "module-oracle-rpc",
+ "module-redeem-rpc",
+ "module-refund-rpc",
+ "module-relay-rpc",
+ "module-replace-rpc",
+ "module-vault-registry-rpc",
+ "pallet-transaction-payment-rpc",
  "parity-scale-codec",
  "sc-basic-authorship",
  "sc-cli",
  "sc-client-api",
  "sc-consensus",
- "sc-consensus-aura",
+ "sc-consensus-babe",
+ "sc-consensus-manual-seal",
  "sc-executor",
  "sc-finality-grandpa",
  "sc-keystore",
@@ -2959,7 +3070,7 @@ dependencies = [
  "sp-arithmetic",
  "sp-block-builder",
  "sp-consensus",
- "sp-consensus-aura",
+ "sp-consensus-babe",
  "sp-core",
  "sp-finality-grandpa",
  "sp-inherents",
@@ -2971,6 +3082,7 @@ dependencies = [
  "sp-transaction-pool",
  "structopt",
  "substrate-build-script-utils",
+ "substrate-frame-rpc-system",
 ]
 
 [[package]]
@@ -3019,31 +3131,31 @@ checksum = "68f2d64f2edebec4ce84ad108148e67e1064789bee435edc5b60ad398714a3a9"
 [[package]]
 name = "issue"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
- "bitcoin 1.2.0",
- "btc-relay",
- "currency",
- "fee",
+ "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "btc-relay 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "currency 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "fee 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives",
- "oracle 1.2.0",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "oracle 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "orml-tokens",
  "orml-traits",
  "pallet-timestamp",
  "parity-scale-codec",
  "refund",
  "scale-info",
- "security",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "serde",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
- "vault-registry",
+ "vault-registry 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
 ]
 
 [[package]]
@@ -4333,7 +4445,7 @@ dependencies = [
 [[package]]
 name = "module-btc-relay-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -4348,7 +4460,7 @@ dependencies = [
 [[package]]
 name = "module-btc-relay-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4359,7 +4471,7 @@ dependencies = [
 [[package]]
 name = "module-issue-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -4374,7 +4486,7 @@ dependencies = [
 [[package]]
 name = "module-issue-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4385,12 +4497,12 @@ dependencies = [
 [[package]]
 name = "module-oracle-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
- "module-oracle-rpc-runtime-api",
+ "module-oracle-rpc-runtime-api 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "parity-scale-codec",
  "sp-api",
  "sp-blockchain",
@@ -4410,9 +4522,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "module-oracle-rpc-runtime-api"
+version = "1.2.0"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
+dependencies = [
+ "frame-support",
+ "parity-scale-codec",
+ "serde",
+ "sp-api",
+ "sp-std",
+]
+
+[[package]]
 name = "module-redeem-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -4427,7 +4551,7 @@ dependencies = [
 [[package]]
 name = "module-redeem-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4438,7 +4562,7 @@ dependencies = [
 [[package]]
 name = "module-refund-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -4453,7 +4577,7 @@ dependencies = [
 [[package]]
 name = "module-refund-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4464,7 +4588,7 @@ dependencies = [
 [[package]]
 name = "module-relay-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -4479,7 +4603,7 @@ dependencies = [
 [[package]]
 name = "module-relay-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4490,7 +4614,7 @@ dependencies = [
 [[package]]
 name = "module-replace-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -4505,7 +4629,7 @@ dependencies = [
 [[package]]
 name = "module-replace-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4516,12 +4640,12 @@ dependencies = [
 [[package]]
 name = "module-vault-registry-rpc"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
- "module-oracle-rpc-runtime-api",
+ "module-oracle-rpc-runtime-api 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "module-vault-registry-rpc-runtime-api",
  "parity-scale-codec",
  "sp-api",
@@ -4532,10 +4656,10 @@ dependencies = [
 [[package]]
 name = "module-vault-registry-rpc-runtime-api"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
  "frame-support",
- "module-oracle-rpc-runtime-api",
+ "module-oracle-rpc-runtime-api 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "parity-scale-codec",
  "sp-api",
  "sp-std",
@@ -4734,30 +4858,30 @@ dependencies = [
 [[package]]
 name = "nomination"
 version = "0.5.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
- "currency",
- "fee",
+ "currency 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "fee 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives",
- "oracle 1.2.0",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "oracle 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "orml-tokens",
  "orml-traits",
  "pallet-timestamp",
  "parity-scale-codec",
- "reward",
+ "reward 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "scale-info",
- "security",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "serde",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
- "staking",
- "vault-registry",
+ "staking 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "vault-registry 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
 ]
 
 [[package]]
@@ -4986,21 +5110,43 @@ name = "oracle"
 version = "1.2.0"
 source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
 dependencies = [
- "currency",
+ "currency 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "security",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
- "staking",
+ "staking 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
+]
+
+[[package]]
+name = "oracle"
+version = "1.2.0"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
+dependencies = [
+ "currency 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "scale-info",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "staking 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
 ]
 
 [[package]]
@@ -5063,22 +5209,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ff55baddef9e4ad00f88b6c743a2a8062d4c6ade126c2a528644b8e444d52ce"
 dependencies = [
  "stable_deref_trait",
-]
-
-[[package]]
-name = "pallet-aura"
-version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.11#57346f6b24875f8935280dba51fa8ab0a9ba1e39"
-dependencies = [
- "frame-support",
- "frame-system",
- "pallet-timestamp",
- "parity-scale-codec",
- "scale-info",
- "sp-application-crypto",
- "sp-consensus-aura",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
@@ -6303,30 +6433,30 @@ dependencies = [
 [[package]]
 name = "redeem"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
- "bitcoin 1.2.0",
- "btc-relay",
- "currency",
- "fee",
+ "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "btc-relay 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "currency 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "fee 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives",
- "oracle 1.2.0",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "oracle 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "orml-tokens",
  "orml-traits",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "security",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "serde",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
- "vault-registry",
+ "vault-registry 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
 ]
 
 [[package]]
@@ -6377,30 +6507,30 @@ dependencies = [
 [[package]]
 name = "refund"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
- "bitcoin 1.2.0",
- "btc-relay",
- "currency",
- "fee",
+ "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "btc-relay 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "currency 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "fee 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives",
- "oracle 1.2.0",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "oracle 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "orml-tokens",
  "orml-traits",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "security",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "serde",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
- "vault-registry",
+ "vault-registry 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
 ]
 
 [[package]]
@@ -6456,18 +6586,18 @@ dependencies = [
 [[package]]
 name = "relay"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
- "bitcoin 1.2.0",
- "btc-relay",
- "currency",
- "fee",
+ "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "btc-relay 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "currency 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "fee 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "nomination",
- "oracle 1.2.0",
+ "oracle 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "orml-tokens",
  "orml-traits",
  "parity-scale-codec",
@@ -6475,14 +6605,14 @@ dependencies = [
  "refund",
  "replace",
  "scale-info",
- "security",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "serde",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
- "vault-registry",
+ "vault-registry 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
 ]
 
 [[package]]
@@ -6497,31 +6627,31 @@ dependencies = [
 [[package]]
 name = "replace"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
 dependencies = [
- "bitcoin 1.2.0",
- "btc-relay",
- "currency",
- "fee",
+ "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "btc-relay 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "currency 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "fee 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "nomination",
- "oracle 1.2.0",
+ "oracle 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "orml-tokens",
  "orml-traits",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "security",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "serde",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
- "vault-registry",
+ "vault-registry 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
 ]
 
 [[package]]
@@ -6584,7 +6714,26 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "reward"
+version = "1.2.0"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -6647,23 +6796,23 @@ dependencies = [
  "async-trait",
  "backoff",
  "bitcoin 1.1.0",
- "bitcoin 1.2.0",
- "btc-relay",
+ "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
+ "btc-relay 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "clap 3.0.0-beta.4",
  "env_logger 0.8.4",
  "frame-support",
  "futures 0.3.17",
- "interbtc-primitives",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "interbtc-standalone",
  "jsonrpsee-types",
  "jsonrpsee-ws-client",
  "log 0.4.14",
- "module-oracle-rpc-runtime-api",
+ "module-oracle-rpc-runtime-api 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "parity-scale-codec",
  "polkadot-parachain",
  "rand 0.7.3",
  "runtime",
- "security",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "serde",
  "serde_json",
  "sp-arithmetic",
@@ -6675,7 +6824,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "url 2.2.2",
- "vault-registry",
+ "vault-registry 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "xcm",
 ]
 
@@ -6965,31 +7114,92 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-consensus-aura"
+name = "sc-consensus-babe"
 version = "0.10.0-dev"
 source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.11#57346f6b24875f8935280dba51fa8ab0a9ba1e39"
 dependencies = [
  "async-trait",
  "derive_more",
+ "fork-tree",
  "futures 0.3.17",
  "log 0.4.14",
+ "merlin",
+ "num-bigint",
+ "num-rational 0.2.4",
+ "num-traits",
  "parity-scale-codec",
- "sc-block-builder",
+ "parking_lot 0.11.2",
+ "rand 0.7.3",
+ "retain_mut",
  "sc-client-api",
  "sc-consensus",
+ "sc-consensus-epochs",
  "sc-consensus-slots",
+ "sc-keystore",
  "sc-telemetry",
+ "schnorrkel",
+ "serde",
  "sp-api",
  "sp-application-crypto",
  "sp-block-builder",
  "sp-blockchain",
  "sp-consensus",
- "sp-consensus-aura",
+ "sp-consensus-babe",
+ "sp-consensus-slots",
+ "sp-consensus-vrf",
+ "sp-core",
+ "sp-inherents",
+ "sp-io",
+ "sp-keystore",
+ "sp-runtime",
+ "sp-version",
+ "substrate-prometheus-endpoint",
+]
+
+[[package]]
+name = "sc-consensus-epochs"
+version = "0.10.0-dev"
+source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.11#57346f6b24875f8935280dba51fa8ab0a9ba1e39"
+dependencies = [
+ "fork-tree",
+ "parity-scale-codec",
+ "sc-client-api",
+ "sc-consensus",
+ "sp-blockchain",
+ "sp-runtime",
+]
+
+[[package]]
+name = "sc-consensus-manual-seal"
+version = "0.10.0-dev"
+source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.11#57346f6b24875f8935280dba51fa8ab0a9ba1e39"
+dependencies = [
+ "assert_matches",
+ "async-trait",
+ "derive_more",
+ "futures 0.3.17",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "sc-client-api",
+ "sc-consensus",
+ "sc-consensus-babe",
+ "sc-consensus-epochs",
+ "sc-transaction-pool",
+ "sc-transaction-pool-api",
+ "serde",
+ "sp-api",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-babe",
  "sp-consensus-slots",
  "sp-core",
  "sp-inherents",
  "sp-keystore",
  "sp-runtime",
+ "sp-timestamp",
  "substrate-prometheus-endpoint",
 ]
 
@@ -7702,6 +7912,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "security"
+version = "1.2.0"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sha2 0.8.2",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "security-framework"
 version = "2.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8167,18 +8393,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-consensus-aura"
+name = "sp-consensus-babe"
 version = "0.10.0-dev"
 source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.11#57346f6b24875f8935280dba51fa8ab0a9ba1e39"
 dependencies = [
  "async-trait",
+ "merlin",
  "parity-scale-codec",
  "scale-info",
+ "serde",
  "sp-api",
  "sp-application-crypto",
  "sp-consensus",
  "sp-consensus-slots",
+ "sp-consensus-vrf",
+ "sp-core",
  "sp-inherents",
+ "sp-keystore",
  "sp-runtime",
  "sp-std",
  "sp-timestamp",
@@ -8193,6 +8424,18 @@ dependencies = [
  "scale-info",
  "sp-arithmetic",
  "sp-runtime",
+]
+
+[[package]]
+name = "sp-consensus-vrf"
+version = "0.10.0-dev"
+source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.11#57346f6b24875f8935280dba51fa8ab0a9ba1e39"
+dependencies = [
+ "parity-scale-codec",
+ "schnorrkel",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -8693,7 +8936,26 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "staking"
+version = "1.2.0"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -9601,30 +9863,61 @@ name = "vault-registry"
 version = "1.2.0"
 source = "git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4#0ce5f7bab9e7b5b15a35c1df7282bb983055deb4"
 dependencies = [
- "bitcoin 1.2.0",
- "currency",
- "fee",
+ "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
+ "currency 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
+ "fee 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "fixed-hash",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "log 0.4.14",
- "oracle 1.2.0",
+ "oracle 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "orml-tokens",
  "orml-traits",
  "pallet-timestamp",
  "parity-scale-codec",
- "reward",
+ "reward 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "scale-info",
- "security",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
  "serde",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
- "staking",
+ "staking 1.2.0 (git+https://github.com/interlay/interbtc?rev=0ce5f7bab9e7b5b15a35c1df7282bb983055deb4)",
+]
+
+[[package]]
+name = "vault-registry"
+version = "1.2.0"
+source = "git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d#dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d"
+dependencies = [
+ "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "currency 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "fee 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "fixed-hash",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "log 0.4.14",
+ "oracle 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "orml-tokens",
+ "orml-traits",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "reward 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "scale-info",
+ "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
+ "serde",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "staking 1.2.0 (git+https://github.com/interlay/interbtc?rev=dbb22674fb2fd65ba89a859ee8bcc8067e8cff1d)",
 ]
 
 [[package]]
