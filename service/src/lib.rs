@@ -9,10 +9,7 @@ use std::marker::PhantomData;
 
 mod cli;
 mod error;
-mod telemetry;
 mod trace;
-
-use telemetry::TelemetryClient;
 
 use bitcoin::Error as BitcoinError;
 pub use cli::{LoggingFormat, RestartPolicy, ServiceConfig};
@@ -69,12 +66,6 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
 
 impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Config, S> {
     pub async fn start(&self) -> Result<(), Error> {
-        if let Some(uri) = &self.service_config.telemetry_url {
-            // run telemetry client heartbeat
-            let telemetry_client = TelemetryClient::new(uri.clone(), self.signer.clone());
-            tokio::spawn(async move { telemetry::do_update(&telemetry_client, S::NAME, S::VERSION).await });
-        }
-
         tracing::info!("AccountId: {}", self.signer.account_id().to_ss58check());
 
         loop {
