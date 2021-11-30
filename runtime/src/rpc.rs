@@ -8,7 +8,7 @@ use crate::{
 use async_trait::async_trait;
 use codec::Encode;
 use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt};
-use jsonrpsee_types::to_json_value;
+use jsonrpsee::types::to_json_value;
 use module_oracle_rpc_runtime_api::BalanceWrapper;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 use subxt::{
@@ -31,6 +31,11 @@ pub struct InterBtcParachain {
 
 impl InterBtcParachain {
     pub async fn new<P: Into<RpcClient>>(rpc_client: P, signer: InterBtcSigner) -> Result<Self, Error> {
+        #[cfg(feature = "use-parachain-metadata")]
+        log::info!("metadata version: parachain");
+        #[cfg(not(feature = "use-parachain-metadata"))]
+        log::info!("metadata version: standalone");
+
         let account_id = signer.account_id().clone();
         let rpc_client = rpc_client.into();
         let ext_client = SubxtClientBuilder::new().set_client(rpc_client.clone()).build().await?;

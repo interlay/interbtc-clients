@@ -14,7 +14,7 @@ tokio = { version = "1.0", features = ["full"] }
 thiserror = "1.0"
 jsonrpc-http-server = "18.0.0"
 parity-scale-codec = "2.0.0"
-serde_json = "1.0.57"
+serde_json = "1.0.71"
 serde = "1.0.130"
 hex = "0.4.2"
 kv = { version = "0.22.0", features = ["json-value"] }
@@ -32,4 +32,4 @@ service = { path = "../service" }
 runtime = { path = "../runtime", features = ["testing-utils"] }
 
 # Substrate dependencies
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.11" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.12" }

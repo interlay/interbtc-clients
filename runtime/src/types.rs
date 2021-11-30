@@ -113,6 +113,7 @@ mod metadata_aliases {
 
     pub type SecurityCall = metadata::runtime_types::security::pallet::Call;
 }
+
 impl crate::RawBlockHeader {
     pub fn hash(&self) -> crate::H256Le {
         module_bitcoin::utils::sha256d_le(&self.0).into()

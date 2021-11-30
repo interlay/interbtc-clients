@@ -12,10 +12,9 @@ use futures::{
     future::{try_join, Either},
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
-use sp_keyring::AccountKeyring;
 use std::time::Duration;
 use subxt::{Event, PairSigner};
-use subxt_client::{DatabaseSource, KeystoreConfig, Role, SubxtClientConfig, WasmExecutionMethod};
+use subxt_client::{AccountKeyring, DatabaseSource, KeystoreConfig, Role, SubxtClientConfig, WasmExecutionMethod};
 use tempdir::TempDir;
 use tokio::time::{sleep, timeout};
 
