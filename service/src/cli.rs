@@ -59,8 +59,4 @@ pub struct ServiceConfig {
     /// Logging output format.
     #[clap(long, default_value = "full")]
     pub logging_format: LoggingFormat,
-
-    /// Telemetry endpoint.
-    #[clap(long)]
-    pub telemetry_url: Option<String>,
 }

@@ -2974,16 +2974,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "interbtc-telemetry-types"
-version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc-telemetry?rev=7540edb7cedc8ecdc8b721b9ea198be56c697b16#7540edb7cedc8ecdc8b721b9ea198be56c697b16"
-dependencies = [
- "serde",
- "serde_json",
- "sp-core",
-]
-
-[[package]]
 name = "intervalier"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7821,7 +7811,6 @@ dependencies = [
  "futures 0.3.17",
  "hyper 0.14.14",
  "hyper-tls",
- "interbtc-telemetry-types",
  "runtime",
  "serde",
  "serde_json",
