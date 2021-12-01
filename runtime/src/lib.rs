@@ -49,14 +49,14 @@ pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
 
 // TODO: possibly substitute CurrencyId, VaultId, H256Le
 #[cfg_attr(
-    feature = "use-parachain-metadata",
+    feature = "parachain-metadata",
     subxt(
         runtime_metadata_path = "metadata-parachain.scale",
         generated_type_derives = "Debug, Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]
 #[cfg_attr(
-    not(feature = "use-parachain-metadata"),
+    not(feature = "parachain-metadata"),
     subxt(
         runtime_metadata_path = "metadata-standalone.scale",
         generated_type_derives = "Debug, Eq, PartialEq, Ord, PartialOrd, Clone"

@@ -21,4 +21,4 @@ runtime = { path = "../runtime" }
 
 
 [features]
-use-parachain-metadata = ["runtime/use-parachain-metadata"]
+parachain-metadata = ["runtime/parachain-metadata"]

@@ -70,7 +70,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --features use-parachain-metadata
+          args: --release --features parachain-metadata
       - name: upload artifacts - parachain vault
         uses: actions/upload-artifact@v2
         with:

@@ -31,9 +31,9 @@ pub struct InterBtcParachain {
 
 impl InterBtcParachain {
     pub async fn new<P: Into<RpcClient>>(rpc_client: P, signer: InterBtcSigner) -> Result<Self, Error> {
-        #[cfg(feature = "use-parachain-metadata")]
+        #[cfg(feature = "parachain-metadata")]
         log::info!("metadata version: parachain");
-        #[cfg(not(feature = "use-parachain-metadata"))]
+        #[cfg(not(feature = "parachain-metadata"))]
         log::info!("metadata version: standalone");
 
         let account_id = signer.account_id().clone();

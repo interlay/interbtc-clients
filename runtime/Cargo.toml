@@ -13,7 +13,7 @@ testing-utils = [
     "interbtc",
     "rand",
 ]
-use-parachain-metadata = []
+parachain-metadata = []
 
 [dependencies]
 serde = { version = "1.0.130", features = ["derive"] }
