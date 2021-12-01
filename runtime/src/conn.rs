@@ -1,5 +1,5 @@
 use crate::{error::JsonRpseeError, Error};
-use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
+use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
 

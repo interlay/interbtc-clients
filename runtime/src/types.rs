@@ -106,9 +106,14 @@ mod metadata_aliases {
     pub type VaultId = metadata::runtime_types::interbtc_primitives::VaultId<AccountId, CurrencyId>;
     pub type VaultCurrencyPair = metadata::runtime_types::interbtc_primitives::VaultCurrencyPair<CurrencyId>;
 
+    #[cfg(feature = "parachain-metadata")]
+    pub type EncodedCall = metadata::runtime_types::interbtc_runtime_parachain::Call;
+    #[cfg(not(feature = "parachain-metadata"))]
     pub type EncodedCall = metadata::runtime_types::interbtc_runtime_standalone::Call;
+
     pub type SecurityCall = metadata::runtime_types::security::pallet::Call;
 }
+
 impl crate::RawBlockHeader {
     pub fn hash(&self) -> crate::H256Le {
         module_bitcoin::utils::sha256d_le(&self.0).into()

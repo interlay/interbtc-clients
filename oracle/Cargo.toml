@@ -18,3 +18,7 @@ git-version = "0.3.4"
 
 # Workspace dependencies
 runtime = { path = "../runtime" }
+
+
+[features]
+parachain-metadata = ["runtime/parachain-metadata"]

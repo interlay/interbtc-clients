@@ -13,13 +13,14 @@ testing-utils = [
     "interbtc",
     "rand",
 ]
+parachain-metadata = []
 
 [dependencies]
 serde = { version = "1.0.130", features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive", "full"] }
 async-trait = "0.1.40"
 thiserror = "1.0"
-serde_json = "1.0.57"
+serde_json = "1.0.71"
 tokio = { version = "1.0", features = ["full"] }
 backoff = { version = "0.3.0", features = ["tokio"] }
 futures = "0.3.5"
@@ -28,27 +29,26 @@ log = "0.4.0"
 url = "2"
 
 # Substrate dependencies
-sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.11" }
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.11" }
-sp-std = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.11" }
-frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.11" }
+sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.12" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.12" }
+sp-std = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.12" }
+frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.12" }
 
 # Subxt dependencies
-subxt = { package = "subxt", git = "https://github.com/interlay/substrate-subxt", rev = "3af8331231f1dd3c328c1e96a6b48a10dc1b3ffb" }
-subxt-client = { package = "subxt-client", git = "https://github.com/interlay/substrate-subxt", rev = "3af8331231f1dd3c328c1e96a6b48a10dc1b3ffb" }
+subxt = { package = "subxt", git = "https://github.com/interlay/substrate-subxt", rev = "a2298891aeb8355b4f04d119375d5465961fe688" }
+subxt-client = { package = "subxt-client", git = "https://github.com/interlay/substrate-subxt", rev = "a2298891aeb8355b4f04d119375d5465961fe688" }
 
-jsonrpsee-types = "0.3.0"
-jsonrpsee-ws-client = "0.3.0"
+jsonrpsee = { version = "0.5.1", features = ["macros", "ws-client", "http-client"] }
 
 # Polkadot dependencies
-xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.11" }
-polkadot-parachain = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.11" }
+xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.12" }
+polkadot-parachain = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.12" }
 
 bitcoin = { path = "../bitcoin"}
 
 # Dependencies for the testing utils for integration tests
 tempdir = {version = "0.3.7", optional = true }
-interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "0ce5f7bab9e7b5b15a35c1df7282bb983055deb4", optional = true }
+interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "7b8cdb2d3b777ded37a3fe194ec75c38d9f85c0c", optional = true }
 rand = { version = "0.7", optional = true }
 
 [dependencies.primitives]
