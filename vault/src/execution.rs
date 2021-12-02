@@ -2,11 +2,14 @@ use crate::error::Error;
 use bitcoin::{
     BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata, BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
-use futures::{stream::StreamExt, try_join};
+use futures::{
+    stream::{self, StreamExt},
+    try_join, TryStreamExt,
+};
 use runtime::{
     pallets::refund::RequestRefundEvent, BtcAddress, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRedeemRequest,
-    InterBtcRefundRequest, InterBtcReplaceRequest, InterBtcRuntime, RedeemPallet, RedeemRequestStatus, RefundPallet,
-    ReplacePallet, ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultRegistryPallet,
+    InterBtcRefundRequest, InterBtcReplaceRequest, InterBtcRuntime, IssuePallet, RedeemPallet, RedeemRequestStatus,
+    RefundPallet, ReplacePallet, ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultRegistryPallet,
 };
 use sp_core::H256;
 use std::{collections::HashMap, convert::TryInto, time::Duration};
@@ -133,11 +136,11 @@ impl Request {
     }
 
     /// Constructs a Request for the given InterBtcRefundRequest
-    fn from_refund_request(hash: H256, request: InterBtcRefundRequest) -> Request {
+    fn from_refund_request(hash: H256, request: InterBtcRefundRequest, btc_height: u32) -> Request {
         Request {
             hash,
             deadline: None,
-            btc_height: None,
+            btc_height: Some(btc_height),
             amount: request.amount_wrapped,
             btc_address: request.btc_address,
             request_type: RequestType::Refund,
@@ -304,13 +307,30 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
     num_confirmations: u32,
     payment_margin: Duration,
 ) -> Result<(), Error> {
+    let parachain_rpc = &parachain_rpc;
     let vault_id = parachain_rpc.get_account_id().clone();
 
     // get all redeem, replace and refund requests
     let (redeem_requests, replace_requests, refund_requests) = try_join!(
         parachain_rpc.get_vault_redeem_requests(vault_id.clone()),
         parachain_rpc.get_old_vault_replace_requests(vault_id.clone()),
-        parachain_rpc.get_vault_refund_requests(vault_id),
+        async {
+            // for refunds, we use the btc_height of the issue
+            let refunds = parachain_rpc.get_vault_refund_requests(vault_id).await?;
+            stream::iter(refunds)
+                .then(|(refund_id, refund)| async move {
+                    Ok((
+                        refund_id,
+                        refund.clone(),
+                        parachain_rpc
+                            .get_issue_request(refund.issue_id.clone())
+                            .await?
+                            .btc_height,
+                    ))
+                })
+                .try_collect::<Vec<_>>()
+                .await
+        },
     )?;
 
     let open_redeems = redeem_requests
@@ -325,8 +345,8 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
 
     let open_refunds = refund_requests
         .into_iter()
-        .filter(|(_, request)| !request.completed)
-        .map(|(hash, request)| Request::from_refund_request(hash, request));
+        .filter(|(_, request, _)| !request.completed)
+        .map(|(hash, request, btc_height)| Request::from_refund_request(hash, request, btc_height));
 
     // collect all requests into a hashmap, indexed by their id
     let mut open_requests = open_redeems
