@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCore};
 use futures::{future::Either, Future, FutureExt};
 use runtime::{
-    cli::ConnectionOpts as ParachainConfig, CurrencyInfo, Error as RuntimeError, InterBtcParachain as BtcParachain,
-    InterBtcSigner, RichCurrencyId, Signer, Ss58Codec, VaultId,
+    cli::ConnectionOpts as ParachainConfig, CurrencyId, CurrencyIdExt, CurrencyInfo, Error as RuntimeError,
+    InterBtcParachain as BtcParachain, InterBtcSigner, Signer, Ss58Codec, VaultId,
 };
 use std::marker::PhantomData;
 
@@ -90,14 +90,14 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             let config_copy = self.bitcoin_config.clone();
             let prefix = self.wallet_name.clone().unwrap_or("vault".to_string());
             let constructor = move |vault_id: VaultId| {
-                let collateral_currency: RichCurrencyId = vault_id.collateral_currency().into();
-                let wrapped_currency: RichCurrencyId = vault_id.wrapped_currency().into();
+                let collateral_currency: CurrencyId = vault_id.collateral_currency().into();
+                let wrapped_currency: CurrencyId = vault_id.wrapped_currency().into();
                 // convert to the native type
                 let wallet_name = format!(
                     "{}-{}-{}",
                     prefix,
-                    collateral_currency.symbol(),
-                    wrapped_currency.symbol()
+                    collateral_currency.inner().symbol(),
+                    wrapped_currency.inner().symbol()
                 );
                 let btc_rpc = config_copy.new_client(Some(wallet_name))?;
                 Ok(btc_rpc)

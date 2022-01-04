@@ -17,7 +17,7 @@ use subxt::{
 };
 use tokio::{sync::RwLock, time::sleep};
 
-const DEFAULT_COLLATERAL_CURRENCY: CurrencyId = CurrencyId::DOT;
+const DEFAULT_COLLATERAL_CURRENCY: CurrencyId = Token(DOT);
 
 #[derive(Clone)]
 pub struct InterBtcParachain {
@@ -282,7 +282,7 @@ impl InterBtcParachain {
     pub async fn get_outdated_nonce_error(&self) -> Error {
         use sp_arithmetic::FixedPointNumber;
 
-        let key = OracleKey::ExchangeRate(CurrencyId::DOT);
+        let key = OracleKey::ExchangeRate(Token(DOT));
         let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
 
         let mut signer = self.signer.write().await;

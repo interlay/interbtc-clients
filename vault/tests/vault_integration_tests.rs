@@ -19,8 +19,8 @@ use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager};
 
 const TIMEOUT: Duration = Duration::from_secs(90);
 
-const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
-const DEFAULT_WRAPPED_CURRENCY: CurrencyId = CurrencyId::INTERBTC;
+const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
+const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(INTERBTC);
 
 async fn test_with<F, R>(execute: impl FnOnce(SubxtClient) -> F) -> R
 where

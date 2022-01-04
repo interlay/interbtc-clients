@@ -4,7 +4,7 @@ use hex::FromHex;
 use jsonrpc_core::Value;
 use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use parity_scale_codec::{Decode, Encode};
-use runtime::{InterBtcParachain, RichCurrencyId, VaultId, VaultRegistryPallet, TX_FEES};
+use runtime::{CurrencyId, CurrencyIdExt, InterBtcParachain, VaultId, VaultRegistryPallet, TX_FEES};
 use serde::{Deserialize, Deserializer};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -48,7 +48,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
 ) -> Result<(), Error> {
     tracing::info!("Connecting to the faucet");
     let connection = jsonrpc_http::connect::<TypedClient>(faucet_url).await?;
-    let currency_id: RichCurrencyId = vault_id.collateral_currency().into();
+    let currency_id: CurrencyId = vault_id.collateral_currency().into();
 
     // Receive user allowance from faucet
     if let Err(e) = get_funding(connection.clone(), vault_id.clone()).await {
@@ -57,7 +57,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
 
     let user_allowance_in_dot: u128 = get_faucet_allowance(connection.clone(), "user_allowance").await?;
     let registration_collateral = user_allowance_in_dot
-        .checked_mul(currency_id.one())
+        .checked_mul(currency_id.inner().one())
         .ok_or(Error::ArithmeticOverflow)?
         .checked_sub(TX_FEES)
         .ok_or(Error::ArithmeticUnderflow)?;
@@ -74,7 +74,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
     // TODO: faucet allowance should return planck
     let vault_allowance_in_dot: u128 = get_faucet_allowance(connection.clone(), "vault_allowance").await?;
     let vault_allowance_in_planck = vault_allowance_in_dot
-        .checked_mul(currency_id.one())
+        .checked_mul(currency_id.inner().one())
         .ok_or(Error::ArithmeticOverflow)?;
     let operational_collateral = vault_allowance_in_planck
         .checked_div(3)

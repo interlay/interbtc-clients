@@ -205,8 +205,8 @@ mod tests {
         Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
-        BitcoinBlockHeight, BlockNumber, CurrencyId, Error as RuntimeError, H256Le, InterBtcRichBlockHeader,
-        RawBlockHeader,
+        BitcoinBlockHeight, BlockNumber, Error as RuntimeError, H256Le, InterBtcRichBlockHeader, RawBlockHeader, Token,
+        DOT, INTERBTC,
     };
     use sp_core::{H160, H256};
 
@@ -327,7 +327,7 @@ mod tests {
     }
 
     fn dummy_vault_id() -> VaultId {
-        VaultId::new(Default::default(), CurrencyId::DOT, CurrencyId::INTERBTC)
+        VaultId::new(Default::default(), Token(DOT), Token(INTERBTC))
     }
 
     #[tokio::test]

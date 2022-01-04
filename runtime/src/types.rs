@@ -5,6 +5,13 @@ use subxt::{
     PairSigner,
 };
 
+pub use primitives::{
+    CurrencyId,
+    CurrencyId::Token,
+    TokenSymbol::{DOT, INTERBTC, INTR, KBTC, KINT, KSM},
+};
+
+pub use currency_id::CurrencyIdExt;
 pub use h256_le::RichH256Le;
 pub use module_btc_relay::{RichBlockHeader, MAIN_CHAIN_ID};
 
@@ -15,8 +22,6 @@ pub type BlockNumber = u32;
 pub type H160 = subxt::sp_core::H160;
 pub type H256 = subxt::sp_core::H256;
 pub type U256 = subxt::sp_core::U256;
-
-pub type RichCurrencyId = primitives::CurrencyId;
 
 pub type InterBtcSigner = PairSigner<InterBtcRuntime, KeyPair>;
 
@@ -102,7 +107,6 @@ mod metadata_aliases {
         Balance,
         CurrencyId,
     >;
-    pub type CurrencyId = metadata::runtime_types::interbtc_primitives::CurrencyId;
     pub type VaultId = metadata::runtime_types::interbtc_primitives::VaultId<AccountId, CurrencyId>;
     pub type VaultCurrencyPair = metadata::runtime_types::interbtc_primitives::VaultCurrencyPair<CurrencyId>;
 
@@ -127,41 +131,16 @@ impl From<[u8; 33]> for crate::BtcPublicKey {
 }
 
 mod currency_id {
-    impl Copy for crate::CurrencyId {}
+    use super::*;
 
-    impl Into<primitives::CurrencyId> for crate::CurrencyId {
-        fn into(self) -> primitives::CurrencyId {
+    pub trait CurrencyIdExt {
+        fn inner(&self) -> primitives::TokenSymbol;
+    }
+    impl CurrencyIdExt for CurrencyId {
+        fn inner(&self) -> primitives::TokenSymbol {
             match self {
-                Self::DOT => primitives::CurrencyId::DOT,
-                Self::INTERBTC => primitives::CurrencyId::INTERBTC,
-                Self::INTR => primitives::CurrencyId::INTR,
-                Self::KBTC => primitives::CurrencyId::KBTC,
-                Self::KINT => primitives::CurrencyId::KINT,
-                Self::KSM => primitives::CurrencyId::KSM,
+                Token(x) => x.clone(),
             }
-        }
-    }
-
-    impl From<primitives::CurrencyId> for crate::CurrencyId {
-        fn from(value: primitives::CurrencyId) -> Self {
-            match value {
-                primitives::CurrencyId::DOT => Self::DOT,
-                primitives::CurrencyId::INTERBTC => Self::INTERBTC,
-                primitives::CurrencyId::INTR => Self::INTR,
-                primitives::CurrencyId::KBTC => Self::KBTC,
-                primitives::CurrencyId::KINT => Self::KINT,
-                primitives::CurrencyId::KSM => Self::KSM,
-            }
-        }
-    }
-
-    impl serde::Serialize for crate::CurrencyId {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: serde::Serializer,
-        {
-            let value: primitives::CurrencyId = (*self).into();
-            value.serialize(serializer)
         }
     }
 }
@@ -192,13 +171,13 @@ mod vault_id {
         }
 
         pub fn pretty_printed(&self) -> String {
-            let collateral_currency: RichCurrencyId = self.collateral_currency().into();
-            let wrapped_currency: RichCurrencyId = self.wrapped_currency().into();
+            let collateral_currency: CurrencyId = self.collateral_currency().into();
+            let wrapped_currency: CurrencyId = self.wrapped_currency().into();
             format!(
                 "{}[{}->{}]",
                 self.account_id.to_ss58check(),
-                collateral_currency.name(),
-                wrapped_currency.name()
+                collateral_currency.inner().name(),
+                wrapped_currency.inner().name()
             )
         }
     }

@@ -496,7 +496,7 @@ mod tests {
     };
     use runtime::{
         AccountId, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError, ErrorCode, InterBtcRichBlockHeader,
-        InterBtcVault, StatusCode,
+        InterBtcVault, StatusCode, Token, DOT, INTERBTC,
     };
     use sp_core::H160;
     use std::collections::BTreeSet;
@@ -651,7 +651,7 @@ mod tests {
     }
 
     fn dummy_vault_id() -> VaultId {
-        VaultId::new(Default::default(), CurrencyId::DOT, CurrencyId::INTERBTC)
+        VaultId::new(Default::default(), Token(DOT), Token(INTERBTC))
     }
 
     #[test]

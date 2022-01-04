@@ -328,8 +328,8 @@ mod tests {
     use async_trait::async_trait;
     use futures::channel::mpsc;
     use runtime::{
-        AccountId, BtcAddress, BtcPublicKey, CurrencyId, ErrorCode, InterBtcIssueRequest, InterBtcReplaceRequest,
-        IssueRequestStatus, RequestIssueEvent, StatusCode, VaultId,
+        AccountId, BtcAddress, BtcPublicKey, ErrorCode, InterBtcIssueRequest, InterBtcReplaceRequest,
+        IssueRequestStatus, RequestIssueEvent, StatusCode, Token, VaultId, DOT, INTERBTC,
     };
     use std::collections::BTreeSet;
 
@@ -408,7 +408,7 @@ mod tests {
             requester: Default::default(),
             btc_public_key: BtcPublicKey { 0: [0; 33] },
             status: IssueRequestStatus::Pending,
-            vault: VaultId::new(Default::default(), CurrencyId::DOT, runtime::CurrencyId::INTERBTC),
+            vault: VaultId::new(Default::default(), Token(DOT), runtime::Token(INTERBTC)),
         }
     }
 
