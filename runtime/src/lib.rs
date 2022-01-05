@@ -10,7 +10,8 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "testing-utils")]
+#[cfg(all(feature = "testing-utils", not(feature = "parachain-metadata")))]
+// #[cfg(feature = "testing-utils")]
 pub mod integration;
 
 use subxt::{
@@ -21,10 +22,13 @@ use subxt::{
 pub use error::Error;
 pub use primitives::CurrencyInfo;
 pub use retry::{notify_retry, RetryPolicy};
+#[cfg(all(feature = "testing-utils", not(feature = "parachain-metadata")))]
+pub use rpc::SudoPallet;
 pub use rpc::{
     BtcRelayPallet, CollateralBalancesPallet, FeePallet, InterBtcParachain, IssuePallet, OraclePallet, RedeemPallet,
     RefundPallet, RelayPallet, ReplacePallet, SecurityPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
 };
+
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
 pub use subxt::{
     sp_core::{crypto::Ss58Codec, sr25519::Pair},

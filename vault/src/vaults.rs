@@ -196,7 +196,7 @@ async fn filter_matching_vaults(addresses: Vec<BtcAddress>, vaults: &Vaults) -> 
         .await
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "parachain-metadata")))]
 mod tests {
     use super::*;
     use async_trait::async_trait;
@@ -240,9 +240,7 @@ mod tests {
             async fn get_block_hash(&self, height: u32) -> Result<H256Le, RuntimeError>;
             async fn get_block_header(&self, hash: H256Le) -> Result<InterBtcRichBlockHeader, RuntimeError>;
             async fn get_bitcoin_confirmations(&self) -> Result<u32, RuntimeError>;
-            async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), RuntimeError>;
             async fn get_parachain_confirmations(&self) -> Result<BlockNumber, RuntimeError>;
-            async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), RuntimeError>;
             async fn wait_for_block_in_relay(
                 &self,
                 block_hash: H256Le,

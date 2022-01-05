@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::error::Error;
 use chrono::{DateTime, Duration as ISO8601, Utc};
 use hex::FromHex;
 use jsonrpc_http_server::{
@@ -301,7 +301,7 @@ pub async fn start_http(
 
 #[cfg(test)]
 mod tests {
-    use crate::Error;
+    use crate::error::Error;
     use runtime::{CurrencyId, CurrencyIdExt, OracleKey, Token, VaultId, DOT, INTERBTC, KBTC, KSM};
     use std::{collections::HashMap, sync::Arc};
 

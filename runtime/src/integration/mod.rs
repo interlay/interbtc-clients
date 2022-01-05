@@ -1,9 +1,9 @@
-#![cfg(feature = "testing-utils")]
+#![cfg(all(feature = "testing-utils", not(feature = "parachain-metadata")))]
 
 mod bitcoin_simulator;
 
 use crate::{
-    rpc::{BtcRelayPallet, IssuePallet, OraclePallet, VaultRegistryPallet},
+    rpc::{IssuePallet, OraclePallet, SudoPallet, VaultRegistryPallet},
     CurrencyId, FixedU128, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey, VaultId,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Txid};

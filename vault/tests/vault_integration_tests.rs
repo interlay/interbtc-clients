@@ -1,4 +1,4 @@
-// #![cfg(feature = "integration")]
+#![cfg(all(feature = "testing-utils", not(feature = "parachain-metadata")))]
 
 use bitcoin::{stream_blocks, BitcoinCoreApi, TransactionExt};
 use frame_support::assert_ok;
@@ -9,7 +9,7 @@ use futures::{
 };
 use runtime::{
     integration::*, types::*, BtcAddress, BtcRelayPallet, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain,
-    InterBtcRedeemRequest, IssuePallet, RedeemPallet, RelayPallet, ReplacePallet, UtilFuncs, VaultId,
+    InterBtcRedeemRequest, IssuePallet, RedeemPallet, RelayPallet, ReplacePallet, SudoPallet, UtilFuncs, VaultId,
     VaultRegistryPallet,
 };
 use sp_core::{H160, H256};

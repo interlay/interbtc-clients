@@ -322,7 +322,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "parachain-metadata")))]
 mod tests {
     use super::*;
     use async_trait::async_trait;
@@ -354,7 +354,6 @@ mod tests {
             async fn get_issue_request(&self, issue_id: H256) -> Result<InterBtcIssueRequest, RuntimeError>;
             async fn get_vault_issue_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcIssueRequest)>, RuntimeError>;
             async fn get_issue_period(&self) -> Result<u32, RuntimeError>;
-            async fn set_issue_period(&self, period: u32) -> Result<(), RuntimeError>;
             async fn get_all_active_issues(&self) -> Result<Vec<(H256, InterBtcIssueRequest)>, RuntimeError>;
         }
 
@@ -369,7 +368,6 @@ mod tests {
             async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
-            async fn set_replace_period(&self, period: u32) -> Result<(), RuntimeError>;
             async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
             async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;
         }
