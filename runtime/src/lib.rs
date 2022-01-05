@@ -10,7 +10,8 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "testing-utils")]
+#[cfg(all(feature = "testing-utils", not(feature = "parachain-metadata")))]
+// #[cfg(feature = "testing-utils")]
 pub mod integration;
 
 use subxt::{
@@ -21,10 +22,13 @@ use subxt::{
 pub use error::Error;
 pub use primitives::CurrencyInfo;
 pub use retry::{notify_retry, RetryPolicy};
+#[cfg(all(feature = "testing-utils", not(feature = "parachain-metadata")))]
+pub use rpc::SudoPallet;
 pub use rpc::{
     BtcRelayPallet, CollateralBalancesPallet, FeePallet, InterBtcParachain, IssuePallet, OraclePallet, RedeemPallet,
     RefundPallet, RelayPallet, ReplacePallet, SecurityPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
 };
+
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
 pub use subxt::{
     sp_core::{crypto::Ss58Codec, sr25519::Pair},
@@ -35,8 +39,8 @@ pub use types::*;
 pub const TX_FEES: u128 = 2000000000;
 pub const MILLISECS_PER_BLOCK: u64 = 6000;
 
-pub const RELAY_CHAIN_CURRENCY: CurrencyId = CurrencyId::DOT;
-pub const RELAY_CHAIN_WRAPPED_CURRENCY: CurrencyId = CurrencyId::KBTC;
+pub const RELAY_CHAIN_CURRENCY: CurrencyId = Token(DOT);
+pub const RELAY_CHAIN_WRAPPED_CURRENCY: CurrencyId = Token(KBTC);
 
 pub const BTC_RELAY_MODULE: &str = "BTCRelay";
 pub const ISSUE_MODULE: &str = "Issue";
@@ -83,6 +87,9 @@ pub mod metadata {
 
     #[subxt(substitute_type = "bitcoin::address::Address")]
     use crate::BtcAddress;
+
+    #[subxt(substitute_type = "interbtc_primitives::CurrencyId")]
+    use crate::CurrencyId;
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -122,16 +129,16 @@ impl subxt::AccountData<InterBtcRuntime> for metadata::system::storage::Account 
 
 pub fn parse_collateral_currency(src: &str) -> Result<CurrencyId, Error> {
     match src.to_uppercase().as_str() {
-        id if id == RichCurrencyId::KSM.symbol() => Ok(CurrencyId::KSM),
-        id if id == RichCurrencyId::DOT.symbol() => Ok(CurrencyId::DOT),
+        id if id == KSM.symbol() => Ok(Token(KSM)),
+        id if id == DOT.symbol() => Ok(Token(DOT)),
         _ => Err(Error::InvalidCurrency),
     }
 }
 
 pub fn parse_wrapped_currency(src: &str) -> Result<CurrencyId, Error> {
     match src.to_uppercase().as_str() {
-        id if id == RichCurrencyId::KBTC.symbol() => Ok(CurrencyId::KBTC),
-        id if id == RichCurrencyId::INTERBTC.symbol() => Ok(CurrencyId::INTERBTC),
+        id if id == KBTC.symbol() => Ok(Token(KBTC)),
+        id if id == INTERBTC.symbol() => Ok(Token(INTERBTC)),
         _ => Err(Error::InvalidCurrency),
     }
 }

@@ -1,4 +1,4 @@
-#![cfg(feature = "testing-utils")]
+#![cfg(all(feature = "testing-utils", not(feature = "parachain-metadata")))]
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]

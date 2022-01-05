@@ -1,4 +1,4 @@
-// #![cfg(feature = "integration")]
+#![cfg(all(feature = "testing-utils", not(feature = "parachain-metadata")))]
 
 use bitcoin::{stream_blocks, BitcoinCoreApi, TransactionExt};
 use frame_support::assert_ok;
@@ -9,7 +9,7 @@ use futures::{
 };
 use runtime::{
     integration::*, types::*, BtcAddress, BtcRelayPallet, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain,
-    InterBtcRedeemRequest, IssuePallet, RedeemPallet, RelayPallet, ReplacePallet, UtilFuncs, VaultId,
+    InterBtcRedeemRequest, IssuePallet, RedeemPallet, RelayPallet, ReplacePallet, SudoPallet, UtilFuncs, VaultId,
     VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
@@ -19,8 +19,8 @@ use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager};
 
 const TIMEOUT: Duration = Duration::from_secs(90);
 
-const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
-const DEFAULT_WRAPPED_CURRENCY: CurrencyId = CurrencyId::INTERBTC;
+const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
+const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(INTERBTC);
 
 async fn test_with<F, R>(execute: impl FnOnce(SubxtClient) -> F) -> R
 where

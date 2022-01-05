@@ -3,8 +3,9 @@ use crate::{
     metadata, notify_retry,
     types::*,
     AccountId, CurrencyId, Error, InterBtcRuntime, InterBtcSigner, RetryPolicy, RichH256Le, SubxtError,
-    BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CONFIRMATIONS,
 };
+#[cfg(not(feature = "parachain-metadata"))]
+use crate::{BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CONFIRMATIONS};
 use async_trait::async_trait;
 use codec::Encode;
 use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt};
@@ -17,7 +18,7 @@ use subxt::{
 };
 use tokio::{sync::RwLock, time::sleep};
 
-const DEFAULT_COLLATERAL_CURRENCY: CurrencyId = CurrencyId::DOT;
+const DEFAULT_COLLATERAL_CURRENCY: CurrencyId = Token(DOT);
 
 #[derive(Clone)]
 pub struct InterBtcParachain {
@@ -237,20 +238,6 @@ impl InterBtcParachain {
         Ok(())
     }
 
-    pub async fn sudo(&self, call: EncodedCall) -> Result<(), Error> {
-        let call = &call;
-        self.with_unique_signer(|signer| async move {
-            self.api
-                .tx()
-                .sudo()
-                .sudo(call.clone())
-                .sign_and_submit_then_watch(&signer)
-                .await
-        })
-        .await?;
-        Ok(())
-    }
-
     async fn batch(&self, calls: Vec<EncodedCall>) -> Result<(), Error> {
         let encoded_calls = &calls;
         self.with_unique_signer(|signer| async move {
@@ -265,24 +252,11 @@ impl InterBtcParachain {
         Ok(())
     }
 
-    async fn set_storage<V: Encode>(&self, module: &str, key: &str, value: V) -> Result<(), Error> {
-        let module = subxt::sp_core::twox_128(module.as_bytes());
-        let item = subxt::sp_core::twox_128(key.as_bytes());
-
-        Ok(self
-            .sudo(EncodedCall::System(
-                metadata::runtime_types::frame_system::pallet::Call::set_storage {
-                    items: vec![([module, item].concat(), value.encode())],
-                },
-            ))
-            .await?)
-    }
-
     #[cfg(test)]
     pub async fn get_outdated_nonce_error(&self) -> Error {
         use sp_arithmetic::FixedPointNumber;
 
-        let key = OracleKey::ExchangeRate(CurrencyId::DOT);
+        let key = OracleKey::ExchangeRate(Token(DOT));
         let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
 
         let mut signer = self.signer.write().await;
@@ -466,10 +440,6 @@ pub trait ReplacePallet {
     /// request is created and required completion time by a vault
     async fn get_replace_period(&self) -> Result<u32, Error>;
 
-    /// Set the time difference in number of blocks between when a replace
-    /// request is created and required completion time by a vault
-    async fn set_replace_period(&self, period: u32) -> Result<(), Error>;
-
     /// Get a replace request from storage
     async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, Error>;
 
@@ -608,14 +578,6 @@ impl ReplacePallet for InterBtcParachain {
         Ok(self.api.storage().replace().replace_period(head).await?)
     }
 
-    async fn set_replace_period(&self, period: u32) -> Result<(), Error> {
-        Ok(self
-            .sudo(EncodedCall::Replace(
-                metadata::runtime_types::replace::pallet::Call::set_replace_period { period },
-            ))
-            .await?)
-    }
-
     async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, Error> {
         let head = self.get_latest_block_hash().await?;
         Ok(self
@@ -652,8 +614,6 @@ pub trait OraclePallet {
     async fn get_exchange_rate(&self) -> Result<FixedU128, Error>;
 
     async fn feed_values(&self, values: Vec<(OracleKey, FixedU128)>) -> Result<(), Error>;
-
-    async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error>;
 
     async fn set_bitcoin_fees(&self, value: FixedU128) -> Result<(), Error>;
 
@@ -697,22 +657,6 @@ impl OraclePallet for InterBtcParachain {
         })
         .await?;
         Ok(())
-    }
-
-    /// Adds a new authorized oracle with the given name and the signer's AccountId
-    ///
-    /// # Arguments
-    /// * `account_id` - The Account ID of the new oracle
-    /// * `name` - The name of the new oracle
-    async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error> {
-        Ok(self
-            .sudo(EncodedCall::Oracle(
-                metadata::runtime_types::oracle::pallet::Call::insert_authorized_oracle {
-                    account_id,
-                    name: name.into_bytes(),
-                },
-            ))
-            .await?)
     }
 
     /// Sets the estimated Satoshis per bytes required to get a Bitcoin transaction included in
@@ -1000,8 +944,6 @@ pub trait IssuePallet {
 
     async fn get_issue_period(&self) -> Result<u32, Error>;
 
-    async fn set_issue_period(&self, period: u32) -> Result<(), Error>;
-
     async fn get_all_active_issues(&self) -> Result<Vec<(H256, InterBtcIssueRequest)>, Error>;
 }
 
@@ -1093,14 +1035,6 @@ impl IssuePallet for InterBtcParachain {
         Ok(self.api.storage().issue().issue_period(head).await?)
     }
 
-    async fn set_issue_period(&self, period: u32) -> Result<(), Error> {
-        Ok(self
-            .sudo(EncodedCall::Issue(
-                metadata::runtime_types::issue::pallet::Call::set_issue_period { period },
-            ))
-            .await?)
-    }
-
     async fn get_all_active_issues(&self) -> Result<Vec<(H256, InterBtcIssueRequest)>, Error> {
         let current_height = self.get_current_chain_height().await?;
         let issue_period = self.get_issue_period().await?;
@@ -1140,8 +1074,6 @@ pub trait RedeemPallet {
     ) -> Result<Vec<(H256, InterBtcRedeemRequest)>, Error>;
 
     async fn get_redeem_period(&self) -> Result<BlockNumber, Error>;
-
-    async fn set_redeem_period(&self, period: u32) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -1227,14 +1159,6 @@ impl RedeemPallet for InterBtcParachain {
         let head = self.get_latest_block_hash().await?;
         Ok(self.api.storage().redeem().redeem_period(head).await?)
     }
-
-    async fn set_redeem_period(&self, period: BlockNumber) -> Result<(), Error> {
-        Ok(self
-            .sudo(EncodedCall::Redeem(
-                metadata::runtime_types::redeem::pallet::Call::set_redeem_period { period },
-            ))
-            .await?)
-    }
 }
 
 #[async_trait]
@@ -1315,11 +1239,7 @@ pub trait BtcRelayPallet {
 
     async fn get_bitcoin_confirmations(&self) -> Result<u32, Error>;
 
-    async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), Error>;
-
     async fn get_parachain_confirmations(&self) -> Result<BlockNumber, Error>;
-
-    async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), Error>;
 
     async fn wait_for_block_in_relay(
         &self,
@@ -1373,12 +1293,6 @@ impl BtcRelayPallet for InterBtcParachain {
             .await?)
     }
 
-    /// Set the global security parameter k for stable Bitcoin transactions
-    async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), Error> {
-        self.set_storage(BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS, value)
-            .await
-    }
-
     /// Get the global security parameter for stable parachain confirmations
     async fn get_parachain_confirmations(&self) -> Result<BlockNumber, Error> {
         let head = self.get_latest_block_hash().await?;
@@ -1388,12 +1302,6 @@ impl BtcRelayPallet for InterBtcParachain {
             .btc_relay()
             .stable_parachain_confirmations(head)
             .await?)
-    }
-
-    /// Set the global security parameter for stable parachain confirmations
-    async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), Error> {
-        self.set_storage(BTC_RELAY_MODULE, STABLE_PARACHAIN_CONFIRMATIONS, value)
-            .await
     }
 
     /// Wait until Bitcoin block is submitted to the relay
@@ -1706,5 +1614,100 @@ impl FeePallet for InterBtcParachain {
     async fn get_replace_griefing_collateral(&self) -> Result<FixedU128, Error> {
         let head = self.get_latest_block_hash().await?;
         Ok(self.api.storage().fee().replace_griefing_collateral(head).await?)
+    }
+}
+
+#[async_trait]
+pub trait SudoPallet {
+    async fn sudo(&self, call: EncodedCall) -> Result<(), Error>;
+    async fn set_storage<V: Encode + Send + Sync>(&self, module: &str, key: &str, value: V) -> Result<(), Error>;
+    async fn set_redeem_period(&self, period: BlockNumber) -> Result<(), Error>;
+    async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), Error>;
+    async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), Error>;
+    async fn set_issue_period(&self, period: u32) -> Result<(), Error>;
+    async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error>;
+    async fn set_replace_period(&self, period: u32) -> Result<(), Error>;
+}
+
+#[cfg(not(feature = "parachain-metadata"))]
+#[async_trait]
+impl SudoPallet for InterBtcParachain {
+    async fn sudo(&self, call: EncodedCall) -> Result<(), Error> {
+        let call = &call;
+        self.with_unique_signer(|signer| async move {
+            self.api
+                .tx()
+                .sudo()
+                .sudo(call.clone())
+                .sign_and_submit_then_watch(&signer)
+                .await
+        })
+        .await?;
+        Ok(())
+    }
+
+    async fn set_storage<V: Encode + Send + Sync>(&self, module: &str, key: &str, value: V) -> Result<(), Error> {
+        let module = subxt::sp_core::twox_128(module.as_bytes());
+        let item = subxt::sp_core::twox_128(key.as_bytes());
+
+        Ok(self
+            .sudo(EncodedCall::System(
+                metadata::runtime_types::frame_system::pallet::Call::set_storage {
+                    items: vec![([module, item].concat(), value.encode())],
+                },
+            ))
+            .await?)
+    }
+
+    async fn set_redeem_period(&self, period: BlockNumber) -> Result<(), Error> {
+        Ok(self
+            .sudo(EncodedCall::Redeem(
+                metadata::runtime_types::redeem::pallet::Call::set_redeem_period { period },
+            ))
+            .await?)
+    }
+
+    /// Set the global security parameter for stable parachain confirmations
+    async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), Error> {
+        self.set_storage(BTC_RELAY_MODULE, STABLE_PARACHAIN_CONFIRMATIONS, value)
+            .await
+    }
+
+    /// Set the global security parameter k for stable Bitcoin transactions
+    async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), Error> {
+        self.set_storage(BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS, value)
+            .await
+    }
+
+    async fn set_issue_period(&self, period: u32) -> Result<(), Error> {
+        Ok(self
+            .sudo(EncodedCall::Issue(
+                metadata::runtime_types::issue::pallet::Call::set_issue_period { period },
+            ))
+            .await?)
+    }
+
+    /// Adds a new authorized oracle with the given name and the signer's AccountId
+    ///
+    /// # Arguments
+    /// * `account_id` - The Account ID of the new oracle
+    /// * `name` - The name of the new oracle
+    async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error> {
+        Ok(self
+            .sudo(EncodedCall::Oracle(
+                metadata::runtime_types::oracle::pallet::Call::insert_authorized_oracle {
+                    account_id,
+                    name: name.into_bytes(),
+                },
+            ))
+            .await?)
+    }
+
+    async fn set_replace_period(&self, period: u32) -> Result<(), Error> {
+        Ok(self
+            .sudo(EncodedCall::Replace(
+                metadata::runtime_types::replace::pallet::Call::set_replace_period { period },
+            ))
+            .await?)
     }
 }

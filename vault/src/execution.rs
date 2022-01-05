@@ -486,7 +486,7 @@ fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "parachain-metadata")))]
 mod tests {
     use super::*;
     use async_trait::async_trait;
@@ -496,7 +496,7 @@ mod tests {
     };
     use runtime::{
         AccountId, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError, ErrorCode, InterBtcRichBlockHeader,
-        InterBtcVault, StatusCode,
+        InterBtcVault, StatusCode, Token, DOT, INTERBTC,
     };
     use sp_core::H160;
     use std::collections::BTreeSet;
@@ -546,7 +546,6 @@ mod tests {
             async fn get_redeem_request(&self, redeem_id: H256) -> Result<InterBtcRedeemRequest, RuntimeError>;
             async fn get_vault_redeem_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcRedeemRequest)>, RuntimeError>;
             async fn get_redeem_period(&self) -> Result<BlockNumber, RuntimeError>;
-            async fn set_redeem_period(&self, period: u32) -> Result<(), RuntimeError>;
         }
 
         #[async_trait]
@@ -559,7 +558,6 @@ mod tests {
             async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
-            async fn set_replace_period(&self, period: u32) -> Result<(), RuntimeError>;
             async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
             async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;
         }
@@ -579,9 +577,7 @@ mod tests {
             async fn get_block_hash(&self, height: u32) -> Result<H256Le, RuntimeError>;
             async fn get_block_header(&self, hash: H256Le) -> Result<InterBtcRichBlockHeader, RuntimeError>;
             async fn get_bitcoin_confirmations(&self) -> Result<u32, RuntimeError>;
-            async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), RuntimeError>;
             async fn get_parachain_confirmations(&self) -> Result<BlockNumber, RuntimeError>;
-            async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), RuntimeError>;
             async fn wait_for_block_in_relay(&self, block_hash: H256Le, btc_confirmations: Option<BlockNumber>) -> Result<(), RuntimeError>;
             async fn verify_block_header_inclusion(&self, block_hash: H256Le) -> Result<(), RuntimeError>;
         }
@@ -651,7 +647,7 @@ mod tests {
     }
 
     fn dummy_vault_id() -> VaultId {
-        VaultId::new(Default::default(), CurrencyId::DOT, CurrencyId::INTERBTC)
+        VaultId::new(Default::default(), Token(DOT), Token(INTERBTC))
     }
 
     #[test]

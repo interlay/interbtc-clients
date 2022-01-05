@@ -196,7 +196,7 @@ pub async fn listen_for_execute_replace(
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "parachain-metadata")))]
 mod tests {
     use super::*;
     use async_trait::async_trait;
@@ -206,7 +206,7 @@ mod tests {
     };
     use runtime::{
         AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcReplaceRequest,
-        InterBtcVault, H256,
+        InterBtcVault, Token, DOT, H256, INTERBTC,
     };
 
     macro_rules! assert_err {
@@ -314,7 +314,6 @@ mod tests {
         async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
         async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
         async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
-        async fn set_replace_period(&self, period: u32) -> Result<(), RuntimeError>;
         async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
         async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;
     }
@@ -337,7 +336,7 @@ mod tests {
     }
 
     fn dummy_vault_id() -> VaultId {
-        VaultId::new(Default::default(), CurrencyId::DOT, CurrencyId::INTERBTC)
+        VaultId::new(Default::default(), Token(DOT), Token(INTERBTC))
     }
 
     #[tokio::test]

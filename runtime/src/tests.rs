@@ -1,10 +1,11 @@
-#![cfg(test)]
+#![cfg(all(test, not(feature = "parachain-metadata")))]
 
-const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
+const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
 
 use super::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, FixedPointNumber, FixedU128,
-    OraclePallet, RawBlockHeader, RelayPallet, ReplacePallet, SecurityPallet, StatusCode, VaultRegistryPallet,
+    OraclePallet, RawBlockHeader, RelayPallet, ReplacePallet, SecurityPallet, StatusCode, Token, VaultRegistryPallet,
+    DOT, INTERBTC,
 };
 use crate::{integration::*, FeedValuesEvent, OracleKey, VaultId, H160, U256};
 use module_bitcoin::{formatter::TryFormattable, types::BlockBuilder};
@@ -43,7 +44,7 @@ async fn test_getters() {
 
     tokio::join!(
         async {
-            assert_eq!(parachain_rpc.get_free_balance(CurrencyId::DOT).await.unwrap(), 1 << 60);
+            assert_eq!(parachain_rpc.get_free_balance(Token(DOT)).await.unwrap(), 1 << 60);
         },
         async {
             assert_eq!(parachain_rpc.get_parachain_status().await.unwrap(), StatusCode::Error);
@@ -61,7 +62,7 @@ async fn test_getters() {
 async fn test_is_transaction_invalid() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
-    let vault_id = VaultId::new(AccountKeyring::Alice.into(), CurrencyId::DOT, CurrencyId::INTERBTC);
+    let vault_id = VaultId::new(AccountKeyring::Alice.into(), Token(DOT), Token(INTERBTC));
     let err = parachain_rpc.is_transaction_invalid(&vault_id, &[]).await;
 
     parachain_rpc
@@ -123,7 +124,7 @@ async fn test_register_vault() {
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
     set_exchange_rate(client.clone()).await;
 
-    let vault_id = VaultId::new(AccountKeyring::Alice.into(), CurrencyId::DOT, CurrencyId::INTERBTC);
+    let vault_id = VaultId::new(AccountKeyring::Alice.into(), Token(DOT), Token(INTERBTC));
 
     parachain_rpc
         .register_vault(&vault_id, 100, dummy_public_key())

@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::error::Error;
 use chrono::{DateTime, Duration as ISO8601, Utc};
 use hex::FromHex;
 use jsonrpc_http_server::{
@@ -8,13 +8,12 @@ use jsonrpc_http_server::{
 use kv::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    AccountId, CollateralBalancesPallet, CurrencyId, CurrencyInfo, Error as RuntimeError, InterBtcParachain,
-    RichCurrencyId, VaultRegistryPallet,
+    AccountId, CollateralBalancesPallet, CurrencyId, CurrencyIdExt, CurrencyInfo, Error as RuntimeError,
+    InterBtcParachain, VaultRegistryPallet,
 };
 use serde::{Deserialize, Deserializer};
 use std::{collections::HashMap, net::SocketAddr, time::Duration};
 use tokio::time::timeout;
-
 const HEALTH_DURATION: Duration = Duration::from_millis(5000);
 
 const KV_STORE_NAME: &str = "store";
@@ -199,8 +198,8 @@ async fn atomic_faucet_funding(
     currency_id: CurrencyId,
     allowances: HashMap<FundingRequestAccountType, u128>,
 ) -> Result<(), Error> {
-    let rich_currency_id: RichCurrencyId = currency_id.into();
-    let account_str = format!("{}-{}", account_id, rich_currency_id.symbol());
+    let rich_currency_id: CurrencyId = currency_id.into();
+    let account_str = format!("{}-{}", account_id, rich_currency_id.inner().symbol());
     let last_request_json = kv.get(account_str.clone())?;
     let account_type = get_account_type(parachain_rpc, account_id.clone()).await?;
     ensure_funding_allowed(
@@ -215,7 +214,7 @@ async fn atomic_faucet_funding(
     let amount = allowances
         .get(&account_type)
         .ok_or(Error::NoFaucetAllowance)?
-        .checked_mul(rich_currency_id.one())
+        .checked_mul(rich_currency_id.inner().one())
         .ok_or(Error::MathError)?;
 
     log::info!(
@@ -302,12 +301,12 @@ pub async fn start_http(
 
 #[cfg(test)]
 mod tests {
-    use crate::Error;
-    use runtime::{CurrencyId, OracleKey, RichCurrencyId, VaultId};
+    use crate::error::Error;
+    use runtime::{CurrencyId, CurrencyIdExt, OracleKey, Token, VaultId, DOT, INTERBTC, KBTC, KSM};
     use std::{collections::HashMap, sync::Arc};
 
-    const DEFAULT_TESTING_CURRENCY: CurrencyId = CurrencyId::DOT;
-    const DEFAULT_WRAPPED_CURRENCY: CurrencyId = CurrencyId::INTERBTC;
+    const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
+    const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(INTERBTC);
 
     use super::{
         fund_account, open_kv_store, CollateralBalancesPallet, FundAccountJsonRpcRequest, FundingRequestAccountType,
@@ -341,7 +340,7 @@ mod tests {
         let oracle_provider = setup_provider(client, AccountKeyring::Bob).await;
         let key = OracleKey::ExchangeRate(DEFAULT_TESTING_CURRENCY);
         let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
-        let ksm_key = OracleKey::ExchangeRate(CurrencyId::KSM);
+        let ksm_key = OracleKey::ExchangeRate(Token(KBTC));
 
         oracle_provider
             .feed_values(vec![(key, exchange_rate), (ksm_key, exchange_rate)])
@@ -361,8 +360,8 @@ mod tests {
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
         allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        let testing_currency: RichCurrencyId = DEFAULT_TESTING_CURRENCY.into();
-        let expected_amount_planck: u128 = user_allowance_dot * testing_currency.one();
+        let testing_currency: CurrencyId = DEFAULT_TESTING_CURRENCY.into();
+        let expected_amount_planck: u128 = user_allowance_dot * testing_currency.inner().one();
 
         let store = Store::new(Config::new(tmp_dir.path().join("kv1"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
@@ -439,8 +438,8 @@ mod tests {
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
         allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        let testing_currency: RichCurrencyId = DEFAULT_TESTING_CURRENCY.into();
-        let expected_amount_planck: u128 = vault_allowance_dot * testing_currency.one();
+        let testing_currency: CurrencyId = DEFAULT_TESTING_CURRENCY.into();
+        let expected_amount_planck: u128 = vault_allowance_dot * testing_currency.inner().one();
 
         let store = Store::new(Config::new(tmp_dir.path().join("kv3"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
@@ -509,8 +508,8 @@ mod tests {
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
         allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        let testing_currency: RichCurrencyId = DEFAULT_TESTING_CURRENCY.into();
-        let expected_amount_planck: u128 = user_allowance_dot * testing_currency.one();
+        let testing_currency: CurrencyId = DEFAULT_TESTING_CURRENCY.into();
+        let expected_amount_planck: u128 = user_allowance_dot * testing_currency.inner().one();
 
         let store = Store::new(Config::new(tmp_dir.path().join("kv3"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
@@ -556,7 +555,7 @@ mod tests {
         let kv = open_kv_store(store.clone()).unwrap();
         kv.clear().unwrap();
 
-        for currency_id in [CurrencyId::DOT, CurrencyId::KSM] {
+        for currency_id in [Token(DOT), Token(KSM)] {
             let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
             let bob_vault_id = VaultId::new(bob_account_id.clone(), currency_id, DEFAULT_WRAPPED_CURRENCY);
             let user_allowance_dot: u128 = 1;
@@ -567,8 +566,8 @@ mod tests {
             let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
             allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
             allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-            let rich_currency_id: RichCurrencyId = currency_id.into();
-            let expected_amount_planck: u128 = vault_allowance_dot * rich_currency_id.one();
+            let rich_currency_id: CurrencyId = currency_id.into();
+            let expected_amount_planck: u128 = vault_allowance_dot * rich_currency_id.inner().one();
 
             let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
             bob_provider
@@ -629,8 +628,8 @@ mod tests {
         let mut allowances: HashMap<FundingRequestAccountType, u128> = HashMap::new();
         allowances.insert(FundingRequestAccountType::User, user_allowance_dot);
         allowances.insert(FundingRequestAccountType::Vault, vault_allowance_dot);
-        let testing_currency: RichCurrencyId = DEFAULT_TESTING_CURRENCY.into();
-        let expected_amount_planck: u128 = vault_allowance_dot * testing_currency.one();
+        let testing_currency: CurrencyId = DEFAULT_TESTING_CURRENCY.into();
+        let expected_amount_planck: u128 = vault_allowance_dot * testing_currency.inner().one();
 
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         bob_provider
