@@ -61,8 +61,15 @@ build-clients:
     extends:
         - .rust-base-job
     script:
-        - cargo check --workspace --release --target $PLATFORM
-        - cargo build --workspace --release --target $PLATFORM
+        - |
+            cargo check --workspace --release --target $PLATFORM --features parachain-metadata
+            cargo build --workspace --release --target $PLATFORM --features parachain-metadata
+            cp target/$PLATFORM/release/oracle target/$PLATFORM/release/oracle-parachain
+            cp target/$PLATFORM/release/vault target/$PLATFORM/release/vault-parachain
+        - |
+            cargo check --workspace --release --target $PLATFORM
+            cargo build --workspace --release --target $PLATFORM
+
         - ls -l target/$PLATFORM/release/
     variables:
         DOCKER_REGISTRY_IMAGE: interlayhq/interbtc-clients
@@ -76,6 +83,8 @@ build-clients:
         name: "${CI_COMMIT_REF_SLUG}"
         expire_in: 30 days
         paths:
+            - target/$PLATFORM/release/oracle-parachain${FILE_EXTENSION}
+            - target/$PLATFORM/release/vault-parachain${FILE_EXTENSION}
             - target/$PLATFORM/release/oracle${FILE_EXTENSION}
             - target/$PLATFORM/release/vault${FILE_EXTENSION}
             - target/$PLATFORM/release/faucet${FILE_EXTENSION}
@@ -84,12 +93,7 @@ build-docker-images:
     stage: deploy
     parallel:
         matrix:
-            - ARTIFACT_BIN_PATH:
-                  [
-                      "oracle",
-                      "vault",
-                      "faucet",
-                  ]
+            - ARTIFACT_BIN_PATH: ["oracle", "vault", "oracle-parachain", "vault-parachain", "faucet"]
     image:
         name: gcr.io/kaniko-project/executor:v1.7.0-debug
         entrypoint: [""]
