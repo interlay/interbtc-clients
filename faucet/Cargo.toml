@@ -5,6 +5,11 @@ authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 description = "Collateral faucet for the BTC Parachain."
 
+[features]
+standalone-metadata = ["runtime/standalone-metadata"]
+parachain-metadata-kintsugi = ["runtime/parachain-metadata-kintsugi"]
+parachain-metadata-testnet = ["runtime/parachain-metadata-testnet"]
+
 [dependencies]
 log = "0.4.6"
 env_logger = "0.6.1"

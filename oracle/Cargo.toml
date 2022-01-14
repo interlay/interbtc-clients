@@ -5,6 +5,11 @@ authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 description = "Liveness service to update the exchange rate periodically."
 
+[features]
+standalone-metadata = ["runtime/standalone-metadata"]
+parachain-metadata-kintsugi = ["runtime/parachain-metadata-kintsugi"]
+parachain-metadata-testnet = ["runtime/parachain-metadata-testnet"]
+
 [dependencies]
 log = "0.4.0"
 env_logger = "0.7.1"
@@ -18,9 +23,3 @@ git-version = "0.3.4"
 
 # Workspace dependencies
 runtime = { path = "../runtime" }
-
-
-[features]
-standalone-metadata = ["runtime/standalone-metadata"]
-parachain-metadata-kintsugi = ["runtime/parachain-metadata-kintsugi"]
-parachain-metadata-testnet = ["runtime/parachain-metadata-testnet"]
