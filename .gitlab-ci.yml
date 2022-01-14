@@ -37,6 +37,7 @@ test-clients:
         BITCOIN_RPC_URL: "http://localhost:18443"
         BITCOIN_RPC_USER: "rpcuser"
         BITCOIN_RPC_PASS: "rpcpassword"
+        METADATA: standalone-metadata
     services:
         - name: ruimarinho/bitcoin-core:0.21-alpine
           alias: bitcoind
@@ -47,10 +48,10 @@ test-clients:
               - -rpcpassword=rpcpassword
     script:
         - cargo fmt -- --check
-        - cargo check --workspace --release --features standalone-metadata
-        - cargo clippy --workspace --release --features standalone-metadata
-        - cargo test --workspace --release --features standalone-metadata
-        - cargo test --manifest-path bitcoin/Cargo.toml --test "*" --features uses-bitcoind standalone-metadata -- --test-threads=1
+        - cargo check --workspace --release --features $METADATA
+        - cargo clippy --workspace --release --features $METADATA
+        - cargo test --workspace --release --features $METADATA
+        - cargo test --manifest-path bitcoin/Cargo.toml --test "*" --features $METADATA uses-bitcoind -- --test-threads=1
     cache:
         key: cargo
         paths:
@@ -62,14 +63,11 @@ build-clients:
         - .rust-base-job
     script:
         - |
-            cargo check --workspace --release --target $PLATFORM --features parachain-metadata-testnet
-            cargo build --workspace --release --target $PLATFORM --features parachain-metadata-testnet
-            cp target/$PLATFORM/release/oracle target/$PLATFORM/release/oracle-parachain-testnet
-            cp target/$PLATFORM/release/vault target/$PLATFORM/release/vault-parachain-testnet
-            cp target/$PLATFORM/release/faucet target/$PLATFORM/release/faucet-parachain-testnet
-        - |
-            cargo check --workspace --release --target $PLATFORM --features standalone-metadata
-            cargo build --workspace --release --target $PLATFORM --features standalone-metadata
+            cargo check --workspace --release --target $PLATFORM --features $METADATA
+            cargo build --workspace --release --target $PLATFORM --features $METADATA
+            cp target/$PLATFORM/release/oracle target/$PLATFORM/release/oracle-$METADATA
+            cp target/$PLATFORM/release/vault target/$PLATFORM/release/vault-$METADATA
+            cp target/$PLATFORM/release/faucet target/$PLATFORM/release/faucet-$METADATA
 
         - ls -l target/$PLATFORM/release/
     variables:
@@ -78,24 +76,29 @@ build-clients:
         matrix:
             - PLATFORM: x86_64-unknown-linux-gnu
               FILE_EXTENSION: [""]
+              METADATA:
+                - parachain-metadata-kintsugi
+                - parachain-metadata-testnet
+                - standalone-metadata
 #            - PLATFORM: x86_64-pc-windows-gnu
 #              FILE_EXTENSION: [".exe"]
     artifacts:
         name: "${CI_COMMIT_REF_SLUG}"
         expire_in: 30 days
         paths:
-            - target/$PLATFORM/release/oracle-testnet-runtime${FILE_EXTENSION}
-            - target/$PLATFORM/release/vault-testnet-runtime${FILE_EXTENSION}
-            - target/$PLATFORM/release/faucet-testnet-runtime${FILE_EXTENSION}
-            - target/$PLATFORM/release/oracle${FILE_EXTENSION}
-            - target/$PLATFORM/release/vault${FILE_EXTENSION}
-            - target/$PLATFORM/release/faucet${FILE_EXTENSION}
+            - target/$PLATFORM/release/oracle-$METADATA${FILE_EXTENSION}
+            - target/$PLATFORM/release/vault-$METADATA${FILE_EXTENSION}
+            - target/$PLATFORM/release/faucet-$METADATA${FILE_EXTENSION}
 
 build-docker-images:
     stage: deploy
     parallel:
         matrix:
-            - ARTIFACT_BIN_PATH: ["oracle", "vault", "oracle-parachain", "vault-parachain", "faucet"]
+            - ARTIFACT_BIN: ["oracle", "vault", "faucet"]
+              METADATA:
+                - parachain-metadata-kintsugi
+                - parachain-metadata-testnet
+                - standalone-metadata
     image:
         name: gcr.io/kaniko-project/executor:v1.7.0-debug
         entrypoint: [""]
@@ -105,12 +108,12 @@ build-docker-images:
         - echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"auth\":\"$DOCKER_HUB_TOKEN\"}}}" > /kaniko/.docker/config.json
         - |
             /kaniko/executor --force \
-                --build-arg BINARY=${ARTIFACT_BIN_PATH} \
+                --build-arg BINARY=${ARTIFACT_BIN}-${METADATA} \
                 --build-arg PROFILE="x86_64-unknown-linux-gnu/release" \
                 --context ${CI_PROJECT_DIR} \
                 --dockerfile ${CI_PROJECT_DIR}/.deploy/Dockerfile \
-                --destination ${DOCKER_REGISTRY_IMAGE}:${ARTIFACT_BIN_PATH}-${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}-$(date +%s) \
-                --destination ${DOCKER_REGISTRY_IMAGE}:${ARTIFACT_BIN_PATH}-${CI_COMMIT_REF_SLUG}
+                --destination ${DOCKER_REGISTRY_IMAGE}:${ARTIFACT_BIN}-${METADATA}-${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}-$(date +%s) \
+                --destination ${DOCKER_REGISTRY_IMAGE}:${ARTIFACT_BIN}-${METADATA}-${CI_COMMIT_REF_SLUG}
     <<: *only_refs
 
 release-github:
