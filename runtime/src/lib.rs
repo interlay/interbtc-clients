@@ -10,10 +10,11 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
-#[cfg(all(feature = "testing-utils", not(feature = "parachain-metadata")))]
-// #[cfg(feature = "testing-utils")]
+#[cfg(all(feature = "testing-utils", feature = "standalone-metadata"))]
 pub mod integration;
 
+use codec::{Decode, Encode};
+use sp_std::marker::PhantomData;
 use subxt::{
     sp_runtime::{generic::Header, traits::BlakeTwo256, MultiSignature, OpaqueExtrinsic},
     subxt, Config, ExtrinsicExtraData, StorageEntry,
@@ -22,7 +23,10 @@ use subxt::{
 pub use error::Error;
 pub use primitives::CurrencyInfo;
 pub use retry::{notify_retry, RetryPolicy};
-#[cfg(all(feature = "testing-utils", not(feature = "parachain-metadata")))]
+#[cfg(all(
+    feature = "testing-utils",
+    any(feature = "standalone-metadata", feature = "parachain-metadata-testnet")
+))]
 pub use rpc::SudoPallet;
 pub use rpc::{
     BtcRelayPallet, CollateralBalancesPallet, FeePallet, InterBtcParachain, IssuePallet, OraclePallet, RedeemPallet,
@@ -53,14 +57,21 @@ pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
 
 // TODO: possibly substitute CurrencyId, VaultId, H256Le
 #[cfg_attr(
-    feature = "parachain-metadata",
+    feature = "parachain-metadata-kintsugi",
     subxt(
-        runtime_metadata_path = "metadata-parachain.scale",
+        runtime_metadata_path = "metadata-parachain-kintsugi.scale",
         generated_type_derives = "Debug, Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]
 #[cfg_attr(
-    not(feature = "parachain-metadata"),
+    feature = "parachain-metadata-testnet",
+    subxt(
+        runtime_metadata_path = "metadata-parachain-testnet.scale",
+        generated_type_derives = "Debug, Eq, PartialEq, Ord, PartialOrd, Clone"
+    )
+)]
+#[cfg_attr(
+    feature = "standalone-metadata",
     subxt(
         runtime_metadata_path = "metadata-standalone.scale",
         generated_type_derives = "Debug, Eq, PartialEq, Ord, PartialOrd, Clone"
@@ -90,6 +101,15 @@ pub mod metadata {
 
     #[subxt(substitute_type = "interbtc_primitives::CurrencyId")]
     use crate::CurrencyId;
+
+    #[subxt(substitute_type = "frame_support::traits::misc::WrapperKeepOpaque")]
+    use crate::WrapperKeepOpaque;
+}
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Default, Clone, Decode, Encode)]
+pub struct WrapperKeepOpaque<T> {
+    data: Vec<u8>,
+    _phantom: PhantomData<T>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

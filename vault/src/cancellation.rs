@@ -322,7 +322,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
     }
 }
 
-#[cfg(all(test, not(feature = "parachain-metadata")))]
+#[cfg(all(test, feature = "standalone-metadata"))]
 mod tests {
     use super::*;
     use async_trait::async_trait;

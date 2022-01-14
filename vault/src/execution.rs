@@ -486,7 +486,7 @@ fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -
     }
 }
 
-#[cfg(all(test, not(feature = "parachain-metadata")))]
+#[cfg(all(test, feature = "standalone-metadata"))]
 mod tests {
     use super::*;
     use async_trait::async_trait;
