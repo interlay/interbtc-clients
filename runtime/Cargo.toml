@@ -13,7 +13,9 @@ testing-utils = [
     "interbtc",
     "rand",
 ]
-parachain-metadata = []
+standalone-metadata = []
+parachain-metadata-kintsugi = []
+parachain-metadata-testnet = []
 
 [dependencies]
 serde = { version = "1.0.130", features = ["derive"] }
@@ -47,7 +49,7 @@ polkadot-parachain = { git = "https://github.com/paritytech/polkadot", branch = 
 bitcoin = { path = "../bitcoin"}
 
 # Dependencies for the testing utils for integration tests
-tempdir = {version = "0.3.7", optional = true }
+tempdir = { version = "0.3.7", optional = true }
 interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "b1bdd2c8102c643dd9fec11d133802c6055fd988", optional = true }
 rand = { version = "0.7", optional = true }
 
@@ -80,8 +82,6 @@ package = "vault-registry"
 git = "https://github.com/interlay/interbtc"
 rev = "b1bdd2c8102c643dd9fec11d133802c6055fd988"
 package = "module-oracle-rpc-runtime-api"
-
-
 
 [dev-dependencies]
 runtime = { path = ".", features = ["testing-utils"] }

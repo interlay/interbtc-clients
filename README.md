@@ -54,7 +54,6 @@ Running `rustup show` from the root directory of this repo should be enough to
 set up the toolchain and you can inspect the output to verify that it matches
 the version specified in the override file.
 
-
 <p align="center">
   <a href="https://web3.foundation/grants/">
     <img src="media/web3_grants.png">

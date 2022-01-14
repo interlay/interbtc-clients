@@ -1,4 +1,4 @@
-#![cfg(all(feature = "testing-utils", not(feature = "parachain-metadata")))]
+#![cfg(all(feature = "testing-utils", feature = "standalone-metadata"))]
 
 mod bitcoin_simulator;
 

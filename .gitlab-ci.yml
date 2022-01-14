@@ -47,10 +47,10 @@ test-clients:
               - -rpcpassword=rpcpassword
     script:
         - cargo fmt -- --check
-        - cargo check --workspace --release
-        - cargo clippy --workspace --release
-        - cargo test --workspace --release
-        - cargo test --manifest-path bitcoin/Cargo.toml --test "*" --features uses-bitcoind -- --test-threads=1
+        - cargo check --workspace --release --features standalone-metadata
+        - cargo clippy --workspace --release --features standalone-metadata
+        - cargo test --workspace --release --features standalone-metadata
+        - cargo test --manifest-path bitcoin/Cargo.toml --test "*" --features uses-bitcoind standalone-metadata -- --test-threads=1
     cache:
         key: cargo
         paths:
@@ -62,13 +62,14 @@ build-clients:
         - .rust-base-job
     script:
         - |
-            cargo check --workspace --release --target $PLATFORM --features parachain-metadata
-            cargo build --workspace --release --target $PLATFORM --features parachain-metadata
-            cp target/$PLATFORM/release/oracle target/$PLATFORM/release/oracle-parachain
-            cp target/$PLATFORM/release/vault target/$PLATFORM/release/vault-parachain
+            cargo check --workspace --release --target $PLATFORM --features parachain-metadata-testnet
+            cargo build --workspace --release --target $PLATFORM --features parachain-metadata-testnet
+            cp target/$PLATFORM/release/oracle target/$PLATFORM/release/oracle-parachain-testnet
+            cp target/$PLATFORM/release/vault target/$PLATFORM/release/vault-parachain-testnet
+            cp target/$PLATFORM/release/faucet target/$PLATFORM/release/faucet-parachain-testnet
         - |
-            cargo check --workspace --release --target $PLATFORM
-            cargo build --workspace --release --target $PLATFORM
+            cargo check --workspace --release --target $PLATFORM --features standalone-metadata
+            cargo build --workspace --release --target $PLATFORM --features standalone-metadata
 
         - ls -l target/$PLATFORM/release/
     variables:
@@ -83,8 +84,9 @@ build-clients:
         name: "${CI_COMMIT_REF_SLUG}"
         expire_in: 30 days
         paths:
-            - target/$PLATFORM/release/oracle-parachain${FILE_EXTENSION}
-            - target/$PLATFORM/release/vault-parachain${FILE_EXTENSION}
+            - target/$PLATFORM/release/oracle-testnet-runtime${FILE_EXTENSION}
+            - target/$PLATFORM/release/vault-testnet-runtime${FILE_EXTENSION}
+            - target/$PLATFORM/release/faucet-testnet-runtime${FILE_EXTENSION}
             - target/$PLATFORM/release/oracle${FILE_EXTENSION}
             - target/$PLATFORM/release/vault${FILE_EXTENSION}
             - target/$PLATFORM/release/faucet${FILE_EXTENSION}

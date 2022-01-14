@@ -21,4 +21,6 @@ runtime = { path = "../runtime" }
 
 
 [features]
-parachain-metadata = ["runtime/parachain-metadata"]
+standalone-metadata = ["runtime/standalone-metadata"]
+parachain-metadata-kintsugi = ["runtime/parachain-metadata-kintsugi"]
+parachain-metadata-testnet = ["runtime/parachain-metadata-testnet"]

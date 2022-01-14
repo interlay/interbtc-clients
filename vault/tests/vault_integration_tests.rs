@@ -1,4 +1,4 @@
-#![cfg(all(feature = "testing-utils", not(feature = "parachain-metadata")))]
+#![cfg(all(feature = "testing-utils", feature = "stadnalone-metadata"))]
 
 use bitcoin::{stream_blocks, BitcoinCoreApi, TransactionExt};
 use frame_support::assert_ok;

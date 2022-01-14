@@ -110,10 +110,12 @@ mod metadata_aliases {
     pub type VaultId = metadata::runtime_types::interbtc_primitives::VaultId<AccountId, CurrencyId>;
     pub type VaultCurrencyPair = metadata::runtime_types::interbtc_primitives::VaultCurrencyPair<CurrencyId>;
 
-    #[cfg(feature = "parachain-metadata")]
-    pub type EncodedCall = metadata::runtime_types::kintsugi_runtime_parachain::Call;
-    #[cfg(not(feature = "parachain-metadata"))]
+    #[cfg(feature = "standalone-metadata")]
     pub type EncodedCall = metadata::runtime_types::interbtc_runtime_standalone::Call;
+    #[cfg(feature = "parachain-metadata-testnet")]
+    pub type EncodedCall = metadata::runtime_types::testnet_runtime_parachain::Call;
+    #[cfg(feature = "parachain-metadata-kintsugi")]
+    pub type EncodedCall = metadata::runtime_types::kintsugi_runtime_parachain::Call;
 
     pub type SecurityCall = metadata::runtime_types::security::pallet::Call;
 }
@@ -252,6 +254,7 @@ mod h256_le {
             RichH256Le::from_bytes_le(&self.content)
         }
     }
+
     impl crate::H256Le {
         pub fn from_bytes_le(bytes: &[u8]) -> H256Le {
             RichH256Le::from_bytes_le(bytes).into()

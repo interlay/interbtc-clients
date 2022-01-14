@@ -4,7 +4,7 @@ use crate::{
     types::*,
     AccountId, CurrencyId, Error, InterBtcRuntime, InterBtcSigner, RetryPolicy, RichH256Le, SubxtError,
 };
-#[cfg(not(feature = "parachain-metadata"))]
+#[cfg(any(feature = "standalone-metadata", feature = "parachain-metadata-testnet"))]
 use crate::{BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CONFIRMATIONS};
 use async_trait::async_trait;
 use codec::Encode;
@@ -32,10 +32,12 @@ pub struct InterBtcParachain {
 
 impl InterBtcParachain {
     pub async fn new<P: Into<RpcClient>>(rpc_client: P, signer: InterBtcSigner) -> Result<Self, Error> {
-        #[cfg(feature = "parachain-metadata")]
-        log::info!("metadata version: parachain");
-        #[cfg(not(feature = "parachain-metadata"))]
-        log::info!("metadata version: standalone");
+        #[cfg(feature = "standalone-metadata")]
+        log::info!("Metadata: standalone");
+        #[cfg(feature = "parachain-metadata-kintsugi")]
+        log::info!("Metadata: kintsugi");
+        #[cfg(feature = "parachain-metadata-testnet")]
+        log::info!("Metadata: testnet");
 
         let account_id = signer.account_id().clone();
         let rpc_client = rpc_client.into();
@@ -1629,7 +1631,7 @@ pub trait SudoPallet {
     async fn set_replace_period(&self, period: u32) -> Result<(), Error>;
 }
 
-#[cfg(not(feature = "parachain-metadata"))]
+#[cfg(any(feature = "standalone-metadata", feature = "parachain-metadata-testnet"))]
 #[async_trait]
 impl SudoPallet for InterBtcParachain {
     async fn sudo(&self, call: EncodedCall) -> Result<(), Error> {

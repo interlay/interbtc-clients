@@ -196,7 +196,7 @@ async fn filter_matching_vaults(addresses: Vec<BtcAddress>, vaults: &Vaults) -> 
         .await
 }
 
-#[cfg(all(test, not(feature = "parachain-metadata")))]
+#[cfg(all(test, feature = "standalone-metadata"))]
 mod tests {
     use super::*;
     use async_trait::async_trait;

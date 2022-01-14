@@ -1,4 +1,4 @@
-#![cfg(all(test, not(feature = "parachain-metadata")))]
+#![cfg(all(test, feature = "standalone-metadata"))]
 
 const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
 

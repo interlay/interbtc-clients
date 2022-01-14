@@ -196,7 +196,7 @@ pub async fn listen_for_execute_replace(
     Ok(())
 }
 
-#[cfg(all(test, not(feature = "parachain-metadata")))]
+#[cfg(all(test, feature = "standalone-metadata"))]
 mod tests {
     use super::*;
     use async_trait::async_trait;
