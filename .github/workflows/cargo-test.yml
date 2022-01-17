@@ -10,6 +10,13 @@ jobs:
     name: Test Suite
     runs-on: [self-hosted, linux]
 
+    strategy:
+      matrix:
+        metadata:
+          - parachain-metadata-kintsugi
+          - parachain-metadata-testnet
+          - standalone-metadata
+
     steps:
       - uses: actions/checkout@v2
       - run: git fetch --prune --unshallow
@@ -35,51 +42,34 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --release --workspace --features standalone-metadata
+          args: --release --workspace --features ${{ matrix.metadata }}
       - name: check
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --release --workspace --features standalone-metadata
+          args: --release --workspace --features ${{ matrix.metadata }}
       - name: test
         uses: actions-rs/cargo@v1
         env:
           RUST_LOG: info,regalloc=warn
         with:
           command: test
-          args: --release --workspace --features standalone-metadata
-      - name: upload artifacts - standalone vault
+          args: --release --workspace --features ${{ matrix.metadata }}
+      - name: upload artifacts - vault
         uses: actions/upload-artifact@v2
         with:
-          name: vault-standalone-${{ github.sha }}
+          name: vault-${{ matrix.metadata }}-${{ github.sha }}
           path: target/release/vault
           retention-days: 10
-      - name: upload artifacts - standalone oracle
+      - name: upload artifacts - oracle
         uses: actions/upload-artifact@v2
         with:
-          name: oracle-standalone-${{ github.sha }}
+          name: oracle-${{ matrix.metadata }}-${{ github.sha }}
           path: target/release/oracle
           retention-days: 10
       - name: upload artifacts - faucet
         uses: actions/upload-artifact@v2
         with:
-          name: faucet-standalone-${{ github.sha }}
+          name: faucet-${{ matrix.metadata }}-${{ github.sha }}
           path: target/release/faucet
-          retention-days: 10
-      - name: build with parachain metadata
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --features parachain-metadata-testnet
-      - name: upload artifacts - parachain vault
-        uses: actions/upload-artifact@v2
-        with:
-          name: vault-parachain-testnet-${{ github.sha }}
-          path: target/release/vault
-          retention-days: 10
-      - name: upload artifacts - parachain oracle
-        uses: actions/upload-artifact@v2
-        with:
-          name: oracle-parachain-testnet-${{ github.sha }}
-          path: target/release/oracle
           retention-days: 10

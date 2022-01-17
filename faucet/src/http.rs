@@ -299,7 +299,7 @@ pub async fn start_http(
     close_handle
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "standalone-metadata"))]
 mod tests {
     use crate::error::Error;
     use runtime::{CurrencyId, CurrencyIdExt, OracleKey, Token, VaultId, DOT, INTERBTC, KBTC, KSM};
