@@ -30,6 +30,12 @@ Please also install the following dependencies:
 
 ### Installation
 
+#### Faucet
+
+The testnet may use a faucet to allow users and vaults to self-fund up to a daily limit.
+
+To start the Faucet follow the instructions contained in the [Faucet README](./faucet/README.md).
+
 #### Oracle
 
 The interBTC bridge requires a price oracle to calculate collateralization rates, for local development we can run this client
@@ -39,7 +45,7 @@ To start the Oracle follow the instructions contained in the [Oracle README](./o
 
 #### Vault
 
-The [Vault](./vault/README.md) client is used to intermediate assets between Bitcoin and the BTC Parachain.
+The vault client is used to intermediate assets between Bitcoin and the BTC Parachain.
 It is also capable of submitting Bitcoin block headers to the BTC Parachain.
 
 To start the Vault follow the instructions contained in the [Vault README](./vault/README.md).
@@ -53,6 +59,12 @@ requirements are specified in the [./rust-toolchain.toml](./rust-toolchain.toml)
 Running `rustup show` from the root directory of this repo should be enough to
 set up the toolchain and you can inspect the output to verify that it matches
 the version specified in the override file.
+
+Use the following command to fetch the newest metadata from a live chain:
+
+```shell
+curl -sX POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"state_getMetadata", "id": 1}' localhost:9933 | jq .result | cut -d '"' -f 2 | xxd -r -p > runtime/metadata.scale
+```
 
 <p align="center">
   <a href="https://web3.foundation/grants/">
