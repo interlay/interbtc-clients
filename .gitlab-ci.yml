@@ -51,7 +51,7 @@ test-clients:
         - cargo check --workspace --release --features $METADATA
         - cargo clippy --workspace --release --features $METADATA
         - cargo test --workspace --release --features $METADATA
-        - cargo test --manifest-path bitcoin/Cargo.toml --test "*" --features $METADATA uses-bitcoind -- --test-threads=1
+        - cargo test --manifest-path bitcoin/Cargo.toml --test "*" --features uses-bitcoind -- --test-threads=1
     cache:
         key: cargo
         paths:
