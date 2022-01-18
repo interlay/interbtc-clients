@@ -1,6 +1,6 @@
 # Faucet Client
 
-Transfer collateral (e.g. DOT/KSM) to users.
+Transfer collateral (e.g. DOT/KSM) and native fees (e.g. INTR/KINT) to users.
 
 ## Responsibilities
 
@@ -27,7 +27,7 @@ For convenience, a copy of this output is included below.
 
 ```
 USAGE:
-    faucet [OPTIONS]
+    faucet [OPTIONS] --native-currency-id <NATIVE_CURRENCY_ID>
 
 FLAGS:
     -h, --help       Print help information
@@ -58,6 +58,9 @@ OPTIONS:
 
         --max-notifs-per-subscription <MAX_NOTIFS_PER_SUBSCRIPTION>
             Maximum notification capacity for each subscription
+
+        --native-currency-id <NATIVE_CURRENCY_ID>
+            The native currency fees are paid in, e.g. "INTR" or "KINT"
 
         --rpc-cors-domain <RPC_CORS_DOMAIN>
             Comma separated list of allowed origins [default: *]
