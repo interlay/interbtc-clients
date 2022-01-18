@@ -20,6 +20,8 @@ use tokio::{sync::RwLock, time::sleep};
 
 const DEFAULT_COLLATERAL_CURRENCY: CurrencyId = Token(DOT);
 
+// TODO: embed collateral, native and wrapped currency ids here
+// read from pallet constants at startup
 #[derive(Clone)]
 pub struct InterBtcParachain {
     rpc_client: RpcClient,
