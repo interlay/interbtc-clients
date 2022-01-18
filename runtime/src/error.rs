@@ -43,6 +43,8 @@ pub enum Error {
     KeyringAccountParsingError,
     #[error("Storage item not found")]
     StorageItemNotFound,
+    #[error("Client does not support node runtime")]
+    InvalidRuntimeVersion,
 
     #[error("Failed to load credentials from file: {0}")]
     KeyLoadingFailure(#[from] KeyLoadingError),

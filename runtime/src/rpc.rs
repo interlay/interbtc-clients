@@ -11,7 +11,9 @@ use codec::Encode;
 use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt};
 use jsonrpsee::types::to_json_value;
 use module_oracle_rpc_runtime_api::BalanceWrapper;
-use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
+use sp_runtime::create_runtime_str;
+use sp_version::RuntimeVersion;
+use std::{borrow::Cow, collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 use subxt::{
     sp_runtime::DispatchError, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Event, EventSubscription,
     EventsDecoder, Metadata, RpcClient, RuntimeError as SubxtRuntimeError, Signer,
@@ -19,6 +21,40 @@ use subxt::{
 use tokio::{sync::RwLock, time::sleep};
 
 const DEFAULT_COLLATERAL_CURRENCY: CurrencyId = Token(DOT);
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "standalone-metadata")] {
+        const DEFAULT_RUNTIME_VERSION: RuntimeVersion = RuntimeVersion {
+            spec_name: create_runtime_str!("interbtc-standalone"),
+            impl_name: create_runtime_str!("interbtc-standalone"),
+            authoring_version: 1,
+            spec_version: 1,
+            impl_version: 1,
+            transaction_version: 1,
+            apis: Cow::Owned(vec![]),
+        };
+    } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
+        const DEFAULT_RUNTIME_VERSION: RuntimeVersion = RuntimeVersion {
+            spec_name: create_runtime_str!("kintsugi-parachain"),
+            impl_name: create_runtime_str!("kintsugi-parachain"),
+            authoring_version: 1,
+            spec_version: 9,
+            impl_version: 1,
+            transaction_version: 2,
+            apis: Cow::Owned(vec![]),
+        };
+    } else if #[cfg(feature = "parachain-metadata-testnet")] {
+        const DEFAULT_RUNTIME_VERSION: RuntimeVersion = RuntimeVersion {
+            spec_name: create_runtime_str!("testnet-parachain"),
+            impl_name: create_runtime_str!("testnet-parachain"),
+            authoring_version: 1,
+            spec_version: 0,
+            impl_version: 1,
+            transaction_version: 0,
+            apis: Cow::Owned(vec![]),
+        };
+    }
+}
 
 // TODO: embed collateral, native and wrapped currency ids here
 // read from pallet constants at startup
@@ -34,18 +70,23 @@ pub struct InterBtcParachain {
 
 impl InterBtcParachain {
     pub async fn new<P: Into<RpcClient>>(rpc_client: P, signer: InterBtcSigner) -> Result<Self, Error> {
-        #[cfg(feature = "standalone-metadata")]
-        log::info!("Metadata: standalone");
-        #[cfg(feature = "parachain-metadata-kintsugi")]
-        log::info!("Metadata: kintsugi");
-        #[cfg(feature = "parachain-metadata-testnet")]
-        log::info!("Metadata: testnet");
-
         let account_id = signer.account_id().clone();
         let rpc_client = rpc_client.into();
         let ext_client = SubxtClientBuilder::new().set_client(rpc_client.clone()).build().await?;
         let api = Arc::new(ext_client.clone().to_runtime_api());
         let metadata = Arc::new(ext_client.rpc().metadata().await?);
+
+        if ext_client
+            .rpc()
+            .runtime_version(None)
+            .await?
+            .can_call_with(&DEFAULT_RUNTIME_VERSION)
+        {
+            log::info!("Using {}", DEFAULT_RUNTIME_VERSION);
+        } else {
+            return Err(Error::InvalidRuntimeVersion);
+        }
+
         let parachain_rpc = Self {
             rpc_client,
             ext_client,
