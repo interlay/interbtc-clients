@@ -155,6 +155,14 @@ pub fn parse_collateral_currency(src: &str) -> Result<CurrencyId, Error> {
     }
 }
 
+pub fn parse_native_currency(src: &str) -> Result<CurrencyId, Error> {
+    match src.to_uppercase().as_str() {
+        id if id == KINT.symbol() => Ok(Token(KINT)),
+        id if id == INTR.symbol() => Ok(Token(INTR)),
+        _ => Err(Error::InvalidCurrency),
+    }
+}
+
 pub fn parse_wrapped_currency(src: &str) -> Result<CurrencyId, Error> {
     match src.to_uppercase().as_str() {
         id if id == KBTC.symbol() => Ok(Token(KBTC)),

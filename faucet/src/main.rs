@@ -4,7 +4,7 @@ mod http;
 use clap::Clap;
 use error::Error;
 use git_version::git_version;
-use runtime::{InterBtcRuntime, PairSigner};
+use runtime::{parse_native_currency, CurrencyId, InterBtcRuntime, PairSigner};
 use service::{on_shutdown, wait_or_shutdown};
 use std::net::SocketAddr;
 
@@ -46,6 +46,10 @@ pub struct FaucetConfig {
     /// Allowance per request for vaults.
     #[clap(long, default_value = "500")]
     vault_allowance: u128,
+
+    /// The native currency fees are paid in, e.g. "INTR" or "KINT".
+    #[clap(long, parse(try_from_str = parse_native_currency))]
+    native_currency_id: CurrencyId,
 }
 
 #[tokio::main]
@@ -72,6 +76,7 @@ async fn main() -> Result<(), Error> {
             faucet_config.rpc_cors_domain.clone(),
             faucet_config.user_allowance,
             faucet_config.vault_allowance,
+            faucet_config.native_currency_id,
         )
         .await;
 
