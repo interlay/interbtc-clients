@@ -228,11 +228,15 @@ async fn atomic_faucet_funding(
         amount
     );
 
-    parachain_rpc.transfer_to(&account_id, amount, currency_id).await?;
+    let mut transfers = vec![parachain_rpc.transfer_to(&account_id, amount, currency_id)];
     if currency_id != native_currency_id {
-        parachain_rpc
-            .transfer_to(&account_id, amount, native_currency_id)
-            .await?;
+        transfers.push(parachain_rpc.transfer_to(&account_id, amount, native_currency_id));
+    }
+
+    let result = futures::future::join_all(transfers).await;
+
+    if let Some(err) = result.into_iter().find_map(|x| x.err()) {
+        return Err(err.into());
     }
 
     // Replace the previous (expired) claim datetime with the datetime of the current claim, only update
