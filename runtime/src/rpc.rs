@@ -76,15 +76,11 @@ impl InterBtcParachain {
         let api = Arc::new(ext_client.clone().to_runtime_api());
         let metadata = Arc::new(ext_client.rpc().metadata().await?);
 
-        if ext_client
-            .rpc()
-            .runtime_version(None)
-            .await?
-            .can_call_with(&DEFAULT_RUNTIME_VERSION)
-        {
-            log::info!("Using {}", DEFAULT_RUNTIME_VERSION);
+        let runtime_version = ext_client.rpc().runtime_version(None).await?;
+        if runtime_version.can_call_with(&DEFAULT_RUNTIME_VERSION) {
+            log::info!("Using {}", runtime_version);
         } else {
-            return Err(Error::InvalidRuntimeVersion);
+            return Err(Error::InvalidRuntimeVersion(DEFAULT_RUNTIME_VERSION, runtime_version));
         }
 
         let parachain_rpc = Self {
