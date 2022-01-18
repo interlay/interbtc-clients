@@ -9,11 +9,12 @@ use kv::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
     AccountId, CollateralBalancesPallet, CurrencyId, CurrencyIdExt, CurrencyInfo, Error as RuntimeError,
-    InterBtcParachain, VaultRegistryPallet,
+    InterBtcParachain, Token, VaultRegistryPallet, KINT,
 };
 use serde::{Deserialize, Deserializer};
 use std::{collections::HashMap, net::SocketAddr, time::Duration};
 use tokio::time::timeout;
+
 const HEALTH_DURATION: Duration = Duration::from_millis(5000);
 
 const KV_STORE_NAME: &str = "store";
@@ -218,12 +219,17 @@ async fn atomic_faucet_funding(
         .ok_or(Error::MathError)?;
 
     log::info!(
-        "AccountId: {}, Type: {:?}, Amount: {}",
+        "AccountId: {}, Currency: {:?} Type: {:?}, Amount: {}",
         account_id,
+        currency_id.inner().symbol(),
         account_type,
         amount
     );
+
     parachain_rpc.transfer_to(&account_id, amount, currency_id).await?;
+    if currency_id != Token(KINT) {
+        parachain_rpc.transfer_to(&account_id, amount, Token(KINT)).await?;
+    }
 
     // Replace the previous (expired) claim datetime with the datetime of the current claim, only update
     // this after successfully transferring funds to ensure that this can be called again on error

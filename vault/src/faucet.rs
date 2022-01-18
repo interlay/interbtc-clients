@@ -4,7 +4,7 @@ use hex::FromHex;
 use jsonrpc_core::Value;
 use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use parity_scale_codec::{Decode, Encode};
-use runtime::{CurrencyId, CurrencyIdExt, InterBtcParachain, VaultId, VaultRegistryPallet, TX_FEES};
+use runtime::{AccountId, CurrencyId, CurrencyIdExt, InterBtcParachain, VaultId, VaultRegistryPallet, TX_FEES};
 use serde::{Deserialize, Deserializer};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -21,7 +21,8 @@ where
 
 #[derive(Encode, Decode, Debug, Clone, serde::Serialize)]
 struct FundAccountJsonRpcRequest {
-    pub vault_id: VaultId,
+    pub vault_account_id: AccountId,
+    pub collateral_currency: CurrencyId,
 }
 
 async fn get_faucet_allowance(faucet_connection: TypedClient, allowance_type: &str) -> Result<u128, Error> {
@@ -32,7 +33,10 @@ async fn get_faucet_allowance(faucet_connection: TypedClient, allowance_type: &s
 }
 
 async fn get_funding(faucet_connection: TypedClient, vault_id: VaultId) -> Result<(), Error> {
-    let funding_request = FundAccountJsonRpcRequest { vault_id };
+    let funding_request = FundAccountJsonRpcRequest {
+        vault_account_id: vault_id.account_id.clone(),
+        collateral_currency: vault_id.collateral_currency(),
+    };
     let eq = format!("0x{}", hex::encode(funding_request.encode()));
     faucet_connection
         .call_method::<Vec<String>, Value>("fund_account", "", vec![eq.clone()])
