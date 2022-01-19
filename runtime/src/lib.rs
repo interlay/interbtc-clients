@@ -151,7 +151,7 @@ pub fn parse_collateral_currency(src: &str) -> Result<CurrencyId, Error> {
     match src.to_uppercase().as_str() {
         id if id == KSM.symbol() => Ok(Token(KSM)),
         id if id == DOT.symbol() => Ok(Token(DOT)),
-        _ => Err(Error::InvalidCurrency),
+        x => parse_native_currency(x),
     }
 }
 
