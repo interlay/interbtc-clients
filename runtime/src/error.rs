@@ -5,6 +5,7 @@ use crate::{types::*, BTC_RELAY_MODULE, ISSUE_MODULE, REDEEM_MODULE, RELAY_MODUL
 use codec::Error as CodecError;
 use jsonrpsee::types::{error::Error as RequestError, CallError};
 use serde_json::Error as SerdeJsonError;
+use sp_version::RuntimeVersion;
 use std::{array::TryFromSliceError, io::Error as IoError, num::TryFromIntError};
 use subxt::{sp_core::crypto::SecretStringError, PalletError as SubxtPalletError, RuntimeError as SubxtRuntimeError};
 use thiserror::Error;
@@ -43,6 +44,8 @@ pub enum Error {
     KeyringAccountParsingError,
     #[error("Storage item not found")]
     StorageItemNotFound,
+    #[error("Client does not support node runtime: expected {0}, got {1}")]
+    InvalidRuntimeVersion(RuntimeVersion, RuntimeVersion),
 
     #[error("Failed to load credentials from file: {0}")]
     KeyLoadingFailure(#[from] KeyLoadingError),
