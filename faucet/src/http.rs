@@ -201,8 +201,7 @@ async fn atomic_faucet_funding(
     native_currency_id: CurrencyId,
     allowances: HashMap<FundingRequestAccountType, u128>,
 ) -> Result<(), Error> {
-    let rich_currency_id: CurrencyId = currency_id.into();
-    let account_str = format!("{}-{}", account_id, rich_currency_id.inner().symbol());
+    let account_str = format!("{}-{}", account_id, currency_id.inner().symbol());
     let last_request_json = kv.get(account_str.clone())?;
     let account_type = get_account_type(parachain_rpc, account_id.clone()).await?;
     ensure_funding_allowed(
@@ -217,7 +216,7 @@ async fn atomic_faucet_funding(
     let amount = allowances
         .get(&account_type)
         .ok_or(Error::NoFaucetAllowance)?
-        .checked_mul(rich_currency_id.inner().one())
+        .checked_mul(currency_id.inner().one())
         .ok_or(Error::MathError)?;
 
     log::info!(

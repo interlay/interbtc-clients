@@ -1,3 +1,5 @@
+#![allow(clippy::enum_variant_names)]
+
 use chrono::ParseError;
 use jsonrpc_http_server::jsonrpc_core::Error as JsonRpcError;
 use kv::Error as KvError;

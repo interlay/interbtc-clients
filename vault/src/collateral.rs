@@ -2,8 +2,8 @@ use crate::{error::Error, system::VaultIdManager};
 use bitcoin::BitcoinCoreApi;
 use futures::future;
 use runtime::{
-    CollateralBalancesPallet, CurrencyId, CurrencyIdExt, CurrencyInfo, FeedValuesEvent, InterBtcParachain, OracleKey,
-    VaultId, VaultRegistryPallet, VaultStatus,
+    CollateralBalancesPallet, CurrencyIdExt, CurrencyInfo, FeedValuesEvent, InterBtcParachain, OracleKey, VaultId,
+    VaultRegistryPallet, VaultStatus,
 };
 use service::Error as ServiceError;
 
@@ -22,17 +22,13 @@ pub async fn maintain_collateralization_rate<B: BitcoinCoreApi + Clone + Send + 
                 });
                 let vault_ids = vault_id_manager.get_vault_ids().await;
                 for currency_id in updated_currencies {
-                    let rich_currency_id: CurrencyId = (*currency_id).into();
                     match vault_ids
                         .iter()
                         .find(|vault_id| &vault_id.collateral_currency() == currency_id)
                     {
-                        None => tracing::debug!(
-                            "Ignoring exchange rate update for {}",
-                            rich_currency_id.inner().symbol()
-                        ),
+                        None => tracing::debug!("Ignoring exchange rate update for {}", currency_id.inner().symbol()),
                         Some(vault_id) => {
-                            tracing::info!("Received FeedValuesEvent for {}", rich_currency_id.inner().symbol());
+                            tracing::info!("Received FeedValuesEvent for {}", currency_id.inner().symbol());
 
                             // TODO: implement retrying
                             if let Err(e) = lock_required_collateral(parachain_rpc.clone(), vault_id.clone()).await {

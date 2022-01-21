@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCore};
+use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCore, Error as BitcoinError};
 use futures::{future::Either, Future, FutureExt};
 use runtime::{
     cli::ConnectionOpts as ParachainConfig, CurrencyId, CurrencyIdExt, CurrencyInfo, Error as RuntimeError,
@@ -11,7 +11,6 @@ mod cli;
 mod error;
 mod trace;
 
-use bitcoin::Error as BitcoinError;
 pub use cli::{LoggingFormat, RestartPolicy, ServiceConfig};
 pub use error::Error;
 pub use trace::init_subscriber;
@@ -88,10 +87,10 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             .await?;
 
             let config_copy = self.bitcoin_config.clone();
-            let prefix = self.wallet_name.clone().unwrap_or("vault".to_string());
+            let prefix = self.wallet_name.clone().unwrap_or_else(|| "vault".to_string());
             let constructor = move |vault_id: VaultId| {
-                let collateral_currency: CurrencyId = vault_id.collateral_currency().into();
-                let wrapped_currency: CurrencyId = vault_id.wrapped_currency().into();
+                let collateral_currency: CurrencyId = vault_id.collateral_currency();
+                let wrapped_currency: CurrencyId = vault_id.wrapped_currency();
                 // convert to the native type
                 let wallet_name = format!(
                     "{}-{}-{}",
@@ -99,8 +98,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
                     collateral_currency.inner().symbol(),
                     wrapped_currency.inner().symbol()
                 );
-                let btc_rpc = config_copy.new_client(Some(wallet_name))?;
-                Ok(btc_rpc)
+                config_copy.new_client(Some(wallet_name))
             };
 
             let service = S::new_service(btc_parachain, bitcoin_core, config, shutdown_tx, Box::new(constructor));

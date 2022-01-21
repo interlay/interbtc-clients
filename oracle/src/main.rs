@@ -25,7 +25,6 @@ const BTC_DECIMALS: u32 = 8;
 const BTC_CURRENCY: &str = "btc";
 
 async fn get_exchange_rate_from_coingecko(currency_id: CurrencyId, url: &Url) -> Result<FixedU128, Error> {
-    let currency_id: CurrencyId = currency_id.into();
     // https://www.coingecko.com/api/documentations/v3
     let resp = reqwest::get(url.clone())
         .await?
@@ -195,9 +194,9 @@ async fn main() -> Result<(), Error> {
         (currencies, exchange_rates, None) if currencies.len() == exchange_rates.len() => currencies
             .iter()
             .zip(exchange_rates)
-            .map(|(currency_id, exchange_rate)| (currency_id.clone(), UrlOrDefault::Def(exchange_rate)))
+            .map(|(currency_id, exchange_rate)| (*currency_id, UrlOrDefault::Def(exchange_rate)))
             .collect(),
-        (currencies, exchange_rates, Some(url)) if exchange_rates.len() == 0 => currencies
+        (currencies, exchange_rates, Some(url)) if exchange_rates.is_empty() => currencies
             .iter()
             .map(|currency_id| {
                 let mut url = url.clone();
@@ -207,7 +206,7 @@ async fn main() -> Result<(), Error> {
                     currency_id.inner().name().to_lowercase(),
                     BTC_CURRENCY
                 )));
-                (currency_id.clone(), UrlOrDefault::Url(url))
+                (*currency_id, UrlOrDefault::Url(url))
             })
             .collect(),
         args => {
@@ -253,12 +252,7 @@ async fn main() -> Result<(), Error> {
                 || async {
                     let result = futures::future::join_all(exchange_rates_to_set.iter().map(
                         |(currency_id, value, conversion_factor)| {
-                            submit_exchange_rate(
-                                &parachain_rpc,
-                                value.clone(),
-                                currency_id.clone(),
-                                conversion_factor.clone(),
-                            )
+                            submit_exchange_rate(&parachain_rpc, value.clone(), *currency_id, *conversion_factor)
                         },
                     ))
                     .await
