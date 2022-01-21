@@ -1,3 +1,5 @@
+#![allow(clippy::enum_variant_names)]
+
 use bitcoin::Error as BitcoinError;
 use runtime::Error as InterBtcError;
 use thiserror::Error;

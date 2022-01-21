@@ -1,3 +1,5 @@
+#![allow(clippy::enum_variant_names)]
+
 use reqwest::Error as ReqwestError;
 use runtime::{Error as RuntimeError, SubxtError};
 use std::num::ParseIntError;

@@ -330,10 +330,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                         Ok((
                             refund_id,
                             refund.clone(),
-                            parachain_rpc
-                                .get_issue_request(refund.issue_id.clone())
-                                .await?
-                                .btc_height,
+                            parachain_rpc.get_issue_request(refund.issue_id).await?.btc_height,
                         ))
                     })
                     .try_collect()

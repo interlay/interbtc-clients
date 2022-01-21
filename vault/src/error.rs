@@ -1,4 +1,3 @@
-// use crate::relay::Error as RelayError;
 use bitcoin::Error as BitcoinError;
 use hex::FromHexError;
 use jsonrpc_core_client::RpcError;
@@ -25,8 +24,6 @@ pub enum Error {
     TryIntoIntError(#[from] std::num::TryFromIntError),
     #[error("Deadline has expired")]
     DeadlineExpired,
-    #[error("Failed to parse argument; argument not valid")]
-    ArgumentParsingError,
 
     #[error("ServiceError: {0}")]
     ServiceError(#[from] ServiceError),
@@ -42,6 +39,4 @@ pub enum Error {
     SubxtError(#[from] SubxtError),
     #[error("CodecError: {0}")]
     CodecError(#[from] CodecError),
-    /* #[error("RelayError: {0}")]
-     * RelayError(#[from] RelayError), */
 }

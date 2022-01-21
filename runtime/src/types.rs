@@ -138,10 +138,11 @@ mod currency_id {
     pub trait CurrencyIdExt {
         fn inner(&self) -> primitives::TokenSymbol;
     }
+
     impl CurrencyIdExt for CurrencyId {
         fn inner(&self) -> primitives::TokenSymbol {
             match self {
-                Token(x) => x.clone(),
+                Token(x) => *x,
             }
         }
     }
@@ -173,8 +174,8 @@ mod vault_id {
         }
 
         pub fn pretty_printed(&self) -> String {
-            let collateral_currency: CurrencyId = self.collateral_currency().into();
-            let wrapped_currency: CurrencyId = self.wrapped_currency().into();
+            let collateral_currency: CurrencyId = self.collateral_currency();
+            let wrapped_currency: CurrencyId = self.wrapped_currency();
             format!(
                 "{}[{}->{}]",
                 self.account_id.to_ss58check(),
@@ -184,13 +185,13 @@ mod vault_id {
         }
     }
 
-    impl Into<RichVaultId> for crate::VaultId {
-        fn into(self) -> RichVaultId {
-            primitives::VaultId {
-                account_id: self.account_id,
+    impl From<crate::VaultId> for RichVaultId {
+        fn from(value: crate::VaultId) -> Self {
+            Self {
+                account_id: value.account_id,
                 currencies: primitives::VaultCurrencyPair {
-                    collateral: self.currencies.collateral.into(),
-                    wrapped: self.currencies.wrapped.into(),
+                    collateral: value.currencies.collateral,
+                    wrapped: value.currencies.wrapped,
                 },
             }
         }
@@ -201,8 +202,8 @@ mod vault_id {
             Self {
                 account_id: value.account_id,
                 currencies: crate::VaultCurrencyPair {
-                    collateral: value.currencies.collateral.into(),
-                    wrapped: value.currencies.wrapped.into(),
+                    collateral: value.currencies.collateral,
+                    wrapped: value.currencies.wrapped,
                 },
             }
         }
@@ -249,9 +250,9 @@ mod h256_le {
         }
     }
 
-    impl Into<RichH256Le> for crate::H256Le {
-        fn into(self) -> RichH256Le {
-            RichH256Le::from_bytes_le(&self.content)
+    impl From<crate::H256Le> for RichH256Le {
+        fn from(value: crate::H256Le) -> Self {
+            Self::from_bytes_le(&value.content)
         }
     }
 

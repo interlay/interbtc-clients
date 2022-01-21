@@ -18,7 +18,7 @@ use runtime::{
     VaultCurrencyPair, VaultId, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{sync::RwLock, time::sleep};
 
 pub const VERSION: &str = git_version!(args = ["--tags"]);
@@ -144,26 +144,28 @@ async fn relay_block_listener(
 }
 
 #[derive(Clone)]
-pub struct VaultIdManager<T: BitcoinCoreApi + Clone + Send + Sync + 'static> {
-    bitcoin_rpcs: Arc<RwLock<std::collections::HashMap<VaultId, T>>>,
+pub struct VaultIdManager<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> {
+    bitcoin_rpcs: Arc<RwLock<HashMap<VaultId, BCA>>>,
     btc_parachain: InterBtcParachain,
-    constructor: Arc<Box<dyn Fn(VaultId) -> Result<T, BitcoinError> + Send + Sync>>,
+    // TODO: refactor this
+    #[allow(clippy::type_complexity)]
+    constructor: Arc<Box<dyn Fn(VaultId) -> Result<BCA, BitcoinError> + Send + Sync>>,
 }
 
-impl<T: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<T> {
+impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
     pub fn new(
         btc_parachain: InterBtcParachain,
-        constructor: impl Fn(VaultId) -> Result<T, BitcoinError> + Send + Sync + 'static,
+        constructor: impl Fn(VaultId) -> Result<BCA, BitcoinError> + Send + Sync + 'static,
     ) -> Self {
         Self {
-            bitcoin_rpcs: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            bitcoin_rpcs: Arc::new(RwLock::new(HashMap::new())),
             constructor: Arc::new(Box::new(constructor)),
             btc_parachain,
         }
     }
 
     // used for testing only
-    pub fn from_map(btc_parachain: InterBtcParachain, map: std::collections::HashMap<VaultId, T>) -> Self {
+    pub fn from_map(btc_parachain: InterBtcParachain, map: HashMap<VaultId, BCA>) -> Self {
         Self {
             bitcoin_rpcs: Arc::new(RwLock::new(map)),
             constructor: Arc::new(Box::new(|_| unimplemented!())),
@@ -171,7 +173,7 @@ impl<T: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<T> {
         }
     }
 
-    async fn add_vault_id(&self, vault_id: VaultId) -> Result<T, Error> {
+    async fn add_vault_id(&self, vault_id: VaultId) -> Result<BCA, Error> {
         let btc_rpc = (*self.constructor)(vault_id.clone())?;
 
         // load wallet. Exit on failure, since without wallet we can't do a lot
@@ -228,7 +230,7 @@ impl<T: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<T> {
             .await?)
     }
 
-    pub async fn get_bitcoin_rpc(&self, vault_id: &VaultId) -> Option<T> {
+    pub async fn get_bitcoin_rpc(&self, vault_id: &VaultId) -> Option<BCA> {
         self.bitcoin_rpcs.read().await.get(vault_id).cloned()
     }
 
@@ -241,7 +243,7 @@ impl<T: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<T> {
             .collect()
     }
 
-    pub async fn get_vault_btc_rpcs(&self) -> Vec<(VaultId, T)> {
+    pub async fn get_vault_btc_rpcs(&self) -> Vec<(VaultId, BCA)> {
         self.bitcoin_rpcs
             .read()
             .await
@@ -570,8 +572,8 @@ impl VaultService {
                 wrapped: self
                     .config
                     .wrapped_currency_id
-                    .unwrap_or_else(|| runtime::RELAY_CHAIN_WRAPPED_CURRENCY), /* TODO: fetch this from parachain
-                                                                                * metadata */
+                    .unwrap_or(runtime::RELAY_CHAIN_WRAPPED_CURRENCY), /* TODO: fetch this from parachain
+                                                                        * metadata */
             },
         };
 
