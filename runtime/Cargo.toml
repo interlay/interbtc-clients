@@ -40,8 +40,8 @@ sp-version = { git = "https://github.com/paritytech/substrate", branch = "polkad
 frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.15" }
 
 # Subxt dependencies
-subxt = { package = "subxt", git = "https://github.com/interlay/substrate-subxt", rev = "2878633f3d0e9e17b0c62b1ad636f15bbc7527a5" }
-subxt-client = { package = "subxt-client", git = "https://github.com/interlay/substrate-subxt", rev = "2878633f3d0e9e17b0c62b1ad636f15bbc7527a5" }
+subxt = { package = "subxt", git = "https://github.com/interlay/substrate-subxt", rev = "d5746cbb68bebe170de1ac2e5430776cc765de0d" }
+subxt-client = { package = "subxt-client", git = "https://github.com/interlay/substrate-subxt", rev = "d5746cbb68bebe170de1ac2e5430776cc765de0d" }
 
 jsonrpsee = { version = "0.5.1", features = ["macros", "ws-client", "http-client"] }
 
