@@ -3,7 +3,10 @@ pub use subxt::Error as SubxtError;
 
 use crate::{types::*, BTC_RELAY_MODULE, ISSUE_MODULE, REDEEM_MODULE, RELAY_MODULE};
 use codec::Error as CodecError;
-use jsonrpsee::types::{error::Error as RequestError, CallError};
+use jsonrpsee::{
+    types::{error::Error as RequestError, CallError},
+    ws_client::transport::WsHandshakeError,
+};
 use serde_json::Error as SerdeJsonError;
 use sp_version::RuntimeVersion;
 use std::{array::TryFromSliceError, io::Error as IoError, num::TryFromIntError};
@@ -135,6 +138,14 @@ impl Error {
 
     pub fn is_rpc_error(&self) -> bool {
         matches!(self, Error::SubxtError(SubxtError::Rpc(_)))
+    }
+
+    pub fn is_ws_invalid_url_error(&self) -> bool {
+        matches!(
+            self,
+            Error::JsonRpseeError(JsonRpseeError::Transport(err))
+            if matches!(err.downcast_ref::<WsHandshakeError>(), Some(WsHandshakeError::Url(_)))
+        )
     }
 
     pub fn is_parachain_shutdown_error(&self) -> bool {

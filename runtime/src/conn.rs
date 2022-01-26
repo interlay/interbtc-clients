@@ -30,6 +30,9 @@ pub(crate) async fn new_websocket_client_with_retry(
     timeout(connection_timeout, async move {
         loop {
             match new_websocket_client(url, max_concurrent_requests, max_notifs_per_subscription).await {
+                Err(err) if err.is_ws_invalid_url_error() => {
+                    return Err(err);
+                }
                 Err(Error::JsonRpseeError(JsonRpseeError::Transport(err))) => {
                     log::trace!("could not connect to parachain: {}", err);
                     sleep(RETRY_TIMEOUT).await;
