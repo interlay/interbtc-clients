@@ -10,7 +10,7 @@ use subxt::sp_core::{sr25519::Pair, Pair as _};
 #[derive(Clap, Debug, Clone)]
 pub struct ProviderUserOpts {
     /// Keyring to use, mutually exclusive with keyfile.
-    #[clap(long, parse(try_from_str = parse_account_keyring))]
+    #[clap(long, required_unless_present = "keyfile", parse(try_from_str = parse_account_keyring))]
     pub keyring: Option<AccountKeyring>,
 
     /// Path to the json file containing key pairs in a map.
@@ -33,7 +33,10 @@ impl ProviderUserOpts {
                 (get_credentials_from_file(file_path, keyname)?, keyname.to_string())
             }
             (None, None, Some(keyring)) => (keyring.pair(), format!("{}", keyring)),
-            _ => panic!("Invalid arguments"), // should never occur, due to clap constraints
+            _ => {
+                // should never occur, due to clap constraints
+                return Err(Error::KeyringArgumentError);
+            }
         };
         Ok((pair, user_name))
     }
