@@ -179,8 +179,8 @@ mod vault_id {
             format!(
                 "{}[{}->{}]",
                 self.account_id.to_ss58check(),
-                collateral_currency.inner().name(),
-                wrapped_currency.inner().name()
+                collateral_currency.inner().symbol(),
+                wrapped_currency.inner().symbol()
             )
         }
     }

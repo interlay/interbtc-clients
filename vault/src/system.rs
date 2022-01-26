@@ -583,16 +583,18 @@ impl VaultService {
                 vault_id.pretty_printed()
             );
         } else {
-            tracing::info!("[{}] Automatically registering vault", vault_id.pretty_printed());
+            tracing::info!("[{}] Not registered", vault_id.pretty_printed());
 
             let bitcoin_core_with_wallet = self.vault_id_manager.add_vault_id(vault_id.clone()).await?;
 
             if let Some(collateral) = self.config.auto_register_with_collateral {
+                tracing::info!("[{}] Automatically registering...", vault_id.pretty_printed());
                 let public_key = bitcoin_core_with_wallet.get_new_public_key().await?;
                 self.btc_parachain
                     .register_vault(&vault_id, collateral, public_key)
                     .await?;
             } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
+                tracing::info!("[{}] Automatically registering...", vault_id.pretty_printed());
                 faucet::fund_and_register(&self.btc_parachain, &bitcoin_core_with_wallet, faucet_url, &vault_id)
                     .await?;
             }
