@@ -5,7 +5,7 @@ Automated price feeder for interBTC. Values can be set manually or imported from
 ## Examples
 
 ```shell
-cargo run -- --keyring bob --exchange-rate 385523187 --timeout-ms 36000
+cargo run --bin oracle --features standalone-metadata -- --keyring alice --currency-id DOT --exchange-rate 2308 --interval-ms 1000
 ```
 
 ## Detailed Options
@@ -13,14 +13,14 @@ cargo run -- --keyring bob --exchange-rate 385523187 --timeout-ms 36000
 When using cargo to run this binary, arguments to cargo and the binary are separated by `--`. For example, to pass `--help` to the tool to get a list of all command line options that is guaranteed to be up date, run:
 
 ```
-cargo run -- --help
+cargo run --bin oracle --features standalone-metadata -- --help
 ```
 
 For convenience, a modified version of this output is included below.
 
 ```
 USAGE:
-    oracle [OPTIONS] --currency-id <CURRENCY_ID>
+    oracle [OPTIONS]
 
 FLAGS:
     -h, --help       Print help information
@@ -43,12 +43,12 @@ OPTIONS:
         --connection-timeout-ms <CONNECTION_TIMEOUT_MS>
             Timeout in milliseconds to wait for connection to btc-parachain [default: 60000]
 
-        --currency-id <CURRENCY_ID>
+        --currency-id <CURRENCY_ID>...
             Collateral type for exchange rates, e.g. "DOT" or "KSM"
 
-        --exchange-rate <EXCHANGE_RATE>
+        --exchange-rate <EXCHANGE_RATE>...
             Exchange rate from the collateral currency to the wrapped currency - i.e. 1 BTC = 2308
-            DOT [default: 2308]
+            DOT
 
         --interval-ms <INTERVAL_MS>
             Interval for exchange rate setter, default 25 minutes [default: 1500000]
