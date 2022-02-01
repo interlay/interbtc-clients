@@ -33,12 +33,11 @@ Download and start [Bitcoin Core](https://bitcoin.org/en/bitcoin-core/):
 bitcoind -regtest -server
 ```
 
-Build and run the [BTC Parachain](https://github.com/interlay/interbtc):
+Build and run the [interBTC Parachain](https://github.com/interlay/interbtc):
 
 ```
-git clone git@gitlab.com:interlay/btc-parachain.git
-cd btc-parachain
-cargo run --release -- --dev
+git clone git@gitlab.com:interlay/interbtc.git
+cargo run --bin interbtc-standalone -- --dev --tmp
 ```
 
 ## Getting Started
@@ -47,7 +46,7 @@ The basic command to run the vault client:
 
 ```
 source ../.env
-cargo run
+cargo run --bin vault --features standalone-metadata
 ```
 
 ### Options
@@ -55,7 +54,7 @@ cargo run
 When using cargo to run this binary, arguments to cargo and the binary are separated by `--`. For example, to pass `--help` to the vault to get a list of all command line options that is guaranteed to be up date, run:
 
 ```
-cargo run -- --help
+cargo run --bin vault --features standalone-metadata -- --help
 ```
 
 For convenience, a copy of this output is included below. Note that the bitcoin RPC configuration can be passed either as command line arguments, or as environment variables. By running `source ../.env`, the default RPC configuration is loaded into environment variables. 
