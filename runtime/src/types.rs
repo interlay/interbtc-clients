@@ -1,9 +1,6 @@
 use crate::{metadata, Config, InterBtcRuntime};
 pub use metadata_aliases::*;
-use subxt::{
-    sp_core::{crypto::Ss58Codec, sr25519::Pair as KeyPair},
-    PairSigner,
-};
+use subxt::sp_core::{crypto::Ss58Codec, sr25519::Pair as KeyPair};
 
 pub use primitives::{
     CurrencyId,
@@ -23,7 +20,7 @@ pub type H160 = subxt::sp_core::H160;
 pub type H256 = subxt::sp_core::H256;
 pub type U256 = subxt::sp_core::U256;
 
-pub type InterBtcSigner = PairSigner<InterBtcRuntime, KeyPair>;
+pub type InterBtcSigner = subxt::PairSigner<InterBtcRuntime, subxt::DefaultExtra<InterBtcRuntime>, KeyPair>;
 
 pub type BtcAddress = module_btc_relay::BtcAddress;
 

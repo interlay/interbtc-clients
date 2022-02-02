@@ -1,5 +1,5 @@
 use clap::Clap;
-use runtime::{InterBtcRuntime, PairSigner};
+use runtime::InterBtcSigner;
 use service::{ConnectionManager, ServiceConfig};
 
 use vault::{Error, VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION};
@@ -33,7 +33,7 @@ async fn start() -> Result<(), Error> {
     opts.service.logging_format.init_subscriber();
 
     let (pair, wallet_name) = opts.account_info.get_key_pair()?;
-    let signer = PairSigner::<InterBtcRuntime, _>::new(pair);
+    let signer = InterBtcSigner::new(pair);
 
     ConnectionManager::<_, VaultService>::new(
         signer.clone(),
