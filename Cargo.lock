@@ -8861,7 +8861,7 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 [[package]]
 name = "subxt"
 version = "0.16.0"
-source = "git+https://github.com/interlay/subxt?rev=33aabfb8bfc333950f341e4add5585b8f2b0b786#33aabfb8bfc333950f341e4add5585b8f2b0b786"
+source = "git+https://github.com/interlay/subxt?rev=aefc0aabcce124c8e724d637f2dd7fb607ee7bba#aefc0aabcce124c8e724d637f2dd7fb607ee7bba"
 dependencies = [
  "async-trait",
  "bitvec",
@@ -8889,7 +8889,7 @@ dependencies = [
 [[package]]
 name = "subxt-client"
 version = "0.1.0"
-source = "git+https://github.com/interlay/subxt?rev=33aabfb8bfc333950f341e4add5585b8f2b0b786#33aabfb8bfc333950f341e4add5585b8f2b0b786"
+source = "git+https://github.com/interlay/subxt?rev=aefc0aabcce124c8e724d637f2dd7fb607ee7bba#aefc0aabcce124c8e724d637f2dd7fb607ee7bba"
 dependencies = [
  "async-std",
  "futures 0.1.31",
@@ -8909,7 +8909,7 @@ dependencies = [
 [[package]]
 name = "subxt-codegen"
 version = "0.16.0"
-source = "git+https://github.com/interlay/subxt?rev=33aabfb8bfc333950f341e4add5585b8f2b0b786#33aabfb8bfc333950f341e4add5585b8f2b0b786"
+source = "git+https://github.com/interlay/subxt?rev=aefc0aabcce124c8e724d637f2dd7fb607ee7bba#aefc0aabcce124c8e724d637f2dd7fb607ee7bba"
 dependencies = [
  "async-trait",
  "darling",
@@ -8927,7 +8927,7 @@ dependencies = [
 [[package]]
 name = "subxt-macro"
 version = "0.16.0"
-source = "git+https://github.com/interlay/subxt?rev=33aabfb8bfc333950f341e4add5585b8f2b0b786#33aabfb8bfc333950f341e4add5585b8f2b0b786"
+source = "git+https://github.com/interlay/subxt?rev=aefc0aabcce124c8e724d637f2dd7fb607ee7bba#aefc0aabcce124c8e724d637f2dd7fb607ee7bba"
 dependencies = [
  "async-trait",
  "darling",

@@ -1345,22 +1345,20 @@ impl BtcRelayPallet for InterBtcParachain {
 
     /// check that the block with the given block is included in the main chain of the relay, with sufficient
     /// confirmations
-    async fn verify_block_header_inclusion(&self, _block_hash: H256Le) -> Result<(), Error> {
-        // let head = self.get_latest_block_hash().await?;
-        // let result: Result<(), DispatchError> = self
-        //     .rpc_client
-        //     .request(
-        //         "btcRelay_verifyBlockHeaderInclusion",
-        //         &[
-        //             to_json_value(Into::<RichH256Le>::into(block_hash))?,
-        //             to_json_value(head)?,
-        //         ],
-        //     )
-        //     .await?;
+    async fn verify_block_header_inclusion(&self, block_hash: H256Le) -> Result<(), Error> {
+        let head = self.get_latest_block_hash().await?;
+        let result: Result<(), DispatchError> = self
+            .rpc_client
+            .request(
+                "btcRelay_verifyBlockHeaderInclusion",
+                &[
+                    to_json_value(Into::<RichH256Le>::into(block_hash))?,
+                    to_json_value(head)?,
+                ],
+            )
+            .await?;
 
-        // // TODO: convert runtime error
-        // Ok(result.unwrap())
-        Ok(())
+        result.map_err(|err| Error::SubxtRuntimeError(SubxtError::Runtime(subxt::RuntimeError(err))))
     }
 }
 
