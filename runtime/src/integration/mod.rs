@@ -4,7 +4,7 @@ mod bitcoin_simulator;
 
 use crate::{
     rpc::{IssuePallet, OraclePallet, SudoPallet, VaultRegistryPallet},
-    CurrencyId, FixedU128, H256Le, InterBtcParachain, InterBtcRuntime, OracleKey, VaultId,
+    CurrencyId, FixedU128, H256Le, InterBtcParachain, InterBtcSigner, OracleKey, VaultId,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
 use frame_support::assert_ok;
@@ -13,7 +13,7 @@ use futures::{
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
 use std::time::Duration;
-use subxt::{Event, PairSigner};
+use subxt::Event;
 use subxt_client::{AccountKeyring, DatabaseSource, KeystoreConfig, Role, SubxtClientConfig, WasmExecutionMethod};
 use tempdir::TempDir;
 use tokio::time::{sleep, timeout};
@@ -88,7 +88,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
 
 /// Create a new parachain_rpc with the given keyring
 pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> InterBtcParachain {
-    let signer = PairSigner::<InterBtcRuntime, _>::new(key.pair());
+    let signer = InterBtcSigner::new(key.pair());
     InterBtcParachain::new(client, signer)
         .await
         .expect("Error creating parachain_rpc")

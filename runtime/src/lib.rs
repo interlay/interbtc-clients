@@ -17,10 +17,10 @@ use codec::{Decode, Encode};
 use sp_std::marker::PhantomData;
 use subxt::{
     sp_runtime::{generic::Header, traits::BlakeTwo256, MultiSignature, OpaqueExtrinsic},
-    subxt, Config, ExtrinsicExtraData, StorageEntry,
+    subxt, Config,
 };
 
-pub use error::Error;
+pub use error::{Error, SubxtError};
 pub use primitives::CurrencyInfo;
 pub use retry::{notify_retry, RetryPolicy};
 #[cfg(all(
@@ -32,11 +32,10 @@ pub use rpc::{
     BtcRelayPallet, CollateralBalancesPallet, FeePallet, InterBtcParachain, IssuePallet, OraclePallet, RedeemPallet,
     RefundPallet, RelayPallet, ReplacePallet, SecurityPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
 };
-
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
 pub use subxt::{
     sp_core::{crypto::Ss58Codec, sr25519::Pair},
-    Error as SubxtError, PairSigner, Signer,
+    Signer,
 };
 pub use types::*;
 
@@ -60,21 +59,21 @@ pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
     feature = "parachain-metadata-kintsugi",
     subxt(
         runtime_metadata_path = "metadata-parachain-kintsugi.scale",
-        generated_type_derives = "Debug, Eq, PartialEq, Ord, PartialOrd, Clone"
+        generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]
 #[cfg_attr(
     feature = "parachain-metadata-testnet",
     subxt(
         runtime_metadata_path = "metadata-parachain-testnet.scale",
-        generated_type_derives = "Debug, Eq, PartialEq, Ord, PartialOrd, Clone"
+        generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]
 #[cfg_attr(
     feature = "standalone-metadata",
     subxt(
         runtime_metadata_path = "metadata-standalone.scale",
-        generated_type_derives = "Debug, Eq, PartialEq, Ord, PartialOrd, Clone"
+        generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]
 pub mod metadata {
@@ -127,22 +126,8 @@ impl Config for InterBtcRuntime {
     type Signature = MultiSignature;
 }
 
-impl ExtrinsicExtraData<InterBtcRuntime> for InterBtcRuntime {
-    type AccountData = metadata::system::storage::Account;
-    type Extra = subxt::extrinsic::DefaultExtra<Self>;
-}
-
 impl From<<InterBtcRuntime as Config>::AccountId> for metadata::system::storage::Account {
     fn from(account_id: <InterBtcRuntime as Config>::AccountId) -> Self {
-        Self(account_id)
-    }
-}
-
-impl subxt::AccountData<InterBtcRuntime> for metadata::system::storage::Account {
-    fn nonce(result: &<Self as StorageEntry>::Value) -> <InterBtcRuntime as Config>::Index {
-        result.nonce
-    }
-    fn storage_entry(account_id: <InterBtcRuntime as Config>::AccountId) -> Self {
         Self(account_id)
     }
 }

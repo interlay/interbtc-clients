@@ -9,7 +9,7 @@ use runtime::{
     cli::{parse_duration_ms, ProviderUserOpts},
     parse_collateral_currency, CurrencyId, CurrencyIdExt, CurrencyInfo, FixedPointNumber,
     FixedPointTraits::{CheckedDiv, CheckedMul, One},
-    FixedU128, InterBtcParachain, InterBtcRuntime, OracleKey, OraclePallet, PairSigner,
+    FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, OraclePallet,
 };
 use std::{collections::HashMap, time::Duration};
 use tokio::{join, time::sleep};
@@ -181,7 +181,7 @@ async fn main() -> Result<(), Error> {
     log::info!("Starting oracle with currencies = {:?}", opts.currency_id);
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
-    let signer = PairSigner::<InterBtcRuntime, _>::new(key_pair);
+    let signer = InterBtcSigner::new(key_pair);
 
     let blockstream_url = if let Some(mut url) = opts.blockstream {
         url.set_path(&format!("{}/fee-estimates", url.path()));

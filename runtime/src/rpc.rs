@@ -1,6 +1,8 @@
 use crate::{
     conn::{new_websocket_client, new_websocket_client_with_retry},
-    metadata, notify_retry,
+    metadata,
+    metadata::DispatchError,
+    notify_retry,
     types::*,
     AccountId, CurrencyId, Error, InterBtcRuntime, InterBtcSigner, RetryPolicy, RichH256Le, SubxtError,
 };
@@ -9,14 +11,12 @@ use crate::{BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CON
 use async_trait::async_trait;
 use codec::Encode;
 use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt};
-use jsonrpsee::types::to_json_value;
+use jsonrpsee::core::to_json_value;
 use module_oracle_rpc_runtime_api::BalanceWrapper;
-use sp_runtime::create_runtime_str;
-use sp_version::RuntimeVersion;
-use std::{borrow::Cow, collections::BTreeSet, future::Future, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 use subxt::{
-    sp_runtime::DispatchError, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Event, EventSubscription,
-    EventsDecoder, Metadata, RpcClient, RuntimeError as SubxtRuntimeError, Signer,
+    BasicError, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, DefaultExtra, Event, EventSubscription,
+    EventsDecoder, Metadata, RpcClient, Signer, TransactionEvents, TransactionProgress,
 };
 use tokio::{sync::RwLock, time::sleep};
 
@@ -24,35 +24,11 @@ const DEFAULT_COLLATERAL_CURRENCY: CurrencyId = Token(DOT);
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "standalone-metadata")] {
-        const DEFAULT_RUNTIME_VERSION: RuntimeVersion = RuntimeVersion {
-            spec_name: create_runtime_str!("interbtc-standalone"),
-            impl_name: create_runtime_str!("interbtc-standalone"),
-            authoring_version: 1,
-            spec_version: 1,
-            impl_version: 1,
-            transaction_version: 1,
-            apis: Cow::Owned(vec![]),
-        };
+        const DEFAULT_SPEC_VERSION: u32 = 1;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_RUNTIME_VERSION: RuntimeVersion = RuntimeVersion {
-            spec_name: create_runtime_str!("kintsugi-parachain"),
-            impl_name: create_runtime_str!("kintsugi-parachain"),
-            authoring_version: 1,
-            spec_version: 9,
-            impl_version: 1,
-            transaction_version: 2,
-            apis: Cow::Owned(vec![]),
-        };
+        const DEFAULT_SPEC_VERSION: u32 = 9;
     } else if #[cfg(feature = "parachain-metadata-testnet")] {
-        const DEFAULT_RUNTIME_VERSION: RuntimeVersion = RuntimeVersion {
-            spec_name: create_runtime_str!("testnet-parachain"),
-            impl_name: create_runtime_str!("testnet-parachain"),
-            authoring_version: 1,
-            spec_version: 0,
-            impl_version: 1,
-            transaction_version: 0,
-            apis: Cow::Owned(vec![]),
-        };
+        const DEFAULT_SPEC_VERSION: u32 = 0;
     }
 }
 
@@ -64,7 +40,7 @@ pub struct InterBtcParachain {
     ext_client: SubxtClient<InterBtcRuntime>,
     signer: Arc<RwLock<InterBtcSigner>>,
     account_id: AccountId,
-    api: Arc<metadata::RuntimeApi<InterBtcRuntime>>,
+    api: Arc<metadata::RuntimeApi<InterBtcRuntime, DefaultExtra<InterBtcRuntime>>>,
     metadata: Arc<Metadata>,
 }
 
@@ -77,10 +53,14 @@ impl InterBtcParachain {
         let metadata = Arc::new(ext_client.rpc().metadata().await?);
 
         let runtime_version = ext_client.rpc().runtime_version(None).await?;
-        if runtime_version.can_call_with(&DEFAULT_RUNTIME_VERSION) {
-            log::info!("Using {}", runtime_version);
+        if runtime_version.spec_version == DEFAULT_SPEC_VERSION {
+            log::info!("spec_version={}", runtime_version.spec_version);
+            log::info!("transaction_version={}", runtime_version.transaction_version);
         } else {
-            return Err(Error::InvalidRuntimeVersion(DEFAULT_RUNTIME_VERSION, runtime_version));
+            return Err(Error::InvalidSpecVersion(
+                DEFAULT_SPEC_VERSION,
+                runtime_version.spec_version,
+            ));
         }
 
         let parachain_rpc = Self {
@@ -144,12 +124,12 @@ impl InterBtcParachain {
     }
 
     /// Gets a copy of the signer with a unique nonce
-    async fn with_unique_signer<F, R, T>(&self, call: F) -> Result<T, Error>
+    async fn with_unique_signer<'client, F, R>(&self, call: F) -> Result<TransactionEvents<InterBtcRuntime>, Error>
     where
         F: Fn(InterBtcSigner) -> R,
-        R: Future<Output = Result<T, SubxtError>>,
+        R: Future<Output = Result<TransactionProgress<'client, InterBtcRuntime, DispatchError>, BasicError>>,
     {
-        notify_retry(
+        notify_retry::<Error, _, _, _, _, _>(
             || async {
                 let signer = {
                     let mut signer = self.signer.write().await;
@@ -158,11 +138,11 @@ impl InterBtcParachain {
                     signer.increment_nonce();
                     cloned_signer
                 };
-                call(signer).await
+                Ok(call(signer).await?.wait_for_finalized_success().await?)
             },
             |result| async {
                 match result.map_err(Into::<Error>::into) {
-                    Ok(ok) => Ok(ok),
+                    Ok(te) => Ok(te),
                     Err(err) if err.is_invalid_transaction() => {
                         self.refresh_nonce().await;
                         Err(RetryPolicy::Skip(Error::InvalidTransaction))
@@ -186,7 +166,7 @@ impl InterBtcParachain {
     {
         let mut sub = self.ext_client.rpc().subscribe_finalized_blocks().await?;
         loop {
-            on_block(sub.next().await?.ok_or(Error::ChannelClosed)?).await?;
+            on_block(sub.next().await.ok_or(Error::ChannelClosed)??).await?;
         }
     }
 
@@ -196,7 +176,7 @@ impl InterBtcParachain {
     ///
     /// # Arguments
     /// * `on_error` - callback for decoding errors, is not allowed to take too long
-    pub async fn on_event_error<E: Fn(SubxtError)>(&self, on_error: E) -> Result<(), Error> {
+    pub async fn on_event_error<E: Fn(BasicError)>(&self, on_error: E) -> Result<(), Error> {
         let sub = self.ext_client.rpc().subscribe_finalized_events().await?;
         let decoder = EventsDecoder::<InterBtcRuntime>::new((*self.metadata).clone());
 
@@ -996,19 +976,17 @@ impl IssuePallet for InterBtcParachain {
         vault_id: &VaultId,
         griefing_collateral: u128,
     ) -> Result<RequestIssueEvent, Error> {
-        let result = self
-            .with_unique_signer(|signer| async move {
-                self.api
-                    .tx()
-                    .issue()
-                    .request_issue(amount, vault_id.clone(), griefing_collateral)
-                    .sign_and_submit_then_watch(&signer)
-                    .await
-            })
-            .await?;
-        result
-            .find_event::<RequestIssueEvent>()?
-            .ok_or(Error::RequestIssueIDNotFound)
+        self.with_unique_signer(|signer| async move {
+            self.api
+                .tx()
+                .issue()
+                .request_issue(amount, vault_id.clone(), griefing_collateral)
+                .sign_and_submit_then_watch(&signer)
+                .await
+        })
+        .await?
+        .find_first_event::<RequestIssueEvent>()?
+        .ok_or(Error::RequestIssueIDNotFound)
     }
 
     async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
@@ -1120,7 +1098,7 @@ pub trait RedeemPallet {
 #[async_trait]
 impl RedeemPallet for InterBtcParachain {
     async fn request_redeem(&self, amount: u128, btc_address: BtcAddress, vault_id: &VaultId) -> Result<H256, Error> {
-        let result = self
+        let redeem_event = self
             .with_unique_signer(|signer| async move {
                 self.api
                     .tx()
@@ -1129,10 +1107,8 @@ impl RedeemPallet for InterBtcParachain {
                     .sign_and_submit_then_watch(&signer)
                     .await
             })
-            .await?;
-
-        let redeem_event = result
-            .find_event::<RequestRedeemEvent>()?
+            .await?
+            .find_first_event::<RequestRedeemEvent>()?
             .ok_or(Error::RequestRedeemIDNotFound)?;
         Ok(redeem_event.redeem_id)
     }
@@ -1382,12 +1358,7 @@ impl BtcRelayPallet for InterBtcParachain {
             )
             .await?;
 
-        result.map_err(
-            |x| match SubxtRuntimeError::from_dispatch(self.ext_client.metadata(), x) {
-                Ok(e) => Error::SubxtError(SubxtError::Runtime(e)),
-                Err(e) => Error::SubxtError(e),
-            },
-        )
+        result.map_err(|err| Error::SubxtRuntimeError(SubxtError::Runtime(subxt::RuntimeError(err))))
     }
 }
 
