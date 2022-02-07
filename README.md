@@ -66,6 +66,16 @@ Use the following command to fetch the newest metadata from a live chain:
 curl -sX POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"state_getMetadata", "id": 1}' localhost:9933 | jq .result | cut -d '"' -f 2 | xxd -r -p > runtime/metadata.scale
 ```
 
+To build, one of the following mutually-exclusive features must be specified:
+- standalone-metadata
+- parachain-metadata-kintsugi
+- parachain-metadata-testnet
+
+The default command for building the clients, assuming a standalone chain, is:
+```shell
+cargo build --features=standalone-metadata
+```
+
 <p align="center">
   <a href="https://web3.foundation/grants/">
     <img src="media/web3_grants.png">
