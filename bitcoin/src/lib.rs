@@ -19,7 +19,7 @@ pub use bitcoincore_rpc::{
         Address, Amount, Block, BlockHeader, Network, OutPoint, PrivateKey, PubkeyHash, PublicKey, Script, ScriptHash,
         Transaction, TxIn, TxMerkleNode, TxOut, Txid, WPubkeyHash, WScriptHash,
     },
-    bitcoincore_rpc_json::{CreateRawTransactionInput, GetTransactionResult, WalletTxInfo},
+    bitcoincore_rpc_json::{CreateRawTransactionInput, GetBlockchainInfoResult, GetTransactionResult, WalletTxInfo},
     json::{self, AddressType, GetBlockResult},
     jsonrpc::{error::RpcError, Error as JsonRpcError},
     Auth, Client, Error as BitcoinError, RpcApi,
@@ -183,35 +183,125 @@ impl LockedTransaction {
     }
 }
 
+fn parse_bitcoin_network(src: &str) -> Result<Network, Error> {
+    match src {
+        "main" => Ok(Network::Bitcoin),
+        "test" => Ok(Network::Testnet),
+        "regtest" => Ok(Network::Regtest),
+        _ => Err(Error::InvalidBitcoinNetwork),
+    }
+}
+
+/// Connect to a bitcoin-core full node or timeout.
+async fn connect(rpc: &Client, connection_timeout: Duration) -> Result<Network, Error> {
+    info!("Connecting to bitcoin-core...");
+    timeout(connection_timeout, async move {
+        loop {
+            match rpc.get_blockchain_info() {
+                Err(BitcoinError::JsonRpc(JsonRpcError::Hyper(HyperError::Io(err))))
+                    if err.kind() == IoErrorKind::ConnectionRefused =>
+                {
+                    trace!("could not connect to bitcoin-core");
+                    sleep(RETRY_DURATION).await;
+                    continue;
+                }
+                Err(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
+                    if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcInWarmup =>
+                {
+                    // may be loading block index or verifying wallet
+                    trace!("bitcoin-core still in warm up");
+                    sleep(RETRY_DURATION).await;
+                    continue;
+                }
+                Err(BitcoinError::JsonRpc(JsonRpcError::Json(err))) if err.classify() == SerdeJsonCategory::Syntax => {
+                    // invalid response, can happen if server is in shutdown
+                    trace!("bitcoin-core gave an invalid response: {}", err);
+                    sleep(RETRY_DURATION).await;
+                    continue;
+                }
+                Ok(GetBlockchainInfoResult { chain, .. }) => {
+                    info!("Connected to {}", chain);
+                    return parse_bitcoin_network(&chain);
+                }
+                Err(err) => return Err(err.into()),
+            }
+        }
+    })
+    .await?
+}
+
+struct BitcoinCoreBuilder {
+    url: String,
+    auth: Auth,
+    wallet_name: Option<String>,
+    electrs_url: Option<String>,
+}
+
+impl BitcoinCoreBuilder {
+    pub(crate) fn new(url: String) -> Self {
+        Self {
+            url,
+            auth: Auth::None,
+            wallet_name: None,
+            electrs_url: None,
+        }
+    }
+
+    pub(crate) fn set_auth(mut self, auth: Auth) -> Self {
+        self.auth = auth;
+        self
+    }
+
+    pub(crate) fn set_wallet_name(mut self, wallet_name: Option<String>) -> Self {
+        self.wallet_name = wallet_name;
+        self
+    }
+
+    pub(crate) fn set_electrs_url(mut self, electrs_url: Option<String>) -> Self {
+        self.electrs_url = electrs_url;
+        self
+    }
+
+    fn new_client(&self) -> Result<Client, Error> {
+        let url = match self.wallet_name {
+            Some(ref x) => format!("{}/wallet/{}", self.url, x),
+            None => self.url.clone(),
+        };
+        Ok(Client::new(url, self.auth.clone())?)
+    }
+
+    pub fn build_with_network(self, network: Network) -> Result<BitcoinCore, Error> {
+        Ok(BitcoinCore::new(
+            self.new_client()?,
+            self.wallet_name,
+            network,
+            self.electrs_url,
+        ))
+    }
+
+    pub async fn build_and_connect(self, connection_timeout: Duration) -> Result<BitcoinCore, Error> {
+        let client = self.new_client()?;
+        let network = connect(&client, connection_timeout).await?;
+        Ok(BitcoinCore::new(client, self.wallet_name, network, self.electrs_url))
+    }
+}
+
 #[derive(Clone)]
 pub struct BitcoinCore {
     rpc: Arc<Client>,
     wallet_name: Option<String>,
     network: Network,
     transaction_creation_lock: Arc<Mutex<()>>,
-    connection_timeout: Duration,
     electrs_config: ElectrsConfiguration,
 }
 
 impl BitcoinCore {
-    pub fn new(
-        url: String,
-        auth: Auth,
-        wallet_name: Option<String>,
-        network: Network,
-        connection_timeout: Duration,
-        electrs_url: Option<String>,
-    ) -> Result<Self, Error> {
-        let url = match wallet_name {
-            Some(ref x) => format!("{}/wallet/{}", url, x),
-            None => url,
-        };
-        Ok(Self {
-            rpc: Arc::new(Client::new(url, auth)?),
+    fn new(client: Client, wallet_name: Option<String>, network: Network, electrs_url: Option<String>) -> Self {
+        BitcoinCore {
+            rpc: Arc::new(client),
             wallet_name,
             network,
             transaction_creation_lock: Arc::new(Mutex::new(())),
-            connection_timeout,
             electrs_config: ElectrsConfiguration {
                 base_path: electrs_url.unwrap_or_else(|| {
                     match network {
@@ -223,47 +313,11 @@ impl BitcoinCore {
                 }),
                 ..Default::default()
             },
-        })
+        }
     }
 
-    /// Connect to a bitcoin-core full node or timeout.
-    pub async fn connect(&self) -> Result<(), Error> {
-        info!("Connecting to bitcoin-core...");
-        timeout(self.connection_timeout, async move {
-            loop {
-                match self.rpc.get_blockchain_info() {
-                    Err(BitcoinError::JsonRpc(JsonRpcError::Hyper(HyperError::Io(err))))
-                        if err.kind() == IoErrorKind::ConnectionRefused =>
-                    {
-                        trace!("could not connect to bitcoin-core");
-                        sleep(RETRY_DURATION).await;
-                        continue;
-                    }
-                    Err(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
-                        if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcInWarmup =>
-                    {
-                        // may be loading block index or verifying wallet
-                        trace!("bitcoin-core still in warm up");
-                        sleep(RETRY_DURATION).await;
-                        continue;
-                    }
-                    Err(BitcoinError::JsonRpc(JsonRpcError::Json(err)))
-                        if err.classify() == SerdeJsonCategory::Syntax =>
-                    {
-                        // invalid response, can happen if server is in shutdown
-                        trace!("bitcoin-core gave an invalid response: {}", err);
-                        sleep(RETRY_DURATION).await;
-                        continue;
-                    }
-                    Ok(_) => {
-                        info!("Connected!");
-                        return Ok(());
-                    }
-                    Err(err) => return Err(err.into()),
-                }
-            }
-        })
-        .await?
+    pub fn network(&self) -> Network {
+        self.network
     }
 
     /// Wait indefinitely for the node to sync.
@@ -884,15 +938,9 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_find_duplicate_payments_succeeds() {
-        let bitcoin_core = BitcoinCore::new(
-            "".to_string(),
-            Auth::None,
-            None,
-            Network::Testnet,
-            Duration::from_secs(5),
-            None,
-        )
-        .unwrap();
+        let bitcoin_core = BitcoinCoreBuilder::new("".to_string())
+            .build_with_network(Network::Testnet)
+            .unwrap();
 
         let raw_tx = Vec::from_hex("020000000001011f876af6685f6e872b18d288a614adfd21d0246f52e3ca086cdb15d125837a270100000000fdffffff020000000000000000226a208b26f7cf49e1ad4d9f81d237933da8810644a85ac25b3c22a6a2324e1ba02efcba0e0000000000001600148cb0d2c0597a4b496370f94c2e1424d6d1e3432d02473044022023159d039a42095066036b25f08bf77dbf8a8813bf3d842aa998f7437e0da5d002202a102568194e3bba597a31f432c8d3beb5fca9129366f115831b4abba356aa4001210223a4dbc56f6d53a2014dfb106e754323da8e9c095cf9d68f627169f7c059d07a08e71f00").unwrap();
         let transaction: Transaction = deserialize(&raw_tx).unwrap();

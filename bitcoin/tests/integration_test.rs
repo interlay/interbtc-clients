@@ -1,23 +1,20 @@
 #![cfg(feature = "uses-bitcoind")]
 
 use bitcoin::{
-    Auth, BitcoinCore, BitcoinCoreApi, Error, Network, PartialAddress, Payload, PrivateKey, PUBLIC_KEY_SIZE,
+    Auth, BitcoinCore, BitcoinCoreApi, BitcoinCoreBuilder, Error, Network, PartialAddress, Payload, PrivateKey,
+    PUBLIC_KEY_SIZE,
 };
 use regex::Regex;
 use std::env::var;
 
 fn new_bitcoin_core(wallet: Option<String>) -> Result<BitcoinCore, Error> {
-    Ok(BitcoinCore::new(
-        var("BITCOIN_RPC_URL").expect("BITCOIN_RPC_URL not set"),
-        Auth::UserPass(
+    BitcoinCoreBuilder::new(var("BITCOIN_RPC_URL").expect("BITCOIN_RPC_URL not set"))
+        .set_auth(Auth::UserPass(
             var("BITCOIN_RPC_USER").expect("BITCOIN_RPC_USER not set"),
             var("BITCOIN_RPC_PASS").expect("BITCOIN_RPC_PASS not set"),
-        ),
-        wallet,
-        Network::Regtest,
-        Default::default(),
-        None,
-    )?)
+        ))
+        .set_wallet_name(wallet)
+        .build_with_network(Network::Regtest)
 }
 
 #[tokio::test]
