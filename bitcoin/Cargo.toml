@@ -30,11 +30,11 @@ hyper = "0.10"
 esplora-btc-api = "1.0.3"
 
 # Substrate dependencies
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.12" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.16" }
 
 [dependencies.interbtc-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "b1bdd2c8102c643dd9fec11d133802c6055fd988"
+rev = "9fed496a74c9b2b8bc0a3ed15e35804f79c79728"
 package = "bitcoin"
 optional = true
 
