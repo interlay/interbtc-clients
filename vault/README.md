@@ -119,7 +119,8 @@ OPTIONS:
             Parachain websocket URL [default: ws://127.0.0.1:9944]
 
         --collateral-currency-id <COLLATERAL_CURRENCY_ID>
-            The currency to use for the collateral, e.g. "DOT" or "KSM"
+            The currency to use for the collateral, e.g. "DOT" or "KSM". Defaults to the relay chain
+            currency if not set
 
         --collateral-timeout-ms <COLLATERAL_TIMEOUT_MS>
             Timeout in milliseconds to repeat collateralization checks [default: 5000]
@@ -150,16 +151,10 @@ OPTIONS:
         --max-notifs-per-subscription <MAX_NOTIFS_PER_SUBSCRIPTION>
             Maximum notification capacity for each subscription
 
-        --network <NETWORK>
-            Bitcoin network type for address encoding [default: regtest]
-
         --payment-margin-minutes <PAYMENT_MARGIN_MINUTES>
             Minimum time to the the redeem/replace execution deadline to make the bitcoin payment
             [default: 120]
 
         --restart-policy <RESTART_POLICY>
             Restart or stop on error [default: always]
-
-        --wrapped-currency-id <WRAPPED_CURRENCY_ID>
-            The currency to use for the wrapping, e.g. "INTERBTC" or "KBTC"
 ```
