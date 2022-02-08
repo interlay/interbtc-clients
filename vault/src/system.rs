@@ -13,9 +13,9 @@ use futures::{
 use git_version::git_version;
 use runtime::{
     cli::{parse_duration_minutes, parse_duration_ms},
-    parse_collateral_currency, parse_wrapped_currency, BtcRelayPallet, CurrencyId, Error as RuntimeError,
-    InterBtcParachain, RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs,
-    VaultCurrencyPair, VaultId, VaultRegistryPallet,
+    parse_collateral_currency, BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain,
+    RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair, VaultId,
+    VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -97,12 +97,9 @@ pub struct VaultServiceConfig {
     pub no_auto_refund: bool,
 
     /// The currency to use for the collateral, e.g. "DOT" or "KSM".
-    #[clap(long, parse(try_from_str = parse_collateral_currency), requires = "wrapped-currency-id")]
+    /// Defaults to the relay chain currency if not set.
+    #[clap(long, parse(try_from_str = parse_collateral_currency))]
     pub collateral_currency_id: Option<CurrencyId>,
-
-    /// The currency to use for the wrapping, e.g. "INTERBTC" or "KBTC".
-    #[clap(long, parse(try_from_str = parse_wrapped_currency), requires = "collateral-currency-id")]
-    pub wrapped_currency_id: Option<CurrencyId>,
 }
 
 async fn active_block_listener(
@@ -554,26 +551,19 @@ impl VaultService {
 
     async fn maybe_register_vault(&self) -> Result<(), Error> {
         let account_id = self.btc_parachain.get_account_id();
-        let (collateral_currency, _wrapped_currency) =
-            match (self.config.collateral_currency_id, self.config.wrapped_currency_id) {
-                (Some(x), Some(y)) => (x, y),
-                _ => {
-                    tracing::info!(
-                        "Not registering vault -- collateral-currency-id and wrapped-currency-id not configured"
-                    );
-                    return Ok(());
-                }
-            };
+
+        let collateral_currency = if let Some(currency_id) = self.config.collateral_currency_id {
+            currency_id
+        } else {
+            self.btc_parachain.relay_chain_currency_id
+        };
+        let wrapped_currency = self.btc_parachain.wrapped_currency_id;
 
         let vault_id = VaultId {
             account_id: account_id.clone(),
             currencies: VaultCurrencyPair {
                 collateral: collateral_currency,
-                wrapped: self
-                    .config
-                    .wrapped_currency_id
-                    .unwrap_or(runtime::RELAY_CHAIN_WRAPPED_CURRENCY), /* TODO: fetch this from parachain
-                                                                        * metadata */
+                wrapped: wrapped_currency,
             },
         };
 

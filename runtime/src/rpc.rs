@@ -20,8 +20,6 @@ use subxt::{
 };
 use tokio::{sync::RwLock, time::sleep};
 
-const DEFAULT_COLLATERAL_CURRENCY: CurrencyId = Token(DOT);
-
 cfg_if::cfg_if! {
     if #[cfg(feature = "standalone-metadata")] {
         const DEFAULT_SPEC_VERSION: u32 = 1;
@@ -32,16 +30,19 @@ cfg_if::cfg_if! {
     }
 }
 
-// TODO: embed collateral, native and wrapped currency ids here
-// read from pallet constants at startup
+type RuntimeApi = metadata::RuntimeApi<InterBtcRuntime, DefaultExtra<InterBtcRuntime>>;
+
 #[derive(Clone)]
 pub struct InterBtcParachain {
     rpc_client: RpcClient,
     ext_client: SubxtClient<InterBtcRuntime>,
     signer: Arc<RwLock<InterBtcSigner>>,
     account_id: AccountId,
-    api: Arc<metadata::RuntimeApi<InterBtcRuntime, DefaultExtra<InterBtcRuntime>>>,
+    api: Arc<RuntimeApi>,
     metadata: Arc<Metadata>,
+    pub native_currency_id: CurrencyId,
+    pub relay_chain_currency_id: CurrencyId,
+    pub wrapped_currency_id: CurrencyId,
 }
 
 impl InterBtcParachain {
@@ -49,7 +50,7 @@ impl InterBtcParachain {
         let account_id = signer.account_id().clone();
         let rpc_client = rpc_client.into();
         let ext_client = SubxtClientBuilder::new().set_client(rpc_client.clone()).build().await?;
-        let api = Arc::new(ext_client.clone().to_runtime_api());
+        let api: RuntimeApi = ext_client.clone().to_runtime_api();
         let metadata = Arc::new(ext_client.rpc().metadata().await?);
 
         let runtime_version = ext_client.rpc().runtime_version(None).await?;
@@ -63,13 +64,21 @@ impl InterBtcParachain {
             ));
         }
 
+        let currency_constants = api.constants().currency();
+        let native_currency_id = currency_constants.get_native_currency_id()?;
+        let relay_chain_currency_id = currency_constants.get_relay_chain_currency_id()?;
+        let wrapped_currency_id = currency_constants.get_wrapped_currency_id()?;
+
         let parachain_rpc = Self {
             rpc_client,
             ext_client,
-            api,
+            api: Arc::new(api),
             metadata,
             signer: Arc::new(RwLock::new(signer)),
             account_id,
+            native_currency_id,
+            relay_chain_currency_id,
+            wrapped_currency_id,
         };
         parachain_rpc.refresh_nonce().await;
         Ok(parachain_rpc)
@@ -629,10 +638,10 @@ impl TimestampPallet for InterBtcParachain {
         Ok(self.api.storage().timestamp().now(head).await?)
     }
 }
-//
+
 #[async_trait]
 pub trait OraclePallet {
-    async fn get_exchange_rate(&self) -> Result<FixedU128, Error>;
+    async fn get_exchange_rate(&self, currency_id: CurrencyId) -> Result<FixedU128, Error>;
 
     async fn feed_values(&self, values: Vec<(OracleKey, FixedU128)>) -> Result<(), Error>;
 
@@ -640,9 +649,9 @@ pub trait OraclePallet {
 
     async fn get_bitcoin_fees(&self) -> Result<FixedU128, Error>;
 
-    async fn wrapped_to_collateral(&self, amount: u128) -> Result<u128, Error>;
+    async fn wrapped_to_collateral(&self, amount: u128, currency_id: CurrencyId) -> Result<u128, Error>;
 
-    async fn collateral_to_wrapped(&self, amount: u128) -> Result<u128, Error>;
+    async fn collateral_to_wrapped(&self, amount: u128, currency_id: CurrencyId) -> Result<u128, Error>;
 
     async fn has_updated(&self, key: &OracleKey) -> Result<bool, Error>;
 }
@@ -651,13 +660,13 @@ pub trait OraclePallet {
 impl OraclePallet for InterBtcParachain {
     /// Returns the last exchange rate in planck per satoshis, the time at which it was set
     /// and the configured max delay.
-    async fn get_exchange_rate(&self) -> Result<FixedU128, Error> {
+    async fn get_exchange_rate(&self, currency_id: CurrencyId) -> Result<FixedU128, Error> {
         let head = self.get_latest_block_hash().await?;
         Ok(self
             .api
             .storage()
             .oracle()
-            .aggregate(OracleKey::ExchangeRate(crate::RELAY_CHAIN_CURRENCY), head)
+            .aggregate(OracleKey::ExchangeRate(currency_id), head)
             .await?
             .ok_or(Error::StorageItemNotFound)?)
     }
@@ -712,7 +721,7 @@ impl OraclePallet for InterBtcParachain {
     }
 
     /// Converts the amount in btc to dot, based on the current set exchange rate.
-    async fn wrapped_to_collateral(&self, amount: u128) -> Result<u128, Error> {
+    async fn wrapped_to_collateral(&self, amount: u128, currency_id: CurrencyId) -> Result<u128, Error> {
         let head = self.get_latest_block_hash().await?;
         let result: BalanceWrapper<_> = self
             .rpc_client
@@ -720,7 +729,7 @@ impl OraclePallet for InterBtcParachain {
                 "oracle_wrappedToCollateral",
                 &[
                     to_json_value(BalanceWrapper { amount })?,
-                    to_json_value(DEFAULT_COLLATERAL_CURRENCY)?,
+                    to_json_value(currency_id)?,
                     to_json_value(head)?,
                 ],
             )
@@ -730,7 +739,7 @@ impl OraclePallet for InterBtcParachain {
     }
 
     /// Converts the amount in dot to btc, based on the current set exchange rate.
-    async fn collateral_to_wrapped(&self, amount: u128) -> Result<u128, Error> {
+    async fn collateral_to_wrapped(&self, amount: u128, currency_id: CurrencyId) -> Result<u128, Error> {
         let head = self.get_latest_block_hash().await?;
         let result: BalanceWrapper<_> = self
             .rpc_client
@@ -738,7 +747,7 @@ impl OraclePallet for InterBtcParachain {
                 "oracle_collateralToWrapped",
                 &[
                     to_json_value(BalanceWrapper { amount })?,
-                    to_json_value(DEFAULT_COLLATERAL_CURRENCY)?,
+                    to_json_value(currency_id)?,
                     to_json_value(head)?,
                 ],
             )

@@ -42,9 +42,6 @@ pub use types::*;
 pub const TX_FEES: u128 = 2000000000;
 pub const MILLISECS_PER_BLOCK: u64 = 6000;
 
-pub const RELAY_CHAIN_CURRENCY: CurrencyId = Token(DOT);
-pub const RELAY_CHAIN_WRAPPED_CURRENCY: CurrencyId = Token(KBTC);
-
 pub const BTC_RELAY_MODULE: &str = "BTCRelay";
 pub const ISSUE_MODULE: &str = "Issue";
 pub const REDEEM_MODULE: &str = "Redeem";
