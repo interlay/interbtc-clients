@@ -318,6 +318,7 @@ mod dispatch_error {
                 RichDispatchError::Module { index, error, .. } => DispatchError::Module { index, error },
                 RichDispatchError::ConsumerRemaining => DispatchError::ConsumerRemaining,
                 RichDispatchError::NoProviders => DispatchError::NoProviders,
+                RichDispatchError::TooManyConsumers => DispatchError::TooManyConsumers,
                 RichDispatchError::Token(token_error) => DispatchError::Token(token_error.into()),
                 RichDispatchError::Arithmetic(arithmetic_error) => DispatchError::Arithmetic(arithmetic_error.into()),
             }
