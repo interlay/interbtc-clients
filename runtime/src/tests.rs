@@ -76,7 +76,7 @@ async fn test_is_transaction_invalid() {
         .await
         .unwrap();
     parachain_rpc.feed_values(vec![(key, exchange_rate)]).await.unwrap();
-    parachain_rpc.wrapped_to_collateral(2532523).await.unwrap();
+    parachain_rpc.wrapped_to_collateral(2532523, Token(DOT)).await.unwrap();
     err.unwrap();
 }
 

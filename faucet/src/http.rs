@@ -83,13 +83,12 @@ async fn _fund_account_raw(
     store: Store,
     user_allowance: u128,
     vault_allowance: u128,
-    native_currency_id: CurrencyId,
 ) -> Result<(), Error> {
     let req: FundAccountJsonRpcRequest = parse_params(params)?;
     let mut allowances = HashMap::new();
     allowances.insert(FundingRequestAccountType::User, user_allowance);
     allowances.insert(FundingRequestAccountType::Vault, vault_allowance);
-    fund_account(parachain_rpc, req, store, allowances, native_currency_id).await
+    fund_account(parachain_rpc, req, store, allowances).await
 }
 
 async fn get_account_type(
@@ -198,7 +197,6 @@ async fn atomic_faucet_funding(
     kv: Bucket<'_, String, Json<FaucetRequest>>,
     account_id: AccountId,
     currency_id: CurrencyId,
-    native_currency_id: CurrencyId,
     allowances: HashMap<FundingRequestAccountType, u128>,
 ) -> Result<(), Error> {
     let account_str = format!("{}-{}", account_id, currency_id.inner().symbol());
@@ -228,8 +226,8 @@ async fn atomic_faucet_funding(
     );
 
     let mut transfers = vec![parachain_rpc.transfer_to(&account_id, amount, currency_id)];
-    if currency_id != native_currency_id {
-        transfers.push(parachain_rpc.transfer_to(&account_id, amount, native_currency_id));
+    if currency_id != parachain_rpc.native_currency_id {
+        transfers.push(parachain_rpc.transfer_to(&account_id, amount, parachain_rpc.native_currency_id));
     }
 
     let result = futures::future::join_all(transfers).await;
@@ -249,19 +247,10 @@ async fn fund_account(
     req: FundAccountJsonRpcRequest,
     store: Store,
     allowances: HashMap<FundingRequestAccountType, u128>,
-    native_currency_id: CurrencyId,
 ) -> Result<(), Error> {
     let parachain_rpc = parachain_rpc.clone();
     let kv = open_kv_store(store)?;
-    atomic_faucet_funding(
-        &parachain_rpc,
-        kv,
-        req.account_id.clone(),
-        req.currency_id,
-        native_currency_id,
-        allowances,
-    )
-    .await?;
+    atomic_faucet_funding(&parachain_rpc, kv, req.account_id.clone(), req.currency_id, allowances).await?;
     Ok(())
 }
 
@@ -271,7 +260,6 @@ pub async fn start_http(
     origin: String,
     user_allowance: u128,
     vault_allowance: u128,
-    native_currency_id: CurrencyId,
 ) -> jsonrpc_http_server::CloseHandle {
     let mut io = IoHandler::default();
     let store = Store::new(Config::new("./kv")).expect("Unable to open kv store");
@@ -293,15 +281,8 @@ pub async fn start_http(
             let parachain_rpc = parachain_rpc.clone();
             let store = store.clone();
             async move {
-                let result = _fund_account_raw(
-                    &parachain_rpc.clone(),
-                    params,
-                    store,
-                    user_allowance,
-                    vault_allowance,
-                    native_currency_id,
-                )
-                .await;
+                let result =
+                    _fund_account_raw(&parachain_rpc.clone(), params, store, user_allowance, vault_allowance).await;
                 if let Err(ref err) = result {
                     log::debug!("Failed to fund account: {}", err);
                 }
@@ -332,12 +313,11 @@ pub async fn start_http(
 #[cfg(all(test, feature = "standalone-metadata"))]
 mod tests {
     use crate::error::Error;
-    use runtime::{CurrencyId, CurrencyIdExt, OracleKey, Token, VaultId, DOT, INTERBTC, INTR, KBTC, KSM};
+    use runtime::{CurrencyId, CurrencyIdExt, OracleKey, Token, VaultId, DOT, INTERBTC, KBTC, KSM};
     use std::{collections::HashMap, sync::Arc};
 
     const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
     const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(INTERBTC);
-    const DEFAULT_NATIVE_CURRENCY: CurrencyId = Token(INTR);
 
     use super::{
         fund_account, open_kv_store, CollateralBalancesPallet, FundAccountJsonRpcRequest, FundingRequestAccountType,
@@ -408,15 +388,9 @@ mod tests {
             currency_id: DEFAULT_TESTING_CURRENCY,
         };
 
-        fund_account(
-            &Arc::from(alice_provider.clone()),
-            req,
-            store,
-            allowances,
-            DEFAULT_NATIVE_CURRENCY,
-        )
-        .await
-        .expect("Funding the account failed");
+        fund_account(&Arc::from(alice_provider.clone()), req, store, allowances)
+            .await
+            .expect("Funding the account failed");
 
         let bob_funds_after = alice_provider
             .get_free_balance_for_id(bob_account_id, DEFAULT_TESTING_CURRENCY)
@@ -451,14 +425,7 @@ mod tests {
         };
 
         assert_err!(
-            fund_account(
-                &Arc::from(alice_provider.clone()),
-                req,
-                store,
-                allowances,
-                DEFAULT_NATIVE_CURRENCY
-            )
-            .await,
+            fund_account(&Arc::from(alice_provider.clone()), req, store, allowances,).await,
             Error::AccountBalanceExceedsMaximum
         );
     }
@@ -515,7 +482,6 @@ mod tests {
             req.clone(),
             store.clone(),
             allowances.clone(),
-            DEFAULT_NATIVE_CURRENCY,
         )
         .await
         .expect("Funding the account failed");
@@ -530,15 +496,9 @@ mod tests {
             .await
             .unwrap();
 
-        fund_account(
-            &Arc::from(alice_provider.clone()),
-            req,
-            store,
-            allowances,
-            DEFAULT_NATIVE_CURRENCY,
-        )
-        .await
-        .expect("Funding the account failed");
+        fund_account(&Arc::from(alice_provider.clone()), req, store, allowances)
+            .await
+            .expect("Funding the account failed");
 
         let bob_funds_after = alice_provider
             .get_free_balance_for_id(bob_account_id, DEFAULT_TESTING_CURRENCY)
@@ -581,7 +541,6 @@ mod tests {
             req.clone(),
             store.clone(),
             allowances.clone(),
-            DEFAULT_NATIVE_CURRENCY,
         )
         .await
         .expect("Funding the account failed");
@@ -593,14 +552,7 @@ mod tests {
         assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
 
         assert_err!(
-            fund_account(
-                &Arc::from(alice_provider.clone()),
-                req,
-                store,
-                allowances,
-                DEFAULT_NATIVE_CURRENCY
-            )
-            .await,
+            fund_account(&Arc::from(alice_provider.clone()), req, store, allowances,).await,
             Error::AccountAlreadyFunded
         );
     }
@@ -655,15 +607,9 @@ mod tests {
                 currency_id,
             };
 
-            fund_account(
-                &Arc::from(alice_provider.clone()),
-                req,
-                store.clone(),
-                allowances,
-                DEFAULT_NATIVE_CURRENCY,
-            )
-            .await
-            .expect("Funding the account failed");
+            fund_account(&Arc::from(alice_provider.clone()), req, store.clone(), allowances)
+                .await
+                .expect("Funding the account failed");
 
             let bob_funds_after = alice_provider
                 .get_free_balance_for_id(bob_account_id, currency_id)
@@ -734,7 +680,6 @@ mod tests {
             req.clone(),
             store.clone(),
             allowances.clone(),
-            DEFAULT_NATIVE_CURRENCY,
         )
         .await
         .expect("Funding the account failed");
@@ -747,14 +692,7 @@ mod tests {
         assert_eq!(bob_funds_before + expected_amount_planck, bob_funds_after);
 
         assert_err!(
-            fund_account(
-                &Arc::from(alice_provider.clone()),
-                req,
-                store,
-                allowances,
-                DEFAULT_NATIVE_CURRENCY
-            )
-            .await,
+            fund_account(&Arc::from(alice_provider.clone()), req, store, allowances,).await,
             Error::AccountBalanceExceedsMaximum
         );
     }
