@@ -71,8 +71,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             let config = self.config.clone();
             let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
 
-            let bitcoin_core = self.bitcoin_config.new_client(None)?;
-            bitcoin_core.connect().await?;
+            let bitcoin_core = self.bitcoin_config.new_client(None).await?;
             bitcoin_core.sync().await?;
 
             // only open connection to parachain after bitcoind sync to prevent timeout
@@ -87,6 +86,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             .await?;
 
             let config_copy = self.bitcoin_config.clone();
+            let network_copy = bitcoin_core.network();
             let prefix = self.wallet_name.clone().unwrap_or_else(|| "vault".to_string());
             let constructor = move |vault_id: VaultId| {
                 let collateral_currency: CurrencyId = vault_id.collateral_currency();
@@ -98,7 +98,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
                     collateral_currency.inner().symbol(),
                     wrapped_currency.inner().symbol()
                 );
-                config_copy.new_client(Some(wallet_name))
+                config_copy.new_client_with_network(Some(wallet_name), network_copy)
             };
 
             let service = S::new_service(btc_parachain, bitcoin_core, config, shutdown_tx, Box::new(constructor));

@@ -1,24 +1,9 @@
 #![cfg(feature = "cli")]
 
-use crate::{BitcoinCore, Error};
+use crate::{BitcoinCore, BitcoinCoreBuilder, Error};
 use bitcoincore_rpc::{bitcoin::Network, Auth};
 use clap::Clap;
-use std::{str::FromStr, time::Duration};
-
-#[derive(Debug, Copy, Clone)]
-pub struct BitcoinNetwork(pub Network);
-
-impl FromStr for BitcoinNetwork {
-    type Err = Error;
-    fn from_str(s: &str) -> Result<Self, Error> {
-        match s {
-            "mainnet" => Ok(BitcoinNetwork(Network::Bitcoin)),
-            "testnet" => Ok(BitcoinNetwork(Network::Testnet)),
-            "regtest" => Ok(BitcoinNetwork(Network::Regtest)),
-            _ => Err(Error::InvalidBitcoinNetwork),
-        }
-    }
-}
+use std::time::Duration;
 
 #[derive(Clap, Debug, Clone)]
 pub struct BitcoinOpts {
@@ -35,10 +20,6 @@ pub struct BitcoinOpts {
     #[clap(long, default_value = "60000")]
     pub bitcoin_connection_timeout_ms: u64,
 
-    /// Bitcoin network type for address encoding.
-    #[clap(long, default_value = "regtest")]
-    pub network: BitcoinNetwork,
-
     /// Url of the electrs server - used for theft reporting. If unset, a default
     /// fallback is used depending on the network argument.
     #[clap(long)]
@@ -50,14 +31,20 @@ impl BitcoinOpts {
         Auth::UserPass(self.bitcoin_rpc_user.clone(), self.bitcoin_rpc_pass.clone())
     }
 
-    pub fn new_client(&self, wallet_name: Option<String>) -> Result<BitcoinCore, Error> {
-        BitcoinCore::new(
-            self.bitcoin_rpc_url.clone(),
-            self.new_auth(),
-            wallet_name,
-            self.network.0,
-            Duration::from_millis(self.bitcoin_connection_timeout_ms),
-            self.electrs_url.clone(),
-        )
+    fn new_client_builder(&self, wallet_name: Option<String>) -> BitcoinCoreBuilder {
+        BitcoinCoreBuilder::new(self.bitcoin_rpc_url.clone())
+            .set_auth(self.new_auth())
+            .set_wallet_name(wallet_name)
+            .set_electrs_url(self.electrs_url.clone())
+    }
+
+    pub async fn new_client(&self, wallet_name: Option<String>) -> Result<BitcoinCore, Error> {
+        self.new_client_builder(wallet_name)
+            .build_and_connect(Duration::from_millis(self.bitcoin_connection_timeout_ms))
+            .await
+    }
+
+    pub fn new_client_with_network(&self, wallet_name: Option<String>, network: Network) -> Result<BitcoinCore, Error> {
+        self.new_client_builder(wallet_name).build_with_network(network)
     }
 }
