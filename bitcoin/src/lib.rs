@@ -230,7 +230,7 @@ async fn connect(rpc: &Client, connection_timeout: Duration) -> Result<Network, 
     .await?
 }
 
-struct BitcoinCoreBuilder {
+pub struct BitcoinCoreBuilder {
     url: String,
     auth: Auth,
     wallet_name: Option<String>,
@@ -238,7 +238,7 @@ struct BitcoinCoreBuilder {
 }
 
 impl BitcoinCoreBuilder {
-    pub(crate) fn new(url: String) -> Self {
+    pub fn new(url: String) -> Self {
         Self {
             url,
             auth: Auth::None,
@@ -247,17 +247,17 @@ impl BitcoinCoreBuilder {
         }
     }
 
-    pub(crate) fn set_auth(mut self, auth: Auth) -> Self {
+    pub fn set_auth(mut self, auth: Auth) -> Self {
         self.auth = auth;
         self
     }
 
-    pub(crate) fn set_wallet_name(mut self, wallet_name: Option<String>) -> Self {
+    pub fn set_wallet_name(mut self, wallet_name: Option<String>) -> Self {
         self.wallet_name = wallet_name;
         self
     }
 
-    pub(crate) fn set_electrs_url(mut self, electrs_url: Option<String>) -> Self {
+    pub fn set_electrs_url(mut self, electrs_url: Option<String>) -> Self {
         self.electrs_url = electrs_url;
         self
     }
