@@ -112,6 +112,10 @@ impl Error {
             Error::SubxtRuntimeError(SubxtError::Rpc(RequestError::Call(CallError::Custom { code, message, .. })))
                 if *code == POOL_INVALID_TX &&
                 message == INVALID_TX_MESSAGE
+        ) || matches!(self,
+            Error::SubxtBasicError(BasicError::Rpc(RequestError::Call(CallError::Custom { code, message, .. })))
+                if *code == POOL_INVALID_TX &&
+                message == INVALID_TX_MESSAGE
         )
     }
 
@@ -123,11 +127,15 @@ impl Error {
         matches!(
             self,
             Error::SubxtRuntimeError(SubxtError::Rpc(JsonRpseeError::RestartNeeded(_)))
+                | Error::SubxtBasicError(BasicError::Rpc(JsonRpseeError::RestartNeeded(_)))
         )
     }
 
     pub fn is_rpc_error(&self) -> bool {
-        matches!(self, Error::SubxtRuntimeError(SubxtError::Rpc(_)))
+        matches!(
+            self,
+            Error::SubxtRuntimeError(SubxtError::Rpc(_)) | Error::SubxtBasicError(BasicError::Rpc(_))
+        )
     }
 
     pub fn is_ws_invalid_url_error(&self) -> bool {
