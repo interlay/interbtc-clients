@@ -524,6 +524,7 @@ dependencies = [
  "num",
  "num-derive",
  "num-traits",
+ "rand 0.7.3",
  "regex",
  "serde_json",
  "sp-core",

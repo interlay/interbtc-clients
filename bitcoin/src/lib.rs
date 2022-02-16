@@ -937,7 +937,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_find_duplicate_payments_succeeds() {
-        let bitcoin_core = BitcoinCoreBuilder::new("".to_string())
+        let bitcoin_core = BitcoinCoreBuilder::new("localhost".to_string())
             .build_with_network(Network::Testnet)
             .unwrap();
 
