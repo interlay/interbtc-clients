@@ -14,7 +14,7 @@ uses-bitcoind = []
 
 [dependencies]
 thiserror = "1.0"
-bitcoincore-rpc = { git = "https://github.com/gregdhill/rust-bitcoincore-rpc", rev = "80ff27b" }
+bitcoincore-rpc = { git = "https://github.com/rust-bitcoin/rust-bitcoincore-rpc", rev = "d9a1dd014f8eff8b00618457bb6b845c8b932bb7" }
 hex = "0.4.2"
 async-trait = "0.1.40"
 tokio = { version = "1.0", features = ["full"] }
@@ -41,3 +41,4 @@ optional = true
 [dev-dependencies]
 mockall = "0.8.1"
 regex = "1.4.3"
+rand = { version = "0.7" }

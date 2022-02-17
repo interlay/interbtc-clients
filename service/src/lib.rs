@@ -104,10 +104,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             let service = S::new_service(btc_parachain, bitcoin_core, config, shutdown_tx, Box::new(constructor));
             if let Err(outer) = service.start().await {
                 match outer {
-                    Error::BitcoinError(ref inner)
-                        if inner.is_connection_aborted()
-                            || inner.is_connection_refused()
-                            || inner.is_json_decode_error() => {}
+                    Error::BitcoinError(ref inner) if inner.is_transport_error() || inner.is_json_decode_error() => {}
                     Error::RuntimeError(RuntimeError::ChannelClosed) => (),
                     Error::RuntimeError(ref inner) if inner.is_rpc_error() => (),
                     other => return Err(other),
