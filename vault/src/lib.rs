@@ -6,6 +6,7 @@ mod error;
 mod execution;
 mod faucet;
 mod issue;
+pub mod metrics;
 mod redeem;
 mod refund;
 mod relay;
@@ -17,7 +18,7 @@ mod vaults;
 pub mod service {
     pub use crate::{
         cancellation::{CancellationScheduler, IssueCanceller, ReplaceCanceller},
-        collateral::maintain_collateralization_rate,
+        collateral::{maintain_collateralization_rate, monitor_bridge_metrics},
         execution::execute_open_requests,
         issue::{
             listen_for_issue_cancels, listen_for_issue_executes, listen_for_issue_requests, process_issue_requests,

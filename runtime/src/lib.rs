@@ -22,6 +22,7 @@ use subxt::{
 
 pub use error::{Error, SubxtError};
 pub use primitives::CurrencyInfo;
+pub use prometheus;
 pub use retry::{notify_retry, RetryPolicy};
 #[cfg(all(
     feature = "testing-utils",

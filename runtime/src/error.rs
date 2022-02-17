@@ -7,6 +7,7 @@ use crate::{
 };
 use codec::Error as CodecError;
 use jsonrpsee::{client_transport::ws::WsHandshakeError, core::error::Error as RequestError, types::error::CallError};
+use prometheus::Error as PrometheusError;
 use serde_json::Error as SerdeJsonError;
 use std::{array::TryFromSliceError, io::Error as IoError, num::TryFromIntError};
 use subxt::{sp_core::crypto::SecretStringError, BasicError};
@@ -72,6 +73,8 @@ pub enum Error {
     TimeElapsed(#[from] Elapsed),
     #[error("UrlParseError: {0}")]
     UrlParseError(#[from] UrlParseError),
+    #[error("PrometheusError: {0}")]
+    PrometheusError(#[from] PrometheusError),
 }
 
 impl Error {

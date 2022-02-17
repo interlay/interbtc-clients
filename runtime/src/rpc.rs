@@ -13,6 +13,8 @@ use codec::Encode;
 use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt};
 use jsonrpsee::core::to_json_value;
 use module_oracle_rpc_runtime_api::BalanceWrapper;
+use primitives::UnsignedFixedPoint;
+use sp_runtime::FixedPointNumber;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 use subxt::{
     BasicError, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, DefaultExtra, Event, EventSubscription,
@@ -284,8 +286,6 @@ impl InterBtcParachain {
 
     #[cfg(test)]
     pub async fn get_outdated_nonce_error(&self) -> Error {
-        use sp_arithmetic::FixedPointNumber;
-
         let key = OracleKey::ExchangeRate(Token(DOT));
         let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
 
@@ -1399,6 +1399,8 @@ pub trait VaultRegistryPallet {
     async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, Error>;
 
     async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, Error>;
+
+    async fn get_collateralization_from_vault(&self, vault_id: VaultId, only_issued: bool) -> Result<u128, Error>;
 }
 
 #[async_trait]
@@ -1610,6 +1612,23 @@ impl VaultRegistryPallet for InterBtcParachain {
             .await?;
 
         Ok(result.amount)
+    }
+
+    async fn get_collateralization_from_vault(&self, vault_id: VaultId, only_issued: bool) -> Result<u128, Error> {
+        let head = self.get_latest_block_hash().await?;
+        let result: UnsignedFixedPoint = self
+            .rpc_client
+            .request(
+                "vaultRegistry_getCollateralizationFromVault",
+                &[
+                    to_json_value(vault_id)?,
+                    to_json_value(only_issued)?,
+                    to_json_value(head)?,
+                ],
+            )
+            .await?;
+
+        Ok(result.into_inner())
     }
 }
 

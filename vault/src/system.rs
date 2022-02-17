@@ -515,6 +515,11 @@ impl VaultService {
             ),
         );
 
+        let bridge_metrics_listener = wait_or_shutdown(
+            self.shutdown.clone(),
+            monitor_bridge_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
+        );
+
         // starts all the tasks
         tracing::info!("Starting to listen for events...");
         let _ = tokio::join!(
@@ -543,7 +548,9 @@ impl VaultService {
             // runs vault theft checks
             tokio::spawn(async move { vaults_listener.await }),
             // relayer process
-            tokio::task::spawn_blocking(move || block_on(relayer))
+            tokio::task::spawn_blocking(move || block_on(relayer)),
+            // prometheus monitoring
+            tokio::task::spawn(async move { bridge_metrics_listener.await }),
         );
 
         Ok(())
