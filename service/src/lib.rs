@@ -14,6 +14,7 @@ mod trace;
 pub use cli::{LoggingFormat, RestartPolicy, ServiceConfig};
 pub use error::Error;
 pub use trace::init_subscriber;
+pub use warp;
 
 pub type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
 pub type ShutdownReceiver = tokio::sync::broadcast::Receiver<Option<()>>;

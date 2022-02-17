@@ -6,11 +6,9 @@ use crate::{
     BTC_RELAY_MODULE, ISSUE_MODULE, RELAY_MODULE, SYSTEM_MODULE,
 };
 use codec::Error as CodecError;
-use jsonrpsee::{
-    client_transport::ws::WsHandshakeError,
-    core::error::Error as RequestError,
-    types::error::{CallError, ErrorResponse},
-};
+use jsonrpsee::{client_transport::ws::WsHandshakeError, core::error::Error as RequestError, types::error::CallError};
+use jsonrpsee::types::error::ErrorResponse;
+use prometheus::Error as PrometheusError;
 use serde_json::Error as SerdeJsonError;
 use std::{
     array::TryFromSliceError,
@@ -87,6 +85,8 @@ pub enum Error {
     TimeElapsed(#[from] Elapsed),
     #[error("UrlParseError: {0}")]
     UrlParseError(#[from] UrlParseError),
+    #[error("PrometheusError: {0}")]
+    PrometheusError(#[from] PrometheusError),
 }
 
 impl From<SubxtError> for Error {

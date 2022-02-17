@@ -1,4 +1,4 @@
-use crate::{error::Error, system::VaultIdManager};
+use crate::{error::Error, metrics, system::VaultIdManager};
 use bitcoin::BitcoinCoreApi;
 use futures::future;
 use runtime::{
@@ -6,6 +6,43 @@ use runtime::{
     VaultRegistryPallet, VaultStatus,
 };
 use service::Error as ServiceError;
+
+pub async fn monitor_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    parachain_rpc: InterBtcParachain,
+    vault_id_manager: VaultIdManager<B>,
+) -> Result<(), ServiceError> {
+    let parachain_rpc = &parachain_rpc;
+    let vault_id_manager = &vault_id_manager;
+    parachain_rpc
+        .on_event::<FeedValuesEvent, _, _, _>(
+            |event| async move {
+                let updated_currencies = event.values.iter().filter_map(|(key, _value)| match key {
+                    OracleKey::ExchangeRate(currency_id) => Some(currency_id),
+                    _ => None,
+                });
+                let vault_ids = vault_id_manager.get_vault_ids().await;
+                for currency_id in updated_currencies {
+                    match vault_ids
+                        .iter()
+                        .find(|vault_id| &vault_id.collateral_currency() == currency_id)
+                    {
+                        None => tracing::debug!("Ignoring exchange rate update for {}", currency_id.inner().symbol()),
+                        Some(vault_id) => {
+                            tracing::info!("Received FeedValuesEvent for {}", currency_id.inner().symbol());
+                            if let Err(err) =
+                                metrics::update_service_metrics(parachain_rpc.clone(), vault_id.clone()).await
+                            {
+                                tracing::info!("{:?}", err);
+                            }
+                        }
+                    }
+                }
+            },
+            |error| tracing::error!("Error reading SetExchangeRate event: {}", error.to_string()),
+        )
+        .await?;
+    Ok(())
+}
 
 pub async fn maintain_collateralization_rate<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     parachain_rpc: InterBtcParachain,
@@ -175,6 +212,7 @@ mod tests {
             async fn get_required_collateral_for_wrapped(&self, amount_btc: u128, collateral_currency: CurrencyId) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
             async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
+            async fn get_collateralization_from_vault(&self, vault_id: VaultId, only_issued: bool) -> Result<u128, RuntimeError>;
         }
 
         #[async_trait]

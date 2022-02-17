@@ -1,8 +1,8 @@
 use clap::Parser;
 use runtime::InterBtcSigner;
-use service::{ConnectionManager, ServiceConfig};
+use service::{warp, warp::Filter, ConnectionManager, Error, ServiceConfig};
 
-use vault::{Error, VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION};
+use vault::{metrics, VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
@@ -35,18 +35,24 @@ async fn start() -> Result<(), Error> {
     let (pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = InterBtcSigner::new(pair);
 
-    ConnectionManager::<_, VaultService>::new(
+    metrics::register_custom_metrics()?;
+    let metrics_route = warp::path("metrics").and_then(metrics::metrics_handler);
+
+    let vault_connection_manager = ConnectionManager::<_, VaultService>::new(
         signer.clone(),
         Some(wallet_name.to_string()),
         opts.bitcoin,
         opts.parachain,
         opts.service,
         opts.vault,
-    )
-    .start()
-    .await?;
+    );
 
-    Ok(())
+    let (_, future_result) = futures::join!(
+        warp::serve(metrics_route).run(([0, 0, 0, 0], 8080)),
+        tokio::task::spawn(async move { vault_connection_manager.start().await }),
+    );
+
+    future_result?
 }
 
 #[tokio::main]

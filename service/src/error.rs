@@ -3,6 +3,7 @@ use hyper::{http::Error as HyperHttpError, Error as HyperError};
 use runtime::Error as RuntimeError;
 use serde_json::Error as SerdeJsonError;
 use thiserror::Error;
+use tokio::task::JoinError as TokioJoinError;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -22,6 +23,8 @@ pub enum Error {
     RuntimeError(#[from] RuntimeError),
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
+    #[error("TokioError: {0}")]
+    TokioError(#[from] TokioJoinError),
 
     /// Other error
     #[error("Other: {0}")]
