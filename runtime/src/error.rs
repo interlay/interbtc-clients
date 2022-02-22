@@ -113,9 +113,8 @@ impl Error {
                 if *code == POOL_INVALID_TX &&
                 message == INVALID_TX_MESSAGE
         ) || matches!(self,
-            Error::SubxtBasicError(BasicError::Rpc(RequestError::Call(CallError::Custom { code, message, .. })))
-                if *code == POOL_INVALID_TX &&
-                message == INVALID_TX_MESSAGE
+            Error::SubxtBasicError(BasicError::Rpc(RequestError::Request(message)))
+                if message.contains(OUTDATED_TX_MESSAGE) || message.contains(OUTDATED_TX_CODE) // check for both the error message and the code to be a little bit less brittle
         )
     }
 
@@ -170,4 +169,8 @@ pub enum KeyLoadingError {
 // https://github.com/paritytech/substrate/blob/e60597dff0aa7ffad623be2cc6edd94c7dc51edd/client/rpc-api/src/author/error.rs#L80
 const BASE_ERROR: i32 = 1000;
 const POOL_INVALID_TX: i32 = BASE_ERROR + 10;
+// a typical outdated nonce response would be:
+// {"jsonrpc":"2.0","error":{"code":1010,"message":"Invalid Transaction","data":"Transaction is outdated"},"id":628}"
 const INVALID_TX_MESSAGE: &str = "Invalid Transaction";
+const OUTDATED_TX_MESSAGE: &str = "Transaction is outdated";
+const OUTDATED_TX_CODE: &str = "\"code\":1010";
