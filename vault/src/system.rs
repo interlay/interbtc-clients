@@ -326,6 +326,7 @@ impl VaultService {
 
         let open_request_executor = execute_open_requests(
             self.btc_parachain.clone(),
+            self.vault_id_manager.clone(),
             walletless_btc_rpc.clone(),
             num_confirmations,
             self.config.payment_margin_minutes,
