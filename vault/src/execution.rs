@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::{error::Error, VaultIdManager};
 use bitcoin::{
     BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata, BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
@@ -309,7 +309,8 @@ impl Request {
 /// bitcoin blockchain to see if a payment has already been made.
 pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     parachain_rpc: InterBtcParachain,
-    btc_rpc: B,
+    btc_rpc: VaultIdManager<B>,
+    read_only_btc_rpc: B,
     num_confirmations: u32,
     payment_margin: Duration,
     process_refunds: bool,
@@ -374,7 +375,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
     };
 
     // iterate through transactions in reverse order, starting from those in the mempool
-    let mut transaction_stream = bitcoin::reverse_stream_transactions(&btc_rpc, btc_start_height).await?;
+    let mut transaction_stream = bitcoin::reverse_stream_transactions(&read_only_btc_rpc, btc_start_height).await?;
     while let Some(result) = transaction_stream.next().await {
         let tx = result?;
 
@@ -394,6 +395,17 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
             let parachain_rpc = parachain_rpc.clone();
             let btc_rpc = btc_rpc.clone();
             tokio::spawn(async move {
+                let btc_rpc = match btc_rpc.get_bitcoin_rpc(&request.vault_id).await {
+                    Some(x) => x,
+                    None => {
+                        tracing::error!(
+                            "Failed to fetch bitcoin rpc for vault {}",
+                            request.vault_id.pretty_printed()
+                        );
+                        return; // nothing we can do - bail
+                    }
+                };
+
                 // Payment has been made, but it might not have been confirmed enough times yet
                 let tx_metadata = btc_rpc
                     .clone()
@@ -445,6 +457,17 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         let parachain_rpc = parachain_rpc.clone();
         let btc_rpc = btc_rpc.clone();
         tokio::spawn(async move {
+            let btc_rpc = match btc_rpc.get_bitcoin_rpc(&request.vault_id).await {
+                Some(x) => x,
+                None => {
+                    tracing::error!(
+                        "Failed to fetch bitcoin rpc for vault {}",
+                        request.vault_id.pretty_printed()
+                    );
+                    return; // nothing we can do - bail
+                }
+            };
+
             tracing::info!(
                 "{:?} request #{:?} found without bitcoin payment - processing...",
                 request.request_type,
