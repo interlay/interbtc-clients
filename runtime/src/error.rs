@@ -50,6 +50,8 @@ pub enum Error {
     KeyringAccountParsingError,
     #[error("Storage item not found")]
     StorageItemNotFound,
+    #[error("Insufficient funds")]
+    InsufficientFunds,
     #[error("Client does not support spec_version: expected {0}, got {1}")]
     InvalidSpecVersion(u32, u32),
     #[error("Failed to load credentials from file: {0}")]

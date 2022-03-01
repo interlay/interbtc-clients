@@ -1471,6 +1471,11 @@ impl VaultRegistryPallet for InterBtcParachain {
         collateral: u128,
         public_key: BtcPublicKey,
     ) -> Result<(), Error> {
+        // TODO: check MinimumDeposit
+        if collateral == 0 {
+            return Err(Error::InsufficientFunds);
+        }
+
         let public_key = &public_key.clone();
         self.with_unique_signer(|signer| async move {
             self.api

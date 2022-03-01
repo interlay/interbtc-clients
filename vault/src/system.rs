@@ -13,9 +13,9 @@ use futures::{
 use git_version::git_version;
 use runtime::{
     cli::{parse_duration_minutes, parse_duration_ms},
-    parse_collateral_currency, BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain,
-    RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair, VaultId,
-    VaultRegistryPallet,
+    parse_collateral_currency, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, Error as RuntimeError,
+    InterBtcParachain, RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs,
+    VaultCurrencyPair, VaultId, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -581,8 +581,9 @@ impl VaultService {
             if let Some(collateral) = self.config.auto_register_with_collateral {
                 tracing::info!("[{}] Automatically registering...", vault_id.pretty_printed());
                 let public_key = bitcoin_core_with_wallet.get_new_public_key().await?;
+                let free_balance = self.btc_parachain.get_free_balance(collateral_currency).await?;
                 self.btc_parachain
-                    .register_vault(&vault_id, collateral, public_key)
+                    .register_vault(&vault_id, std::cmp::min(collateral, free_balance), public_key)
                     .await?;
             } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
                 tracing::info!("[{}] Automatically registering...", vault_id.pretty_printed());
