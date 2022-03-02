@@ -8,7 +8,12 @@ use crate::{
 use codec::Error as CodecError;
 use jsonrpsee::{client_transport::ws::WsHandshakeError, core::error::Error as RequestError, types::error::CallError};
 use serde_json::Error as SerdeJsonError;
-use std::{array::TryFromSliceError, io::Error as IoError, num::TryFromIntError};
+use std::{
+    array::TryFromSliceError,
+    fmt::{Debug, Display},
+    io::Error as IoError,
+    num::TryFromIntError,
+};
 use subxt::{sp_core::crypto::SecretStringError, BasicError};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
@@ -92,17 +97,17 @@ impl From<SubxtError> for OuterSubxtError {
 
 impl std::error::Error for OuterSubxtError {}
 
-impl std::fmt::Display for OuterSubxtError {
+impl Display for OuterSubxtError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.0 {
             subxt::Error::Runtime(err) => {
                 if let Some(ErrorDetails { error, pallet, .. }) = err.clone().inner().details() {
                     write!(f, "{} from {}", error, pallet)
                 } else {
-                    write!(f, "Unknown error!")
+                    Debug::fmt(&err, f)
                 }
             }
-            err => write!(f, "{:?}", err),
+            err => Display::fmt(&err, f),
         }
     }
 }
