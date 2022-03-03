@@ -1,6 +1,7 @@
 use clap::Parser;
 use runtime::InterBtcSigner;
-use service::{warp, warp::Filter, ConnectionManager, Error, ServiceConfig};
+use service::{warp, warp::Filter, ConnectionManager, Error, MonitoringConfig, ServiceConfig};
+use std::net::{Ipv4Addr, SocketAddr};
 
 use vault::{metrics, VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION};
 
@@ -26,6 +27,10 @@ pub struct Opts {
     /// General service settings.
     #[clap(flatten)]
     pub service: ServiceConfig,
+
+    /// Prometheus monitoring settings.
+    #[clap(flatten)]
+    pub monitoring: MonitoringConfig,
 }
 
 async fn start() -> Result<(), Error> {
@@ -34,9 +39,6 @@ async fn start() -> Result<(), Error> {
 
     let (pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = InterBtcSigner::new(pair);
-
-    metrics::register_custom_metrics()?;
-    let metrics_route = warp::path("metrics").and_then(metrics::metrics_handler);
 
     let vault_connection_manager = ConnectionManager::<_, VaultService>::new(
         signer.clone(),
@@ -47,12 +49,28 @@ async fn start() -> Result<(), Error> {
         opts.vault,
     );
 
-    let (_, future_result) = futures::join!(
-        warp::serve(metrics_route).run(([0, 0, 0, 0], 8080)),
-        tokio::task::spawn(async move { vault_connection_manager.start().await }),
-    );
-
-    future_result?
+    if !opts.monitoring.no_prometheus {
+        metrics::register_custom_metrics()?;
+        let metrics_route = warp::path("metrics").and_then(metrics::metrics_handler);
+        let prometheus_host = if opts.monitoring.prometheus_external {
+            Ipv4Addr::UNSPECIFIED
+        } else {
+            Ipv4Addr::LOCALHOST
+        };
+        tracing::info!(
+            "Starting Prometheus exporter at http://{}:{}",
+            prometheus_host,
+            opts.monitoring.prometheus_port
+        );
+        let (_, future_result) = futures::join!(
+            warp::serve(metrics_route).run(SocketAddr::new(prometheus_host.into(), opts.monitoring.prometheus_port,)),
+            tokio::task::spawn(async move { vault_connection_manager.start().await }),
+        );
+        future_result?
+    } else {
+        vault_connection_manager.start().await?;
+        Ok(())
+    }
 }
 
 #[tokio::main]

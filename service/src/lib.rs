@@ -11,7 +11,7 @@ mod cli;
 mod error;
 mod trace;
 
-pub use cli::{LoggingFormat, RestartPolicy, ServiceConfig};
+pub use cli::{LoggingFormat, MonitoringConfig, RestartPolicy, ServiceConfig};
 pub use error::Error;
 pub use trace::init_subscriber;
 pub use warp;
