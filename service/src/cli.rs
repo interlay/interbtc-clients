@@ -60,3 +60,20 @@ pub struct ServiceConfig {
     #[clap(long, default_value = "full")]
     pub logging_format: LoggingFormat,
 }
+
+#[derive(Clap, Debug, Clone)]
+pub struct MonitoringConfig {
+    /// Do not expose a Prometheus metric endpoint.
+    #[clap(long)]
+    pub no_prometheus: bool,
+
+    /// Expose Prometheus exporter on all interfaces.
+    ///
+    /// Default is local.
+    #[clap(long)]
+    pub prometheus_external: bool,
+
+    /// Specify Prometheus exporter TCP Port.
+    #[clap(long, default_value = "9615")]
+    pub prometheus_port: u16,
+}
