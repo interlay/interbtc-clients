@@ -8,7 +8,12 @@ use crate::{
 use codec::Error as CodecError;
 use jsonrpsee::{client_transport::ws::WsHandshakeError, core::error::Error as RequestError, types::error::CallError};
 use serde_json::Error as SerdeJsonError;
-use std::{array::TryFromSliceError, io::Error as IoError, num::TryFromIntError};
+use std::{
+    array::TryFromSliceError,
+    fmt::{Debug, Display},
+    io::Error as IoError,
+    num::TryFromIntError,
+};
 use subxt::{sp_core::crypto::SecretStringError, BasicError};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
@@ -61,7 +66,7 @@ pub enum Error {
     #[error("Subxt basic error: {0}")]
     SubxtBasicError(#[from] BasicError),
     #[error("Subxt runtime error: {0}")]
-    SubxtRuntimeError(#[from] SubxtError),
+    SubxtRuntimeError(#[from] OuterSubxtError),
     #[error("Error decoding: {0}")]
     CodecError(#[from] CodecError),
     #[error("Error encoding json data: {0}")]
@@ -74,11 +79,44 @@ pub enum Error {
     UrlParseError(#[from] UrlParseError),
 }
 
+impl From<SubxtError> for Error {
+    fn from(err: SubxtError) -> Self {
+        Self::SubxtRuntimeError(OuterSubxtError(err))
+    }
+}
+
+// hacky workaround to pretty print runtime errors
+#[derive(Debug)]
+pub struct OuterSubxtError(pub SubxtError);
+
+impl From<SubxtError> for OuterSubxtError {
+    fn from(err: SubxtError) -> Self {
+        Self(err)
+    }
+}
+
+impl std::error::Error for OuterSubxtError {}
+
+impl Display for OuterSubxtError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            subxt::Error::Runtime(err) => {
+                if let Some(ErrorDetails { error, pallet, .. }) = err.clone().inner().details() {
+                    write!(f, "{} from {}", error, pallet)
+                } else {
+                    Debug::fmt(&err, f)
+                }
+            }
+            err => Display::fmt(&err, f),
+        }
+    }
+}
+
 impl Error {
     fn is_runtime_err(&self, pallet_name: &str, error_name: &str) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(SubxtError::Runtime(runtime_error))
+            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Runtime(runtime_error)))
             if matches!(
                 runtime_error.clone().inner().details(),
                 Some(ErrorDetails {
@@ -109,7 +147,7 @@ impl Error {
 
     pub fn is_invalid_transaction(&self) -> bool {
         matches!(self,
-            Error::SubxtRuntimeError(SubxtError::Rpc(RequestError::Call(CallError::Custom { code, message, .. })))
+            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(RequestError::Call(CallError::Custom { code, message, .. }))))
                 if *code == POOL_INVALID_TX &&
                 message == INVALID_TX_MESSAGE
         ) || matches!(self,
@@ -125,7 +163,7 @@ impl Error {
     pub fn is_rpc_disconnect_error(&self) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(SubxtError::Rpc(JsonRpseeError::RestartNeeded(_)))
+            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(JsonRpseeError::RestartNeeded(_))))
                 | Error::SubxtBasicError(BasicError::Rpc(JsonRpseeError::RestartNeeded(_)))
         )
     }
@@ -133,7 +171,7 @@ impl Error {
     pub fn is_rpc_error(&self) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(SubxtError::Rpc(_)) | Error::SubxtBasicError(BasicError::Rpc(_))
+            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(_))) | Error::SubxtBasicError(BasicError::Rpc(_))
         )
     }
 
@@ -148,7 +186,7 @@ impl Error {
     pub fn is_parachain_shutdown_error(&self) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(SubxtError::Runtime(runtime_error))
+            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Runtime(runtime_error)))
             if matches!(runtime_error.clone().inner(), DispatchError::BadOrigin)
         )
     }

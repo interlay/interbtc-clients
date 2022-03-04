@@ -1,5 +1,6 @@
 use crate::{
     conn::{new_websocket_client, new_websocket_client_with_retry},
+    error::OuterSubxtError,
     metadata,
     metadata::DispatchError,
     notify_retry,
@@ -1367,7 +1368,7 @@ impl BtcRelayPallet for InterBtcParachain {
             )
             .await?;
 
-        result.map_err(|err| Error::SubxtRuntimeError(SubxtError::Runtime(subxt::RuntimeError(err))))
+        result.map_err(|err| Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Runtime(subxt::RuntimeError(err)))))
     }
 }
 
