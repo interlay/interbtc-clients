@@ -1,7 +1,9 @@
 use lazy_static::lazy_static;
 use runtime::{
     prometheus::{gather, Encoder, GaugeVec, IntGauge, Opts as PrometheusOpts, Registry, TextEncoder},
-    Error, FixedU128, InterBtcParachain, VaultId, VaultRegistryPallet,
+    Error, FixedPointNumber,
+    FixedPointTraits::One,
+    FixedU128, InterBtcParachain, VaultId, VaultRegistryPallet,
 };
 use service::warp::{Rejection, Reply};
 
@@ -69,8 +71,14 @@ pub async fn metrics_handler() -> Result<impl Reply, Rejection> {
 }
 
 pub async fn update_service_metrics(parachain_rpc: InterBtcParachain, vault_id: VaultId) -> Result<(), Error> {
+    let decimals_offset = FixedU128::one()
+        .into_inner()
+        .checked_div(vault_id.collateral_currency().one())
+        .unwrap_or_default() as f64;
+
     let actual_collateral = parachain_rpc.get_vault_total_collateral(vault_id.clone()).await?;
-    let float_actual_collateral = FixedU128::from_inner(actual_collateral).to_float();
+    let float_actual_collateral = FixedU128::from_inner(actual_collateral).to_float() * decimals_offset;
+
     LOCKED_COLLATERAL
         .with_label_values(&[format!("{:?}", vault_id).as_str()])
         .set(float_actual_collateral);
@@ -89,7 +97,7 @@ pub async fn update_service_metrics(parachain_rpc: InterBtcParachain, vault_id: 
     let required_collateral = parachain_rpc
         .get_required_collateral_for_vault(vault_id.clone())
         .await?;
-    let truncated_required_collateral = FixedU128::from_inner(required_collateral).to_float();
+    let truncated_required_collateral = FixedU128::from_inner(required_collateral).to_float() * decimals_offset;
     REQUIRED_COLLATERAL
         .with_label_values(&[format!("{:?}", vault_id).as_str()])
         .set(truncated_required_collateral);
