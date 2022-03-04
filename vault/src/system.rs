@@ -583,7 +583,20 @@ impl VaultService {
                 let public_key = bitcoin_core_with_wallet.get_new_public_key().await?;
                 let free_balance = self.btc_parachain.get_free_balance(collateral_currency).await?;
                 self.btc_parachain
-                    .register_vault(&vault_id, std::cmp::min(collateral, free_balance), public_key)
+                    .register_vault(
+                        &vault_id,
+                        if collateral.gt(&free_balance) {
+                            tracing::warn!(
+                                "Cannot register with {}, using the available free balance: {}",
+                                collateral,
+                                free_balance
+                            );
+                            free_balance
+                        } else {
+                            collateral
+                        },
+                        public_key,
+                    )
                     .await?;
             } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
                 tracing::info!("[{}] Automatically registering...", vault_id.pretty_printed());
