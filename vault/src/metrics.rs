@@ -11,17 +11,17 @@ lazy_static! {
         IntGauge::new("connected_clients", "Connected Clients").expect("Failed to create prometheus metric");
     pub static ref LOCKED_COLLATERAL: GaugeVec = GaugeVec::new(
         PrometheusOpts::new("locked_collateral", "Locked Collateral"),
-        &["collateral_currency"]
+        &["vault_id"]
     )
     .expect("Failed to create prometheus metric");
     pub static ref COLLATERALIZATION: GaugeVec = GaugeVec::new(
         PrometheusOpts::new("collateralization", "Collateralization"),
-        &["collateral_currency"]
+        &["vault_id"]
     )
     .expect("Failed to create prometheus metric");
     pub static ref REQUIRED_COLLATERAL: GaugeVec = GaugeVec::new(
         PrometheusOpts::new("required_collateral", "Required Collateral"),
-        &["required_collateral"]
+        &["vault_id"]
     )
     .expect("Failed to create prometheus metric");
 }
