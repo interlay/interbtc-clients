@@ -153,11 +153,17 @@ impl InterBtcParachain {
             |result| async {
                 match result.map_err(Into::<Error>::into) {
                     Ok(te) => Ok(te),
-                    Err(err) if err.is_invalid_transaction() => {
-                        self.refresh_nonce().await;
-                        Err(RetryPolicy::Skip(Error::InvalidTransaction))
+                    Err(err) => {
+                        if let Some(data) = err.is_invalid_transaction() {
+                            self.refresh_nonce().await;
+                            Err(RetryPolicy::Skip(Error::InvalidTransaction(data)))
+                        } else if err.is_pool_too_low_priority().is_some() {
+                            self.refresh_nonce().await;
+                            Err(RetryPolicy::Skip(Error::PoolTooLowPriority))
+                        } else {
+                            Err(RetryPolicy::Throw(err))
+                        }
                     }
-                    Err(err) => Err(RetryPolicy::Throw(err)),
                 }
             },
         )

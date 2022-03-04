@@ -88,7 +88,7 @@ async fn test_outdated_nonce_matching() {
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
     let err = parachain_rpc.get_outdated_nonce_error().await;
     log::error!("Error: {:?}", err);
-    assert!(err.is_invalid_transaction())
+    assert!(err.is_invalid_transaction().is_some())
 }
 
 #[tokio::test]

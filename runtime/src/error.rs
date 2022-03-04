@@ -6,7 +6,11 @@ use crate::{
     BTC_RELAY_MODULE, ISSUE_MODULE, REDEEM_MODULE, RELAY_MODULE,
 };
 use codec::Error as CodecError;
-use jsonrpsee::{client_transport::ws::WsHandshakeError, core::error::Error as RequestError, types::error::CallError};
+use jsonrpsee::{
+    client_transport::ws::WsHandshakeError,
+    core::error::Error as RequestError,
+    types::error::{CallError, ErrorResponse},
+};
 use serde_json::Error as SerdeJsonError;
 use std::{
     array::TryFromSliceError,
@@ -41,8 +45,10 @@ pub enum Error {
     VaultCommittedTheft,
     #[error("Channel closed unexpectedly")]
     ChannelClosed,
-    #[error("Transaction is invalid")]
-    InvalidTransaction,
+    #[error("Cannot replace existing transaction")]
+    PoolTooLowPriority,
+    #[error("Transaction is invalid: {0}")]
+    InvalidTransaction(String),
     #[error("Request has timed out")]
     Timeout,
     #[error("Block is not in the relay main chain")]
@@ -145,15 +151,51 @@ impl Error {
         self.is_runtime_err(RELAY_MODULE, &format!("{:?}", RelayPalletError::ValidRefundTransaction))
     }
 
-    pub fn is_invalid_transaction(&self) -> bool {
-        matches!(self,
-            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(RequestError::Call(CallError::Custom { code, message, .. }))))
-                if *code == POOL_INVALID_TX &&
-                message == INVALID_TX_MESSAGE
-        ) || matches!(self,
-            Error::SubxtBasicError(BasicError::Rpc(RequestError::Request(message)))
-                if message.contains(OUTDATED_TX_MESSAGE) || message.contains(OUTDATED_TX_CODE) // check for both the error message and the code to be a little bit less brittle
-        )
+    fn map_call_error<T>(&self, call: impl Fn(&CallError) -> Option<T>) -> Option<T> {
+        match self {
+            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(RequestError::Call(err)))) => call(err),
+            Error::SubxtBasicError(BasicError::Rpc(RequestError::Request(message))) => {
+                if let Ok(error_response) = serde_json::from_str::<ErrorResponse>(message) {
+                    call(&CallError::Custom {
+                        code: error_response.error.code.code(),
+                        message: error_response.error.message.to_string(),
+                        data: error_response.error.data.map(ToOwned::to_owned),
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    pub fn is_invalid_transaction(&self) -> Option<String> {
+        self.map_call_error(|call_error| {
+            if let CallError::Custom {
+                code: POOL_INVALID_TX,
+                data,
+                ..
+            } = call_error
+            {
+                Some(data.clone().map(|raw| raw.to_string()).unwrap_or_default())
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn is_pool_too_low_priority(&self) -> Option<()> {
+        self.map_call_error(|call_error| {
+            if let CallError::Custom {
+                code: POOL_TOO_LOW_PRIORITY,
+                ..
+            } = call_error
+            {
+                Some(())
+            } else {
+                None
+            }
+        })
     }
 
     pub fn is_commit_period_expired(&self) -> bool {
@@ -207,8 +249,4 @@ pub enum KeyLoadingError {
 // https://github.com/paritytech/substrate/blob/e60597dff0aa7ffad623be2cc6edd94c7dc51edd/client/rpc-api/src/author/error.rs#L80
 const BASE_ERROR: i32 = 1000;
 const POOL_INVALID_TX: i32 = BASE_ERROR + 10;
-// a typical outdated nonce response would be:
-// {"jsonrpc":"2.0","error":{"code":1010,"message":"Invalid Transaction","data":"Transaction is outdated"},"id":628}"
-const INVALID_TX_MESSAGE: &str = "Invalid Transaction";
-const OUTDATED_TX_MESSAGE: &str = "Transaction is outdated";
-const OUTDATED_TX_CODE: &str = "\"code\":1010";
+const POOL_TOO_LOW_PRIORITY: i32 = POOL_INVALID_TX + 4;
