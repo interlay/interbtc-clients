@@ -3,7 +3,7 @@ use bitcoin::BitcoinCoreApi;
 use lazy_static::lazy_static;
 
 use runtime::{
-    prometheus::{gather, Encoder, GaugeVec, IntGauge, Opts as PrometheusOpts, Registry, TextEncoder},
+    prometheus::{gather, proto::MetricFamily, Encoder, GaugeVec, Opts as PrometheusOpts, Registry, TextEncoder},
     CurrencyIdExt, CurrencyInfo, Error, FeedValuesEvent, FixedPointNumber,
     FixedPointTraits::One,
     FixedU128, InterBtcParachain, OracleKey, VaultId, VaultRegistryPallet,
@@ -13,10 +13,13 @@ use service::{
     Error as ServiceError,
 };
 
+// Metrics are stored under the `vault_id` key so that multiple vaults can be easily
+// monitored at the same time.
 lazy_static! {
     pub static ref REGISTRY: Registry = Registry::new();
-    pub static ref LOCKED_BTC: IntGauge =
-        IntGauge::new("connected_clients", "Connected Clients").expect("Failed to create prometheus metric");
+    pub static ref LOCKED_BTC: GaugeVec =
+        GaugeVec::new(PrometheusOpts::new("locked_btc", "Locked Bitcoin"), &["vault_id"])
+            .expect("Failed to create prometheus metric");
     pub static ref LOCKED_COLLATERAL: GaugeVec = GaugeVec::new(
         PrometheusOpts::new("locked_collateral", "Locked Collateral"),
         &["vault_id"]
@@ -43,37 +46,28 @@ pub fn register_custom_metrics() -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn metrics_handler() -> Result<impl Reply, Rejection> {
+fn serialize(metrics: &[MetricFamily]) -> String {
     let encoder = TextEncoder::new();
-
     let mut buffer = Vec::new();
-    if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
-        eprintln!("could not encode custom metrics: {}", e);
+    if let Err(e) = encoder.encode(&metrics, &mut buffer) {
+        eprintln!("could not encode metrics: {}", e);
     };
-    let mut res = match String::from_utf8(buffer.clone()) {
+    let res = match String::from_utf8(buffer.clone()) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("custom metrics could not be from_utf8'd: {}", e);
+            eprintln!("metrics could not be parsed `from_utf8`: {}", e);
             String::default()
         }
     };
     buffer.clear();
+    res
+}
 
-    let mut buffer = Vec::new();
-    if let Err(e) = encoder.encode(&gather(), &mut buffer) {
-        eprintln!("could not encode prometheus metrics: {}", e);
-    };
-    let res_custom = match String::from_utf8(buffer.clone()) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("prometheus metrics could not be from_utf8'd: {}", e);
-            String::default()
-        }
-    };
-    buffer.clear();
-
-    res.push_str(&res_custom);
-    Ok(res)
+pub async fn metrics_handler() -> Result<impl Reply, Rejection> {
+    let mut metrics = serialize(&REGISTRY.gather());
+    let custom_metrics = serialize(&gather());
+    metrics.push_str(&custom_metrics);
+    Ok(metrics)
 }
 
 pub async fn update_service_metrics(parachain_rpc: InterBtcParachain, vault_id: VaultId) -> Result<(), Error> {
