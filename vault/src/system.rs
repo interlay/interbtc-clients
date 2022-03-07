@@ -664,7 +664,7 @@ impl VaultService {
         // keep vault wallets up-to-date
         let wallet_update_listener = wait_or_shutdown(
             self.shutdown.clone(),
-            listen_for_wallet_updates(self.btc_parachain.clone(), vaults.clone()),
+            listen_for_wallet_updates(self.btc_parachain.clone(), vaults.clone(), self.bitcoin_core.clone()),
         );
 
         Ok(futures::future::join3(

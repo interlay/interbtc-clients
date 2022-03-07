@@ -1,5 +1,5 @@
 use crate::error::Error;
-use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _};
+use bitcoin::{BitcoinCore, BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _};
 use futures::stream::{iter, StreamExt};
 use runtime::{
     BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcVault, RegisterAddressEvent,
@@ -84,7 +84,11 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonit
                 let raw_tx_2 = self.bitcoin_core.get_raw_tx(&txid_2, &block_hash).await?;
                 let proof_2 = self.bitcoin_core.get_proof(txid_2, &block_hash).await?;
                 if !self.btc_parachain.is_transaction_invalid(vault_id, &raw_tx_2).await? {
-                    tracing::info!("Found a double payment - reporting...");
+                    tracing::error!(
+                        "Found a double payment - reporting... {} {}",
+                        transaction.txid(),
+                        txid_2
+                    );
                     self.btc_parachain
                         .report_vault_double_payment(
                             vault_id,
@@ -149,14 +153,18 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonit
 pub async fn listen_for_wallet_updates(
     btc_parachain: InterBtcParachain,
     vaults: Arc<Vaults>,
+    walletless_btc_rpc: BitcoinCore,
 ) -> Result<(), ServiceError> {
     let vaults = &vaults;
+    let walletless_btc_rpc = &walletless_btc_rpc;
     btc_parachain
         .on_event::<RegisterAddressEvent, _, _, _>(
             |event| async move {
                 tracing::info!(
                     "Added new btc address {:?} for vault {}",
-                    event.address,
+                    walletless_btc_rpc
+                        .encode_address(event.address)
+                        .unwrap_or("<unknown>".to_string()),
                     event.vault_id.account_id.to_ss58check()
                 );
                 vaults.write(event.address, event.vault_id).await;
@@ -314,6 +322,7 @@ mod tests {
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), BitcoinError>;
             async fn rescan_blockchain(&self, start_height: usize) -> Result<(), BitcoinError>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError>;
+            fn encode_address<A: PartialAddress + Send + 'static>(&self, address: A) -> Result<String, Error>;
         }
     }
 

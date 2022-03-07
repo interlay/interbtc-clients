@@ -164,6 +164,8 @@ pub trait BitcoinCoreApi {
     async fn rescan_blockchain(&self, start_height: usize) -> Result<(), Error>;
 
     async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
+
+    fn encode_address<A: PartialAddress + Send + 'static>(&self, address: A) -> Result<String, Error>;
 }
 
 pub struct LockedTransaction {
@@ -362,10 +364,6 @@ impl BitcoinCore {
         self.rpc
             .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
         Ok(())
-    }
-
-    pub fn encode_address<A: PartialAddress + Send + 'static>(&self, address: A) -> Result<String, Error> {
-        Ok(address.encode_str(self.network)?)
     }
 
     async fn with_wallet<F, R, T>(&self, call: F) -> Result<T, Error>
@@ -797,6 +795,10 @@ impl BitcoinCoreApi for BitcoinCore {
             })
             .collect();
         Ok(ret?)
+    }
+
+    fn encode_address<A: PartialAddress + Send + 'static>(&self, address: A) -> Result<String, Error> {
+        Ok(address.encode_str(self.network)?)
     }
 }
 

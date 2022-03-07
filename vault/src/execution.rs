@@ -236,7 +236,12 @@ impl Request {
                 // one return-to-self address, make sure it is registered
                 let wallet = parachain_rpc.get_vault(&vault_id).await?.wallet;
                 if !wallet.addresses.contains(address) {
-                    tracing::info!("Registering address {:?}", address);
+                    tracing::info!(
+                        "Registering address {}",
+                        btc_rpc
+                            .encode_address(address.clone())
+                            .unwrap_or("<unknown>".to_string())
+                    );
                     parachain_rpc.register_address(&vault_id, *address).await?;
                 }
             }
@@ -646,6 +651,7 @@ mod tests {
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), BitcoinError>;
             async fn rescan_blockchain(&self, start_height: usize) -> Result<(), BitcoinError>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError>;
+            fn encode_address<A: PartialAddress + Send + 'static>(&self, address: A) -> Result<String, Error>;
         }
     }
 

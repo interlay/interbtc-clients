@@ -240,6 +240,7 @@ mod tests {
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error>;
             async fn rescan_blockchain(&self, start_height: usize) -> Result<(), Error>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
+            fn encode_address<A: PartialAddress + Send + 'static>(&self, address: A) -> Result<String, Error>;
         }
     }
 
