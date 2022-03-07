@@ -151,7 +151,11 @@ impl Error {
         self.is_runtime_err(RELAY_MODULE, &format!("{:?}", RelayPalletError::ValidRefundTransaction))
     }
 
-    fn map_call_error<T>(&self, call: impl Fn(&CallError) -> Option<T>, other: impl Fn(&String) -> Option<T>) -> Option<T> {
+    fn map_call_error<T>(
+        &self,
+        call: impl Fn(&CallError) -> Option<T>,
+        other: impl Fn(&String) -> Option<T>,
+    ) -> Option<T> {
         match self {
             Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(RequestError::Call(err)))) => call(err),
             Error::SubxtBasicError(BasicError::Rpc(RequestError::Request(message))) => {
@@ -170,44 +174,50 @@ impl Error {
     }
 
     pub fn is_invalid_transaction(&self) -> Option<String> {
-        self.map_call_error(|call_error| {
-            if let CallError::Custom {
-                code: POOL_INVALID_TX,
-                data,
-                ..
-            } = call_error
-            {
-                Some(data.clone().map(|raw| raw.to_string()).unwrap_or_default())
-            } else {
-                None
-            }
-        }, |message| {
-            if message.contains(INVALID_TX_MESSAGE) {
-                Some(message.to_string())
-            } else {
-                None
-            }
-        })
+        self.map_call_error(
+            |call_error| {
+                if let CallError::Custom {
+                    code: POOL_INVALID_TX,
+                    data,
+                    ..
+                } = call_error
+                {
+                    Some(data.clone().map(|raw| raw.to_string()).unwrap_or_default())
+                } else {
+                    None
+                }
+            },
+            |message| {
+                if message.contains(INVALID_TX_MESSAGE) {
+                    Some(message.to_string())
+                } else {
+                    None
+                }
+            },
+        )
     }
 
     pub fn is_pool_too_low_priority(&self) -> Option<()> {
-        self.map_call_error(|call_error| {
-            if let CallError::Custom {
-                code: POOL_TOO_LOW_PRIORITY,
-                ..
-            } = call_error
-            {
-                Some(())
-            } else {
-                None
-            }
-        }, |message| {
-            if message.contains(TOO_LOW_PRIORITY_MESSAGE) {
-                Some(())
-            } else {
-                None
-            }
-        })
+        self.map_call_error(
+            |call_error| {
+                if let CallError::Custom {
+                    code: POOL_TOO_LOW_PRIORITY,
+                    ..
+                } = call_error
+                {
+                    Some(())
+                } else {
+                    None
+                }
+            },
+            |message| {
+                if message.contains(TOO_LOW_PRIORITY_MESSAGE) {
+                    Some(())
+                } else {
+                    None
+                }
+            },
+        )
     }
 
     pub fn is_commit_period_expired(&self) -> bool {
