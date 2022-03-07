@@ -317,7 +317,9 @@ impl VaultService {
         };
         tracing::info!("Using {} bitcoin confirmations", num_confirmations);
 
-        self.maybe_register_vault().await?;
+        if let Err(err) = self.maybe_register_vault().await {
+            tracing::error!("Could not register vault: {}", err);
+        }
 
         // purposefully _after_ maybe_register_vault
         self.vault_id_manager.fetch_vault_ids(false).await?;
@@ -573,6 +575,7 @@ impl VaultService {
                 "[{}] Not registering vault -- already registered",
                 vault_id.pretty_printed()
             );
+            Ok(())
         } else {
             tracing::info!("[{}] Not registered", vault_id.pretty_printed());
 
@@ -597,14 +600,15 @@ impl VaultService {
                         },
                         public_key,
                     )
-                    .await?;
+                    .await
+                    .map_err(Into::into)
             } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
                 tracing::info!("[{}] Automatically registering...", vault_id.pretty_printed());
-                faucet::fund_and_register(&self.btc_parachain, &bitcoin_core_with_wallet, faucet_url, &vault_id)
-                    .await?;
+                faucet::fund_and_register(&self.btc_parachain, &bitcoin_core_with_wallet, faucet_url, &vault_id).await
+            } else {
+                Ok(())
             }
         }
-        Ok(())
     }
 
     async fn await_parachain_block(&self) -> Result<u32, Error> {
