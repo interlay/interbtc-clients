@@ -43,7 +43,7 @@ where
         match backoff.next_backoff() {
             Some(wait) => {
                 // error occurred, sleep before retrying
-                log::warn!("{:?} - next retry in {:.3} s", err, wait.as_secs_f64());
+                log::warn!("{} - next retry in {:.3} s", err, wait.as_secs_f64());
                 tokio::time::sleep(wait).await;
             }
             None => break Err(Error::Timeout),

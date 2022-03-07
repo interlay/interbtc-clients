@@ -153,11 +153,17 @@ impl InterBtcParachain {
             |result| async {
                 match result.map_err(Into::<Error>::into) {
                     Ok(te) => Ok(te),
-                    Err(err) if err.is_invalid_transaction() => {
-                        self.refresh_nonce().await;
-                        Err(RetryPolicy::Skip(Error::InvalidTransaction))
+                    Err(err) => {
+                        if let Some(data) = err.is_invalid_transaction() {
+                            self.refresh_nonce().await;
+                            Err(RetryPolicy::Skip(Error::InvalidTransaction(data)))
+                        } else if err.is_pool_too_low_priority().is_some() {
+                            self.refresh_nonce().await;
+                            Err(RetryPolicy::Skip(Error::PoolTooLowPriority))
+                        } else {
+                            Err(RetryPolicy::Throw(err))
+                        }
                     }
-                    Err(err) => Err(RetryPolicy::Throw(err)),
                 }
             },
         )
@@ -283,19 +289,15 @@ impl InterBtcParachain {
         Ok(())
     }
 
+    /// Emulate the POOL_INVALID_TX error using token transfer extrinsics.
     #[cfg(test)]
-    pub async fn get_outdated_nonce_error(&self) -> Error {
-        use sp_arithmetic::FixedPointNumber;
-
-        let key = OracleKey::ExchangeRate(Token(DOT));
-        let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
-
+    pub async fn get_invalid_tx_error(&self, recipient: AccountId) -> Error {
         let mut signer = self.signer.write().await;
 
         self.api
             .tx()
-            .oracle()
-            .feed_values(vec![(key.clone(), exchange_rate)])
+            .tokens()
+            .transfer(recipient.clone(), Token(DOT), 100)
             .sign_and_submit_then_watch(&signer.clone())
             .await
             .unwrap();
@@ -305,8 +307,33 @@ impl InterBtcParachain {
         // now call with outdated nonce
         self.api
             .tx()
-            .oracle()
-            .feed_values(vec![(key, exchange_rate)])
+            .tokens()
+            .transfer(recipient.clone(), Token(DOT), 100)
+            .sign_and_submit_then_watch(&signer.clone())
+            .await
+            .unwrap_err()
+            .into()
+    }
+
+    /// Emulate the POOL_TOO_LOW_PRIORITY error using token transfer extrinsics.
+    #[cfg(test)]
+    pub async fn get_too_low_priority_error(&self, recipient: AccountId) -> Error {
+        let signer = self.signer.write().await;
+
+        // submit tx but don't watch
+        self.api
+            .tx()
+            .tokens()
+            .transfer(recipient.clone(), Token(DOT), 100)
+            .sign_and_submit(&signer.clone())
+            .await
+            .unwrap();
+
+        // should call with the same nonce
+        self.api
+            .tx()
+            .tokens()
+            .transfer(recipient, Token(DOT), 100)
             .sign_and_submit_then_watch(&signer.clone())
             .await
             .unwrap_err()
