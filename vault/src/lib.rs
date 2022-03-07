@@ -18,11 +18,12 @@ mod vaults;
 pub mod service {
     pub use crate::{
         cancellation::{CancellationScheduler, IssueCanceller, ReplaceCanceller},
-        collateral::{maintain_collateralization_rate, monitor_bridge_metrics},
+        collateral::maintain_collateralization_rate,
         execution::execute_open_requests,
         issue::{
             listen_for_issue_cancels, listen_for_issue_executes, listen_for_issue_requests, process_issue_requests,
         },
+        metrics::monitor_bridge_metrics,
         redeem::listen_for_redeem_requests,
         refund::listen_for_refund_requests,
         relay::{Config, Runner},

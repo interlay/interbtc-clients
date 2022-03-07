@@ -1,11 +1,17 @@
+use crate::system::VaultIdManager;
+use bitcoin::BitcoinCoreApi;
 use lazy_static::lazy_static;
+
 use runtime::{
     prometheus::{gather, Encoder, GaugeVec, IntGauge, Opts as PrometheusOpts, Registry, TextEncoder},
-    Error, FixedPointNumber,
+    CurrencyIdExt, CurrencyInfo, Error, FeedValuesEvent, FixedPointNumber,
     FixedPointTraits::One,
-    FixedU128, InterBtcParachain, VaultId, VaultRegistryPallet,
+    FixedU128, InterBtcParachain, OracleKey, VaultId, VaultRegistryPallet,
 };
-use service::warp::{Rejection, Reply};
+use service::{
+    warp::{Rejection, Reply},
+    Error as ServiceError,
+};
 
 lazy_static! {
     pub static ref REGISTRY: Registry = Registry::new();
@@ -101,5 +107,40 @@ pub async fn update_service_metrics(parachain_rpc: InterBtcParachain, vault_id: 
     REQUIRED_COLLATERAL
         .with_label_values(&[format!("{:?}", vault_id).as_str()])
         .set(truncated_required_collateral);
+    Ok(())
+}
+
+pub async fn monitor_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    parachain_rpc: InterBtcParachain,
+    vault_id_manager: VaultIdManager<B>,
+) -> Result<(), ServiceError> {
+    let parachain_rpc = &parachain_rpc;
+    let vault_id_manager = &vault_id_manager;
+    parachain_rpc
+        .on_event::<FeedValuesEvent, _, _, _>(
+            |event| async move {
+                let updated_currencies = event.values.iter().filter_map(|(key, _value)| match key {
+                    OracleKey::ExchangeRate(currency_id) => Some(currency_id),
+                    _ => None,
+                });
+                let vault_ids = vault_id_manager.get_vault_ids().await;
+                for currency_id in updated_currencies {
+                    match vault_ids
+                        .iter()
+                        .find(|vault_id| &vault_id.collateral_currency() == currency_id)
+                    {
+                        None => tracing::debug!("Ignoring exchange rate update for {}", currency_id.inner().symbol()),
+                        Some(vault_id) => {
+                            tracing::info!("Received FeedValuesEvent for {}", currency_id.inner().symbol());
+                            if let Err(err) = update_service_metrics(parachain_rpc.clone(), vault_id.clone()).await {
+                                tracing::info!("{:?}", err);
+                            }
+                        }
+                    }
+                }
+            },
+            |error| tracing::error!("Error reading SetExchangeRate event: {}", error.to_string()),
+        )
+        .await?;
     Ok(())
 }
