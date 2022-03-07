@@ -81,7 +81,6 @@ async fn test_is_transaction_invalid() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_outdated_nonce_matching() {
     env_logger::init();
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;

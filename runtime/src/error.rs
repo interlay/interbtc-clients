@@ -151,7 +151,7 @@ impl Error {
         self.is_runtime_err(RELAY_MODULE, &format!("{:?}", RelayPalletError::ValidRefundTransaction))
     }
 
-    fn map_call_error<T>(&self, call: impl Fn(&CallError) -> Option<T>) -> Option<T> {
+    fn map_call_error<T>(&self, call: impl Fn(&CallError) -> Option<T>, other: impl Fn(&String) -> Option<T>) -> Option<T> {
         match self {
             Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(RequestError::Call(err)))) => call(err),
             Error::SubxtBasicError(BasicError::Rpc(RequestError::Request(message))) => {
@@ -162,7 +162,7 @@ impl Error {
                         data: error_response.error.data.map(ToOwned::to_owned),
                     })
                 } else {
-                    None
+                    other(message)
                 }
             }
             _ => None,
@@ -181,6 +181,12 @@ impl Error {
             } else {
                 None
             }
+        }, |message| {
+            if message.contains(INVALID_TX_MESSAGE) {
+                Some(message.to_string())
+            } else {
+                None
+            }
         })
     }
 
@@ -191,6 +197,12 @@ impl Error {
                 ..
             } = call_error
             {
+                Some(())
+            } else {
+                None
+            }
+        }, |message| {
+            if message.contains(TOO_LOW_PRIORITY_MESSAGE) {
                 Some(())
             } else {
                 None
@@ -250,3 +262,6 @@ pub enum KeyLoadingError {
 const BASE_ERROR: i32 = 1000;
 const POOL_INVALID_TX: i32 = BASE_ERROR + 10;
 const POOL_TOO_LOW_PRIORITY: i32 = POOL_INVALID_TX + 4;
+
+const INVALID_TX_MESSAGE: &str = "Invalid Transaction";
+const TOO_LOW_PRIORITY_MESSAGE: &str = "Priority is too low";
