@@ -122,7 +122,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
     }
 }
 
-pub async fn wait_or_shutdown<F>(shutdown_tx: ShutdownSender, future2: F)
+pub async fn wait_or_shutdown<F>(name: &str, shutdown_tx: ShutdownSender, future2: F)
 where
     F: Future<Output = Result<(), Error>>,
 {
@@ -138,8 +138,12 @@ where
         Either::Left((_, _)) => {
             tracing::trace!("Received shutdown signal");
         }
-        Either::Right((_, _)) => {
-            tracing::trace!("Sending shutdown signal");
+        Either::Right((ret, _)) => {
+            tracing::info!(
+                "Sending shutdown signal to all tasks because service {} returned {:?}.",
+                name,
+                ret
+            );
             // TODO: shutdown signal should be error
             let _ = shutdown_tx.send(Some(()));
         }

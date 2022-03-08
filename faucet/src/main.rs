@@ -76,7 +76,7 @@ async fn main() -> Result<(), Error> {
         .await;
 
         // run block listener to restart faucet on disconnect
-        let block_listener = wait_or_shutdown(shutdown_tx.clone(), async move {
+        let block_listener = wait_or_shutdown("Faucet Block Listener", shutdown_tx.clone(), async move {
             btc_parachain
                 .on_block(move |header| async move {
                     log::debug!("Got block {:?}", header);

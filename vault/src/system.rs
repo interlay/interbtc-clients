@@ -351,6 +351,7 @@ impl VaultService {
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
 
         let issue_request_listener = wait_or_shutdown(
+            "Issue Request Listener",
             self.shutdown.clone(),
             listen_for_issue_requests(
                 self.vault_id_manager.clone(),
@@ -361,11 +362,13 @@ impl VaultService {
         );
 
         let issue_execute_listener = wait_or_shutdown(
+            "Issue Execute Listener",
             self.shutdown.clone(),
             listen_for_issue_executes(self.btc_parachain.clone(), issue_event_tx.clone(), issue_set.clone()),
         );
 
         let issue_cancel_listener = wait_or_shutdown(
+            "Issue Cancel Listener",
             self.shutdown.clone(),
             listen_for_issue_cancels(self.btc_parachain.clone(), issue_set.clone()),
         );
@@ -377,7 +380,7 @@ impl VaultService {
             account_id.clone(),
         );
 
-        let issue_cancel_scheduler = wait_or_shutdown(self.shutdown.clone(), async move {
+        let issue_cancel_scheduler = wait_or_shutdown("Issue Cancel Scheduler", self.shutdown.clone(), async move {
             issue_cancellation_scheduler
                 .handle_cancellation::<IssueCanceller>(issue_event_rx)
                 .await?;
@@ -387,6 +390,7 @@ impl VaultService {
         let issue_executor = maybe_run_task(
             !self.config.no_issue_execution,
             wait_or_shutdown(
+                "Issue Executor",
                 self.shutdown.clone(),
                 issue::process_issue_requests(
                     walletless_btc_rpc.clone(),
@@ -402,6 +406,7 @@ impl VaultService {
         let (replace_event_tx, replace_event_rx) = mpsc::channel::<Event>(16);
 
         let request_replace_listener = wait_or_shutdown(
+            "Request Replace Listener",
             self.shutdown.clone(),
             listen_for_replace_requests(
                 self.btc_parachain.clone(),
@@ -412,6 +417,7 @@ impl VaultService {
         );
 
         let accept_replace_listener = wait_or_shutdown(
+            "Accept Replace Listener",
             self.shutdown.clone(),
             listen_for_accept_replace(
                 self.btc_parachain.clone(),
@@ -422,6 +428,7 @@ impl VaultService {
         );
 
         let execute_replace_listener = wait_or_shutdown(
+            "Execute Replace Listener",
             self.shutdown.clone(),
             listen_for_execute_replace(self.btc_parachain.clone(), replace_event_tx.clone()),
         );
@@ -433,15 +440,17 @@ impl VaultService {
             account_id.clone(),
         );
 
-        let replace_cancel_scheduler = wait_or_shutdown(self.shutdown.clone(), async move {
-            replace_cancellation_scheduler
-                .handle_cancellation::<ReplaceCanceller>(replace_event_rx)
-                .await?;
-            Ok(())
-        });
+        let replace_cancel_scheduler =
+            wait_or_shutdown("Replace Cancel Scheduler", self.shutdown.clone(), async move {
+                replace_cancellation_scheduler
+                    .handle_cancellation::<ReplaceCanceller>(replace_event_rx)
+                    .await?;
+                Ok(())
+            });
 
         // listen for parachain blocks, used for cancellation
         let parachain_block_listener = wait_or_shutdown(
+            "Parachain Block Listener",
             self.shutdown.clone(),
             active_block_listener(
                 self.btc_parachain.clone(),
@@ -452,6 +461,7 @@ impl VaultService {
 
         // listen for bitcoin blocks, used for cancellation
         let bitcoin_block_listener = wait_or_shutdown(
+            "Bitcoind Block Listener",
             self.shutdown.clone(),
             relay_block_listener(
                 self.btc_parachain.clone(),
@@ -462,6 +472,7 @@ impl VaultService {
 
         // redeem handling
         let redeem_listener = wait_or_shutdown(
+            "Redeem Listener",
             self.shutdown.clone(),
             listen_for_redeem_requests(
                 self.btc_parachain.clone(),
@@ -473,6 +484,7 @@ impl VaultService {
 
         // refund handling
         let refund_listener = wait_or_shutdown(
+            "Refund Listener",
             self.shutdown.clone(),
             listen_for_refund_requests(
                 self.btc_parachain.clone(),
@@ -483,7 +495,7 @@ impl VaultService {
         );
 
         let err_provider = self.btc_parachain.clone();
-        let err_listener = wait_or_shutdown(self.shutdown.clone(), async move {
+        let err_listener = wait_or_shutdown("Error Listener", self.shutdown.clone(), async move {
             err_provider
                 .on_event_error(|e| tracing::debug!("Received error event: {}", e))
                 .await?;
@@ -494,6 +506,7 @@ impl VaultService {
         let vaults_listener = maybe_run_task(!self.config.no_vault_theft_report, self.start_theft_reporting().await?);
 
         let vault_id_registration_listener = wait_or_shutdown(
+            "VaultId Registration Listener",
             self.shutdown.clone(),
             self.vault_id_manager.clone().listen_for_vault_id_registrations(),
         );
@@ -502,6 +515,7 @@ impl VaultService {
         let relayer = maybe_run_task(
             !self.config.no_bitcoin_block_relay,
             wait_or_shutdown(
+                "Relayer",
                 self.shutdown.clone(),
                 run_relayer(Runner::new(
                     walletless_btc_rpc.clone(),
@@ -646,6 +660,7 @@ impl VaultService {
             .unwrap_or(self.bitcoin_core.get_block_count().await? as u32 + 1);
 
         let vaults_listener = wait_or_shutdown(
+            "Vaults Listener",
             self.shutdown.clone(),
             report_vault_thefts(
                 self.bitcoin_core.clone(),
@@ -657,12 +672,14 @@ impl VaultService {
 
         // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
         let vaults_registration_listener = wait_or_shutdown(
+            "Vaults Registration Listener",
             self.shutdown.clone(),
             listen_for_vaults_registered(self.btc_parachain.clone(), vaults.clone()),
         );
 
         // keep vault wallets up-to-date
         let wallet_update_listener = wait_or_shutdown(
+            "Wallet Update Listener",
             self.shutdown.clone(),
             listen_for_wallet_updates(self.btc_parachain.clone(), vaults.clone()),
         );
