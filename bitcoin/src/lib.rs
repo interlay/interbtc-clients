@@ -7,6 +7,7 @@ mod iter;
 pub use addr::PartialAddress;
 use async_trait::async_trait;
 use backoff::{backoff::Backoff, future::retry, ExponentialBackoff};
+use bitcoincore_rpc::bitcoin::SignedAmount;
 pub use bitcoincore_rpc::{
     bitcoin::{
         blockdata::{opcodes::all as opcodes, script::Builder},
@@ -19,7 +20,10 @@ pub use bitcoincore_rpc::{
         Address, Amount, Block, BlockHeader, Network, OutPoint, PrivateKey, PubkeyHash, PublicKey, Script, ScriptHash,
         Transaction, TxIn, TxMerkleNode, TxOut, Txid, WPubkeyHash, WScriptHash,
     },
-    bitcoincore_rpc_json::{CreateRawTransactionInput, GetBlockchainInfoResult, GetTransactionResult, WalletTxInfo},
+    bitcoincore_rpc_json::{
+        CreateRawTransactionInput, FundRawTransactionOptions, GetBlockchainInfoResult, GetTransactionResult,
+        WalletTxInfo,
+    },
     json::{self, AddressType, GetBlockResult},
     jsonrpc::{error::RpcError, Error as JsonRpcError},
     Auth, Client, Error as BitcoinError, RpcApi,
@@ -85,6 +89,7 @@ pub struct TransactionMetadata {
     pub raw_tx: Vec<u8>,
     pub block_height: u32,
     pub block_hash: BlockHash,
+    pub fee: Option<SignedAmount>,
 }
 
 #[async_trait]
@@ -585,7 +590,7 @@ impl BitcoinCoreApi for BitcoinCore {
         txid: Txid,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
-        let (block_height, block_hash) = retry(get_exponential_backoff(), || async {
+        let (block_height, block_hash, fee) = retry(get_exponential_backoff(), || async {
             Ok(match self.rpc.get_transaction(&txid, None) {
                 Ok(GetTransactionResult {
                     info:
@@ -595,8 +600,9 @@ impl BitcoinCoreApi for BitcoinCore {
                             blockheight: Some(height),
                             ..
                         },
+                    fee,
                     ..
-                }) if confirmations >= 0 && confirmations as u32 >= num_confirmations => Ok((height, hash)),
+                }) if confirmations >= 0 && confirmations as u32 >= num_confirmations => Ok((height, hash, fee)),
                 Ok(_) => Err(Error::ConfirmationError),
                 Err(e) => Err(e.into()),
             }?)
@@ -619,6 +625,7 @@ impl BitcoinCoreApi for BitcoinCore {
             raw_tx,
             block_height,
             block_hash,
+            fee,
         })
     }
 
