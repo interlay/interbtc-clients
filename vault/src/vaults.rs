@@ -1,5 +1,5 @@
 use crate::error::Error;
-use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _};
+use bitcoin::{BitcoinCoreApi, BlockHash, Network, PartialAddress, Transaction, TransactionExt as _};
 use futures::stream::{iter, StreamExt};
 use runtime::{
     BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcVault, RegisterAddressEvent,
@@ -148,18 +148,22 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonit
 
 pub async fn listen_for_wallet_updates(
     btc_parachain: InterBtcParachain,
+    btc_network: Network,
     vaults: Arc<Vaults>,
 ) -> Result<(), ServiceError> {
     let vaults = &vaults;
     btc_parachain
         .on_event::<RegisterAddressEvent, _, _, _>(
             |event| async move {
+                let btc_address = event.address;
                 tracing::info!(
-                    "Added new btc address {:?} for vault {}",
-                    event.address,
+                    "Added new btc address {} for vault {}",
+                    btc_address
+                        .encode_str(btc_network)
+                        .unwrap_or(format!("{:?}", btc_address)),
                     event.vault_id.account_id.to_ss58check()
                 );
-                vaults.write(event.address, event.vault_id).await;
+                vaults.write(btc_address, event.vault_id).await;
             },
             |err| tracing::error!("Error (RegisterAddressEvent): {}", err.to_string()),
         )
@@ -262,6 +266,7 @@ mod tests {
 
         #[async_trait]
         trait BitcoinCoreApi {
+            fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;

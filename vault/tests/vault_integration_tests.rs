@@ -188,7 +188,7 @@ async fn test_report_vault_theft_succeeds() {
     test_service(
         join(
             vault::service::report_vault_thefts(btc_rpc.clone(), relayer_provider.clone(), 0, vaults.clone()),
-            vault::service::listen_for_wallet_updates(relayer_provider.clone(), vaults.clone()),
+            vault::service::listen_for_wallet_updates(relayer_provider.clone(), btc_rpc.network(), vaults.clone()),
         ),
         async {
             // Theft detection works by extracting the public address from transaction inputs,
@@ -270,7 +270,7 @@ async fn test_report_vault_double_payment_succeeds() {
         test_service(
             join4(
                 vault::service::report_vault_thefts(btc_rpc.clone(), relayer_provider.clone(), 0, vaults.clone()),
-                vault::service::listen_for_wallet_updates(relayer_provider.clone(), vaults.clone()),
+                vault::service::listen_for_wallet_updates(relayer_provider.clone(), btc_rpc.network(), vaults.clone()),
                 pay_redeem_from_vault_wallet(vault_provider.clone(), btc_rpc.clone(), 2, vault_id.clone()),
                 pay_redeem_from_vault_wallet(vault_provider.clone(), btc_rpc.clone(), 3, vault_id.clone()),
             ),
