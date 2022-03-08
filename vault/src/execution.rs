@@ -1,6 +1,7 @@
 use crate::{error::Error, VaultIdManager};
 use bitcoin::{
-    BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata, BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
+    BitcoinCoreApi, PartialAddress, Transaction, TransactionExt, TransactionMetadata,
+    BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
 use futures::{
     stream::{self, StreamExt},
@@ -236,7 +237,12 @@ impl Request {
                 // one return-to-self address, make sure it is registered
                 let wallet = parachain_rpc.get_vault(&vault_id).await?.wallet;
                 if !wallet.addresses.contains(address) {
-                    tracing::info!("Registering address {:?}", address);
+                    tracing::info!(
+                        "Registering address {:?}",
+                        address
+                            .encode_str(btc_rpc.network())
+                            .unwrap_or(format!("{:?}", address)),
+                    );
                     parachain_rpc.register_address(&vault_id, *address).await?;
                 }
             }
@@ -511,8 +517,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress,
-        PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, Network,
+        PartialAddress, PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
         AccountId, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError, ErrorCode, InterBtcRichBlockHeader,
@@ -622,6 +628,7 @@ mod tests {
 
         #[async_trait]
         trait BitcoinCoreApi {
+            fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;

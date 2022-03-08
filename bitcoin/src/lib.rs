@@ -89,6 +89,8 @@ pub struct TransactionMetadata {
 
 #[async_trait]
 pub trait BitcoinCoreApi {
+    fn network(&self) -> Network;
+
     async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, Error>;
 
     async fn get_block_count(&self) -> Result<u64, Error>;
@@ -315,10 +317,6 @@ impl BitcoinCore {
         }
     }
 
-    pub fn network(&self) -> Network {
-        self.network
-    }
-
     /// Wait indefinitely for the node to sync.
     pub async fn sync(&self) -> Result<(), Error> {
         info!("Waiting for bitcoin-core to sync...");
@@ -413,6 +411,10 @@ fn err_not_in_mempool(err: &bitcoincore_rpc::Error) -> bool {
 
 #[async_trait]
 impl BitcoinCoreApi for BitcoinCore {
+    fn network(&self) -> Network {
+        self.network
+    }
+
     /// Wait for a specified height to return a `BlockHash` or
     /// exit on error.
     ///

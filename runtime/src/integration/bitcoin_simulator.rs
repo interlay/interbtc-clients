@@ -227,6 +227,9 @@ impl MockBitcoinCore {
 
 #[async_trait]
 impl BitcoinCoreApi for MockBitcoinCore {
+    fn network(&self) -> Network {
+        Network::Regtest
+    }
     async fn wait_for_block(&self, height: u32, _num_confirmations: u32) -> Result<Block, BitcoinError> {
         loop {
             let blocks = self.blocks.read().await;
