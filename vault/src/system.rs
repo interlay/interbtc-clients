@@ -618,8 +618,8 @@ impl VaultService {
         tracing::info!("Got new block...");
         Ok(startup_height)
     }
+
     pub(crate) async fn start_theft_reporting(&self) -> Result<impl Future, Error> {
-        // TODO: don't fetch vaults if reporting is disabled
         tracing::info!("Fetching all active vaults...");
         let vaults = self
             .btc_parachain
