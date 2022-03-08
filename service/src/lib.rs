@@ -65,9 +65,10 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
 
 impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Config, S> {
     pub async fn start(&self) -> Result<(), Error> {
-        tracing::info!("AccountId: {}", self.signer.account_id().to_ss58check());
-
         loop {
+            tracing::info!("Version: {}", S::VERSION);
+            tracing::info!("AccountId: {}", self.signer.account_id().to_ss58check());
+
             let config = self.config.clone();
             let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
 
