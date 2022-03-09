@@ -25,9 +25,9 @@ cfg_if::cfg_if! {
     if #[cfg(feature = "standalone-metadata")] {
         const DEFAULT_SPEC_VERSION: u32 = 1;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: u32 = 10;
+        const DEFAULT_SPEC_VERSION: u32 = 11;
     } else if #[cfg(feature = "parachain-metadata-testnet")] {
-        const DEFAULT_SPEC_VERSION: u32 = 1;
+        const DEFAULT_SPEC_VERSION: u32 = 2;
     }
 }
 

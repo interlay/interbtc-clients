@@ -1,7 +1,7 @@
 mod error;
 
 use backoff::{future::retry_notify, ExponentialBackoff};
-use clap::Clap;
+use clap::Parser;
 use error::Error;
 use git_version::git_version;
 use reqwest::Url;
@@ -54,7 +54,7 @@ fn parse_fixed_point(src: &str) -> Result<FixedU128, Error> {
     FixedU128::checked_from_integer(src.parse::<u128>()?).ok_or(Error::InvalidExchangeRate)
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
 struct Opts {
     /// Parachain URL, can be over WebSockets or HTTP.

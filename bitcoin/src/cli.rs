@@ -2,10 +2,10 @@
 
 use crate::{BitcoinCore, BitcoinCoreBuilder, Error};
 use bitcoincore_rpc::{bitcoin::Network, Auth};
-use clap::Clap;
+use clap::Parser;
 use std::time::Duration;
 
-#[derive(Clap, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
 pub struct BitcoinOpts {
     #[clap(long, env = "BITCOIN_RPC_URL")]
     pub bitcoin_rpc_url: String,
