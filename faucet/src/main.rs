@@ -1,7 +1,7 @@
 mod error;
 mod http;
 
-use clap::Clap;
+use clap::Parser;
 use error::Error;
 use git_version::git_version;
 use runtime::InterBtcSigner;
@@ -13,7 +13,7 @@ const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 const NAME: &str = env!("CARGO_PKG_NAME");
 const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
 struct Opts {
     /// Keyring / keyfile options.

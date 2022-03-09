@@ -274,6 +274,7 @@ mod dispatch_error {
         runtime_types::sp_runtime::{ArithmeticError, TokenError},
         DispatchError,
     };
+    use sp_runtime::ModuleError;
 
     type RichTokenError = sp_runtime::TokenError;
     type RichArithmeticError = sp_runtime::ArithmeticError;
@@ -315,7 +316,7 @@ mod dispatch_error {
                 RichDispatchError::Other(_) => DispatchError::Other,
                 RichDispatchError::CannotLookup => DispatchError::CannotLookup,
                 RichDispatchError::BadOrigin => DispatchError::BadOrigin,
-                RichDispatchError::Module { index, error, .. } => DispatchError::Module { index, error },
+                RichDispatchError::Module(ModuleError { index, error, .. }) => DispatchError::Module { index, error },
                 RichDispatchError::ConsumerRemaining => DispatchError::ConsumerRemaining,
                 RichDispatchError::NoProviders => DispatchError::NoProviders,
                 RichDispatchError::TooManyConsumers => DispatchError::TooManyConsumers,

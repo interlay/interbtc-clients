@@ -2,12 +2,12 @@ use crate::{
     error::{Error, KeyLoadingError},
     InterBtcParachain, InterBtcSigner,
 };
-use clap::Clap;
+use clap::Parser;
 use sp_keyring::AccountKeyring;
 use std::{collections::HashMap, num::ParseIntError, str::FromStr, time::Duration};
 use subxt::sp_core::{sr25519::Pair, Pair as _};
 
-#[derive(Clap, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
 pub struct ProviderUserOpts {
     /// Keyring to use, mutually exclusive with keyfile.
     #[clap(long, required_unless_present = "keyfile", parse(try_from_str = parse_account_keyring))]
@@ -69,7 +69,7 @@ pub fn parse_duration_minutes(src: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_secs(src.parse::<u64>()? * 60))
 }
 
-#[derive(Clap, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
 pub struct ConnectionOpts {
     /// Parachain websocket URL.
     #[clap(long, default_value = "ws://127.0.0.1:9944")]

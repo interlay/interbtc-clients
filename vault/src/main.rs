@@ -1,10 +1,10 @@
-use clap::Clap;
+use clap::Parser;
 use runtime::InterBtcSigner;
 use service::{ConnectionManager, ServiceConfig};
 
 use vault::{Error, VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION};
 
-#[derive(Clap, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
 pub struct Opts {
     /// Keyring / keyfile options.

@@ -18,7 +18,7 @@ parachain-metadata-kintsugi = []
 parachain-metadata-testnet = []
 
 [dependencies]
-serde = { version = "1.0.130", features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive", "full"] }
 async-trait = "0.1.40"
 thiserror = "1.0"
@@ -26,7 +26,7 @@ serde_json = "1.0.71"
 tokio = { version = "1.0", features = ["full"] }
 backoff = { version = "0.3.0", features = ["tokio"] }
 futures = "0.3.5"
-clap = "3.0.0-beta.2"
+clap = "3.1"
 log = "0.4.0"
 url = "2"
 cfg-if = "1.0"
@@ -41,8 +41,8 @@ frame-support = { git = "https://github.com/paritytech/substrate", branch = "pol
 
 # Subxt dependencies
 # https://github.com/interlay/subxt/tree/polkadot-v0.9.17
-subxt = { package = "subxt", git = "https://github.com/interlay/subxt", rev = "38258d5177319c97789dc18fbcca6f99bf36af65" }
-subxt-client = { package = "subxt-client", git = "https://github.com/interlay/subxt", rev = "38258d5177319c97789dc18fbcca6f99bf36af65" }
+subxt = { package = "subxt", git = "https://github.com/interlay/subxt", rev = "75e43d15812d6484b962405d3435373dd3f80aba" }
+subxt-client = { package = "subxt-client", git = "https://github.com/interlay/subxt", rev = "75e43d15812d6484b962405d3435373dd3f80aba" }
 
 jsonrpsee = { version = "0.8.0", features = ["macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
 
