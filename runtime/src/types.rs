@@ -271,14 +271,14 @@ mod h256_le {
 
 mod dispatch_error {
     use crate::metadata::{
-        runtime_types::sp_runtime::{ArithmeticError, TokenError},
+        runtime_types::sp_runtime::{ArithmeticError, ModuleError, TokenError},
         DispatchError,
     };
-    use sp_runtime::ModuleError;
 
     type RichTokenError = sp_runtime::TokenError;
     type RichArithmeticError = sp_runtime::ArithmeticError;
     type RichDispatchError = sp_runtime::DispatchError;
+    type RichModuleError = sp_runtime::ModuleError;
 
     macro_rules! convert_enum{($src: ident, $dst: ident, $($variant: ident,)*)=> {
         impl From<$src> for $dst {
@@ -316,7 +316,9 @@ mod dispatch_error {
                 RichDispatchError::Other(_) => DispatchError::Other,
                 RichDispatchError::CannotLookup => DispatchError::CannotLookup,
                 RichDispatchError::BadOrigin => DispatchError::BadOrigin,
-                RichDispatchError::Module(ModuleError { index, error, .. }) => DispatchError::Module { index, error },
+                RichDispatchError::Module(RichModuleError { index, error, .. }) => {
+                    DispatchError::Module(ModuleError { index, error })
+                }
                 RichDispatchError::ConsumerRemaining => DispatchError::ConsumerRemaining,
                 RichDispatchError::NoProviders => DispatchError::NoProviders,
                 RichDispatchError::TooManyConsumers => DispatchError::TooManyConsumers,
