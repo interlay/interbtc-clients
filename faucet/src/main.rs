@@ -29,7 +29,7 @@ struct Opts {
     faucet: FaucetConfig,
 }
 
-#[derive(Clap, Clone)]
+#[derive(Parser, Clone)]
 pub struct FaucetConfig {
     /// Address to listen on for JSON-RPC requests.
     #[clap(long, default_value = "[::0]:3033")]
