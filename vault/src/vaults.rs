@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::{error::Error, metrics::update_bitcoin_metrics};
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _};
 use futures::stream::{iter, StreamExt};
 use runtime::{
@@ -34,13 +34,14 @@ impl Vaults {
     }
 }
 
-pub async fn report_vault_thefts<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone>(
+pub async fn monitor_btc_txs<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     bitcoin_core: B,
     btc_parachain: P,
     btc_height: u32,
     vaults: Arc<Vaults>,
+    vault_id: VaultId,
 ) -> Result<(), ServiceError> {
-    match VaultTheftMonitor::new(bitcoin_core, btc_parachain, btc_height, vaults)
+    match BitcoinMonitor::new(bitcoin_core, btc_parachain, btc_height, vaults, vault_id)
         .process_blocks()
         .await
     {
@@ -49,20 +50,22 @@ pub async fn report_vault_thefts<P: RelayPallet + BtcRelayPallet, B: BitcoinCore
     }
 }
 
-pub struct VaultTheftMonitor<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> {
+pub struct BitcoinMonitor<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone + Send + Sync + 'static> {
     bitcoin_core: B,
     btc_parachain: P,
     btc_height: u32,
     vaults: Arc<Vaults>,
+    vault_id: VaultId,
 }
 
-impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonitor<P, B> {
-    pub fn new(bitcoin_core: B, btc_parachain: P, btc_height: u32, vaults: Arc<Vaults>) -> Self {
+impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone + Send + Sync + 'static> BitcoinMonitor<P, B> {
+    pub fn new(bitcoin_core: B, btc_parachain: P, btc_height: u32, vaults: Arc<Vaults>, vault_id: VaultId) -> Self {
         Self {
             bitcoin_core,
             btc_parachain,
             btc_height,
             vaults,
+            vault_id,
         }
     }
 
@@ -97,6 +100,15 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonit
         }
 
         Ok(())
+    }
+
+    async fn monitor_bitcoin_metrics(&self, tx: Transaction, num_confirmations: u32) {
+        let mut addresses = tx.extract_input_addresses();
+        addresses.append(&mut tx.extract_output_addresses());
+        let vault_ids = filter_matching_vaults(addresses, &self.vaults).await;
+        if vault_ids.contains(&self.vault_id) {
+            update_bitcoin_metrics(self.bitcoin_core.clone(), num_confirmations).await;
+        }
     }
 
     async fn check_transaction(
@@ -136,9 +148,10 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone> VaultTheftMonit
             bitcoin::stream_in_chain_transactions(self.bitcoin_core.clone(), self.btc_height, num_confirmations).await;
 
         while let Some(Ok((block_hash, tx))) = stream.next().await {
-            if let Err(err) = self.check_transaction(tx, block_hash, num_confirmations).await {
+            if let Err(err) = self.check_transaction(tx.clone(), block_hash, num_confirmations).await {
                 tracing::error!("Failed to check transaction: {}", err);
             }
+            self.monitor_bitcoin_metrics(tx, num_confirmations).await;
         }
 
         // stream should not end, signal restart
@@ -369,7 +382,7 @@ mod tests {
         let mut bitcoin_core = MockBitcoin::default();
         bitcoin_core.expect_find_duplicate_payments().returning(|_| Ok(vec![]));
 
-        let monitor = VaultTheftMonitor::new(bitcoin_core, parachain, 0, Arc::new(Vaults::default()));
+        let monitor = BitcoinMonitor::new(bitcoin_core, parachain, 0, Arc::new(Vaults::default()));
 
         monitor
             .report_invalid(&dummy_vault_id(), &[], &[], &dummy_tx())
@@ -383,7 +396,7 @@ mod tests {
         parachain.expect_is_transaction_invalid().returning(|_, _| Ok(true));
         parachain.expect_report_vault_theft().once().returning(|_, _, _| Ok(()));
 
-        let monitor = VaultTheftMonitor::new(MockBitcoin::default(), parachain, 0, Arc::new(Vaults::default()));
+        let monitor = BitcoinMonitor::new(MockBitcoin::default(), parachain, 0, Arc::new(Vaults::default()));
 
         monitor
             .report_invalid(&dummy_vault_id(), &[], &[], &dummy_tx())

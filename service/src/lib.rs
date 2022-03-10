@@ -27,6 +27,7 @@ pub trait Service<Config> {
         btc_parachain: BtcParachain,
         bitcoin_core: BitcoinCore,
         config: Config,
+        monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
         constructor: Box<dyn Fn(VaultId) -> Result<BitcoinCore, BitcoinError> + Send + Sync>,
     ) -> Self;
@@ -39,6 +40,7 @@ pub struct ConnectionManager<Config: Clone, S: Service<Config>> {
     bitcoin_config: BitcoinConfig,
     parachain_config: ParachainConfig,
     service_config: ServiceConfig,
+    monitoring_config: MonitoringConfig,
     config: Config,
     _marker: PhantomData<S>,
 }
@@ -50,6 +52,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
         bitcoin_config: BitcoinConfig,
         parachain_config: ParachainConfig,
         service_config: ServiceConfig,
+        monitoring_config: MonitoringConfig,
         config: Config,
     ) -> Self {
         Self {
@@ -58,6 +61,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             bitcoin_config,
             parachain_config,
             service_config,
+            monitoring_config,
             config,
             _marker: PhantomData::default(),
         }
@@ -102,7 +106,14 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
                 config_copy.new_client_with_network(Some(wallet_name), network_copy)
             };
 
-            let service = S::new_service(btc_parachain, bitcoin_core, config, shutdown_tx, Box::new(constructor));
+            let service = S::new_service(
+                btc_parachain,
+                bitcoin_core,
+                config,
+                self.monitoring_config.clone(),
+                shutdown_tx,
+                Box::new(constructor),
+            );
             if let Err(outer) = service.start().await {
                 match outer {
                     Error::BitcoinError(ref inner)
