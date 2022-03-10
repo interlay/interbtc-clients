@@ -1,6 +1,6 @@
 use crate::{
-    collateral::lock_required_collateral, error::Error, faucet, issue, relay::run_relayer, service::*, vaults::Vaults,
-    Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
+    collateral::lock_required_collateral, error::Error, faucet, issue, metrics::update_bitcoin_metrics,
+    relay::run_relayer, service::*, vaults::Vaults, Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
@@ -17,10 +17,9 @@ use runtime::{
     InterBtcParachain, RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs,
     VaultCurrencyPair, VaultId, VaultRegistryPallet,
 };
-use service::{wait_or_shutdown, Error as ServiceError, Service, ShutdownSender};
+use service::{wait_or_shutdown, Error as ServiceError, MonitoringConfig, Service, ShutdownSender};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{sync::RwLock, time::sleep};
-
 pub const VERSION: &str = git_version!(args = ["--tags"]);
 pub const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 pub const NAME: &str = env!("CARGO_PKG_NAME");
@@ -254,6 +253,7 @@ pub struct VaultService {
     btc_parachain: InterBtcParachain,
     bitcoin_core: BitcoinCore,
     config: VaultServiceConfig,
+    monitoring_config: MonitoringConfig,
     shutdown: ShutdownSender,
     vault_id_manager: VaultIdManager<BitcoinCore>,
 }
@@ -267,10 +267,18 @@ impl Service<VaultServiceConfig> for VaultService {
         btc_parachain: InterBtcParachain,
         bitcoin_core: BitcoinCore,
         config: VaultServiceConfig,
+        monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
         constructor: Box<dyn Fn(VaultId) -> Result<BitcoinCore, BitcoinError> + Send + Sync>,
     ) -> Self {
-        VaultService::new(btc_parachain, bitcoin_core, config, shutdown, constructor)
+        VaultService::new(
+            btc_parachain,
+            bitcoin_core,
+            config,
+            monitoring_config,
+            shutdown,
+            constructor,
+        )
     }
 
     async fn start(&self) -> Result<(), ServiceError> {
@@ -294,6 +302,7 @@ impl VaultService {
         btc_parachain: InterBtcParachain,
         bitcoin_core: BitcoinCore,
         config: VaultServiceConfig,
+        monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
         constructor: impl Fn(VaultId) -> Result<BitcoinCore, BitcoinError> + Send + Sync + 'static,
     ) -> Self {
@@ -301,8 +310,28 @@ impl VaultService {
             btc_parachain: btc_parachain.clone(),
             bitcoin_core,
             config,
+            monitoring_config,
             shutdown,
             vault_id_manager: VaultIdManager::new(btc_parachain, constructor),
+        }
+    }
+
+    fn get_vault_id(&self) -> VaultId {
+        let account_id = self.btc_parachain.get_account_id();
+
+        let collateral_currency = if let Some(currency_id) = self.config.collateral_currency_id {
+            currency_id
+        } else {
+            self.btc_parachain.relay_chain_currency_id
+        };
+        let wrapped_currency = self.btc_parachain.wrapped_currency_id;
+
+        VaultId {
+            account_id: account_id.clone(),
+            currencies: VaultCurrencyPair {
+                collateral: collateral_currency,
+                wrapped: wrapped_currency,
+            },
         }
     }
 
@@ -495,7 +524,10 @@ impl VaultService {
         });
 
         // watch vault address registration and report potential thefts
-        let vaults_listener = maybe_run_task(!self.config.no_vault_theft_report, self.start_theft_reporting().await?);
+        let vaults_listener = maybe_run_task(
+            !self.config.no_vault_theft_report,
+            self.start_monitoring_btc_txs().await?,
+        );
 
         let vault_id_registration_listener = wait_or_shutdown(
             self.shutdown.clone(),
@@ -519,9 +551,8 @@ impl VaultService {
                 )),
             ),
         );
-
-        let bridge_metrics_listener = wait_or_shutdown(
-            self.shutdown.clone(),
+        let bridge_metrics_listener = maybe_run_task(
+            !self.monitoring_config.no_prometheus,
             monitor_bridge_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
         );
 
@@ -562,22 +593,7 @@ impl VaultService {
     }
 
     async fn maybe_register_vault(&self) -> Result<(), Error> {
-        let account_id = self.btc_parachain.get_account_id();
-
-        let collateral_currency = if let Some(currency_id) = self.config.collateral_currency_id {
-            currency_id
-        } else {
-            self.btc_parachain.relay_chain_currency_id
-        };
-        let wrapped_currency = self.btc_parachain.wrapped_currency_id;
-
-        let vault_id = VaultId {
-            account_id: account_id.clone(),
-            currencies: VaultCurrencyPair {
-                collateral: collateral_currency,
-                wrapped: wrapped_currency,
-            },
-        };
+        let vault_id = self.get_vault_id();
 
         if is_vault_registered(&self.btc_parachain, &vault_id).await? {
             tracing::info!(
@@ -629,8 +645,7 @@ impl VaultService {
         tracing::info!("Got new block...");
         Ok(startup_height)
     }
-
-    pub(crate) async fn start_theft_reporting(&self) -> Result<impl Future, Error> {
+    pub(crate) async fn start_monitoring_btc_txs(&self) -> Result<impl Future, Error> {
         tracing::info!("Fetching all active vaults...");
         let vaults = self
             .btc_parachain
@@ -656,13 +671,20 @@ impl VaultService {
             .bitcoin_theft_start_height
             .unwrap_or(self.bitcoin_core.get_block_count().await? as u32 + 1);
 
-        let vaults_listener = wait_or_shutdown(
+        update_bitcoin_metrics(
+            self.bitcoin_core.clone(),
+            self.btc_parachain.get_bitcoin_confirmations().await?,
+        )
+        .await;
+
+        let bitcoin_listener = wait_or_shutdown(
             self.shutdown.clone(),
-            report_vault_thefts(
+            monitor_btc_txs(
                 self.bitcoin_core.clone(),
                 self.btc_parachain.clone(),
                 bitcoin_theft_start_height,
                 vaults.clone(),
+                self.get_vault_id(),
             ),
         );
 
@@ -679,7 +701,7 @@ impl VaultService {
         );
 
         Ok(futures::future::join3(
-            vaults_listener,
+            bitcoin_listener,
             vaults_registration_listener,
             wallet_update_listener,
         ))

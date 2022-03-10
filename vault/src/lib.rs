@@ -28,7 +28,7 @@ pub mod service {
         refund::listen_for_refund_requests,
         relay::{Config, Runner},
         replace::{listen_for_accept_replace, listen_for_execute_replace, listen_for_replace_requests},
-        vaults::{listen_for_vaults_registered, listen_for_wallet_updates, report_vault_thefts},
+        vaults::{listen_for_vaults_registered, listen_for_wallet_updates, monitor_btc_txs},
     };
 }
 use std::time::Duration;

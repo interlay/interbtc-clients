@@ -297,14 +297,7 @@ impl InterBtcParachain {
 
     /// Emulate the POOL_INVALID_TX error using token transfer extrinsics.
     #[cfg(test)]
-<<<<<<< HEAD
     pub async fn get_invalid_tx_error(&self, recipient: AccountId) -> Error {
-=======
-    pub async fn get_outdated_nonce_error(&self) -> Error {
-        let key = OracleKey::ExchangeRate(Token(DOT));
-        let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
-
->>>>>>> 7384168 (feat: vault MVP metrics)
         let mut signer = self.signer.write().await;
 
         self.api

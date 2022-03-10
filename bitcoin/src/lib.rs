@@ -100,6 +100,8 @@ pub trait BitcoinCoreApi {
 
     async fn get_block_count(&self) -> Result<u64, Error>;
 
+    async fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error>;
+
     async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
 
     async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
@@ -453,6 +455,13 @@ impl BitcoinCoreApi for BitcoinCore {
     /// Get the tip of the main chain as reported by Bitcoin core.
     async fn get_block_count(&self) -> Result<u64, Error> {
         Ok(self.rpc.get_block_count()?)
+    }
+
+    /// Get wallet balance.
+    async fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error> {
+        Ok(self
+            .rpc
+            .get_balance(min_confirmations.map(|x| x.try_into().unwrap_or_default()), None)?)
     }
 
     /// Get the raw transaction identified by `Txid` and stored

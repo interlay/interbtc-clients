@@ -46,6 +46,7 @@ async fn start() -> Result<(), Error> {
         opts.bitcoin,
         opts.parachain,
         opts.service,
+        opts.monitoring.clone(),
         opts.vault,
     );
 
