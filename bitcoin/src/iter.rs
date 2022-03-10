@@ -180,7 +180,7 @@ async fn get_best_block_info<B: BitcoinCoreApi + Clone>(rpc: &B) -> Result<GetBl
 mod tests {
     use super::*;
     use crate::*;
-    pub use bitcoincore_rpc::bitcoin::TxMerkleNode;
+    pub use bitcoincore_rpc::bitcoin::{Network, TxMerkleNode};
     use sp_core::H256;
 
     mockall::mock! {
@@ -188,6 +188,7 @@ mod tests {
 
         #[async_trait]
         trait BitcoinCoreApi {
+            fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, Error>;
             async fn get_block_count(&self) -> Result<u64, Error>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;

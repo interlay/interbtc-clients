@@ -6,7 +6,7 @@
 use crate::{rpc::RelayPallet, BtcAddress, BtcRelayPallet, InterBtcParachain, RawBlockHeader, H160, H256, U256};
 use async_trait::async_trait;
 use bitcoin::{
-    secp256k1::{rand::rngs::OsRng, PublicKey, Secp256k1, SecretKey},
+    secp256k1::{constants::SECRET_KEY_SIZE, PublicKey, Secp256k1, SecretKey},
     serialize, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, Hash,
     LockedTransaction, Network, OutPoint, PartialAddress, PartialMerkleTree, PrivateKey, Script, Transaction,
     TransactionExt, TransactionMetadata, TxIn, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
@@ -227,6 +227,9 @@ impl MockBitcoinCore {
 
 #[async_trait]
 impl BitcoinCoreApi for MockBitcoinCore {
+    fn network(&self) -> Network {
+        Network::Regtest
+    }
     async fn wait_for_block(&self, height: u32, _num_confirmations: u32) -> Result<Block, BitcoinError> {
         loop {
             let blocks = self.blocks.read().await;
@@ -289,8 +292,8 @@ impl BitcoinCoreApi for MockBitcoinCore {
     }
     async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, BitcoinError> {
         let secp = Secp256k1::new();
-        let mut rng = OsRng::new().unwrap();
-        let secret_key = SecretKey::new(&mut rng);
+        let raw_secret_key: [u8; SECRET_KEY_SIZE] = thread_rng().gen();
+        let secret_key = SecretKey::from_slice(&raw_secret_key).unwrap();
         let public_key = PublicKey::from_secret_key(&secp, &secret_key);
         Ok(P::from(public_key.serialize()))
     }

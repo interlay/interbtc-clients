@@ -26,12 +26,11 @@ pub use bitcoincore_rpc::{
 };
 pub use error::{BitcoinRpcError, ConversionError, Error};
 use esplora_btc_api::apis::configuration::Configuration as ElectrsConfiguration;
-use hyper::Error as HyperError;
 pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
 use log::{info, trace};
 use serde_json::error::Category as SerdeJsonCategory;
 use sp_core::H256;
-use std::{convert::TryInto, future::Future, io::ErrorKind as IoErrorKind, str::FromStr, sync::Arc, time::Duration};
+use std::{convert::TryInto, future::Future, str::FromStr, sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, OwnedMutexGuard},
     time::{sleep, timeout},
@@ -90,6 +89,8 @@ pub struct TransactionMetadata {
 
 #[async_trait]
 pub trait BitcoinCoreApi {
+    fn network(&self) -> Network;
+
     async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, Error>;
 
     async fn get_block_count(&self) -> Result<u64, Error>;
@@ -199,15 +200,15 @@ async fn connect(rpc: &Client, connection_timeout: Duration) -> Result<Network, 
     info!("Connecting to bitcoin-core...");
     timeout(connection_timeout, async move {
         loop {
-            match rpc.get_blockchain_info() {
-                Err(BitcoinError::JsonRpc(JsonRpcError::Hyper(HyperError::Io(err))))
-                    if err.kind() == IoErrorKind::ConnectionRefused =>
+            match rpc.get_blockchain_info().map_err(Into::<Error>::into) {
+                Err(err)
+                    if err.is_transport_error() =>
                 {
-                    trace!("could not connect to bitcoin-core");
+                    trace!("A transport error occurred while attempting to communicate with bitcoin-core. Typically this indicates a failure to connect");
                     sleep(RETRY_DURATION).await;
                     continue;
                 }
-                Err(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
+                Err(Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err))))
                     if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcInWarmup =>
                 {
                     // may be loading block index or verifying wallet
@@ -215,7 +216,7 @@ async fn connect(rpc: &Client, connection_timeout: Duration) -> Result<Network, 
                     sleep(RETRY_DURATION).await;
                     continue;
                 }
-                Err(BitcoinError::JsonRpc(JsonRpcError::Json(err))) if err.classify() == SerdeJsonCategory::Syntax => {
+                Err(Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Json(err)))) if err.classify() == SerdeJsonCategory::Syntax => {
                     // invalid response, can happen if server is in shutdown
                     trace!("bitcoin-core gave an invalid response: {}", err);
                     sleep(RETRY_DURATION).await;
@@ -225,7 +226,7 @@ async fn connect(rpc: &Client, connection_timeout: Duration) -> Result<Network, 
                     info!("Connected to {}", chain);
                     return parse_bitcoin_network(&chain);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => return Err(err),
             }
         }
     })
@@ -269,7 +270,7 @@ impl BitcoinCoreBuilder {
             Some(ref x) => format!("{}/wallet/{}", self.url, x),
             None => self.url.clone(),
         };
-        Ok(Client::new(url, self.auth.clone())?)
+        Ok(Client::new(&url, self.auth.clone())?)
     }
 
     pub fn build_with_network(self, network: Network) -> Result<BitcoinCore, Error> {
@@ -316,10 +317,6 @@ impl BitcoinCore {
                 ..Default::default()
             },
         }
-    }
-
-    pub fn network(&self) -> Network {
-        self.network
     }
 
     /// Wait indefinitely for the node to sync.
@@ -416,6 +413,10 @@ fn err_not_in_mempool(err: &bitcoincore_rpc::Error) -> bool {
 
 #[async_trait]
 impl BitcoinCoreApi for BitcoinCore {
+    fn network(&self) -> Network {
+        self.network
+    }
+
     /// Wait for a specified height to return a `BlockHash` or
     /// exit on error.
     ///
@@ -427,7 +428,7 @@ impl BitcoinCoreApi for BitcoinCore {
             match self.rpc.get_block_hash(height.into()) {
                 Ok(hash) => {
                     let info = self.rpc.get_block_info(&hash)?;
-                    if info.confirmations >= num_confirmations {
+                    if info.confirmations >= num_confirmations as i32 {
                         return Ok(self.rpc.get_block(&hash)?);
                     } else {
                         sleep(RETRY_DURATION).await;
@@ -947,7 +948,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_find_duplicate_payments_succeeds() {
-        let bitcoin_core = BitcoinCoreBuilder::new("".to_string())
+        let bitcoin_core = BitcoinCoreBuilder::new("localhost".to_string())
             .build_with_network(Network::Testnet)
             .unwrap();
 

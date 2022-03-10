@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCore, Error as BitcoinError};
+use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
 use futures::{future::Either, Future, FutureExt};
 use runtime::{
     cli::ConnectionOpts as ParachainConfig, CurrencyId, CurrencyIdExt, CurrencyInfo, Error as RuntimeError,
@@ -70,9 +70,10 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
 
 impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Config, S> {
     pub async fn start(&self) -> Result<(), Error> {
-        tracing::info!("AccountId: {}", self.signer.account_id().to_ss58check());
-
         loop {
+            tracing::info!("Version: {}", S::VERSION);
+            tracing::info!("AccountId: {}", self.signer.account_id().to_ss58check());
+
             let config = self.config.clone();
             let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
 
@@ -116,10 +117,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             );
             if let Err(outer) = service.start().await {
                 match outer {
-                    Error::BitcoinError(ref inner)
-                        if inner.is_connection_aborted()
-                            || inner.is_connection_refused()
-                            || inner.is_json_decode_error() => {}
+                    Error::BitcoinError(ref inner) if inner.is_transport_error() || inner.is_json_decode_error() => {}
                     Error::RuntimeError(RuntimeError::ChannelClosed) => (),
                     Error::RuntimeError(ref inner) if inner.is_rpc_error() => (),
                     other => return Err(other),

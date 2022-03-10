@@ -181,7 +181,7 @@ pub async fn run_relayer(runner: Runner<BitcoinCore, InterBtcParachain>) -> Resu
             Err(Error::InterBtcError(ref err)) if err.is_rpc_disconnect_error() => {
                 return Err(ServiceError::ClientShutdown);
             }
-            Err(Error::BitcoinError(err)) if err.is_connection_refused() => {
+            Err(Error::BitcoinError(err)) if err.is_transport_error() => {
                 return Err(ServiceError::ClientShutdown);
             }
             Err(err) => {

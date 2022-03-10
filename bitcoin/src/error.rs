@@ -9,9 +9,7 @@ use bitcoincore_rpc::{
     jsonrpc::{error::RpcError, Error as JsonRpcError},
 };
 use hex::FromHexError;
-use hyper::Error as HyperError;
 use serde_json::Error as SerdeJsonError;
-use std::io::ErrorKind as IoErrorKind;
 use thiserror::Error;
 use tokio::time::error::Elapsed;
 
@@ -57,17 +55,10 @@ pub enum Error {
 }
 
 impl Error {
-    pub fn is_connection_refused(&self) -> bool {
-        matches!(self,
-            Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Hyper(HyperError::Io(err))))
-                if err.kind() == IoErrorKind::ConnectionRefused
-        )
-    }
-
-    pub fn is_connection_aborted(&self) -> bool {
-        matches!(self,
-            Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Hyper(HyperError::Io(err))))
-                if err.kind() == IoErrorKind::ConnectionAborted
+    pub fn is_transport_error(&self) -> bool {
+        matches!(
+            self,
+            Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Transport(_)))
         )
     }
 

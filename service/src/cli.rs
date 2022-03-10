@@ -1,4 +1,4 @@
-use clap::Clap;
+use clap::Parser;
 use std::str::FromStr;
 
 #[derive(Clone, Debug)]
@@ -50,7 +50,7 @@ impl LoggingFormat {
     }
 }
 
-#[derive(Clap, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
 pub struct ServiceConfig {
     /// Restart or stop on error.
     #[clap(long, default_value = "always")]
@@ -61,7 +61,7 @@ pub struct ServiceConfig {
     pub logging_format: LoggingFormat,
 }
 
-#[derive(Clap, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
 pub struct MonitoringConfig {
     /// Do not expose a Prometheus metric endpoint.
     #[clap(long)]

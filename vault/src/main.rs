@@ -1,11 +1,11 @@
-use clap::Clap;
+use clap::Parser;
 use runtime::InterBtcSigner;
 use service::{warp, warp::Filter, ConnectionManager, Error, MonitoringConfig, ServiceConfig};
 use std::net::{Ipv4Addr, SocketAddr};
 
 use vault::{metrics, VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION};
 
-#[derive(Clap, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
 pub struct Opts {
     /// Keyring / keyfile options.

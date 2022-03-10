@@ -1,6 +1,7 @@
-use crate::error::Error;
+use crate::{error::Error, VaultIdManager};
 use bitcoin::{
-    BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata, BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
+    BitcoinCoreApi, PartialAddress, Transaction, TransactionExt, TransactionMetadata,
+    BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
 use futures::{
     stream::{self, StreamExt},
@@ -236,7 +237,12 @@ impl Request {
                 // one return-to-self address, make sure it is registered
                 let wallet = parachain_rpc.get_vault(&vault_id).await?.wallet;
                 if !wallet.addresses.contains(address) {
-                    tracing::info!("Registering address {:?}", address);
+                    tracing::info!(
+                        "Registering address {:?}",
+                        address
+                            .encode_str(btc_rpc.network())
+                            .unwrap_or(format!("{:?}", address)),
+                    );
                     parachain_rpc.register_address(&vault_id, *address).await?;
                 }
             }
@@ -309,7 +315,8 @@ impl Request {
 /// bitcoin blockchain to see if a payment has already been made.
 pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     parachain_rpc: InterBtcParachain,
-    btc_rpc: B,
+    btc_rpc: VaultIdManager<B>,
+    read_only_btc_rpc: B,
     num_confirmations: u32,
     payment_margin: Duration,
     process_refunds: bool,
@@ -374,7 +381,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
     };
 
     // iterate through transactions in reverse order, starting from those in the mempool
-    let mut transaction_stream = bitcoin::reverse_stream_transactions(&btc_rpc, btc_start_height).await?;
+    let mut transaction_stream = bitcoin::reverse_stream_transactions(&read_only_btc_rpc, btc_start_height).await?;
     while let Some(result) = transaction_stream.next().await {
         let tx = result?;
 
@@ -394,6 +401,17 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
             let parachain_rpc = parachain_rpc.clone();
             let btc_rpc = btc_rpc.clone();
             tokio::spawn(async move {
+                let btc_rpc = match btc_rpc.get_bitcoin_rpc(&request.vault_id).await {
+                    Some(x) => x,
+                    None => {
+                        tracing::error!(
+                            "Failed to fetch bitcoin rpc for vault {}",
+                            request.vault_id.pretty_printed()
+                        );
+                        return; // nothing we can do - bail
+                    }
+                };
+
                 // Payment has been made, but it might not have been confirmed enough times yet
                 let tx_metadata = btc_rpc
                     .clone()
@@ -445,6 +463,17 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         let parachain_rpc = parachain_rpc.clone();
         let btc_rpc = btc_rpc.clone();
         tokio::spawn(async move {
+            let btc_rpc = match btc_rpc.get_bitcoin_rpc(&request.vault_id).await {
+                Some(x) => x,
+                None => {
+                    tracing::error!(
+                        "Failed to fetch bitcoin rpc for vault {}",
+                        request.vault_id.pretty_printed()
+                    );
+                    return; // nothing we can do - bail
+                }
+            };
+
             tracing::info!(
                 "{:?} request #{:?} found without bitcoin payment - processing...",
                 request.request_type,
@@ -488,8 +517,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress,
-        PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, Network,
+        PartialAddress, PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
         AccountId, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError, ErrorCode, InterBtcRichBlockHeader,
@@ -600,6 +629,7 @@ mod tests {
 
         #[async_trait]
         trait BitcoinCoreApi {
+            fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
@@ -645,7 +675,7 @@ mod tests {
     }
 
     fn dummy_vault_id() -> VaultId {
-        VaultId::new(Default::default(), Token(DOT), Token(INTERBTC))
+        VaultId::new(AccountId::new([1u8; 32]), Token(DOT), Token(INTERBTC))
     }
 
     #[test]

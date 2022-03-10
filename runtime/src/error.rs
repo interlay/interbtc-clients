@@ -6,10 +6,19 @@ use crate::{
     BTC_RELAY_MODULE, ISSUE_MODULE, REDEEM_MODULE, RELAY_MODULE,
 };
 use codec::Error as CodecError;
-use jsonrpsee::{client_transport::ws::WsHandshakeError, core::error::Error as RequestError, types::error::CallError};
+use jsonrpsee::{
+    client_transport::ws::WsHandshakeError,
+    core::error::Error as RequestError,
+    types::error::{CallError, ErrorResponse},
+};
 use prometheus::Error as PrometheusError;
 use serde_json::Error as SerdeJsonError;
-use std::{array::TryFromSliceError, io::Error as IoError, num::TryFromIntError};
+use std::{
+    array::TryFromSliceError,
+    fmt::{Debug, Display},
+    io::Error as IoError,
+    num::TryFromIntError,
+};
 use subxt::{sp_core::crypto::SecretStringError, BasicError};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
@@ -37,8 +46,10 @@ pub enum Error {
     VaultCommittedTheft,
     #[error("Channel closed unexpectedly")]
     ChannelClosed,
-    #[error("Transaction is invalid")]
-    InvalidTransaction,
+    #[error("Cannot replace existing transaction")]
+    PoolTooLowPriority,
+    #[error("Transaction is invalid: {0}")]
+    InvalidTransaction(String),
     #[error("Request has timed out")]
     Timeout,
     #[error("Block is not in the relay main chain")]
@@ -51,6 +62,8 @@ pub enum Error {
     KeyringAccountParsingError,
     #[error("Storage item not found")]
     StorageItemNotFound,
+    #[error("Insufficient funds")]
+    InsufficientFunds,
     #[error("Client does not support spec_version: expected {0}, got {1}")]
     InvalidSpecVersion(u32, u32),
     #[error("Failed to load credentials from file: {0}")]
@@ -62,7 +75,7 @@ pub enum Error {
     #[error("Subxt basic error: {0}")]
     SubxtBasicError(#[from] BasicError),
     #[error("Subxt runtime error: {0}")]
-    SubxtRuntimeError(#[from] SubxtError),
+    SubxtRuntimeError(#[from] OuterSubxtError),
     #[error("Error decoding: {0}")]
     CodecError(#[from] CodecError),
     #[error("Error encoding json data: {0}")]
@@ -77,11 +90,44 @@ pub enum Error {
     PrometheusError(#[from] PrometheusError),
 }
 
+impl From<SubxtError> for Error {
+    fn from(err: SubxtError) -> Self {
+        Self::SubxtRuntimeError(OuterSubxtError(err))
+    }
+}
+
+// hacky workaround to pretty print runtime errors
+#[derive(Debug)]
+pub struct OuterSubxtError(pub SubxtError);
+
+impl From<SubxtError> for OuterSubxtError {
+    fn from(err: SubxtError) -> Self {
+        Self(err)
+    }
+}
+
+impl std::error::Error for OuterSubxtError {}
+
+impl Display for OuterSubxtError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            subxt::Error::Runtime(err) => {
+                if let Some(ErrorDetails { error, pallet, .. }) = err.clone().inner().details() {
+                    write!(f, "{} from {}", error, pallet)
+                } else {
+                    Debug::fmt(&err, f)
+                }
+            }
+            err => Display::fmt(&err, f),
+        }
+    }
+}
+
 impl Error {
     fn is_runtime_err(&self, pallet_name: &str, error_name: &str) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(SubxtError::Runtime(runtime_error))
+            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Runtime(runtime_error)))
             if matches!(
                 runtime_error.clone().inner().details(),
                 Some(ErrorDetails {
@@ -110,15 +156,72 @@ impl Error {
         self.is_runtime_err(RELAY_MODULE, &format!("{:?}", RelayPalletError::ValidRefundTransaction))
     }
 
-    pub fn is_invalid_transaction(&self) -> bool {
-        matches!(self,
-            Error::SubxtRuntimeError(SubxtError::Rpc(RequestError::Call(CallError::Custom { code, message, .. })))
-                if *code == POOL_INVALID_TX &&
-                message == INVALID_TX_MESSAGE
-        ) || matches!(self,
-            Error::SubxtBasicError(BasicError::Rpc(RequestError::Call(CallError::Custom { code, message, .. })))
-                if *code == POOL_INVALID_TX &&
-                message == INVALID_TX_MESSAGE
+    fn map_call_error<T>(
+        &self,
+        call: impl Fn(&CallError) -> Option<T>,
+        other: impl Fn(&String) -> Option<T>,
+    ) -> Option<T> {
+        match self {
+            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(RequestError::Call(err)))) => call(err),
+            Error::SubxtBasicError(BasicError::Rpc(RequestError::Request(message))) => {
+                if let Ok(error_response) = serde_json::from_str::<ErrorResponse>(message) {
+                    call(&CallError::Custom {
+                        code: error_response.error.code.code(),
+                        message: error_response.error.message.to_string(),
+                        data: error_response.error.data.map(ToOwned::to_owned),
+                    })
+                } else {
+                    other(message)
+                }
+            }
+            _ => None,
+        }
+    }
+
+    pub fn is_invalid_transaction(&self) -> Option<String> {
+        self.map_call_error(
+            |call_error| {
+                if let CallError::Custom {
+                    code: POOL_INVALID_TX,
+                    data,
+                    ..
+                } = call_error
+                {
+                    Some(data.clone().map(|raw| raw.to_string()).unwrap_or_default())
+                } else {
+                    None
+                }
+            },
+            |message| {
+                if message.contains(INVALID_TX_MESSAGE) {
+                    Some(message.to_string())
+                } else {
+                    None
+                }
+            },
+        )
+    }
+
+    pub fn is_pool_too_low_priority(&self) -> Option<()> {
+        self.map_call_error(
+            |call_error| {
+                if let CallError::Custom {
+                    code: POOL_TOO_LOW_PRIORITY,
+                    ..
+                } = call_error
+                {
+                    Some(())
+                } else {
+                    None
+                }
+            },
+            |message| {
+                if message.contains(TOO_LOW_PRIORITY_MESSAGE) {
+                    Some(())
+                } else {
+                    None
+                }
+            },
         )
     }
 
@@ -129,7 +232,7 @@ impl Error {
     pub fn is_rpc_disconnect_error(&self) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(SubxtError::Rpc(JsonRpseeError::RestartNeeded(_)))
+            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(JsonRpseeError::RestartNeeded(_))))
                 | Error::SubxtBasicError(BasicError::Rpc(JsonRpseeError::RestartNeeded(_)))
         )
     }
@@ -137,7 +240,7 @@ impl Error {
     pub fn is_rpc_error(&self) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(SubxtError::Rpc(_)) | Error::SubxtBasicError(BasicError::Rpc(_))
+            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(_))) | Error::SubxtBasicError(BasicError::Rpc(_))
         )
     }
 
@@ -152,7 +255,7 @@ impl Error {
     pub fn is_parachain_shutdown_error(&self) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(SubxtError::Runtime(runtime_error))
+            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Runtime(runtime_error)))
             if matches!(runtime_error.clone().inner(), DispatchError::BadOrigin)
         )
     }
@@ -173,4 +276,7 @@ pub enum KeyLoadingError {
 // https://github.com/paritytech/substrate/blob/e60597dff0aa7ffad623be2cc6edd94c7dc51edd/client/rpc-api/src/author/error.rs#L80
 const BASE_ERROR: i32 = 1000;
 const POOL_INVALID_TX: i32 = BASE_ERROR + 10;
+const POOL_TOO_LOW_PRIORITY: i32 = POOL_INVALID_TX + 4;
+
 const INVALID_TX_MESSAGE: &str = "Invalid Transaction";
+const TOO_LOW_PRIORITY_MESSAGE: &str = "Priority is too low";

@@ -81,14 +81,21 @@ async fn test_is_transaction_invalid() {
 }
 
 #[tokio::test]
-#[ignore]
-async fn test_outdated_nonce_matching() {
-    env_logger::init();
+async fn test_invalid_tx_matching() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
-    let err = parachain_rpc.get_outdated_nonce_error().await;
-    log::error!("Error: {:?}", err);
-    assert!(err.is_invalid_transaction())
+    let err = parachain_rpc.get_invalid_tx_error(AccountKeyring::Bob.into()).await;
+    assert!(err.is_invalid_transaction().is_some())
+}
+
+#[tokio::test]
+async fn test_too_low_priority_matching() {
+    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+    let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    let err = parachain_rpc
+        .get_too_low_priority_error(AccountKeyring::Bob.into())
+        .await;
+    assert!(err.is_pool_too_low_priority().is_some())
 }
 
 #[tokio::test]

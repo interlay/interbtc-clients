@@ -14,12 +14,12 @@ uses-bitcoind = []
 
 [dependencies]
 thiserror = "1.0"
-bitcoincore-rpc = { git = "https://github.com/gregdhill/rust-bitcoincore-rpc", rev = "80ff27b" }
+bitcoincore-rpc = { git = "https://github.com/rust-bitcoin/rust-bitcoincore-rpc", rev = "d9a1dd014f8eff8b00618457bb6b845c8b932bb7" }
 hex = "0.4.2"
 async-trait = "0.1.40"
 tokio = { version = "1.0", features = ["full"] }
 backoff = { version = "0.3.0", features = ["tokio"] }
-clap = { version = "= 3.0.0-beta.4", features = ["derive", "std"], optional = true }
+clap = { version = "3.1", features = ["derive", "std", "env"], optional = true }
 num = "0.2"
 num-traits = "0.2"
 num-derive = "0.3"
@@ -30,14 +30,15 @@ hyper = "0.10"
 esplora-btc-api = "1.0.3"
 
 # Substrate dependencies
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.16" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.17" }
 
 [dependencies.interbtc-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "9fed496a74c9b2b8bc0a3ed15e35804f79c79728"
+rev = "22b7490625b34de6b04f5750eda5966083d98567"
 package = "bitcoin"
 optional = true
 
 [dev-dependencies]
 mockall = "0.8.1"
 regex = "1.4.3"
+rand = { version = "0.7" }

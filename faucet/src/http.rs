@@ -21,7 +21,7 @@ const KV_STORE_NAME: &str = "store";
 const FAUCET_COOLDOWN_HOURS: i64 = 6;
 
 // If the client has more 50 DOT it won't be funded
-const MAX_FUNDABLE_CLIENT_BALANCE: u128 = 500_000_000_000;
+const MAX_FUNDABLE_CLIENT_BALANCE: u128 = 50;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 struct FaucetRequest {
@@ -157,7 +157,7 @@ async fn ensure_funding_allowed(
     let reserved_balance = parachain_rpc
         .get_reserved_balance_for_id(account_id.clone(), currency_id)
         .await?;
-    if free_balance + reserved_balance > MAX_FUNDABLE_CLIENT_BALANCE {
+    if free_balance + reserved_balance > MAX_FUNDABLE_CLIENT_BALANCE * currency_id.inner().one() {
         log::warn!(
             "User {} has enough funds: {:?}",
             account_id,

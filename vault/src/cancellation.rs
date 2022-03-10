@@ -403,10 +403,10 @@ mod tests {
             griefing_collateral: Default::default(),
             opentime: Default::default(),
             period: Default::default(),
-            requester: Default::default(),
+            requester: AccountId::new([1u8; 32]),
             btc_public_key: BtcPublicKey { 0: [0; 33] },
             status: IssueRequestStatus::Pending,
-            vault: VaultId::new(Default::default(), Token(DOT), runtime::Token(INTERBTC)),
+            vault: VaultId::new(AccountId::new([1u8; 32]), Token(DOT), runtime::Token(INTERBTC)),
         }
     }
 
@@ -446,7 +446,7 @@ mod tests {
         });
         parachain_rpc.expect_get_issue_period().times(1).returning(|| Ok(1_000));
 
-        let mut canceller = CancellationScheduler::new(parachain_rpc, 10_000, 150, Default::default());
+        let mut canceller = CancellationScheduler::new(parachain_rpc, 10_000, 150, AccountId::new([1u8; 32]));
 
         // checks that the delay is calculated correctly
         assert_eq!(
@@ -491,7 +491,7 @@ mod tests {
         parachain_rpc.expect_cancel_issue().returning(|_| Ok(()));
 
         let mut active_processes: Vec<ActiveRequest> = vec![];
-        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::new([1u8; 32]));
 
         assert_eq!(
             cancellation_scheduler
@@ -541,7 +541,8 @@ mod tests {
         parachain_rpc.expect_cancel_issue().returning(|_| Ok(()));
 
         let mut active_processes: Vec<ActiveRequest> = vec![];
-        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 10_001, 101, AccountId::default());
+        let mut cancellation_scheduler =
+            CancellationScheduler::new(parachain_rpc, 10_001, 101, AccountId::new([1u8; 32]));
 
         // deadline is at parachain_height = 11_000 and bitcoin_height = 110
 
@@ -612,7 +613,7 @@ mod tests {
             },
         ];
 
-        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::new([1u8; 32]));
 
         // simulate that the issue gets executed
         let event = Event::Executed(H256::from_slice(&[2; 32]));
@@ -650,7 +651,7 @@ mod tests {
         parachain_rpc.expect_get_issue_period().returning(|| Ok(10));
 
         let mut active_processes: Vec<ActiveRequest> = vec![];
-        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 15, 0, AccountId::default());
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 15, 0, AccountId::new([1u8; 32]));
 
         // simulate that the issue gets executed
         let event = Event::Executed(H256::from_slice(&[1; 32]));
@@ -677,7 +678,7 @@ mod tests {
             .returning(|_| Err(RuntimeError::BlockNotFound));
 
         let mut active_processes: Vec<ActiveRequest> = vec![];
-        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::new([1u8; 32]));
 
         // simulate that we have a timeout (new issue request opened)
         let event = Event::Opened;
@@ -697,7 +698,7 @@ mod tests {
         // check that if the selector fails, the error is propagated
         let parachain_rpc = MockProvider::default();
 
-        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::default());
+        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::new([1u8; 32]));
 
         // dropping the tx immediately - this effectively closes the channel
         let (_, replace_event_rx) = mpsc::channel::<Event>(16);

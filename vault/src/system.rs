@@ -4,7 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
-use clap::Clap;
+use clap::Parser;
 use futures::{
     channel::{mpsc, mpsc::Sender},
     executor::block_on,
@@ -13,9 +13,9 @@ use futures::{
 use git_version::git_version;
 use runtime::{
     cli::{parse_duration_minutes, parse_duration_ms},
-    parse_collateral_currency, BtcRelayPallet, CurrencyId, Error as RuntimeError, InterBtcParachain,
-    RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair, VaultId,
-    VaultRegistryPallet,
+    parse_collateral_currency, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, Error as RuntimeError,
+    InterBtcParachain, RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs,
+    VaultCurrencyPair, VaultId, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, MonitoringConfig, Service, ShutdownSender};
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -25,7 +25,7 @@ pub const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 pub const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
 
-#[derive(Clap, Clone, Debug)]
+#[derive(Parser, Clone, Debug)]
 pub struct VaultServiceConfig {
     /// Automatically register the vault with the given amount of collateral and a newly generated address.
     #[clap(long)]
@@ -355,6 +355,7 @@ impl VaultService {
 
         let open_request_executor = execute_open_requests(
             self.btc_parachain.clone(),
+            self.vault_id_manager.clone(),
             walletless_btc_rpc.clone(),
             num_confirmations,
             self.config.payment_margin_minutes,
@@ -603,8 +604,25 @@ impl VaultService {
             if let Some(collateral) = self.config.auto_register_with_collateral {
                 tracing::info!("[{}] Automatically registering...", vault_id.pretty_printed());
                 let public_key = bitcoin_core_with_wallet.get_new_public_key().await?;
+                let free_balance = self
+                    .btc_parachain
+                    .get_free_balance(vault_id.currencies.collateral)
+                    .await?;
                 self.btc_parachain
-                    .register_vault(&vault_id, collateral, public_key)
+                    .register_vault(
+                        &vault_id,
+                        if collateral.gt(&free_balance) {
+                            tracing::warn!(
+                                "Cannot register with {}, using the available free balance: {}",
+                                collateral,
+                                free_balance
+                            );
+                            free_balance
+                        } else {
+                            collateral
+                        },
+                        public_key,
+                    )
                     .await?;
             } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
                 tracing::info!("[{}] Automatically registering...", vault_id.pretty_printed());
@@ -626,8 +644,8 @@ impl VaultService {
         tracing::info!("Got new block...");
         Ok(startup_height)
     }
+
     pub(crate) async fn start_monitoring_btc_txs(&self) -> Result<impl Future, Error> {
-        // TODO: don't fetch vaults if reporting is disabled
         tracing::info!("Fetching all active vaults...");
         let vaults = self
             .btc_parachain
@@ -679,7 +697,7 @@ impl VaultService {
         // keep vault wallets up-to-date
         let wallet_update_listener = wait_or_shutdown(
             self.shutdown.clone(),
-            listen_for_wallet_updates(self.btc_parachain.clone(), vaults.clone()),
+            listen_for_wallet_updates(self.btc_parachain.clone(), self.bitcoin_core.network(), vaults.clone()),
         );
 
         Ok(futures::future::join3(
