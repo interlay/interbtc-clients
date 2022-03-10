@@ -45,7 +45,7 @@ pub async fn monitor_btc_txs<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi 
     btc_parachain: P,
     btc_height: u32,
     vaults: Arc<Vaults>,
-    vault_id: VaultId,
+    vault_id: Option<VaultId>,
 ) -> Result<(), ServiceError> {
     match BitcoinMonitor::new(bitcoin_core, btc_parachain, btc_height, vaults, vault_id)
         .process_blocks()
@@ -61,11 +61,17 @@ pub struct BitcoinMonitor<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + C
     btc_parachain: P,
     btc_height: u32,
     vaults: Arc<Vaults>,
-    vault_id: VaultId,
+    vault_id: Option<VaultId>,
 }
 
 impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone + Send + Sync + 'static> BitcoinMonitor<P, B> {
-    pub fn new(bitcoin_core: B, btc_parachain: P, btc_height: u32, vaults: Arc<Vaults>, vault_id: VaultId) -> Self {
+    pub fn new(
+        bitcoin_core: B,
+        btc_parachain: P,
+        btc_height: u32,
+        vaults: Arc<Vaults>,
+        vault_id: Option<VaultId>,
+    ) -> Self {
         Self {
             bitcoin_core,
             btc_parachain,
@@ -260,6 +266,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::{
         Block, BlockHeader, Error as BitcoinError, GetBlockResult, Hash as _, LockedTransaction, PartialAddress,
+        Amount, Block, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress,
         PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
@@ -322,6 +329,7 @@ mod tests {
         trait BitcoinCoreApi {
             fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
+            async fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
@@ -428,7 +436,7 @@ mod tests {
         let mut bitcoin_core = MockBitcoin::default();
         bitcoin_core.expect_find_duplicate_payments().returning(|_| Ok(vec![]));
 
-        let monitor = BitcoinMonitor::new(bitcoin_core, parachain, 0, Arc::new(Vaults::default()));
+        let monitor = BitcoinMonitor::new(bitcoin_core, parachain, 0, Arc::new(Vaults::default()), None);
 
         let block_hash = BlockHash::from_slice(&[0; 32]).unwrap();
         monitor

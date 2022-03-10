@@ -671,8 +671,13 @@ impl VaultService {
             .bitcoin_theft_start_height
             .unwrap_or(self.bitcoin_core.get_block_count().await? as u32 + 1);
 
+        let vault_id = self.get_vault_id();
+        let bitcoin_core_with_wallet = match self.vault_id_manager.get_bitcoin_rpc(&vault_id).await {
+            Some(btc_rpc) => btc_rpc,
+            None => self.bitcoin_core.clone(),
+        };
         update_bitcoin_metrics(
-            self.bitcoin_core.clone(),
+            bitcoin_core_with_wallet.clone(),
             self.btc_parachain.get_bitcoin_confirmations().await?,
         )
         .await;
@@ -680,11 +685,11 @@ impl VaultService {
         let bitcoin_listener = wait_or_shutdown(
             self.shutdown.clone(),
             monitor_btc_txs(
-                self.bitcoin_core.clone(),
+                bitcoin_core_with_wallet.clone(),
                 self.btc_parachain.clone(),
                 bitcoin_theft_start_height,
                 vaults.clone(),
-                self.get_vault_id(),
+                Some(vault_id.clone()),
             ),
         );
 
