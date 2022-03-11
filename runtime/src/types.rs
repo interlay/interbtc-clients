@@ -80,6 +80,7 @@ mod metadata_aliases {
     pub type RedeemPalletError = metadata::runtime_types::redeem::pallet::Error;
     pub type RelayPalletError = metadata::runtime_types::relay::pallet::Error;
     pub type SecurityPalletError = metadata::runtime_types::security::pallet::Error;
+    pub type SystemPalletError = metadata::runtime_types::frame_system::pallet::Error;
 
     pub type H256Le = metadata::runtime_types::bitcoin::types::H256Le;
 
