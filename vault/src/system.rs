@@ -325,6 +325,7 @@ impl VaultService {
         let startup_height = self.await_parachain_block().await?;
 
         let open_request_executor = execute_open_requests(
+            self.shutdown.clone(),
             self.btc_parachain.clone(),
             self.vault_id_manager.clone(),
             walletless_btc_rpc.clone(),
@@ -414,6 +415,7 @@ impl VaultService {
         let accept_replace_listener = wait_or_shutdown(
             self.shutdown.clone(),
             listen_for_accept_replace(
+                self.shutdown.clone(),
                 self.btc_parachain.clone(),
                 self.vault_id_manager.clone(),
                 num_confirmations,
@@ -464,6 +466,7 @@ impl VaultService {
         let redeem_listener = wait_or_shutdown(
             self.shutdown.clone(),
             listen_for_redeem_requests(
+                self.shutdown.clone(),
                 self.btc_parachain.clone(),
                 self.vault_id_manager.clone(),
                 num_confirmations,
@@ -475,6 +478,7 @@ impl VaultService {
         let refund_listener = wait_or_shutdown(
             self.shutdown.clone(),
             listen_for_refund_requests(
+                self.shutdown.clone(),
                 self.btc_parachain.clone(),
                 self.vault_id_manager.clone(),
                 num_confirmations,

@@ -12,6 +12,7 @@ use runtime::{
     InterBtcReplaceRequest, IssuePallet, RedeemPallet, RedeemRequestStatus, RefundPallet, ReplacePallet,
     ReplaceRequestStatus, RequestRefundEvent, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
+use service::{spawn_cancelable, ShutdownSender};
 use std::{collections::HashMap, convert::TryInto, time::Duration};
 use tokio::time::sleep;
 
@@ -314,6 +315,7 @@ impl Request {
 /// Queries the parachain for open requests and executes them. It checks the
 /// bitcoin blockchain to see if a payment has already been made.
 pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
     btc_rpc: VaultIdManager<B>,
     read_only_btc_rpc: B,
@@ -400,7 +402,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
             // make copies of the variables we move into the task
             let parachain_rpc = parachain_rpc.clone();
             let btc_rpc = btc_rpc.clone();
-            tokio::spawn(async move {
+            spawn_cancelable(shutdown_tx.subscribe(), async move {
                 let btc_rpc = match btc_rpc.get_bitcoin_rpc(&request.vault_id).await {
                     Some(x) => x,
                     None => {
@@ -462,7 +464,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         // make copies of the variables we move into the task
         let parachain_rpc = parachain_rpc.clone();
         let btc_rpc = btc_rpc.clone();
-        tokio::spawn(async move {
+        spawn_cancelable(shutdown_tx.subscribe(), async move {
             let btc_rpc = match btc_rpc.get_bitcoin_rpc(&request.vault_id).await {
                 Some(x) => x,
                 None => {
