@@ -16,6 +16,7 @@ pub use error::Error;
 pub use trace::init_subscriber;
 
 pub type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
+pub type ShutdownReceiver = tokio::sync::broadcast::Receiver<Option<()>>;
 
 #[async_trait]
 pub trait Service<Config> {
@@ -127,8 +128,26 @@ pub async fn wait_or_shutdown<F>(shutdown_tx: ShutdownSender, future2: F)
 where
     F: Future<Output = Result<(), Error>>,
 {
-    let mut shutdown_rx = shutdown_tx.subscribe();
+    match run_cancelable(shutdown_tx.subscribe(), future2).await {
+        TerminationStatus::Cancelled => {
+            tracing::trace!("Received shutdown signal");
+        }
+        TerminationStatus::Completed => {
+            tracing::trace!("Sending shutdown signal");
+            // TODO: shutdown signal should be error
+            let _ = shutdown_tx.send(Some(()));
+        }
+    }
+}
 
+pub enum TerminationStatus {
+    Cancelled,
+    Completed,
+}
+async fn run_cancelable<F, Ret>(mut shutdown_rx: ShutdownReceiver, future2: F) -> TerminationStatus
+where
+    F: Future<Output = Ret>,
+{
     let future1 = shutdown_rx.recv().fuse();
     let future2 = future2.fuse();
 
@@ -136,15 +155,13 @@ where
     futures::pin_mut!(future2);
 
     match futures::future::select(future1, future2).await {
-        Either::Left((_, _)) => {
-            tracing::trace!("Received shutdown signal");
-        }
-        Either::Right((_, _)) => {
-            tracing::trace!("Sending shutdown signal");
-            // TODO: shutdown signal should be error
-            let _ = shutdown_tx.send(Some(()));
-        }
-    };
+        Either::Left((_, _)) => TerminationStatus::Cancelled,
+        Either::Right((_, _)) => TerminationStatus::Completed,
+    }
+}
+
+pub fn spawn_cancelable<T: Future + Send + 'static>(shutdown_rx: ShutdownReceiver, future: T) {
+    tokio::spawn(run_cancelable(shutdown_rx, future));
 }
 
 pub async fn on_shutdown(shutdown_tx: ShutdownSender, future2: impl Future) {

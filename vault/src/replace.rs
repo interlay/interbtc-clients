@@ -5,7 +5,7 @@ use runtime::{
     AcceptReplaceEvent, CollateralBalancesPallet, ExecuteReplaceEvent, InterBtcParachain, ReplacePallet,
     RequestReplaceEvent, UtilFuncs, VaultId, VaultRegistryPallet,
 };
-use service::Error as ServiceError;
+use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
 use std::time::Duration;
 
 /// Listen for AcceptReplaceEvent directed at this vault and continue the replacement
@@ -17,6 +17,7 @@ use std::time::Duration;
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
     btc_rpc: VaultIdManager<B>,
     num_confirmations: u32,
@@ -24,6 +25,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
 ) -> Result<(), ServiceError> {
     let parachain_rpc = &parachain_rpc;
     let btc_rpc = &btc_rpc;
+    let shutdown_tx = &shutdown_tx;
     parachain_rpc
         .on_event::<AcceptReplaceEvent, _, _, _>(
             |event| async move {
@@ -38,7 +40,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                 // arguments by value rather than by reference, so clone these:
                 let parachain_rpc = parachain_rpc.clone();
                 // Spawn a new task so that we handle these events concurrently
-                tokio::spawn(async move {
+                spawn_cancelable(shutdown_tx.subscribe(), async move {
                     tracing::info!("Executing accept replace #{:?}", event.replace_id);
 
                     let result = async {
