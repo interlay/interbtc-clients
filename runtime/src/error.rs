@@ -3,7 +3,7 @@ pub use jsonrpsee::core::Error as JsonRpseeError;
 use crate::{
     metadata::{DispatchError, ErrorDetails},
     types::*,
-    BTC_RELAY_MODULE, ISSUE_MODULE, REDEEM_MODULE, RELAY_MODULE,
+    BTC_RELAY_MODULE, ISSUE_MODULE, REDEEM_MODULE, RELAY_MODULE, SYSTEM_MODULE,
 };
 use codec::Error as CodecError;
 use jsonrpsee::{
@@ -250,11 +250,7 @@ impl Error {
     }
 
     pub fn is_parachain_shutdown_error(&self) -> bool {
-        matches!(
-            self,
-            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Runtime(runtime_error)))
-            if matches!(runtime_error.clone().inner(), DispatchError::BadOrigin)
-        )
+        self.is_runtime_err(SYSTEM_MODULE, &format!("{:?}", SystemPalletError::CallFiltered))
     }
 }
 
