@@ -1,12 +1,9 @@
-use crate::error::Error;
+use crate::{error::Error, metrics::update_bitcoin_metrics};
 use bitcoin::{stream_blocks, BitcoinCoreApi, BlockHash, Network, PartialAddress, Transaction, TransactionExt as _};
 use futures::{
     prelude::*,
     stream::{iter, StreamExt},
 };
-use crate::{error::Error, metrics::update_bitcoin_metrics};
-use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt as _};
-use futures::stream::{iter, StreamExt};
 use runtime::{
     BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcVault, RegisterAddressEvent,
     RegisterVaultEvent, RelayPallet, Ss58Codec, VaultId, VaultRegistryPallet,
@@ -265,9 +262,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, BlockHeader, Error as BitcoinError, GetBlockResult, Hash as _, LockedTransaction, PartialAddress,
-        Amount, Block, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress,
-        PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        json, Amount, Block, BlockHeader, Error as BitcoinError, GetBlockResult, Hash as _, LockedTransaction,
+        PartialAddress, PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
         AccountId, BitcoinBlockHeight, BlockNumber, Error as RuntimeError, H256Le, InterBtcRichBlockHeader,
@@ -330,6 +326,7 @@ mod tests {
             fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
             async fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError>;
+            async fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;

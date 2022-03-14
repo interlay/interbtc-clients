@@ -1,11 +1,9 @@
 use crate::system::VaultIdManager;
-use bitcoin::BitcoinCoreApi;
+use bitcoin::{BitcoinCoreApi, SignedAmount};
 use lazy_static::lazy_static;
 
 use runtime::{
-    prometheus::{
-        gather, proto::MetricFamily, Encoder, Gauge, GaugeVec, Opts as PrometheusOpts, Registry, TextEncoder,
-    },
+    prometheus::{gather, proto::MetricFamily, Encoder, Gauge, Registry, TextEncoder},
     CurrencyIdExt, CurrencyInfo, Error, FeedValuesEvent, FixedPointNumber,
     FixedPointTraits::One,
     FixedU128, InterBtcParachain, OracleKey, VaultId, VaultRegistryPallet,
@@ -14,32 +12,28 @@ use service::{
     warp::{Rejection, Reply},
     Error as ServiceError,
 };
+use tokio::sync::RwLock;
 
 // Metrics are stored under the `vault_id` key so that multiple vaults can be easily
 // monitored at the same time.
 lazy_static! {
+    static ref BITCOIN_FEES: RwLock<Vec<f64>> = RwLock::new(vec![]);
     pub static ref REGISTRY: Registry = Registry::new();
     pub static ref LOCKED_BTC: Gauge =
         Gauge::new("locked_btc", "Locked Bitcoin").expect("Failed to create prometheus metric");
-    pub static ref LOCKED_COLLATERAL: GaugeVec = GaugeVec::new(
-        PrometheusOpts::new("locked_collateral", "Locked Collateral"),
-        &["vault_id"]
-    )
-    .expect("Failed to create prometheus metric");
-    pub static ref COLLATERALIZATION: GaugeVec = GaugeVec::new(
-        PrometheusOpts::new("collateralization", "Collateralization"),
-        &["vault_id"]
-    )
-    .expect("Failed to create prometheus metric");
-    pub static ref REQUIRED_COLLATERAL: GaugeVec = GaugeVec::new(
-        PrometheusOpts::new("required_collateral", "Required Collateral"),
-        &["vault_id"]
-    )
-    .expect("Failed to create prometheus metric");
+    pub static ref AVERAGE_BTC_FEE: Gauge =
+        Gauge::new("avg_btc_fee", "Average Bitcoin Fee").expect("Failed to create prometheus metric");
+    pub static ref LOCKED_COLLATERAL: Gauge =
+        Gauge::new("locked_collateral", "Locked Collateral").expect("Failed to create prometheus metric");
+    pub static ref COLLATERALIZATION: Gauge =
+        Gauge::new("collateralization", "Collateralization").expect("Failed to create prometheus metric");
+    pub static ref REQUIRED_COLLATERAL: Gauge =
+        Gauge::new("required_collateral", "Required Collateral").expect("Failed to create prometheus metric");
 }
 
 pub fn register_custom_metrics() -> Result<(), Error> {
     REGISTRY.register(Box::new(LOCKED_BTC.clone()))?;
+    REGISTRY.register(Box::new(AVERAGE_BTC_FEE.clone()))?;
     REGISTRY.register(Box::new(LOCKED_COLLATERAL.clone()))?;
     REGISTRY.register(Box::new(COLLATERALIZATION.clone()))?;
     REGISTRY.register(Box::new(REQUIRED_COLLATERAL.clone()))?;
@@ -80,9 +74,7 @@ pub async fn update_bridge_metrics(parachain_rpc: InterBtcParachain, vault_id: V
     let actual_collateral = parachain_rpc.get_vault_total_collateral(vault_id.clone()).await?;
     let float_actual_collateral = FixedU128::from_inner(actual_collateral).to_float() * decimals_offset;
 
-    LOCKED_COLLATERAL
-        .with_label_values(&[vault_id.pretty_printed().as_str()])
-        .set(float_actual_collateral);
+    LOCKED_COLLATERAL.set(float_actual_collateral);
 
     let collateralization = parachain_rpc
         .get_collateralization_from_vault(vault_id.clone(), false)
@@ -91,17 +83,13 @@ pub async fn update_bridge_metrics(parachain_rpc: InterBtcParachain, vault_id: V
         .await
         .unwrap_or(0u128);
     let float_collateralization_percentage = FixedU128::from_inner(collateralization).to_float();
-    COLLATERALIZATION
-        .with_label_values(&[vault_id.pretty_printed().as_str()])
-        .set(float_collateralization_percentage);
+    COLLATERALIZATION.set(float_collateralization_percentage);
 
     let required_collateral = parachain_rpc
         .get_required_collateral_for_vault(vault_id.clone())
         .await?;
     let truncated_required_collateral = FixedU128::from_inner(required_collateral).to_float() * decimals_offset;
-    REQUIRED_COLLATERAL
-        .with_label_values(&[vault_id.pretty_printed().as_str()])
-        .set(truncated_required_collateral);
+    REQUIRED_COLLATERAL.set(truncated_required_collateral);
     Ok(())
 }
 
@@ -116,6 +104,36 @@ pub async fn update_bitcoin_metrics<B: BitcoinCoreApi + Clone + Send + Sync + 's
             tracing::error!("Failed to get Bitcoin balance: {}", e);
         }
     }
+    update_bitcoin_fees(btc_rpc, None).await;
+}
+
+pub async fn update_bitcoin_fees<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    btc_rpc: B,
+    new_fee_entry: Option<SignedAmount>,
+) {
+    let mut bitcoin_fees_vec = BITCOIN_FEES.write().await;
+    if bitcoin_fees_vec.len() == 0 && new_fee_entry.is_none() {
+        // Initialize the `AVERAGE_BTC_FEE` by fetching all Bitcoin txs.
+        match btc_rpc.list_transactions(None).await {
+            Ok(tx_list) => {
+                let mut fees: Vec<_> = tx_list
+                    .iter()
+                    .filter_map(|tx| tx.detail.fee.map(|amount| amount.as_btc()))
+                    .collect();
+
+                bitcoin_fees_vec.append(&mut fees);
+            }
+            Err(e) => {
+                // failed to cancel; get up-to-date request list in next iteration
+                tracing::error!("Failed to get Bitcoin transactions: {}", e);
+            }
+        }
+    } else if let Some(fee) = new_fee_entry {
+        bitcoin_fees_vec.push(fee.as_btc());
+    }
+    let average = bitcoin_fees_vec.iter().sum::<f64>() / bitcoin_fees_vec.len() as f64;
+    // Fees are returned as negative numbers.
+    AVERAGE_BTC_FEE.set(-average);
 }
 
 pub async fn monitor_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
