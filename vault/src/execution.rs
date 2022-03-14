@@ -34,6 +34,7 @@ pub struct Request {
     btc_address: BtcAddress,
     request_type: RequestType,
     vault_id: VaultId,
+    fee_budget: Option<u128>,
 }
 
 pub fn parachain_blocks_to_bitcoin_blocks_rounded_up(parachain_blocks: u32) -> Result<u32, Error> {
@@ -114,6 +115,7 @@ impl Request {
             btc_address: request.btc_address,
             request_type: RequestType::Redeem,
             vault_id: request.vault,
+            fee_budget: Some(request.transfer_fee_btc),
         })
     }
 
@@ -136,6 +138,7 @@ impl Request {
             btc_address: request.btc_address,
             request_type: RequestType::Replace,
             vault_id: request.old_vault,
+            fee_budget: None,
         })
     }
 
@@ -149,6 +152,7 @@ impl Request {
             btc_address: request.btc_address,
             request_type: RequestType::Refund,
             vault_id: request.vault,
+            fee_budget: Some(request.transfer_fee_btc),
         }
     }
 
@@ -162,6 +166,7 @@ impl Request {
             deadline: None,
             request_type: RequestType::Refund,
             vault_id: request.vault_id.clone(),
+            fee_budget: None,
         }
     }
 
@@ -291,6 +296,17 @@ impl Request {
             RequestType::Replace => ReplacePallet::execute_replace,
             RequestType::Refund => RefundPallet::execute_refund,
         };
+
+        match (self.fee_budget, tx_metadata.fee.map(|x| x.abs().as_sat() as u128)) {
+            (Some(budget), Some(actual)) if budget < actual => {
+                tracing::warn!(
+                    "Spent more on bitcoin inclusion fee than budgeted: spent {} satoshi; budget was {}",
+                    actual,
+                    budget
+                );
+            }
+            _ => {}
+        }
 
         // Retry until success or timeout, explicitly handle the cases
         // where the redeem has expired or the rpc has disconnected
@@ -759,6 +775,7 @@ mod tests {
                     raw_tx: vec![],
                     block_height: 0,
                     block_hash: BlockHash::default(),
+                    fee: None,
                 })
             });
 
@@ -773,6 +790,7 @@ mod tests {
                 btc_height: None,
                 request_type: RequestType::Redeem,
                 vault_id: dummy_vault_id(),
+                fee_budget: None,
             };
 
             (request, parachain_rpc, btc_rpc)
@@ -832,6 +850,7 @@ mod tests {
             btc_height: None,
             request_type: RequestType::Redeem,
             vault_id: dummy_vault_id(),
+            fee_budget: None,
         };
 
         assert_err!(
@@ -879,6 +898,7 @@ mod tests {
                 raw_tx: vec![],
                 block_height: 0,
                 block_hash: BlockHash::default(),
+                fee: None,
             })
         });
 
@@ -893,6 +913,7 @@ mod tests {
             btc_height: None,
             request_type: RequestType::Replace,
             vault_id: dummy_vault_id(),
+            fee_budget: None,
         };
 
         assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
