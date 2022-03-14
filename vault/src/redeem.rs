@@ -1,7 +1,7 @@
 use crate::{execution::*, system::VaultIdManager};
 use bitcoin::BitcoinCoreApi;
 use runtime::{InterBtcParachain, RedeemPallet, RequestRedeemEvent};
-use service::Error as ServiceError;
+use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
 use std::time::Duration;
 
 /// Listen for RequestRedeemEvent directed at this vault; upon reception, transfer
@@ -14,6 +14,7 @@ use std::time::Duration;
 /// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+    shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
     btc_rpc: VaultIdManager<B>,
     num_confirmations: u32,
@@ -34,7 +35,7 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                 // arguments by value rather than by reference, so clone these:
                 let parachain_rpc = parachain_rpc.clone();
                 // Spawn a new task so that we handle these events concurrently
-                tokio::spawn(async move {
+                spawn_cancelable(shutdown_tx.subscribe(), async move {
                     tracing::info!("Executing redeem #{:?}", event.redeem_id);
                     let result = async {
                         let request = Request::from_redeem_request(

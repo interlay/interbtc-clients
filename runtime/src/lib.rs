@@ -48,6 +48,7 @@ pub const ISSUE_MODULE: &str = "Issue";
 pub const REDEEM_MODULE: &str = "Redeem";
 pub const RELAY_MODULE: &str = "Relay";
 pub const SECURITY_MODULE: &str = "Security";
+pub const SYSTEM_MODULE: &str = "System";
 
 pub const STABLE_BITCOIN_CONFIRMATIONS: &str = "StableBitcoinConfirmations";
 pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";

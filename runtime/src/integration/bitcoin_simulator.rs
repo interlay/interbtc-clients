@@ -387,6 +387,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
             raw_tx,
             txid,
             block_height: block_height as u32,
+            fee: None,
         })
     }
     async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(

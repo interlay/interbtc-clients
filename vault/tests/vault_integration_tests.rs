@@ -1,4 +1,4 @@
-#![cfg(all(feature = "testing-utils", feature = "stadnalone-metadata"))]
+#![cfg(feature = "standalone-metadata")]
 
 use bitcoin::{stream_blocks, BitcoinCoreApi, TransactionExt};
 use frame_support::assert_ok;
@@ -8,7 +8,7 @@ use futures::{
     Future, FutureExt, SinkExt, TryStreamExt,
 };
 use runtime::{
-    integration::*, types::*, BtcAddress, BtcRelayPallet, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain,
+    integration::*, types::*, BtcAddress, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain,
     InterBtcRedeemRequest, IssuePallet, RedeemPallet, RelayPallet, ReplacePallet, SudoPallet, UtilFuncs, VaultId,
     VaultRegistryPallet,
 };
@@ -19,6 +19,7 @@ use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager};
 
 const TIMEOUT: Duration = Duration::from_secs(90);
 
+const DEFAULT_NATIVE_CURRENCY: CurrencyId = Token(INTR);
 const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
 const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(INTERBTC);
 
@@ -34,6 +35,12 @@ where
     set_exchange_rate_and_wait(
         &parachain_rpc,
         DEFAULT_TESTING_CURRENCY,
+        FixedU128::saturating_from_rational(1u128, 100u128),
+    )
+    .await;
+    set_exchange_rate_and_wait(
+        &parachain_rpc,
+        DEFAULT_NATIVE_CURRENCY,
         FixedU128::saturating_from_rational(1u128, 100u128),
     )
     .await;
@@ -54,6 +61,12 @@ where
     set_exchange_rate_and_wait(
         &parachain_rpc,
         DEFAULT_TESTING_CURRENCY,
+        FixedU128::saturating_from_rational(1u128, 100u128),
+    )
+    .await;
+    set_exchange_rate_and_wait(
+        &parachain_rpc,
+        DEFAULT_NATIVE_CURRENCY,
         FixedU128::saturating_from_rational(1u128, 100u128),
     )
     .await;
@@ -311,8 +324,11 @@ async fn test_redeem_succeeds() {
 
         assert_issue(&user_provider, &btc_rpc, &vault_id, issue_amount).await;
 
+        let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
+
         test_service(
             vault::service::listen_for_redeem_requests(
+                shutdown_tx,
                 vault_provider.clone(),
                 vault_id_manager,
                 0,
@@ -381,6 +397,7 @@ async fn test_replace_succeeds() {
 
         assert_issue(&user_provider, &btc_rpc, &old_vault_id, issue_amount).await;
 
+        let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
         let (replace_event_tx, _) = mpsc::channel::<CancellationEvent>(16);
         test_service(
             join(
@@ -391,6 +408,7 @@ async fn test_replace_succeeds() {
                     true,
                 ),
                 vault::service::listen_for_accept_replace(
+                    shutdown_tx.clone(),
                     old_vault_provider.clone(),
                     vault_id_manager.clone(),
                     0,
@@ -744,8 +762,9 @@ async fn test_refund_succeeds() {
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpcs);
 
+        let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
         let refund_service =
-            vault::service::listen_for_refund_requests(vault_provider.clone(), vault_id_manager, 0, true);
+            vault::service::listen_for_refund_requests(shutdown_tx, vault_provider.clone(), vault_id_manager, 0, true);
 
         assert_ok!(sudo_provider.set_parachain_confirmations(0).await);
 
@@ -822,8 +841,9 @@ async fn test_issue_overpayment_succeeds() {
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpcs);
 
+        let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
         let refund_service =
-            vault::service::listen_for_refund_requests(vault_provider.clone(), vault_id_manager, 0, true);
+            vault::service::listen_for_refund_requests(shutdown_tx, vault_provider.clone(), vault_id_manager, 0, true);
 
         let issue_amount = 100000;
         let over_payment_factor = 3;
@@ -857,8 +877,8 @@ async fn test_issue_overpayment_succeeds() {
 
             join(
                 assert_event::<EndowedEvent, _>(TIMEOUT, user_provider.clone(), |x| {
-                    if &x.1 == user_provider.get_account_id() {
-                        assert_eq!(x.2, issue.amount * over_payment_factor);
+                    if &x.who == user_provider.get_account_id() {
+                        assert_eq!(x.amount, issue.amount * over_payment_factor);
                         true
                     } else {
                         false
@@ -958,6 +978,8 @@ async fn test_execute_open_requests_succeeds() {
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
+        let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpcs);
 
         let issue_amount = 100000;
         let vault_collateral =
@@ -1001,9 +1023,18 @@ async fn test_execute_open_requests_succeeds() {
             .transaction;
         btc_rpc.send_to_mempool(transaction).await;
 
+        let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
         join3(
-            vault::service::execute_open_requests(vault_provider, btc_rpc.clone(), 0, Duration::from_secs(0), true)
-                .map(Result::unwrap),
+            vault::service::execute_open_requests(
+                shutdown_tx.clone(),
+                vault_provider,
+                vault_id_manager,
+                btc_rpc.clone(),
+                0,
+                Duration::from_secs(0),
+                true,
+            )
+            .map(Result::unwrap),
             assert_redeem_event(TIMEOUT, user_provider.clone(), redeem_ids[0]),
             assert_redeem_event(TIMEOUT, user_provider.clone(), redeem_ids[2]),
         )
