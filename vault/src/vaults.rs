@@ -1,6 +1,9 @@
 use crate::{error::Error, metrics::update_bitcoin_metrics};
-use bitcoin::{BitcoinCoreApi, BlockHash, Network, PartialAddress, Transaction, TransactionExt as _};
-use futures::stream::{iter, StreamExt};
+use bitcoin::{stream_blocks, BitcoinCoreApi, BlockHash, Network, PartialAddress, Transaction, TransactionExt as _};
+use futures::{
+    prelude::*,
+    stream::{iter, StreamExt},
+};
 use runtime::{
     BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcVault, RegisterAddressEvent,
     RegisterVaultEvent, RelayPallet, Ss58Codec, VaultId, VaultRegistryPallet,
@@ -34,7 +37,9 @@ impl Vaults {
     }
 }
 
-pub async fn monitor_btc_txs<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn monitor_btc_txs<
+    P: RelayPallet + BtcRelayPallet + Send + Sync,
+    B: BitcoinCoreApi + Send + Sync + Clone + 'static>(
     bitcoin_core: B,
     btc_parachain: P,
     btc_height: u32,
@@ -50,15 +55,14 @@ pub async fn monitor_btc_txs<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi 
     }
 }
 
-pub struct BitcoinMonitor<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone + Send + Sync + 'static> {
-    bitcoin_core: B,
+pub struct BitcoinMonitor<P: RelayPallet + BtcRelayPallet + Send + Sync, B: BitcoinCoreApi + Send + Sync + Clone + 'static> {    bitcoin_core: B,
     btc_parachain: P,
     btc_height: u32,
     vaults: Arc<Vaults>,
     vault_id: Option<VaultId>,
 }
 
-impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone + Send + Sync + 'static> BitcoinMonitor<P, B> {
+impl<P: RelayPallet + BtcRelayPallet + Send + Sync, B: BitcoinCoreApi + Send + Sync + Clone + 'static> BitcoinMonitor<P, B> {
     pub fn new(
         bitcoin_core: B,
         btc_parachain: P,
@@ -75,29 +79,48 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone + Send + Sync + 
         }
     }
 
-    async fn report_invalid(
+    /// Check a bitcoin transaction made by the given vault, and try to report it if it is invalid.
+    /// Note that since this is not essential to the vault's operation, this is done on a best-effort
+    /// basis. I.e., we don't retry on failure.  
+    async fn check_vault_transaction(
         &self,
         vault_id: &VaultId,
-        proof: &[u8],
-        raw_tx: &[u8],
         transaction: &Transaction,
+        block_hash: BlockHash,
     ) -> Result<(), Error> {
-        tracing::info!("Found tx from vault {}", vault_id.pretty_printed());
+        tracing::debug!(
+            "Found txid {} from vault {}",
+            transaction.txid(),
+            vault_id.pretty_printed()
+        );
         // check if matching redeem or replace request
-        if self.btc_parachain.is_transaction_invalid(vault_id, raw_tx).await? {
-            tracing::info!("Transaction is invalid");
-            self.btc_parachain.report_vault_theft(vault_id, proof, raw_tx).await?;
+        let raw_tx = bitcoin::serialize(transaction);
+        if self.btc_parachain.is_transaction_invalid(vault_id, &raw_tx).await? {
+            tracing::info!(
+                "Detected theft by vault {} - txid {}. Reporting...",
+                vault_id.pretty_printed(),
+                transaction.txid()
+            );
+
+            let proof = self.bitcoin_core.get_proof(transaction.txid(), &block_hash).await?;
+            self.btc_parachain.report_vault_theft(vault_id, &proof, &raw_tx).await?;
         } else {
             // valid payment.. but check that it is not a duplicate payment
-            for (txid_2, block_hash) in self.bitcoin_core.find_duplicate_payments(transaction).await? {
-                let raw_tx_2 = self.bitcoin_core.get_raw_tx(&txid_2, &block_hash).await?;
-                let proof_2 = self.bitcoin_core.get_proof(txid_2, &block_hash).await?;
+            for (txid_2, block_hash_2) in self.bitcoin_core.find_duplicate_payments(transaction).await? {
+                let raw_tx_2 = self.bitcoin_core.get_raw_tx(&txid_2, &block_hash_2).await?;
                 if !self.btc_parachain.is_transaction_invalid(vault_id, &raw_tx_2).await? {
-                    tracing::info!("Found a double payment - reporting...");
+                    tracing::info!(
+                        "Detected double payment by vault {} - txids {} and {}. Reporting...",
+                        vault_id.pretty_printed(),
+                        transaction.txid(),
+                        txid_2
+                    );
+                    let proof_1 = self.bitcoin_core.get_proof(transaction.txid(), &block_hash).await?;
+                    let proof_2 = self.bitcoin_core.get_proof(txid_2, &block_hash_2).await?;
                     self.btc_parachain
                         .report_vault_double_payment(
                             vault_id,
-                            (proof.to_vec(), proof_2.to_vec()),
+                            (proof_1.to_vec(), proof_2.to_vec()),
                             (raw_tx.to_vec(), raw_tx_2.to_vec()),
                         )
                         .await?;
@@ -119,31 +142,54 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone + Send + Sync + 
         }
     }
 
-    async fn check_transaction(
+    async fn stream_relayed_transactions(
         &self,
-        tx: Transaction,
-        block_hash: BlockHash,
+        rpc: B,
+        from_height: u32,
         num_confirmations: u32,
-    ) -> Result<(), Error> {
+    ) -> impl Stream<Item = Result<(BlockHash, Transaction), Error>> + Send + Unpin + '_ {
+        Box::pin(
+            stream_blocks(rpc, from_height, num_confirmations)
+                .await
+                .then(move |block| async move {
+                    let transactions: Box<dyn Stream<Item = _> + Unpin + Send> = match block {
+                        Ok(e) => {
+                            let block_hash = e.block_hash();
+                            // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
+                            // but the relay can introduce a delay, so wait until the relay also confirms the
+                            // transaction.
+                            let transactions: Box<dyn Stream<Item = _> + Unpin + Send> = match self
+                                .btc_parachain
+                                .wait_for_block_in_relay(
+                                    H256Le::from_bytes_le(&block_hash.to_vec()),
+                                    Some(num_confirmations),
+                                )
+                                .await
+                            {
+                                Ok(_) => {
+                                    tracing::debug!("Scanning block {} for transactions...", block_hash);
+                                    Box::new(stream::iter(e.txdata.into_iter().map(move |x| Ok((block_hash, x)))))
+                                }
+                                Err(e) => Box::new(stream::iter(std::iter::once(Err(e.into())))),
+                            };
+                            transactions
+                        }
+                        Err(e) => Box::new(stream::iter(std::iter::once(Err(e.into())))),
+                    };
+                    transactions
+                })
+                .flatten(),
+        )
+    }
+
+    async fn check_transaction(&self, tx: Transaction, block_hash: BlockHash) -> Result<(), Error> {
         let tx_id = tx.txid();
-        tracing::debug!("Checking transaction: {}", tx_id);
-
-        // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
-        // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
-        self.btc_parachain
-            .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash.to_vec()), Some(num_confirmations))
-            .await?;
-
-        let tx_id = tx.txid();
-
-        let raw_tx = self.bitcoin_core.get_raw_tx(&tx_id, &block_hash).await?;
-        let proof = self.bitcoin_core.get_proof(tx_id, &block_hash).await?;
-
+        tracing::debug!("Checking transaction {}", tx_id);
         let addresses = tx.extract_input_addresses();
         let vault_ids = filter_matching_vaults(addresses, &self.vaults).await;
 
         for vault_id in vault_ids {
-            self.report_invalid(&vault_id, &proof, &raw_tx, &tx).await?;
+            self.check_vault_transaction(&vault_id, &tx, block_hash).await?;
         }
 
         Ok(())
@@ -151,12 +197,14 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone + Send + Sync + 
 
     pub async fn process_blocks(&mut self) -> Result<(), RuntimeError> {
         let num_confirmations = self.btc_parachain.get_bitcoin_confirmations().await?;
+        tracing::info!("Starting bitcoin monitoring...");
 
-        let mut stream =
-            bitcoin::stream_in_chain_transactions(self.bitcoin_core.clone(), self.btc_height, num_confirmations).await;
+        let mut stream = self
+            .stream_relayed_transactions(self.bitcoin_core.clone(), self.btc_height, num_confirmations)
+            .await;
 
         while let Some(Ok((block_hash, tx))) = stream.next().await {
-            if let Err(err) = self.check_transaction(tx.clone(), block_hash, num_confirmations).await {
+            if let Err(err) = self.check_transaction(tx, block_hash).await {
                 tracing::error!("Failed to check transaction: {}", err);
             }
             self.monitor_bitcoin_metrics(tx, num_confirmations).await;
@@ -226,7 +274,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        json, Amount, Block, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress,
+        json, Amount, Block, BlockHeader, Error as BitcoinError, GetBlockResult, Hash as _, LockedTransaction, PartialAddress,
         PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
@@ -399,22 +447,26 @@ mod tests {
 
         let monitor = BitcoinMonitor::new(bitcoin_core, parachain, 0, Arc::new(Vaults::default()), None);
 
+        let block_hash = BlockHash::from_slice(&[0; 32]).unwrap();
         monitor
-            .report_invalid(&dummy_vault_id(), &[], &[], &dummy_tx())
+            .check_vault_transaction(&dummy_vault_id(), &dummy_tx(), block_hash)
             .await
             .unwrap();
     }
 
     #[tokio::test]
-    async fn test_report_invalid_transaction() {
+    async fn test_check_vault_transaction_transaction() {
         let mut parachain = MockProvider::default();
+        let mut btc_rpc = MockBitcoin::default();
         parachain.expect_is_transaction_invalid().returning(|_, _| Ok(true));
         parachain.expect_report_vault_theft().once().returning(|_, _, _| Ok(()));
+        btc_rpc.expect_get_proof().once().returning(|_, _| Ok(vec![]));
 
-        let monitor = BitcoinMonitor::new(MockBitcoin::default(), parachain, 0, Arc::new(Vaults::default()), None);
+        let monitor = BitcoinMonitor::new(btc_rpc, parachain, 0, Arc::new(Vaults::default()), None);
 
+        let block_hash = BlockHash::from_slice(&[0; 32]).unwrap();
         monitor
-            .report_invalid(&dummy_vault_id(), &[], &[], &dummy_tx())
+            .check_vault_transaction(&dummy_vault_id(), &dummy_tx(), block_hash)
             .await
             .unwrap();
     }
