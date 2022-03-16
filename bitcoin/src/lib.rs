@@ -7,7 +7,6 @@ mod iter;
 pub use addr::PartialAddress;
 use async_trait::async_trait;
 use backoff::{backoff::Backoff, future::retry, ExponentialBackoff};
-use bitcoincore_rpc::bitcoin::SignedAmount;
 pub use bitcoincore_rpc::{
     bitcoin::{
         blockdata::{opcodes::all as opcodes, script::Builder},
@@ -18,7 +17,7 @@ pub use bitcoincore_rpc::{
         secp256k1::{constants::PUBLIC_KEY_SIZE, SecretKey},
         util::{address::Payload, key, merkleblock::PartialMerkleTree, psbt::serialize::Serialize, uint::Uint256},
         Address, Amount, Block, BlockHeader, Network, OutPoint, PrivateKey, PubkeyHash, PublicKey, Script, ScriptHash,
-        Transaction, TxIn, TxMerkleNode, TxOut, Txid, WPubkeyHash, WScriptHash,
+        SignedAmount, Transaction, TxIn, TxMerkleNode, TxOut, Txid, WPubkeyHash, WScriptHash,
     },
     bitcoincore_rpc_json::{
         CreateRawTransactionInput, FundRawTransactionOptions, GetBlockchainInfoResult, GetTransactionResult,
@@ -99,6 +98,10 @@ pub trait BitcoinCoreApi {
     async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, Error>;
 
     async fn get_block_count(&self) -> Result<u64, Error>;
+
+    async fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error>;
+
+    async fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error>;
 
     async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
 
@@ -453,6 +456,23 @@ impl BitcoinCoreApi for BitcoinCore {
     /// Get the tip of the main chain as reported by Bitcoin core.
     async fn get_block_count(&self) -> Result<u64, Error> {
         Ok(self.rpc.get_block_count()?)
+    }
+
+    /// Get wallet balance.
+    async fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error> {
+        Ok(self
+            .rpc
+            .get_balance(min_confirmations.map(|x| x.try_into().unwrap_or_default()), None)?)
+    }
+
+    /// List the transaction in the wallet.
+    async fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error> {
+        // Arbitrarily picked number for the max tx count to receive. The bitcoin rpc default is 10.
+        let default_max_count = 100_000_000;
+        // If no `max_count` is specified, list all transactions.
+        Ok(self
+            .rpc
+            .list_transactions(None, max_count.or(Some(default_max_count)), None, None)?)
     }
 
     /// Get the raw transaction identified by `Txid` and stored

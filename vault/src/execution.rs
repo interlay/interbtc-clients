@@ -1,4 +1,4 @@
-use crate::{error::Error, VaultIdManager};
+use crate::{error::Error, metrics::update_bitcoin_fees, VaultIdManager};
 use bitcoin::{
     BitcoinCoreApi, PartialAddress, Transaction, TransactionExt, TransactionMetadata,
     BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
@@ -172,7 +172,7 @@ impl Request {
 
     /// Makes the bitcoin transfer and executes the request
     pub async fn pay_and_execute<
-        B: BitcoinCoreApi + Clone,
+        B: BitcoinCoreApi + Clone + Send + Sync + 'static,
         P: ReplacePallet
             + RefundPallet
             + BtcRelayPallet
@@ -199,8 +199,14 @@ impl Request {
         }
 
         let tx_metadata = self
-            .transfer_btc(&parachain_rpc, btc_rpc, num_confirmations, self.vault_id.clone())
+            .transfer_btc(
+                &parachain_rpc,
+                btc_rpc.clone(),
+                num_confirmations,
+                self.vault_id.clone(),
+            )
             .await?;
+        update_bitcoin_fees(btc_rpc, tx_metadata.fee).await;
         self.execute(parachain_rpc, tx_metadata).await
     }
 
@@ -535,7 +541,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, Network,
+        json, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, Network,
         PartialAddress, PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
@@ -580,6 +586,7 @@ mod tests {
             async fn get_required_collateral_for_wrapped(&self, amount_btc: u128, collateral_currency: CurrencyId) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
             async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
+            async fn get_collateralization_from_vault(&self, vault_id: VaultId, only_issued: bool) -> Result<u128, RuntimeError>;
         }
 
         #[async_trait]
@@ -648,6 +655,8 @@ mod tests {
         trait BitcoinCoreApi {
             fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
+            async fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError>;
+            async fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;

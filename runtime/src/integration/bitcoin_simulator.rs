@@ -6,8 +6,9 @@
 use crate::{rpc::RelayPallet, BtcAddress, BtcRelayPallet, InterBtcParachain, RawBlockHeader, H160, H256, U256};
 use async_trait::async_trait;
 use bitcoin::{
+    json,
     secp256k1::{constants::SECRET_KEY_SIZE, PublicKey, Secp256k1, SecretKey},
-    serialize, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, Hash,
+    serialize, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, Hash,
     LockedTransaction, Network, OutPoint, PartialAddress, PartialMerkleTree, PrivateKey, Script, Transaction,
     TransactionExt, TransactionMetadata, TxIn, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
 };
@@ -239,6 +240,15 @@ impl BitcoinCoreApi for MockBitcoinCore {
             drop(blocks); // release the lock
             sleep(Duration::from_secs(1)).await;
         }
+    }
+    async fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError> {
+        unimplemented!();
+    }
+    async fn list_transactions(
+        &self,
+        max_count: Option<usize>,
+    ) -> Result<Vec<json::ListTransactionResult>, BitcoinError> {
+        unimplemented!();
     }
     async fn get_block_count(&self) -> Result<u64, BitcoinError> {
         Ok((self.blocks.read().await.len() - 1).try_into().unwrap())
