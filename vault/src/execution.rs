@@ -1,4 +1,4 @@
-use crate::{error::Error, metrics::update_bitcoin_fees, VaultIdManager};
+use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager};
 use bitcoin::{
     BitcoinCoreApi, PartialAddress, Transaction, TransactionExt, TransactionMetadata,
     BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
@@ -186,27 +186,22 @@ impl Request {
     >(
         &self,
         parachain_rpc: P,
-        btc_rpc: B,
+        vault: VaultData<B>,
         num_confirmations: u32,
     ) -> Result<(), Error> {
         // ensure the deadline has not expired yet
         if let Some(ref deadline) = self.deadline {
             if parachain_rpc.get_current_active_block_number().await? >= deadline.parachain
-                && btc_rpc.get_block_count().await? >= deadline.bitcoin as u64
+                && vault.btc_rpc.get_block_count().await? >= deadline.bitcoin as u64
             {
                 return Err(Error::DeadlineExpired);
             }
         }
 
         let tx_metadata = self
-            .transfer_btc(
-                &parachain_rpc,
-                btc_rpc.clone(),
-                num_confirmations,
-                self.vault_id.clone(),
-            )
+            .transfer_btc(&parachain_rpc, &vault.btc_rpc, num_confirmations, self.vault_id.clone())
             .await?;
-        update_bitcoin_fees(btc_rpc, tx_metadata.fee).await;
+        update_bitcoin_metrics(vault, tx_metadata.fee).await;
         self.execute(parachain_rpc, tx_metadata).await
     }
 
@@ -225,7 +220,7 @@ impl Request {
     >(
         &self,
         parachain_rpc: &P,
-        btc_rpc: B,
+        btc_rpc: &B,
         num_confirmations: u32,
         vault_id: VaultId,
     ) -> Result<TransactionMetadata, Error> {
@@ -338,7 +333,7 @@ impl Request {
 pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
-    btc_rpc: VaultIdManager<B>,
+    vault_id_manager: VaultIdManager<B>,
     read_only_btc_rpc: B,
     num_confirmations: u32,
     payment_margin: Duration,
@@ -422,7 +417,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
             // start a new task to (potentially) await confirmation and to execute on the parachain
             // make copies of the variables we move into the task
             let parachain_rpc = parachain_rpc.clone();
-            let btc_rpc = btc_rpc.clone();
+            let btc_rpc = vault_id_manager.clone();
             spawn_cancelable(shutdown_tx.subscribe(), async move {
                 let btc_rpc = match btc_rpc.get_bitcoin_rpc(&request.vault_id).await {
                     Some(x) => x,
@@ -484,9 +479,9 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         // delay other requests
         // make copies of the variables we move into the task
         let parachain_rpc = parachain_rpc.clone();
-        let btc_rpc = btc_rpc.clone();
+        let vault_id_manager = vault_id_manager.clone();
         spawn_cancelable(shutdown_tx.subscribe(), async move {
-            let btc_rpc = match btc_rpc.get_bitcoin_rpc(&request.vault_id).await {
+            let vault = match vault_id_manager.get_vault(&request.vault_id).await {
                 Some(x) => x,
                 None => {
                     tracing::error!(
@@ -503,7 +498,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                 request.hash
             );
 
-            match request.pay_and_execute(parachain_rpc, btc_rpc, num_confirmations).await {
+            match request.pay_and_execute(parachain_rpc, vault, num_confirmations).await {
                 Ok(_) => tracing::info!(
                     "{:?} request #{:?} successfully executed",
                     request.request_type,
@@ -537,6 +532,8 @@ fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -
 
 #[cfg(all(test, feature = "standalone-metadata"))]
 mod tests {
+    use crate::metrics::PerCurrencyMetrics;
+
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
@@ -740,6 +737,8 @@ mod tests {
     }
 
     mod pay_and_execute_redeem_tests {
+        use crate::metrics::PerCurrencyMetrics;
+
         use super::*;
 
         fn should_pay_and_execute_with_deadlines(
@@ -747,7 +746,7 @@ mod tests {
             current_parachain_height: u32,
             bitcoin_deadline: u32,
             current_bitcoin_height: u32,
-        ) -> (Request, MockProvider, MockBitcoin) {
+        ) -> (Request, MockProvider, VaultData<MockBitcoin>) {
             let mut parachain_rpc = MockProvider::default();
             parachain_rpc
                 .expect_get_current_active_block_number()
@@ -787,6 +786,9 @@ mod tests {
                 })
             });
 
+            btc_rpc.expect_list_transactions().returning(|_| Ok(vec![]));
+            btc_rpc.expect_get_balance().returning(|_| Ok(Amount::ZERO));
+
             let request = Request {
                 amount: 100,
                 deadline: Some(Deadline {
@@ -801,7 +803,12 @@ mod tests {
                 fee_budget: None,
             };
 
-            (request, parachain_rpc, btc_rpc)
+            let vault_data = VaultData {
+                btc_rpc,
+                metrics: PerCurrencyMetrics::dummy(),
+            };
+
+            (request, parachain_rpc, vault_data)
         }
 
         #[tokio::test]
@@ -861,8 +868,13 @@ mod tests {
             fee_budget: None,
         };
 
+        let vault_data = VaultData {
+            btc_rpc,
+            metrics: PerCurrencyMetrics::dummy(),
+        };
+
         assert_err!(
-            request.pay_and_execute(parachain_rpc, btc_rpc, 6).await,
+            request.pay_and_execute(parachain_rpc, vault_data, 6).await,
             Error::DeadlineExpired
         );
     }
@@ -910,6 +922,8 @@ mod tests {
             })
         });
 
+        btc_rpc.expect_get_balance().returning(|_| Ok(Amount::ZERO));
+
         let request = Request {
             amount: 100,
             deadline: Some(Deadline {
@@ -924,6 +938,11 @@ mod tests {
             fee_budget: None,
         };
 
-        assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
+        let vault_data = VaultData {
+            btc_rpc,
+            metrics: PerCurrencyMetrics::dummy(),
+        };
+
+        assert_ok!(request.pay_and_execute(parachain_rpc, vault_data, 6).await);
     }
 }

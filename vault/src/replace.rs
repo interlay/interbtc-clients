@@ -19,17 +19,17 @@ use std::time::Duration;
 pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
-    btc_rpc: VaultIdManager<B>,
+    vault_id_manager: VaultIdManager<B>,
     num_confirmations: u32,
     payment_margin: Duration,
 ) -> Result<(), ServiceError> {
     let parachain_rpc = &parachain_rpc;
-    let btc_rpc = &btc_rpc;
+    let vault_id_manager = &vault_id_manager;
     let shutdown_tx = &shutdown_tx;
     parachain_rpc
         .on_event::<AcceptReplaceEvent, _, _, _>(
             |event| async move {
-                let btc_rpc = match btc_rpc.get_bitcoin_rpc(&event.old_vault_id).await {
+                let vault = match vault_id_manager.get_vault(&event.old_vault_id).await {
                     Some(x) => x,
                     None => return, // event not directed at this vault
                 };
@@ -49,7 +49,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                             parachain_rpc.get_replace_request(event.replace_id).await?,
                             payment_margin,
                         )?;
-                        request.pay_and_execute(parachain_rpc, btc_rpc, num_confirmations).await
+                        request.pay_and_execute(parachain_rpc, vault, num_confirmations).await
                     }
                     .await;
 

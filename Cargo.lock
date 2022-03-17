@@ -7917,7 +7917,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "028f48d513f9678cda28f6e4064755b3fbb2af6acd672f2c209b62323f7aea0f"
 dependencies = [
  "cfg-if 1.0.0",
+<<<<<<< HEAD
  "cpufeatures 0.2.2",
+=======
+ "cpufeatures 0.2.1",
+>>>>>>> ce299c2 (refactor: monitor per currencypair & misc refactorings)
  "digest 0.10.3",
 ]
 
@@ -9484,7 +9488,11 @@ dependencies = [
  "bytes 1.1.0",
  "http",
  "httparse",
+<<<<<<< HEAD
  "log 0.4.16",
+=======
+ "log 0.4.14",
+>>>>>>> ce299c2 (refactor: monitor per currencypair & misc refactorings)
  "rand 0.8.5",
  "sha-1 0.9.8",
  "thiserror",
@@ -9802,7 +9810,11 @@ dependencies = [
  "headers",
  "http",
  "hyper 0.14.17",
+<<<<<<< HEAD
  "log 0.4.16",
+=======
+ "log 0.4.14",
+>>>>>>> ce299c2 (refactor: monitor per currencypair & misc refactorings)
  "mime 0.3.16",
  "mime_guess",
  "multipart",

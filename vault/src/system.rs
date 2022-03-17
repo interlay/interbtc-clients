@@ -1,6 +1,6 @@
 use crate::{
-    collateral::lock_required_collateral, error::Error, faucet, issue, metrics::update_bitcoin_metrics,
-    relay::run_relayer, service::*, vaults::Vaults, Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
+    collateral::lock_required_collateral, error::Error, faucet, issue, metrics::PerCurrencyMetrics, relay::run_relayer,
+    service::*, vaults::Vaults, Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
@@ -140,8 +140,14 @@ async fn relay_block_listener(
 }
 
 #[derive(Clone)]
+pub struct VaultData<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> {
+    pub btc_rpc: BCA,
+    pub metrics: PerCurrencyMetrics,
+}
+
+#[derive(Clone)]
 pub struct VaultIdManager<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> {
-    bitcoin_rpcs: Arc<RwLock<HashMap<VaultId, BCA>>>,
+    vault_data: Arc<RwLock<HashMap<VaultId, VaultData<BCA>>>>,
     btc_parachain: InterBtcParachain,
     // TODO: refactor this
     #[allow(clippy::type_complexity)]
@@ -154,7 +160,7 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
         constructor: impl Fn(VaultId) -> Result<BCA, BitcoinError> + Send + Sync + 'static,
     ) -> Self {
         Self {
-            bitcoin_rpcs: Arc::new(RwLock::new(HashMap::new())),
+            vault_data: Arc::new(RwLock::new(HashMap::new())),
             constructor: Arc::new(Box::new(constructor)),
             btc_parachain,
         }
@@ -162,8 +168,20 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
 
     // used for testing only
     pub fn from_map(btc_parachain: InterBtcParachain, map: HashMap<VaultId, BCA>) -> Self {
+        let vault_data = map
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    key,
+                    VaultData {
+                        btc_rpc: value,
+                        metrics: PerCurrencyMetrics::dummy(),
+                    },
+                )
+            })
+            .collect();
         Self {
-            bitcoin_rpcs: Arc::new(RwLock::new(map)),
+            vault_data: Arc::new(RwLock::new(vault_data)),
             constructor: Arc::new(Box::new(|_| unimplemented!())),
             btc_parachain,
         }
@@ -185,7 +203,14 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
         }
         issue::add_keys_from_past_issue_request(&btc_rpc, &self.btc_parachain).await?;
 
-        self.bitcoin_rpcs.write().await.insert(vault_id, btc_rpc.clone());
+        let metrics = PerCurrencyMetrics::new(&vault_id).await;
+        let data = VaultData {
+            btc_rpc: btc_rpc.clone(),
+            metrics: metrics.clone(),
+        };
+        PerCurrencyMetrics::initialize_values(self.btc_parachain.clone(), vault_id.clone(), &data).await;
+
+        self.vault_data.write().await.insert(vault_id.clone(), data.clone());
 
         Ok(btc_rpc)
     }
@@ -227,11 +252,24 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
     }
 
     pub async fn get_bitcoin_rpc(&self, vault_id: &VaultId) -> Option<BCA> {
-        self.bitcoin_rpcs.read().await.get(vault_id).cloned()
+        self.vault_data.read().await.get(vault_id).map(|x| x.btc_rpc.clone())
+    }
+
+    pub async fn get_vault(&self, vault_id: &VaultId) -> Option<VaultData<BCA>> {
+        self.vault_data.read().await.get(vault_id).cloned()
+    }
+
+    pub async fn get_entries(&self) -> Vec<(VaultId, VaultData<BCA>)> {
+        self.vault_data
+            .read()
+            .await
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect()
     }
 
     pub async fn get_vault_ids(&self) -> Vec<VaultId> {
-        self.bitcoin_rpcs
+        self.vault_data
             .read()
             .await
             .iter()
@@ -240,18 +278,18 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
     }
 
     pub async fn get_vault_btc_rpcs(&self) -> Vec<(VaultId, BCA)> {
-        self.bitcoin_rpcs
+        self.vault_data
             .read()
             .await
             .iter()
-            .map(|(vault_id, btc_rpc)| (vault_id.clone(), btc_rpc.clone()))
+            .map(|(vault_id, data)| (vault_id.clone(), data.btc_rpc.clone()))
             .collect()
     }
 }
 
 pub struct VaultService {
     btc_parachain: InterBtcParachain,
-    bitcoin_core: BitcoinCore,
+    walletless_btc_rpc: BitcoinCore,
     config: VaultServiceConfig,
     monitoring_config: MonitoringConfig,
     shutdown: ShutdownSender,
@@ -265,7 +303,7 @@ impl Service<VaultServiceConfig> for VaultService {
 
     fn new_service(
         btc_parachain: InterBtcParachain,
-        bitcoin_core: BitcoinCore,
+        walletless_btc_rpc: BitcoinCore,
         config: VaultServiceConfig,
         monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
@@ -273,7 +311,7 @@ impl Service<VaultServiceConfig> for VaultService {
     ) -> Self {
         VaultService::new(
             btc_parachain,
-            bitcoin_core,
+            walletless_btc_rpc,
             config,
             monitoring_config,
             shutdown,
@@ -300,7 +338,7 @@ async fn maybe_run_task(should_run: bool, task: impl Future) {
 impl VaultService {
     fn new(
         btc_parachain: InterBtcParachain,
-        bitcoin_core: BitcoinCore,
+        walletless_btc_rpc: BitcoinCore,
         config: VaultServiceConfig,
         monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
@@ -308,7 +346,7 @@ impl VaultService {
     ) -> Self {
         Self {
             btc_parachain: btc_parachain.clone(),
-            bitcoin_core,
+            walletless_btc_rpc,
             config,
             monitoring_config,
             shutdown,
@@ -336,8 +374,6 @@ impl VaultService {
     }
 
     async fn run_service(&self) -> Result<(), Error> {
-        let walletless_btc_rpc = self.bitcoin_core.clone();
-
         let account_id = self.btc_parachain.get_account_id().clone();
 
         let num_confirmations = match self.config.btc_confirmations {
@@ -357,7 +393,7 @@ impl VaultService {
             self.shutdown.clone(),
             self.btc_parachain.clone(),
             self.vault_id_manager.clone(),
-            walletless_btc_rpc.clone(),
+            self.walletless_btc_rpc.clone(),
             num_confirmations,
             self.config.payment_margin_minutes,
             !self.config.no_auto_refund,
@@ -376,7 +412,7 @@ impl VaultService {
         // issue handling
         let issue_set = Arc::new(IssueRequests::new());
         let oldest_issue_btc_height =
-            issue::initialize_issue_set(&walletless_btc_rpc, &self.btc_parachain, &issue_set).await?;
+            issue::initialize_issue_set(&self.walletless_btc_rpc, &self.btc_parachain, &issue_set).await?;
 
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
 
@@ -419,7 +455,7 @@ impl VaultService {
             wait_or_shutdown(
                 self.shutdown.clone(),
                 issue::process_issue_requests(
-                    walletless_btc_rpc.clone(),
+                    self.walletless_btc_rpc.clone(),
                     self.btc_parachain.clone(),
                     issue_set.clone(),
                     oldest_issue_btc_height,
@@ -540,7 +576,7 @@ impl VaultService {
             wait_or_shutdown(
                 self.shutdown.clone(),
                 run_relayer(Runner::new(
-                    walletless_btc_rpc.clone(),
+                    self.walletless_btc_rpc.clone(),
                     self.btc_parachain.clone(),
                     Config {
                         start_height: self.config.bitcoin_relay_start_height,
@@ -583,10 +619,10 @@ impl VaultService {
             tokio::spawn(async move { refund_listener.await }),
             // runs vault theft checks
             tokio::spawn(async move { vaults_listener.await }),
-            // relayer process
-            tokio::task::spawn_blocking(move || block_on(relayer)),
             // prometheus monitoring
             tokio::task::spawn(async move { bridge_metrics_listener.await }),
+            // relayer process
+            tokio::task::spawn_blocking(move || block_on(relayer)),
         );
 
         Ok(())
@@ -669,27 +705,15 @@ impl VaultService {
         let bitcoin_theft_start_height = self
             .config
             .bitcoin_theft_start_height
-            .unwrap_or(self.bitcoin_core.get_block_count().await? as u32 + 1);
-
-        let vault_id = self.get_vault_id();
-        let bitcoin_core_with_wallet = match self.vault_id_manager.get_bitcoin_rpc(&vault_id).await {
-            Some(btc_rpc) => btc_rpc,
-            None => self.bitcoin_core.clone(),
-        };
-        update_bitcoin_metrics(
-            bitcoin_core_with_wallet.clone(),
-            self.btc_parachain.get_bitcoin_confirmations().await?,
-        )
-        .await;
+            .unwrap_or(self.walletless_btc_rpc.get_block_count().await? as u32 + 1);
 
         let bitcoin_listener = wait_or_shutdown(
             self.shutdown.clone(),
             monitor_btc_txs(
-                bitcoin_core_with_wallet.clone(),
+                self.walletless_btc_rpc.clone(),
                 self.btc_parachain.clone(),
                 bitcoin_theft_start_height,
                 vaults.clone(),
-                Some(vault_id.clone()),
             ),
         );
 
@@ -702,7 +726,11 @@ impl VaultService {
         // keep vault wallets up-to-date
         let wallet_update_listener = wait_or_shutdown(
             self.shutdown.clone(),
-            listen_for_wallet_updates(self.btc_parachain.clone(), self.bitcoin_core.network(), vaults.clone()),
+            listen_for_wallet_updates(
+                self.btc_parachain.clone(),
+                self.walletless_btc_rpc.network(),
+                vaults.clone(),
+            ),
         );
 
         Ok(futures::future::join3(

@@ -1,4 +1,4 @@
-use crate::{error::Error, metrics::update_bitcoin_metrics};
+use crate::error::Error;
 use bitcoin::{stream_blocks, BitcoinCoreApi, BlockHash, Network, PartialAddress, Transaction, TransactionExt as _};
 use futures::{
     prelude::*,
@@ -37,14 +37,16 @@ impl Vaults {
     }
 }
 
-pub async fn monitor_btc_txs<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn monitor_btc_txs<
+    P: RelayPallet + BtcRelayPallet + Send + Sync,
+    B: BitcoinCoreApi + Send + Sync + Clone + 'static,
+>(
     bitcoin_core: B,
     btc_parachain: P,
     btc_height: u32,
     vaults: Arc<Vaults>,
-    vault_id: Option<VaultId>,
 ) -> Result<(), ServiceError> {
-    match BitcoinMonitor::new(bitcoin_core, btc_parachain, btc_height, vaults, vault_id)
+    match BitcoinMonitor::new(bitcoin_core, btc_parachain, btc_height, vaults)
         .process_blocks()
         .await
     {
@@ -53,28 +55,25 @@ pub async fn monitor_btc_txs<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi 
     }
 }
 
-pub struct BitcoinMonitor<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone + Send + Sync + 'static> {
+pub struct BitcoinMonitor<
+    P: RelayPallet + BtcRelayPallet + Send + Sync,
+    B: BitcoinCoreApi + Send + Sync + Clone + 'static,
+> {
     bitcoin_core: B,
     btc_parachain: P,
     btc_height: u32,
     vaults: Arc<Vaults>,
-    vault_id: Option<VaultId>,
 }
 
-impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone + Send + Sync + 'static> BitcoinMonitor<P, B> {
-    pub fn new(
-        bitcoin_core: B,
-        btc_parachain: P,
-        btc_height: u32,
-        vaults: Arc<Vaults>,
-        vault_id: Option<VaultId>,
-    ) -> Self {
+impl<P: RelayPallet + BtcRelayPallet + Send + Sync, B: BitcoinCoreApi + Send + Sync + Clone + 'static>
+    BitcoinMonitor<P, B>
+{
+    pub fn new(bitcoin_core: B, btc_parachain: P, btc_height: u32, vaults: Arc<Vaults>) -> Self {
         Self {
             bitcoin_core,
             btc_parachain,
             btc_height,
             vaults,
-            vault_id,
         }
     }
 
@@ -195,7 +194,6 @@ impl<P: RelayPallet + BtcRelayPallet, B: BitcoinCoreApi + Clone + Send + Sync + 
             if let Err(err) = self.check_transaction(tx, block_hash).await {
                 tracing::error!("Failed to check transaction: {}", err);
             }
-            self.monitor_bitcoin_metrics(tx, num_confirmations).await;
         }
 
         // stream should not end, signal restart
@@ -433,7 +431,7 @@ mod tests {
         let mut bitcoin_core = MockBitcoin::default();
         bitcoin_core.expect_find_duplicate_payments().returning(|_| Ok(vec![]));
 
-        let monitor = BitcoinMonitor::new(bitcoin_core, parachain, 0, Arc::new(Vaults::default()), None);
+        let monitor = BitcoinMonitor::new(bitcoin_core, parachain, 0, Arc::new(Vaults::default()));
 
         let block_hash = BlockHash::from_slice(&[0; 32]).unwrap();
         monitor
