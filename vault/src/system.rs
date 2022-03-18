@@ -1,6 +1,12 @@
 use crate::{
-    collateral::lock_required_collateral, error::Error, faucet, issue, metrics::PerCurrencyMetrics, relay::run_relayer,
-    service::*, vaults::Vaults, Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
+    collateral::lock_required_collateral,
+    error::Error,
+    faucet, issue,
+    metrics::{poll_bridge_metrics, PerCurrencyMetrics},
+    relay::run_relayer,
+    service::*,
+    vaults::Vaults,
+    Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
 use bitcoin::{BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
@@ -214,6 +220,7 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
             btc_rpc: btc_rpc.clone(),
             metrics: metrics.clone(),
         };
+        tracing::info!("Initializing metrics..222.");
         PerCurrencyMetrics::initialize_values(self.btc_parachain.clone(), vault_id.clone(), &data).await;
 
         self.vault_data.write().await.insert(vault_id.clone(), data.clone());
@@ -265,12 +272,12 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
         self.vault_data.read().await.get(vault_id).cloned()
     }
 
-    pub async fn get_entries(&self) -> Vec<(VaultId, VaultData<BCA>)> {
+    pub async fn get_entries(&self) -> Vec<VaultData<BCA>> {
         self.vault_data
             .read()
             .await
             .iter()
-            .map(|(key, value)| (key.clone(), value.clone()))
+            .map(|(_, value)| value.clone())
             .collect()
     }
 
@@ -598,6 +605,11 @@ impl VaultService {
             monitor_bridge_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
         );
 
+        let bridge_metrics_poller = maybe_run_task(
+            !self.monitoring_config.no_prometheus,
+            poll_bridge_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
+        );
+
         // starts all the tasks
         tracing::info!("Starting to listen for events...");
         let _ = tokio::join!(
@@ -626,6 +638,7 @@ impl VaultService {
             // runs vault theft checks
             tokio::spawn(async move { vaults_listener.await }),
             // prometheus monitoring
+            tokio::task::spawn(async move { bridge_metrics_poller.await }),
             tokio::task::spawn(async move { bridge_metrics_listener.await }),
             // relayer process
             tokio::task::spawn_blocking(move || block_on(relayer)),

@@ -1129,7 +1129,7 @@ pub trait RedeemPallet {
 
     async fn get_redeem_request(&self, redeem_id: H256) -> Result<InterBtcRedeemRequest, Error>;
 
-    /// Get all open redeem requests requested of the given vault
+    /// Get all redeem requests requested of the given vault
     async fn get_vault_redeem_requests(
         &self,
         account_id: AccountId,
@@ -1229,7 +1229,7 @@ pub trait RefundPallet {
     /// Fetch a refund request from storage
     async fn get_refund_request(&self, refund_id: H256) -> Result<InterBtcRefundRequest, Error>;
 
-    /// Get all open refund requests requested of the given vault
+    /// Get all refund requests requested of the given vault
     async fn get_vault_refund_requests(
         &self,
         account_id: AccountId,

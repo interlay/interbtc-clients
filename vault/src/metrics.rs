@@ -6,17 +6,22 @@ use futures::{try_join, StreamExt};
 use lazy_static::lazy_static;
 use runtime::{
     prometheus::{gather, proto::MetricFamily, Encoder, Gauge, GaugeVec, Opts, Registry, TextEncoder},
-    CurrencyIdExt, CurrencyInfo, Error, FeedValuesEvent, FixedPointNumber,
+    CollateralBalancesPallet, CurrencyIdExt, CurrencyInfo, Error, FeedValuesEvent, FixedPointNumber,
     FixedPointTraits::One,
-    FixedU128, InterBtcParachain, OracleKey, RedeemPallet, RefundPallet, ReplacePallet, VaultId, VaultRegistryPallet,
+    FixedU128, InterBtcParachain, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet, RedeemRequestStatus,
+    RefundPallet, ReplacePallet, UtilFuncs, VaultId, VaultRegistryPallet,
 };
 use service::{
     warp::{Rejection, Reply},
     Error as ServiceError,
 };
-use tokio::sync::RwLock;
+use std::time::Duration;
+use tokio::{sync::RwLock, time::sleep};
+const SLEEP_DURATION: Duration = Duration::from_secs(5 * 60);
 
 const CURRENCY_LABEL: &str = "currency";
+const BTC_BALANCE_TYPE_LABEL: &str = "type";
+const REQUEST_STATUS_LABEL: &str = "status";
 
 // Metrics are stored under the [`CURRENCY_LABEL`] key so that multiple vaults can be easily
 // monitored at the same time.
@@ -36,9 +41,23 @@ lazy_static! {
         &[CURRENCY_LABEL]
     )
     .expect("Failed to create prometheus metric");
-    pub static ref BTC_BALANCE: GaugeVec =
-        GaugeVec::new(Opts::new("btc_balance", "Bitcoin Balance"), &[CURRENCY_LABEL, "type"])
-            .expect("Failed to create prometheus metric");
+    pub static ref BTC_BALANCE: GaugeVec = GaugeVec::new(
+        Opts::new("btc_balance", "Bitcoin Balance"),
+        &[CURRENCY_LABEL, BTC_BALANCE_TYPE_LABEL]
+    )
+    .expect("Failed to create prometheus metric");
+    pub static ref ISSUES: GaugeVec = GaugeVec::new(
+        Opts::new("issue_count", "Number of issues"),
+        &[CURRENCY_LABEL, REQUEST_STATUS_LABEL]
+    )
+    .expect("Failed to create prometheus metric");
+    pub static ref REDEEMS: GaugeVec = GaugeVec::new(
+        Opts::new("redeem_count", "Number of redeems"),
+        &[CURRENCY_LABEL, REQUEST_STATUS_LABEL]
+    )
+    .expect("Failed to create prometheus metric");
+    pub static ref KINT_BALANCE: Gauge =
+        Gauge::new("kint_balance", "Kint Balance").expect("Failed to create prometheus metric");
     pub static ref FEE_BUDGET_SURPLUS: GaugeVec =
         GaugeVec::new(Opts::new("fee_budget_surplus", "Fee Budget Surplus"), &[CURRENCY_LABEL])
             .expect("Failed to create prometheus metric");
@@ -64,11 +83,20 @@ struct BtcBalance {
 }
 
 #[derive(Clone, Debug)]
+struct RequestCounter {
+    open_count: Gauge,
+    completed_count: Gauge,
+    expired_count: Gauge,
+}
+
+#[derive(Clone, Debug)]
 pub struct PerCurrencyMetrics {
     locked_collateral: Gauge,
     collateralization: Gauge,
     required_collateral: Gauge,
     btc_balance: BtcBalance,
+    issues: RequestCounter,
+    redeems: RequestCounter,
     average_btc_fee: StatefulGauge<AverageTracker>,
     fee_budget_surplus: StatefulGauge<i64>,
 }
@@ -92,8 +120,12 @@ impl PerCurrencyMetrics {
         let labels = HashMap::from([(CURRENCY_LABEL, label.as_ref())]);
 
         let btc_balance_gauge = |balance_type: &'static str| {
-            let labels = HashMap::<&str, &str>::from([(CURRENCY_LABEL, label.as_ref()), ("type", balance_type)]);
+            let labels =
+                HashMap::<&str, &str>::from([(CURRENCY_LABEL, label.as_ref()), (BTC_BALANCE_TYPE_LABEL, balance_type)]);
             BTC_BALANCE.with(&labels)
+        };
+        let request_type_label = |balance_type: &'static str| {
+            HashMap::<&str, &str>::from([(CURRENCY_LABEL, label.as_ref()), (REQUEST_STATUS_LABEL, balance_type)])
         };
 
         Self {
@@ -112,6 +144,16 @@ impl PerCurrencyMetrics {
                 upperbound: btc_balance_gauge("required_upperbound"),
                 lowerbound: btc_balance_gauge("required_lowerbound"),
                 actual: btc_balance_gauge("actual"),
+            },
+            issues: RequestCounter {
+                open_count: ISSUES.with(&request_type_label("open")),
+                completed_count: ISSUES.with(&request_type_label("completed")),
+                expired_count: ISSUES.with(&request_type_label("expired")),
+            },
+            redeems: RequestCounter {
+                open_count: REDEEMS.with(&request_type_label("open")),
+                completed_count: REDEEMS.with(&request_type_label("completed")),
+                expired_count: REDEEMS.with(&request_type_label("expired")),
             },
         }
     }
@@ -188,6 +230,9 @@ pub fn register_custom_metrics() -> Result<(), Error> {
     REGISTRY.register(Box::new(REQUIRED_COLLATERAL.clone()))?;
     REGISTRY.register(Box::new(FEE_BUDGET_SURPLUS.clone()))?;
     REGISTRY.register(Box::new(BTC_BALANCE.clone()))?;
+    REGISTRY.register(Box::new(KINT_BALANCE.clone()))?;
+    REGISTRY.register(Box::new(ISSUES.clone()))?;
+    REGISTRY.register(Box::new(REDEEMS.clone()))?;
 
     Ok(())
 }
@@ -302,6 +347,91 @@ async fn publish_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(vault:
     }
 }
 
+async fn publish_kint_balance(parachain_rpc: &InterBtcParachain) {
+    if let Ok(balance) = parachain_rpc.get_free_balance(parachain_rpc.native_currency_id).await {
+        KINT_BALANCE.set(balance as f64 / parachain_rpc.native_currency_id.one() as f64);
+    }
+}
+
+async fn publish_issue_count<B: BitcoinCoreApi + Clone + Send + Sync>(
+    parachain_rpc: &InterBtcParachain,
+    vault_id_manager: &VaultIdManager<B>,
+) {
+    if let Ok(issues) = parachain_rpc
+        .get_vault_issue_requests(parachain_rpc.get_account_id().clone())
+        .await
+    {
+        for vault in vault_id_manager.get_entries().await {
+            let relevant_issues: Vec<_> = issues
+                .iter()
+                .filter(|(_, issue)| issue.vault == vault.vault_id)
+                .map(|(_, issue)| issue.status.clone())
+                .collect();
+
+            vault.metrics.issues.open_count.set(
+                relevant_issues
+                    .iter()
+                    .filter(|status| matches!(status, IssueRequestStatus::Pending))
+                    .count() as f64,
+            );
+            vault.metrics.issues.completed_count.set(
+                relevant_issues
+                    .iter()
+                    .filter(|status| matches!(status, IssueRequestStatus::Completed(_)))
+                    .count() as f64,
+            );
+            vault.metrics.issues.expired_count.set(
+                relevant_issues
+                    .iter()
+                    .filter(|status| matches!(status, IssueRequestStatus::Cancelled))
+                    .count() as f64,
+            );
+        }
+    }
+}
+
+async fn publish_redeem_count<B: BitcoinCoreApi + Clone + Send + Sync>(
+    parachain_rpc: &InterBtcParachain,
+    vault_id_manager: &VaultIdManager<B>,
+) {
+    if let Ok(redeems) = parachain_rpc
+        .get_vault_redeem_requests(parachain_rpc.get_account_id().clone())
+        .await
+    {
+        for vault in vault_id_manager.get_entries().await {
+            let relevant_redeems: Vec<_> = redeems
+                .iter()
+                .filter(|(_, redeem)| redeem.vault == vault.vault_id)
+                .map(|(_, redeem)| redeem.status.clone())
+                .collect();
+
+            vault.metrics.redeems.open_count.set(
+                relevant_redeems
+                    .iter()
+                    .filter(|status| matches!(status, RedeemRequestStatus::Pending))
+                    .count() as f64,
+            );
+            vault.metrics.redeems.completed_count.set(
+                relevant_redeems
+                    .iter()
+                    .filter(|status| matches!(status, RedeemRequestStatus::Completed))
+                    .count() as f64,
+            );
+            vault.metrics.redeems.expired_count.set(
+                relevant_redeems
+                    .iter()
+                    .filter(|status| {
+                        matches!(
+                            status,
+                            RedeemRequestStatus::Reimbursed(_) | RedeemRequestStatus::Retried
+                        )
+                    })
+                    .count() as f64,
+            );
+        }
+    }
+}
+
 pub async fn monitor_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
     parachain_rpc: InterBtcParachain,
     vault_id_manager: VaultIdManager<B>,
@@ -317,12 +447,13 @@ pub async fn monitor_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
                 });
                 let vaults = vault_id_manager.get_entries().await;
                 for currency_id in updated_currencies {
-                    for (vault_id, data) in vaults
+                    for vault in vaults
                         .iter()
-                        .filter(|(vault_id, _)| &vault_id.collateral_currency() == currency_id)
+                        .filter(|vault| &vault.vault_id.collateral_currency() == currency_id)
                     {
                         if let Err(err) =
-                            update_bridge_metrics(parachain_rpc.clone(), vault_id.clone(), data.metrics.clone()).await
+                            update_bridge_metrics(parachain_rpc.clone(), vault.vault_id.clone(), vault.metrics.clone())
+                                .await
                         {
                             tracing::info!("Failed to update prometheus bridge metrics: {}", err);
                         }
@@ -333,6 +464,22 @@ pub async fn monitor_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
         )
         .await?;
     Ok(())
+}
+
+pub async fn poll_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
+    parachain_rpc: InterBtcParachain,
+    vault_id_manager: VaultIdManager<B>,
+) -> Result<(), ServiceError> {
+    let parachain_rpc = &parachain_rpc;
+    let vault_id_manager = &vault_id_manager;
+
+    loop {
+        publish_kint_balance(&parachain_rpc).await;
+        publish_issue_count(&parachain_rpc.clone(), &vault_id_manager).await;
+        publish_redeem_count(&parachain_rpc.clone(), &vault_id_manager).await;
+
+        sleep(SLEEP_DURATION).await;
+    }
 }
 
 pub async fn update_expected_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(
