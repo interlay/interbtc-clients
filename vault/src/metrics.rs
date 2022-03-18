@@ -22,8 +22,6 @@ const CURRENCY_LABEL: &str = "currency";
 // monitored at the same time.
 lazy_static! {
     pub static ref REGISTRY: Registry = Registry::new();
-    pub static ref LOCKED_BTC: GaugeVec = GaugeVec::new(Opts::new("locked_btc", "Locked Bitcoin"), &[CURRENCY_LABEL])
-        .expect("Failed to create prometheus metric");
     pub static ref AVERAGE_BTC_FEE: GaugeVec =
         GaugeVec::new(Opts::new("avg_btc_fee", "Average Bitcoin Fee"), &[CURRENCY_LABEL])
             .expect("Failed to create prometheus metric");
@@ -38,6 +36,9 @@ lazy_static! {
         &[CURRENCY_LABEL]
     )
     .expect("Failed to create prometheus metric");
+    pub static ref BTC_BALANCE: GaugeVec =
+        GaugeVec::new(Opts::new("btc_balance", "Bitcoin Balance"), &[CURRENCY_LABEL, "type"])
+            .expect("Failed to create prometheus metric");
     pub static ref FEE_BUDGET_SURPLUS: GaugeVec =
         GaugeVec::new(Opts::new("fee_budget_surplus", "Fee Budget Surplus"), &[CURRENCY_LABEL])
             .expect("Failed to create prometheus metric");
@@ -56,48 +57,46 @@ struct StatefulGauge<T: Clone> {
 }
 
 #[derive(Clone, Debug)]
+struct BtcBalance {
+    upperbound: Gauge,
+    lowerbound: Gauge,
+    actual: Gauge,
+}
+
+#[derive(Clone, Debug)]
 pub struct PerCurrencyMetrics {
-    locked_btc: Gauge,
     locked_collateral: Gauge,
     collateralization: Gauge,
     required_collateral: Gauge,
+    btc_balance: BtcBalance,
     average_btc_fee: StatefulGauge<AverageTracker>,
     fee_budget_surplus: StatefulGauge<i64>,
 }
 
 impl PerCurrencyMetrics {
-    pub async fn new(vault_id: &VaultId) -> Self {
+    pub fn new(vault_id: &VaultId) -> Self {
         let label = format!(
             "{}_{}",
             vault_id.collateral_currency().inner().symbol(),
             vault_id.wrapped_currency().inner().symbol()
         );
-        let mut labels = HashMap::new();
-        labels.insert(CURRENCY_LABEL, label.as_ref());
-
-        Self {
-            locked_btc: LOCKED_BTC.with(&labels),
-            locked_collateral: LOCKED_COLLATERAL.with(&labels),
-            collateralization: COLLATERALIZATION.with(&labels),
-            required_collateral: REQUIRED_COLLATERAL.with(&labels),
-            fee_budget_surplus: StatefulGauge {
-                gauge: FEE_BUDGET_SURPLUS.with(&labels),
-                data: Arc::new(RwLock::new(0)),
-            },
-            average_btc_fee: StatefulGauge {
-                gauge: AVERAGE_BTC_FEE.with(&labels),
-                data: Arc::new(RwLock::new(AverageTracker { total: 0, count: 0 })),
-            },
-        }
+        Self::new_with_label(label.as_ref())
     }
 
     // construct a dummy metrics struct for testing purposes
     pub fn dummy() -> Self {
-        let mut labels = HashMap::new();
-        labels.insert(CURRENCY_LABEL, "dummy");
+        Self::new_with_label("dummy")
+    }
+
+    fn new_with_label(label: &str) -> Self {
+        let labels = HashMap::from([(CURRENCY_LABEL, label.as_ref())]);
+
+        let btc_balance_gauge = |balance_type: &'static str| {
+            let labels = HashMap::<&str, &str>::from([(CURRENCY_LABEL, label.as_ref()), ("type", balance_type)]);
+            BTC_BALANCE.with(&labels)
+        };
 
         Self {
-            locked_btc: LOCKED_BTC.with(&labels),
             locked_collateral: LOCKED_COLLATERAL.with(&labels),
             collateralization: COLLATERALIZATION.with(&labels),
             required_collateral: REQUIRED_COLLATERAL.with(&labels),
@@ -108,6 +107,11 @@ impl PerCurrencyMetrics {
             average_btc_fee: StatefulGauge {
                 gauge: AVERAGE_BTC_FEE.with(&labels),
                 data: Arc::new(RwLock::new(AverageTracker { total: 0, count: 0 })),
+            },
+            btc_balance: BtcBalance {
+                upperbound: btc_balance_gauge("required_upperbound"),
+                lowerbound: btc_balance_gauge("required_lowerbound"),
+                actual: btc_balance_gauge("actual"),
             },
         }
     }
@@ -169,6 +173,7 @@ impl PerCurrencyMetrics {
 
         publish_average_bitcoin_fee(&vault).await;
         publish_bitcoin_balance(&vault).await;
+        update_expected_bitcoin_balance(&vault, parachain_rpc.clone()).await;
 
         if let Err(err) = update_bridge_metrics(parachain_rpc, vault_id, vault.metrics.clone()).await {
             tracing::error!("Failed to initialize bridge metrics {:?}", err);
@@ -177,12 +182,12 @@ impl PerCurrencyMetrics {
 }
 
 pub fn register_custom_metrics() -> Result<(), Error> {
-    REGISTRY.register(Box::new(LOCKED_BTC.clone()))?;
     REGISTRY.register(Box::new(AVERAGE_BTC_FEE.clone()))?;
     REGISTRY.register(Box::new(LOCKED_COLLATERAL.clone()))?;
     REGISTRY.register(Box::new(COLLATERALIZATION.clone()))?;
     REGISTRY.register(Box::new(REQUIRED_COLLATERAL.clone()))?;
     REGISTRY.register(Box::new(FEE_BUDGET_SURPLUS.clone()))?;
+    REGISTRY.register(Box::new(BTC_BALANCE.clone()))?;
 
     Ok(())
 }
@@ -289,7 +294,7 @@ async fn publish_average_bitcoin_fee<B: BitcoinCoreApi + Clone + Send + Sync>(va
 
 async fn publish_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
     match vault.btc_rpc.get_balance(None).await {
-        Ok(bitcoin_balance) => vault.metrics.locked_btc.set(bitcoin_balance.as_btc()),
+        Ok(bitcoin_balance) => vault.metrics.btc_balance.actual.set(bitcoin_balance.as_sat() as f64),
         Err(e) => {
             // unexpected error, but not critical so just continue
             tracing::warn!("Failed to get Bitcoin balance: {}", e);
@@ -328,4 +333,16 @@ pub async fn monitor_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
         )
         .await?;
     Ok(())
+}
+
+pub async fn update_expected_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(
+    vault: &VaultData<B>,
+    parachain_rpc: InterBtcParachain,
+) {
+    if let Ok(v) = parachain_rpc.get_vault(&vault.vault_id).await {
+        let lowerbound = v.issued_tokens.saturating_sub(v.to_be_redeemed_tokens);
+        let upperbound = v.issued_tokens.saturating_add(v.to_be_issued_tokens);
+        vault.metrics.btc_balance.lowerbound.set(lowerbound as f64);
+        vault.metrics.btc_balance.upperbound.set(upperbound as f64);
+    }
 }

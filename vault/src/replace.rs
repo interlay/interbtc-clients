@@ -1,4 +1,7 @@
-use crate::{cancellation::Event, error::Error, execution::Request, system::VaultIdManager};
+use crate::{
+    cancellation::Event, error::Error, execution::Request, metrics::update_expected_bitcoin_balance,
+    system::VaultIdManager,
+};
 use bitcoin::BitcoinCoreApi;
 use futures::{channel::mpsc::Sender, future::try_join3, SinkExt};
 use runtime::{
@@ -34,6 +37,8 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                     None => return, // event not directed at this vault
                 };
                 tracing::info!("Received accept replace event: {:?}", event);
+
+                update_expected_bitcoin_balance(&vault, parachain_rpc.clone()).await;
 
                 // within this event callback, we captured the arguments of listen_for_redeem_requests
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
