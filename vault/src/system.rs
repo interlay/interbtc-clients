@@ -141,6 +141,7 @@ async fn relay_block_listener(
 
 #[derive(Clone)]
 pub struct VaultData<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> {
+    pub vault_id: VaultId,
     pub btc_rpc: BCA,
     pub metrics: PerCurrencyMetrics,
 }
@@ -172,8 +173,9 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
             .into_iter()
             .map(|(key, value)| {
                 (
-                    key,
+                    key.clone(),
                     VaultData {
+                        vault_id: key,
                         btc_rpc: value,
                         metrics: PerCurrencyMetrics::dummy(),
                     },
@@ -201,10 +203,14 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
                 return Err(bitcoin::Error::MissingPublicKey.into());
             }
         }
+
+        tracing::info!("Adding keys from past issues...");
         issue::add_keys_from_past_issue_request(&btc_rpc, &self.btc_parachain).await?;
 
+        tracing::info!("Initializing metrics...");
         let metrics = PerCurrencyMetrics::new(&vault_id).await;
         let data = VaultData {
+            vault_id: vault_id.clone(),
             btc_rpc: btc_rpc.clone(),
             metrics: metrics.clone(),
         };
@@ -384,7 +390,7 @@ impl VaultService {
 
         self.maybe_register_vault().await?;
 
-        // purposefully _after_ maybe_register_vault
+        // purposefully _after_ maybe_register_vault and _before_ other calls
         self.vault_id_manager.fetch_vault_ids(false).await?;
 
         let startup_height = self.await_parachain_block().await?;

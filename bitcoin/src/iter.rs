@@ -194,6 +194,7 @@ mod tests {
             async fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error>;
             async fn get_block_count(&self) -> Result<u64, Error>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+            async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, Error>;
             async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
             async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;

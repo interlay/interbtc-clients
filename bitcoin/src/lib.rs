@@ -21,7 +21,7 @@ pub use bitcoincore_rpc::{
     },
     bitcoincore_rpc_json::{
         CreateRawTransactionInput, FundRawTransactionOptions, GetBlockchainInfoResult, GetTransactionResult,
-        WalletTxInfo,
+        GetTransactionResultDetailCategory, WalletTxInfo,
     },
     json::{self, AddressType, GetBlockResult},
     jsonrpc::{error::RpcError, Error as JsonRpcError},
@@ -104,6 +104,8 @@ pub trait BitcoinCoreApi {
     async fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error>;
 
     async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+
+    async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, Error>;
 
     async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
 
@@ -483,6 +485,16 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `block_hash` - hash of the block tx is stored in
     async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
         Ok(serialize(&self.rpc.get_raw_transaction(txid, Some(block_hash))?))
+    }
+
+    /// Get the raw transaction identified by `Txid` and stored
+    /// in the specified block.
+    ///
+    /// # Arguments
+    /// * `txid` - transaction ID
+    /// * `block_hash` - hash of the block tx is stored in
+    async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, Error> {
+        Ok(self.rpc.get_raw_transaction(txid, block_hash.as_ref())?)
     }
 
     /// Get the merkle proof which can be used to validate transaction inclusion.

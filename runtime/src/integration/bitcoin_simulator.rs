@@ -69,7 +69,7 @@ impl MockBitcoinCore {
         ret
     }
 
-    pub async fn get_transaction(&self, f: impl Fn(&Transaction) -> bool) -> Option<Transaction> {
+    pub async fn find_transaction(&self, f: impl Fn(&Transaction) -> bool) -> Option<Transaction> {
         self.blocks
             .read()
             .await
@@ -253,16 +253,20 @@ impl BitcoinCoreApi for MockBitcoinCore {
     async fn get_block_count(&self) -> Result<u64, BitcoinError> {
         Ok((self.blocks.read().await.len() - 1).try_into().unwrap())
     }
-    async fn get_raw_tx(&self, txid: &Txid, _block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError> {
-        let blocks = self.blocks.read().await;
-
-        let transaction = blocks
+    async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError> {
+        let transaction = self.get_transaction(txid, Some(block_hash.clone())).await?;
+        Ok(serialize(&transaction))
+    }
+    async fn get_transaction(&self, txid: &Txid, _block_hash: Option<BlockHash>) -> Result<Transaction, BitcoinError> {
+        self.blocks
+            .read()
+            .await
             .iter()
             .find_map(|x| x.txdata.iter().find(|y| &y.txid() == txid))
-            .ok_or(BitcoinError::InvalidBitcoinHeight)?;
-
-        Ok(serialize(transaction))
+            .ok_or(BitcoinError::InvalidBitcoinHeight)
+            .cloned()
     }
+
     async fn get_proof(&self, txid: Txid, _block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError> {
         let mut proof = Vec::new();
         let blocks = self.blocks.read().await;

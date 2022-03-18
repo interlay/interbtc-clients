@@ -810,7 +810,7 @@ async fn test_refund_succeeds() {
 
             // fetch the tx that was used to execute the redeem
             let tx = btc_rpc
-                .get_transaction(|tx| tx.get_op_return() == Some(refund_request.refund_id))
+                .find_transaction(|tx| tx.get_op_return() == Some(refund_request.refund_id))
                 .await
                 .unwrap();
 

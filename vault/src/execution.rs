@@ -201,7 +201,7 @@ impl Request {
         let tx_metadata = self
             .transfer_btc(&parachain_rpc, &vault.btc_rpc, num_confirmations, self.vault_id.clone())
             .await?;
-        update_bitcoin_metrics(vault, tx_metadata.fee).await;
+        update_bitcoin_metrics(vault, tx_metadata.fee, self.fee_budget).await;
         self.execute(parachain_rpc, tx_metadata).await
     }
 
@@ -655,6 +655,7 @@ mod tests {
             async fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+            async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, BitcoinError>;
             async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError>;
             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
@@ -804,6 +805,7 @@ mod tests {
             };
 
             let vault_data = VaultData {
+                vault_id: dummy_vault_id(),
                 btc_rpc,
                 metrics: PerCurrencyMetrics::dummy(),
             };
@@ -869,6 +871,7 @@ mod tests {
         };
 
         let vault_data = VaultData {
+            vault_id: dummy_vault_id(),
             btc_rpc,
             metrics: PerCurrencyMetrics::dummy(),
         };
@@ -939,6 +942,7 @@ mod tests {
         };
 
         let vault_data = VaultData {
+            vault_id: dummy_vault_id(),
             btc_rpc,
             metrics: PerCurrencyMetrics::dummy(),
         };

@@ -1,14 +1,14 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, convert::TryInto, sync::Arc};
 
 use crate::system::{VaultData, VaultIdManager};
-use bitcoin::{BitcoinCoreApi, SignedAmount};
+use bitcoin::{BitcoinCoreApi, GetTransactionResultDetailCategory, SignedAmount, TransactionExt};
+use futures::{try_join, StreamExt};
 use lazy_static::lazy_static;
-
 use runtime::{
     prometheus::{gather, proto::MetricFamily, Encoder, Gauge, GaugeVec, Opts, Registry, TextEncoder},
     CurrencyIdExt, CurrencyInfo, Error, FeedValuesEvent, FixedPointNumber,
     FixedPointTraits::One,
-    FixedU128, InterBtcParachain, OracleKey, VaultId, VaultRegistryPallet,
+    FixedU128, InterBtcParachain, OracleKey, RedeemPallet, RefundPallet, ReplacePallet, VaultId, VaultRegistryPallet,
 };
 use service::{
     warp::{Rejection, Reply},
@@ -38,6 +38,9 @@ lazy_static! {
         &[CURRENCY_LABEL]
     )
     .expect("Failed to create prometheus metric");
+    pub static ref FEE_BUDGET_SURPLUS: GaugeVec =
+        GaugeVec::new(Opts::new("fee_budget_surplus", "Fee Budget Surplus"), &[CURRENCY_LABEL])
+            .expect("Failed to create prometheus metric");
 }
 
 #[derive(Clone, Debug)]
@@ -47,13 +50,19 @@ struct AverageTracker {
 }
 
 #[derive(Clone, Debug)]
+struct StatefulGauge<T: Clone> {
+    gauge: Gauge,
+    data: Arc<RwLock<T>>,
+}
+
+#[derive(Clone, Debug)]
 pub struct PerCurrencyMetrics {
     locked_btc: Gauge,
-    average_btc_fee: Gauge,
     locked_collateral: Gauge,
     collateralization: Gauge,
     required_collateral: Gauge,
-    bitcoin_fee_data: Arc<RwLock<AverageTracker>>,
+    average_btc_fee: StatefulGauge<AverageTracker>,
+    fee_budget_surplus: StatefulGauge<i64>,
 }
 
 impl PerCurrencyMetrics {
@@ -68,11 +77,17 @@ impl PerCurrencyMetrics {
 
         Self {
             locked_btc: LOCKED_BTC.with(&labels),
-            average_btc_fee: AVERAGE_BTC_FEE.with(&labels),
             locked_collateral: LOCKED_COLLATERAL.with(&labels),
             collateralization: COLLATERALIZATION.with(&labels),
             required_collateral: REQUIRED_COLLATERAL.with(&labels),
-            bitcoin_fee_data: Arc::new(RwLock::new(AverageTracker { total: 0, count: 0 })),
+            fee_budget_surplus: StatefulGauge {
+                gauge: FEE_BUDGET_SURPLUS.with(&labels),
+                data: Arc::new(RwLock::new(0)),
+            },
+            average_btc_fee: StatefulGauge {
+                gauge: AVERAGE_BTC_FEE.with(&labels),
+                data: Arc::new(RwLock::new(AverageTracker { total: 0, count: 0 })),
+            },
         }
     }
 
@@ -83,11 +98,17 @@ impl PerCurrencyMetrics {
 
         Self {
             locked_btc: LOCKED_BTC.with(&labels),
-            average_btc_fee: AVERAGE_BTC_FEE.with(&labels),
             locked_collateral: LOCKED_COLLATERAL.with(&labels),
             collateralization: COLLATERALIZATION.with(&labels),
             required_collateral: REQUIRED_COLLATERAL.with(&labels),
-            bitcoin_fee_data: Arc::new(RwLock::new(AverageTracker { total: 0, count: 0 })),
+            fee_budget_surplus: StatefulGauge {
+                gauge: FEE_BUDGET_SURPLUS.with(&labels),
+                data: Arc::new(RwLock::new(0)),
+            },
+            average_btc_fee: StatefulGauge {
+                gauge: AVERAGE_BTC_FEE.with(&labels),
+                data: Arc::new(RwLock::new(AverageTracker { total: 0, count: 0 })),
+            },
         }
     }
 
@@ -96,15 +117,56 @@ impl PerCurrencyMetrics {
         vault_id: VaultId,
         vault: &VaultData<B>,
     ) {
-        let (total, count) = vault
-            .btc_rpc
-            .list_transactions(None)
-            .await
-            .unwrap_or(vec![])
-            .into_iter()
+        let bitcoin_transactions = match vault.btc_rpc.list_transactions(None).await {
+            Ok(x) => x
+                .into_iter()
+                .filter(|x| x.detail.category == GetTransactionResultDetailCategory::Send)
+                .collect(),
+            Err(_) => vec![],
+        };
+
+        // update average fee
+        let (total, count) = bitcoin_transactions
+            .iter()
             .filter_map(|tx| tx.detail.fee.map(|amount| amount.as_sat().abs() as u64))
             .fold((0, 0), |(total, count), x| (total + x, count + 1));
-        *vault.metrics.bitcoin_fee_data.write().await = AverageTracker { total, count };
+        *vault.metrics.average_btc_fee.data.write().await = AverageTracker { total, count };
+
+        // update fee surplus
+        if let Ok((redeem_requests, replace_requests, refund_requests)) = try_join!(
+            parachain_rpc.get_vault_redeem_requests(vault_id.account_id.clone()),
+            parachain_rpc.get_old_vault_replace_requests(vault_id.account_id.clone()),
+            parachain_rpc.get_vault_refund_requests(vault_id.account_id.clone()),
+        ) {
+            let redeems = redeem_requests
+                .iter()
+                .map(|(id, redeem)| (id.clone(), redeem.transfer_fee_btc));
+            let refunds = refund_requests
+                .iter()
+                .map(|(id, refund)| (id.clone(), refund.transfer_fee_btc));
+            let replaces = replace_requests.iter().map(|(id, _)| (id.clone(), 0));
+            let fee_budgets = redeems.chain(refunds).chain(replaces).collect::<HashMap<_, _>>();
+            let fee_budgets = &fee_budgets;
+
+            let fee_budget_surplus = futures::stream::iter(bitcoin_transactions.iter())
+                .filter_map(|tx| async move {
+                    let transaction = vault
+                        .btc_rpc
+                        .get_transaction(&tx.info.txid, tx.info.blockhash)
+                        .await
+                        .ok()?;
+                    let op_return = transaction.get_op_return()?;
+                    let budget: i64 = fee_budgets.get(&op_return)?.clone().try_into().ok()?;
+                    let surplus = budget.checked_sub(tx.detail.fee?.as_sat().abs());
+                    surplus
+                })
+                .fold(0i64, |acc, x| async move { acc.saturating_add(x) })
+                .await;
+
+            *vault.metrics.fee_budget_surplus.data.write().await = fee_budget_surplus;
+            publish_fee_budget_surplus(&vault).await;
+        }
+
         publish_average_bitcoin_fee(&vault).await;
         publish_bitcoin_balance(&vault).await;
 
@@ -120,6 +182,7 @@ pub fn register_custom_metrics() -> Result<(), Error> {
     REGISTRY.register(Box::new(LOCKED_COLLATERAL.clone()))?;
     REGISTRY.register(Box::new(COLLATERALIZATION.clone()))?;
     REGISTRY.register(Box::new(REQUIRED_COLLATERAL.clone()))?;
+    REGISTRY.register(Box::new(FEE_BUDGET_SURPLUS.clone()))?;
 
     Ok(())
 }
@@ -183,29 +246,45 @@ pub async fn update_bridge_metrics(
 pub async fn update_bitcoin_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
     vault: VaultData<B>,
     new_fee_entry: Option<SignedAmount>,
+    fee_budget: Option<u128>,
 ) {
     // update the average fee
     if let Some(amount) = new_fee_entry {
         {
-            let mut tmp = vault.metrics.bitcoin_fee_data.write().await;
+            let mut tmp = vault.metrics.average_btc_fee.data.write().await;
             *tmp = AverageTracker {
                 total: tmp.total.saturating_add(amount.as_sat().abs() as u64),
                 count: tmp.count.saturating_add(1),
             };
-            // guaranteed not to panic since we just incremented count
-            tmp.total as f64 / tmp.count as f64
-        };
+        }
         publish_average_bitcoin_fee(&vault).await;
+
+        if let Ok(budget) = TryInto::<i64>::try_into(fee_budget.unwrap_or(0)) {
+            let surplus = budget.saturating_sub(amount.as_sat().abs());
+            let mut tmp = vault.metrics.fee_budget_surplus.data.write().await;
+            *tmp = tmp.saturating_add(surplus);
+        }
+        publish_fee_budget_surplus(&vault).await;
     }
 
     publish_bitcoin_balance(&vault).await;
 }
 
+async fn publish_fee_budget_surplus<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
+    let surplus = *vault.metrics.fee_budget_surplus.data.read().await;
+    vault
+        .metrics
+        .fee_budget_surplus
+        .gauge
+        .set(surplus as f64 / vault.vault_id.wrapped_currency().one() as f64);
+}
+
 async fn publish_average_bitcoin_fee<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
-    let fees = vault.metrics.bitcoin_fee_data.read().await;
-    if fees.count != 0 {
-        vault.metrics.average_btc_fee.set(fees.total as f64 / fees.count as f64);
-    }
+    let average = match vault.metrics.average_btc_fee.data.read().await {
+        x if x.count > 0 => x.total as f64 / x.count as f64,
+        _ => 0.0,
+    };
+    vault.metrics.average_btc_fee.gauge.set(average);
 }
 
 async fn publish_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
