@@ -483,4 +483,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
             .map(|block| (block.txdata[1].txid(), block.block_hash()))
             .collect())
     }
+    async fn get_utxo_count(&self) -> Result<usize, BitcoinError> {
+        Ok(0)
+    }
 }

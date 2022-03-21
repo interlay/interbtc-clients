@@ -2,7 +2,7 @@ use crate::{
     collateral::lock_required_collateral,
     error::Error,
     faucet, issue,
-    metrics::{poll_bridge_metrics, PerCurrencyMetrics},
+    metrics::{poll_metrics, PerCurrencyMetrics},
     relay::run_relayer,
     service::*,
     vaults::Vaults,
@@ -607,7 +607,7 @@ impl VaultService {
 
         let bridge_metrics_poller = maybe_run_task(
             !self.monitoring_config.no_prometheus,
-            poll_bridge_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
+            poll_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
         );
 
         // starts all the tasks

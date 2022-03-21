@@ -176,6 +176,8 @@ pub trait BitcoinCoreApi {
     async fn rescan_blockchain(&self, start_height: usize) -> Result<(), Error>;
 
     async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
+
+    async fn get_utxo_count(&self) -> Result<usize, Error>;
 }
 
 pub struct LockedTransaction {
@@ -838,6 +840,10 @@ impl BitcoinCoreApi for BitcoinCore {
             })
             .collect();
         Ok(ret?)
+    }
+
+    async fn get_utxo_count(&self) -> Result<usize, Error> {
+        Ok(self.rpc.list_unspent(None, None, None, None, None)?.len())
     }
 }
 

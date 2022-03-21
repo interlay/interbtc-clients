@@ -5,7 +5,9 @@ use bitcoin::{BitcoinCoreApi, GetTransactionResultDetailCategory, SignedAmount, 
 use futures::{try_join, StreamExt};
 use lazy_static::lazy_static;
 use runtime::{
-    prometheus::{gather, proto::MetricFamily, Encoder, Gauge, GaugeVec, Opts, Registry, TextEncoder},
+    prometheus::{
+        gather, proto::MetricFamily, Encoder, Gauge, GaugeVec, IntGauge, IntGaugeVec, Opts, Registry, TextEncoder,
+    },
     CollateralBalancesPallet, CurrencyIdExt, CurrencyInfo, Error, FeedValuesEvent, FixedPointNumber,
     FixedPointTraits::One,
     FixedU128, InterBtcParachain, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet, RedeemRequestStatus,
@@ -38,6 +40,11 @@ lazy_static! {
             .expect("Failed to create prometheus metric");
     pub static ref REQUIRED_COLLATERAL: GaugeVec = GaugeVec::new(
         Opts::new("required_collateral", "Required Collateral"),
+        &[CURRENCY_LABEL]
+    )
+    .expect("Failed to create prometheus metric");
+    pub static ref UTXO_COUNT: IntGaugeVec = IntGaugeVec::new(
+        Opts::new("utxo_count", "Number of Unspent Bitcoin Outputs"),
         &[CURRENCY_LABEL]
     )
     .expect("Failed to create prometheus metric");
@@ -99,6 +106,7 @@ pub struct PerCurrencyMetrics {
     redeems: RequestCounter,
     average_btc_fee: StatefulGauge<AverageTracker>,
     fee_budget_surplus: StatefulGauge<i64>,
+    utxo_count: IntGauge,
 }
 
 impl PerCurrencyMetrics {
@@ -132,6 +140,7 @@ impl PerCurrencyMetrics {
             locked_collateral: LOCKED_COLLATERAL.with(&labels),
             collateralization: COLLATERALIZATION.with(&labels),
             required_collateral: REQUIRED_COLLATERAL.with(&labels),
+            utxo_count: UTXO_COUNT.with(&labels),
             fee_budget_surplus: StatefulGauge {
                 gauge: FEE_BUDGET_SURPLUS.with(&labels),
                 data: Arc::new(RwLock::new(0)),
@@ -213,6 +222,7 @@ impl PerCurrencyMetrics {
             publish_fee_budget_surplus(&vault).await;
         }
 
+        publish_utxo_count(&vault).await;
         publish_average_bitcoin_fee(&vault).await;
         publish_bitcoin_balance(&vault).await;
         update_expected_bitcoin_balance(&vault, parachain_rpc.clone()).await;
@@ -233,6 +243,7 @@ pub fn register_custom_metrics() -> Result<(), Error> {
     REGISTRY.register(Box::new(KINT_BALANCE.clone()))?;
     REGISTRY.register(Box::new(ISSUES.clone()))?;
     REGISTRY.register(Box::new(REDEEMS.clone()))?;
+    REGISTRY.register(Box::new(UTXO_COUNT.clone()))?;
 
     Ok(())
 }
@@ -353,6 +364,14 @@ async fn publish_kint_balance(parachain_rpc: &InterBtcParachain) {
     }
 }
 
+async fn publish_utxo_count<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
+    if let Ok(count) = vault.btc_rpc.get_utxo_count().await {
+        if let Ok(count_i64) = count.try_into() {
+            vault.metrics.utxo_count.set(count_i64);
+        }
+    }
+}
+
 async fn publish_issue_count<B: BitcoinCoreApi + Clone + Send + Sync>(
     parachain_rpc: &InterBtcParachain,
     vault_id_manager: &VaultIdManager<B>,
@@ -466,7 +485,7 @@ pub async fn monitor_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
     Ok(())
 }
 
-pub async fn poll_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
+pub async fn poll_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
     parachain_rpc: InterBtcParachain,
     vault_id_manager: VaultIdManager<B>,
 ) -> Result<(), ServiceError> {
@@ -477,6 +496,10 @@ pub async fn poll_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
         publish_kint_balance(&parachain_rpc).await;
         publish_issue_count(&parachain_rpc.clone(), &vault_id_manager).await;
         publish_redeem_count(&parachain_rpc.clone(), &vault_id_manager).await;
+
+        for vault in vault_id_manager.get_entries().await {
+            publish_utxo_count(&vault).await;
+        }
 
         sleep(SLEEP_DURATION).await;
     }
