@@ -63,15 +63,16 @@ async fn start() -> Result<(), Error> {
             prometheus_host,
             opts.monitoring.prometheus_port
         );
-        let (_, future_result) = futures::join!(
-            warp::serve(metrics_route).run(SocketAddr::new(prometheus_host.into(), opts.monitoring.prometheus_port,)),
-            tokio::task::spawn(async move { vault_connection_manager.start().await }),
-        );
-        future_result?
-    } else {
-        vault_connection_manager.start().await?;
-        Ok(())
+        let prometheus_port = opts.monitoring.prometheus_port;
+
+        tokio::task::spawn(async move {
+            warp::serve(metrics_route)
+                .run(SocketAddr::new(prometheus_host.into(), prometheus_port))
+                .await;
+        });
     }
+    vault_connection_manager.start().await?;
+    Ok(())
 }
 
 #[tokio::main]
