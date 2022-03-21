@@ -160,6 +160,10 @@ impl InterBtcParachain {
                         } else if err.is_pool_too_low_priority().is_some() {
                             self.refresh_nonce().await;
                             Err(RetryPolicy::Skip(Error::PoolTooLowPriority))
+                        } else if err.is_block_hash_not_found_error() {
+                            self.refresh_nonce().await;
+                            log::info!("Re-sending transaction after apparent fork");
+                            Err(RetryPolicy::Skip(Error::BlockHashNotFound))
                         } else {
                             Err(RetryPolicy::Throw(err))
                         }

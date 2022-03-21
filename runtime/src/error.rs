@@ -18,7 +18,7 @@ use std::{
     io::Error as IoError,
     num::TryFromIntError,
 };
-use subxt::{sp_core::crypto::SecretStringError, BasicError};
+use subxt::{sp_core::crypto::SecretStringError, BasicError, TransactionError};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
 use url::ParseError as UrlParseError;
@@ -47,6 +47,8 @@ pub enum Error {
     ChannelClosed,
     #[error("Cannot replace existing transaction")]
     PoolTooLowPriority,
+    #[error("Transaction did not get included - block hash not found")]
+    BlockHashNotFound,
     #[error("Transaction is invalid: {0}")]
     InvalidTransaction(String),
     #[error("Request has timed out")]
@@ -238,6 +240,15 @@ impl Error {
         matches!(
             self,
             Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(_))) | Error::SubxtBasicError(BasicError::Rpc(_))
+        )
+    }
+
+    pub fn is_block_hash_not_found_error(&self) -> bool {
+        matches!(
+            self,
+            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Transaction(
+                TransactionError::BlockHashNotFound
+            ))) | Error::SubxtBasicError(BasicError::Transaction(TransactionError::BlockHashNotFound))
         )
     }
 
