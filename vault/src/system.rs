@@ -220,7 +220,6 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
             btc_rpc: btc_rpc.clone(),
             metrics: metrics.clone(),
         };
-        tracing::info!("Initializing metrics..222.");
         PerCurrencyMetrics::initialize_values(self.btc_parachain.clone(), vault_id.clone(), &data).await;
 
         self.vault_data.write().await.insert(vault_id.clone(), data.clone());

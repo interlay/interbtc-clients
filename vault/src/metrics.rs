@@ -350,7 +350,7 @@ async fn publish_average_bitcoin_fee<B: BitcoinCoreApi + Clone + Send + Sync>(va
 
 async fn publish_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
     match vault.btc_rpc.get_balance(None).await {
-        Ok(bitcoin_balance) => vault.metrics.btc_balance.actual.set(bitcoin_balance.as_sat() as f64),
+        Ok(bitcoin_balance) => vault.metrics.btc_balance.actual.set(bitcoin_balance.as_btc() as f64),
         Err(e) => {
             // unexpected error, but not critical so just continue
             tracing::warn!("Failed to get Bitcoin balance: {}", e);
@@ -512,7 +512,16 @@ pub async fn update_expected_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + 
     if let Ok(v) = parachain_rpc.get_vault(&vault.vault_id).await {
         let lowerbound = v.issued_tokens.saturating_sub(v.to_be_redeemed_tokens);
         let upperbound = v.issued_tokens.saturating_add(v.to_be_issued_tokens);
-        vault.metrics.btc_balance.lowerbound.set(lowerbound as f64);
-        vault.metrics.btc_balance.upperbound.set(upperbound as f64);
+        let scaling_factor = vault.vault_id.wrapped_currency().one() as f64;
+        vault
+            .metrics
+            .btc_balance
+            .lowerbound
+            .set(lowerbound as f64 / scaling_factor);
+        vault
+            .metrics
+            .btc_balance
+            .upperbound
+            .set(upperbound as f64 / scaling_factor);
     }
 }

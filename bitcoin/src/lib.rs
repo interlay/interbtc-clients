@@ -44,6 +44,7 @@ extern crate num_derive;
 
 /// Average time to mine a Bitcoin block.
 pub const BLOCK_INTERVAL: Duration = Duration::from_secs(600); // 10 minutes
+pub const DEFAULT_MAX_TX_COUNT: usize = 100_000_000;
 
 const NOT_IN_MEMPOOL_ERROR_CODE: i32 = BitcoinRpcError::RpcInvalidAddressOrKey as i32;
 
@@ -469,14 +470,14 @@ impl BitcoinCoreApi for BitcoinCore {
             .get_balance(min_confirmations.map(|x| x.try_into().unwrap_or_default()), None)?)
     }
 
-    /// List the transaction in the wallet.
+    /// List the transaction in the wallet. `max_count` sets a limit on the amount of transactions returned.
+    /// If none is provided, [`DEFAULT_MAX_TX_COUNT`] is used, which is an arbitrarily picked big number to
+    /// effectively return all transactions.
     async fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error> {
-        // Arbitrarily picked number for the max tx count to receive. The bitcoin rpc default is 10.
-        let default_max_count = 100_000_000;
-        // If no `max_count` is specified, list all transactions.
+        // If no `max_count` is specified to the rpc call, bitcoin core only returns 10 items.
         Ok(self
             .rpc
-            .list_transactions(None, max_count.or(Some(default_max_count)), None, None)?)
+            .list_transactions(None, max_count.or(Some(DEFAULT_MAX_TX_COUNT)), None, None)?)
     }
 
     /// Get the raw transaction identified by `Txid` and stored
@@ -842,6 +843,7 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(ret?)
     }
 
+    /// Get the number of unspent transaction outputs.
     async fn get_utxo_count(&self) -> Result<usize, Error> {
         Ok(self.rpc.list_unspent(None, None, None, None, None)?.len())
     }
