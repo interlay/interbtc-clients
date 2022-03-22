@@ -63,8 +63,8 @@ lazy_static! {
         &[CURRENCY_LABEL, REQUEST_STATUS_LABEL]
     )
     .expect("Failed to create prometheus metric");
-    pub static ref KINT_BALANCE: Gauge =
-        Gauge::new("kint_balance", "Kint Balance").expect("Failed to create prometheus metric");
+    pub static ref NATIVE_CURRENCY_BALANCE: Gauge =
+        Gauge::new("native_currency_balance", "Native Currency Balance").expect("Failed to create prometheus metric");
     pub static ref FEE_BUDGET_SURPLUS: GaugeVec =
         GaugeVec::new(Opts::new("fee_budget_surplus", "Fee Budget Surplus"), &[CURRENCY_LABEL])
             .expect("Failed to create prometheus metric");
@@ -240,7 +240,7 @@ pub fn register_custom_metrics() -> Result<(), Error> {
     REGISTRY.register(Box::new(REQUIRED_COLLATERAL.clone()))?;
     REGISTRY.register(Box::new(FEE_BUDGET_SURPLUS.clone()))?;
     REGISTRY.register(Box::new(BTC_BALANCE.clone()))?;
-    REGISTRY.register(Box::new(KINT_BALANCE.clone()))?;
+    REGISTRY.register(Box::new(NATIVE_CURRENCY_BALANCE.clone()))?;
     REGISTRY.register(Box::new(ISSUES.clone()))?;
     REGISTRY.register(Box::new(REDEEMS.clone()))?;
     REGISTRY.register(Box::new(UTXO_COUNT.clone()))?;
@@ -358,9 +358,9 @@ async fn publish_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(vault:
     }
 }
 
-async fn publish_kint_balance(parachain_rpc: &InterBtcParachain) {
+async fn publish_native_currency_balance(parachain_rpc: &InterBtcParachain) {
     if let Ok(balance) = parachain_rpc.get_free_balance(parachain_rpc.native_currency_id).await {
-        KINT_BALANCE.set(balance as f64 / parachain_rpc.native_currency_id.one() as f64);
+        NATIVE_CURRENCY_BALANCE.set(balance as f64 / parachain_rpc.native_currency_id.one() as f64);
     }
 }
 
@@ -493,7 +493,7 @@ pub async fn poll_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
     let vault_id_manager = &vault_id_manager;
 
     loop {
-        publish_kint_balance(&parachain_rpc).await;
+        publish_native_currency_balance(&parachain_rpc).await;
         publish_issue_count(&parachain_rpc.clone(), &vault_id_manager).await;
         publish_redeem_count(&parachain_rpc.clone(), &vault_id_manager).await;
 
