@@ -223,8 +223,8 @@ impl PerCurrencyMetrics {
         }
 
         publish_utxo_count(&vault);
-        publish_average_bitcoin_fee(&vault).await;
         publish_bitcoin_balance(&vault);
+        publish_average_bitcoin_fee(&vault).await;
         update_expected_bitcoin_balance(&vault, parachain_rpc.clone()).await;
 
         if let Err(err) = update_bridge_metrics(parachain_rpc, vault_id, vault.metrics.clone()).await {
@@ -343,7 +343,7 @@ async fn publish_fee_budget_surplus<B: BitcoinCoreApi + Clone + Send + Sync>(vau
 async fn publish_average_bitcoin_fee<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
     let average = match vault.metrics.average_btc_fee.data.read().await {
         x if x.count > 0 => x.total as f64 / x.count as f64,
-        _ => 0.0,
+        _ => Default::default(),
     };
     vault.metrics.average_btc_fee.gauge.set(average);
 }
