@@ -1,4 +1,4 @@
-use crate::{execution::*, metrics::update_expected_bitcoin_balance, system::VaultIdManager};
+use crate::{execution::*, metrics::publish_expected_bitcoin_balance, system::VaultIdManager};
 use bitcoin::BitcoinCoreApi;
 use runtime::{InterBtcParachain, RedeemPallet, RequestRedeemEvent};
 use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
@@ -30,7 +30,7 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
 
                 tracing::info!("Received redeem request: {:?}", event);
 
-                update_expected_bitcoin_balance(&vault, parachain_rpc.clone()).await;
+                publish_expected_bitcoin_balance(&vault, parachain_rpc.clone()).await;
 
                 // within this event callback, we captured the arguments of listen_for_redeem_requests
                 // by reference. Since spawn requires static lifetimes, we will need to capture the

@@ -220,9 +220,9 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
             btc_rpc: btc_rpc.clone(),
             metrics: metrics.clone(),
         };
-        PerCurrencyMetrics::initialize_values(self.btc_parachain.clone(), vault_id.clone(), &data).await;
+        PerCurrencyMetrics::initialize_values(self.btc_parachain.clone(), &data).await;
 
-        self.vault_data.write().await.insert(vault_id.clone(), data.clone());
+        self.vault_data.write().await.insert(vault_id, data.clone());
 
         Ok(btc_rpc)
     }
@@ -662,7 +662,10 @@ impl VaultService {
             if let Some(collateral) = self.config.auto_register_with_collateral {
                 tracing::info!("[{}] Automatically registering...", vault_id.pretty_printed());
                 let public_key = bitcoin_core_with_wallet.get_new_public_key().await?;
-                let free_balance = self.btc_parachain.get_free_balance(collateral_currency).await?;
+                let free_balance = self
+                    .btc_parachain
+                    .get_free_balance(vault_id.collateral_currency())
+                    .await?;
                 self.btc_parachain
                     .register_vault(
                         &vault_id,

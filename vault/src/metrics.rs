@@ -1,17 +1,18 @@
 use std::{collections::HashMap, convert::TryInto, sync::Arc};
 
 use crate::system::{VaultData, VaultIdManager};
-use bitcoin::{BitcoinCoreApi, GetTransactionResultDetailCategory, SignedAmount, TransactionExt};
+use bitcoin::{
+    json::ListTransactionResult, BitcoinCoreApi, GetTransactionResultDetailCategory, SignedAmount, TransactionExt,
+};
 use futures::{try_join, StreamExt};
 use lazy_static::lazy_static;
 use runtime::{
     prometheus::{
         gather, proto::MetricFamily, Encoder, Gauge, GaugeVec, IntGauge, IntGaugeVec, Opts, Registry, TextEncoder,
     },
-    CollateralBalancesPallet, CurrencyIdExt, CurrencyInfo, Error, FeedValuesEvent, FixedPointNumber,
-    FixedPointTraits::One,
-    FixedU128, InterBtcParachain, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet, RedeemRequestStatus,
-    RefundPallet, ReplacePallet, UtilFuncs, VaultId, VaultRegistryPallet,
+    CollateralBalancesPallet, CurrencyId, CurrencyIdExt, CurrencyInfo, Error, FeedValuesEvent, FixedU128,
+    InterBtcParachain, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet, RedeemRequestStatus, RefundPallet,
+    ReplacePallet, UtilFuncs, VaultId, VaultRegistryPallet,
 };
 use service::{
     warp::{Rejection, Reply},
@@ -166,27 +167,12 @@ impl PerCurrencyMetrics {
             },
         }
     }
-
-    pub async fn initialize_values<B: BitcoinCoreApi + Clone + Send + Sync>(
-        parachain_rpc: InterBtcParachain,
-        vault_id: VaultId,
+    async fn initialize_fee_budget_surplus<B: BitcoinCoreApi + Clone + Send + Sync>(
         vault: &VaultData<B>,
+        parachain_rpc: InterBtcParachain,
+        bitcoin_transactions: Vec<ListTransactionResult>,
     ) {
-        let bitcoin_transactions = match vault.btc_rpc.list_transactions(None) {
-            Ok(x) => x
-                .into_iter()
-                .filter(|x| x.detail.category == GetTransactionResultDetailCategory::Send)
-                .collect(),
-            Err(_) => vec![],
-        };
-
-        // update average fee
-        let (total, count) = bitcoin_transactions
-            .iter()
-            .filter_map(|tx| tx.detail.fee.map(|amount| amount.as_sat().abs() as u64))
-            .fold((0, 0), |(total, count), x| (total + x, count + 1));
-        *vault.metrics.average_btc_fee.data.write().await = AverageTracker { total, count };
-
+        let vault_id = &vault.vault_id;
         // update fee surplus
         if let Ok((redeem_requests, replace_requests, refund_requests)) = try_join!(
             parachain_rpc.get_vault_redeem_requests(vault_id.account_id.clone()),
@@ -221,15 +207,40 @@ impl PerCurrencyMetrics {
             *vault.metrics.fee_budget_surplus.data.write().await = fee_budget_surplus;
             publish_fee_budget_surplus(&vault).await;
         }
+    }
+    pub async fn initialize_values<B: BitcoinCoreApi + Clone + Send + Sync>(
+        parachain_rpc: InterBtcParachain,
+        vault: &VaultData<B>,
+    ) {
+        tracing::info!("Init1");
+        let bitcoin_transactions = match vault.btc_rpc.list_transactions(None) {
+            Ok(x) => x
+                .into_iter()
+                .filter(|x| x.detail.category == GetTransactionResultDetailCategory::Send)
+                .collect(),
+            Err(_) => vec![],
+        };
 
-        publish_utxo_count(&vault);
-        publish_bitcoin_balance(&vault);
-        publish_average_bitcoin_fee(&vault).await;
-        update_expected_bitcoin_balance(&vault, parachain_rpc.clone()).await;
+        // update average fee
+        let (total, count) = bitcoin_transactions
+            .iter()
+            .filter_map(|tx| tx.detail.fee.map(|amount| amount.as_sat().abs() as u64))
+            .fold((0, 0), |(total, count), x| (total + x, count + 1));
+        *vault.metrics.average_btc_fee.data.write().await = AverageTracker { total, count };
 
-        if let Err(err) = update_bridge_metrics(parachain_rpc, vault_id, vault.metrics.clone()).await {
-            tracing::error!("Failed to initialize bridge metrics {:?}", err);
-        }
+        publish_utxo_count(vault);
+        publish_bitcoin_balance(vault);
+        tracing::info!("Init2");
+
+        tokio::join!(
+            Self::initialize_fee_budget_surplus(vault, parachain_rpc.clone(), bitcoin_transactions),
+            publish_average_bitcoin_fee(vault),
+            publish_expected_bitcoin_balance(vault, parachain_rpc.clone()),
+            publish_locked_collateral(vault, parachain_rpc.clone()),
+            publish_required_collateral(vault, parachain_rpc.clone()),
+            publish_collateralization(vault, parachain_rpc.clone()),
+        );
+        tracing::info!("Init3");
     }
 }
 
@@ -272,36 +283,46 @@ pub async fn metrics_handler() -> Result<impl Reply, Rejection> {
     Ok(metrics)
 }
 
-pub async fn update_bridge_metrics(
+fn raw_value_as_currency(value: u128, currency: CurrencyId) -> f64 {
+    let scaling_factor = currency.one() as f64;
+    value as f64 / scaling_factor
+}
+
+pub async fn publish_locked_collateral<B: BitcoinCoreApi + Clone + Send + Sync>(
+    vault: &VaultData<B>,
     parachain_rpc: InterBtcParachain,
-    vault_id: VaultId,
-    metrics: PerCurrencyMetrics,
-) -> Result<(), Error> {
-    let decimals_offset = FixedU128::one()
-        .into_inner()
-        .checked_div(vault_id.collateral_currency().one())
-        .unwrap_or_default() as f64;
+) {
+    if let Ok(actual_collateral) = parachain_rpc.get_vault_total_collateral(vault.vault_id.clone()).await {
+        let actual_collateral = raw_value_as_currency(actual_collateral, vault.vault_id.collateral_currency());
+        vault.metrics.locked_collateral.set(actual_collateral);
+    }
+}
 
-    let actual_collateral = parachain_rpc.get_vault_total_collateral(vault_id.clone()).await?;
-    let float_actual_collateral = FixedU128::from_inner(actual_collateral).to_float() * decimals_offset;
+pub async fn publish_required_collateral<B: BitcoinCoreApi + Clone + Send + Sync>(
+    vault: &VaultData<B>,
+    parachain_rpc: InterBtcParachain,
+) {
+    if let Ok(required_collateral) = parachain_rpc
+        .get_required_collateral_for_vault(vault.vault_id.clone())
+        .await
+    {
+        let required_collateral = raw_value_as_currency(required_collateral, vault.vault_id.collateral_currency());
+        vault.metrics.required_collateral.set(required_collateral);
+    }
+}
 
-    metrics.locked_collateral.set(float_actual_collateral);
-
+pub async fn publish_collateralization<B: BitcoinCoreApi + Clone + Send + Sync>(
+    vault: &VaultData<B>,
+    parachain_rpc: InterBtcParachain,
+) {
     // if the collateralization is infinite, return 0 rather than logging an error, so
     // the metrics do change in case of a replacement
     let collateralization = parachain_rpc
-        .get_collateralization_from_vault(vault_id.clone(), false)
+        .get_collateralization_from_vault(vault.vault_id.clone(), false)
         .await
         .unwrap_or(0u128);
     let float_collateralization_percentage = FixedU128::from_inner(collateralization).to_float();
-    metrics.collateralization.set(float_collateralization_percentage);
-
-    let required_collateral = parachain_rpc
-        .get_required_collateral_for_vault(vault_id.clone())
-        .await?;
-    let truncated_required_collateral = FixedU128::from_inner(required_collateral).to_float() * decimals_offset;
-    metrics.required_collateral.set(truncated_required_collateral);
-    Ok(())
+    vault.metrics.collateralization.set(float_collateralization_percentage);
 }
 
 pub async fn update_bitcoin_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
@@ -360,7 +381,8 @@ fn publish_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &Vaul
 
 async fn publish_native_currency_balance(parachain_rpc: &InterBtcParachain) {
     if let Ok(balance) = parachain_rpc.get_free_balance(parachain_rpc.native_currency_id).await {
-        NATIVE_CURRENCY_BALANCE.set(balance as f64 / parachain_rpc.native_currency_id.one() as f64);
+        let balance = raw_value_as_currency(balance, parachain_rpc.native_currency_id);
+        NATIVE_CURRENCY_BALANCE.set(balance);
     }
 }
 
@@ -470,12 +492,9 @@ pub async fn monitor_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
                         .iter()
                         .filter(|vault| &vault.vault_id.collateral_currency() == currency_id)
                     {
-                        if let Err(err) =
-                            update_bridge_metrics(parachain_rpc.clone(), vault.vault_id.clone(), vault.metrics.clone())
-                                .await
-                        {
-                            tracing::info!("Failed to update prometheus bridge metrics: {}", err);
-                        }
+                        publish_locked_collateral(vault, parachain_rpc.clone()).await;
+                        publish_required_collateral(vault, parachain_rpc.clone()).await;
+                        publish_collateralization(vault, parachain_rpc.clone()).await;
                     }
                 }
             },
@@ -505,7 +524,7 @@ pub async fn poll_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
     }
 }
 
-pub async fn update_expected_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(
+pub async fn publish_expected_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(
     vault: &VaultData<B>,
     parachain_rpc: InterBtcParachain,
 ) {

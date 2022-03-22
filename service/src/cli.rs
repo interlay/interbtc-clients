@@ -61,7 +61,7 @@ pub struct ServiceConfig {
     pub logging_format: LoggingFormat,
 }
 
-#[derive(Clap, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
 pub struct MonitoringConfig {
     /// Do not expose a Prometheus metric endpoint.
     #[clap(long)]

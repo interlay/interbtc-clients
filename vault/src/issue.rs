@@ -1,4 +1,4 @@
-use crate::{metrics::update_expected_bitcoin_balance, Error, Event, IssueRequests, VaultIdManager};
+use crate::{metrics::publish_expected_bitcoin_balance, Error, Event, IssueRequests, VaultIdManager};
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt};
 use runtime::{
@@ -226,7 +226,7 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
                     // the only way it can fail is if the channel is closed
                     let _ = event_channel.clone().send(Event::Opened).await;
 
-                    update_expected_bitcoin_balance(&vault, btc_parachain.clone()).await;
+                    publish_expected_bitcoin_balance(&vault, btc_parachain.clone()).await;
 
                     if let Err(e) = add_new_deposit_key(&vault.btc_rpc, event.issue_id, event.vault_public_key).await {
                         tracing::error!("Failed to add new deposit key #{}: {}", event.issue_id, e.to_string());
