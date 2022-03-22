@@ -4,7 +4,6 @@ use futures::{
     prelude::*,
     stream::{iter, StreamExt},
 };
-
 use runtime::{
     BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcVault, RegisterAddressEvent,
     RegisterVaultEvent, RelayPallet, Ss58Codec, VaultId, VaultRegistryPallet,
@@ -38,16 +37,16 @@ impl Vaults {
     }
 }
 
-pub async fn report_vault_thefts<
+pub async fn monitor_btc_txs<
     P: RelayPallet + BtcRelayPallet + Send + Sync,
-    B: BitcoinCoreApi + Send + Sync + Clone,
+    B: BitcoinCoreApi + Send + Sync + Clone + 'static,
 >(
     bitcoin_core: B,
     btc_parachain: P,
     btc_height: u32,
     vaults: Arc<Vaults>,
 ) -> Result<(), ServiceError> {
-    match VaultTheftMonitor::new(bitcoin_core, btc_parachain, btc_height, vaults)
+    match BitcoinMonitor::new(bitcoin_core, btc_parachain, btc_height, vaults)
         .process_blocks()
         .await
     {
@@ -56,14 +55,19 @@ pub async fn report_vault_thefts<
     }
 }
 
-pub struct VaultTheftMonitor<P: RelayPallet + BtcRelayPallet + Send + Sync, B: BitcoinCoreApi + Send + Sync + Clone> {
+pub struct BitcoinMonitor<
+    P: RelayPallet + BtcRelayPallet + Send + Sync,
+    B: BitcoinCoreApi + Send + Sync + Clone + 'static,
+> {
     bitcoin_core: B,
     btc_parachain: P,
     btc_height: u32,
     vaults: Arc<Vaults>,
 }
 
-impl<P: RelayPallet + BtcRelayPallet + Send + Sync, B: BitcoinCoreApi + Send + Sync + Clone> VaultTheftMonitor<P, B> {
+impl<P: RelayPallet + BtcRelayPallet + Send + Sync, B: BitcoinCoreApi + Send + Sync + Clone + 'static>
+    BitcoinMonitor<P, B>
+{
     pub fn new(bitcoin_core: B, btc_parachain: P, btc_height: u32, vaults: Arc<Vaults>) -> Self {
         Self {
             bitcoin_core,
@@ -256,8 +260,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, BlockHeader, Error as BitcoinError, GetBlockResult, Hash as _, LockedTransaction, PartialAddress,
-        PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        json, Amount, Block, BlockHeader, Error as BitcoinError, GetBlockResult, Hash as _, LockedTransaction,
+        PartialAddress, PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
         AccountId, BitcoinBlockHeight, BlockNumber, Error as RuntimeError, H256Le, InterBtcRichBlockHeader,
@@ -319,8 +323,11 @@ mod tests {
         trait BitcoinCoreApi {
             fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
+            fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError>;
+            fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+            async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, BitcoinError>;
             async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError>;
             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
@@ -370,6 +377,7 @@ mod tests {
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), BitcoinError>;
             async fn rescan_blockchain(&self, start_height: usize) -> Result<(), BitcoinError>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError>;
+            fn get_utxo_count(&self) -> Result<usize, BitcoinError>;
         }
     }
 
@@ -425,7 +433,7 @@ mod tests {
         let mut bitcoin_core = MockBitcoin::default();
         bitcoin_core.expect_find_duplicate_payments().returning(|_| Ok(vec![]));
 
-        let monitor = VaultTheftMonitor::new(bitcoin_core, parachain, 0, Arc::new(Vaults::default()));
+        let monitor = BitcoinMonitor::new(bitcoin_core, parachain, 0, Arc::new(Vaults::default()));
 
         let block_hash = BlockHash::from_slice(&[0; 32]).unwrap();
         monitor
@@ -442,7 +450,7 @@ mod tests {
         parachain.expect_report_vault_theft().once().returning(|_, _, _| Ok(()));
         btc_rpc.expect_get_proof().once().returning(|_, _| Ok(vec![]));
 
-        let monitor = VaultTheftMonitor::new(btc_rpc, parachain, 0, Arc::new(Vaults::default()));
+        let monitor = BitcoinMonitor::new(btc_rpc, parachain, 0, Arc::new(Vaults::default()));
 
         let block_hash = BlockHash::from_slice(&[0; 32]).unwrap();
         monitor

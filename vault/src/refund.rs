@@ -16,14 +16,14 @@ use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
 pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
-    btc_rpc: VaultIdManager<B>,
+    vault_id_manager: VaultIdManager<B>,
     num_confirmations: u32,
     process_refunds: bool,
 ) -> Result<(), ServiceError> {
     parachain_rpc
         .on_event::<RequestRefundEvent, _, _, _>(
             |event| async {
-                let btc_rpc = match btc_rpc.get_bitcoin_rpc(&event.vault_id).await {
+                let vault = match vault_id_manager.get_vault(&event.vault_id).await {
                     Some(x) => x,
                     None => return, // event not directed at this vault
                 };
@@ -43,7 +43,7 @@ pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                     tracing::info!("Executing refund #{:?}", event.refund_id);
                     // prepare the action that will be executed after the bitcoin transfer
                     let request = Request::from_refund_request_event(&event);
-                    let result = request.pay_and_execute(parachain_rpc, btc_rpc, num_confirmations).await;
+                    let result = request.pay_and_execute(parachain_rpc, vault, num_confirmations).await;
 
                     match result {
                         Ok(_) => tracing::info!(

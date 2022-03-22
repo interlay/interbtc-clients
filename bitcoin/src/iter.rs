@@ -180,7 +180,7 @@ async fn get_best_block_info<B: BitcoinCoreApi + Clone>(rpc: &B) -> Result<GetBl
 mod tests {
     use super::*;
     use crate::*;
-    pub use bitcoincore_rpc::bitcoin::{Network, TxMerkleNode};
+    pub use bitcoincore_rpc::bitcoin::{Amount, Network, TxMerkleNode};
     use sp_core::H256;
 
     mockall::mock! {
@@ -190,8 +190,11 @@ mod tests {
         trait BitcoinCoreApi {
             fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, Error>;
+            fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error>;
+            fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error>;
             async fn get_block_count(&self) -> Result<u64, Error>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+            async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, Error>;
             async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
             async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
@@ -241,6 +244,7 @@ mod tests {
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error>;
             async fn rescan_blockchain(&self, start_height: usize) -> Result<(), Error>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
+            fn get_utxo_count(&self) -> Result<usize, Error>;
         }
     }
 

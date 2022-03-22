@@ -1,4 +1,7 @@
-use crate::{cancellation::Event, error::Error, execution::Request, system::VaultIdManager};
+use crate::{
+    cancellation::Event, error::Error, execution::Request, metrics::publish_expected_bitcoin_balance,
+    system::VaultIdManager,
+};
 use bitcoin::BitcoinCoreApi;
 use futures::{channel::mpsc::Sender, future::try_join3, SinkExt};
 use runtime::{
@@ -19,21 +22,23 @@ use std::time::Duration;
 pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
-    btc_rpc: VaultIdManager<B>,
+    vault_id_manager: VaultIdManager<B>,
     num_confirmations: u32,
     payment_margin: Duration,
 ) -> Result<(), ServiceError> {
     let parachain_rpc = &parachain_rpc;
-    let btc_rpc = &btc_rpc;
+    let vault_id_manager = &vault_id_manager;
     let shutdown_tx = &shutdown_tx;
     parachain_rpc
         .on_event::<AcceptReplaceEvent, _, _, _>(
             |event| async move {
-                let btc_rpc = match btc_rpc.get_bitcoin_rpc(&event.old_vault_id).await {
+                let vault = match vault_id_manager.get_vault(&event.old_vault_id).await {
                     Some(x) => x,
                     None => return, // event not directed at this vault
                 };
                 tracing::info!("Received accept replace event: {:?}", event);
+
+                publish_expected_bitcoin_balance(&vault, parachain_rpc.clone()).await;
 
                 // within this event callback, we captured the arguments of listen_for_redeem_requests
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
@@ -49,7 +54,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                             parachain_rpc.get_replace_request(event.replace_id).await?,
                             payment_margin,
                         )?;
-                        request.pay_and_execute(parachain_rpc, btc_rpc, num_confirmations).await
+                        request.pay_and_execute(parachain_rpc, vault, num_confirmations).await
                     }
                     .await;
 
@@ -203,7 +208,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, Network,
+        json, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, Network,
         PartialAddress, PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
@@ -228,8 +233,11 @@ mod tests {
         trait BitcoinCoreApi {
             fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
+            fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError>;
+            fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
+            async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, BitcoinError>;
             async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError>;
             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
@@ -279,6 +287,7 @@ mod tests {
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), BitcoinError>;
             async fn rescan_blockchain(&self, start_height: usize) -> Result<(), BitcoinError>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError>;
+            fn get_utxo_count(&self) -> Result<usize, BitcoinError>;
         }
     }
 
@@ -305,6 +314,7 @@ mod tests {
         async fn get_required_collateral_for_wrapped(&self, amount_btc: u128, collateral_currency: CurrencyId) -> Result<u128, RuntimeError>;
         async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
         async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
+        async fn get_collateralization_from_vault(&self, vault_id: VaultId, only_issued: bool) -> Result<u128, RuntimeError>;
     }
 
     #[async_trait]
