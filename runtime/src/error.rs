@@ -73,8 +73,6 @@ pub enum Error {
     Serialize(#[from] TryFromSliceError),
     #[error("Error converting: {0}")]
     Convert(#[from] TryFromIntError),
-    #[error("Subxt basic error: {0}")]
-    SubxtBasicError(#[from] BasicError),
     #[error("Subxt runtime error: {0}")]
     SubxtRuntimeError(#[from] OuterSubxtError),
     #[error("Error decoding: {0}")]
@@ -87,6 +85,12 @@ pub enum Error {
     TimeElapsed(#[from] Elapsed),
     #[error("UrlParseError: {0}")]
     UrlParseError(#[from] UrlParseError),
+}
+
+impl From<BasicError> for Error {
+    fn from(err: BasicError) -> Self {
+        Self::SubxtRuntimeError(OuterSubxtError(err.into()))
+    }
 }
 
 impl From<SubxtError> for Error {
@@ -162,7 +166,7 @@ impl Error {
     ) -> Option<T> {
         match self {
             Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(RequestError::Call(err)))) => call(err),
-            Error::SubxtBasicError(BasicError::Rpc(RequestError::Request(message))) => {
+            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(RequestError::Request(message)))) => {
                 if let Ok(error_response) = serde_json::from_str::<ErrorResponse>(message) {
                     call(&CallError::Custom {
                         code: error_response.error.code.code(),
@@ -232,15 +236,11 @@ impl Error {
         matches!(
             self,
             Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(JsonRpseeError::RestartNeeded(_))))
-                | Error::SubxtBasicError(BasicError::Rpc(JsonRpseeError::RestartNeeded(_)))
         )
     }
 
     pub fn is_rpc_error(&self) -> bool {
-        matches!(
-            self,
-            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(_))) | Error::SubxtBasicError(BasicError::Rpc(_))
-        )
+        matches!(self, Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(_))))
     }
 
     pub fn is_block_hash_not_found_error(&self) -> bool {
@@ -248,7 +248,7 @@ impl Error {
             self,
             Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Transaction(
                 TransactionError::BlockHashNotFound
-            ))) | Error::SubxtBasicError(BasicError::Transaction(TransactionError::BlockHashNotFound))
+            )))
         )
     }
 
