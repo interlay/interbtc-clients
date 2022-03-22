@@ -222,7 +222,7 @@ impl PerCurrencyMetrics {
             publish_fee_budget_surplus(&vault).await;
         }
 
-        publish_utxo_count(&vault).await;
+        publish_utxo_count(&vault);
         publish_average_bitcoin_fee(&vault).await;
         publish_bitcoin_balance(&vault).await;
         update_expected_bitcoin_balance(&vault, parachain_rpc.clone()).await;
@@ -364,8 +364,8 @@ async fn publish_native_currency_balance(parachain_rpc: &InterBtcParachain) {
     }
 }
 
-async fn publish_utxo_count<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
-    if let Ok(count) = vault.btc_rpc.get_utxo_count().await {
+fn publish_utxo_count<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
+    if let Ok(count) = vault.btc_rpc.get_utxo_count() {
         if let Ok(count_i64) = count.try_into() {
             vault.metrics.utxo_count.set(count_i64);
         }
@@ -498,7 +498,7 @@ pub async fn poll_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
         publish_redeem_count(&parachain_rpc.clone(), &vault_id_manager).await;
 
         for vault in vault_id_manager.get_entries().await {
-            publish_utxo_count(&vault).await;
+            publish_utxo_count(&vault);
         }
 
         sleep(SLEEP_DURATION).await;
