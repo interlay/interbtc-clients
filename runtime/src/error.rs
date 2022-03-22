@@ -3,7 +3,7 @@ pub use jsonrpsee::core::Error as JsonRpseeError;
 use crate::{
     metadata::{DispatchError, ErrorDetails},
     types::*,
-    BTC_RELAY_MODULE, ISSUE_MODULE, REDEEM_MODULE, RELAY_MODULE, SYSTEM_MODULE,
+    BTC_RELAY_MODULE, ISSUE_MODULE, RELAY_MODULE, SYSTEM_MODULE,
 };
 use codec::Error as CodecError;
 use jsonrpsee::{
@@ -222,10 +222,6 @@ impl Error {
                 }
             },
         )
-    }
-
-    pub fn is_commit_period_expired(&self) -> bool {
-        self.is_runtime_err(REDEEM_MODULE, &format!("{:?}", RedeemPalletError::CommitPeriodExpired))
     }
 
     pub fn is_rpc_disconnect_error(&self) -> bool {
