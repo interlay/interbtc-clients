@@ -7,7 +7,6 @@ mod iter;
 pub use addr::PartialAddress;
 use async_trait::async_trait;
 use backoff::{backoff::Backoff, future::retry, ExponentialBackoff};
-use bitcoincore_rpc::bitcoin::SignedAmount;
 pub use bitcoincore_rpc::{
     bitcoin::{
         blockdata::{opcodes::all as opcodes, script::Builder},
@@ -18,11 +17,11 @@ pub use bitcoincore_rpc::{
         secp256k1::{constants::PUBLIC_KEY_SIZE, SecretKey},
         util::{address::Payload, key, merkleblock::PartialMerkleTree, psbt::serialize::Serialize, uint::Uint256},
         Address, Amount, Block, BlockHeader, Network, OutPoint, PrivateKey, PubkeyHash, PublicKey, Script, ScriptHash,
-        Transaction, TxIn, TxMerkleNode, TxOut, Txid, WPubkeyHash, WScriptHash,
+        SignedAmount, Transaction, TxIn, TxMerkleNode, TxOut, Txid, WPubkeyHash, WScriptHash,
     },
     bitcoincore_rpc_json::{
         CreateRawTransactionInput, FundRawTransactionOptions, GetBlockchainInfoResult, GetTransactionResult,
-        WalletTxInfo,
+        GetTransactionResultDetailCategory, WalletTxInfo,
     },
     json::{self, AddressType, GetBlockResult},
     jsonrpc::{error::RpcError, Error as JsonRpcError},
@@ -45,6 +44,7 @@ extern crate num_derive;
 
 /// Average time to mine a Bitcoin block.
 pub const BLOCK_INTERVAL: Duration = Duration::from_secs(600); // 10 minutes
+pub const DEFAULT_MAX_TX_COUNT: usize = 100_000_000;
 
 const NOT_IN_MEMPOOL_ERROR_CODE: i32 = BitcoinRpcError::RpcInvalidAddressOrKey as i32;
 
@@ -100,7 +100,13 @@ pub trait BitcoinCoreApi {
 
     async fn get_block_count(&self) -> Result<u64, Error>;
 
+    fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error>;
+
+    fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error>;
+
     async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
+
+    async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, Error>;
 
     async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
 
@@ -171,6 +177,8 @@ pub trait BitcoinCoreApi {
     async fn rescan_blockchain(&self, start_height: usize) -> Result<(), Error>;
 
     async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
+
+    fn get_utxo_count(&self) -> Result<usize, Error>;
 }
 
 pub struct LockedTransaction {
@@ -455,6 +463,23 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(self.rpc.get_block_count()?)
     }
 
+    /// Get wallet balance.
+    fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error> {
+        Ok(self
+            .rpc
+            .get_balance(min_confirmations.map(|x| x.try_into().unwrap_or_default()), None)?)
+    }
+
+    /// List the transaction in the wallet. `max_count` sets a limit on the amount of transactions returned.
+    /// If none is provided, [`DEFAULT_MAX_TX_COUNT`] is used, which is an arbitrarily picked big number to
+    /// effectively return all transactions.
+    fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error> {
+        // If no `max_count` is specified to the rpc call, bitcoin core only returns 10 items.
+        Ok(self
+            .rpc
+            .list_transactions(None, max_count.or(Some(DEFAULT_MAX_TX_COUNT)), None, None)?)
+    }
+
     /// Get the raw transaction identified by `Txid` and stored
     /// in the specified block.
     ///
@@ -463,6 +488,16 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `block_hash` - hash of the block tx is stored in
     async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
         Ok(serialize(&self.rpc.get_raw_transaction(txid, Some(block_hash))?))
+    }
+
+    /// Get the raw transaction identified by `Txid` and stored
+    /// in the specified block.
+    ///
+    /// # Arguments
+    /// * `txid` - transaction ID
+    /// * `block_hash` - hash of the block tx is stored in
+    async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, Error> {
+        Ok(self.rpc.get_raw_transaction(txid, block_hash.as_ref())?)
     }
 
     /// Get the merkle proof which can be used to validate transaction inclusion.
@@ -806,6 +841,11 @@ impl BitcoinCoreApi for BitcoinCore {
             })
             .collect();
         Ok(ret?)
+    }
+
+    /// Get the number of unspent transaction outputs.
+    fn get_utxo_count(&self) -> Result<usize, Error> {
+        Ok(self.rpc.list_unspent(None, None, None, None, None)?.len())
     }
 }
 

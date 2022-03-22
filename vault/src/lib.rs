@@ -6,6 +6,7 @@ mod error;
 mod execution;
 mod faucet;
 mod issue;
+pub mod metrics;
 mod redeem;
 mod refund;
 mod relay;
@@ -22,11 +23,12 @@ pub mod service {
         issue::{
             listen_for_issue_cancels, listen_for_issue_executes, listen_for_issue_requests, process_issue_requests,
         },
+        metrics::monitor_bridge_metrics,
         redeem::listen_for_redeem_requests,
         refund::listen_for_refund_requests,
         relay::{Config, Runner},
         replace::{listen_for_accept_replace, listen_for_execute_replace, listen_for_replace_requests},
-        vaults::{listen_for_vaults_registered, listen_for_wallet_updates, report_vault_thefts},
+        vaults::{listen_for_vaults_registered, listen_for_wallet_updates, monitor_btc_txs},
     };
 }
 use std::time::Duration;
