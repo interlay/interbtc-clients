@@ -190,7 +190,7 @@ mod tests {
         trait BitcoinCoreApi {
             fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, Error>;
-            async fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error>;
+            fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error>;
             async fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error>;
             async fn get_block_count(&self) -> Result<u64, Error>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;

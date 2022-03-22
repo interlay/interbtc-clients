@@ -100,7 +100,7 @@ pub trait BitcoinCoreApi {
 
     async fn get_block_count(&self) -> Result<u64, Error>;
 
-    async fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error>;
+    fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error>;
 
     async fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error>;
 
@@ -464,7 +464,7 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     /// Get wallet balance.
-    async fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error> {
+    fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error> {
         Ok(self
             .rpc
             .get_balance(min_confirmations.map(|x| x.try_into().unwrap_or_default()), None)?)

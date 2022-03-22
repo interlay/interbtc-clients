@@ -224,7 +224,7 @@ impl PerCurrencyMetrics {
 
         publish_utxo_count(&vault);
         publish_average_bitcoin_fee(&vault).await;
-        publish_bitcoin_balance(&vault).await;
+        publish_bitcoin_balance(&vault);
         update_expected_bitcoin_balance(&vault, parachain_rpc.clone()).await;
 
         if let Err(err) = update_bridge_metrics(parachain_rpc, vault_id, vault.metrics.clone()).await {
@@ -328,7 +328,7 @@ pub async fn update_bitcoin_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
         publish_fee_budget_surplus(&vault).await;
     }
 
-    publish_bitcoin_balance(&vault).await;
+    publish_bitcoin_balance(&vault);
 }
 
 async fn publish_fee_budget_surplus<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
@@ -348,8 +348,8 @@ async fn publish_average_bitcoin_fee<B: BitcoinCoreApi + Clone + Send + Sync>(va
     vault.metrics.average_btc_fee.gauge.set(average);
 }
 
-async fn publish_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
-    match vault.btc_rpc.get_balance(None).await {
+fn publish_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
+    match vault.btc_rpc.get_balance(None) {
         Ok(bitcoin_balance) => vault.metrics.btc_balance.actual.set(bitcoin_balance.as_btc() as f64),
         Err(e) => {
             // unexpected error, but not critical so just continue

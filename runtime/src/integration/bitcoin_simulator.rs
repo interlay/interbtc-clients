@@ -241,7 +241,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
             sleep(Duration::from_secs(1)).await;
         }
     }
-    async fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError> {
+    fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError> {
         Ok(Amount::ZERO)
     }
     async fn list_transactions(
