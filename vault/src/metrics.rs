@@ -172,7 +172,7 @@ impl PerCurrencyMetrics {
         vault_id: VaultId,
         vault: &VaultData<B>,
     ) {
-        let bitcoin_transactions = match vault.btc_rpc.list_transactions(None).await {
+        let bitcoin_transactions = match vault.btc_rpc.list_transactions(None) {
             Ok(x) => x
                 .into_iter()
                 .filter(|x| x.detail.category == GetTransactionResultDetailCategory::Send)

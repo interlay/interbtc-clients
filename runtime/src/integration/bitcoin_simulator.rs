@@ -244,10 +244,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
     fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError> {
         Ok(Amount::ZERO)
     }
-    async fn list_transactions(
-        &self,
-        max_count: Option<usize>,
-    ) -> Result<Vec<json::ListTransactionResult>, BitcoinError> {
+    fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, BitcoinError> {
         Ok(vec![])
     }
     async fn get_block_count(&self) -> Result<u64, BitcoinError> {

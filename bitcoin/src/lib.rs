@@ -102,7 +102,7 @@ pub trait BitcoinCoreApi {
 
     fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error>;
 
-    async fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error>;
+    fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error>;
 
     async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
 
@@ -473,7 +473,7 @@ impl BitcoinCoreApi for BitcoinCore {
     /// List the transaction in the wallet. `max_count` sets a limit on the amount of transactions returned.
     /// If none is provided, [`DEFAULT_MAX_TX_COUNT`] is used, which is an arbitrarily picked big number to
     /// effectively return all transactions.
-    async fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error> {
+    fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error> {
         // If no `max_count` is specified to the rpc call, bitcoin core only returns 10 items.
         Ok(self
             .rpc
