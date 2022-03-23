@@ -1,6 +1,9 @@
 use std::{collections::HashMap, convert::TryInto, sync::Arc};
 
-use crate::system::{VaultData, VaultIdManager};
+use crate::{
+    execution::parachain_blocks_to_bitcoin_blocks_rounded_up,
+    system::{VaultData, VaultIdManager},
+};
 use bitcoin::{
     json::ListTransactionResult, BitcoinCoreApi, GetTransactionResultDetailCategory, SignedAmount, TransactionExt,
 };
@@ -11,8 +14,8 @@ use runtime::{
         gather, proto::MetricFamily, Encoder, Gauge, GaugeVec, IntGauge, IntGaugeVec, Opts, Registry, TextEncoder,
     },
     CollateralBalancesPallet, CurrencyId, CurrencyIdExt, CurrencyInfo, Error, FeedValuesEvent, FixedU128,
-    InterBtcParachain, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet, RedeemRequestStatus, RefundPallet,
-    ReplacePallet, UtilFuncs, VaultId, VaultRegistryPallet,
+    InterBtcParachain, InterBtcRedeemRequest, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet,
+    RedeemRequestStatus, RefundPallet, ReplacePallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
 use service::{
     warp::{Rejection, Reply},
@@ -30,6 +33,11 @@ const REQUEST_STATUS_LABEL: &str = "status";
 // monitored at the same time.
 lazy_static! {
     pub static ref REGISTRY: Registry = Registry::new();
+    pub static ref REMAINING_TIME_TO_REDEEM_HOURS: GaugeVec = GaugeVec::new(
+        Opts::new("remaining_time_to_redeem_hours", "Number of hours to redeem deadline"),
+        &[CURRENCY_LABEL]
+    )
+    .expect("Failed to create prometheus metric");
     pub static ref AVERAGE_BTC_FEE: GaugeVec =
         GaugeVec::new(Opts::new("avg_btc_fee", "Average Bitcoin Fee"), &[CURRENCY_LABEL])
             .expect("Failed to create prometheus metric");
@@ -102,6 +110,7 @@ pub struct PerCurrencyMetrics {
     locked_collateral: Gauge,
     collateralization: Gauge,
     required_collateral: Gauge,
+    remaining_time_to_redeem_hours: Gauge,
     btc_balance: BtcBalance,
     issues: RequestCounter,
     redeems: RequestCounter,
@@ -141,6 +150,7 @@ impl PerCurrencyMetrics {
             locked_collateral: LOCKED_COLLATERAL.with(&labels),
             collateralization: COLLATERALIZATION.with(&labels),
             required_collateral: REQUIRED_COLLATERAL.with(&labels),
+            remaining_time_to_redeem_hours: REMAINING_TIME_TO_REDEEM_HOURS.with(&labels),
             utxo_count: UTXO_COUNT.with(&labels),
             fee_budget_surplus: StatefulGauge {
                 gauge: FEE_BUDGET_SURPLUS.with(&labels),
@@ -252,6 +262,7 @@ pub fn register_custom_metrics() -> Result<(), Error> {
     REGISTRY.register(Box::new(ISSUES.clone()))?;
     REGISTRY.register(Box::new(REDEEMS.clone()))?;
     REGISTRY.register(Box::new(UTXO_COUNT.clone()))?;
+    REGISTRY.register(Box::new(REMAINING_TIME_TO_REDEEM_HOURS.clone()))?;
 
     Ok(())
 }
@@ -428,45 +439,91 @@ async fn publish_issue_count<B: BitcoinCoreApi + Clone + Send + Sync>(
     }
 }
 
-async fn publish_redeem_count<B: BitcoinCoreApi + Clone + Send + Sync>(
+async fn publish_time_to_first_deadline<B: BitcoinCoreApi + Clone + Send + Sync>(
     parachain_rpc: &InterBtcParachain,
     vault_id_manager: &VaultIdManager<B>,
+    redeems: &[(H256, InterBtcRedeemRequest)],
 ) {
-    if let Ok(redeems) = parachain_rpc
-        .get_vault_redeem_requests(parachain_rpc.get_account_id().clone())
-        .await
-    {
-        for vault in vault_id_manager.get_entries().await {
-            let relevant_redeems: Vec<_> = redeems
+    for vault in vault_id_manager.get_entries().await {
+        let data: Result<_, crate::Error> = tokio::try_join!(
+            async { parachain_rpc.get_redeem_period().await.map_err(Into::into) },
+            async { parachain_rpc.get_current_chain_height().await.map_err(Into::into) },
+            async { vault.btc_rpc.get_block_count().await.map_err(Into::into) },
+        );
+        if let Ok((redeem_period, para_height, bitcoin_height)) = data {
+            let remaining_time = redeems
                 .iter()
-                .filter(|(_, redeem)| redeem.vault == vault.vault_id)
-                .map(|(_, redeem)| redeem.status.clone())
-                .collect();
+                .filter(|(_, redeem)| redeem.vault == vault.vault_id && redeem.status == RedeemRequestStatus::Pending)
+                .filter_map(|(_, redeem)| calculate_remaining_time(redeem_period, redeem, para_height, bitcoin_height))
+                .min();
 
-            vault.metrics.redeems.open_count.set(
-                relevant_redeems
-                    .iter()
-                    .filter(|status| matches!(status, RedeemRequestStatus::Pending))
-                    .count() as f64,
-            );
-            vault.metrics.redeems.completed_count.set(
-                relevant_redeems
-                    .iter()
-                    .filter(|status| matches!(status, RedeemRequestStatus::Completed))
-                    .count() as f64,
-            );
-            vault.metrics.redeems.expired_count.set(
-                relevant_redeems
-                    .iter()
-                    .filter(|status| {
-                        matches!(
-                            status,
-                            RedeemRequestStatus::Reimbursed(_) | RedeemRequestStatus::Retried
-                        )
-                    })
-                    .count() as f64,
-            );
+            // if no redeem deadlines, then use the redeem period
+            let remaining_time: Duration =
+                remaining_time.unwrap_or_else(|| Duration::from_millis(runtime::MILLISECS_PER_BLOCK) * redeem_period);
+
+            vault
+                .metrics
+                .remaining_time_to_redeem_hours
+                .set(remaining_time.as_secs_f64() / 3600.0);
         }
+    }
+}
+
+fn calculate_remaining_time(
+    redeem_period: u32,
+    redeem: &InterBtcRedeemRequest,
+    para_height: u32,
+    bitcoin_height: u64,
+) -> Option<Duration> {
+    let period_parachain_blocks = redeem_period.max(redeem.period);
+    let time_to_parachain_deadline = {
+        let deadline_block = redeem.opentime.saturating_add(period_parachain_blocks);
+        let remaining_blocks = deadline_block.saturating_sub(para_height);
+        Duration::from_millis(runtime::MILLISECS_PER_BLOCK) * remaining_blocks
+    };
+    let time_to_bitcoin_deadline = {
+        let period_bitcoin_blocks = parachain_blocks_to_bitcoin_blocks_rounded_up(period_parachain_blocks).ok()? as u64;
+        let deadline_bitcoin_block = period_bitcoin_blocks.saturating_add(redeem.btc_height as u64);
+        let remaining_blocks = deadline_bitcoin_block.saturating_sub(bitcoin_height);
+        bitcoin::BLOCK_INTERVAL * remaining_blocks.try_into().ok()?
+    };
+    Some(time_to_parachain_deadline.max(time_to_bitcoin_deadline))
+}
+
+async fn publish_redeem_count<B: BitcoinCoreApi + Clone + Send + Sync>(
+    vault_id_manager: &VaultIdManager<B>,
+    redeems: &[(H256, InterBtcRedeemRequest)],
+) {
+    for vault in vault_id_manager.get_entries().await {
+        let relevant_redeems: Vec<_> = redeems
+            .iter()
+            .filter(|(_, redeem)| redeem.vault == vault.vault_id)
+            .map(|(_, redeem)| redeem.status.clone())
+            .collect();
+
+        vault.metrics.redeems.open_count.set(
+            relevant_redeems
+                .iter()
+                .filter(|status| matches!(status, RedeemRequestStatus::Pending))
+                .count() as f64,
+        );
+        vault.metrics.redeems.completed_count.set(
+            relevant_redeems
+                .iter()
+                .filter(|status| matches!(status, RedeemRequestStatus::Completed))
+                .count() as f64,
+        );
+        vault.metrics.redeems.expired_count.set(
+            relevant_redeems
+                .iter()
+                .filter(|status| {
+                    matches!(
+                        status,
+                        RedeemRequestStatus::Reimbursed(_) | RedeemRequestStatus::Retried
+                    )
+                })
+                .count() as f64,
+        );
     }
 }
 
@@ -511,7 +568,13 @@ pub async fn poll_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
     loop {
         publish_native_currency_balance(&parachain_rpc).await;
         publish_issue_count(&parachain_rpc.clone(), &vault_id_manager).await;
-        publish_redeem_count(&parachain_rpc.clone(), &vault_id_manager).await;
+        if let Ok(redeems) = parachain_rpc
+            .get_vault_redeem_requests(parachain_rpc.get_account_id().clone())
+            .await
+        {
+            publish_redeem_count(&vault_id_manager, &redeems).await;
+            publish_time_to_first_deadline(&parachain_rpc.clone(), &vault_id_manager, &redeems).await;
+        }
 
         for vault in vault_id_manager.get_entries().await {
             publish_utxo_count(&vault);
@@ -539,5 +602,93 @@ pub async fn publish_expected_bitcoin_balance<B: BitcoinCoreApi + Clone + Send +
             .btc_balance
             .upperbound
             .set(upperbound as f64 / scaling_factor);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use runtime::{AccountId, DOT, INTERBTC};
+    use CurrencyId::Token;
+
+    use super::*;
+    fn dummy_redeem_request() -> InterBtcRedeemRequest {
+        InterBtcRedeemRequest {
+            amount_btc: Default::default(),
+            btc_address: Default::default(),
+            btc_height: Default::default(),
+            fee: Default::default(),
+            opentime: Default::default(),
+            period: Default::default(),
+            premium: Default::default(),
+            redeemer: AccountId::new([1u8; 32]),
+            status: RedeemRequestStatus::Pending,
+            transfer_fee_btc: Default::default(),
+            vault: VaultId::new(AccountId::new([1u8; 32]), Token(DOT), Token(INTERBTC)),
+        }
+    }
+
+    #[test]
+    fn test_calculate_remaining_time() {
+        let redeem_period_para_blocks = 5 * 60 * 24;
+        let redeem_period_btc_blocks = redeem_period_para_blocks as u64 / 50;
+        let full_duration = Duration::from_secs(60 * 60 * 24);
+
+        #[derive(Clone, Copy)]
+        struct Params {
+            local_redeem_period: u32,
+            para_current_height: u32,
+            btc_current_height: u64,
+        }
+
+        let remaining_time = |Params {
+                                  local_redeem_period,
+                                  para_current_height,
+                                  btc_current_height,
+                              }| {
+            // add arbitrary offset for starting heights for better coverage
+            let para_open_height = 12345;
+            let btc_open_height = 56789;
+            let redeem = InterBtcRedeemRequest {
+                opentime: para_open_height,
+                btc_height: btc_open_height,
+                period: local_redeem_period,
+                ..dummy_redeem_request()
+            };
+            calculate_remaining_time(
+                redeem_period_para_blocks,
+                &redeem,
+                para_open_height + para_current_height,
+                btc_open_height as u64 + btc_current_height,
+            )
+        };
+
+        let testing_params = Params {
+            local_redeem_period: redeem_period_para_blocks / 2,
+            para_current_height: redeem_period_para_blocks,
+            btc_current_height: redeem_period_btc_blocks,
+        };
+
+        assert_eq!(remaining_time(testing_params), Some(Duration::ZERO));
+        assert_eq!(
+            remaining_time(Params {
+                para_current_height: redeem_period_para_blocks / 4,
+                ..testing_params
+            }),
+            Some((full_duration * 3) / 4)
+        );
+        assert_eq!(
+            remaining_time(Params {
+                btc_current_height: redeem_period_btc_blocks / 4,
+                ..testing_params
+            }),
+            Some((full_duration * 3) / 4)
+        );
+        assert_eq!(
+            remaining_time(Params {
+                local_redeem_period: redeem_period_para_blocks * 4,
+                ..testing_params
+            }),
+            Some(full_duration * 3)
+        );
     }
 }
