@@ -601,12 +601,18 @@ impl VaultService {
         );
         let bridge_metrics_listener = maybe_run_task(
             !self.monitoring_config.no_prometheus,
-            monitor_bridge_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
+            wait_or_shutdown(
+                self.shutdown.clone(),
+                monitor_bridge_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
+            ),
         );
 
         let bridge_metrics_poller = maybe_run_task(
             !self.monitoring_config.no_prometheus,
-            poll_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
+            wait_or_shutdown(
+                self.shutdown.clone(),
+                poll_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
+            ),
         );
 
         // starts all the tasks
