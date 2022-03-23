@@ -89,6 +89,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
                 self.parachain_config.max_concurrent_requests,
                 self.parachain_config.max_notifs_per_subscription,
                 self.parachain_config.btc_parachain_connection_timeout_ms,
+                shutdown_tx.clone(),
             )
             .await?;
 

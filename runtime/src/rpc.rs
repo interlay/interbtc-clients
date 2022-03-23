@@ -21,7 +21,12 @@ use subxt::{
     BasicError, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, DefaultExtra, Event, EventSubscription,
     EventsDecoder, Metadata, RpcClient, Signer, TransactionEvents, TransactionProgress,
 };
-use tokio::{sync::RwLock, time::sleep};
+use tokio::{
+    sync::RwLock,
+    time::{sleep, timeout},
+};
+
+const TRANSACTION_TIMEOUT: Duration = Duration::from_secs(300); // 5 minute timeout
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "standalone-metadata")] {
@@ -34,6 +39,7 @@ cfg_if::cfg_if! {
 }
 
 type RuntimeApi = metadata::RuntimeApi<InterBtcRuntime, DefaultExtra<InterBtcRuntime>>;
+pub(crate) type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
 
 #[derive(Clone)]
 pub struct InterBtcParachain {
@@ -43,13 +49,18 @@ pub struct InterBtcParachain {
     account_id: AccountId,
     api: Arc<RuntimeApi>,
     metadata: Arc<Metadata>,
+    shutdown_tx: ShutdownSender,
     pub native_currency_id: CurrencyId,
     pub relay_chain_currency_id: CurrencyId,
     pub wrapped_currency_id: CurrencyId,
 }
 
 impl InterBtcParachain {
-    pub async fn new<P: Into<RpcClient>>(rpc_client: P, signer: InterBtcSigner) -> Result<Self, Error> {
+    pub async fn new<P: Into<RpcClient>>(
+        rpc_client: P,
+        signer: InterBtcSigner,
+        shutdown_tx: ShutdownSender,
+    ) -> Result<Self, Error> {
         let account_id = signer.account_id().clone();
         let rpc_client = rpc_client.into();
         let ext_client = SubxtClientBuilder::new().set_client(rpc_client.clone()).build().await?;
@@ -79,6 +90,7 @@ impl InterBtcParachain {
             metadata,
             signer: Arc::new(RwLock::new(signer)),
             account_id,
+            shutdown_tx,
             native_currency_id,
             relay_chain_currency_id,
             wrapped_currency_id,
@@ -87,17 +99,18 @@ impl InterBtcParachain {
         Ok(parachain_rpc)
     }
 
-    pub async fn from_url(url: &str, signer: InterBtcSigner) -> Result<Self, Error> {
+    pub async fn from_url(url: &str, signer: InterBtcSigner, shutdown_tx: ShutdownSender) -> Result<Self, Error> {
         let ws_client = new_websocket_client(url, None, None).await?;
-        Self::new(ws_client, signer).await
+        Self::new(ws_client, signer, shutdown_tx).await
     }
 
     pub async fn from_url_with_retry(
         url: &str,
         signer: InterBtcSigner,
         connection_timeout: Duration,
+        shutdown_tx: ShutdownSender,
     ) -> Result<Self, Error> {
-        Self::from_url_and_config_with_retry(url, signer, None, None, connection_timeout).await
+        Self::from_url_and_config_with_retry(url, signer, None, None, connection_timeout, shutdown_tx).await
     }
 
     pub async fn from_url_and_config_with_retry(
@@ -106,6 +119,7 @@ impl InterBtcParachain {
         max_concurrent_requests: Option<usize>,
         max_notifs_per_subscription: Option<usize>,
         connection_timeout: Duration,
+        shutdown_tx: ShutdownSender,
     ) -> Result<Self, Error> {
         let ws_client = new_websocket_client_with_retry(
             url,
@@ -114,7 +128,7 @@ impl InterBtcParachain {
             connection_timeout,
         )
         .await?;
-        Self::new(ws_client, signer).await
+        Self::new(ws_client, signer, shutdown_tx).await
     }
 
     async fn refresh_nonce(&self) {
@@ -150,7 +164,18 @@ impl InterBtcParachain {
                     signer.increment_nonce();
                     cloned_signer
                 };
-                Ok(call(signer).await?.wait_for_finalized_success().await?)
+                match timeout(TRANSACTION_TIMEOUT, async {
+                    call(signer).await?.wait_for_finalized_success().await
+                })
+                .await
+                {
+                    Err(_) => {
+                        log::warn!("Timeout on transaction submission - restart required");
+                        let _ = self.shutdown_tx.send(Some(()));
+                        Err(Error::Timeout)
+                    }
+                    Ok(x) => Ok(x?),
+                }
             },
             |result| async {
                 match result.map_err(Into::<Error>::into) {

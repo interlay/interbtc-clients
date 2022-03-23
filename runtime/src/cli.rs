@@ -1,5 +1,6 @@
 use crate::{
     error::{Error, KeyLoadingError},
+    rpc::ShutdownSender,
     InterBtcParachain, InterBtcSigner,
 };
 use clap::Parser;
@@ -89,13 +90,18 @@ pub struct ConnectionOpts {
 }
 
 impl ConnectionOpts {
-    pub async fn try_connect(&self, signer: InterBtcSigner) -> Result<InterBtcParachain, Error> {
+    pub async fn try_connect(
+        &self,
+        signer: InterBtcSigner,
+        shutdown_tx: ShutdownSender,
+    ) -> Result<InterBtcParachain, Error> {
         InterBtcParachain::from_url_and_config_with_retry(
             &self.btc_parachain_url,
             signer,
             self.max_concurrent_requests,
             self.max_notifs_per_subscription,
             self.btc_parachain_connection_timeout_ms,
+            shutdown_tx,
         )
         .await
     }
