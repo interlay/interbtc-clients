@@ -244,13 +244,12 @@ impl Request {
                 // one return-to-self address, make sure it is registered
                 let wallet = parachain_rpc.get_vault(&vault_id).await?.wallet;
                 if !wallet.addresses.contains(address) {
-                    tracing::info!(
-                        "Registering address {:?}",
-                        address
-                            .encode_str(btc_rpc.network())
-                            .unwrap_or(format!("{:?}", address)),
-                    );
+                    let readable_address = address
+                        .encode_str(btc_rpc.network())
+                        .unwrap_or(format!("{:?}", address));
+                    tracing::info!("Registering address {:?}", readable_address);
                     parachain_rpc.register_address(&vault_id, *address).await?;
+                    tracing::debug!("Successfully registered address {:?}", readable_address);
                 }
             }
             _ => return Err(Error::TooManyReturnToSelfAddresses),
