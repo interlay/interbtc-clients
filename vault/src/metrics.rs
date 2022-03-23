@@ -212,7 +212,6 @@ impl PerCurrencyMetrics {
         parachain_rpc: InterBtcParachain,
         vault: &VaultData<B>,
     ) {
-        tracing::info!("Init1");
         let bitcoin_transactions = match vault.btc_rpc.list_transactions(None) {
             Ok(x) => x
                 .into_iter()
@@ -230,7 +229,6 @@ impl PerCurrencyMetrics {
 
         publish_utxo_count(vault);
         publish_bitcoin_balance(vault);
-        tracing::info!("Init2");
 
         tokio::join!(
             Self::initialize_fee_budget_surplus(vault, parachain_rpc.clone(), bitcoin_transactions),
@@ -240,7 +238,6 @@ impl PerCurrencyMetrics {
             publish_required_collateral(vault, parachain_rpc.clone()),
             publish_collateralization(vault, parachain_rpc.clone()),
         );
-        tracing::info!("Init3");
     }
 }
 
