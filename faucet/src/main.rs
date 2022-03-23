@@ -64,7 +64,9 @@ async fn main() -> Result<(), Error> {
     let faucet_config = opts.faucet;
 
     loop {
-        let btc_parachain = parachain_config.try_connect(signer.clone()).await?;
+        let btc_parachain = parachain_config
+            .try_connect(signer.clone(), shutdown_tx.clone())
+            .await?;
 
         let close_handle = http::start_http(
             btc_parachain.clone(),

@@ -229,9 +229,14 @@ async fn main() -> Result<(), Error> {
         .collect();
 
     loop {
-        let parachain_rpc =
-            InterBtcParachain::from_url_with_retry(&opts.btc_parachain_url, signer.clone(), opts.connection_timeout_ms)
-                .await?;
+        let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
+        let parachain_rpc = InterBtcParachain::from_url_with_retry(
+            &opts.btc_parachain_url,
+            signer.clone(),
+            opts.connection_timeout_ms,
+            shutdown_tx,
+        )
+        .await?;
 
         let bitcoin_fee = opts.bitcoin_fee;
 
