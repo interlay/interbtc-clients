@@ -455,17 +455,17 @@ mod tests {
                 ActiveRequest {
                     id: H256::from_slice(&[1; 32]),
                     parachain_deadline_height: 10_500,
-                    bitcoin_deadline_height: 110,
+                    bitcoin_deadline_height: 120,
                 },
                 ActiveRequest {
                     id: H256::from_slice(&[2; 32]),
                     parachain_deadline_height: 2_000,
-                    bitcoin_deadline_height: 110,
+                    bitcoin_deadline_height: 120,
                 },
                 ActiveRequest {
                     id: H256::from_slice(&[3; 32]),
                     parachain_deadline_height: 9_500,
-                    bitcoin_deadline_height: 110,
+                    bitcoin_deadline_height: 120,
                 },
             ]
         );
@@ -510,7 +510,7 @@ mod tests {
 
         assert_eq!(
             cancellation_scheduler
-                .process_event::<IssueCanceller>(Event::BitcoinBlock(2), &mut active_processes, ListState::Valid,)
+                .process_event::<IssueCanceller>(Event::BitcoinBlock(4), &mut active_processes, ListState::Valid,)
                 .await
                 .unwrap(),
             ListState::Valid
@@ -544,7 +544,7 @@ mod tests {
         let mut cancellation_scheduler =
             CancellationScheduler::new(parachain_rpc, 10_001, 101, AccountId::new([1u8; 32]));
 
-        // deadline is at parachain_height = 11_000 and bitcoin_height = 110
+        // deadline is at parachain_height = 11_000 and bitcoin_height = 120
 
         cancellation_scheduler
             .process_event::<IssueCanceller>(Event::ParachainBlock(10500), &mut active_processes, ListState::Invalid)
@@ -553,7 +553,7 @@ mod tests {
         assert!(!active_processes.is_empty());
 
         cancellation_scheduler
-            .process_event::<IssueCanceller>(Event::BitcoinBlock(110), &mut active_processes, ListState::Valid)
+            .process_event::<IssueCanceller>(Event::BitcoinBlock(120), &mut active_processes, ListState::Valid)
             .await
             .unwrap();
 
@@ -573,7 +573,7 @@ mod tests {
             .await
             .unwrap();
         cancellation_scheduler
-            .process_event::<IssueCanceller>(Event::BitcoinBlock(111), &mut active_processes, ListState::Valid)
+            .process_event::<IssueCanceller>(Event::BitcoinBlock(121), &mut active_processes, ListState::Valid)
             .await
             .unwrap();
 
