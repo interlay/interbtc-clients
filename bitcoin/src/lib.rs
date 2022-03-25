@@ -880,8 +880,7 @@ impl TransactionExt for Transaction {
 
     /// Get the amount of btc that self sent to `dest`, if any
     fn get_payment_amount_to<A: PartialAddress + PartialEq>(&self, dest: A) -> Option<u64> {
-        // we only consider the first three items because the parachain only checks the first 3 positions
-        self.output.iter().take(3).find_map(|uxto| {
+        self.output.iter().find_map(|uxto| {
             let payload = Payload::from_script(&uxto.script_pubkey)?;
             let address = A::from_payload(payload).ok()?;
             if address == dest {

@@ -224,6 +224,60 @@ impl MockBitcoinCore {
             self.send_block(block).await;
         }
     }
+
+    async fn create_transaction_with_many_inputs<A: PartialAddress + Send + Sync + 'static>(
+        &self,
+        address: A,
+        sat: u64,
+        request_id: Option<H256>,
+    ) -> Result<LockedTransaction, BitcoinError> {
+        let mut transaction = MockBitcoinCore::generate_normal_transaction(&address, sat);
+
+        for _ in 1..100 {
+            // add an output with the op_return to the transaction
+            let mut op_return_script = vec![0x6a, 32];
+            op_return_script.append(&mut vec![0; 32]);
+            let op_return = TxOut {
+                value: 0,
+                script_pubkey: Script::from(op_return_script),
+            };
+            transaction.output.insert(0, op_return.clone());
+        }
+
+        if let Some(request_id) = request_id {
+            // add an output with the op_return to the transaction
+            let mut op_return_script = vec![0x6a, 32];
+            op_return_script.append(&mut request_id.to_fixed_bytes().to_vec());
+            let op_return = TxOut {
+                value: 0,
+                script_pubkey: Script::from(op_return_script),
+            };
+            transaction.output.push(op_return);
+        }
+
+        Ok(LockedTransaction::new(
+            transaction,
+            Default::default(),
+            Some(self.transaction_creation_lock.clone().lock_owned().await),
+        ))
+    }
+    pub async fn send_to_address_with_many_outputs<A: PartialAddress + Send + Sync + 'static>(
+        &self,
+        address: A,
+        sat: u64,
+        request_id: Option<H256>,
+        num_confirmations: u32,
+    ) -> Result<TransactionMetadata, BitcoinError> {
+        let tx = self
+            .create_transaction_with_many_inputs(address, sat, request_id)
+            .await?;
+        let txid = self.send_transaction(tx).await?;
+        let metadata = self
+            .wait_for_transaction_metadata(txid, num_confirmations)
+            .await
+            .unwrap();
+        Ok(metadata)
+    }
 }
 
 #[async_trait]
