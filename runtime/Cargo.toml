@@ -55,27 +55,27 @@ bitcoin = { path = "../bitcoin"}
 
 # Dependencies for the testing utils for integration tests
 tempdir = { version = "0.3.7", optional = true }
-interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "15f59d1aa00ee01d531bb406e7cff2c48eb59ceb", optional = true }
+interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "e7a6b41abe69de294abf32a5d350c0c5b719cce3", optional = true }
 rand = { version = "0.7", optional = true }
 
 [dependencies.primitives]
 git = "https://github.com/interlay/interbtc"
-rev = "15f59d1aa00ee01d531bb406e7cff2c48eb59ceb"
+rev = "e7a6b41abe69de294abf32a5d350c0c5b719cce3"
 package = "interbtc-primitives"
 
 [dependencies.module-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "15f59d1aa00ee01d531bb406e7cff2c48eb59ceb"
+rev = "e7a6b41abe69de294abf32a5d350c0c5b719cce3"
 package = "bitcoin"
 
 [dependencies.module-btc-relay]
 git = "https://github.com/interlay/interbtc"
-rev = "15f59d1aa00ee01d531bb406e7cff2c48eb59ceb"
+rev = "e7a6b41abe69de294abf32a5d350c0c5b719cce3"
 package = "btc-relay"
 
 [dependencies.module-oracle-rpc-runtime-api]
 git = "https://github.com/interlay/interbtc"
-rev = "15f59d1aa00ee01d531bb406e7cff2c48eb59ceb"
+rev = "e7a6b41abe69de294abf32a5d350c0c5b719cce3"
 package = "module-oracle-rpc-runtime-api"
 
 [dev-dependencies]
