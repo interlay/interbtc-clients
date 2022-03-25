@@ -972,6 +972,82 @@ async fn test_automatic_issue_execution_succeeds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+// todo: refactor to reuse code from test_automatic_issue_execution_succeeds
+async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
+    test_with_vault(|client, vault1_id, _vault1_provider| async move {
+        let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+        let vault1_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
+        let vault2_provider = setup_provider(client.clone(), AccountKeyring::Eve).await;
+        let vault2_id = VaultId::new(
+            AccountKeyring::Eve.into(),
+            DEFAULT_TESTING_CURRENCY,
+            DEFAULT_WRAPPED_CURRENCY,
+        );
+        let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
+
+        let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let btc_rpcs = vec![(vault2_id.clone(), btc_rpc.clone())].into_iter().collect();
+        let vault_id_manager = VaultIdManager::from_map(vault2_provider.clone(), btc_rpcs);
+
+        let issue_amount = 100000;
+        let vault_collateral =
+            get_required_vault_collateral_for_issue(&vault1_provider, issue_amount, vault1_id.collateral_currency())
+                .await;
+        assert_ok!(
+            vault1_provider
+                .register_vault(
+                    &vault1_id,
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                )
+                .await
+        );
+        assert_ok!(
+            vault2_provider
+                .register_vault(
+                    &vault2_id,
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                )
+                .await
+        );
+
+        let fut_user = async {
+            let issue = user_provider
+                .request_issue(issue_amount, &vault1_id, 10000)
+                .await
+                .unwrap();
+            tracing::warn!("REQUESTED ISSUE: {:?}", issue);
+
+            assert_ok!(
+                btc_rpc
+                    .send_to_address_with_many_outputs(issue.vault_address, (issue.amount + issue.fee) as u64, None, 0)
+                    .await
+            );
+
+            // wait for vault2 to execute this issue
+            assert_event::<ExecuteIssueEvent, _>(TIMEOUT, user_provider.clone(), move |x| x.vault_id == vault1_id)
+                .await;
+        };
+
+        let issue_set = Arc::new(IssueRequests::new());
+        let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
+        let service = join(
+            vault::service::listen_for_issue_requests(
+                vault_id_manager.clone(),
+                vault2_provider.clone(),
+                issue_event_tx.clone(),
+                issue_set.clone(),
+            ),
+            vault::service::process_issue_requests(btc_rpc.clone(), vault2_provider.clone(), issue_set.clone(), 1, 0),
+        );
+
+        test_service(service, fut_user).await;
+    })
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_execute_open_requests_succeeds() {
     test_with_vault(|client, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
