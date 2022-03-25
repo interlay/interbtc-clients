@@ -41,7 +41,7 @@ pub use subxt::{
 pub use types::*;
 
 pub const TX_FEES: u128 = 2000000000;
-pub const MILLISECS_PER_BLOCK: u64 = 6000;
+pub const MILLISECS_PER_BLOCK: u64 = 12000;
 
 pub const BTC_RELAY_MODULE: &str = "BTCRelay";
 pub const ISSUE_MODULE: &str = "Issue";

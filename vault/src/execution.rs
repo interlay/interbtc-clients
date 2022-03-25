@@ -705,7 +705,7 @@ mod tests {
     fn calculate_deadline_behavior() {
         let margin = Duration::from_secs(60 * 60); // 1 hour
         let parachain_blocks = margin.as_millis() as u32 / (runtime::MILLISECS_PER_BLOCK as u32);
-        let bitcoin_blocks = parachain_blocks / 100;
+        let bitcoin_blocks = parachain_blocks / 50;
 
         assert_ok!(
             Request::calculate_deadline(0, 0, 3 * parachain_blocks, margin),
