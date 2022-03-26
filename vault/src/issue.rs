@@ -119,13 +119,14 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
             }
             Some(transferred) => {
                 let transferred = transferred as u128;
-                if transferred == issue.amount + issue.fee {
+                let expected = issue.amount + issue.fee;
+                if transferred == expected {
                     tracing::info!("Found tx for issue with id {:?}", issue_id);
                 } else {
                     tracing::info!(
                         "Found tx for issue with id {}. Expected amount = {}, got {}",
                         issue_id,
-                        issue.amount,
+                        expected,
                         transferred
                     );
                 }
