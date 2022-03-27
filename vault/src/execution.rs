@@ -201,7 +201,7 @@ impl Request {
         let tx_metadata = self
             .transfer_btc(&parachain_rpc, &vault.btc_rpc, num_confirmations, self.vault_id.clone())
             .await?;
-        update_bitcoin_metrics(vault, tx_metadata.fee, self.fee_budget).await;
+        update_bitcoin_metrics(&vault, tx_metadata.fee, self.fee_budget).await;
         self.execute(parachain_rpc, tx_metadata).await
     }
 

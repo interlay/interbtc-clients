@@ -611,7 +611,11 @@ impl VaultService {
             !self.monitoring_config.no_prometheus,
             wait_or_shutdown(
                 self.shutdown.clone(),
-                poll_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
+                poll_metrics(
+                    self.btc_parachain.clone(),
+                    self.vault_id_manager.clone(),
+                    self.btc_parachain.native_currency_id,
+                ),
             ),
         );
 
