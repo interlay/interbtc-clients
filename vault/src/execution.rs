@@ -400,7 +400,13 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
     // iterate through transactions in reverse order, starting from those in the mempool
     let mut transaction_stream = bitcoin::reverse_stream_transactions(&read_only_btc_rpc, btc_start_height).await?;
     while let Some(result) = transaction_stream.next().await {
-        let tx = result?;
+        let tx = match result {
+            Ok(x) => x,
+            Err(e) => {
+                tracing::warn!("Failed to process transaction: {}", e);
+                continue;
+            }
+        };
 
         // get the request this transaction corresponds to, if any
         if let Some(request) = get_request_for_btc_tx(&tx, &open_requests) {
