@@ -15,6 +15,7 @@ parachain-metadata-testnet = ["runtime/parachain-metadata-testnet"]
 thiserror = "1.0"
 clap = "3.1"
 tokio = { version = "1.0", features = ["full"] }
+tokio-metrics = { version = "0.1.0", default-features = false }
 serde = "1.0.136"
 parity-scale-codec = "2.0.0"
 hex = "0.4.2"

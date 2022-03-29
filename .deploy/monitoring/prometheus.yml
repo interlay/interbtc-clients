@@ -1,4 +1,5 @@
 global:
+  # Must match the `TOKIO_POLLING_INTERVAL_MS` in the vault
   scrape_interval:     10s
   evaluation_interval: 10s
 

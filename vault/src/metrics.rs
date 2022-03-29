@@ -21,12 +21,15 @@ use service::{
 };
 use std::time::Duration;
 use tokio::{sync::RwLock, time::sleep};
+use tokio_metrics::TaskMetrics;
 
 const SLEEP_DURATION: Duration = Duration::from_secs(5 * 60);
 
 const CURRENCY_LABEL: &str = "currency";
 const BTC_BALANCE_TYPE_LABEL: &str = "type";
 const REQUEST_STATUS_LABEL: &str = "status";
+const TASK_NAME: &str = "task";
+const TOKIO_POLLING_INTERVAL_MS: u64 = 10000;
 
 // Metrics are stored under the [`CURRENCY_LABEL`] key so that multiple vaults can be easily
 // monitored at the same time.
@@ -44,6 +47,17 @@ lazy_static! {
     pub static ref REQUIRED_COLLATERAL: GaugeVec = GaugeVec::new(
         Opts::new("required_collateral", "Required Collateral"),
         &[CURRENCY_LABEL]
+    )
+    .expect("Failed to create prometheus metric");
+    pub static ref MEAN_IDLE_DURATION: IntGaugeVec =
+        IntGaugeVec::new(Opts::new("mean_idle_duration_ms", "Total Idle Duration"), &[TASK_NAME])
+            .expect("Failed to create prometheus metric");
+    pub static ref MEAN_POLL_DURATION: IntGaugeVec =
+        IntGaugeVec::new(Opts::new("mean_poll_duration_ms", "Total Poll Duration"), &[TASK_NAME])
+            .expect("Failed to create prometheus metric");
+    pub static ref MEAN_SCHEDULED_DURATION: IntGaugeVec = IntGaugeVec::new(
+        Opts::new("mean_scheduled_duration_ms", "Total Scheduled Duration"),
+        &[TASK_NAME]
     )
     .expect("Failed to create prometheus metric");
     pub static ref UTXO_COUNT: IntGaugeVec = IntGaugeVec::new(
@@ -275,6 +289,9 @@ pub fn register_custom_metrics() -> Result<(), Error> {
     REGISTRY.register(Box::new(ISSUES.clone()))?;
     REGISTRY.register(Box::new(REDEEMS.clone()))?;
     REGISTRY.register(Box::new(UTXO_COUNT.clone()))?;
+    REGISTRY.register(Box::new(MEAN_IDLE_DURATION.clone()))?;
+    REGISTRY.register(Box::new(MEAN_POLL_DURATION.clone()))?;
+    REGISTRY.register(Box::new(MEAN_SCHEDULED_DURATION.clone()))?;
 
     Ok(())
 }
@@ -639,6 +656,29 @@ pub async fn publish_expected_bitcoin_balance<
             .btc_balance
             .upperbound
             .set(upperbound as f64 / scaling_factor);
+    }
+}
+
+pub async fn publish_tokio_metrics(
+    mut metrics_iterators: HashMap<&str, impl Iterator<Item = TaskMetrics>>,
+) -> Result<(), ServiceError> {
+    let frequency = std::time::Duration::from_millis(TOKIO_POLLING_INTERVAL_MS);
+    loop {
+        for (key, val) in metrics_iterators.iter_mut() {
+            if let Some(task_metrics) = val.next() {
+                let label = HashMap::<&str, &str>::from([(TASK_NAME, *key)]);
+                MEAN_IDLE_DURATION
+                    .with(&label)
+                    .set(task_metrics.mean_idle_duration().as_millis() as i64);
+                MEAN_POLL_DURATION
+                    .with(&label)
+                    .set(task_metrics.mean_poll_duration().as_millis() as i64);
+                MEAN_SCHEDULED_DURATION
+                    .with(&label)
+                    .set(task_metrics.mean_scheduled_duration().as_millis() as i64);
+            }
+        }
+        tokio::time::sleep(frequency).await;
     }
 }
 
