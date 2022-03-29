@@ -32,9 +32,9 @@ cfg_if::cfg_if! {
     if #[cfg(feature = "standalone-metadata")] {
         const DEFAULT_SPEC_VERSION: u32 = 1;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: u32 = 12;
+        const DEFAULT_SPEC_VERSION: u32 = 13;
     } else if #[cfg(feature = "parachain-metadata-testnet")] {
-        const DEFAULT_SPEC_VERSION: u32 = 3;
+        const DEFAULT_SPEC_VERSION: u32 = 4;
     }
 }
 
@@ -1123,13 +1123,14 @@ impl IssuePallet for InterBtcParachain {
     }
 
     async fn get_all_active_issues(&self) -> Result<Vec<(H256, InterBtcIssueRequest)>, Error> {
-        let current_height = self.get_current_chain_height().await?;
+        let current_height = self.get_current_active_block_number().await?;
         let issue_period = self.get_issue_period().await?;
 
         let mut issue_requests = Vec::new();
         let head = self.get_latest_block_hash().await?;
         let mut iter = self.api.storage().issue().issue_requests_iter(head).await?;
         while let Some((issue_id, request)) = iter.next().await? {
+            // todo: we also need to check the bitcoin height
             if request.status == IssueRequestStatus::Pending && request.opentime + issue_period > current_height {
                 let key_hash = issue_id.0.as_slice();
                 // last bytes are the raw key
