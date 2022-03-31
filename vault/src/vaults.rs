@@ -375,7 +375,7 @@ mod tests {
                 where
                     P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), BitcoinError>;
-            async fn rescan_blockchain(&self, start_height: usize) -> Result<(), BitcoinError>;
+            async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), BitcoinError>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError>;
             fn get_utxo_count(&self) -> Result<usize, BitcoinError>;
         }

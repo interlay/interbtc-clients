@@ -521,7 +521,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
     async fn import_private_key(&self, _privkey: PrivateKey) -> Result<(), BitcoinError> {
         Ok(())
     }
-    async fn rescan_blockchain(&self, start_height: usize) -> Result<(), BitcoinError> {
+    async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), BitcoinError> {
         Ok(())
     }
     async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError> {
