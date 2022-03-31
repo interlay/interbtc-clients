@@ -174,7 +174,7 @@ pub trait BitcoinCoreApi {
 
     async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error>;
 
-    async fn rescan_blockchain(&self, start_height: usize) -> Result<(), Error>;
+    async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error>;
 
     async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
 
@@ -805,8 +805,8 @@ impl BitcoinCoreApi for BitcoinCore {
             .await
     }
 
-    async fn rescan_blockchain(&self, start_height: usize) -> Result<(), Error> {
-        self.rpc.rescan_blockchain(Some(start_height), None)?;
+    async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error> {
+        self.rpc.rescan_blockchain(Some(start_height), Some(end_height))?;
         Ok(())
     }
 
