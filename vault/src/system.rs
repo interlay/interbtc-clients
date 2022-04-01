@@ -30,6 +30,7 @@ pub const VERSION: &str = git_version!(args = ["--tags"]);
 pub const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 pub const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
+const RESTART_INTERVAL: Duration = Duration::from_secs(10800); // restart every 3 hours
 
 #[derive(Parser, Clone, Debug)]
 pub struct VaultServiceConfig {
@@ -615,9 +616,16 @@ impl VaultService {
             ),
         );
 
+        let restart_timer = wait_or_shutdown(self.shutdown.clone(), async move {
+            tokio::time::sleep(RESTART_INTERVAL).await;
+            tracing::info!("Initiating periodic restart...");
+            Err(service::Error::ClientShutdown)
+        });
+
         // starts all the tasks
         tracing::info!("Starting to listen for events...");
         let _ = tokio::join!(
+            tokio::spawn(async move { restart_timer.await }),
             // runs error listener to log errors
             tokio::spawn(async move { err_listener.await }),
             // handles new registrations of this vault done externally
