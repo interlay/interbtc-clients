@@ -2,6 +2,7 @@
 members = [
   "oracle",
   "runtime",
+  "runtime/client",
   "vault",
   "bitcoin",
   "faucet",

@@ -10,8 +10,8 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
-#[cfg(all(feature = "testing-utils", feature = "standalone-metadata"))]
-pub mod integration;
+// #[cfg(all(feature = "testing-utils", feature = "standalone-metadata"))]
+// pub mod integration;
 
 use codec::{Decode, Encode};
 use sp_std::marker::PhantomData;
@@ -36,8 +36,8 @@ pub use rpc::{
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
 use std::time::Duration;
 pub use subxt::{
+    extrinsic::Signer,
     sp_core::{crypto::Ss58Codec, sr25519::Pair},
-    Signer,
 };
 pub use types::*;
 
@@ -126,11 +126,11 @@ impl Config for InterBtcRuntime {
     type Signature = MultiSignature;
 }
 
-impl From<<InterBtcRuntime as Config>::AccountId> for metadata::system::storage::Account {
-    fn from(account_id: <InterBtcRuntime as Config>::AccountId) -> Self {
-        Self(account_id)
-    }
-}
+// impl<'a> From<<InterBtcRuntime as Config>::AccountId> for metadata::system::storage::Account<'a> {
+//     fn from(account_id: <InterBtcRuntime as Config>::AccountId) -> Self {
+//         Self(&account_id)
+//     }
+// }
 
 pub fn parse_collateral_currency(src: &str) -> Result<CurrencyId, Error> {
     match src.to_uppercase().as_str() {

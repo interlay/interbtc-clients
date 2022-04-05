@@ -1,10 +1,6 @@
 pub use jsonrpsee::core::Error as JsonRpseeError;
 
-use crate::{
-    metadata::{DispatchError, ErrorDetails},
-    types::*,
-    BTC_RELAY_MODULE, ISSUE_MODULE, RELAY_MODULE, SYSTEM_MODULE,
-};
+use crate::{metadata::DispatchError, types::*, BTC_RELAY_MODULE, ISSUE_MODULE, RELAY_MODULE, SYSTEM_MODULE};
 use codec::Error as CodecError;
 use jsonrpsee::{
     client_transport::ws::WsHandshakeError,
@@ -118,11 +114,11 @@ impl Display for OuterSubxtError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.0 {
             subxt::Error::Runtime(err) => {
-                if let Some(ErrorDetails { error, pallet, .. }) = err.clone().inner().details() {
-                    write!(f, "{} from {}", error, pallet)
-                } else {
-                    Debug::fmt(&err, f)
-                }
+                // if let Some(ErrorDetails { error, pallet, .. }) = err.clone().inner().details() {
+                //     write!(f, "{} from {}", error, pallet)
+                // } else {
+                Debug::fmt(&err, f)
+                // }
             }
             err => Display::fmt(&err, f),
         }
@@ -131,19 +127,20 @@ impl Display for OuterSubxtError {
 
 impl Error {
     fn is_runtime_err(&self, pallet_name: &str, error_name: &str) -> bool {
-        matches!(
-            self,
-            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Runtime(runtime_error)))
-            if matches!(
-                runtime_error.clone().inner().details(),
-                Some(ErrorDetails {
-                    pallet,
-                    error,
-                    ..
-                })
-                if pallet == pallet_name && error == error_name
-            )
-        )
+        // matches!(
+        //     self,
+        //     Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Runtime(runtime_error)))
+        //     if matches!(
+        //         runtime_error.clone().inner().details(),
+        //         Some(ErrorDetails {
+        //             pallet,
+        //             error,
+        //             ..
+        //         })
+        //         if pallet == pallet_name && error == error_name
+        //     )
+        // )
+        true
     }
 
     pub fn is_duplicate_block(&self) -> bool {
