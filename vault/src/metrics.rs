@@ -7,7 +7,7 @@ use crate::{
 use bitcoin::{
     json::ListTransactionResult, BitcoinCoreApi, GetTransactionResultDetailCategory, SignedAmount, TransactionExt,
 };
-use futures::{try_join, StreamExt};
+use futures::{try_join, StreamExt, TryFutureExt};
 use lazy_static::lazy_static;
 use runtime::{
     prometheus::{
@@ -15,7 +15,7 @@ use runtime::{
     },
     CollateralBalancesPallet, CurrencyId, CurrencyIdExt, CurrencyInfo, Error, FeedValuesEvent, FixedU128,
     InterBtcParachain, InterBtcRedeemRequest, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet,
-    RedeemRequestStatus, RefundPallet, ReplacePallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
+    RedeemRequestStatus, RefundPallet, ReplacePallet, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
 use service::{
     warp::{Rejection, Reply},
@@ -24,6 +24,7 @@ use service::{
 use std::time::Duration;
 use tokio::{sync::RwLock, time::sleep};
 const SLEEP_DURATION: Duration = Duration::from_secs(5 * 60);
+const SECONDS_PER_HOUR: f64 = 3600.0;
 
 const CURRENCY_LABEL: &str = "currency";
 const BTC_BALANCE_TYPE_LABEL: &str = "type";
@@ -446,9 +447,9 @@ async fn publish_time_to_first_deadline<B: BitcoinCoreApi + Clone + Send + Sync>
 ) {
     for vault in vault_id_manager.get_entries().await {
         let data: Result<_, crate::Error> = tokio::try_join!(
-            async { parachain_rpc.get_redeem_period().await.map_err(Into::into) },
-            async { parachain_rpc.get_current_chain_height().await.map_err(Into::into) },
-            async { vault.btc_rpc.get_block_count().await.map_err(Into::into) },
+            parachain_rpc.get_redeem_period().map_err(Into::into),
+            parachain_rpc.get_current_active_block_number().map_err(Into::into),
+            vault.btc_rpc.get_block_count().map_err(Into::into),
         );
         if let Ok((redeem_period, para_height, bitcoin_height)) = data {
             let remaining_time = redeems
@@ -458,13 +459,12 @@ async fn publish_time_to_first_deadline<B: BitcoinCoreApi + Clone + Send + Sync>
                 .min();
 
             // if no redeem deadlines, then use the redeem period
-            let remaining_time: Duration =
-                remaining_time.unwrap_or_else(|| Duration::from_millis(runtime::MILLISECS_PER_BLOCK) * redeem_period);
+            let remaining_time: Duration = remaining_time.unwrap_or_else(|| runtime::BLOCK_INTERVAL * redeem_period);
 
             vault
                 .metrics
                 .remaining_time_to_redeem_hours
-                .set(remaining_time.as_secs_f64() / 3600.0);
+                .set(remaining_time.as_secs_f64() / SECONDS_PER_HOUR);
         }
     }
 }
@@ -479,7 +479,7 @@ fn calculate_remaining_time(
     let time_to_parachain_deadline = {
         let deadline_block = redeem.opentime.saturating_add(period_parachain_blocks);
         let remaining_blocks = deadline_block.saturating_sub(para_height);
-        Duration::from_millis(runtime::MILLISECS_PER_BLOCK) * remaining_blocks
+        runtime::BLOCK_INTERVAL * remaining_blocks
     };
     let time_to_bitcoin_deadline = {
         let period_bitcoin_blocks = parachain_blocks_to_bitcoin_blocks_rounded_up(period_parachain_blocks).ok()? as u64;
@@ -608,6 +608,7 @@ pub async fn publish_expected_bitcoin_balance<B: BitcoinCoreApi + Clone + Send +
 #[cfg(test)]
 mod tests {
     use runtime::{AccountId, DOT, INTERBTC};
+    use std::time::Duration;
     use CurrencyId::Token;
 
     use super::*;
@@ -629,9 +630,11 @@ mod tests {
 
     #[test]
     fn test_calculate_remaining_time() {
-        let redeem_period_para_blocks = 5 * 60 * 24;
-        let redeem_period_btc_blocks = redeem_period_para_blocks as u64 / 50;
-        let full_duration = Duration::from_secs(60 * 60 * 24);
+        let full_duration = Duration::from_secs(3600 * 24); // redeem deadline set to 24 hours
+        let parachain_blocks_per_bitcoin_block = bitcoin::BLOCK_INTERVAL.as_secs() / runtime::BLOCK_INTERVAL.as_secs();
+
+        let redeem_period_para_blocks = (full_duration.as_secs() / runtime::BLOCK_INTERVAL.as_secs()) as u32;
+        let redeem_period_btc_blocks = redeem_period_para_blocks as u64 / parachain_blocks_per_bitcoin_block;
 
         #[derive(Clone, Copy)]
         struct Params {
@@ -662,6 +665,8 @@ mod tests {
             )
         };
 
+        // setup the default params: local_redeem_period < global_redeem_period
+        // and the current height is such that the redeem just expired.
         let testing_params = Params {
             local_redeem_period: redeem_period_para_blocks / 2,
             para_current_height: redeem_period_para_blocks,
@@ -669,6 +674,10 @@ mod tests {
         };
 
         assert_eq!(remaining_time(testing_params), Some(Duration::ZERO));
+
+        // test impact of current parachain height:
+        // if only 1/4th of the para blocks have been produced (and bitcoin deadline has already been reached)
+        // then the remaining time is 3/4th of a day
         assert_eq!(
             remaining_time(Params {
                 para_current_height: redeem_period_para_blocks / 4,
@@ -676,6 +685,10 @@ mod tests {
             }),
             Some((full_duration * 3) / 4)
         );
+
+        // test impact of current bitcoin height:
+        // if only 1/4th of the bitcoin blocks have been produced (and parachain deadline has already been reached)
+        // then the remaining time is 3/4th of a day
         assert_eq!(
             remaining_time(Params {
                 btc_current_height: redeem_period_btc_blocks / 4,
@@ -683,6 +696,10 @@ mod tests {
             }),
             Some((full_duration * 3) / 4)
         );
+
+        // test impact of local redeem period:
+        // if 1 day worth of blocks have been produced, but the local redeem period is set to 4 days,
+        // then we have 3 days remaining
         assert_eq!(
             remaining_time(Params {
                 local_redeem_period: redeem_period_para_blocks * 4,
