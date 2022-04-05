@@ -395,6 +395,18 @@ impl VaultService {
         };
         tracing::info!("Using {} bitcoin confirmations", num_confirmations);
 
+        // Subscribe to an event (any event will do) so that a period of inactivity does not close the jsonrpsee
+        // connection
+        tracing::info!("Subscribing to error events...");
+        let err_provider = self.btc_parachain.clone();
+        let err_listener = wait_or_shutdown(self.shutdown.clone(), async move {
+            err_provider
+                .on_event_error(|e| tracing::debug!("Received error event: {}", e))
+                .await?;
+            Ok(())
+        });
+        tokio::task::spawn(err_listener);
+
         self.maybe_register_vault().await?;
 
         // purposefully _after_ maybe_register_vault and _before_ other calls
@@ -564,14 +576,6 @@ impl VaultService {
             ),
         );
 
-        let err_provider = self.btc_parachain.clone();
-        let err_listener = wait_or_shutdown(self.shutdown.clone(), async move {
-            err_provider
-                .on_event_error(|e| tracing::debug!("Received error event: {}", e))
-                .await?;
-            Ok(())
-        });
-
         // watch vault address registration and report potential thefts
         let vaults_listener = maybe_run_task(
             !self.config.no_vault_theft_report,
@@ -626,8 +630,6 @@ impl VaultService {
         tracing::info!("Starting to listen for events...");
         let _ = tokio::join!(
             tokio::spawn(async move { restart_timer.await }),
-            // runs error listener to log errors
-            tokio::spawn(async move { err_listener.await }),
             // handles new registrations of this vault done externally
             tokio::spawn(async move { vault_id_registration_listener.await }),
             // replace & issue cancellation helpers
