@@ -99,15 +99,18 @@ jobs:
           TAG=$(echo $GITHUB_SHA | head -c7)
           TS=$(date +%s)
           echo ::set-output name=branch_name::$(echo ${GITHUB_REF##*/})
-          echo ::set-output name=tag::${TAG}
+          echo ::set-output name=tag::${{ matrix.client }}-${{ matrix.metadata }}-${TAG}
           echo ::set-output name=ts::${TS}
 
       - uses: actions/download-artifact@v3
         with:
-          name: ${{ matrix.client}}-${{ matrix.metadata }}
+          name: ${{ matrix.client }}-${{ matrix.metadata }}
+          path: artifacts/
 
       - run: |
-          find ./
+          find ./artifacts
+          mkdir -p ./target/release/
+          mv ./artifacts/${{ matrix.client }} ./target/release/${{ matrix.client }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -152,7 +155,7 @@ jobs:
           platforms: linux/amd64
           file: .deploy/Dockerfile
           build-args: |
-            BINARY=${{ matrix.client }}-${{ matrix.metadata }}
+            BINARY=${{ matrix.client }}
             PROFILE=release
 
   publish-draft-release:
