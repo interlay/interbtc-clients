@@ -377,6 +377,9 @@ pub trait UtilFuncs {
     /// Gets the current height of the parachain
     async fn get_current_chain_height(&self) -> Result<u32, Error>;
 
+    /// Gets the ID of the native currency.
+    fn get_native_currency_id(&self) -> CurrencyId;
+
     /// Get the address of the configured signer.
     fn get_account_id(&self) -> &AccountId;
 
@@ -388,6 +391,10 @@ impl UtilFuncs for InterBtcParachain {
     async fn get_current_chain_height(&self) -> Result<u32, Error> {
         let head = self.get_latest_block_hash().await?;
         Ok(self.api.storage().system().number(head).await?)
+    }
+
+    fn get_native_currency_id(&self) -> CurrencyId {
+        self.native_currency_id
     }
 
     fn get_account_id(&self) -> &AccountId {

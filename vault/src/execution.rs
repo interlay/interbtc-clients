@@ -565,6 +565,7 @@ mod tests {
         #[async_trait]
         pub trait UtilFuncs {
             async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
+            fn get_native_currency_id(&self) -> CurrencyId;
             fn get_account_id(&self) -> &AccountId;
             fn is_this_vault(&self, vault_id: &VaultId) -> bool;
         }

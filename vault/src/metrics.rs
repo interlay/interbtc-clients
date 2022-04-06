@@ -453,8 +453,8 @@ async fn publish_native_currency_balance<
         + UtilFuncs,
 >(
     parachain_rpc: &P,
-    native_currency: CurrencyId,
 ) {
+    let native_currency = parachain_rpc.get_native_currency_id();
     if let Ok(balance) = parachain_rpc.get_free_balance(native_currency).await {
         let balance = raw_value_as_currency(balance, native_currency);
         NATIVE_CURRENCY_BALANCE.set(balance);
@@ -611,13 +611,12 @@ pub async fn poll_metrics<
 >(
     parachain_rpc: P,
     vault_id_manager: VaultIdManager<B>,
-    native_currency: CurrencyId,
 ) -> Result<(), ServiceError> {
     let parachain_rpc = &parachain_rpc;
     let vault_id_manager = &vault_id_manager;
 
     loop {
-        publish_native_currency_balance(parachain_rpc, native_currency).await;
+        publish_native_currency_balance(parachain_rpc).await;
         publish_issue_count(parachain_rpc, vault_id_manager).await;
         publish_redeem_count(parachain_rpc, vault_id_manager).await;
 
@@ -662,7 +661,7 @@ pub async fn publish_expected_bitcoin_balance<
 pub async fn publish_tokio_metrics(
     mut metrics_iterators: HashMap<&str, impl Iterator<Item = TaskMetrics>>,
 ) -> Result<(), ServiceError> {
-    let frequency = std::time::Duration::from_millis(TOKIO_POLLING_INTERVAL_MS);
+    let frequency = Duration::from_millis(TOKIO_POLLING_INTERVAL_MS);
     loop {
         for (key, val) in metrics_iterators.iter_mut() {
             if let Some(task_metrics) = val.next() {
@@ -691,9 +690,9 @@ mod tests {
         PartialAddress, PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
-        AccountId, Balance, BlockNumber, BtcAddress, BtcPublicKey, Error as RuntimeError, InterBtcIssueRequest,
-        InterBtcRedeemRequest, InterBtcRefundRequest, InterBtcReplaceRequest, InterBtcVault, RequestIssueEvent, Token,
-        VaultId, VaultStatus, Wallet, DOT, H256, INTERBTC, INTR,
+        AccountId, Balance, BlockNumber, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError,
+        InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcRefundRequest, InterBtcReplaceRequest, InterBtcVault,
+        RequestIssueEvent, Token, VaultId, VaultStatus, Wallet, DOT, H256, INTERBTC, INTR,
     };
 
     mockall::mock! {
@@ -702,6 +701,7 @@ mod tests {
         #[async_trait]
         pub trait UtilFuncs {
             async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
+            fn get_native_currency_id(&self) -> CurrencyId;
             fn get_account_id(&self) -> &AccountId;
             fn is_this_vault(&self, vault_id: &VaultId) -> bool;
         }
@@ -838,6 +838,69 @@ mod tests {
         VaultId::new(AccountId::new([1u8; 32]), Token(DOT), Token(INTERBTC))
     }
 
+    struct MockProviderBuilder {
+        required: u128,
+        actual: u128,
+        max: u128,
+        issued_tokens: u128,
+        to_be_issued_tokens: u128,
+        to_be_redeemed_tokens: u128,
+    }
+
+    impl MockProviderBuilder {
+        pub fn new() -> Self {
+            Self {
+                required: 0,
+                actual: 0,
+                max: 0,
+                issued_tokens: 0,
+                to_be_issued_tokens: 0,
+                to_be_redeemed_tokens: 0,
+            }
+        }
+
+        pub fn set_required_collateral(mut self, required: u128) -> Self {
+            self.required = required;
+            self
+        }
+
+        pub fn set_actual_collateral(mut self, actual: u128) -> Self {
+            self.actual = actual;
+            self
+        }
+
+        pub fn set_max_free_balance(mut self, max: u128) -> Self {
+            self.max = max;
+            self
+        }
+
+        pub fn set_issued_tokens(mut self, issued_tokens: u128) -> Self {
+            self.issued_tokens = issued_tokens;
+            self
+        }
+
+        pub fn set_to_be_issued_tokens(mut self, to_be_issued_tokens: u128) -> Self {
+            self.to_be_issued_tokens = to_be_issued_tokens;
+            self
+        }
+
+        pub fn set_to_be_redeemed_tokens(mut self, to_be_redeemed_tokens: u128) -> Self {
+            self.to_be_redeemed_tokens = to_be_redeemed_tokens;
+            self
+        }
+
+        pub fn build(&self) -> MockProvider {
+            setup_mocks(
+                self.required,
+                self.actual,
+                self.max,
+                self.issued_tokens,
+                self.to_be_issued_tokens,
+                self.to_be_redeemed_tokens,
+            )
+        }
+    }
+
     fn setup_mocks(
         required: u128,
         actual: u128,
@@ -915,7 +978,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_metrics_average_bitcoin_balance_bounds() {
-        let parachain_rpc = setup_mocks(50, 75, 100, 1200000000, 100000000, 300000000);
+        let parachain_rpc = MockProviderBuilder::new()
+            .set_required_collateral(50)
+            .set_actual_collateral(75)
+            .set_max_free_balance(100)
+            .set_issued_tokens(1200000000)
+            .set_to_be_issued_tokens(100000000)
+            .set_to_be_redeemed_tokens(300000000)
+            .build();
         let btc_rpc = MockBitcoin::default();
         let vault_data = VaultData {
             vault_id: dummy_vault_id(),
@@ -970,7 +1040,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_metrics_total_collateral() {
-        let parachain_rpc = setup_mocks(50, 75, 100, 1200000000, 100000000, 300000000);
+        let parachain_rpc = MockProviderBuilder::new()
+            .set_required_collateral(50)
+            .set_actual_collateral(75)
+            .set_max_free_balance(100)
+            .set_issued_tokens(1200000000)
+            .set_to_be_issued_tokens(100000000)
+            .set_to_be_redeemed_tokens(300000000)
+            .build();
         let btc_rpc = MockBitcoin::default();
         let vault_data = VaultData {
             vault_id: dummy_vault_id(),
@@ -1009,7 +1086,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_metrics_required_collateral() {
-        let parachain_rpc = setup_mocks(50, 75, 100, 1200000000, 100000000, 300000000);
+        let parachain_rpc = MockProviderBuilder::new()
+            .set_required_collateral(50)
+            .set_actual_collateral(75)
+            .set_max_free_balance(100)
+            .set_issued_tokens(1200000000)
+            .set_to_be_issued_tokens(100000000)
+            .set_to_be_redeemed_tokens(300000000)
+            .build();
+
         let btc_rpc = MockBitcoin::default();
         let vault_data = VaultData {
             vault_id: dummy_vault_id(),
@@ -1025,9 +1110,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_metrics_native_currency_balance() {
-        let parachain_rpc = setup_mocks(50, 75, 100, 1200000000, 100000000, 300000000);
+        let mut parachain_rpc = MockProviderBuilder::new()
+            .set_required_collateral(50)
+            .set_actual_collateral(75)
+            .set_max_free_balance(100)
+            .set_issued_tokens(1200000000)
+            .set_to_be_issued_tokens(100000000)
+            .set_to_be_redeemed_tokens(300000000)
+            .build();
 
-        publish_native_currency_balance(&parachain_rpc, Token(INTR)).await;
+        parachain_rpc
+            .expect_get_native_currency_id()
+            .returning(move || Token(INTR));
+
+        publish_native_currency_balance(&parachain_rpc).await;
 
         let native_currency_balance = NATIVE_CURRENCY_BALANCE.get();
         assert_eq!(native_currency_balance, 0.0000000025);
@@ -1035,7 +1131,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_metrics_issue_count() {
-        let mut parachain_rpc = setup_mocks(50, 75, 100, 1200000000, 100000000, 300000000);
+        let mut parachain_rpc = MockProviderBuilder::new()
+            .set_required_collateral(50)
+            .set_actual_collateral(75)
+            .set_max_free_balance(100)
+            .set_issued_tokens(1200000000)
+            .set_to_be_issued_tokens(100000000)
+            .set_to_be_redeemed_tokens(300000000)
+            .build();
         parachain_rpc.expect_get_vault_issue_requests().returning(move |_| {
             Ok(vec![
                 (
@@ -1084,7 +1187,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_metrics_redeem_count() {
-        let mut parachain_rpc = setup_mocks(50, 75, 100, 1200000000, 100000000, 300000000);
+        let mut parachain_rpc = MockProviderBuilder::new()
+            .set_required_collateral(50)
+            .set_actual_collateral(75)
+            .set_max_free_balance(100)
+            .set_issued_tokens(1200000000)
+            .set_to_be_issued_tokens(100000000)
+            .set_to_be_redeemed_tokens(300000000)
+            .build();
         parachain_rpc.expect_get_vault_redeem_requests().returning(move |_| {
             Ok(vec![
                 (

@@ -328,7 +328,7 @@ mod tests {
     use async_trait::async_trait;
     use futures::channel::mpsc;
     use runtime::{
-        AccountId, BtcAddress, BtcPublicKey, ErrorCode, InterBtcIssueRequest, InterBtcReplaceRequest,
+        AccountId, BtcAddress, BtcPublicKey, CurrencyId, ErrorCode, InterBtcIssueRequest, InterBtcReplaceRequest,
         IssueRequestStatus, RequestIssueEvent, StatusCode, Token, VaultId, DOT, INTERBTC,
     };
     use std::collections::BTreeSet;
@@ -375,6 +375,7 @@ mod tests {
         #[async_trait]
         pub trait UtilFuncs {
             async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
+            fn get_native_currency_id(&self) -> CurrencyId;
             fn get_account_id(&self) -> &AccountId;
             fn is_this_vault(&self, vault_id: &VaultId) -> bool;
         }
