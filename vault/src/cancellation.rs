@@ -24,7 +24,6 @@ pub enum Event {
 pub struct CancellationScheduler<P: IssuePallet + ReplacePallet + UtilFuncs + Clone> {
     parachain_rpc: P,
     vault_id: AccountId,
-    period: Option<u32>,
     parachain_height: BlockNumber,
     bitcoin_height: u32,
 }
@@ -40,6 +39,7 @@ pub struct UnconvertedOpenTime {
     id: H256,
     parachain_open_height: u32,
     bitcoin_open_height: u32,
+    period: u32,
 }
 
 #[derive(PartialEq, Debug)]
@@ -89,6 +89,7 @@ impl<P: IssuePallet + ReplacePallet + Clone + Send + Sync> Canceller<P> for Issu
                 id: *id,
                 parachain_open_height: issue.opentime,
                 bitcoin_open_height: issue.btc_height,
+                period: issue.period,
             })
             .collect();
         Ok(ret)
@@ -128,6 +129,7 @@ impl<P: IssuePallet + ReplacePallet + Send + Sync> Canceller<P> for ReplaceCance
                 id: *id,
                 parachain_open_height: replace.accept_time,
                 bitcoin_open_height: replace.btc_height,
+                period: replace.period,
             })
             .collect();
         Ok(ret)
@@ -177,7 +179,6 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
         CancellationScheduler {
             parachain_rpc,
             vault_id,
-            period: None,
             bitcoin_height,
             parachain_height,
         }
@@ -278,7 +279,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
         }
 
         // get current block height and request period
-        let period = self.get_cached_period::<T>().await?;
+        let global_period = T::get_period(&self.parachain_rpc).await?;
 
         let ret = open_requests
             .iter()
@@ -287,7 +288,10 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
                      id,
                      parachain_open_height,
                      bitcoin_open_height,
+                     period: local_period,
                  }| {
+                    let period = global_period.max(*local_period);
+
                     let parachain_deadline_height = parachain_open_height
                         .checked_add(period)
                         .ok_or(Error::ArithmeticOverflow)?;
@@ -306,19 +310,6 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
             .collect::<Result<Vec<ActiveRequest>, Error>>()?;
 
         Ok(ret)
-    }
-
-    /// Cached function to get the issue/replace period, in number of blocks until
-    /// it is allowed to be canceled
-    async fn get_cached_period<T: Canceller<P>>(&mut self) -> Result<u32, Error> {
-        match self.period {
-            Some(x) => Ok(x),
-            None => {
-                let ret = T::get_period(&self.parachain_rpc).await?;
-                self.period = Some(ret);
-                Ok(ret)
-            }
-        }
     }
 }
 
@@ -709,6 +700,100 @@ mod tests {
                 .handle_cancellation::<IssueCanceller>(replace_event_rx)
                 .await,
             RuntimeError::ChannelClosed
+        );
+    }
+
+    #[tokio::test]
+    async fn test_period_increase() {
+        let mut parachain_rpc = MockProvider::default();
+        parachain_rpc.expect_get_vault_issue_requests().returning(|_| {
+            Ok(vec![(
+                H256::from_slice(&[1; 32]),
+                InterBtcIssueRequest {
+                    opentime: 10_000,
+                    btc_height: 100,
+                    period: 1_000,
+                    ..default_issue_request()
+                },
+            )])
+        });
+
+        // simulate the period increase: a cancel will return an error
+        parachain_rpc.expect_get_issue_period().once().returning(|| Ok(1000));
+        parachain_rpc.expect_get_issue_period().returning(|| Ok(2000));
+        // normally cancelling prematurely would return issue.TimeNotExpired, but that is difficult to construct..
+        parachain_rpc
+            .expect_cancel_issue()
+            .returning(|_| Err(RuntimeError::BlockNotFound));
+
+        let mut active_processes: Vec<ActiveRequest> = vec![];
+        let mut cancellation_scheduler =
+            CancellationScheduler::new(parachain_rpc, 10_001, 200, AccountId::new([1u8; 32]));
+
+        // deadline is at parachain_height = 11_000 and bitcoin_height = 120, so not yet expired..
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::ParachainBlock(10_500), &mut active_processes, ListState::Invalid)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            active_processes,
+            vec![ActiveRequest {
+                id: H256::from_slice(&[1; 32]),
+                parachain_deadline_height: 11_000,
+                bitcoin_deadline_height: 120,
+            }]
+        );
+
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::ParachainBlock(11_500), &mut active_processes, ListState::Invalid)
+            .await
+            .unwrap();
+        assert_eq!(
+            active_processes,
+            vec![ActiveRequest {
+                id: H256::from_slice(&[1; 32]),
+                parachain_deadline_height: 12_000,
+                bitcoin_deadline_height: 140,
+            }]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_period_decreased() {
+        let mut parachain_rpc = MockProvider::default();
+        parachain_rpc.expect_get_vault_issue_requests().returning(|_| {
+            Ok(vec![(
+                H256::from_slice(&[1; 32]),
+                InterBtcIssueRequest {
+                    opentime: 10_000,
+                    btc_height: 100,
+                    period: 1_000,
+                    ..default_issue_request()
+                },
+            )])
+        });
+
+        parachain_rpc.expect_get_issue_period().once().returning(|| Ok(500));
+
+        let mut active_processes: Vec<ActiveRequest> = vec![];
+        let mut cancellation_scheduler =
+            CancellationScheduler::new(parachain_rpc, 10_001, 200, AccountId::new([1u8; 32]));
+
+        // deadline is at parachain_height = 11_000 and bitcoin_height = 120, so not yet expired..
+        cancellation_scheduler
+            .process_event::<IssueCanceller>(Event::ParachainBlock(10_500), &mut active_processes, ListState::Invalid)
+            .await
+            .unwrap();
+
+        // check that the issue's period of 1000 is used rather than the global period of 500
+        assert_eq!(
+            active_processes,
+            vec![ActiveRequest {
+                id: H256::from_slice(&[1; 32]),
+                parachain_deadline_height: 11_000,
+                bitcoin_deadline_height: 120,
+            }]
         );
     }
 }

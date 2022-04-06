@@ -174,7 +174,7 @@ pub trait BitcoinCoreApi {
 
     async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error>;
 
-    async fn rescan_blockchain(&self, start_height: usize) -> Result<(), Error>;
+    async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error>;
 
     async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
 
@@ -605,8 +605,8 @@ impl BitcoinCoreApi for BitcoinCore {
         let txids = self.rpc.get_raw_mempool()?;
         // map txid to the actual Transaction structs
         let iterator = txids.into_iter().filter_map(move |txid| {
-            match self.rpc.get_raw_transaction_info(&txid, None) {
-                Ok(x) => Some(x.transaction().map_err(Into::into)),
+            match self.rpc.get_raw_transaction(&txid, None) {
+                Ok(x) => Some(Ok(x)),
                 Err(e) if err_not_in_mempool(&e) => None, // not in mempool anymore, so filter out
                 Err(e) => Some(Err(e.into())),            // unknown error, propagate to user
             }
@@ -805,8 +805,8 @@ impl BitcoinCoreApi for BitcoinCore {
             .await
     }
 
-    async fn rescan_blockchain(&self, start_height: usize) -> Result<(), Error> {
-        self.rpc.rescan_blockchain(Some(start_height), None)?;
+    async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error> {
+        self.rpc.rescan_blockchain(Some(start_height), Some(end_height))?;
         Ok(())
     }
 

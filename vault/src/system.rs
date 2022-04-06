@@ -30,6 +30,7 @@ pub const VERSION: &str = git_version!(args = ["--tags"]);
 pub const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 pub const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
+const RESTART_INTERVAL: Duration = Duration::from_secs(10800); // restart every 3 hours
 
 #[derive(Parser, Clone, Debug)]
 pub struct VaultServiceConfig {
@@ -394,6 +395,18 @@ impl VaultService {
         };
         tracing::info!("Using {} bitcoin confirmations", num_confirmations);
 
+        // Subscribe to an event (any event will do) so that a period of inactivity does not close the jsonrpsee
+        // connection
+        tracing::info!("Subscribing to error events...");
+        let err_provider = self.btc_parachain.clone();
+        let err_listener = wait_or_shutdown(self.shutdown.clone(), async move {
+            err_provider
+                .on_event_error(|e| tracing::debug!("Received error event: {}", e))
+                .await?;
+            Ok(())
+        });
+        tokio::task::spawn(err_listener);
+
         self.maybe_register_vault().await?;
 
         // purposefully _after_ maybe_register_vault and _before_ other calls
@@ -563,14 +576,6 @@ impl VaultService {
             ),
         );
 
-        let err_provider = self.btc_parachain.clone();
-        let err_listener = wait_or_shutdown(self.shutdown.clone(), async move {
-            err_provider
-                .on_event_error(|e| tracing::debug!("Received error event: {}", e))
-                .await?;
-            Ok(())
-        });
-
         // watch vault address registration and report potential thefts
         let vaults_listener = maybe_run_task(
             !self.config.no_vault_theft_report,
@@ -615,7 +620,6 @@ impl VaultService {
             ),
         );
 
-        let error_listener_monitor = tokio_metrics::TaskMonitor::new();
         let vault_id_registration_listener_monitor = tokio_metrics::TaskMonitor::new();
         let parachain_block_listener_monitor = tokio_metrics::TaskMonitor::new();
         let bitcoin_block_listener_monitor = tokio_metrics::TaskMonitor::new();
@@ -635,7 +639,6 @@ impl VaultService {
         let bridge_metrics_listener_monitor = tokio_metrics::TaskMonitor::new();
 
         let metrics_iterators = HashMap::from([
-            ("Error Listener", error_listener_monitor.clone().intervals()),
             (
                 "Vault ID Registration Listener",
                 vault_id_registration_listener_monitor.clone().intervals(),
@@ -695,12 +698,17 @@ impl VaultService {
         ]);
 
         let tokio_metrics_publisher = wait_or_shutdown(self.shutdown.clone(), publish_tokio_metrics(metrics_iterators));
+        let restart_timer = wait_or_shutdown(self.shutdown.clone(), async move {
+            tokio::time::sleep(RESTART_INTERVAL).await;
+            tracing::info!("Initiating periodic restart...");
+            Err(service::Error::ClientShutdown)
+        });
 
         // starts all the tasks
         tracing::info!("Starting to listen for events...");
         let _ = tokio::join!(
             // runs error listener to log errors
-            tokio::spawn(async move { error_listener_monitor.instrument(async { err_listener.await }).await }),
+            tokio::spawn(async move { restart_timer.await }),
             // handles new registrations of this vault done externally
             tokio::spawn(async move {
                 vault_id_registration_listener_monitor

@@ -78,7 +78,7 @@ async fn start() -> Result<(), Error> {
 #[tokio::main]
 async fn main() {
     let exit_code = if let Err(err) = start().await {
-        eprintln!("Error: {}", err);
+        tracing::error!("Exiting: {}", err);
         1
     } else {
         0

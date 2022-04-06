@@ -400,7 +400,13 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
     // iterate through transactions in reverse order, starting from those in the mempool
     let mut transaction_stream = bitcoin::reverse_stream_transactions(&read_only_btc_rpc, btc_start_height).await?;
     while let Some(result) = transaction_stream.next().await {
-        let tx = result?;
+        let tx = match result {
+            Ok(x) => x,
+            Err(e) => {
+                tracing::warn!("Failed to process transaction: {}", e);
+                continue;
+            }
+        };
 
         // get the request this transaction corresponds to, if any
         if let Some(request) = get_request_for_btc_tx(&tx, &open_requests) {
@@ -675,7 +681,7 @@ mod tests {
             async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;
             async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError> where P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), BitcoinError>;
-            async fn rescan_blockchain(&self, start_height: usize) -> Result<(), BitcoinError>;
+            async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), BitcoinError>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError>;
             fn get_utxo_count(&self) -> Result<usize, BitcoinError>;
         }
