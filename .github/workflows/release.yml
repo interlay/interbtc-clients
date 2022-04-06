@@ -57,21 +57,21 @@ jobs:
           command: test
           args: --release --workspace --features ${{ matrix.metadata }}
       - name: upload artifacts - vault
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
-          name: vault-${{ matrix.metadata }}-${{ github.sha }}
+          name: vault-${{ matrix.metadata }}
           path: target/release/vault
           retention-days: 10
       - name: upload artifacts - oracle
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
-          name: oracle-${{ matrix.metadata }}-${{ github.sha }}
+          name: oracle-${{ matrix.metadata }}
           path: target/release/oracle
           retention-days: 10
       - name: upload artifacts - faucet
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
-          name: faucet-${{ matrix.metadata }}-${{ github.sha }}
+          name: faucet-${{ matrix.metadata }}
           path: target/release/faucet
           retention-days: 10
 
@@ -96,6 +96,13 @@ jobs:
           echo ::set-output name=branch_name::$(echo ${GITHUB_REF##*/})
           echo ::set-output name=tag::${TAG}
           echo ::set-output name=ts::${TS}
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: ${{ matrix.client}}-${{ matrix.metadata }}
+
+      - run: |
+          find ./
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -141,7 +148,7 @@ jobs:
           file: .deploy/Dockerfile
           build-args: |
             BINARY=${{ matrix.client }}-${{ matrix.metadata }}
-            PROFILE=x86_64-unknown-linux-gnu/release
+            PROFILE=release
 
   publish-draft-release:
     if: github.ref_type == 'tag'
