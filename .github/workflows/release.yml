@@ -49,6 +49,11 @@ jobs:
         with:
           command: check
           args: --release --workspace --features ${{ matrix.metadata }}
+      - name: build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --workspace --features ${{ matrix.metadata }}
       - name: test
         uses: actions-rs/cargo@v1
         env:
