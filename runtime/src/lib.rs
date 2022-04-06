@@ -34,6 +34,7 @@ pub use rpc::{
     RefundPallet, RelayPallet, ReplacePallet, SecurityPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
 };
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
+use std::time::Duration;
 pub use subxt::{
     sp_core::{crypto::Ss58Codec, sr25519::Pair},
     Signer,
@@ -42,6 +43,7 @@ pub use types::*;
 
 pub const TX_FEES: u128 = 2000000000;
 pub const MILLISECS_PER_BLOCK: u64 = 12000;
+pub const BLOCK_INTERVAL: Duration = Duration::from_millis(MILLISECS_PER_BLOCK);
 
 pub const BTC_RELAY_MODULE: &str = "BTCRelay";
 pub const ISSUE_MODULE: &str = "Issue";
