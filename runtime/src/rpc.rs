@@ -16,11 +16,9 @@ use primitives::UnsignedFixedPoint;
 use sp_runtime::FixedPointNumber;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 use subxt::{
-    events::EventSubscription,
-    extrinsic::Signer,
     rpc::{rpc_params, ClientT},
-    BasicError, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Event, Metadata, RpcClient,
-    SubstrateExtrinsicParams, TransactionEvents, TransactionProgress,
+    BasicError, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Event, RpcClient, SubstrateExtrinsicParams,
+    TransactionEvents, TransactionProgress,
 };
 use tokio::{
     sync::RwLock,
@@ -42,13 +40,11 @@ cfg_if::cfg_if! {
 type RuntimeApi = metadata::RuntimeApi<InterBtcRuntime, SubstrateExtrinsicParams<InterBtcRuntime>>;
 pub(crate) type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
 
-#[derive(Clone)]
 pub struct InterBtcParachain {
     ext_client: SubxtClient<InterBtcRuntime>,
     signer: Arc<RwLock<InterBtcSigner>>,
     account_id: AccountId,
     api: Arc<RuntimeApi>,
-    metadata: Arc<Metadata>,
     shutdown_tx: ShutdownSender,
     pub native_currency_id: CurrencyId,
     pub relay_chain_currency_id: CurrencyId,
@@ -64,7 +60,6 @@ impl InterBtcParachain {
         let account_id = signer.account_id().clone();
         let ext_client = SubxtClientBuilder::new().set_client(rpc_client).build().await?;
         let api: RuntimeApi = ext_client.clone().to_runtime_api();
-        let metadata = Arc::new(ext_client.rpc().metadata().await?);
 
         let runtime_version = ext_client.rpc().runtime_version(None).await?;
         if runtime_version.spec_version == DEFAULT_SPEC_VERSION {
@@ -85,7 +80,6 @@ impl InterBtcParachain {
         let parachain_rpc = Self {
             ext_client,
             api: Arc::new(api),
-            metadata,
             signer: Arc::new(RwLock::new(signer)),
             account_id,
             shutdown_tx,
@@ -231,18 +225,15 @@ impl InterBtcParachain {
     /// # Arguments
     /// * `on_error` - callback for decoding errors, is not allowed to take too long
     pub async fn on_event_error<E: Fn(BasicError)>(&self, on_error: E) -> Result<(), Error> {
-        // let sub = self.ext_client.rpc().subscribe_finalized_events().await?;
-        // // let decoder = EventsDecoder::<InterBtcRuntime>::new((*self.metadata).clone());
+        let mut sub = self.api.events().subscribe_finalized().await?;
 
-        // let mut sub = EventSubscription::<_, InterBtcRuntime, _>::new(self.ext_client.rpc(), sub);
-        // loop {
-        //     match sub.next().await {
-        //         Some(Err(err)) => on_error(err), // report error
-        //         Some(Ok(_)) => {}                // do nothing
-        //         None => break Ok(()),            // end of stream
-        //     }
-        // }
-        Ok(())
+        loop {
+            match sub.next().await {
+                Some(Err(err)) => on_error(err), // report error
+                Some(Ok(_)) => {}                // do nothing
+                None => break Ok(()),            // end of stream
+            }
+        }
     }
 
     /// Subscription service that should listen forever, only returns if the initial subscription
@@ -263,50 +254,42 @@ impl InterBtcParachain {
         R: Future<Output = ()>,
         E: Fn(SubxtError),
     {
-        // let sub = self.ext_client.rpc().subscribe_finalized_events().await?;
-        // sub.filter_event::<T>();
+        let mut sub = self.api.events().subscribe_finalized().await?.filter_events::<(T,)>();
+        let (tx, mut rx) = futures::channel::mpsc::channel::<T>(32);
 
-        // let (tx, mut rx) = futures::channel::mpsc::channel::<T>(32);
-
-        // // two tasks: one for event listening and one for callback calling
-        // futures::future::try_join(
-        //     async move {
-        //         let tx = &tx;
-        //         while let Some(result) = sub.next().fuse().await {
-        //             if let Ok(raw_event) = result {
-        //                 log::trace!("raw event: {:?}", raw_event);
-        //                 let decoded = T::decode(&mut &raw_event.data[..]);
-        //                 match decoded {
-        //                     Ok(event) => {
-        //                         log::trace!("decoded event: {:?}", event);
-        //                         // send the event to the other task
-        //                         if tx.clone().send(event).await.is_err() {
-        //                             break;
-        //                         }
-        //                     }
-        //                     Err(err) => {
-        //                         on_error(err.into());
-        //                     }
-        //                 };
-        //             }
-        //         }
-        //         Result::<(), _>::Err(Error::ChannelClosed)
-        //     },
-        //     async move {
-        //         loop {
-        //             // block until we receive an event from the other task
-        //             match rx.next().fuse().await {
-        //                 Some(event) => {
-        //                     on_event(event).await;
-        //                 }
-        //                 None => {
-        //                     return Result::<(), _>::Err(Error::ChannelClosed);
-        //                 }
-        //             }
-        //         }
-        //     },
-        // )
-        // .await?;
+        // two tasks: one for event listening and one for callback calling
+        futures::future::try_join(
+            async move {
+                let tx = &tx;
+                while let Some(result) = sub.next().fuse().await {
+                    match result {
+                        Ok(event_details) => {
+                            let event = event_details.event;
+                            log::trace!("event: {:?}", event);
+                            if tx.clone().send(event).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(err) => on_error(err.into()),
+                    }
+                }
+                Result::<(), _>::Err(Error::ChannelClosed)
+            },
+            async move {
+                loop {
+                    // block until we receive an event from the other task
+                    match rx.next().fuse().await {
+                        Some(event) => {
+                            on_event(event).await;
+                        }
+                        None => {
+                            return Result::<(), _>::Err(Error::ChannelClosed);
+                        }
+                    }
+                }
+            },
+        )
+        .await?;
 
         Ok(())
     }

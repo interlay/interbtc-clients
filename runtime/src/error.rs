@@ -9,12 +9,7 @@ use jsonrpsee::{
 };
 use prometheus::Error as PrometheusError;
 use serde_json::Error as SerdeJsonError;
-use std::{
-    array::TryFromSliceError,
-    fmt::{Debug, Display},
-    io::Error as IoError,
-    num::TryFromIntError,
-};
+use std::{array::TryFromSliceError, fmt::Debug, io::Error as IoError, num::TryFromIntError};
 use subxt::{sp_core::crypto::SecretStringError, BasicError, ModuleError, TransactionError};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
