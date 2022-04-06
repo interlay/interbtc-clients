@@ -115,13 +115,3 @@ build-docker-images:
                 --destination ${DOCKER_REGISTRY_IMAGE}:${ARTIFACT_BIN}-${METADATA}-${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}-$(date +%s) \
                 --destination ${DOCKER_REGISTRY_IMAGE}:${ARTIFACT_BIN}-${METADATA}-${CI_COMMIT_REF_SLUG}
     <<: *only_refs
-
-release-github:
-    stage: release
-    image: registry.gitlab.com/interlay/containers/github-publisher:master
-    script:
-        - gh auth status
-        - git-chglog --output CHANGELOG.md $CI_COMMIT_TAG
-        - gh release -R https://github.com/interlay/interbtc-clients create $CI_COMMIT_TAG --title $CI_COMMIT_TAG -F CHANGELOG.md -d target/x86_64-unknown-linux-gnu/release/*
-    only:
-        - tags

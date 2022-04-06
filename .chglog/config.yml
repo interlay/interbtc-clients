@@ -17,6 +17,10 @@ options:
     #   fix: Bug Fixes
     #   perf: Performance Improvements
     #   refactor: Code Refactoring
+  merges:
+    pattern: "^Merge pull request #(\\d+) from (.*)$"
+    pattern_maps:
+      - Source
   header:
     pattern: "^(\\w*)[!]?\\:\\s(.*)$"
     pattern_maps:
