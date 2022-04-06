@@ -10,8 +10,8 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
-// #[cfg(all(feature = "testing-utils", feature = "standalone-metadata"))]
-// pub mod integration;
+#[cfg(all(feature = "testing-utils", feature = "standalone-metadata"))]
+pub mod integration;
 
 use codec::{Decode, Encode};
 use sp_std::marker::PhantomData;

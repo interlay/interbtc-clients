@@ -344,7 +344,7 @@ impl InterBtcParachain {
             .tx()
             .tokens()
             .transfer(recipient.clone(), Token(DOT), 100)
-            .sign_and_submit(&signer.clone())
+            .sign_and_submit_default(&signer.clone())
             .await
             .unwrap();
 

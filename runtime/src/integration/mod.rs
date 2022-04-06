@@ -12,7 +12,7 @@ use futures::{
     future::{try_join, Either},
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use subxt::Event;
 use subxt_client::{AccountKeyring, DatabaseSource, KeystoreConfig, Role, SubxtClientConfig, WasmExecutionMethod};
 use tempdir::TempDir;
@@ -87,13 +87,15 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
 }
 
 /// Create a new parachain_rpc with the given keyring
-pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> InterBtcParachain {
+pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> Arc<InterBtcParachain> {
     let signer = InterBtcSigner::new(key.pair());
     let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
 
-    InterBtcParachain::new(client, signer, shutdown_tx)
-        .await
-        .expect("Error creating parachain_rpc")
+    Arc::new(
+        InterBtcParachain::new(client, signer, shutdown_tx)
+            .await
+            .expect("Error creating parachain_rpc"),
+    )
 }
 
 /// request, pay and execute an issue
@@ -156,7 +158,7 @@ pub async fn get_required_vault_collateral_for_issue(
 }
 
 /// wait for an event to occur. After the specified error, this will panic. This returns the event.
-pub async fn assert_event<T, F>(duration: Duration, parachain_rpc: InterBtcParachain, f: F) -> T
+pub async fn assert_event<T, F>(duration: Duration, parachain_rpc: Arc<InterBtcParachain>, f: F) -> T
 where
     T: Event + Clone + std::fmt::Debug,
     F: Fn(T) -> bool,

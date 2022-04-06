@@ -1,4 +1,4 @@
-use async_std::task;
+use async_std::{sync::Mutex, task};
 use futures::{
     channel::mpsc,
     future::{select, FutureExt},
@@ -19,6 +19,7 @@ use sc_service::{
     ChainSpec, Configuration, KeepBlocks, RpcHandlers, RpcSession, TaskManager,
 };
 pub use sp_keyring::AccountKeyring;
+use std::sync::Arc;
 use thiserror::Error;
 
 /// Error thrown by the client.
@@ -33,17 +34,20 @@ pub enum SubxtClientError {
 }
 
 /// Sending end.
-pub struct Sender(mpsc::UnboundedSender<String>);
+#[derive(Clone)]
+pub struct Sender(Arc<Mutex<mpsc::UnboundedSender<String>>>);
 
 /// Receiving end
-pub struct Receiver(mpsc::UnboundedReceiver<String>);
+#[derive(Clone)]
+pub struct Receiver(Arc<Mutex<mpsc::UnboundedReceiver<String>>>);
 
 #[async_trait]
 impl TransportSenderT for Sender {
     type Error = SubxtClientError;
 
     async fn send(&mut self, msg: String) -> Result<(), Self::Error> {
-        self.0.send(msg).await?;
+        let mut lock = self.0.lock().await;
+        lock.send(msg).await?;
         Ok(())
     }
 }
@@ -53,12 +57,14 @@ impl TransportReceiverT for Receiver {
     type Error = SubxtClientError;
 
     async fn receive(&mut self) -> Result<String, Self::Error> {
-        let msg = self.0.next().await.expect("channel should be open");
+        let mut lock = self.0.lock().await;
+        let msg = lock.next().await.expect("channel should be open");
         Ok(msg)
     }
 }
 
 /// Client for an embedded substrate node.
+#[derive(Clone)]
 pub struct SubxtClient {
     sender: Sender,
     receiver: Receiver,
@@ -92,8 +98,8 @@ impl SubxtClient {
         );
 
         Self {
-            sender: Sender(to_back),
-            receiver: Receiver(from_back),
+            sender: Sender(Arc::new(Mutex::new(to_back))),
+            receiver: Receiver(Arc::new(Mutex::new(from_back))),
         }
     }
 
