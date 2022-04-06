@@ -15,7 +15,7 @@ use std::{
     io::Error as IoError,
     num::TryFromIntError,
 };
-use subxt::{sp_core::crypto::SecretStringError, BasicError, TransactionError};
+use subxt::{sp_core::crypto::SecretStringError, BasicError, ModuleError, TransactionError};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
 use url::ParseError as UrlParseError;
@@ -71,7 +71,7 @@ pub enum Error {
     #[error("Error converting: {0}")]
     Convert(#[from] TryFromIntError),
     #[error("Subxt runtime error: {0}")]
-    SubxtRuntimeError(#[from] OuterSubxtError),
+    SubxtRuntimeError(#[from] SubxtError),
     #[error("Error decoding: {0}")]
     CodecError(#[from] CodecError),
     #[error("Error encoding json data: {0}")]
@@ -88,75 +88,34 @@ pub enum Error {
 
 impl From<BasicError> for Error {
     fn from(err: BasicError) -> Self {
-        Self::SubxtRuntimeError(OuterSubxtError(err.into()))
-    }
-}
-
-impl From<SubxtError> for Error {
-    fn from(err: SubxtError) -> Self {
-        Self::SubxtRuntimeError(OuterSubxtError(err))
-    }
-}
-
-// hacky workaround to pretty print runtime errors
-#[derive(Debug)]
-pub struct OuterSubxtError(pub SubxtError);
-
-impl From<SubxtError> for OuterSubxtError {
-    fn from(err: SubxtError) -> Self {
-        Self(err)
-    }
-}
-
-impl std::error::Error for OuterSubxtError {}
-
-impl Display for OuterSubxtError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.0 {
-            subxt::Error::Runtime(err) => {
-                // if let Some(ErrorDetails { error, pallet, .. }) = err.clone().inner().details() {
-                //     write!(f, "{} from {}", error, pallet)
-                // } else {
-                Debug::fmt(&err, f)
-                // }
-            }
-            err => Display::fmt(&err, f),
-        }
+        Self::SubxtRuntimeError(err.into())
     }
 }
 
 impl Error {
-    fn is_runtime_err(&self, pallet_name: &str, error_name: &str) -> bool {
-        // matches!(
-        //     self,
-        //     Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Runtime(runtime_error)))
-        //     if matches!(
-        //         runtime_error.clone().inner().details(),
-        //         Some(ErrorDetails {
-        //             pallet,
-        //             error,
-        //             ..
-        //         })
-        //         if pallet == pallet_name && error == error_name
-        //     )
-        // )
-        true
+    fn is_module_err(&self, pallet_name: &str, error_name: &str) -> bool {
+        matches!(
+            self,
+            Error::SubxtRuntimeError(SubxtError::Module(ModuleError {
+                pallet, error, ..
+            })) if pallet == pallet_name && error == error_name,
+        )
     }
 
     pub fn is_duplicate_block(&self) -> bool {
-        self.is_runtime_err(BTC_RELAY_MODULE, &format!("{:?}", BtcRelayPalletError::DuplicateBlock))
+        self.is_module_err(BTC_RELAY_MODULE, &format!("{:?}", BtcRelayPalletError::DuplicateBlock))
     }
 
     pub fn is_invalid_chain_id(&self) -> bool {
-        self.is_runtime_err(BTC_RELAY_MODULE, &format!("{:?}", BtcRelayPalletError::InvalidChainID))
+        self.is_module_err(BTC_RELAY_MODULE, &format!("{:?}", BtcRelayPalletError::InvalidChainID))
     }
 
     pub fn is_issue_completed(&self) -> bool {
-        self.is_runtime_err(ISSUE_MODULE, &format!("{:?}", IssuePalletError::IssueCompleted))
+        self.is_module_err(ISSUE_MODULE, &format!("{:?}", IssuePalletError::IssueCompleted))
     }
 
     pub fn is_valid_refund(&self) -> bool {
-        self.is_runtime_err(RELAY_MODULE, &format!("{:?}", RelayPalletError::ValidRefundTransaction))
+        self.is_module_err(RELAY_MODULE, &format!("{:?}", RelayPalletError::ValidRefundTransaction))
     }
 
     fn map_call_error<T>(
@@ -165,8 +124,8 @@ impl Error {
         other: impl Fn(&String) -> Option<T>,
     ) -> Option<T> {
         match self {
-            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(RequestError::Call(err)))) => call(err),
-            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(RequestError::Request(message)))) => {
+            Error::SubxtRuntimeError(SubxtError::Rpc(RequestError::Call(err))) => call(err),
+            Error::SubxtRuntimeError(SubxtError::Rpc(RequestError::Request(message))) => {
                 if let Ok(error_response) = serde_json::from_str::<ErrorResponse>(message) {
                     call(&CallError::Custom {
                         code: error_response.error.code.code(),
@@ -231,20 +190,18 @@ impl Error {
     pub fn is_rpc_disconnect_error(&self) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(JsonRpseeError::RestartNeeded(_))))
+            Error::SubxtRuntimeError(SubxtError::Rpc(JsonRpseeError::RestartNeeded(_)))
         )
     }
 
     pub fn is_rpc_error(&self) -> bool {
-        matches!(self, Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(_))))
+        matches!(self, Error::SubxtRuntimeError(SubxtError::Rpc(_)))
     }
 
     pub fn is_block_hash_not_found_error(&self) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Transaction(
-                TransactionError::BlockHashNotFound
-            )))
+            Error::SubxtRuntimeError(SubxtError::Transaction(TransactionError::BlockHashNotFound))
         )
     }
 
@@ -257,7 +214,7 @@ impl Error {
     }
 
     pub fn is_parachain_shutdown_error(&self) -> bool {
-        self.is_runtime_err(SYSTEM_MODULE, &format!("{:?}", SystemPalletError::CallFiltered))
+        self.is_module_err(SYSTEM_MODULE, &format!("{:?}", SystemPalletError::CallFiltered))
     }
 }
 
