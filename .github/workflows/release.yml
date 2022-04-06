@@ -76,7 +76,7 @@ jobs:
           retention-days: 10
 
   build_docker:
-    if: github.ref_type == 'tag' || contains(['master', 'dev', 'release-notes'], github.ref_name)
+    if: github.ref_type == 'tag' || contains(fromJson(['master', 'dev', 'release-notes']), github.ref_name)
     runs-on: [self-hosted, linux]
     strategy:
       matrix:
