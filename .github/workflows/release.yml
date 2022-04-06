@@ -77,6 +77,7 @@ jobs:
 
   build_docker:
     if: github.ref_type == 'tag' || contains(fromJson('["master", "dev", "release-notes"]'), github.ref_name)
+    needs: [test]
     runs-on: [self-hosted, linux]
     strategy:
       matrix:
