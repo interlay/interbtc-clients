@@ -141,7 +141,7 @@ jobs:
           file: .deploy/Dockerfile
           build-args: |
             BINARY=${{ matrix.client }}-${{ matrix.metadata }}
-            PROFILE="x86_64-unknown-linux-gnu/release"
+            PROFILE=x86_64-unknown-linux-gnu/release
 
   publish-draft-release:
     if: github.ref_type == 'tag'
