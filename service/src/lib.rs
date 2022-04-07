@@ -3,7 +3,7 @@ use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCore, BitcoinCoreApi, Er
 use futures::{future::Either, Future, FutureExt};
 use runtime::{
     cli::ConnectionOpts as ParachainConfig, CurrencyId, CurrencyIdExt, CurrencyInfo, Error as RuntimeError,
-    InterBtcParachain as BtcParachain, InterBtcSigner, Signer, Ss58Codec, VaultId,
+    InterBtcParachain as BtcParachain, InterBtcSigner, Ss58Codec, VaultId,
 };
 use std::marker::PhantomData;
 

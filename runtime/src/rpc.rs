@@ -40,8 +40,9 @@ cfg_if::cfg_if! {
 type RuntimeApi = metadata::RuntimeApi<InterBtcRuntime, SubstrateExtrinsicParams<InterBtcRuntime>>;
 pub(crate) type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
 
+#[derive(Clone)]
 pub struct InterBtcParachain {
-    ext_client: SubxtClient<InterBtcRuntime>,
+    ext_client: Arc<SubxtClient<InterBtcRuntime>>,
     signer: Arc<RwLock<InterBtcSigner>>,
     account_id: AccountId,
     api: Arc<RuntimeApi>,
@@ -78,7 +79,7 @@ impl InterBtcParachain {
         let wrapped_currency_id = currency_constants.get_wrapped_currency_id()?;
 
         let parachain_rpc = Self {
-            ext_client,
+            ext_client: Arc::new(ext_client),
             api: Arc::new(api),
             signer: Arc::new(RwLock::new(signer)),
             account_id,
