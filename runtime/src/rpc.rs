@@ -17,7 +17,7 @@ use sp_runtime::FixedPointNumber;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 use subxt::{
     rpc::{rpc_params, ClientT},
-    BasicError, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Event, RpcClient, SubstrateExtrinsicParams,
+    BasicError, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Event, PolkadotExtrinsicParams, RpcClient,
     TransactionEvents, TransactionProgress,
 };
 use tokio::{
@@ -37,7 +37,7 @@ cfg_if::cfg_if! {
     }
 }
 
-type RuntimeApi = metadata::RuntimeApi<InterBtcRuntime, SubstrateExtrinsicParams<InterBtcRuntime>>;
+type RuntimeApi = metadata::RuntimeApi<InterBtcRuntime, PolkadotExtrinsicParams<InterBtcRuntime>>;
 pub(crate) type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
 
 #[derive(Clone)]
