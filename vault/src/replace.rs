@@ -213,7 +213,7 @@ mod tests {
     };
     use runtime::{
         AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcReplaceRequest,
-        InterBtcVault, Token, DOT, H256, INTERBTC,
+        InterBtcVault, Token, DOT, H256, IBTC,
     };
 
     macro_rules! assert_err {
@@ -349,7 +349,7 @@ mod tests {
     }
 
     fn dummy_vault_id() -> VaultId {
-        VaultId::new(AccountId::new([1u8; 32]), Token(DOT), Token(INTERBTC))
+        VaultId::new(AccountId::new([1u8; 32]), Token(DOT), Token(IBTC))
     }
 
     #[tokio::test]

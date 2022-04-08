@@ -151,7 +151,7 @@ pub fn parse_native_currency(src: &str) -> Result<CurrencyId, Error> {
 pub fn parse_wrapped_currency(src: &str) -> Result<CurrencyId, Error> {
     match src.to_uppercase().as_str() {
         id if id == KBTC.symbol() => Ok(Token(KBTC)),
-        id if id == INTERBTC.symbol() => Ok(Token(INTERBTC)),
+        id if id == IBTC.symbol() => Ok(Token(IBTC)),
         _ => Err(Error::InvalidCurrency),
     }
 }

@@ -313,11 +313,11 @@ pub async fn start_http(
 #[cfg(all(test, feature = "standalone-metadata"))]
 mod tests {
     use crate::error::Error;
-    use runtime::{CurrencyId, CurrencyIdExt, OracleKey, Token, VaultId, DOT, INTERBTC, KBTC, KSM};
+    use runtime::{CurrencyId, CurrencyIdExt, OracleKey, Token, VaultId, DOT, IBTC, KBTC, KSM};
     use std::{collections::HashMap, sync::Arc};
 
     const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
-    const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(INTERBTC);
+    const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(IBTC);
 
     use super::{
         fund_account, open_kv_store, CollateralBalancesPallet, FundAccountJsonRpcRequest, FundingRequestAccountType,

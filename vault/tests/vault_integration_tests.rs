@@ -21,7 +21,7 @@ const TIMEOUT: Duration = Duration::from_secs(90);
 
 const DEFAULT_NATIVE_CURRENCY: CurrencyId = Token(INTR);
 const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
-const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(INTERBTC);
+const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(IBTC);
 
 async fn test_with<F, R>(execute: impl FnOnce(SubxtClient) -> F) -> R
 where

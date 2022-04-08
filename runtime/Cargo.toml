@@ -40,10 +40,10 @@ frame-support = { git = "https://github.com/paritytech/substrate", branch = "pol
 
 # Subxt dependencies
 # https://github.com/interlay/subxt/tree/polkadot-v0.9.18
-subxt = { package = "subxt", git = "https://github.com/interlay/subxt", rev = "44373cbb8777e002eb2cc1e733afcdcd8b07008a" }
+subxt = { package = "subxt", git = "https://github.com/interlay/subxt", rev = "344e44c3729adcb945b937d6703212e7ae41da50" }
 subxt-client = { package = "subxt-client", path = "./client" }
 
-jsonrpsee = { version = "0.9.0", features = ["macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
+jsonrpsee = { version = "0.10.1", features = ["macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
 
 # Polkadot dependencies
 xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.18" }
@@ -53,27 +53,27 @@ bitcoin = { path = "../bitcoin"}
 
 # Dependencies for the testing utils for integration tests
 tempdir = { version = "0.3.7", optional = true }
-interbtc = { package = "interbtc-standalone", git = "https://github.com/gregdhill/interbtc", rev = "278d379087bc39932b328bce9f497a20c2403c5b", optional = true }
+interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "78a0fd9a610733e6b1a96ad5d03d509bc66764b6", optional = true }
 rand = { version = "0.7", optional = true }
 
 [dependencies.primitives]
-git = "https://github.com/gregdhill/interbtc"
-rev = "278d379087bc39932b328bce9f497a20c2403c5b"
+git = "https://github.com/interlay/interbtc"
+rev = "78a0fd9a610733e6b1a96ad5d03d509bc66764b6"
 package = "interbtc-primitives"
 
 [dependencies.module-bitcoin]
-git = "https://github.com/gregdhill/interbtc"
-rev = "278d379087bc39932b328bce9f497a20c2403c5b"
+git = "https://github.com/interlay/interbtc"
+rev = "78a0fd9a610733e6b1a96ad5d03d509bc66764b6"
 package = "bitcoin"
 
 [dependencies.module-btc-relay]
-git = "https://github.com/gregdhill/interbtc"
-rev = "278d379087bc39932b328bce9f497a20c2403c5b"
+git = "https://github.com/interlay/interbtc"
+rev = "78a0fd9a610733e6b1a96ad5d03d509bc66764b6"
 package = "btc-relay"
 
 [dependencies.module-oracle-rpc-runtime-api]
-git = "https://github.com/gregdhill/interbtc"
-rev = "278d379087bc39932b328bce9f497a20c2403c5b"
+git = "https://github.com/interlay/interbtc"
+rev = "78a0fd9a610733e6b1a96ad5d03d509bc66764b6"
 package = "module-oracle-rpc-runtime-api"
 
 [dev-dependencies]
