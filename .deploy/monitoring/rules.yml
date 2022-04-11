@@ -1,0 +1,20 @@
+# Default alerting rules.
+# - Vault collateralization is below the secure threshold.
+# - A redeem has less than an hour until it expires.
+groups:
+- name: VaultMonitoring
+  rules:
+  - alert: BelowSecureThreshold
+    expr: collateralization < 2.6
+    for: 1s
+    annotations:
+      description: 'Vault with currency pair {{ $labels.currency }} is below the Secure Threshold.'
+    labels:
+      severity: 'critical'
+  - alert: RedeemAlmostExpired
+    expr: remaining_time_to_redeem_hours == 1
+    for: 1s
+    annotations:
+      description: 'Redeem almost expired for Vault with currency pair {{ $labels.currency }}.'
+    labels:
+      severity: 'critical'

@@ -4,3 +4,6 @@
 event-logs
 faucet/kv
 keyfile.json
+.deploy/data
+.deploy/prometheus
+.deploy/alertmanager

@@ -1,0 +1,18 @@
+#!/bin/bash
+
+echo "Downloading latest $1 tarball..."
+
+curl -s https://api.github.com/repos/prometheus/$1/releases/latest \
+| grep "browser_download_url.*.linux-amd64.tar.gz" \
+| cut -d : -f 2,3 \
+| tr -d \" \
+| wget -qi -
+
+
+ls $1-*.tar.gz | xargs tar -xvf
+rm $1-*.tar.gz
+ls $1-*/$1 | xargs -I{} mv {} .
+rm -rf $1-*/
+
+echo ""
+echo "Saved $1 binary in the current directory."

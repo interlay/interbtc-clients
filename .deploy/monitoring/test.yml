@@ -1,0 +1,63 @@
+rule_files:
+    - rules.yml
+
+evaluation_interval: 1m
+
+tests:
+    # Test 1.
+    - interval: 1m
+      input_series:
+          - series: 'collateralization{currency="KSM_KBTC"}'
+            values: '2.5'
+      alert_rule_test:
+          - eval_time: 1m
+            alertname: BelowSecureThreshold
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                      currency: KSM_KBTC
+                  exp_annotations:
+                      description: "Vault with currency pair KSM_KBTC is below the Secure Threshold."
+    # Test 2.
+    - interval: 1m
+      input_series:
+          - series: 'collateralization{currency="KSM_KBTC"}'
+            values: '2.6'
+      alert_rule_test:
+          - eval_time: 1m
+            exp_alerts:
+            # No alerts.
+    # Test 3.
+    - interval: 1m
+      input_series:
+          - series: 'remaining_time_to_redeem_hours{currency="KSM_KBTC"}'
+            values: '1'
+      alert_rule_test:
+          - eval_time: 1m
+            alertname: RedeemAlmostExpired
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                      currency: KSM_KBTC
+                  exp_annotations:
+                      description: "Redeem almost expired for Vault with currency pair KSM_KBTC."
+    # Test 4.
+    - interval: 1m
+      input_series:
+          - series: 'remaining_time_to_redeem_hours{currency="KSM_KBTC"}'
+            values: '0'
+      alert_rule_test:
+          - eval_time: 1m
+            exp_alerts:
+            # No alerts.
+    # Test 5.
+    - interval: 1m
+      input_series:
+          - series: 'remaining_time_to_redeem_hours{currency="KSM_KBTC"}'
+            values: '2'
+      alert_rule_test:
+          - eval_time: 1m
+            exp_alerts:
+            # No alerts.
+
+
