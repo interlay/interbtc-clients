@@ -126,12 +126,6 @@ impl Config for InterBtcRuntime {
     type Signature = MultiSignature;
 }
 
-// impl<'a> From<<InterBtcRuntime as Config>::AccountId> for metadata::system::storage::Account<'a> {
-//     fn from(account_id: <InterBtcRuntime as Config>::AccountId) -> Self {
-//         Self(&account_id)
-//     }
-// }
-
 pub fn parse_collateral_currency(src: &str) -> Result<CurrencyId, Error> {
     match src.to_uppercase().as_str() {
         id if id == KSM.symbol() => Ok(Token(KSM)),
