@@ -10,6 +10,7 @@ testing-utils = [
     "tempdir",
     "interbtc",
     "rand",
+    "subxt-client",
 ]
 standalone-metadata = []
 parachain-metadata-kintsugi = []
@@ -41,7 +42,7 @@ frame-support = { git = "https://github.com/paritytech/substrate", branch = "pol
 # Subxt dependencies
 # https://github.com/interlay/subxt/tree/polkadot-v0.9.18
 subxt = { package = "subxt", git = "https://github.com/interlay/subxt", rev = "344e44c3729adcb945b937d6703212e7ae41da50" }
-subxt-client = { package = "subxt-client", path = "./client" }
+subxt-client = { package = "subxt-client", path = "./client", optional = true }
 
 jsonrpsee = { version = "0.10.1", features = ["macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
 
