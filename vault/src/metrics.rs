@@ -208,14 +208,7 @@ impl PerCurrencyMetrics {
 
     async fn initialize_fee_budget_surplus<
         B: BitcoinCoreApi + Clone + Send + Sync,
-        P: VaultRegistryPallet
-            + CollateralBalancesPallet
-            + RedeemPallet
-            + IssuePallet
-            + ReplacePallet
-            + RefundPallet
-            + SecurityPallet
-            + UtilFuncs,
+        P: VaultRegistryPallet + RedeemPallet + ReplacePallet + RefundPallet,
     >(
         vault: &VaultData<B>,
         parachain_rpc: P,
@@ -338,17 +331,7 @@ fn raw_value_as_currency(value: u128, currency: CurrencyId) -> f64 {
     value as f64 / scaling_factor
 }
 
-pub async fn publish_locked_collateral<
-    B: BitcoinCoreApi + Clone + Send + Sync,
-    P: VaultRegistryPallet
-        + CollateralBalancesPallet
-        + RedeemPallet
-        + IssuePallet
-        + ReplacePallet
-        + RefundPallet
-        + SecurityPallet
-        + UtilFuncs,
->(
+pub async fn publish_locked_collateral<B: BitcoinCoreApi + Clone + Send + Sync, P: VaultRegistryPallet>(
     vault: &VaultData<B>,
     parachain_rpc: P,
 ) {
@@ -358,17 +341,7 @@ pub async fn publish_locked_collateral<
     }
 }
 
-pub async fn publish_required_collateral<
-    B: BitcoinCoreApi + Clone + Send + Sync,
-    P: VaultRegistryPallet
-        + CollateralBalancesPallet
-        + RedeemPallet
-        + IssuePallet
-        + ReplacePallet
-        + RefundPallet
-        + SecurityPallet
-        + UtilFuncs,
->(
+pub async fn publish_required_collateral<B: BitcoinCoreApi + Clone + Send + Sync, P: VaultRegistryPallet>(
     vault: &VaultData<B>,
     parachain_rpc: P,
 ) {
@@ -381,17 +354,7 @@ pub async fn publish_required_collateral<
     }
 }
 
-pub async fn publish_collateralization<
-    B: BitcoinCoreApi + Clone + Send + Sync,
-    P: VaultRegistryPallet
-        + CollateralBalancesPallet
-        + RedeemPallet
-        + IssuePallet
-        + ReplacePallet
-        + RefundPallet
-        + SecurityPallet
-        + UtilFuncs,
->(
+pub async fn publish_collateralization<B: BitcoinCoreApi + Clone + Send + Sync, P: VaultRegistryPallet>(
     vault: &VaultData<B>,
     parachain_rpc: P,
 ) {
@@ -459,18 +422,7 @@ fn publish_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &Vaul
     }
 }
 
-async fn publish_native_currency_balance<
-    P: VaultRegistryPallet
-        + CollateralBalancesPallet
-        + RedeemPallet
-        + IssuePallet
-        + ReplacePallet
-        + RefundPallet
-        + SecurityPallet
-        + UtilFuncs,
->(
-    parachain_rpc: &P,
-) {
+async fn publish_native_currency_balance<P: CollateralBalancesPallet + UtilFuncs>(parachain_rpc: &P) {
     let native_currency = parachain_rpc.get_native_currency_id();
     if let Ok(balance) = parachain_rpc.get_free_balance(native_currency).await {
         let balance = raw_value_as_currency(balance, native_currency);
@@ -489,14 +441,7 @@ fn publish_utxo_count<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData
 async fn publish_issue_count<
     B: BitcoinCoreApi + Clone + Send + Sync + 'static,
     V: VaultDataReader<B>,
-    P: VaultRegistryPallet
-        + CollateralBalancesPallet
-        + RedeemPallet
-        + IssuePallet
-        + ReplacePallet
-        + RefundPallet
-        + SecurityPallet
-        + UtilFuncs,
+    P: IssuePallet + UtilFuncs,
 >(
     parachain_rpc: &P,
     vault_id_manager: &V,
@@ -537,14 +482,7 @@ async fn publish_issue_count<
 async fn publish_time_to_first_deadline<
     B: BitcoinCoreApi + Clone + Send + Sync + 'static,
     V: VaultDataReader<B>,
-    P: VaultRegistryPallet
-        + CollateralBalancesPallet
-        + RedeemPallet
-        + IssuePallet
-        + ReplacePallet
-        + RefundPallet
-        + SecurityPallet
-        + UtilFuncs,
+    P: RedeemPallet + SecurityPallet,
 >(
     parachain_rpc: &P,
     vault_id_manager: &V,
@@ -665,14 +603,7 @@ pub async fn monitor_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
 
 pub async fn poll_metrics<
     B: BitcoinCoreApi + Clone + Send + Sync,
-    P: VaultRegistryPallet
-        + CollateralBalancesPallet
-        + RedeemPallet
-        + IssuePallet
-        + ReplacePallet
-        + RefundPallet
-        + SecurityPallet
-        + UtilFuncs,
+    P: CollateralBalancesPallet + RedeemPallet + IssuePallet + SecurityPallet + UtilFuncs,
 >(
     parachain_rpc: P,
     vault_id_manager: VaultIdManager<B>,
@@ -699,17 +630,7 @@ pub async fn poll_metrics<
     }
 }
 
-pub async fn publish_expected_bitcoin_balance<
-    B: BitcoinCoreApi + Clone + Send + Sync,
-    P: VaultRegistryPallet
-        + CollateralBalancesPallet
-        + RedeemPallet
-        + IssuePallet
-        + ReplacePallet
-        + RefundPallet
-        + SecurityPallet
-        + UtilFuncs,
->(
+pub async fn publish_expected_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync, P: VaultRegistryPallet>(
     vault: &VaultData<B>,
     parachain_rpc: P,
 ) {
