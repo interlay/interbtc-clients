@@ -1,4 +1,3 @@
-use async_std::{sync::Mutex, task};
 use futures::{
     channel::mpsc,
     future::{select, FutureExt},
@@ -19,8 +18,8 @@ use sc_service::{
     ChainSpec, Configuration, KeepBlocks, RpcHandlers, RpcSession, TaskManager,
 };
 pub use sp_keyring::AccountKeyring;
-use std::sync::Arc;
 use thiserror::Error;
+use tokio::task;
 
 /// Error thrown by the client.
 #[derive(Debug, Error)]
@@ -34,20 +33,17 @@ pub enum SubxtClientError {
 }
 
 /// Sending end.
-#[derive(Clone)]
-pub struct Sender(Arc<Mutex<mpsc::UnboundedSender<String>>>);
+pub struct Sender(mpsc::UnboundedSender<String>);
 
 /// Receiving end
-#[derive(Clone)]
-pub struct Receiver(Arc<Mutex<mpsc::UnboundedReceiver<String>>>);
+pub struct Receiver(mpsc::UnboundedReceiver<String>);
 
 #[async_trait]
 impl TransportSenderT for Sender {
     type Error = SubxtClientError;
 
     async fn send(&mut self, msg: String) -> Result<(), Self::Error> {
-        let mut lock = self.0.lock().await;
-        lock.send(msg).await?;
+        self.0.send(msg).await?;
         Ok(())
     }
 }
@@ -57,15 +53,14 @@ impl TransportReceiverT for Receiver {
     type Error = SubxtClientError;
 
     async fn receive(&mut self) -> Result<String, Self::Error> {
-        let mut lock = self.0.lock().await;
-        let msg = lock.next().await.expect("channel should be open");
+        let msg = self.0.next().await.expect("channel should be open");
         Ok(msg)
     }
 }
 
 /// Client for an embedded substrate node.
-#[derive(Clone)]
 pub struct SubxtClient {
+    rpc: RpcHandlers,
     sender: Sender,
     receiver: Receiver,
 }
@@ -76,6 +71,7 @@ impl SubxtClient {
         let (to_back, from_front) = mpsc::unbounded();
         let (to_front, from_back) = mpsc::unbounded();
 
+        let rpc_copy = rpc.clone();
         let session = RpcSession::new(to_front.clone());
         task::spawn(
             select(
@@ -98,8 +94,9 @@ impl SubxtClient {
         );
 
         Self {
-            sender: Sender(Arc::new(Mutex::new(to_back))),
-            receiver: Receiver(Arc::new(Mutex::new(from_back))),
+            rpc: rpc_copy,
+            sender: Sender(to_back),
+            receiver: Receiver(from_back),
         }
     }
 
@@ -111,6 +108,33 @@ impl SubxtClient {
         let config = config.into_service_config();
         let (task_manager, rpc_handlers) = (builder)(config)?;
         Ok(Self::new(task_manager, rpc_handlers))
+    }
+}
+
+impl Clone for SubxtClient {
+    fn clone(&self) -> Self {
+        let (to_back, from_front) = mpsc::unbounded();
+        let (to_front, from_back) = mpsc::unbounded();
+
+        let rpc = self.rpc.clone();
+        let session = RpcSession::new(to_front.clone());
+        task::spawn(Box::pin(from_front.for_each(move |message: String| {
+            let rpc = rpc.clone();
+            let session = session.clone();
+            let mut to_front = to_front.clone();
+            async move {
+                let response = rpc.rpc_query(&session, &message).await;
+                if let Some(response) = response {
+                    to_front.send(response).await.ok();
+                }
+            }
+        })));
+
+        Self {
+            rpc: self.rpc.clone(),
+            sender: Sender(to_back),
+            receiver: Receiver(from_back),
+        }
     }
 }
 

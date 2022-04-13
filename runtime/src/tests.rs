@@ -40,7 +40,6 @@ async fn set_exchange_rate(client: SubxtClient) {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_getters() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-    println!("got client");
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
 
     tokio::join!(
