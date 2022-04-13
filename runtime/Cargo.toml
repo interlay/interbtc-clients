@@ -7,11 +7,10 @@ edition = "2018"
 [features]
 default = []
 testing-utils = [
-    # "substrate-subxt/client",
-    # "substrate-subxt-client",
     "tempdir",
     "interbtc",
     "rand",
+    "subxt-client",
 ]
 standalone-metadata = []
 parachain-metadata-kintsugi = []
@@ -19,7 +18,7 @@ parachain-metadata-testnet = []
 
 [dependencies]
 serde = { version = "1.0.136", features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive", "full"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full"] }
 async-trait = "0.1.40"
 thiserror = "1.0"
 serde_json = "1.0.71"
@@ -33,49 +32,49 @@ cfg-if = "1.0"
 prometheus = { version = "0.12.0", features = ["process"] }
 
 # Substrate dependencies
-sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.17" }
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.17" }
-sp-std = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.17" }
-sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.17" }
-sp-version = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.17" }
-frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.17" }
+sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.18" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.18" }
+sp-std = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.18" }
+sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.18" }
+sp-version = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.18" }
+frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.18" }
 
 # Subxt dependencies
-# https://github.com/interlay/subxt/tree/polkadot-v0.9.17
-subxt = { package = "subxt", git = "https://github.com/interlay/subxt", rev = "1193d94206a669c59cc5dd89486fecfa82ca584a" }
-subxt-client = { package = "subxt-client", git = "https://github.com/interlay/subxt", rev = "1193d94206a669c59cc5dd89486fecfa82ca584a" }
+# https://github.com/interlay/subxt/tree/polkadot-v0.9.18
+subxt = { package = "subxt", git = "https://github.com/interlay/subxt", rev = "344e44c3729adcb945b937d6703212e7ae41da50" }
+subxt-client = { package = "subxt-client", path = "./client", optional = true }
 
-jsonrpsee = { version = "0.8.0", features = ["macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
+jsonrpsee = { version = "0.10.1", features = ["macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
 
 # Polkadot dependencies
-xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.17" }
-polkadot-parachain = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.17" }
+xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.18" }
+polkadot-parachain = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.18" }
 
 bitcoin = { path = "../bitcoin"}
 
 # Dependencies for the testing utils for integration tests
 tempdir = { version = "0.3.7", optional = true }
-interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "e7a6b41abe69de294abf32a5d350c0c5b719cce3", optional = true }
+interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "92278904c8f35b5f3ef3b3393065831df7dd05b7", optional = true }
 rand = { version = "0.7", optional = true }
 
 [dependencies.primitives]
 git = "https://github.com/interlay/interbtc"
-rev = "e7a6b41abe69de294abf32a5d350c0c5b719cce3"
+rev = "92278904c8f35b5f3ef3b3393065831df7dd05b7"
 package = "interbtc-primitives"
 
 [dependencies.module-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "e7a6b41abe69de294abf32a5d350c0c5b719cce3"
+rev = "92278904c8f35b5f3ef3b3393065831df7dd05b7"
 package = "bitcoin"
 
 [dependencies.module-btc-relay]
 git = "https://github.com/interlay/interbtc"
-rev = "e7a6b41abe69de294abf32a5d350c0c5b719cce3"
+rev = "92278904c8f35b5f3ef3b3393065831df7dd05b7"
 package = "btc-relay"
 
 [dependencies.module-oracle-rpc-runtime-api]
 git = "https://github.com/interlay/interbtc"
-rev = "e7a6b41abe69de294abf32a5d350c0c5b719cce3"
+rev = "92278904c8f35b5f3ef3b3393065831df7dd05b7"
 package = "module-oracle-rpc-runtime-api"
 
 [dev-dependencies]

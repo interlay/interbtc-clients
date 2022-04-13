@@ -36,8 +36,8 @@ pub use rpc::{
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
 use std::time::Duration;
 pub use subxt::{
+    extrinsic::Signer,
     sp_core::{crypto::Ss58Codec, sr25519::Pair},
-    Signer,
 };
 pub use types::*;
 
@@ -126,12 +126,6 @@ impl Config for InterBtcRuntime {
     type Signature = MultiSignature;
 }
 
-impl From<<InterBtcRuntime as Config>::AccountId> for metadata::system::storage::Account {
-    fn from(account_id: <InterBtcRuntime as Config>::AccountId) -> Self {
-        Self(account_id)
-    }
-}
-
 pub fn parse_collateral_currency(src: &str) -> Result<CurrencyId, Error> {
     match src.to_uppercase().as_str() {
         id if id == KSM.symbol() => Ok(Token(KSM)),
@@ -151,7 +145,7 @@ pub fn parse_native_currency(src: &str) -> Result<CurrencyId, Error> {
 pub fn parse_wrapped_currency(src: &str) -> Result<CurrencyId, Error> {
     match src.to_uppercase().as_str() {
         id if id == KBTC.symbol() => Ok(Token(KBTC)),
-        id if id == INTERBTC.symbol() => Ok(Token(INTERBTC)),
+        id if id == IBTC.symbol() => Ok(Token(IBTC)),
         _ => Err(Error::InvalidCurrency),
     }
 }

@@ -133,7 +133,7 @@ mod tests {
     use async_trait::async_trait;
     use runtime::{
         AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcVault, Token, Wallet,
-        DOT, INTERBTC,
+        DOT, IBTC,
     };
 
     macro_rules! assert_ok {
@@ -232,7 +232,7 @@ mod tests {
     }
 
     fn dummy_vault_id() -> VaultId {
-        VaultId::new(AccountId::new([1u8; 32]), Token(DOT), Token(INTERBTC))
+        VaultId::new(AccountId::new([1u8; 32]), Token(DOT), Token(IBTC))
     }
 
     #[tokio::test]

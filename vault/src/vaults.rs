@@ -265,7 +265,7 @@ mod tests {
     };
     use runtime::{
         AccountId, BitcoinBlockHeight, BlockNumber, Error as RuntimeError, H256Le, InterBtcRichBlockHeader,
-        RawBlockHeader, Token, DOT, INTERBTC,
+        RawBlockHeader, Token, DOT, IBTC,
     };
     use sp_core::{H160, H256};
 
@@ -389,7 +389,7 @@ mod tests {
     }
 
     fn dummy_vault_id() -> VaultId {
-        VaultId::new(AccountId::new([1u8; 32]), Token(DOT), Token(INTERBTC))
+        VaultId::new(AccountId::new([1u8; 32]), Token(DOT), Token(IBTC))
     }
 
     #[tokio::test]

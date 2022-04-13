@@ -26,7 +26,7 @@ use tokio::{
 /// input uxto.
 #[derive(Clone)]
 pub struct MockBitcoinCore {
-    parachain_rpc: InterBtcParachain,
+    parachain_rpc: Arc<InterBtcParachain>,
     blocks: Arc<RwLock<Vec<Block>>>,
     mempool: Arc<RwLock<Vec<Transaction>>>,
     transaction_creation_lock: Arc<Mutex<()>>,
@@ -42,7 +42,7 @@ impl MockBitcoinCore {
     /// Creates a new instance, and initializes parachain's btc-relay
     pub async fn new(parachain_rpc: InterBtcParachain) -> Self {
         let ret = Self {
-            parachain_rpc,
+            parachain_rpc: Arc::new(parachain_rpc),
             blocks: Arc::new(RwLock::new(vec![])),
             mempool: Arc::new(RwLock::new(vec![])),
             transaction_creation_lock: Arc::new(Mutex::new(())),
@@ -81,7 +81,7 @@ impl MockBitcoinCore {
     /// Creates a new instance, but does not initializes parachain's btc-relay
     pub async fn new_uninitialized(parachain_rpc: InterBtcParachain) -> Self {
         Self {
-            parachain_rpc,
+            parachain_rpc: Arc::new(parachain_rpc),
             blocks: Arc::new(RwLock::new(vec![])),
             mempool: Arc::new(RwLock::new(vec![])),
             transaction_creation_lock: Arc::new(Mutex::new(())),

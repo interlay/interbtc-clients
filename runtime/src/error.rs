@@ -1,25 +1,12 @@
 pub use jsonrpsee::core::Error as JsonRpseeError;
 
-use crate::{
-    metadata::{DispatchError, ErrorDetails},
-    types::*,
-    BTC_RELAY_MODULE, ISSUE_MODULE, RELAY_MODULE, SYSTEM_MODULE,
-};
+use crate::{metadata::DispatchError, types::*, BTC_RELAY_MODULE, ISSUE_MODULE, RELAY_MODULE, SYSTEM_MODULE};
 use codec::Error as CodecError;
-use jsonrpsee::{
-    client_transport::ws::WsHandshakeError,
-    core::error::Error as RequestError,
-    types::error::{CallError, ErrorResponse},
-};
+use jsonrpsee::{client_transport::ws::WsHandshakeError, core::error::Error as RequestError, types::error::CallError};
 use prometheus::Error as PrometheusError;
 use serde_json::Error as SerdeJsonError;
-use std::{
-    array::TryFromSliceError,
-    fmt::{Debug, Display},
-    io::Error as IoError,
-    num::TryFromIntError,
-};
-use subxt::{sp_core::crypto::SecretStringError, BasicError, TransactionError};
+use std::{array::TryFromSliceError, fmt::Debug, io::Error as IoError, num::TryFromIntError};
+use subxt::{sp_core::crypto::SecretStringError, BasicError, ModuleError, TransactionError};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
 use url::ParseError as UrlParseError;
@@ -75,7 +62,7 @@ pub enum Error {
     #[error("Error converting: {0}")]
     Convert(#[from] TryFromIntError),
     #[error("Subxt runtime error: {0}")]
-    SubxtRuntimeError(#[from] OuterSubxtError),
+    SubxtRuntimeError(#[from] SubxtError),
     #[error("Error decoding: {0}")]
     CodecError(#[from] CodecError),
     #[error("Error encoding json data: {0}")]
@@ -92,162 +79,87 @@ pub enum Error {
 
 impl From<BasicError> for Error {
     fn from(err: BasicError) -> Self {
-        Self::SubxtRuntimeError(OuterSubxtError(err.into()))
-    }
-}
-
-impl From<SubxtError> for Error {
-    fn from(err: SubxtError) -> Self {
-        Self::SubxtRuntimeError(OuterSubxtError(err))
-    }
-}
-
-// hacky workaround to pretty print runtime errors
-#[derive(Debug)]
-pub struct OuterSubxtError(pub SubxtError);
-
-impl From<SubxtError> for OuterSubxtError {
-    fn from(err: SubxtError) -> Self {
-        Self(err)
-    }
-}
-
-impl std::error::Error for OuterSubxtError {}
-
-impl Display for OuterSubxtError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.0 {
-            subxt::Error::Runtime(err) => {
-                if let Some(ErrorDetails { error, pallet, .. }) = err.clone().inner().details() {
-                    write!(f, "{} from {}", error, pallet)
-                } else {
-                    Debug::fmt(&err, f)
-                }
-            }
-            err => Display::fmt(&err, f),
-        }
+        Self::SubxtRuntimeError(err.into())
     }
 }
 
 impl Error {
-    fn is_runtime_err(&self, pallet_name: &str, error_name: &str) -> bool {
+    fn is_module_err(&self, pallet_name: &str, error_name: &str) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Runtime(runtime_error)))
-            if matches!(
-                runtime_error.clone().inner().details(),
-                Some(ErrorDetails {
-                    pallet,
-                    error,
-                    ..
-                })
-                if pallet == pallet_name && error == error_name
-            )
+            Error::SubxtRuntimeError(SubxtError::Module(ModuleError {
+                pallet, error, ..
+            })) if pallet == pallet_name && error == error_name,
         )
     }
 
     pub fn is_duplicate_block(&self) -> bool {
-        self.is_runtime_err(BTC_RELAY_MODULE, &format!("{:?}", BtcRelayPalletError::DuplicateBlock))
+        self.is_module_err(BTC_RELAY_MODULE, &format!("{:?}", BtcRelayPalletError::DuplicateBlock))
     }
 
     pub fn is_invalid_chain_id(&self) -> bool {
-        self.is_runtime_err(BTC_RELAY_MODULE, &format!("{:?}", BtcRelayPalletError::InvalidChainID))
+        self.is_module_err(BTC_RELAY_MODULE, &format!("{:?}", BtcRelayPalletError::InvalidChainID))
     }
 
     pub fn is_issue_completed(&self) -> bool {
-        self.is_runtime_err(ISSUE_MODULE, &format!("{:?}", IssuePalletError::IssueCompleted))
+        self.is_module_err(ISSUE_MODULE, &format!("{:?}", IssuePalletError::IssueCompleted))
     }
 
     pub fn is_valid_refund(&self) -> bool {
-        self.is_runtime_err(RELAY_MODULE, &format!("{:?}", RelayPalletError::ValidRefundTransaction))
+        self.is_module_err(RELAY_MODULE, &format!("{:?}", RelayPalletError::ValidRefundTransaction))
     }
 
-    fn map_call_error<T>(
-        &self,
-        call: impl Fn(&CallError) -> Option<T>,
-        other: impl Fn(&String) -> Option<T>,
-    ) -> Option<T> {
+    fn map_call_error<T>(&self, call: impl Fn(&CallError) -> Option<T>) -> Option<T> {
         match self {
-            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(RequestError::Call(err)))) => call(err),
-            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(RequestError::Request(message)))) => {
-                if let Ok(error_response) = serde_json::from_str::<ErrorResponse>(message) {
-                    call(&CallError::Custom {
-                        code: error_response.error.code.code(),
-                        message: error_response.error.message.to_string(),
-                        data: error_response.error.data.map(ToOwned::to_owned),
-                    })
-                } else {
-                    other(message)
-                }
-            }
+            Error::SubxtRuntimeError(SubxtError::Rpc(RequestError::Call(err))) => call(err),
             _ => None,
         }
     }
 
     pub fn is_invalid_transaction(&self) -> Option<String> {
-        self.map_call_error(
-            |call_error| {
-                if let CallError::Custom {
-                    code: POOL_INVALID_TX,
-                    data,
-                    ..
-                } = call_error
-                {
-                    Some(data.clone().map(|raw| raw.to_string()).unwrap_or_default())
-                } else {
-                    None
-                }
-            },
-            |message| {
-                if message.contains(INVALID_TX_MESSAGE) {
-                    Some(message.to_string())
-                } else {
-                    None
-                }
-            },
-        )
+        self.map_call_error(|call_error| {
+            if let CallError::Custom {
+                code: POOL_INVALID_TX,
+                data,
+                ..
+            } = call_error
+            {
+                Some(data.clone().map(|raw| raw.to_string()).unwrap_or_default())
+            } else {
+                None
+            }
+        })
     }
 
     pub fn is_pool_too_low_priority(&self) -> Option<()> {
-        self.map_call_error(
-            |call_error| {
-                if let CallError::Custom {
-                    code: POOL_TOO_LOW_PRIORITY,
-                    ..
-                } = call_error
-                {
-                    Some(())
-                } else {
-                    None
-                }
-            },
-            |message| {
-                if message.contains(TOO_LOW_PRIORITY_MESSAGE) {
-                    Some(())
-                } else {
-                    None
-                }
-            },
-        )
+        self.map_call_error(|call_error| {
+            if let CallError::Custom {
+                code: POOL_TOO_LOW_PRIORITY,
+                ..
+            } = call_error
+            {
+                Some(())
+            } else {
+                None
+            }
+        })
     }
 
     pub fn is_rpc_disconnect_error(&self) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(JsonRpseeError::RestartNeeded(_))))
+            Error::SubxtRuntimeError(SubxtError::Rpc(JsonRpseeError::RestartNeeded(_)))
         )
     }
 
     pub fn is_rpc_error(&self) -> bool {
-        matches!(self, Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Rpc(_))))
+        matches!(self, Error::SubxtRuntimeError(SubxtError::Rpc(_)))
     }
 
     pub fn is_block_hash_not_found_error(&self) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(OuterSubxtError(SubxtError::Transaction(
-                TransactionError::BlockHashNotFound
-            )))
+            Error::SubxtRuntimeError(SubxtError::Transaction(TransactionError::BlockHashNotFound))
         )
     }
 
@@ -260,7 +172,7 @@ impl Error {
     }
 
     pub fn is_parachain_shutdown_error(&self) -> bool {
-        self.is_runtime_err(SYSTEM_MODULE, &format!("{:?}", SystemPalletError::CallFiltered))
+        self.is_module_err(SYSTEM_MODULE, &format!("{:?}", SystemPalletError::CallFiltered))
     }
 }
 
@@ -280,6 +192,3 @@ pub enum KeyLoadingError {
 const BASE_ERROR: i32 = 1000;
 const POOL_INVALID_TX: i32 = BASE_ERROR + 10;
 const POOL_TOO_LOW_PRIORITY: i32 = POOL_INVALID_TX + 4;
-
-const INVALID_TX_MESSAGE: &str = "Invalid Transaction";
-const TOO_LOW_PRIORITY_MESSAGE: &str = "Priority is too low";

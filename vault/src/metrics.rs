@@ -676,8 +676,6 @@ pub async fn publish_tokio_metrics(
 
 #[cfg(all(test, feature = "standalone-metadata"))]
 mod tests {
-    use std::collections::BTreeSet;
-
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
@@ -687,8 +685,9 @@ mod tests {
     use runtime::{
         AccountId, Balance, BlockNumber, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, ErrorCode,
         InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcRefundRequest, InterBtcReplaceRequest, InterBtcVault,
-        RequestIssueEvent, StatusCode, Token, VaultId, VaultStatus, Wallet, DOT, H256, INTERBTC, INTR,
+        RequestIssueEvent, StatusCode, Token, VaultId, VaultStatus, Wallet, DOT, H256, IBTC, INTR,
     };
+    use std::collections::BTreeSet;
 
     mockall::mock! {
         Provider {}
@@ -840,7 +839,7 @@ mod tests {
     }
 
     fn dummy_vault_id() -> VaultId {
-        VaultId::new(AccountId::new([1u8; 32]), Token(DOT), Token(INTERBTC))
+        VaultId::new(AccountId::new([1u8; 32]), Token(DOT), Token(IBTC))
     }
 
     struct MockProviderBuilder {
