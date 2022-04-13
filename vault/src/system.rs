@@ -2,7 +2,7 @@ use crate::{
     collateral::lock_required_collateral,
     error::Error,
     faucet, issue,
-    metrics::{poll_metrics, PerCurrencyMetrics},
+    metrics::{poll_metrics, publish_tokio_metrics, PerCurrencyMetrics},
     relay::run_relayer,
     service::*,
     vaults::Vaults,
@@ -620,6 +620,84 @@ impl VaultService {
             ),
         );
 
+        let vault_id_registration_listener_monitor = tokio_metrics::TaskMonitor::new();
+        let parachain_block_listener_monitor = tokio_metrics::TaskMonitor::new();
+        let bitcoin_block_listener_monitor = tokio_metrics::TaskMonitor::new();
+        let issue_request_listener_monitor = tokio_metrics::TaskMonitor::new();
+        let issue_execute_listener_monitor = tokio_metrics::TaskMonitor::new();
+        let issue_cancel_listener_monitor = tokio_metrics::TaskMonitor::new();
+        let issue_cancel_scheduler_monitor = tokio_metrics::TaskMonitor::new();
+        let issue_executor_monitor = tokio_metrics::TaskMonitor::new();
+        let request_replace_listener_monitor = tokio_metrics::TaskMonitor::new();
+        let accept_replace_listener_monitor = tokio_metrics::TaskMonitor::new();
+        let execute_replace_listener_monitor = tokio_metrics::TaskMonitor::new();
+        let replace_cancel_scheduler_monitor = tokio_metrics::TaskMonitor::new();
+        let redeem_listener_monitor = tokio_metrics::TaskMonitor::new();
+        let refund_listener_monitor = tokio_metrics::TaskMonitor::new();
+        let vaults_listener_monitor = tokio_metrics::TaskMonitor::new();
+        let bridge_metrics_poller_monitor = tokio_metrics::TaskMonitor::new();
+        let bridge_metrics_listener_monitor = tokio_metrics::TaskMonitor::new();
+
+        let metrics_iterators = HashMap::from([
+            (
+                "Vault ID Registration Listener",
+                vault_id_registration_listener_monitor.clone().intervals(),
+            ),
+            (
+                "Parachain Block Listener",
+                parachain_block_listener_monitor.clone().intervals(),
+            ),
+            (
+                "Bitcoin Block Listener",
+                bitcoin_block_listener_monitor.clone().intervals(),
+            ),
+            (
+                "Issue Request Listener",
+                issue_request_listener_monitor.clone().intervals(),
+            ),
+            (
+                "Issue Execute Listener",
+                issue_execute_listener_monitor.clone().intervals(),
+            ),
+            (
+                "Issue Cancel Listener",
+                issue_cancel_listener_monitor.clone().intervals(),
+            ),
+            (
+                "Issue Cancel Scheduler",
+                issue_cancel_scheduler_monitor.clone().intervals(),
+            ),
+            ("Issue Executor", issue_executor_monitor.clone().intervals()),
+            (
+                "Request Replace Listener",
+                request_replace_listener_monitor.clone().intervals(),
+            ),
+            (
+                "Accept Replace Listener",
+                accept_replace_listener_monitor.clone().intervals(),
+            ),
+            (
+                "Execute Replace Listener",
+                execute_replace_listener_monitor.clone().intervals(),
+            ),
+            (
+                "Replace Cancel Scheduler",
+                replace_cancel_scheduler_monitor.clone().intervals(),
+            ),
+            ("Redeem Listener", redeem_listener_monitor.clone().intervals()),
+            ("Refund Listener", refund_listener_monitor.clone().intervals()),
+            ("Vaults Listener", vaults_listener_monitor.clone().intervals()),
+            (
+                "Bridge Metrics Poller",
+                bridge_metrics_poller_monitor.clone().intervals(),
+            ),
+            (
+                "Bridge Metrics Listener",
+                bridge_metrics_listener_monitor.clone().intervals(),
+            ),
+        ]);
+
+        let tokio_metrics_publisher = wait_or_shutdown(self.shutdown.clone(), publish_tokio_metrics(metrics_iterators));
         let restart_timer = wait_or_shutdown(self.shutdown.clone(), async move {
             tokio::time::sleep(RESTART_INTERVAL).await;
             tracing::info!("Initiating periodic restart...");
@@ -629,32 +707,98 @@ impl VaultService {
         // starts all the tasks
         tracing::info!("Starting to listen for events...");
         let _ = tokio::join!(
+            // runs error listener to log errors
             tokio::spawn(async move { restart_timer.await }),
             // handles new registrations of this vault done externally
-            tokio::spawn(async move { vault_id_registration_listener.await }),
+            tokio::spawn(async move {
+                vault_id_registration_listener_monitor
+                    .instrument(async { vault_id_registration_listener.await })
+                    .await
+            }),
             // replace & issue cancellation helpers
-            tokio::spawn(async move { parachain_block_listener.await }),
-            tokio::spawn(async move { bitcoin_block_listener.await }),
+            tokio::spawn(async move {
+                parachain_block_listener_monitor
+                    .instrument(async { parachain_block_listener.await })
+                    .await
+            }),
+            tokio::spawn(async move {
+                bitcoin_block_listener_monitor
+                    .instrument(async { bitcoin_block_listener.await })
+                    .await
+            }),
             // issue handling
-            tokio::spawn(async move { issue_request_listener.await }),
-            tokio::spawn(async move { issue_execute_listener.await }),
-            tokio::spawn(async move { issue_cancel_listener.await }),
-            tokio::spawn(async move { issue_cancel_scheduler.await }),
-            tokio::spawn(async move { issue_executor.await }),
+            tokio::spawn(async move {
+                issue_request_listener_monitor
+                    .instrument(async { issue_request_listener.await })
+                    .await
+            }),
+            tokio::spawn(async move {
+                issue_execute_listener_monitor
+                    .instrument(async { issue_execute_listener.await })
+                    .await
+            }),
+            tokio::spawn(async move {
+                issue_cancel_listener_monitor
+                    .instrument(async { issue_cancel_listener.await })
+                    .await
+            }),
+            tokio::spawn(async move {
+                issue_cancel_scheduler_monitor
+                    .instrument(async { issue_cancel_scheduler.await })
+                    .await
+            }),
+            tokio::spawn(async move { issue_executor_monitor.instrument(async { issue_executor.await }).await }),
             // replace handling
-            tokio::spawn(async move { request_replace_listener.await }),
-            tokio::spawn(async move { accept_replace_listener.await }),
-            tokio::spawn(async move { execute_replace_listener.await }),
-            tokio::spawn(async move { replace_cancel_scheduler.await }),
+            tokio::spawn(async move {
+                request_replace_listener_monitor
+                    .instrument(async { request_replace_listener.await })
+                    .await
+            }),
+            tokio::spawn(async move {
+                accept_replace_listener_monitor
+                    .instrument(async { accept_replace_listener.await })
+                    .await
+            }),
+            tokio::spawn(async move {
+                execute_replace_listener_monitor
+                    .instrument(async { execute_replace_listener.await })
+                    .await
+            }),
+            tokio::spawn(async move {
+                replace_cancel_scheduler_monitor
+                    .instrument(async { replace_cancel_scheduler.await })
+                    .await
+            }),
             // redeem handling
-            tokio::spawn(async move { redeem_listener.await }),
+            tokio::spawn(async move {
+                redeem_listener_monitor
+                    .instrument(async { redeem_listener.await })
+                    .await
+            }),
             // refund handling
-            tokio::spawn(async move { refund_listener.await }),
+            tokio::spawn(async move {
+                refund_listener_monitor
+                    .instrument(async { refund_listener.await })
+                    .await
+            }),
             // runs vault theft checks
-            tokio::spawn(async move { vaults_listener.await }),
+            tokio::spawn(async move {
+                vaults_listener_monitor
+                    .instrument(async { vaults_listener.await })
+                    .await
+            }),
             // prometheus monitoring
-            tokio::task::spawn(async move { bridge_metrics_poller.await }),
-            tokio::task::spawn(async move { bridge_metrics_listener.await }),
+            tokio::task::spawn(async move {
+                bridge_metrics_poller_monitor
+                    .instrument(async { bridge_metrics_poller.await })
+                    .await
+            }),
+            tokio::task::spawn(async move {
+                bridge_metrics_listener_monitor
+                    .instrument(async { bridge_metrics_listener.await })
+                    .await
+            }),
+            tokio::task::spawn(async move { tokio_metrics_publisher.await }),
             // relayer process
             tokio::task::spawn_blocking(move || block_on(relayer)),
         );
