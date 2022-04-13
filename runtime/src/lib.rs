@@ -56,6 +56,13 @@ pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
 
 // TODO: possibly substitute CurrencyId, VaultId, H256Le
 #[cfg_attr(
+    feature = "parachain-metadata-interlay",
+    subxt(
+        runtime_metadata_path = "metadata-parachain-interlay.scale",
+        generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
+    )
+)]
+#[cfg_attr(
     feature = "parachain-metadata-kintsugi",
     subxt(
         runtime_metadata_path = "metadata-parachain-kintsugi.scale",

@@ -108,12 +108,14 @@ mod metadata_aliases {
     pub type VaultId = metadata::runtime_types::interbtc_primitives::VaultId<AccountId, CurrencyId>;
     pub type VaultCurrencyPair = metadata::runtime_types::interbtc_primitives::VaultCurrencyPair<CurrencyId>;
 
-    #[cfg(feature = "standalone-metadata")]
-    pub type EncodedCall = metadata::runtime_types::interbtc_runtime_standalone::Call;
-    #[cfg(feature = "parachain-metadata-testnet")]
-    pub type EncodedCall = metadata::runtime_types::testnet_runtime_parachain::Call;
+    #[cfg(feature = "parachain-metadata-interlay")]
+    pub type EncodedCall = metadata::runtime_types::interlay_runtime_parachain::Call;
     #[cfg(feature = "parachain-metadata-kintsugi")]
     pub type EncodedCall = metadata::runtime_types::kintsugi_runtime_parachain::Call;
+    #[cfg(feature = "parachain-metadata-testnet")]
+    pub type EncodedCall = metadata::runtime_types::testnet_runtime_parachain::Call;
+    #[cfg(feature = "standalone-metadata")]
+    pub type EncodedCall = metadata::runtime_types::interbtc_runtime_standalone::Call;
 
     pub type SecurityCall = metadata::runtime_types::security::pallet::Call;
 }

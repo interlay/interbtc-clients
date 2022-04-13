@@ -12,9 +12,10 @@ testing-utils = [
     "rand",
     "subxt-client",
 ]
-standalone-metadata = []
+parachain-metadata-interlay = []
 parachain-metadata-kintsugi = []
 parachain-metadata-testnet = []
+standalone-metadata = []
 
 [dependencies]
 serde = { version = "1.0.136", features = ["derive"] }
