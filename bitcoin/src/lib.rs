@@ -66,6 +66,9 @@ const MULTIPLIER: f64 = 2.0;
 // Random value between 25% below and 25% above the ideal delay.
 const RANDOMIZATION_FACTOR: f64 = 0.25;
 
+const DERIVATION_KEY_LABEL: &str = "derivation-key";
+const DEPOSIT_LABEL: &str = "deposit";
+
 const ELECTRS_TESTNET_URL: &str = "https://btc-testnet.interlay.io";
 const ELECTRS_MAINNET_URL: &str = "https://btc-mainnet.interlay.io";
 const ELECTRS_LOCALHOST_URL: &str = "http://localhost:3002";
@@ -117,6 +120,13 @@ pub trait BitcoinCoreApi {
     async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
 
     async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error>;
+
+    fn dump_derivation_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
+        &self,
+        public_key: P,
+    ) -> Result<PrivateKey, Error>;
+
+    fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), Error>;
 
     async fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
         &self,
@@ -550,10 +560,27 @@ impl BitcoinCoreApi for BitcoinCore {
 
     /// Gets a new public key for an address in the wallet
     async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error> {
-        let address = self.rpc.get_new_address(None, Some(AddressType::Bech32))?;
+        let address = self
+            .rpc
+            .get_new_address(Some(DERIVATION_KEY_LABEL), Some(AddressType::Bech32))?;
         let address_info = self.rpc.get_address_info(&address)?;
         let public_key = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
         Ok(P::from(public_key.key.serialize()))
+    }
+
+    fn dump_derivation_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
+        &self,
+        public_key: P,
+    ) -> Result<PrivateKey, Error> {
+        let address = Address::p2wpkh(&PublicKey::from_slice(&public_key.into())?, self.network)
+            .map_err(ConversionError::from)?;
+        Ok(self.rpc.dump_private_key(&address)?)
+    }
+
+    fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), Error> {
+        Ok(self
+            .rpc
+            .import_private_key(&private_key, Some(DERIVATION_KEY_LABEL), Some(false))?)
     }
 
     /// Derive and import the private key for the master public key and public secret
@@ -573,7 +600,7 @@ impl BitcoinCoreApi for BitcoinCore {
                 network: self.network,
                 key: deposit_secret_key,
             },
-            None,
+            Some(DEPOSIT_LABEL),
             // rescan true by default
             Some(false),
         )?;

@@ -1205,3 +1205,27 @@ async fn assert_redeem_event(
 ) -> ExecuteRedeemEvent {
     assert_event::<ExecuteRedeemEvent, _>(duration, parachain_rpc, |x| x.redeem_id == redeem_id).await
 }
+
+#[async_trait]
+trait InterBtcParachainExt {
+    async fn register_vault_with_public_key(
+        &self,
+        vault_id: &VaultId,
+        collateral: u128,
+        public_key: BtcPublicKey,
+    ) -> Result<(), runtime::Error>;
+}
+
+#[async_trait]
+impl InterBtcParachainExt for InterBtcParachain {
+    async fn register_vault_with_public_key(
+        &self,
+        vault_id: &VaultId,
+        collateral: u128,
+        public_key: BtcPublicKey,
+    ) -> Result<(), runtime::Error> {
+        self.register_public_key(public_key).await.unwrap();
+        self.register_vault(vault_id, collateral).await.unwrap();
+        Ok(())
+    }
+}

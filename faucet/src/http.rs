@@ -486,10 +486,8 @@ mod tests {
         .await
         .expect("Funding the account failed");
 
-        bob_provider
-            .register_vault(&bob_vault_id, 100, dummy_public_key())
-            .await
-            .unwrap();
+        bob_provider.register_public_key(dummy_public_key()).await.unwrap();
+        bob_provider.register_vault(&bob_vault_id, 100).await.unwrap();
 
         let bob_funds_before = alice_provider
             .get_free_balance_for_id(bob_account_id.clone(), DEFAULT_TESTING_CURRENCY)
@@ -581,10 +579,8 @@ mod tests {
             let expected_amount_planck: u128 = vault_allowance_dot * rich_currency_id.inner().one();
 
             let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-            bob_provider
-                .register_vault(&bob_vault_id, 100, dummy_public_key())
-                .await
-                .unwrap();
+            bob_provider.register_public_key(dummy_public_key()).await.unwrap();
+            bob_provider.register_vault(&bob_vault_id, 100).await.unwrap();
 
             let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
 
@@ -643,10 +639,8 @@ mod tests {
         let expected_amount_planck: u128 = vault_allowance_dot * testing_currency.inner().one();
 
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-        bob_provider
-            .register_vault(&bob_vault_id, 100, dummy_public_key())
-            .await
-            .unwrap();
+        bob_provider.register_public_key(dummy_public_key()).await.unwrap();
+        bob_provider.register_vault(&bob_vault_id, 100).await.unwrap();
 
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding

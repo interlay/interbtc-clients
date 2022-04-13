@@ -729,7 +729,8 @@ mod tests {
             async fn register_vault(&self, vault_id: &VaultId, collateral: u128, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
             async fn deposit_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
-            async fn update_public_key(&self, vault_id: &VaultId, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
+            async fn get_public_key(&self) -> Result<Option<BtcPublicKey>, RuntimeError>;
+            async fn register_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
             async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), RuntimeError>;
             async fn get_required_collateral_for_wrapped(&self, amount_btc: u128, collateral_currency: CurrencyId) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
