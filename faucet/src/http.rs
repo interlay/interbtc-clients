@@ -579,7 +579,9 @@ mod tests {
             let expected_amount_planck: u128 = vault_allowance_dot * rich_currency_id.inner().one();
 
             let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-            bob_provider.register_public_key(dummy_public_key()).await.unwrap();
+            if bob_provider.get_public_key().await.unwrap().is_none() {
+                bob_provider.register_public_key(dummy_public_key()).await.unwrap();
+            }
             bob_provider.register_vault(&bob_vault_id, 100).await.unwrap();
 
             let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;

@@ -207,7 +207,6 @@ mod tests {
                 id: x.clone(),
                 wallet: Wallet {
                     addresses: Default::default(),
-                    public_key: BtcPublicKey { 0: [0; 33] },
                 },
                 status: VaultStatus::Active(true),
                 banned_until: None,
@@ -338,7 +337,6 @@ mod tests {
                 id: x.clone(),
                 wallet: Wallet {
                     addresses: Default::default(),
-                    public_key: BtcPublicKey { 0: [0; 33] },
                 },
                 status: VaultStatus::CommittedTheft,
                 banned_until: None,
