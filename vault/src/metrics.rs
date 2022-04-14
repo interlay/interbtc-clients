@@ -652,13 +652,13 @@ pub async fn publish_expected_bitcoin_balance<B: BitcoinCoreApi + Clone + Send +
 }
 
 pub async fn publish_tokio_metrics(
-    mut metrics_iterators: HashMap<&str, impl Iterator<Item = TaskMetrics>>,
+    mut metrics_iterators: HashMap<String, impl Iterator<Item = TaskMetrics>>,
 ) -> Result<(), ServiceError> {
     let frequency = Duration::from_millis(TOKIO_POLLING_INTERVAL_MS);
     loop {
         for (key, val) in metrics_iterators.iter_mut() {
             if let Some(task_metrics) = val.next() {
-                let label = HashMap::<&str, &str>::from([(TASK_NAME, *key)]);
+                let label = HashMap::<&str, &str>::from([(TASK_NAME, &key[..])]);
                 MEAN_IDLE_DURATION
                     .with(&label)
                     .set(task_metrics.mean_idle_duration().as_millis() as i64);

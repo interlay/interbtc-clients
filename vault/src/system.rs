@@ -13,8 +13,8 @@ use bitcoin::{BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
 use clap::Parser;
 use futures::{
     channel::{mpsc, mpsc::Sender},
-    executor::block_on,
-    Future, SinkExt,
+    future::{join, join_all},
+    Future, SinkExt, TryFutureExt,
 };
 use git_version::git_version;
 use runtime::{
@@ -24,8 +24,9 @@ use runtime::{
     VaultCurrencyPair, VaultId, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, MonitoringConfig, Service, ShutdownSender};
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 use tokio::{sync::RwLock, time::sleep};
+
 pub const VERSION: &str = git_version!(args = ["--tags"]);
 pub const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 pub const NAME: &str = env!("CARGO_PKG_NAME");
@@ -342,10 +343,52 @@ impl Service<VaultServiceConfig> for VaultService {
     }
 }
 
-async fn maybe_run_task(should_run: bool, task: impl Future) {
-    if should_run {
-        task.await;
-    }
+async fn run_and_monitor_tasks(shutdown_tx: ShutdownSender, items: Vec<(&str, ServiceTask)>) {
+    let (metrics_iterators, tasks): (HashMap<String, _>, Vec<_>) = items
+        .into_iter()
+        .filter_map(|(name, task)| {
+            let monitor = tokio_metrics::TaskMonitor::new();
+            let metrics_iterator = monitor.intervals();
+            let task = match task {
+                ServiceTask::Optional(true, t) | ServiceTask::Essential(t) => {
+                    Some(wait_or_shutdown(shutdown_tx.clone(), t))
+                }
+                _ => None,
+            }?;
+            let task = monitor.instrument(task);
+            let task = tokio::spawn(task);
+            Some(((name.to_string(), metrics_iterator), task))
+        })
+        .unzip();
+
+    let tokio_metrics = tokio::spawn(wait_or_shutdown(
+        shutdown_tx.clone(),
+        publish_tokio_metrics(metrics_iterators),
+    ));
+
+    let _ = join(tokio_metrics, join_all(tasks)).await;
+}
+
+type Task = Pin<Box<dyn Future<Output = Result<(), service::Error>> + Send + 'static>>;
+
+enum ServiceTask {
+    Optional(bool, Task),
+    Essential(Task),
+}
+
+fn maybe_run<F, E>(should_run: bool, task: F) -> ServiceTask
+where
+    F: Future<Output = Result<(), E>> + Send + 'static,
+    E: Into<service::Error>,
+{
+    ServiceTask::Optional(should_run, Box::pin(task.map_err(|x| x.into())))
+}
+fn run<F, E>(task: F) -> ServiceTask
+where
+    F: Future<Output = Result<(), E>> + Send + 'static,
+    E: Into<service::Error>,
+{
+    ServiceTask::Essential(Box::pin(task.map_err(|x| x.into())))
 }
 
 impl VaultService {
@@ -425,6 +468,7 @@ impl VaultService {
         );
         tokio::spawn(async move {
             tracing::info!("Checking for open requests...");
+            // TODO: kill task on shutdown signal to prevent double payment
             match open_request_executor.await {
                 Ok(_) => tracing::info!("Done processing open requests"),
                 Err(e) => tracing::error!("Failed to process open requests: {}", e),
@@ -440,368 +484,174 @@ impl VaultService {
             issue::initialize_issue_set(&self.walletless_btc_rpc, &self.btc_parachain, &issue_set).await?;
 
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
-
-        let issue_request_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            listen_for_issue_requests(
-                self.vault_id_manager.clone(),
-                self.btc_parachain.clone(),
-                issue_event_tx.clone(),
-                issue_set.clone(),
-            ),
-        );
-
-        let issue_execute_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            listen_for_issue_executes(self.btc_parachain.clone(), issue_event_tx.clone(), issue_set.clone()),
-        );
-
-        let issue_cancel_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            listen_for_issue_cancels(self.btc_parachain.clone(), issue_set.clone()),
-        );
-
-        let mut issue_cancellation_scheduler = CancellationScheduler::new(
-            self.btc_parachain.clone(),
-            startup_height,
-            initial_btc_height,
-            account_id.clone(),
-        );
-
-        let issue_cancel_scheduler = wait_or_shutdown(self.shutdown.clone(), async move {
-            issue_cancellation_scheduler
-                .handle_cancellation::<IssueCanceller>(issue_event_rx)
-                .await?;
-            Ok(())
-        });
-
-        let issue_executor = maybe_run_task(
-            !self.config.no_issue_execution,
-            wait_or_shutdown(
-                self.shutdown.clone(),
-                issue::process_issue_requests(
-                    self.walletless_btc_rpc.clone(),
-                    self.btc_parachain.clone(),
-                    issue_set.clone(),
-                    oldest_issue_btc_height,
-                    num_confirmations,
-                ),
-            ),
-        );
-
-        // replace handling
         let (replace_event_tx, replace_event_rx) = mpsc::channel::<Event>(16);
 
-        let request_replace_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            listen_for_replace_requests(
-                self.btc_parachain.clone(),
-                self.vault_id_manager.clone(),
-                replace_event_tx.clone(),
-                !self.config.no_auto_replace,
-            ),
-        );
-
-        let accept_replace_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            listen_for_accept_replace(
-                self.shutdown.clone(),
-                self.btc_parachain.clone(),
-                self.vault_id_manager.clone(),
-                num_confirmations,
-                self.config.payment_margin_minutes,
-            ),
-        );
-
-        let execute_replace_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            listen_for_execute_replace(self.btc_parachain.clone(), replace_event_tx.clone()),
-        );
-
-        let mut replace_cancellation_scheduler = CancellationScheduler::new(
-            self.btc_parachain.clone(),
-            startup_height,
-            initial_btc_height,
-            account_id.clone(),
-        );
-
-        let replace_cancel_scheduler = wait_or_shutdown(self.shutdown.clone(), async move {
-            replace_cancellation_scheduler
-                .handle_cancellation::<ReplaceCanceller>(replace_event_rx)
-                .await?;
-            Ok(())
-        });
-
-        // listen for parachain blocks, used for cancellation
-        let parachain_block_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            active_block_listener(
-                self.btc_parachain.clone(),
-                issue_event_tx.clone(),
-                replace_event_tx.clone(),
-            ),
-        );
-
-        // listen for bitcoin blocks, used for cancellation
-        let bitcoin_block_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            relay_block_listener(
-                self.btc_parachain.clone(),
-                issue_event_tx.clone(),
-                replace_event_tx.clone(),
-            ),
-        );
-
-        // redeem handling
-        let redeem_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            listen_for_redeem_requests(
-                self.shutdown.clone(),
-                self.btc_parachain.clone(),
-                self.vault_id_manager.clone(),
-                num_confirmations,
-                self.config.payment_margin_minutes,
-            ),
-        );
-
-        // refund handling
-        let refund_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            listen_for_refund_requests(
-                self.shutdown.clone(),
-                self.btc_parachain.clone(),
-                self.vault_id_manager.clone(),
-                num_confirmations,
-                !self.config.no_auto_refund,
-            ),
-        );
-
-        // watch vault address registration and report potential thefts
-        let vaults_listener = maybe_run_task(
-            !self.config.no_vault_theft_report,
-            self.start_monitoring_btc_txs().await?,
-        );
-
-        let vault_id_registration_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            self.vault_id_manager.clone().listen_for_vault_id_registrations(),
-        );
-
-        // relay bitcoin block headers to the relay
-        let relayer = maybe_run_task(
-            !self.config.no_bitcoin_block_relay,
-            wait_or_shutdown(
-                self.shutdown.clone(),
-                run_relayer(Runner::new(
-                    self.walletless_btc_rpc.clone(),
-                    self.btc_parachain.clone(),
-                    Config {
-                        start_height: self.config.bitcoin_relay_start_height,
-                        max_batch_size: self.config.max_batch_size,
-                        interval: Some(self.config.bitcoin_poll_interval_ms),
-                        btc_confirmations: self.config.bitcoin_relay_confirmations,
-                    },
-                )),
-            ),
-        );
-        let bridge_metrics_listener = maybe_run_task(
-            !self.monitoring_config.no_prometheus,
-            wait_or_shutdown(
-                self.shutdown.clone(),
-                monitor_bridge_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
-            ),
-        );
-
-        let bridge_metrics_poller = maybe_run_task(
-            !self.monitoring_config.no_prometheus,
-            wait_or_shutdown(
-                self.shutdown.clone(),
-                poll_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
-            ),
-        );
-
-        let vault_id_registration_listener_monitor = tokio_metrics::TaskMonitor::new();
-        let parachain_block_listener_monitor = tokio_metrics::TaskMonitor::new();
-        let bitcoin_block_listener_monitor = tokio_metrics::TaskMonitor::new();
-        let issue_request_listener_monitor = tokio_metrics::TaskMonitor::new();
-        let issue_execute_listener_monitor = tokio_metrics::TaskMonitor::new();
-        let issue_cancel_listener_monitor = tokio_metrics::TaskMonitor::new();
-        let issue_cancel_scheduler_monitor = tokio_metrics::TaskMonitor::new();
-        let issue_executor_monitor = tokio_metrics::TaskMonitor::new();
-        let request_replace_listener_monitor = tokio_metrics::TaskMonitor::new();
-        let accept_replace_listener_monitor = tokio_metrics::TaskMonitor::new();
-        let execute_replace_listener_monitor = tokio_metrics::TaskMonitor::new();
-        let replace_cancel_scheduler_monitor = tokio_metrics::TaskMonitor::new();
-        let redeem_listener_monitor = tokio_metrics::TaskMonitor::new();
-        let refund_listener_monitor = tokio_metrics::TaskMonitor::new();
-        let vaults_listener_monitor = tokio_metrics::TaskMonitor::new();
-        let bridge_metrics_poller_monitor = tokio_metrics::TaskMonitor::new();
-        let bridge_metrics_listener_monitor = tokio_metrics::TaskMonitor::new();
-
-        let metrics_iterators = HashMap::from([
-            (
-                "Vault ID Registration Listener",
-                vault_id_registration_listener_monitor.clone().intervals(),
-            ),
-            (
-                "Parachain Block Listener",
-                parachain_block_listener_monitor.clone().intervals(),
-            ),
-            (
-                "Bitcoin Block Listener",
-                bitcoin_block_listener_monitor.clone().intervals(),
-            ),
+        let mut tasks = vec![
             (
                 "Issue Request Listener",
-                issue_request_listener_monitor.clone().intervals(),
+                run(listen_for_issue_requests(
+                    self.vault_id_manager.clone(),
+                    self.btc_parachain.clone(),
+                    issue_event_tx.clone(),
+                    issue_set.clone(),
+                )),
             ),
             (
                 "Issue Execute Listener",
-                issue_execute_listener_monitor.clone().intervals(),
+                run(listen_for_issue_executes(
+                    self.btc_parachain.clone(),
+                    issue_event_tx.clone(),
+                    issue_set.clone(),
+                )),
             ),
             (
                 "Issue Cancel Listener",
-                issue_cancel_listener_monitor.clone().intervals(),
+                run(listen_for_issue_cancels(self.btc_parachain.clone(), issue_set.clone())),
             ),
             (
                 "Issue Cancel Scheduler",
-                issue_cancel_scheduler_monitor.clone().intervals(),
+                run(CancellationScheduler::new(
+                    self.btc_parachain.clone(),
+                    startup_height,
+                    initial_btc_height,
+                    account_id.clone(),
+                )
+                .handle_cancellation::<IssueCanceller>(issue_event_rx)),
             ),
-            ("Issue Executor", issue_executor_monitor.clone().intervals()),
             (
                 "Request Replace Listener",
-                request_replace_listener_monitor.clone().intervals(),
+                run(listen_for_replace_requests(
+                    self.btc_parachain.clone(),
+                    self.vault_id_manager.clone(),
+                    replace_event_tx.clone(),
+                    !self.config.no_auto_replace,
+                )),
             ),
             (
                 "Accept Replace Listener",
-                accept_replace_listener_monitor.clone().intervals(),
+                run(listen_for_accept_replace(
+                    self.shutdown.clone(),
+                    self.btc_parachain.clone(),
+                    self.vault_id_manager.clone(),
+                    num_confirmations,
+                    self.config.payment_margin_minutes,
+                )),
             ),
             (
                 "Execute Replace Listener",
-                execute_replace_listener_monitor.clone().intervals(),
+                run(listen_for_execute_replace(
+                    self.btc_parachain.clone(),
+                    replace_event_tx.clone(),
+                )),
             ),
             (
-                "Replace Cancel Scheduler",
-                replace_cancel_scheduler_monitor.clone().intervals(),
+                "Replace Cancellation Scheduler",
+                run(CancellationScheduler::new(
+                    self.btc_parachain.clone(),
+                    startup_height,
+                    initial_btc_height,
+                    account_id.clone(),
+                )
+                .handle_cancellation::<ReplaceCanceller>(replace_event_rx)),
             ),
-            ("Redeem Listener", redeem_listener_monitor.clone().intervals()),
-            ("Refund Listener", refund_listener_monitor.clone().intervals()),
-            ("Vaults Listener", vaults_listener_monitor.clone().intervals()),
             (
-                "Bridge Metrics Poller",
-                bridge_metrics_poller_monitor.clone().intervals(),
+                "Parachain Block Listener",
+                run(active_block_listener(
+                    self.btc_parachain.clone(),
+                    issue_event_tx.clone(),
+                    replace_event_tx.clone(),
+                )),
+            ),
+            (
+                "Bitcoin Block Listener",
+                run(relay_block_listener(
+                    self.btc_parachain.clone(),
+                    issue_event_tx.clone(),
+                    replace_event_tx.clone(),
+                )),
+            ),
+            (
+                "Redeem Request Listener",
+                run(listen_for_redeem_requests(
+                    self.shutdown.clone(),
+                    self.btc_parachain.clone(),
+                    self.vault_id_manager.clone(),
+                    num_confirmations,
+                    self.config.payment_margin_minutes,
+                )),
+            ),
+            (
+                "Refund Request Listener",
+                run(listen_for_refund_requests(
+                    self.shutdown.clone(),
+                    self.btc_parachain.clone(),
+                    self.vault_id_manager.clone(),
+                    num_confirmations,
+                    !self.config.no_auto_refund,
+                )),
+            ),
+            (
+                "VaultId Registration Listener",
+                run(self.vault_id_manager.clone().listen_for_vault_id_registrations()),
+            ),
+            (
+                "Bitcoin Relay",
+                maybe_run(
+                    !self.config.no_bitcoin_block_relay,
+                    run_relayer(Runner::new(
+                        self.walletless_btc_rpc.clone(),
+                        self.btc_parachain.clone(),
+                        Config {
+                            start_height: self.config.bitcoin_relay_start_height,
+                            max_batch_size: self.config.max_batch_size,
+                            interval: Some(self.config.bitcoin_poll_interval_ms),
+                            btc_confirmations: self.config.bitcoin_relay_confirmations,
+                        },
+                    )),
+                ),
+            ),
+            (
+                "Issue Executor",
+                maybe_run(
+                    !self.config.no_issue_execution,
+                    issue::process_issue_requests(
+                        self.walletless_btc_rpc.clone(),
+                        self.btc_parachain.clone(),
+                        issue_set.clone(),
+                        oldest_issue_btc_height,
+                        num_confirmations,
+                    ),
+                ),
             ),
             (
                 "Bridge Metrics Listener",
-                bridge_metrics_listener_monitor.clone().intervals(),
+                maybe_run(
+                    !self.monitoring_config.no_prometheus,
+                    monitor_bridge_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
+                ),
             ),
-        ]);
+            (
+                "Bridge Metrics Poller",
+                maybe_run(
+                    !self.monitoring_config.no_prometheus,
+                    poll_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
+                ),
+            ),
+            (
+                "Restart Timer",
+                run(async move {
+                    tokio::time::sleep(RESTART_INTERVAL).await;
+                    tracing::info!("Initiating periodic restart...");
+                    Err(service::Error::ClientShutdown)
+                }),
+            ),
+        ];
 
-        let tokio_metrics_publisher = wait_or_shutdown(self.shutdown.clone(), publish_tokio_metrics(metrics_iterators));
-        let restart_timer = wait_or_shutdown(self.shutdown.clone(), async move {
-            tokio::time::sleep(RESTART_INTERVAL).await;
-            tracing::info!("Initiating periodic restart...");
-            Err(service::Error::ClientShutdown)
-        });
+        if !self.config.no_vault_theft_report {
+            tasks.extend(self.btc_monitor_tasks().await?)
+        }
 
-        // starts all the tasks
-        tracing::info!("Starting to listen for events...");
-        let _ = tokio::join!(
-            // runs error listener to log errors
-            tokio::spawn(async move { restart_timer.await }),
-            // handles new registrations of this vault done externally
-            tokio::spawn(async move {
-                vault_id_registration_listener_monitor
-                    .instrument(async { vault_id_registration_listener.await })
-                    .await
-            }),
-            // replace & issue cancellation helpers
-            tokio::spawn(async move {
-                parachain_block_listener_monitor
-                    .instrument(async { parachain_block_listener.await })
-                    .await
-            }),
-            tokio::spawn(async move {
-                bitcoin_block_listener_monitor
-                    .instrument(async { bitcoin_block_listener.await })
-                    .await
-            }),
-            // issue handling
-            tokio::spawn(async move {
-                issue_request_listener_monitor
-                    .instrument(async { issue_request_listener.await })
-                    .await
-            }),
-            tokio::spawn(async move {
-                issue_execute_listener_monitor
-                    .instrument(async { issue_execute_listener.await })
-                    .await
-            }),
-            tokio::spawn(async move {
-                issue_cancel_listener_monitor
-                    .instrument(async { issue_cancel_listener.await })
-                    .await
-            }),
-            tokio::spawn(async move {
-                issue_cancel_scheduler_monitor
-                    .instrument(async { issue_cancel_scheduler.await })
-                    .await
-            }),
-            tokio::spawn(async move { issue_executor_monitor.instrument(async { issue_executor.await }).await }),
-            // replace handling
-            tokio::spawn(async move {
-                request_replace_listener_monitor
-                    .instrument(async { request_replace_listener.await })
-                    .await
-            }),
-            tokio::spawn(async move {
-                accept_replace_listener_monitor
-                    .instrument(async { accept_replace_listener.await })
-                    .await
-            }),
-            tokio::spawn(async move {
-                execute_replace_listener_monitor
-                    .instrument(async { execute_replace_listener.await })
-                    .await
-            }),
-            tokio::spawn(async move {
-                replace_cancel_scheduler_monitor
-                    .instrument(async { replace_cancel_scheduler.await })
-                    .await
-            }),
-            // redeem handling
-            tokio::spawn(async move {
-                redeem_listener_monitor
-                    .instrument(async { redeem_listener.await })
-                    .await
-            }),
-            // refund handling
-            tokio::spawn(async move {
-                refund_listener_monitor
-                    .instrument(async { refund_listener.await })
-                    .await
-            }),
-            // runs vault theft checks
-            tokio::spawn(async move {
-                vaults_listener_monitor
-                    .instrument(async { vaults_listener.await })
-                    .await
-            }),
-            // prometheus monitoring
-            tokio::task::spawn(async move {
-                bridge_metrics_poller_monitor
-                    .instrument(async { bridge_metrics_poller.await })
-                    .await
-            }),
-            tokio::task::spawn(async move {
-                bridge_metrics_listener_monitor
-                    .instrument(async { bridge_metrics_listener.await })
-                    .await
-            }),
-            tokio::task::spawn(async move { tokio_metrics_publisher.await }),
-            // relayer process
-            tokio::task::spawn_blocking(move || block_on(relayer)),
-        );
+        run_and_monitor_tasks(self.shutdown.clone(), tasks).await;
 
         Ok(())
     }
@@ -862,7 +712,8 @@ impl VaultService {
         tracing::info!("Got new block...");
         Ok(startup_height)
     }
-    pub(crate) async fn start_monitoring_btc_txs(&self) -> Result<impl Future, Error> {
+
+    async fn btc_monitor_tasks(&self) -> Result<Vec<(&str, ServiceTask)>, Error> {
         tracing::info!("Fetching all active vaults...");
         let vaults = self
             .btc_parachain
@@ -888,37 +739,31 @@ impl VaultService {
             .bitcoin_theft_start_height
             .unwrap_or(self.walletless_btc_rpc.get_block_count().await? as u32 + 1);
 
-        let bitcoin_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            monitor_btc_txs(
-                self.walletless_btc_rpc.clone(),
-                self.btc_parachain.clone(),
-                bitcoin_theft_start_height,
-                vaults.clone(),
+        Ok(vec![
+            (
+                "Bitcoin tx monitor",
+                run(monitor_btc_txs(
+                    self.walletless_btc_rpc.clone(),
+                    self.btc_parachain.clone(),
+                    bitcoin_theft_start_height,
+                    vaults.clone(),
+                )),
             ),
-        );
-
-        // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
-        let vaults_registration_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            listen_for_vaults_registered(self.btc_parachain.clone(), vaults.clone()),
-        );
-
-        // keep vault wallets up-to-date
-        let wallet_update_listener = wait_or_shutdown(
-            self.shutdown.clone(),
-            listen_for_wallet_updates(
-                self.btc_parachain.clone(),
-                self.walletless_btc_rpc.network(),
-                vaults.clone(),
+            (
+                // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
+                "Vault Registration Listener",
+                run(listen_for_vaults_registered(self.btc_parachain.clone(), vaults.clone())),
             ),
-        );
-
-        Ok(futures::future::join3(
-            bitcoin_listener,
-            vaults_registration_listener,
-            wallet_update_listener,
-        ))
+            (
+                // keep vault wallets up-to-date
+                "Vault Wallet Update Listener",
+                run(listen_for_wallet_updates(
+                    self.btc_parachain.clone(),
+                    self.walletless_btc_rpc.network(),
+                    vaults.clone(),
+                )),
+            ),
+        ])
     }
 }
 

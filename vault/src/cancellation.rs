@@ -193,7 +193,7 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
     ///
     /// *`event_listener`: channel that signals relevant events _for this vault_.
     pub async fn handle_cancellation<T: Canceller<P>>(
-        &mut self,
+        mut self,
         mut event_listener: Receiver<Event>,
     ) -> Result<(), RuntimeError> {
         let mut list_state = ListState::Invalid;
