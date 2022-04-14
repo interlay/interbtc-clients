@@ -30,12 +30,16 @@ const TRANSACTION_TIMEOUT: Duration = Duration::from_secs(300); // 5 minute time
 cfg_if::cfg_if! {
     if #[cfg(feature = "standalone-metadata")] {
         const DEFAULT_SPEC_VERSION: u32 = 1;
+        pub const SS58_PREFIX: u16 = 42;
     } else if #[cfg(feature = "parachain-metadata-interlay")] {
         const DEFAULT_SPEC_VERSION: u32 = 2;
+        pub const SS58_PREFIX: u16 = 2032;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
         const DEFAULT_SPEC_VERSION: u32 = 14;
+        pub const SS58_PREFIX: u16 = 2092;
     } else if #[cfg(feature = "parachain-metadata-testnet")] {
         const DEFAULT_SPEC_VERSION: u32 = 5;
+        pub const SS58_PREFIX: u16 = 42;
     }
 }
 

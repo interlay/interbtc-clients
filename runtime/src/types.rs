@@ -1,4 +1,4 @@
-use crate::{metadata, Config, InterBtcRuntime};
+use crate::{metadata, Config, InterBtcRuntime, SS58_PREFIX};
 pub use metadata_aliases::*;
 use subxt::sp_core::{crypto::Ss58Codec, sr25519::Pair as KeyPair};
 
@@ -178,7 +178,7 @@ mod vault_id {
             let wrapped_currency: CurrencyId = self.wrapped_currency();
             format!(
                 "{}[{}->{}]",
-                self.account_id.to_ss58check(),
+                self.account_id.to_ss58check_with_version(SS58_PREFIX.into()),
                 collateral_currency.inner().symbol(),
                 wrapped_currency.inner().symbol()
             )

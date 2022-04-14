@@ -6,7 +6,7 @@ use futures::{
 };
 use runtime::{
     BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcVault, RegisterAddressEvent,
-    RegisterVaultEvent, RelayPallet, Ss58Codec, VaultId, VaultRegistryPallet,
+    RegisterVaultEvent, RelayPallet, Ss58Codec, VaultId, VaultRegistryPallet, SS58_PREFIX,
 };
 use service::Error as ServiceError;
 use std::{collections::HashMap, sync::Arc};
@@ -216,7 +216,7 @@ pub async fn listen_for_wallet_updates(
                     btc_address
                         .encode_str(btc_network)
                         .unwrap_or(format!("{:?}", btc_address)),
-                    event.vault_id.account_id.to_ss58check()
+                    event.vault_id.account_id.to_ss58check_with_version(SS58_PREFIX.into())
                 );
                 vaults.write(btc_address, event.vault_id).await;
             },
