@@ -8,6 +8,7 @@ description = "The Vault client intermediates between Bitcoin Core and the BTC P
 [features]
 integration = []
 standalone-metadata = ["runtime/standalone-metadata"]
+parachain-metadata-interlay = ["runtime/parachain-metadata-interlay"]
 parachain-metadata-kintsugi = ["runtime/parachain-metadata-kintsugi"]
 parachain-metadata-testnet = ["runtime/parachain-metadata-testnet"]
 

@@ -13,6 +13,7 @@ jobs:
     strategy:
       matrix:
         metadata:
+          - parachain-metadata-interlay
           - parachain-metadata-kintsugi
           - parachain-metadata-testnet
           - standalone-metadata
