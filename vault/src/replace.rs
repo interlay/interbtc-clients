@@ -5,7 +5,7 @@ use crate::{
 use bitcoin::BitcoinCoreApi;
 use futures::{channel::mpsc::Sender, future::try_join3, SinkExt};
 use runtime::{
-    AcceptReplaceEvent, CollateralBalancesPallet, ExecuteReplaceEvent, InterBtcParachain, ReplacePallet,
+    AcceptReplaceEvent, CollateralBalancesPallet, ExecuteReplaceEvent, InterBtcParachain, PrettyPrint, ReplacePallet,
     RequestReplaceEvent, UtilFuncs, VaultId, VaultRegistryPallet,
 };
 use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
@@ -104,7 +104,7 @@ pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone + Send + Sync
 
                 tracing::info!(
                     "Received replace request from {} for amount {}",
-                    event.old_vault_id.pretty_printed(),
+                    event.old_vault_id.pretty_print(),
                     event.amount
                 );
 
@@ -114,8 +114,8 @@ pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone + Send + Sync
                             Ok(_) => {
                                 tracing::info!(
                                     "[{}] Accepted replace request from {}",
-                                    vault_id.pretty_printed(),
-                                    event.old_vault_id.pretty_printed()
+                                    vault_id.pretty_print(),
+                                    event.old_vault_id.pretty_print()
                                 );
                                 // try to send the event, but ignore the returned result since
                                 // the only way it can fail is if the channel is closed
@@ -125,8 +125,8 @@ pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone + Send + Sync
                             }
                             Err(e) => tracing::error!(
                                 "[{}] Failed to accept replace request from {}: {}",
-                                vault_id.pretty_printed(),
-                                event.old_vault_id.pretty_printed(),
+                                vault_id.pretty_print(),
+                                event.old_vault_id.pretty_print(),
                                 e.to_string()
                             ),
                         }

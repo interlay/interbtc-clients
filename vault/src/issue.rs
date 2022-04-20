@@ -3,7 +3,7 @@ use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt};
 use runtime::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, ExecuteIssueEvent, H256Le, InterBtcParachain,
-    IssuePallet, RequestIssueEvent, UtilFuncs, H256,
+    IssuePallet, PrettyPrint, RequestIssueEvent, UtilFuncs, H256,
 };
 use service::Error as ServiceError;
 use sha2::{Digest, Sha256};
@@ -170,8 +170,8 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
                 tracing::info!(
                     "Executing issue #{:?} on behalf of user {:?} with vault {:?}",
                     issue_id,
-                    issue.requester,
-                    issue.vault.pretty_printed()
+                    issue.requester.pretty_print(),
+                    issue.vault.pretty_print()
                 );
                 match btc_parachain.execute_issue(issue_id, &proof, &raw_tx).await {
                     Ok(_) => (),
@@ -233,7 +233,7 @@ pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync +
                         None => {
                             tracing::error!(
                                 "No bitcoin_rpc found for vault with id {}",
-                                event.vault_id.pretty_printed()
+                                event.vault_id.pretty_print()
                             );
                             return;
                         }

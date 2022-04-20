@@ -1,4 +1,4 @@
-use crate::{metadata, Config, InterBtcRuntime};
+use crate::{metadata, Config, InterBtcRuntime, SS58_PREFIX};
 pub use metadata_aliases::*;
 use subxt::sp_core::{crypto::Ss58Codec, sr25519::Pair as KeyPair};
 
@@ -148,6 +148,20 @@ mod currency_id {
     }
 }
 
+pub trait PrettyPrint {
+    fn pretty_print(&self) -> String;
+}
+
+mod account_id {
+    use super::*;
+
+    impl PrettyPrint for AccountId {
+        fn pretty_print(&self) -> String {
+            self.to_ss58check_with_version(SS58_PREFIX.into())
+        }
+    }
+}
+
 mod vault_id {
     use super::*;
     use primitives::CurrencyInfo;
@@ -172,13 +186,15 @@ mod vault_id {
         pub fn wrapped_currency(&self) -> CurrencyId {
             self.currencies.wrapped
         }
+    }
 
-        pub fn pretty_printed(&self) -> String {
+    impl PrettyPrint for VaultId {
+        fn pretty_print(&self) -> String {
             let collateral_currency: CurrencyId = self.collateral_currency();
             let wrapped_currency: CurrencyId = self.wrapped_currency();
             format!(
                 "{}[{}->{}]",
-                self.account_id.to_ss58check(),
+                self.account_id.pretty_print(),
                 collateral_currency.inner().symbol(),
                 wrapped_currency.inner().symbol()
             )
