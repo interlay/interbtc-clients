@@ -133,12 +133,10 @@ async fn test_register_vault() {
 
     let vault_id = VaultId::new(AccountKeyring::Alice.into(), Token(DOT), Token(IBTC));
 
-    parachain_rpc
-        .register_vault(&vault_id, 100, dummy_public_key())
-        .await
-        .unwrap();
-    let vault = parachain_rpc.get_vault(&vault_id).await.unwrap();
-    assert_eq!(vault.wallet.public_key, dummy_public_key());
+    parachain_rpc.register_public_key(dummy_public_key()).await.unwrap();
+    parachain_rpc.register_vault(&vault_id, 100).await.unwrap();
+    parachain_rpc.get_vault(&vault_id).await.unwrap();
+    assert_eq!(parachain_rpc.get_public_key().await.unwrap(), Some(dummy_public_key()));
 }
 
 #[tokio::test]

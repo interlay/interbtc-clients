@@ -158,6 +158,7 @@ pub struct VaultData<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> {
 pub struct VaultIdManager<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> {
     vault_data: Arc<RwLock<HashMap<VaultId, VaultData<BCA>>>>,
     btc_parachain: InterBtcParachain,
+    btc_rpc_master_wallet: BCA,
     // TODO: refactor this
     #[allow(clippy::type_complexity)]
     constructor: Arc<Box<dyn Fn(VaultId) -> Result<BCA, BitcoinError> + Send + Sync>>,
@@ -166,17 +167,19 @@ pub struct VaultIdManager<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> {
 impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
     pub fn new(
         btc_parachain: InterBtcParachain,
+        btc_rpc_master_wallet: BCA,
         constructor: impl Fn(VaultId) -> Result<BCA, BitcoinError> + Send + Sync + 'static,
     ) -> Self {
         Self {
             vault_data: Arc::new(RwLock::new(HashMap::new())),
             constructor: Arc::new(Box::new(constructor)),
+            btc_rpc_master_wallet,
             btc_parachain,
         }
     }
 
     // used for testing only
-    pub fn from_map(btc_parachain: InterBtcParachain, map: HashMap<VaultId, BCA>) -> Self {
+    pub fn from_map(btc_parachain: InterBtcParachain, btc_rpc_master_wallet: BCA, map: HashMap<VaultId, BCA>) -> Self {
         let vault_data = map
             .into_iter()
             .map(|(key, value)| {
@@ -193,11 +196,12 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
         Self {
             vault_data: Arc::new(RwLock::new(vault_data)),
             constructor: Arc::new(Box::new(|_| unimplemented!())),
+            btc_rpc_master_wallet,
             btc_parachain,
         }
     }
 
-    async fn add_vault_id(&self, vault_id: VaultId) -> Result<BCA, Error> {
+    async fn add_vault_id(&self, vault_id: VaultId) -> Result<(), Error> {
         let btc_rpc = (*self.constructor)(vault_id.clone())?;
 
         // load wallet. Exit on failure, since without wallet we can't do a lot
@@ -206,9 +210,28 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
             .await
             .map_err(Error::WalletInitializationFailure)?;
 
-        if let Ok(vault) = self.btc_parachain.get_vault(&vault_id).await {
-            if !btc_rpc.wallet_has_public_key(vault.wallet.public_key.0).await? {
-                return Err(bitcoin::Error::MissingPublicKey.into());
+        tracing::info!("Adding derivation key...");
+        let derivation_key = self
+            .btc_parachain
+            .get_public_key()
+            .await?
+            .ok_or(bitcoin::Error::MissingPublicKey)?;
+
+        // migration to the new shared public key setup: copy the public key from the
+        // currency-specific wallet to the master wallet. This can be removed once all
+        // vaults have migrated
+        if let Ok(private_key) = btc_rpc.dump_derivation_key(derivation_key.0) {
+            self.btc_rpc_master_wallet.import_derivation_key(&private_key)?;
+        }
+
+        // Copy the derivation key from the master wallet to use currency-specific wallet
+        match self.btc_rpc_master_wallet.dump_derivation_key(derivation_key.0) {
+            Ok(private_key) => {
+                btc_rpc.import_derivation_key(&private_key)?;
+            }
+            Err(err) => {
+                tracing::error!("Could not find the derivation key in the bitcoin wallet");
+                return Err(err.into());
             }
         }
 
@@ -226,7 +249,7 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
 
         self.vault_data.write().await.insert(vault_id, data.clone());
 
-        Ok(btc_rpc)
+        Ok(())
     }
 
     pub async fn fetch_vault_ids(&self, startup_collateral_increase: bool) -> Result<(), Error> {
@@ -303,7 +326,7 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
 
 pub struct VaultService {
     btc_parachain: InterBtcParachain,
-    walletless_btc_rpc: BitcoinCore,
+    btc_rpc_master_wallet: BitcoinCore,
     config: VaultServiceConfig,
     monitoring_config: MonitoringConfig,
     shutdown: ShutdownSender,
@@ -317,7 +340,7 @@ impl Service<VaultServiceConfig> for VaultService {
 
     fn new_service(
         btc_parachain: InterBtcParachain,
-        walletless_btc_rpc: BitcoinCore,
+        btc_rpc_master_wallet: BitcoinCore,
         config: VaultServiceConfig,
         monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
@@ -325,7 +348,7 @@ impl Service<VaultServiceConfig> for VaultService {
     ) -> Self {
         VaultService::new(
             btc_parachain,
-            walletless_btc_rpc,
+            btc_rpc_master_wallet,
             config,
             monitoring_config,
             shutdown,
@@ -394,7 +417,7 @@ where
 impl VaultService {
     fn new(
         btc_parachain: InterBtcParachain,
-        walletless_btc_rpc: BitcoinCore,
+        btc_rpc_master_wallet: BitcoinCore,
         config: VaultServiceConfig,
         monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
@@ -402,11 +425,11 @@ impl VaultService {
     ) -> Self {
         Self {
             btc_parachain: btc_parachain.clone(),
-            walletless_btc_rpc,
+            btc_rpc_master_wallet: btc_rpc_master_wallet.clone(),
             config,
             monitoring_config,
             shutdown,
-            vault_id_manager: VaultIdManager::new(btc_parachain, constructor),
+            vault_id_manager: VaultIdManager::new(btc_parachain, btc_rpc_master_wallet, constructor),
         }
     }
 
@@ -461,7 +484,7 @@ impl VaultService {
             self.shutdown.clone(),
             self.btc_parachain.clone(),
             self.vault_id_manager.clone(),
-            self.walletless_btc_rpc.clone(),
+            self.btc_rpc_master_wallet.clone(),
             num_confirmations,
             self.config.payment_margin_minutes,
             !self.config.no_auto_refund,
@@ -481,7 +504,7 @@ impl VaultService {
         // issue handling
         let issue_set = Arc::new(IssueRequests::new());
         let oldest_issue_btc_height =
-            issue::initialize_issue_set(&self.walletless_btc_rpc, &self.btc_parachain, &issue_set).await?;
+            issue::initialize_issue_set(&self.btc_rpc_master_wallet, &self.btc_parachain, &issue_set).await?;
 
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
         let (replace_event_tx, replace_event_rx) = mpsc::channel::<Event>(16);
@@ -599,7 +622,7 @@ impl VaultService {
                 maybe_run(
                     !self.config.no_bitcoin_block_relay,
                     run_relayer(Runner::new(
-                        self.walletless_btc_rpc.clone(),
+                        self.btc_rpc_master_wallet.clone(),
                         self.btc_parachain.clone(),
                         Config {
                             start_height: self.config.bitcoin_relay_start_height,
@@ -615,7 +638,7 @@ impl VaultService {
                 maybe_run(
                     !self.config.no_issue_execution,
                     issue::process_issue_requests(
-                        self.walletless_btc_rpc.clone(),
+                        self.btc_rpc_master_wallet.clone(),
                         self.btc_parachain.clone(),
                         issue_set.clone(),
                         oldest_issue_btc_height,
@@ -656,7 +679,19 @@ impl VaultService {
         Ok(())
     }
 
+    async fn maybe_register_public_key(&self) -> Result<(), Error> {
+        if let None = self.btc_parachain.get_public_key().await? {
+            tracing::info!("Registering bitcoin public key to the parachain...");
+            let new_key = self.btc_rpc_master_wallet.get_new_public_key().await?;
+            self.btc_parachain.register_public_key(new_key).await?;
+        }
+
+        Ok(())
+    }
+
     async fn maybe_register_vault(&self) -> Result<(), Error> {
+        self.maybe_register_public_key().await?;
+
         let vault_id = self.get_vault_id();
 
         if is_vault_registered(&self.btc_parachain, &vault_id).await? {
@@ -667,11 +702,10 @@ impl VaultService {
         } else {
             tracing::info!("[{}] Not registered", vault_id.pretty_printed());
 
-            let bitcoin_core_with_wallet = self.vault_id_manager.add_vault_id(vault_id.clone()).await?;
+            self.vault_id_manager.add_vault_id(vault_id.clone()).await?;
 
             if let Some(collateral) = self.config.auto_register_with_collateral {
                 tracing::info!("[{}] Automatically registering...", vault_id.pretty_printed());
-                let public_key = bitcoin_core_with_wallet.get_new_public_key().await?;
                 let free_balance = self
                     .btc_parachain
                     .get_free_balance(vault_id.collateral_currency())
@@ -689,13 +723,11 @@ impl VaultService {
                         } else {
                             collateral
                         },
-                        public_key,
                     )
                     .await?;
             } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
                 tracing::info!("[{}] Automatically registering...", vault_id.pretty_printed());
-                faucet::fund_and_register(&self.btc_parachain, &bitcoin_core_with_wallet, faucet_url, &vault_id)
-                    .await?;
+                faucet::fund_and_register(&self.btc_parachain, faucet_url, &vault_id).await?;
             }
         }
         Ok(())
@@ -737,13 +769,13 @@ impl VaultService {
         let bitcoin_theft_start_height = self
             .config
             .bitcoin_theft_start_height
-            .unwrap_or(self.walletless_btc_rpc.get_block_count().await? as u32 + 1);
+            .unwrap_or(self.btc_rpc_master_wallet.get_block_count().await? as u32 + 1);
 
         Ok(vec![
             (
                 "Bitcoin tx monitor",
                 run(monitor_btc_txs(
-                    self.walletless_btc_rpc.clone(),
+                    self.btc_rpc_master_wallet.clone(),
                     self.btc_parachain.clone(),
                     bitcoin_theft_start_height,
                     vaults.clone(),
@@ -759,7 +791,7 @@ impl VaultService {
                 "Vault Wallet Update Listener",
                 run(listen_for_wallet_updates(
                     self.btc_parachain.clone(),
-                    self.walletless_btc_rpc.network(),
+                    self.btc_rpc_master_wallet.network(),
                     vaults.clone(),
                 )),
             ),

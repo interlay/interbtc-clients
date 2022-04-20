@@ -1397,14 +1397,15 @@ pub trait VaultRegistryPallet {
 
     async fn get_all_vaults(&self) -> Result<Vec<InterBtcVault>, Error>;
 
-    async fn register_vault(&self, vault_id: &VaultId, collateral: u128, public_key: BtcPublicKey)
-        -> Result<(), Error>;
+    async fn register_vault(&self, vault_id: &VaultId, collateral: u128) -> Result<(), Error>;
 
     async fn deposit_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error>;
 
     async fn withdraw_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error>;
 
-    async fn update_public_key(&self, vault_id: &VaultId, public_key: BtcPublicKey) -> Result<(), Error>;
+    async fn get_public_key(&self) -> Result<Option<BtcPublicKey>, Error>;
+
+    async fn register_public_key(&self, public_key: BtcPublicKey) -> Result<(), Error>;
 
     async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), Error>;
 
@@ -1476,23 +1477,17 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// # Arguments
     /// * `collateral` - deposit
     /// * `public_key` - Bitcoin public key
-    async fn register_vault(
-        &self,
-        vault_id: &VaultId,
-        collateral: u128,
-        public_key: BtcPublicKey,
-    ) -> Result<(), Error> {
+    async fn register_vault(&self, vault_id: &VaultId, collateral: u128) -> Result<(), Error> {
         // TODO: check MinimumDeposit
         if collateral == 0 {
             return Err(Error::InsufficientFunds);
         }
 
-        let public_key = &public_key.clone();
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
                 .vault_registry()
-                .register_vault(vault_id.currencies.clone(), collateral, public_key.clone())
+                .register_vault(vault_id.currencies.clone(), collateral)
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1540,17 +1535,27 @@ impl VaultRegistryPallet for InterBtcParachain {
         Ok(())
     }
 
+    async fn get_public_key(&self) -> Result<Option<BtcPublicKey>, Error> {
+        let head = self.get_latest_block_hash().await?;
+        Ok(self
+            .api
+            .storage()
+            .vault_registry()
+            .vault_bitcoin_public_key(self.get_account_id(), head)
+            .await?)
+    }
+
     /// Update the default BTC public key for the vault corresponding to the signer.
     ///
     /// # Arguments
     /// * `public_key` - the new public key of the vault
-    async fn update_public_key(&self, vault_id: &VaultId, public_key: BtcPublicKey) -> Result<(), Error> {
+    async fn register_public_key(&self, public_key: BtcPublicKey) -> Result<(), Error> {
         let public_key = &public_key.clone();
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
                 .vault_registry()
-                .update_public_key(vault_id.currencies.clone(), public_key.clone())
+                .register_public_key(public_key.clone())
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
