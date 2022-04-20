@@ -5,8 +5,8 @@ use futures::{
     stream::{iter, StreamExt},
 };
 use runtime::{
-    BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcVault, RegisterAddressEvent,
-    RegisterVaultEvent, RelayPallet, Ss58Codec, VaultId, VaultRegistryPallet, SS58_PREFIX,
+    BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcVault, PrettyPrint,
+    RegisterAddressEvent, RegisterVaultEvent, RelayPallet, VaultId, VaultRegistryPallet,
 };
 use service::Error as ServiceError;
 use std::{collections::HashMap, sync::Arc};
@@ -89,14 +89,14 @@ impl<P: RelayPallet + BtcRelayPallet + Send + Sync, B: BitcoinCoreApi + Send + S
         tracing::debug!(
             "Found txid {} from vault {}",
             transaction.txid(),
-            vault_id.pretty_printed()
+            vault_id.pretty_print()
         );
         // check if matching redeem or replace request
         let raw_tx = bitcoin::serialize(transaction);
         if self.btc_parachain.is_transaction_invalid(vault_id, &raw_tx).await? {
             tracing::info!(
                 "Detected theft by vault {} - txid {}. Reporting...",
-                vault_id.pretty_printed(),
+                vault_id.pretty_print(),
                 transaction.txid()
             );
 
@@ -109,7 +109,7 @@ impl<P: RelayPallet + BtcRelayPallet + Send + Sync, B: BitcoinCoreApi + Send + S
                 if !self.btc_parachain.is_transaction_invalid(vault_id, &raw_tx_2).await? {
                     tracing::info!(
                         "Detected double payment by vault {} - txids {} and {}. Reporting...",
-                        vault_id.pretty_printed(),
+                        vault_id.pretty_print(),
                         transaction.txid(),
                         txid_2
                     );
@@ -216,7 +216,7 @@ pub async fn listen_for_wallet_updates(
                     btc_address
                         .encode_str(btc_network)
                         .unwrap_or(format!("{:?}", btc_address)),
-                    event.vault_id.account_id.to_ss58check_with_version(SS58_PREFIX.into())
+                    event.vault_id.account_id.pretty_print()
                 );
                 vaults.write(btc_address, event.vault_id).await;
             },
@@ -236,7 +236,7 @@ pub async fn listen_for_vaults_registered(
                 let vault_id = event.vault_id;
                 match btc_parachain.get_vault(&vault_id).await {
                     Ok(vault) => {
-                        tracing::info!("Vault registered: {}", vault.id.pretty_printed());
+                        tracing::info!("Vault registered: {}", vault.id.pretty_print());
                         vaults.add_vault(vault).await;
                     }
                     Err(err) => tracing::error!("Error getting vault: {}", err.to_string()),
