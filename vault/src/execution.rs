@@ -9,7 +9,7 @@ use futures::{
 };
 use runtime::{
     BtcAddress, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRedeemRequest, InterBtcRefundRequest,
-    InterBtcReplaceRequest, IssuePallet, RedeemPallet, RedeemRequestStatus, RefundPallet, ReplacePallet,
+    InterBtcReplaceRequest, IssuePallet, PrettyPrint, RedeemPallet, RedeemRequestStatus, RefundPallet, ReplacePallet,
     ReplaceRequestStatus, RequestRefundEvent, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
 use service::{spawn_cancelable, ShutdownSender};
@@ -429,7 +429,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                     None => {
                         tracing::error!(
                             "Failed to fetch bitcoin rpc for vault {}",
-                            request.vault_id.pretty_printed()
+                            request.vault_id.pretty_print()
                         );
                         return; // nothing we can do - bail
                     }
@@ -491,7 +491,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                 None => {
                     tracing::error!(
                         "Failed to fetch bitcoin rpc for vault {}",
-                        request.vault_id.pretty_printed()
+                        request.vault_id.pretty_print()
                     );
                     return; // nothing we can do - bail
                 }

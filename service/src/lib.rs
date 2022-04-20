@@ -3,7 +3,7 @@ use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCore, BitcoinCoreApi, Er
 use futures::{future::Either, Future, FutureExt};
 use runtime::{
     cli::ConnectionOpts as ParachainConfig, CurrencyId, CurrencyIdExt, CurrencyInfo, Error as RuntimeError,
-    InterBtcParachain as BtcParachain, InterBtcSigner, Ss58Codec, VaultId,
+    InterBtcParachain as BtcParachain, InterBtcSigner, PrettyPrint, VaultId,
 };
 use std::marker::PhantomData;
 
@@ -73,7 +73,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
     pub async fn start(&self) -> Result<(), Error> {
         loop {
             tracing::info!("Version: {}", S::VERSION);
-            tracing::info!("AccountId: {}", self.signer.account_id().to_ss58check());
+            tracing::info!("AccountId: {}", self.signer.account_id().pretty_print());
 
             let config = self.config.clone();
             let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
