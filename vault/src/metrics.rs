@@ -702,7 +702,7 @@ mod tests {
 
         #[async_trait]
         pub trait IssuePallet {
-            async fn request_issue(&self, amount: u128, vault_id: &VaultId, griefing_collateral: u128) -> Result<RequestIssueEvent, RuntimeError>;
+            async fn request_issue(&self, amount: u128, vault_id: &VaultId) -> Result<RequestIssueEvent, RuntimeError>;
             async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
             async fn cancel_issue(&self, issue_id: H256) -> Result<(), RuntimeError>;
             async fn get_issue_request(&self, issue_id: H256) -> Result<InterBtcIssueRequest, RuntimeError>;
@@ -748,7 +748,7 @@ mod tests {
 
         #[async_trait]
         pub trait ReplacePallet {
-            async fn request_replace(&self, vault_id: &VaultId, amount: u128, griefing_collateral: u128) -> Result<(), RuntimeError>;
+            async fn request_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
             async fn accept_replace(&self, new_vault: &VaultId, old_vault: &VaultId, amount_btc: u128, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
             async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;

@@ -417,7 +417,7 @@ async fn test_replace_succeeds() {
             ),
             async {
                 old_vault_provider
-                    .request_replace(&old_vault_id, issue_amount, 1000000)
+                    .request_replace(&old_vault_id, issue_amount)
                     .await
                     .unwrap();
 
@@ -530,7 +530,7 @@ async fn test_withdraw_replace_succeeds() {
 
         join(
             old_vault_provider
-                .request_replace(&old_vault_id, issue_amount, 1000000)
+                .request_replace(&old_vault_id, issue_amount)
                 .map(Result::unwrap),
             assert_event::<RequestReplaceEvent, _>(TIMEOUT, old_vault_provider.clone(), |_| true),
         )
@@ -711,7 +711,7 @@ async fn test_cancellation_succeeds() {
                         // setup the to-be-cancelled replace
                         assert_ok!(
                             old_vault_provider
-                                .request_replace(&old_vault_id, issue_amount / 2, 1000000)
+                                .request_replace(&old_vault_id, issue_amount / 2)
                                 .await
                         );
                         assert_ok!(
@@ -727,7 +727,7 @@ async fn test_cancellation_succeeds() {
                         );
 
                         // setup the to-be-cancelled issue
-                        assert_ok!(user_provider.request_issue(issue_amount, &new_vault_id, 10000).await);
+                        assert_ok!(user_provider.request_issue(issue_amount, &new_vault_id).await);
 
                         for _ in 0u32..2 {
                             assert_ok!(
@@ -781,10 +781,7 @@ async fn test_refund_succeeds() {
         let fut_user = async {
             let over_payment = 100500;
 
-            let issue = user_provider
-                .request_issue(issue_amount, &vault_id, 10000)
-                .await
-                .unwrap();
+            let issue = user_provider.request_issue(issue_amount, &vault_id).await.unwrap();
 
             let metadata = btc_rpc
                 .send_to_address(
@@ -860,10 +857,7 @@ async fn test_issue_overpayment_succeeds() {
         );
 
         let fut_user = async {
-            let issue = user_provider
-                .request_issue(issue_amount, &vault_id, 10000)
-                .await
-                .unwrap();
+            let issue = user_provider.request_issue(issue_amount, &vault_id).await.unwrap();
 
             let metadata = btc_rpc
                 .send_to_address(
@@ -937,10 +931,7 @@ async fn test_automatic_issue_execution_succeeds() {
         );
 
         let fut_user = async {
-            let issue = user_provider
-                .request_issue(issue_amount, &vault1_id, 10000)
-                .await
-                .unwrap();
+            let issue = user_provider.request_issue(issue_amount, &vault1_id).await.unwrap();
             tracing::warn!("REQUESTED ISSUE: {:?}", issue);
 
             assert_ok!(
@@ -1013,10 +1004,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
         );
 
         let fut_user = async {
-            let issue = user_provider
-                .request_issue(issue_amount, &vault1_id, 10000)
-                .await
-                .unwrap();
+            let issue = user_provider.request_issue(issue_amount, &vault1_id).await.unwrap();
             tracing::warn!("REQUESTED ISSUE: {:?}", issue);
 
             assert_ok!(
@@ -1180,7 +1168,7 @@ async fn test_shutdown() {
 
         // request issue should fail:
         assert!(user_provider
-            .request_issue(10000, &sudo_vault_id, 10000)
+            .request_issue(10000, &sudo_vault_id)
             .await
             .unwrap_err()
             .is_parachain_shutdown_error());
@@ -1193,7 +1181,7 @@ async fn test_shutdown() {
                 }))
                 .await
         );
-        assert_ok!(user_provider.request_issue(10000, &sudo_vault_id, 10000).await);
+        assert_ok!(user_provider.request_issue(10000, &sudo_vault_id).await);
     })
     .await;
 }

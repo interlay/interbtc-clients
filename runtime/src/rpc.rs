@@ -31,11 +31,11 @@ cfg_if::cfg_if! {
     if #[cfg(feature = "standalone-metadata")] {
         const DEFAULT_SPEC_VERSION: u32 = 1;
     } else if #[cfg(feature = "parachain-metadata-interlay")] {
-        const DEFAULT_SPEC_VERSION: u32 = 2;
+        const DEFAULT_SPEC_VERSION: u32 = 3;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: u32 = 14;
+        const DEFAULT_SPEC_VERSION: u32 = 15;
     } else if #[cfg(feature = "parachain-metadata-testnet")] {
-        const DEFAULT_SPEC_VERSION: u32 = 5;
+        const DEFAULT_SPEC_VERSION: u32 = 6;
     }
 }
 
@@ -464,8 +464,7 @@ pub trait ReplacePallet {
     ///
     /// * `&self` - sender of the transaction
     /// * `amount` - amount of [Wrapped]
-    /// * `griefing_collateral` - amount of griefing collateral
-    async fn request_replace(&self, vault_id: &VaultId, amount: u128, griefing_collateral: u128) -> Result<(), Error>;
+    async fn request_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error>;
 
     /// Withdraw a request of vault replacement
     ///
@@ -536,12 +535,12 @@ pub trait ReplacePallet {
 
 #[async_trait]
 impl ReplacePallet for InterBtcParachain {
-    async fn request_replace(&self, vault_id: &VaultId, amount: u128, griefing_collateral: u128) -> Result<(), Error> {
+    async fn request_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
                 .replace()
-                .request_replace(vault_id.currencies.clone(), amount, griefing_collateral)
+                .request_replace(vault_id.currencies.clone(), amount)
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -994,12 +993,7 @@ impl SecurityPallet for InterBtcParachain {
 #[async_trait]
 pub trait IssuePallet {
     /// Request a new issue
-    async fn request_issue(
-        &self,
-        amount: u128,
-        vault_id: &VaultId,
-        griefing_collateral: u128,
-    ) -> Result<RequestIssueEvent, Error>;
+    async fn request_issue(&self, amount: u128, vault_id: &VaultId) -> Result<RequestIssueEvent, Error>;
 
     /// Execute a issue request by providing a Bitcoin transaction inclusion proof
     async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error>;
@@ -1019,17 +1013,12 @@ pub trait IssuePallet {
 
 #[async_trait]
 impl IssuePallet for InterBtcParachain {
-    async fn request_issue(
-        &self,
-        amount: u128,
-        vault_id: &VaultId,
-        griefing_collateral: u128,
-    ) -> Result<RequestIssueEvent, Error> {
+    async fn request_issue(&self, amount: u128, vault_id: &VaultId) -> Result<RequestIssueEvent, Error> {
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
                 .issue()
-                .request_issue(amount, vault_id.clone(), griefing_collateral)
+                .request_issue(amount, vault_id.clone())
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
