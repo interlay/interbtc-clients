@@ -1,5 +1,4 @@
 use crate::{deposit_collateral, error::Error};
-use bitcoin::BitcoinCoreApi;
 use hex::FromHex;
 use jsonrpc_core::Value;
 use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
@@ -44,9 +43,8 @@ async fn get_funding(faucet_connection: TypedClient, vault_id: VaultId) -> Resul
     Ok(())
 }
 
-pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
+pub async fn fund_and_register(
     parachain_rpc: &InterBtcParachain,
-    bitcoin_core: &B,
     faucet_url: &str,
     vault_id: &VaultId,
 ) -> Result<(), Error> {
@@ -67,10 +65,7 @@ pub async fn fund_and_register<B: BitcoinCoreApi + Clone>(
         .ok_or(Error::ArithmeticUnderflow)?;
 
     tracing::info!("Registering the vault");
-    let public_key = bitcoin_core.get_new_public_key().await?;
-    parachain_rpc
-        .register_vault(vault_id, registration_collateral, public_key)
-        .await?;
+    parachain_rpc.register_vault(vault_id, registration_collateral).await?;
 
     // Receive vault allowance from faucet
     get_funding(connection.clone(), vault_id.clone()).await?;

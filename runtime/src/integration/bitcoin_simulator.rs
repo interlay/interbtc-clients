@@ -362,6 +362,15 @@ impl BitcoinCoreApi for MockBitcoinCore {
         let public_key = PublicKey::from_secret_key(&secp, &secret_key);
         Ok(P::from(public_key.serialize()))
     }
+    fn dump_derivation_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
+        &self,
+        public_key: P,
+    ) -> Result<PrivateKey, BitcoinError> {
+        todo!()
+    }
+    fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), BitcoinError> {
+        todo!()
+    }
     async fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
         &self,
         _public_key: P,

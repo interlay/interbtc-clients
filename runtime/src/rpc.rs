@@ -32,13 +32,13 @@ cfg_if::cfg_if! {
         const DEFAULT_SPEC_VERSION: u32 = 1;
         pub const SS58_PREFIX: u16 = 42;
     } else if #[cfg(feature = "parachain-metadata-interlay")] {
-        const DEFAULT_SPEC_VERSION: u32 = 2;
+        const DEFAULT_SPEC_VERSION: u32 = 3;
         pub const SS58_PREFIX: u16 = 2032;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: u32 = 14;
+        const DEFAULT_SPEC_VERSION: u32 = 15;
         pub const SS58_PREFIX: u16 = 2092;
     } else if #[cfg(feature = "parachain-metadata-testnet")] {
-        const DEFAULT_SPEC_VERSION: u32 = 5;
+        const DEFAULT_SPEC_VERSION: u32 = 6;
         pub const SS58_PREFIX: u16 = 42;
     }
 }
@@ -468,8 +468,7 @@ pub trait ReplacePallet {
     ///
     /// * `&self` - sender of the transaction
     /// * `amount` - amount of [Wrapped]
-    /// * `griefing_collateral` - amount of griefing collateral
-    async fn request_replace(&self, vault_id: &VaultId, amount: u128, griefing_collateral: u128) -> Result<(), Error>;
+    async fn request_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error>;
 
     /// Withdraw a request of vault replacement
     ///
@@ -540,12 +539,12 @@ pub trait ReplacePallet {
 
 #[async_trait]
 impl ReplacePallet for InterBtcParachain {
-    async fn request_replace(&self, vault_id: &VaultId, amount: u128, griefing_collateral: u128) -> Result<(), Error> {
+    async fn request_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
                 .replace()
-                .request_replace(vault_id.currencies.clone(), amount, griefing_collateral)
+                .request_replace(vault_id.currencies.clone(), amount)
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -998,12 +997,7 @@ impl SecurityPallet for InterBtcParachain {
 #[async_trait]
 pub trait IssuePallet {
     /// Request a new issue
-    async fn request_issue(
-        &self,
-        amount: u128,
-        vault_id: &VaultId,
-        griefing_collateral: u128,
-    ) -> Result<RequestIssueEvent, Error>;
+    async fn request_issue(&self, amount: u128, vault_id: &VaultId) -> Result<RequestIssueEvent, Error>;
 
     /// Execute a issue request by providing a Bitcoin transaction inclusion proof
     async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error>;
@@ -1023,17 +1017,12 @@ pub trait IssuePallet {
 
 #[async_trait]
 impl IssuePallet for InterBtcParachain {
-    async fn request_issue(
-        &self,
-        amount: u128,
-        vault_id: &VaultId,
-        griefing_collateral: u128,
-    ) -> Result<RequestIssueEvent, Error> {
+    async fn request_issue(&self, amount: u128, vault_id: &VaultId) -> Result<RequestIssueEvent, Error> {
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
                 .issue()
-                .request_issue(amount, vault_id.clone(), griefing_collateral)
+                .request_issue(amount, vault_id.clone())
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1412,14 +1401,15 @@ pub trait VaultRegistryPallet {
 
     async fn get_all_vaults(&self) -> Result<Vec<InterBtcVault>, Error>;
 
-    async fn register_vault(&self, vault_id: &VaultId, collateral: u128, public_key: BtcPublicKey)
-        -> Result<(), Error>;
+    async fn register_vault(&self, vault_id: &VaultId, collateral: u128) -> Result<(), Error>;
 
     async fn deposit_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error>;
 
     async fn withdraw_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error>;
 
-    async fn update_public_key(&self, vault_id: &VaultId, public_key: BtcPublicKey) -> Result<(), Error>;
+    async fn get_public_key(&self) -> Result<Option<BtcPublicKey>, Error>;
+
+    async fn register_public_key(&self, public_key: BtcPublicKey) -> Result<(), Error>;
 
     async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), Error>;
 
@@ -1491,23 +1481,17 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// # Arguments
     /// * `collateral` - deposit
     /// * `public_key` - Bitcoin public key
-    async fn register_vault(
-        &self,
-        vault_id: &VaultId,
-        collateral: u128,
-        public_key: BtcPublicKey,
-    ) -> Result<(), Error> {
+    async fn register_vault(&self, vault_id: &VaultId, collateral: u128) -> Result<(), Error> {
         // TODO: check MinimumDeposit
         if collateral == 0 {
             return Err(Error::InsufficientFunds);
         }
 
-        let public_key = &public_key.clone();
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
                 .vault_registry()
-                .register_vault(vault_id.currencies.clone(), collateral, public_key.clone())
+                .register_vault(vault_id.currencies.clone(), collateral)
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1555,17 +1539,27 @@ impl VaultRegistryPallet for InterBtcParachain {
         Ok(())
     }
 
+    async fn get_public_key(&self) -> Result<Option<BtcPublicKey>, Error> {
+        let head = self.get_latest_block_hash().await?;
+        Ok(self
+            .api
+            .storage()
+            .vault_registry()
+            .vault_bitcoin_public_key(self.get_account_id(), head)
+            .await?)
+    }
+
     /// Update the default BTC public key for the vault corresponding to the signer.
     ///
     /// # Arguments
     /// * `public_key` - the new public key of the vault
-    async fn update_public_key(&self, vault_id: &VaultId, public_key: BtcPublicKey) -> Result<(), Error> {
+    async fn register_public_key(&self, public_key: BtcPublicKey) -> Result<(), Error> {
         let public_key = &public_key.clone();
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
                 .vault_registry()
-                .update_public_key(vault_id.currencies.clone(), public_key.clone())
+                .register_public_key(public_key.clone())
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })

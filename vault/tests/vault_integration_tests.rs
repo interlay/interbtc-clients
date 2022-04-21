@@ -1,5 +1,6 @@
 #![cfg(feature = "standalone-metadata")]
 
+use async_trait::async_trait;
 use bitcoin::{stream_blocks, BitcoinCoreApi, TransactionExt};
 use frame_support::assert_ok;
 use futures::{
@@ -192,7 +193,7 @@ async fn test_report_vault_theft_succeeds() {
         get_required_vault_collateral_for_issue(&vault_provider, issue_amount, vault_id.collateral_currency()).await;
     assert_ok!(
         vault_provider
-            .register_vault(&vault_id, vault_collateral, btc_rpc.get_new_public_key().await.unwrap(),)
+            .register_vault_with_public_key(&vault_id, vault_collateral, btc_rpc.get_new_public_key().await.unwrap(),)
             .await
     );
 
@@ -271,7 +272,11 @@ async fn test_report_vault_double_payment_succeeds() {
                 .await;
         assert_ok!(
             vault_provider
-                .register_vault(&vault_id, vault_collateral, btc_rpc.get_new_public_key().await.unwrap(),)
+                .register_vault_with_public_key(
+                    &vault_id,
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                )
                 .await
         );
         assert_issue(&user_provider, &btc_rpc, &vault_id, issue_amount).await;
@@ -302,6 +307,10 @@ async fn test_report_vault_double_payment_succeeds() {
     .await;
 }
 
+async fn get_master_btc_rpc(parachain_rpc: InterBtcParachain) -> MockBitcoinCore {
+    let btc_rpc = MockBitcoinCore::new(parachain_rpc).await;
+    btc_rpc
+}
 #[tokio::test(flavor = "multi_thread")]
 async fn test_redeem_succeeds() {
     test_with_vault(|client, vault_id, vault_provider| async move {
@@ -310,7 +319,8 @@ async fn test_redeem_succeeds() {
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
-        let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpcs);
+        let btc_rpc_master_wallet = btc_rpc.clone();
+        let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
 
         let issue_amount = 100000;
         let vault_collateral =
@@ -318,7 +328,11 @@ async fn test_redeem_succeeds() {
                 .await;
         assert_ok!(
             vault_provider
-                .register_vault(&vault_id, vault_collateral, btc_rpc.get_new_public_key().await.unwrap(),)
+                .register_vault_with_public_key(
+                    &vault_id,
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                )
                 .await
         );
 
@@ -360,14 +374,18 @@ async fn test_replace_succeeds() {
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpcs = vec![(new_vault_id.clone(), btc_rpc.clone())].into_iter().collect();
-        let _vault_id_manager = VaultIdManager::from_map(new_vault_provider.clone(), btc_rpcs);
+        let new_btc_rpc_master_wallet = btc_rpc.clone();
+        let _vault_id_manager =
+            VaultIdManager::from_map(new_vault_provider.clone(), new_btc_rpc_master_wallet, btc_rpcs);
         let btc_rpcs = vec![
             (old_vault_id.clone(), btc_rpc.clone()),
             (new_vault_id.clone(), btc_rpc.clone()),
         ]
         .into_iter()
         .collect();
-        let vault_id_manager = VaultIdManager::from_map(old_vault_provider.clone(), btc_rpcs);
+        let old_btc_rpc_master_wallet = btc_rpc.clone();
+        let vault_id_manager =
+            VaultIdManager::from_map(old_vault_provider.clone(), old_btc_rpc_master_wallet, btc_rpcs);
 
         let issue_amount = 100000;
         let vault_collateral = get_required_vault_collateral_for_issue(
@@ -378,7 +396,7 @@ async fn test_replace_succeeds() {
         .await;
         assert_ok!(
             old_vault_provider
-                .register_vault(
+                .register_vault_with_public_key(
                     &old_vault_id,
                     vault_collateral,
                     btc_rpc.get_new_public_key().await.unwrap(),
@@ -387,7 +405,7 @@ async fn test_replace_succeeds() {
         );
         assert_ok!(
             new_vault_provider
-                .register_vault(
+                .register_vault_with_public_key(
                     &new_vault_id,
                     vault_collateral,
                     btc_rpc.get_new_public_key().await.unwrap(),
@@ -417,7 +435,7 @@ async fn test_replace_succeeds() {
             ),
             async {
                 old_vault_provider
-                    .request_replace(&old_vault_id, issue_amount, 1000000)
+                    .request_replace(&old_vault_id, issue_amount)
                     .await
                     .unwrap();
 
@@ -449,7 +467,8 @@ async fn test_maintain_collateral_succeeds() {
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
-        let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpcs);
+        let btc_rpc_master_wallet = btc_rpc.clone();
+        let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
 
         let issue_amount = 100000;
         let vault_collateral =
@@ -457,7 +476,11 @@ async fn test_maintain_collateral_succeeds() {
                 .await;
         assert_ok!(
             vault_provider
-                .register_vault(&vault_id, vault_collateral, btc_rpc.get_new_public_key().await.unwrap(),)
+                .register_vault_with_public_key(
+                    &vault_id,
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                )
                 .await
         );
 
@@ -509,7 +532,7 @@ async fn test_withdraw_replace_succeeds() {
         .await;
         assert_ok!(
             old_vault_provider
-                .register_vault(
+                .register_vault_with_public_key(
                     &old_vault_id,
                     vault_collateral,
                     btc_rpc.get_new_public_key().await.unwrap(),
@@ -518,7 +541,7 @@ async fn test_withdraw_replace_succeeds() {
         );
         assert_ok!(
             new_vault_provider
-                .register_vault(
+                .register_vault_with_public_key(
                     &new_vault_id,
                     vault_collateral,
                     btc_rpc.get_new_public_key().await.unwrap(),
@@ -530,7 +553,7 @@ async fn test_withdraw_replace_succeeds() {
 
         join(
             old_vault_provider
-                .request_replace(&old_vault_id, issue_amount, 1000000)
+                .request_replace(&old_vault_id, issue_amount)
                 .map(Result::unwrap),
             assert_event::<RequestReplaceEvent, _>(TIMEOUT, old_vault_provider.clone(), |_| true),
         )
@@ -574,7 +597,9 @@ async fn test_cancellation_succeeds() {
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpcs = vec![(new_vault_id.clone(), btc_rpc.clone())].into_iter().collect();
-        let vault_id_manager = VaultIdManager::from_map(new_vault_provider.clone(), btc_rpcs);
+        let new_btc_rpc_master_wallet = btc_rpc.clone();
+        let vault_id_manager =
+            VaultIdManager::from_map(new_vault_provider.clone(), new_btc_rpc_master_wallet, btc_rpcs);
 
         let issue_amount = 100000;
         let vault_collateral = get_required_vault_collateral_for_issue(
@@ -585,7 +610,7 @@ async fn test_cancellation_succeeds() {
         .await;
         assert_ok!(
             old_vault_provider
-                .register_vault(
+                .register_vault_with_public_key(
                     &old_vault_id,
                     vault_collateral,
                     btc_rpc.get_new_public_key().await.unwrap(),
@@ -594,7 +619,7 @@ async fn test_cancellation_succeeds() {
         );
         assert_ok!(
             new_vault_provider
-                .register_vault(
+                .register_vault_with_public_key(
                     &new_vault_id,
                     vault_collateral,
                     btc_rpc.get_new_public_key().await.unwrap(),
@@ -711,7 +736,7 @@ async fn test_cancellation_succeeds() {
                         // setup the to-be-cancelled replace
                         assert_ok!(
                             old_vault_provider
-                                .request_replace(&old_vault_id, issue_amount / 2, 1000000)
+                                .request_replace(&old_vault_id, issue_amount / 2)
                                 .await
                         );
                         assert_ok!(
@@ -727,7 +752,7 @@ async fn test_cancellation_succeeds() {
                         );
 
                         // setup the to-be-cancelled issue
-                        assert_ok!(user_provider.request_issue(issue_amount, &new_vault_id, 10000).await);
+                        assert_ok!(user_provider.request_issue(issue_amount, &new_vault_id).await);
 
                         for _ in 0u32..2 {
                             assert_ok!(
@@ -760,7 +785,8 @@ async fn test_refund_succeeds() {
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
-        let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpcs);
+        let btc_rpc_master_wallet = btc_rpc.clone();
+        let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
 
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
         let refund_service =
@@ -774,17 +800,18 @@ async fn test_refund_succeeds() {
                 .await;
         assert_ok!(
             vault_provider
-                .register_vault(&vault_id, vault_collateral, btc_rpc.get_new_public_key().await.unwrap(),)
+                .register_vault_with_public_key(
+                    &vault_id,
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                )
                 .await
         );
 
         let fut_user = async {
             let over_payment = 100500;
 
-            let issue = user_provider
-                .request_issue(issue_amount, &vault_id, 10000)
-                .await
-                .unwrap();
+            let issue = user_provider.request_issue(issue_amount, &vault_id).await.unwrap();
 
             let metadata = btc_rpc
                 .send_to_address(
@@ -839,7 +866,8 @@ async fn test_issue_overpayment_succeeds() {
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
-        let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpcs);
+        let btc_rpc_master_wallet = btc_rpc.clone();
+        let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
 
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
         let refund_service =
@@ -855,15 +883,16 @@ async fn test_issue_overpayment_succeeds() {
         .await;
         assert_ok!(
             vault_provider
-                .register_vault(&vault_id, vault_collateral, btc_rpc.get_new_public_key().await.unwrap(),)
+                .register_vault_with_public_key(
+                    &vault_id,
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                )
                 .await
         );
 
         let fut_user = async {
-            let issue = user_provider
-                .request_issue(issue_amount, &vault_id, 10000)
-                .await
-                .unwrap();
+            let issue = user_provider.request_issue(issue_amount, &vault_id).await.unwrap();
 
             let metadata = btc_rpc
                 .send_to_address(
@@ -911,7 +940,8 @@ async fn test_automatic_issue_execution_succeeds() {
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpcs = vec![(vault2_id.clone(), btc_rpc.clone())].into_iter().collect();
-        let vault_id_manager = VaultIdManager::from_map(vault2_provider.clone(), btc_rpcs);
+        let btc_rpc_master_wallet = btc_rpc.clone();
+        let vault_id_manager = VaultIdManager::from_map(vault2_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
 
         let issue_amount = 100000;
         let vault_collateral =
@@ -919,7 +949,7 @@ async fn test_automatic_issue_execution_succeeds() {
                 .await;
         assert_ok!(
             vault1_provider
-                .register_vault(
+                .register_vault_with_public_key(
                     &vault1_id,
                     vault_collateral,
                     btc_rpc.get_new_public_key().await.unwrap(),
@@ -928,7 +958,7 @@ async fn test_automatic_issue_execution_succeeds() {
         );
         assert_ok!(
             vault2_provider
-                .register_vault(
+                .register_vault_with_public_key(
                     &vault2_id,
                     vault_collateral,
                     btc_rpc.get_new_public_key().await.unwrap(),
@@ -937,10 +967,7 @@ async fn test_automatic_issue_execution_succeeds() {
         );
 
         let fut_user = async {
-            let issue = user_provider
-                .request_issue(issue_amount, &vault1_id, 10000)
-                .await
-                .unwrap();
+            let issue = user_provider.request_issue(issue_amount, &vault1_id).await.unwrap();
             tracing::warn!("REQUESTED ISSUE: {:?}", issue);
 
             assert_ok!(
@@ -987,7 +1014,8 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpcs = vec![(vault2_id.clone(), btc_rpc.clone())].into_iter().collect();
-        let vault_id_manager = VaultIdManager::from_map(vault2_provider.clone(), btc_rpcs);
+        let btc_rpc_master_wallet = btc_rpc.clone();
+        let vault_id_manager = VaultIdManager::from_map(vault2_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
 
         let issue_amount = 100000;
         let vault_collateral =
@@ -995,7 +1023,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
                 .await;
         assert_ok!(
             vault1_provider
-                .register_vault(
+                .register_vault_with_public_key(
                     &vault1_id,
                     vault_collateral,
                     btc_rpc.get_new_public_key().await.unwrap(),
@@ -1004,7 +1032,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
         );
         assert_ok!(
             vault2_provider
-                .register_vault(
+                .register_vault_with_public_key(
                     &vault2_id,
                     vault_collateral,
                     btc_rpc.get_new_public_key().await.unwrap(),
@@ -1013,10 +1041,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
         );
 
         let fut_user = async {
-            let issue = user_provider
-                .request_issue(issue_amount, &vault1_id, 10000)
-                .await
-                .unwrap();
+            let issue = user_provider.request_issue(issue_amount, &vault1_id).await.unwrap();
             tracing::warn!("REQUESTED ISSUE: {:?}", issue);
 
             assert_ok!(
@@ -1055,7 +1080,8 @@ async fn test_execute_open_requests_succeeds() {
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
-        let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpcs);
+        let btc_rpc_master_wallet = btc_rpc.clone();
+        let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
 
         let issue_amount = 100000;
         let vault_collateral =
@@ -1063,7 +1089,11 @@ async fn test_execute_open_requests_succeeds() {
                 .await;
         assert_ok!(
             vault_provider
-                .register_vault(&vault_id, vault_collateral, btc_rpc.get_new_public_key().await.unwrap(),)
+                .register_vault_with_public_key(
+                    &vault_id,
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                )
                 .await
         );
 
@@ -1137,7 +1167,11 @@ async fn test_off_chain_liquidation() {
                 .await;
         assert_ok!(
             vault_provider
-                .register_vault(&vault_id, vault_collateral, btc_rpc.get_new_public_key().await.unwrap(),)
+                .register_vault_with_public_key(
+                    &vault_id,
+                    vault_collateral,
+                    btc_rpc.get_new_public_key().await.unwrap(),
+                )
                 .await
         );
 
@@ -1165,7 +1199,7 @@ async fn test_shutdown() {
         let btc_rpc = MockBitcoinCore::new(sudo_provider.clone()).await;
         assert_ok!(
             sudo_provider
-                .register_vault(&sudo_vault_id, 1000000, btc_rpc.get_new_public_key().await.unwrap(),)
+                .register_vault_with_public_key(&sudo_vault_id, 1000000, btc_rpc.get_new_public_key().await.unwrap(),)
                 .await
         );
 
@@ -1180,7 +1214,7 @@ async fn test_shutdown() {
 
         // request issue should fail:
         assert!(user_provider
-            .request_issue(10000, &sudo_vault_id, 10000)
+            .request_issue(10000, &sudo_vault_id)
             .await
             .unwrap_err()
             .is_parachain_shutdown_error());
@@ -1193,7 +1227,7 @@ async fn test_shutdown() {
                 }))
                 .await
         );
-        assert_ok!(user_provider.request_issue(10000, &sudo_vault_id, 10000).await);
+        assert_ok!(user_provider.request_issue(10000, &sudo_vault_id).await);
     })
     .await;
 }
@@ -1204,4 +1238,28 @@ async fn assert_redeem_event(
     redeem_id: H256,
 ) -> ExecuteRedeemEvent {
     assert_event::<ExecuteRedeemEvent, _>(duration, parachain_rpc, |x| x.redeem_id == redeem_id).await
+}
+
+#[async_trait]
+trait InterBtcParachainExt {
+    async fn register_vault_with_public_key(
+        &self,
+        vault_id: &VaultId,
+        collateral: u128,
+        public_key: BtcPublicKey,
+    ) -> Result<(), runtime::Error>;
+}
+
+#[async_trait]
+impl InterBtcParachainExt for InterBtcParachain {
+    async fn register_vault_with_public_key(
+        &self,
+        vault_id: &VaultId,
+        collateral: u128,
+        public_key: BtcPublicKey,
+    ) -> Result<(), runtime::Error> {
+        self.register_public_key(public_key).await.unwrap();
+        self.register_vault(vault_id, collateral).await.unwrap();
+        Ok(())
+    }
 }
