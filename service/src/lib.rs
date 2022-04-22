@@ -79,13 +79,9 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
 
             let prefix = self.wallet_name.clone().unwrap_or_else(|| "vault".to_string());
-
-            let bitcoin_core = self
-                .bitcoin_config
-                .new_client(Some(format!("{prefix}-master",)))
-                .await?;
-
+            let bitcoin_core = self.bitcoin_config.new_client(Some(format!("{prefix}-master"))).await?;
             bitcoin_core.sync().await?;
+            bitcoin_core.create_or_load_wallet().await?;
 
             // only open connection to parachain after bitcoind sync to prevent timeout
             let signer = self.signer.clone();
