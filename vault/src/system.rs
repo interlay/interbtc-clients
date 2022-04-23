@@ -19,9 +19,9 @@ use futures::{
 use git_version::git_version;
 use runtime::{
     cli::{parse_duration_minutes, parse_duration_ms},
-    parse_collateral_currency, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, Error as RuntimeError,
-    InterBtcParachain, PrettyPrint, RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs,
-    VaultCurrencyPair, VaultId, VaultRegistryPallet,
+    parse_collateral_currency, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, CurrencyId,
+    Error as RuntimeError, InterBtcParachain, PrettyPrint, RegisterVaultEvent, StoreMainChainHeaderEvent,
+    UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair, VaultId, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, MonitoringConfig, Service, ShutdownSender};
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
@@ -690,8 +690,6 @@ impl VaultService {
     }
 
     async fn maybe_register_vault(&self) -> Result<(), Error> {
-        self.maybe_register_public_key().await?;
-
         let vault_id = self.get_vault_id();
 
         if is_vault_registered(&self.btc_parachain, &vault_id).await? {
@@ -702,9 +700,8 @@ impl VaultService {
         } else {
             tracing::info!("[{}] Not registered", vault_id.pretty_print());
 
-            self.vault_id_manager.add_vault_id(vault_id.clone()).await?;
-
             if let Some(collateral) = self.config.auto_register_with_collateral {
+                self.maybe_register_public_key().await?;
                 tracing::info!("[{}] Automatically registering...", vault_id.pretty_print());
                 let free_balance = self
                     .btc_parachain
@@ -727,8 +724,16 @@ impl VaultService {
                     .await?;
             } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
                 tracing::info!("[{}] Automatically registering...", vault_id.pretty_print());
-                faucet::fund_and_register(&self.btc_parachain, faucet_url, &vault_id).await?;
+                let maybe_public_key = if let None = self.btc_parachain.get_public_key().await? {
+                    tracing::info!("Created new bitcoin public key");
+                    Some(self.btc_rpc_master_wallet.get_new_public_key::<BtcPublicKey>().await?)
+                } else {
+                    None
+                };
+                faucet::fund_and_register(&self.btc_parachain, faucet_url, &vault_id, maybe_public_key).await?;
             }
+
+            self.vault_id_manager.add_vault_id(vault_id.clone()).await?;
         }
         Ok(())
     }
