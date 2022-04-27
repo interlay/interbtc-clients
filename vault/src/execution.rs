@@ -432,10 +432,16 @@ where
                     }
                 };
 
+                let txid = tx.txid();
+                let locked_tx = btc_rpc.lock_transaction(tx).await;
+                // try sending but ignore the result as it may have already been processed
+                // TODO: register return-to-self addresses
+                let _ = btc_rpc.send_transaction(locked_tx).await;
+
                 // Payment has been made, but it might not have been confirmed enough times yet
                 let tx_metadata = btc_rpc
                     .clone()
-                    .wait_for_transaction_metadata(tx.txid(), num_confirmations)
+                    .wait_for_transaction_metadata(txid, num_confirmations)
                     .await;
 
                 match tx_metadata {
@@ -669,6 +675,7 @@ mod tests {
             async fn get_mempool_transactions<'a>(&'a self) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(&self, txid: Txid, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>) -> Result<LockedTransaction, BitcoinError>;
+            async fn lock_transaction(&self, transaction: Transaction) -> LockedTransaction;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
             async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>) -> Result<Txid, BitcoinError>;
             async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;

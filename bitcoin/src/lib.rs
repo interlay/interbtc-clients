@@ -159,6 +159,8 @@ pub trait BitcoinCoreApi {
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, Error>;
 
+    async fn lock_transaction(&self, transaction: Transaction) -> LockedTransaction;
+
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
 
     async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
@@ -738,6 +740,15 @@ impl BitcoinCoreApi for BitcoinCore {
             Ok(LockedTransaction::new(transaction, address_string, Some(lock)))
         })
         .await
+    }
+
+    /// Lock a transaction to prevent re-spending of UTXOs.
+    ///
+    /// # Arguments
+    /// * `transaction` - The transaction created by create_transaction
+    async fn lock_transaction(&self, transaction: Transaction) -> LockedTransaction {
+        let lock = self.transaction_creation_lock.clone().lock_owned().await;
+        LockedTransaction::new(transaction, Default::default(), Some(lock))
     }
 
     /// Submits a transaction to the mempool
