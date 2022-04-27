@@ -2,6 +2,7 @@ use bitcoin::Error as BitcoinError;
 use hex::FromHexError;
 use jsonrpc_core_client::RpcError;
 use parity_scale_codec::Error as CodecError;
+use rocksdb::Error as RocksDbError;
 use runtime::{Error as RuntimeError, SubxtError};
 use service::Error as ServiceError;
 use thiserror::Error;
@@ -24,6 +25,8 @@ pub enum Error {
     TryIntoIntError(#[from] std::num::TryFromIntError),
     #[error("Deadline has expired")]
     DeadlineExpired,
+    #[error("Transaction not found")]
+    TransactionNotFound,
 
     #[error("ServiceError: {0}")]
     ServiceError(#[from] ServiceError),
@@ -39,4 +42,6 @@ pub enum Error {
     SubxtError(#[from] SubxtError),
     #[error("CodecError: {0}")]
     CodecError(#[from] CodecError),
+    #[error("RocksDbError: {0}")]
+    RocksDbError(#[from] RocksDbError),
 }

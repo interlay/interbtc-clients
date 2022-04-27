@@ -1,7 +1,8 @@
-use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager};
+use crate::{
+    error::Error, metrics::update_bitcoin_metrics, storage::TransactionStore, system::VaultData, VaultIdManager,
+};
 use bitcoin::{
-    BitcoinCoreApi, PartialAddress, Transaction, TransactionExt, TransactionMetadata,
-    BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
+    BitcoinCoreApi, PartialAddress, TransactionExt, TransactionMetadata, BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
 use futures::{
     stream::{self, StreamExt},
@@ -13,7 +14,7 @@ use runtime::{
     ReplaceRequestStatus, RequestRefundEvent, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
 use service::{spawn_cancelable, ShutdownSender};
-use std::{collections::HashMap, convert::TryInto, time::Duration};
+use std::{collections::HashMap, convert::TryInto, sync::Arc, time::Duration};
 use tokio::time::sleep;
 
 const ON_FORK_RETRY_DELAY: Duration = Duration::from_secs(10);
@@ -183,10 +184,12 @@ impl Request {
             + Clone
             + Send
             + Sync,
+        TS: TransactionStore,
     >(
         &self,
         parachain_rpc: P,
         vault: VaultData<B>,
+        tx_store: Arc<TS>,
         num_confirmations: u32,
     ) -> Result<(), Error> {
         // ensure the deadline has not expired yet
@@ -199,7 +202,13 @@ impl Request {
         }
 
         let tx_metadata = self
-            .transfer_btc(&parachain_rpc, &vault.btc_rpc, num_confirmations, self.vault_id.clone())
+            .transfer_btc(
+                &parachain_rpc,
+                &vault.btc_rpc,
+                tx_store,
+                num_confirmations,
+                self.vault_id.clone(),
+            )
             .await?;
         update_bitcoin_metrics(&vault, tx_metadata.fee, self.fee_budget).await;
         self.execute(parachain_rpc, tx_metadata).await
@@ -208,27 +217,31 @@ impl Request {
     /// Make a bitcoin transfer to fulfil the request
     #[tracing::instrument(
         name = "transfer_btc",
-        skip(self, parachain_rpc, btc_rpc),
+        skip(self, parachain_rpc, btc_rpc, tx_store),
         fields(
             request_type = ?self.request_type,
             request_id = ?self.hash,
         )
     )]
-    async fn transfer_btc<
-        B: BitcoinCoreApi + Clone,
-        P: BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
-    >(
+    async fn transfer_btc<B, P, TS>(
         &self,
         parachain_rpc: &P,
         btc_rpc: &B,
+        tx_store: Arc<TS>,
         num_confirmations: u32,
         vault_id: VaultId,
-    ) -> Result<TransactionMetadata, Error> {
+    ) -> Result<TransactionMetadata, Error>
+    where
+        B: BitcoinCoreApi + Clone,
+        P: BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
+        TS: TransactionStore,
+    {
         let tx = btc_rpc
             .create_transaction(self.btc_address, self.amount as u64, Some(self.hash))
             .await?;
         let recipient = tx.recipient.clone();
         tracing::info!("Sending bitcoin to {}", recipient);
+        tx_store.put_tx(self.hash, tx.transaction.clone())?;
 
         let return_to_self_addresses = tx
             .transaction
@@ -329,15 +342,19 @@ impl Request {
 
 /// Queries the parachain for open requests and executes them. It checks the
 /// bitcoin blockchain to see if a payment has already been made.
-pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn execute_open_requests<B, TS>(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
     vault_id_manager: VaultIdManager<B>,
-    read_only_btc_rpc: B,
+    tx_store: Arc<TS>,
     num_confirmations: u32,
     payment_margin: Duration,
     process_refunds: bool,
-) -> Result<(), Error> {
+) -> Result<(), Error>
+where
+    B: BitcoinCoreApi + Clone + Send + Sync + 'static,
+    TS: TransactionStore + Send + Sync + 'static,
+{
     let parachain_rpc = &parachain_rpc;
     let vault_id = parachain_rpc.get_account_id().clone();
 
@@ -387,31 +404,11 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         .map(|x| (x.hash, x))
         .collect::<HashMap<_, _>>();
 
-    // find the height of bitcoin chain corresponding to the earliest btc_height
-    let btc_start_height = match open_requests
-        .iter()
-        .map(|(_, request)| request.btc_height.unwrap_or(u32::MAX))
-        .min()
-    {
-        Some(x) => x,
-        None => return Ok(()), // the iterator is empty so we have nothing to do
-    };
-
-    // iterate through transactions in reverse order, starting from those in the mempool
-    let mut transaction_stream = bitcoin::reverse_stream_transactions(&read_only_btc_rpc, btc_start_height).await?;
-    while let Some(result) = transaction_stream.next().await {
-        let tx = match result {
-            Ok(x) => x,
-            Err(e) => {
-                tracing::warn!("Failed to process transaction: {}", e);
-                continue;
-            }
-        };
-
+    for (hash, request) in open_requests.clone().into_iter() {
         // get the request this transaction corresponds to, if any
-        if let Some(request) = get_request_for_btc_tx(&tx, &open_requests) {
+        if let Ok(tx) = tx_store.get_tx(&hash) {
             // remove request from the hashmap
-            open_requests.retain(|&key, _| key != request.hash);
+            open_requests.remove(&request.hash);
 
             tracing::info!(
                 "{:?} request #{:?} has valid bitcoin payment - processing...",
@@ -485,6 +482,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         // make copies of the variables we move into the task
         let parachain_rpc = parachain_rpc.clone();
         let vault_id_manager = vault_id_manager.clone();
+        let tx_store = tx_store.clone();
         spawn_cancelable(shutdown_tx.subscribe(), async move {
             let vault = match vault_id_manager.get_vault(&request.vault_id).await {
                 Some(x) => x,
@@ -503,7 +501,10 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                 request.hash
             );
 
-            match request.pay_and_execute(parachain_rpc, vault, num_confirmations).await {
+            match request
+                .pay_and_execute(parachain_rpc, vault, tx_store, num_confirmations)
+                .await
+            {
                 Ok(_) => tracing::info!(
                     "{:?} request #{:?} successfully executed",
                     request.request_type,
@@ -522,19 +523,6 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
     Ok(())
 }
 
-/// Get the Request from the hashmap that the given Transaction satisfies, based
-/// on the OP_RETURN and the amount of btc that is transfered to the address
-fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -> Option<Request> {
-    let hash = tx.get_op_return()?;
-    let request = hash_map.get(&hash)?;
-    let paid_amount = tx.get_payment_amount_to(request.btc_address)?;
-    if paid_amount as u128 >= request.amount {
-        Some(request.clone())
-    } else {
-        None
-    }
-}
-
 #[cfg(all(test, feature = "standalone-metadata"))]
 mod tests {
     use crate::metrics::PerCurrencyMetrics;
@@ -550,7 +538,10 @@ mod tests {
         InterBtcVault, StatusCode, Token, DOT, IBTC,
     };
     use sp_core::H160;
-    use std::collections::BTreeSet;
+    use std::{
+        collections::{BTreeSet, HashMap},
+        sync::Mutex,
+    };
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {
@@ -826,30 +817,34 @@ mod tests {
         #[tokio::test]
         async fn should_pay_and_execute_redeem_if_neither_parachain_nor_bitcoin_deadlines_expired() {
             let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 50, 100, 50);
+            let tx_store = Arc::new(Mutex::new(HashMap::new()));
 
-            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
+            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, tx_store, 6).await);
         }
 
         #[tokio::test]
         async fn should_pay_and_execute_redeem_if_only_parachain_deadline_expired() {
             let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 101, 100, 50);
+            let tx_store = Arc::new(Mutex::new(HashMap::new()));
 
-            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
+            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, tx_store, 6).await);
         }
 
         #[tokio::test]
         async fn should_pay_and_execute_redeem_if_only_bitcoin_deadline_expired() {
             let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 50, 100, 101);
+            let tx_store = Arc::new(Mutex::new(HashMap::new()));
 
-            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
+            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, tx_store, 6).await);
         }
 
         #[tokio::test]
         async fn should_not_pay_and_execute_redeem_if_both_deadlines_expired() {
             let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 101, 100, 101);
+            let tx_store = Arc::new(Mutex::new(HashMap::new()));
 
             assert_err!(
-                request.pay_and_execute(parachain_rpc, btc_rpc, 6).await,
+                request.pay_and_execute(parachain_rpc, btc_rpc, tx_store, 6).await,
                 Error::DeadlineExpired
             );
         }
@@ -886,8 +881,10 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
+        let tx_store = Arc::new(Mutex::new(HashMap::new()));
+
         assert_err!(
-            request.pay_and_execute(parachain_rpc, vault_data, 6).await,
+            request.pay_and_execute(parachain_rpc, vault_data, tx_store, 6).await,
             Error::DeadlineExpired
         );
     }
@@ -957,6 +954,8 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
-        assert_ok!(request.pay_and_execute(parachain_rpc, vault_data, 6).await);
+        let tx_store = Arc::new(Mutex::new(HashMap::new()));
+
+        assert_ok!(request.pay_and_execute(parachain_rpc, vault_data, tx_store, 6).await);
     }
 }

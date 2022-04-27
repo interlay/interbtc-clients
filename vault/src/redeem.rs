@@ -1,8 +1,10 @@
-use crate::{execution::*, metrics::publish_expected_bitcoin_balance, system::VaultIdManager};
+use crate::{
+    execution::*, metrics::publish_expected_bitcoin_balance, storage::TransactionStore, system::VaultIdManager,
+};
 use bitcoin::BitcoinCoreApi;
 use runtime::{InterBtcParachain, RedeemPallet, RequestRedeemEvent};
 use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 /// Listen for RequestRedeemEvent directed at this vault; upon reception, transfer
 /// bitcoin and call execute_redeem
@@ -13,13 +15,18 @@ use std::time::Duration;
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
-pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn listen_for_redeem_requests<B, TS>(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
     vault_id_manager: VaultIdManager<B>,
+    tx_store: Arc<TS>,
     num_confirmations: u32,
     payment_margin: Duration,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError>
+where
+    B: BitcoinCoreApi + Clone + Send + Sync + 'static,
+    TS: TransactionStore + Send + Sync + 'static,
+{
     parachain_rpc
         .on_event::<RequestRedeemEvent, _, _, _>(
             |event| async {
@@ -36,6 +43,7 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
                 // arguments by value rather than by reference, so clone these:
                 let parachain_rpc = parachain_rpc.clone();
+                let tx_store = tx_store.clone();
                 // Spawn a new task so that we handle these events concurrently
                 spawn_cancelable(shutdown_tx.subscribe(), async move {
                     tracing::info!("Executing redeem #{:?}", event.redeem_id);
@@ -45,7 +53,9 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                             parachain_rpc.get_redeem_request(event.redeem_id).await?,
                             payment_margin,
                         )?;
-                        request.pay_and_execute(parachain_rpc, vault, num_confirmations).await
+                        request
+                            .pay_and_execute(parachain_rpc, vault, tx_store, num_confirmations)
+                            .await
                     }
                     .await;
 

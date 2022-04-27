@@ -1,7 +1,8 @@
-use crate::{execution::*, system::VaultIdManager};
+use crate::{execution::*, storage::TransactionStore, system::VaultIdManager};
 use bitcoin::BitcoinCoreApi;
 use runtime::{InterBtcParachain, RequestRefundEvent};
 use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
+use std::sync::Arc;
 
 /// Listen for RequestRefundEvent directed at this vault; upon reception, transfer
 /// bitcoin and call execute_refund
@@ -13,13 +14,18 @@ use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
 /// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 /// * `process_refunds` - if true, we will process refund requests
-pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn listen_for_refund_requests<B, TS>(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
     vault_id_manager: VaultIdManager<B>,
+    tx_store: Arc<TS>,
     num_confirmations: u32,
     process_refunds: bool,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError>
+where
+    B: BitcoinCoreApi + Clone + Send + Sync + 'static,
+    TS: TransactionStore + Send + Sync + 'static,
+{
     parachain_rpc
         .on_event::<RequestRefundEvent, _, _, _>(
             |event| async {
@@ -38,12 +44,15 @@ pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
                 // arguments by value rather than by reference, so clone these:
                 let parachain_rpc = parachain_rpc.clone();
+                let tx_store = tx_store.clone();
                 // Spawn a new task so that we handle these events concurrently
                 spawn_cancelable(shutdown_tx.subscribe(), async move {
                     tracing::info!("Executing refund #{:?}", event.refund_id);
                     // prepare the action that will be executed after the bitcoin transfer
                     let request = Request::from_refund_request_event(&event);
-                    let result = request.pay_and_execute(parachain_rpc, vault, num_confirmations).await;
+                    let result = request
+                        .pay_and_execute(parachain_rpc, vault, tx_store, num_confirmations)
+                        .await;
 
                     match result {
                         Ok(_) => tracing::info!(

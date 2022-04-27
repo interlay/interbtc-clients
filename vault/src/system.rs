@@ -107,6 +107,9 @@ pub struct VaultServiceConfig {
     /// Defaults to the relay chain currency if not set.
     #[clap(long, parse(try_from_str = parse_collateral_currency))]
     pub collateral_currency_id: Option<CurrencyId>,
+
+    #[clap(long, default_value = ".vault_db")]
+    pub rocksdb_path: String,
 }
 
 async fn active_block_listener(
@@ -480,11 +483,16 @@ impl VaultService {
 
         let startup_height = self.await_parachain_block().await?;
 
+        // persist request payments since checking mempool is unreliable
+        // we could use the `listtransactions` bitcoin rpc to fetch txs
+        // but this requires paging and may eventually be very large
+        let rocksdb = Arc::new(rocksdb::DB::open_default(self.config.rocksdb_path.clone()).expect("could not open db"));
+
         let open_request_executor = execute_open_requests(
             self.shutdown.clone(),
             self.btc_parachain.clone(),
             self.vault_id_manager.clone(),
-            self.btc_rpc_master_wallet.clone(),
+            rocksdb.clone(),
             num_confirmations,
             self.config.payment_margin_minutes,
             !self.config.no_auto_refund,
@@ -556,6 +564,7 @@ impl VaultService {
                     self.shutdown.clone(),
                     self.btc_parachain.clone(),
                     self.vault_id_manager.clone(),
+                    rocksdb.clone(),
                     num_confirmations,
                     self.config.payment_margin_minutes,
                 )),
@@ -599,6 +608,7 @@ impl VaultService {
                     self.shutdown.clone(),
                     self.btc_parachain.clone(),
                     self.vault_id_manager.clone(),
+                    rocksdb.clone(),
                     num_confirmations,
                     self.config.payment_margin_minutes,
                 )),
@@ -609,6 +619,7 @@ impl VaultService {
                     self.shutdown.clone(),
                     self.btc_parachain.clone(),
                     self.vault_id_manager.clone(),
+                    rocksdb.clone(),
                     num_confirmations,
                     !self.config.no_auto_refund,
                 )),
