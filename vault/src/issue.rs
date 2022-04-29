@@ -3,7 +3,7 @@ use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt};
 use runtime::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, ExecuteIssueEvent, H256Le, InterBtcParachain,
-    IssuePallet, PrettyPrint, RequestIssueEvent, UtilFuncs, H256,
+    IssuePallet, PrettyPrint, RequestIssueEvent, UtilFuncs, VaultId, H256,
 };
 use service::Error as ServiceError;
 use sha2::{Digest, Sha256};
@@ -70,10 +70,14 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
 pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     bitcoin_core: &B,
     btc_parachain: &InterBtcParachain,
+    vault_id: &VaultId,
 ) -> Result<(), Error> {
-    let issue_requests = btc_parachain
+    let issue_requests: Vec<_> = btc_parachain
         .get_vault_issue_requests(btc_parachain.get_account_id().clone())
-        .await?;
+        .await?
+        .into_iter()
+        .filter(|(_, issue)| &issue.vault == vault_id)
+        .collect();
 
     let btc_start_height = match issue_requests.iter().map(|(_, request)| request.btc_height).min() {
         Some(x) => x as usize,

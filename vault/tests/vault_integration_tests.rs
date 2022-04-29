@@ -307,10 +307,6 @@ async fn test_report_vault_double_payment_succeeds() {
     .await;
 }
 
-async fn get_master_btc_rpc(parachain_rpc: InterBtcParachain) -> MockBitcoinCore {
-    let btc_rpc = MockBitcoinCore::new(parachain_rpc).await;
-    btc_rpc
-}
 #[tokio::test(flavor = "multi_thread")]
 async fn test_redeem_succeeds() {
     test_with_vault(|client, vault_id, vault_provider| async move {
@@ -647,13 +643,13 @@ async fn test_cancellation_succeeds() {
             issue_set.clone(),
         );
 
-        let mut issue_cancellation_scheduler = vault::service::CancellationScheduler::new(
+        let issue_cancellation_scheduler = vault::service::CancellationScheduler::new(
             new_vault_provider.clone(),
             new_vault_provider.get_current_chain_height().await.unwrap(),
             0,
             new_vault_provider.get_account_id().clone(),
         );
-        let mut replace_cancellation_scheduler = vault::service::CancellationScheduler::new(
+        let replace_cancellation_scheduler = vault::service::CancellationScheduler::new(
             new_vault_provider.clone(),
             new_vault_provider.get_current_chain_height().await.unwrap(),
             0,
