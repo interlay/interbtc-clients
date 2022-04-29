@@ -236,7 +236,7 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
         }
 
         tracing::info!("Adding keys from past issues...");
-        issue::add_keys_from_past_issue_request(&btc_rpc, &self.btc_parachain).await?;
+        issue::add_keys_from_past_issue_request(&btc_rpc, &self.btc_parachain, &vault_id).await?;
 
         tracing::info!("Initializing metrics...");
         let metrics = PerCurrencyMetrics::new(&vault_id);

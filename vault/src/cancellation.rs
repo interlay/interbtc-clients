@@ -690,7 +690,7 @@ mod tests {
         // check that if the selector fails, the error is propagated
         let parachain_rpc = MockProvider::default();
 
-        let mut cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::new([1u8; 32]));
+        let cancellation_scheduler = CancellationScheduler::new(parachain_rpc, 0, 0, AccountId::new([1u8; 32]));
 
         // dropping the tx immediately - this effectively closes the channel
         let (_, replace_event_rx) = mpsc::channel::<Event>(16);
