@@ -12,7 +12,8 @@ use futures::{try_join, StreamExt, TryFutureExt};
 use lazy_static::lazy_static;
 use runtime::{
     prometheus::{
-        gather, proto::MetricFamily, Encoder, Gauge, GaugeVec, IntGauge, IntGaugeVec, Opts, Registry, TextEncoder,
+        gather, proto::MetricFamily, Encoder, Gauge, GaugeVec, IntCounter, IntGauge, IntGaugeVec, Opts, Registry,
+        TextEncoder,
     },
     CollateralBalancesPallet, CurrencyId, CurrencyIdExt, CurrencyInfo, Error, FeedValuesEvent, FixedU128,
     InterBtcParachain, InterBtcRedeemRequest, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet,
@@ -94,6 +95,8 @@ lazy_static! {
     pub static ref FEE_BUDGET_SURPLUS: GaugeVec =
         GaugeVec::new(Opts::new("fee_budget_surplus", "Fee Budget Surplus"), &[CURRENCY_LABEL])
             .expect("Failed to create prometheus metric");
+    pub static ref RESTART_COUNT: IntCounter =
+        IntCounter::new("restart_count", "Number of service restarts").expect("Failed to create prometheus metric");
 }
 
 #[derive(Clone, Debug)]
@@ -298,6 +301,7 @@ pub fn register_custom_metrics() -> Result<(), Error> {
     REGISTRY.register(Box::new(MEAN_POLL_DURATION.clone()))?;
     REGISTRY.register(Box::new(MEAN_SCHEDULED_DURATION.clone()))?;
     REGISTRY.register(Box::new(REMAINING_TIME_TO_REDEEM_HOURS.clone()))?;
+    REGISTRY.register(Box::new(RESTART_COUNT.clone()))?;
 
     Ok(())
 }
@@ -436,6 +440,10 @@ fn publish_utxo_count<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData
             vault.metrics.utxo_count.set(count_i64);
         }
     }
+}
+
+pub fn increment_restart_counter() {
+    RESTART_COUNT.inc();
 }
 
 async fn publish_issue_count<
@@ -1005,6 +1013,13 @@ mod tests {
 
         assert_eq!(bitcoin_lower_bound, 9.0);
         assert_eq!(bitcoin_upper_bound, 13.0);
+    }
+
+    #[tokio::test]
+    async fn test_metrics_restart_counter() {
+        assert_eq!(RESTART_COUNT.get(), 0);
+        increment_restart_counter();
+        assert_eq!(RESTART_COUNT.get(), 1);
     }
 
     #[tokio::test]

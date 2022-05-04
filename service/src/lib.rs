@@ -35,7 +35,7 @@ pub trait Service<Config> {
     async fn start(&self) -> Result<(), Error>;
 }
 
-pub struct ConnectionManager<Config: Clone, S: Service<Config>> {
+pub struct ConnectionManager<Config: Clone, S: Service<Config>, F: Fn()> {
     signer: InterBtcSigner,
     wallet_name: Option<String>,
     bitcoin_config: BitcoinConfig,
@@ -44,9 +44,10 @@ pub struct ConnectionManager<Config: Clone, S: Service<Config>> {
     monitoring_config: MonitoringConfig,
     config: Config,
     _marker: PhantomData<S>,
+    increment_restart_counter: F,
 }
 
-impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Config, S> {
+impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionManager<Config, S, F> {
     pub fn new(
         signer: InterBtcSigner,
         wallet_name: Option<String>,
@@ -55,6 +56,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
         service_config: ServiceConfig,
         monitoring_config: MonitoringConfig,
         config: Config,
+        increment_restart_counter: F,
     ) -> Self {
         Self {
             signer,
@@ -65,11 +67,12 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
             monitoring_config,
             config,
             _marker: PhantomData::default(),
+            increment_restart_counter,
         }
     }
 }
 
-impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Config, S> {
+impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionManager<Config, S, F> {
     pub async fn start(&self) -> Result<(), Error> {
         loop {
             tracing::info!("Version: {}", S::VERSION);
@@ -132,7 +135,10 @@ impl<Config: Clone + Send + 'static, S: Service<Config>> ConnectionManager<Confi
 
             match self.service_config.restart_policy {
                 RestartPolicy::Never => return Err(Error::ClientShutdown),
-                RestartPolicy::Always => continue,
+                RestartPolicy::Always => {
+                    (self.increment_restart_counter)();
+                    continue;
+                }
             };
         }
     }

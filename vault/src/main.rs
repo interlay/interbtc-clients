@@ -3,7 +3,10 @@ use runtime::InterBtcSigner;
 use service::{warp, warp::Filter, ConnectionManager, Error, MonitoringConfig, ServiceConfig};
 use std::net::{Ipv4Addr, SocketAddr};
 
-use vault::{metrics, VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION};
+use vault::{
+    metrics::{self, increment_restart_counter},
+    VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION,
+};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
@@ -40,7 +43,7 @@ async fn start() -> Result<(), Error> {
     let (pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = InterBtcSigner::new(pair);
 
-    let vault_connection_manager = ConnectionManager::<_, VaultService>::new(
+    let vault_connection_manager = ConnectionManager::<_, VaultService, _>::new(
         signer.clone(),
         Some(wallet_name.to_string()),
         opts.bitcoin,
@@ -48,6 +51,7 @@ async fn start() -> Result<(), Error> {
         opts.service,
         opts.monitoring.clone(),
         opts.vault,
+        || increment_restart_counter(),
     );
 
     if !opts.monitoring.no_prometheus {
