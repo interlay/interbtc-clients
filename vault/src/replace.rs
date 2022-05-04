@@ -151,16 +151,17 @@ pub async fn handle_replace_request<
     vault_id: &VaultId,
 ) -> Result<(), Error> {
     let collateral_currency = vault_id.collateral_currency();
-    let (required_collateral, free_balance, minimum_replace) = try_join3(
+
+    let (required_replace_collateral, current_collateral, used_collateral) = try_join3(
         parachain_rpc.get_required_collateral_for_wrapped(event.amount, collateral_currency),
-        parachain_rpc.get_free_balance(collateral_currency),
-        parachain_rpc.get_replace_dust_amount(),
+        parachain_rpc.get_vault_total_collateral(vault_id.clone()),
+        parachain_rpc.get_required_collateral_for_vault(vault_id.clone()),
     )
     .await?;
 
-    if required_collateral <= minimum_replace {
-        Err(Error::BelowDustAmount)
-    } else if free_balance < required_collateral {
+    let total_required_collateral = required_replace_collateral.saturating_add(used_collateral);
+
+    if current_collateral < total_required_collateral {
         Err(Error::InsufficientFunds)
     } else {
         Ok(parachain_rpc
@@ -168,7 +169,7 @@ pub async fn handle_replace_request<
                 vault_id,
                 &event.old_vault_id,
                 event.amount,
-                required_collateral,
+                0, // do not lock any additional collateral
                 btc_rpc.get_new_address().await?,
             )
             .await?)
@@ -363,12 +364,11 @@ mod tests {
         let mut parachain_rpc = MockProvider::default();
         parachain_rpc
             .expect_get_required_collateral_for_wrapped()
-            .returning(|_, _| Ok(100));
-        parachain_rpc.expect_get_free_balance().returning(|_| Ok(50));
+            .returning(|_, _| Ok(51));
         parachain_rpc
-            .expect_get_replace_dust_amount()
-            .times(1)
-            .returning(|| Ok(0));
+            .expect_get_required_collateral_for_vault()
+            .returning(|_| Ok(50));
+        parachain_rpc.expect_get_vault_total_collateral().returning(|_| Ok(100));
 
         let event = RequestReplaceEvent {
             old_vault_id: dummy_vault_id(),
@@ -379,5 +379,30 @@ mod tests {
             handle_replace_request(parachain_rpc, bitcoin, &event, &dummy_vault_id()).await,
             Error::InsufficientFunds
         );
+    }
+
+    #[tokio::test]
+    async fn test_handle_replace_request_with_sufficient_balance() {
+        let mut bitcoin = MockBitcoin::default();
+        bitcoin.expect_get_new_address().returning(|| Ok(BtcAddress::default()));
+
+        let mut parachain_rpc = MockProvider::default();
+        parachain_rpc
+            .expect_get_required_collateral_for_wrapped()
+            .returning(|_, _| Ok(50));
+        parachain_rpc
+            .expect_get_required_collateral_for_vault()
+            .returning(|_| Ok(50));
+        parachain_rpc.expect_get_vault_total_collateral().returning(|_| Ok(100));
+        parachain_rpc.expect_accept_replace().returning(|_, _, _, _, _| Ok(()));
+
+        let event = RequestReplaceEvent {
+            old_vault_id: dummy_vault_id(),
+            amount: Default::default(),
+            griefing_collateral: Default::default(),
+        };
+        handle_replace_request(parachain_rpc, bitcoin, &event, &dummy_vault_id())
+            .await
+            .unwrap();
     }
 }
