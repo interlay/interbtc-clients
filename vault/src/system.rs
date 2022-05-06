@@ -258,7 +258,26 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
             .get_vaults_by_account_id(self.btc_parachain.get_account_id())
             .await?
         {
-            self.add_vault_id(vault_id.clone()).await?;
+            match is_vault_registered(&self.btc_parachain, &vault_id).await {
+                Err(Error::RuntimeError(RuntimeError::VaultLiquidated)) => {
+                    tracing::error!(
+                        "[{}] Vault is liquidated -- not going to process events for this vault.",
+                        vault_id.pretty_print()
+                    );
+                }
+                Err(Error::RuntimeError(RuntimeError::VaultCommittedTheft)) => {
+                    tracing::error!(
+                        "[{}] Vault committed theft -- not going to process events for this vault.",
+                        vault_id.pretty_print()
+                    );
+                }
+                Ok(_) => {
+                    self.add_vault_id(vault_id.clone()).await?;
+                }
+                Err(x) => {
+                    return Err(x);
+                }
+            }
 
             if startup_collateral_increase {
                 // check if the vault is registered
@@ -692,49 +711,56 @@ impl VaultService {
     async fn maybe_register_vault(&self) -> Result<(), Error> {
         let vault_id = self.get_vault_id();
 
-        if is_vault_registered(&self.btc_parachain, &vault_id).await? {
-            tracing::info!(
-                "[{}] Not registering vault -- already registered",
-                vault_id.pretty_print()
-            );
-        } else {
-            tracing::info!("[{}] Not registered", vault_id.pretty_print());
-
-            if let Some(collateral) = self.config.auto_register_with_collateral {
-                self.maybe_register_public_key().await?;
-                tracing::info!("[{}] Automatically registering...", vault_id.pretty_print());
-                let free_balance = self
-                    .btc_parachain
-                    .get_free_balance(vault_id.collateral_currency())
-                    .await?;
-                self.btc_parachain
-                    .register_vault(
-                        &vault_id,
-                        if collateral.gt(&free_balance) {
-                            tracing::warn!(
-                                "Cannot register with {}, using the available free balance: {}",
-                                collateral,
-                                free_balance
-                            );
-                            free_balance
-                        } else {
-                            collateral
-                        },
-                    )
-                    .await?;
-            } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
-                tracing::info!("[{}] Automatically registering...", vault_id.pretty_print());
-                let maybe_public_key = if let None = self.btc_parachain.get_public_key().await? {
-                    tracing::info!("Created new bitcoin public key");
-                    Some(self.btc_rpc_master_wallet.get_new_public_key::<BtcPublicKey>().await?)
-                } else {
-                    None
-                };
-                faucet::fund_and_register(&self.btc_parachain, faucet_url, &vault_id, maybe_public_key).await?;
+        match is_vault_registered(&self.btc_parachain, &vault_id).await {
+            Err(Error::RuntimeError(RuntimeError::VaultLiquidated))
+            | Err(Error::RuntimeError(RuntimeError::VaultCommittedTheft))
+            | Ok(true) => {
+                tracing::info!(
+                    "[{}] Not registering vault -- already registered",
+                    vault_id.pretty_print()
+                );
             }
+            Ok(false) => {
+                tracing::info!("[{}] Not registered", vault_id.pretty_print());
 
-            self.vault_id_manager.add_vault_id(vault_id.clone()).await?;
+                if let Some(collateral) = self.config.auto_register_with_collateral {
+                    self.maybe_register_public_key().await?;
+                    tracing::info!("[{}] Automatically registering...", vault_id.pretty_print());
+                    let free_balance = self
+                        .btc_parachain
+                        .get_free_balance(vault_id.collateral_currency())
+                        .await?;
+                    self.btc_parachain
+                        .register_vault(
+                            &vault_id,
+                            if collateral.gt(&free_balance) {
+                                tracing::warn!(
+                                    "Cannot register with {}, using the available free balance: {}",
+                                    collateral,
+                                    free_balance
+                                );
+                                free_balance
+                            } else {
+                                collateral
+                            },
+                        )
+                        .await?;
+                } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
+                    tracing::info!("[{}] Automatically registering...", vault_id.pretty_print());
+                    let maybe_public_key = if let None = self.btc_parachain.get_public_key().await? {
+                        tracing::info!("Created new bitcoin public key");
+                        Some(self.btc_rpc_master_wallet.get_new_public_key::<BtcPublicKey>().await?)
+                    } else {
+                        None
+                    };
+                    faucet::fund_and_register(&self.btc_parachain, faucet_url, &vault_id, maybe_public_key).await?;
+                }
+
+                self.vault_id_manager.add_vault_id(vault_id.clone()).await?;
+            }
+            Err(x) => return Err(x),
         }
+
         Ok(())
     }
 
