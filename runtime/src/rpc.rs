@@ -13,6 +13,7 @@ use codec::Encode;
 use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt};
 use module_oracle_rpc_runtime_api::BalanceWrapper;
 use primitives::UnsignedFixedPoint;
+use serde_json::{Map, Value};
 use sp_runtime::FixedPointNumber;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 use subxt::{
@@ -30,15 +31,19 @@ const TRANSACTION_TIMEOUT: Duration = Duration::from_secs(300); // 5 minute time
 cfg_if::cfg_if! {
     if #[cfg(feature = "standalone-metadata")] {
         const DEFAULT_SPEC_VERSION: u32 = 1;
+        const DEFAULT_SPEC_NAME: &str = "interbtc-standalone";
         pub const SS58_PREFIX: u16 = 42;
     } else if #[cfg(feature = "parachain-metadata-interlay")] {
         const DEFAULT_SPEC_VERSION: u32 = 3;
+        const DEFAULT_SPEC_NAME: &str = "interlay-parachain";
         pub const SS58_PREFIX: u16 = 2032;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
         const DEFAULT_SPEC_VERSION: u32 = 15;
+        const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
         pub const SS58_PREFIX: u16 = 2092;
     } else if #[cfg(feature = "parachain-metadata-testnet")] {
         const DEFAULT_SPEC_VERSION: u32 = 6;
+        const DEFAULT_SPEC_NAME: &str = "testnet-parachain";
         pub const SS58_PREFIX: u16 = 42;
     }
 }
@@ -69,6 +74,18 @@ impl InterBtcParachain {
         let api: RuntimeApi = ext_client.clone().to_runtime_api();
 
         let runtime_version = ext_client.rpc().runtime_version(None).await?;
+        if let Some(spec_name) = runtime_version.other.get("specName") {
+            if spec_name == DEFAULT_SPEC_NAME {
+                log::info!("spec_name={}", spec_name);
+            } else {
+                return Err(Error::ParachainMetadataMismatch(
+                    DEFAULT_SPEC_NAME.into(),
+                    // The spec name is always expected to be a string if defined, so `unwrap()` never panics.
+                    spec_name.as_str().unwrap().into(),
+                ));
+            }
+        }
+
         if runtime_version.spec_version == DEFAULT_SPEC_VERSION {
             log::info!("spec_version={}", runtime_version.spec_version);
             log::info!("transaction_version={}", runtime_version.transaction_version);
