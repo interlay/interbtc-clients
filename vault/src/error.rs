@@ -22,6 +22,8 @@ pub enum Error {
     TryIntoIntError(#[from] std::num::TryFromIntError),
     #[error("Deadline has expired")]
     DeadlineExpired,
+    #[error("Faucet url not set")]
+    FaucetUrlNotSet,
 
     #[error("ServiceError: {0}")]
     ServiceError(#[from] ServiceError),
