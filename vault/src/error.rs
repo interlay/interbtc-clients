@@ -10,8 +10,6 @@ use thiserror::Error;
 pub enum Error {
     #[error("Insufficient funds available")]
     InsufficientFunds,
-    #[error("Value below dust amount")]
-    BelowDustAmount,
     #[error("Failed to load or create bitcoin wallet: {0}")]
     WalletInitializationFailure(BitcoinError),
     #[error("Transaction contains more than one return-to-self uxto")]
