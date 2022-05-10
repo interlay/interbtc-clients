@@ -3,9 +3,7 @@ use hex::FromHex;
 use jsonrpc_core::Value;
 use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use parity_scale_codec::{Decode, Encode};
-use runtime::{
-    AccountId, BtcPublicKey, CurrencyId, CurrencyIdExt, InterBtcParachain, VaultId, VaultRegistryPallet, TX_FEES,
-};
+use runtime::{AccountId, CurrencyId, CurrencyIdExt, InterBtcParachain, VaultId, VaultRegistryPallet, TX_FEES};
 use serde::{Deserialize, Deserializer};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -45,20 +43,25 @@ async fn get_funding(faucet_connection: TypedClient, vault_id: VaultId) -> Resul
     Ok(())
 }
 
-pub async fn fund_and_register(
-    parachain_rpc: &InterBtcParachain,
-    faucet_url: &str,
-    vault_id: &VaultId,
-    maybe_public_key: Option<BtcPublicKey>,
-) -> Result<(), Error> {
+pub async fn fund_account(faucet_url: &str, vault_id: &VaultId) -> Result<TypedClient, Error> {
     tracing::info!("Connecting to the faucet");
     let connection = jsonrpc_http::connect::<TypedClient>(faucet_url).await?;
-    let currency_id: CurrencyId = vault_id.collateral_currency();
 
     // Receive user allowance from faucet
     if let Err(e) = get_funding(connection.clone(), vault_id.clone()).await {
         tracing::warn!("Failed to get funding from faucet: {}", e);
     }
+
+    Ok(connection)
+}
+
+pub async fn fund_and_register(
+    parachain_rpc: &InterBtcParachain,
+    faucet_url: &str,
+    vault_id: &VaultId,
+) -> Result<(), Error> {
+    let connection = fund_account(faucet_url, vault_id).await?;
+    let currency_id: CurrencyId = vault_id.collateral_currency();
 
     let user_allowance_in_dot: u128 = get_faucet_allowance(connection.clone(), "user_allowance").await?;
     let registration_collateral = user_allowance_in_dot
@@ -68,9 +71,6 @@ pub async fn fund_and_register(
         .ok_or(Error::ArithmeticUnderflow)?;
 
     tracing::info!("Registering the vault");
-    if let Some(public_key) = maybe_public_key {
-        parachain_rpc.register_public_key(public_key).await?;
-    }
     parachain_rpc.register_vault(vault_id, registration_collateral).await?;
 
     // Receive vault allowance from faucet

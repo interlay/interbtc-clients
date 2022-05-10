@@ -19,9 +19,9 @@ use futures::{
 use git_version::git_version;
 use runtime::{
     cli::{parse_duration_minutes, parse_duration_ms},
-    parse_collateral_currency, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, CurrencyId,
-    Error as RuntimeError, InterBtcParachain, PrettyPrint, RegisterVaultEvent, StoreMainChainHeaderEvent,
-    UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair, VaultId, VaultRegistryPallet,
+    parse_collateral_currency, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, Error as RuntimeError,
+    InterBtcParachain, PrettyPrint, RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs,
+    VaultCurrencyPair, VaultId, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, MonitoringConfig, Service, ShutdownSender};
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
@@ -31,18 +31,36 @@ pub const VERSION: &str = git_version!(args = ["--tags"]);
 pub const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 pub const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
+
 const RESTART_INTERVAL: Duration = Duration::from_secs(10800); // restart every 3 hours
+
+fn parse_collateral_and_amount(
+    s: &str,
+) -> Result<(CurrencyId, Option<u128>), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    let pos = s
+        .find('=')
+        .ok_or_else(|| format!("invalid CurrencyId=amount: no `=` found in `{}`", s))?;
+
+    let val = &s[pos + 1..];
+    Ok((
+        parse_collateral_currency(&s[..pos])?,
+        if val.contains("faucet") {
+            None
+        } else {
+            Some(val.parse()?)
+        },
+    ))
+}
 
 #[derive(Parser, Clone, Debug)]
 pub struct VaultServiceConfig {
     /// Automatically register the vault with the given amount of collateral and a newly generated address.
-    #[clap(long)]
-    pub auto_register_with_collateral: Option<u128>,
+    #[clap(long, parse(try_from_str = parse_collateral_and_amount))]
+    pub auto_register: Vec<(CurrencyId, Option<u128>)>,
 
-    /// Automatically register the vault with the collateral received from the faucet and a newly generated address.
-    /// The parameter is the URL of the faucet
-    #[clap(long, conflicts_with("auto-register-with-collateral"))]
-    pub auto_register_with_faucet_url: Option<String>,
+    /// Pass the faucet URL for auto-registration.
+    #[clap(long)]
+    pub faucet_url: Option<String>,
 
     /// Opt out of participation in replace requests.
     #[clap(long)]
@@ -102,11 +120,6 @@ pub struct VaultServiceConfig {
     /// Don't refund overpayments.
     #[clap(long)]
     pub no_auto_refund: bool,
-
-    /// The currency to use for the collateral, e.g. "DOT" or "KSM".
-    /// Defaults to the relay chain currency if not set.
-    #[clap(long, parse(try_from_str = parse_collateral_currency))]
-    pub collateral_currency_id: Option<CurrencyId>,
 }
 
 async fn active_block_listener(
@@ -452,14 +465,8 @@ impl VaultService {
         }
     }
 
-    fn get_vault_id(&self) -> VaultId {
+    fn get_vault_id(&self, collateral_currency: CurrencyId) -> VaultId {
         let account_id = self.btc_parachain.get_account_id();
-
-        let collateral_currency = if let Some(currency_id) = self.config.collateral_currency_id {
-            currency_id
-        } else {
-            self.btc_parachain.relay_chain_currency_id
-        };
         let wrapped_currency = self.btc_parachain.wrapped_currency_id;
 
         VaultId {
@@ -473,6 +480,12 @@ impl VaultService {
 
     async fn run_service(&self) -> Result<(), Error> {
         let account_id = self.btc_parachain.get_account_id().clone();
+
+        // exit if auto-register uses faucet and faucet url not set
+        if self.config.auto_register.iter().any(|(_, o)| o.is_none()) && self.config.faucet_url.is_none() {
+            // TODO: validate before bitcoin / parachain connections
+            return Err(Error::FaucetUrlNotSet);
+        }
 
         let num_confirmations = match self.config.btc_confirmations {
             Some(x) => x,
@@ -492,7 +505,14 @@ impl VaultService {
         });
         tokio::task::spawn(err_listener);
 
-        self.maybe_register_vault().await?;
+        self.maybe_register_public_key().await?;
+        join_all(
+            self.config
+                .auto_register
+                .iter()
+                .map(|(currency_id, amount)| self.maybe_register_vault(currency_id, amount)),
+        )
+        .await;
 
         // purposefully _after_ maybe_register_vault and _before_ other calls
         self.vault_id_manager.fetch_vault_ids(false).await?;
@@ -699,6 +719,11 @@ impl VaultService {
     }
 
     async fn maybe_register_public_key(&self) -> Result<(), Error> {
+        if let Some(faucet_url) = &self.config.faucet_url {
+            // fund the native token first to pay for tx fees
+            crate::faucet::fund_account(faucet_url, &self.get_vault_id(self.btc_parachain.native_currency_id)).await?;
+        }
+
         if let None = self.btc_parachain.get_public_key().await? {
             tracing::info!("Registering bitcoin public key to the parachain...");
             let new_key = self.btc_rpc_master_wallet.get_new_public_key().await?;
@@ -708,8 +733,12 @@ impl VaultService {
         Ok(())
     }
 
-    async fn maybe_register_vault(&self) -> Result<(), Error> {
-        let vault_id = self.get_vault_id();
+    async fn maybe_register_vault(
+        &self,
+        collateral_currency: &CurrencyId,
+        maybe_collateral_amount: &Option<u128>,
+    ) -> Result<(), Error> {
+        let vault_id = self.get_vault_id(collateral_currency.clone());
 
         match is_vault_registered(&self.btc_parachain, &vault_id).await {
             Err(Error::RuntimeError(RuntimeError::VaultLiquidated))
@@ -722,9 +751,7 @@ impl VaultService {
             }
             Ok(false) => {
                 tracing::info!("[{}] Not registered", vault_id.pretty_print());
-
-                if let Some(collateral) = self.config.auto_register_with_collateral {
-                    self.maybe_register_public_key().await?;
+                if let Some(collateral) = maybe_collateral_amount {
                     tracing::info!("[{}] Automatically registering...", vault_id.pretty_print());
                     let free_balance = self
                         .btc_parachain
@@ -741,22 +768,14 @@ impl VaultService {
                                 );
                                 free_balance
                             } else {
-                                collateral
+                                collateral.clone()
                             },
                         )
                         .await?;
-                } else if let Some(faucet_url) = &self.config.auto_register_with_faucet_url {
+                } else if let Some(faucet_url) = &self.config.faucet_url {
                     tracing::info!("[{}] Automatically registering...", vault_id.pretty_print());
-                    let maybe_public_key = if let None = self.btc_parachain.get_public_key().await? {
-                        tracing::info!("Created new bitcoin public key");
-                        Some(self.btc_rpc_master_wallet.get_new_public_key::<BtcPublicKey>().await?)
-                    } else {
-                        None
-                    };
-                    faucet::fund_and_register(&self.btc_parachain, faucet_url, &vault_id, maybe_public_key).await?;
+                    faucet::fund_and_register(&self.btc_parachain, faucet_url, &vault_id).await?;
                 }
-
-                self.vault_id_manager.add_vault_id(vault_id.clone()).await?;
             }
             Err(x) => return Err(x),
         }
