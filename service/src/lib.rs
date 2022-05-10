@@ -48,6 +48,7 @@ pub struct ConnectionManager<Config: Clone, S: Service<Config>, F: Fn()> {
 }
 
 impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionManager<Config, S, F> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         signer: InterBtcSigner,
         wallet_name: Option<String>,

@@ -32,14 +32,14 @@ pub trait Translate {
 impl Translate for Txid {
     type Associated = H256Le;
     fn translate(&self) -> Self::Associated {
-        H256Le::from_bytes_le(&self.to_vec())
+        H256Le::from_bytes_le(self)
     }
 }
 
 impl Translate for BlockHash {
     type Associated = H256Le;
     fn translate(&self) -> Self::Associated {
-        H256Le::from_bytes_le(&self.to_vec())
+        H256Le::from_bytes_le(self)
     }
 }
 

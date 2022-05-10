@@ -161,7 +161,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
                 // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
                 // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
                 btc_parachain
-                    .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash.to_vec()), Some(num_confirmations))
+                    .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash), Some(num_confirmations))
                     .await?;
 
                 // found tx, submit proof
@@ -200,7 +200,7 @@ async fn add_new_deposit_key<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
 ) -> Result<(), Error> {
     let mut hasher = Sha256::default();
     // input compressed public key
-    hasher.input(public_key.0.to_vec());
+    hasher.input(public_key.0);
     // input issue id
     hasher.input(secure_id.as_bytes());
     bitcoin_core

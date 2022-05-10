@@ -147,10 +147,7 @@ impl<P: RelayPallet + BtcRelayPallet + Send + Sync, B: BitcoinCoreApi + Send + S
                             // transaction.
                             let transactions: Box<dyn Stream<Item = _> + Unpin + Send> = match self
                                 .btc_parachain
-                                .wait_for_block_in_relay(
-                                    H256Le::from_bytes_le(&block_hash.to_vec()),
-                                    Some(num_confirmations),
-                                )
+                                .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash), Some(num_confirmations))
                                 .await
                             {
                                 Ok(_) => {
