@@ -74,16 +74,15 @@ impl InterBtcParachain {
         let api: RuntimeApi = ext_client.clone().to_runtime_api();
 
         let runtime_version = ext_client.rpc().runtime_version(None).await?;
-        if let Some(spec_name) = runtime_version.other.get("specName") {
-            if spec_name == DEFAULT_SPEC_NAME {
-                log::info!("spec_name={}", spec_name);
-            } else {
-                return Err(Error::ParachainMetadataMismatch(
-                    DEFAULT_SPEC_NAME.into(),
-                    // The spec name is always expected to be a string if defined, so `unwrap()` never panics.
-                    spec_name.as_str().unwrap().into(),
-                ));
-            }
+        let default_spec_name = &Value::default();
+        let spec_name = runtime_version.other.get("specName").unwrap_or(default_spec_name);
+        if spec_name == DEFAULT_SPEC_NAME {
+            log::info!("spec_name={}", spec_name);
+        } else {
+            return Err(Error::ParachainMetadataMismatch(
+                DEFAULT_SPEC_NAME.into(),
+                spec_name.as_str().unwrap_or_default().into(),
+            ));
         }
 
         if runtime_version.spec_version == DEFAULT_SPEC_VERSION {
