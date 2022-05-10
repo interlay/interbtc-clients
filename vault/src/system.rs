@@ -776,8 +776,6 @@ impl VaultService {
                     tracing::info!("[{}] Automatically registering...", vault_id.pretty_print());
                     faucet::fund_and_register(&self.btc_parachain, faucet_url, &vault_id).await?;
                 }
-
-                self.vault_id_manager.add_vault_id(vault_id.clone()).await?;
             }
             Err(x) => return Err(x),
         }
