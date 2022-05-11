@@ -2,7 +2,8 @@ use crate::{
     error::Error, metrics::update_bitcoin_metrics, storage::TransactionStore, system::VaultData, VaultIdManager,
 };
 use bitcoin::{
-    BitcoinCoreApi, PartialAddress, TransactionExt, TransactionMetadata, BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
+    BitcoinCoreApi, LockedTransaction, PartialAddress, TransactionExt, TransactionMetadata,
+    BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
 use futures::{
     stream::{self, StreamExt},
@@ -202,16 +203,47 @@ impl Request {
         }
 
         let tx_metadata = self
-            .transfer_btc(
-                &parachain_rpc,
-                &vault.btc_rpc,
-                tx_store,
-                num_confirmations,
-                self.vault_id.clone(),
-            )
+            .transfer_btc(&parachain_rpc, &vault.btc_rpc, tx_store, num_confirmations)
             .await?;
         update_bitcoin_metrics(&vault, tx_metadata.fee, self.fee_budget).await;
         self.execute(parachain_rpc, tx_metadata).await
+    }
+
+    async fn register_addresses<B, P>(
+        &self,
+        parachain_rpc: &P,
+        btc_rpc: &B,
+        tx: &LockedTransaction,
+    ) -> Result<(), Error>
+    where
+        B: BitcoinCoreApi + Clone,
+        P: BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
+    {
+        let return_to_self_addresses = tx
+            .transaction
+            .extract_output_addresses()
+            .into_iter()
+            .filter(|x| x != &self.btc_address)
+            .collect::<Vec<_>>();
+
+        // register return-to-self address if it exists
+        match return_to_self_addresses.as_slice() {
+            [] => {} // no return-to-self
+            [address] => {
+                // one return-to-self address, make sure it is registered
+                let wallet = parachain_rpc.get_vault(&self.vault_id).await?.wallet;
+                if !wallet.addresses.contains(address) {
+                    let readable_address = address
+                        .encode_str(btc_rpc.network())
+                        .unwrap_or(format!("{:?}", address));
+                    tracing::info!("Registering address {:?}", readable_address);
+                    parachain_rpc.register_address(&self.vault_id, *address).await?;
+                    tracing::debug!("Successfully registered address {:?}", readable_address);
+                }
+            }
+            _ => return Err(Error::TooManyReturnToSelfAddresses),
+        };
+        Ok(())
     }
 
     /// Make a bitcoin transfer to fulfil the request
@@ -229,7 +261,6 @@ impl Request {
         btc_rpc: &B,
         tx_store: Arc<TS>,
         num_confirmations: u32,
-        vault_id: VaultId,
     ) -> Result<TransactionMetadata, Error>
     where
         B: BitcoinCoreApi + Clone,
@@ -239,34 +270,12 @@ impl Request {
         let tx = btc_rpc
             .create_transaction(self.btc_address, self.amount as u64, Some(self.hash))
             .await?;
+        self.register_addresses(parachain_rpc, btc_rpc, &tx).await?;
+
         let recipient = tx.recipient.clone();
         tracing::info!("Sending bitcoin to {}", recipient);
+        // don't store tx until addresses are registered
         tx_store.put_tx(self.hash, tx.transaction.clone())?;
-
-        let return_to_self_addresses = tx
-            .transaction
-            .extract_output_addresses()
-            .into_iter()
-            .filter(|x| x != &self.btc_address)
-            .collect::<Vec<_>>();
-
-        // register return-to-self address if it exists
-        match return_to_self_addresses.as_slice() {
-            [] => {} // no return-to-self
-            [address] => {
-                // one return-to-self address, make sure it is registered
-                let wallet = parachain_rpc.get_vault(&vault_id).await?.wallet;
-                if !wallet.addresses.contains(address) {
-                    let readable_address = address
-                        .encode_str(btc_rpc.network())
-                        .unwrap_or(format!("{:?}", address));
-                    tracing::info!("Registering address {:?}", readable_address);
-                    parachain_rpc.register_address(&vault_id, *address).await?;
-                    tracing::debug!("Successfully registered address {:?}", readable_address);
-                }
-            }
-            _ => return Err(Error::TooManyReturnToSelfAddresses),
-        };
 
         let txid = btc_rpc.send_transaction(tx).await?;
 
@@ -434,8 +443,9 @@ where
 
                 let txid = tx.txid();
                 let locked_tx = btc_rpc.lock_transaction(tx).await;
+                // tx not stored if there are too many return to self addresses
+                let _ = request.register_addresses(&parachain_rpc, &btc_rpc, &locked_tx).await;
                 // try sending but ignore the result as it may have already been processed
-                // TODO: register return-to-self addresses
                 let _ = btc_rpc.send_transaction(locked_tx).await;
 
                 // Payment has been made, but it might not have been confirmed enough times yet
@@ -536,8 +546,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        json, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, Network,
-        PartialAddress, PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        json, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, Network, PartialAddress,
+        PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
         AccountId, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError, ErrorCode, InterBtcRichBlockHeader,
