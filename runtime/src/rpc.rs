@@ -13,7 +13,7 @@ use codec::Encode;
 use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt};
 use module_oracle_rpc_runtime_api::BalanceWrapper;
 use primitives::UnsignedFixedPoint;
-use serde_json::{Map, Value};
+use serde_json::Value;
 use sp_runtime::FixedPointNumber;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 use subxt::{

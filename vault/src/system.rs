@@ -724,7 +724,7 @@ impl VaultService {
             crate::faucet::fund_account(faucet_url, &self.get_vault_id(self.btc_parachain.native_currency_id)).await?;
         }
 
-        if let None = self.btc_parachain.get_public_key().await? {
+        if self.btc_parachain.get_public_key().await?.is_none() {
             tracing::info!("Registering bitcoin public key to the parachain...");
             let new_key = self.btc_rpc_master_wallet.get_new_public_key().await?;
             self.btc_parachain.register_public_key(new_key).await?;
@@ -738,7 +738,7 @@ impl VaultService {
         collateral_currency: &CurrencyId,
         maybe_collateral_amount: &Option<u128>,
     ) -> Result<(), Error> {
-        let vault_id = self.get_vault_id(collateral_currency.clone());
+        let vault_id = self.get_vault_id(*collateral_currency);
 
         match is_vault_registered(&self.btc_parachain, &vault_id).await {
             Err(Error::RuntimeError(RuntimeError::VaultLiquidated))
@@ -768,7 +768,7 @@ impl VaultService {
                                 );
                                 free_balance
                             } else {
-                                collateral.clone()
+                                *collateral
                             },
                         )
                         .await?;

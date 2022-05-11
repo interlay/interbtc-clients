@@ -263,10 +263,7 @@ impl Request {
             tracing::info!("Awaiting parachain confirmations...");
 
             match parachain_rpc
-                .wait_for_block_in_relay(
-                    H256Le::from_bytes_le(&tx_metadata.block_hash.to_vec()),
-                    Some(num_confirmations),
-                )
+                .wait_for_block_in_relay(H256Le::from_bytes_le(&tx_metadata.block_hash), Some(num_confirmations))
                 .await
             {
                 Ok(_) => {
@@ -446,7 +443,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                         // we have enough btc confirmations, now make sure they have been relayed before we continue
                         if let Err(e) = parachain_rpc
                             .wait_for_block_in_relay(
-                                H256Le::from_bytes_le(&tx_metadata.block_hash.to_vec()),
+                                H256Le::from_bytes_le(&tx_metadata.block_hash),
                                 Some(num_confirmations),
                             )
                             .await

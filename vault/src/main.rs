@@ -51,7 +51,7 @@ async fn start() -> Result<(), Error> {
         opts.service,
         opts.monitoring.clone(),
         opts.vault,
-        || increment_restart_counter(),
+        increment_restart_counter,
     );
 
     if !opts.monitoring.no_prometheus {
