@@ -35,6 +35,8 @@ pub enum Error {
     TimeElapsed(#[from] Elapsed),
     #[error("ElectrsError: {0}")]
     ElectrsError(#[from] ElectrsError),
+    #[error("Connected to incompatable bitcoin core version: {0}")]
+    IncompatibleVersion(usize),
 
     #[error("Could not confirm transaction")]
     ConfirmationError,

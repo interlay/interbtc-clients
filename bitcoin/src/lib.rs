@@ -45,7 +45,10 @@ extern crate num_derive;
 /// Average time to mine a Bitcoin block.
 pub const BLOCK_INTERVAL: Duration = Duration::from_secs(600); // 10 minutes
 pub const DEFAULT_MAX_TX_COUNT: usize = 100_000_000;
-
+/// the bitcoin core version.
+/// See https://github.com/bitcoin/bitcoin/blob/833add0f48b0fad84d7b8cf9373a349e7aef20b4/src/rpc/net.cpp#L627
+/// and https://github.com/bitcoin/bitcoin/blob/833add0f48b0fad84d7b8cf9373a349e7aef20b4/src/clientversion.h#L33-L37
+pub const BITCOIN_CORE_VERSION_23: usize = 230_000;
 const NOT_IN_MEMPOOL_ERROR_CODE: i32 = BitcoinRpcError::RpcInvalidAddressOrKey as i32;
 
 // Time to sleep before retry on startup.
@@ -218,12 +221,26 @@ fn parse_bitcoin_network(src: &str) -> Result<Network, Error> {
     }
 }
 
+struct ConnectionInfo {
+    chain: String,
+    version: usize,
+}
+
+fn get_info(rpc: &Client) -> Result<ConnectionInfo, Error> {
+    let blockchain_info = rpc.get_blockchain_info()?;
+    let network_info = rpc.get_network_info()?;
+    Ok(ConnectionInfo {
+        chain: blockchain_info.chain,
+        version: network_info.version,
+    })
+}
+
 /// Connect to a bitcoin-core full node or timeout.
 async fn connect(rpc: &Client, connection_timeout: Duration) -> Result<Network, Error> {
     info!("Connecting to bitcoin-core...");
     timeout(connection_timeout, async move {
         loop {
-            match rpc.get_blockchain_info().map_err(Into::<Error>::into) {
+            match get_info(rpc) {
                 Err(err)
                     if err.is_transport_error() =>
                 {
@@ -245,8 +262,14 @@ async fn connect(rpc: &Client, connection_timeout: Duration) -> Result<Network, 
                     sleep(RETRY_DURATION).await;
                     continue;
                 }
-                Ok(GetBlockchainInfoResult { chain, .. }) => {
+                Ok(ConnectionInfo{chain, version}) => {
                     info!("Connected to {}", chain);
+                    info!("Bitcoin version {}", version);
+
+                    if version >= BITCOIN_CORE_VERSION_23 {
+                        return Err(Error::IncompatibleVersion(version))
+                    }
+
                     return parse_bitcoin_network(&chain);
                 }
                 Err(err) => return Err(err),

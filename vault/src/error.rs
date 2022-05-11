@@ -11,8 +11,6 @@ use thiserror::Error;
 pub enum Error {
     #[error("Insufficient funds available")]
     InsufficientFunds,
-    #[error("Value below dust amount")]
-    BelowDustAmount,
     #[error("Failed to load or create bitcoin wallet: {0}")]
     WalletInitializationFailure(BitcoinError),
     #[error("Transaction contains more than one return-to-self uxto")]
@@ -27,6 +25,8 @@ pub enum Error {
     DeadlineExpired,
     #[error("Transaction not found")]
     TransactionNotFound,
+    #[error("Faucet url not set")]
+    FaucetUrlNotSet,
 
     #[error("ServiceError: {0}")]
     ServiceError(#[from] ServiceError),
