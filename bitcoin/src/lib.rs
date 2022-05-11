@@ -605,7 +605,7 @@ impl BitcoinCoreApi for BitcoinCore {
     fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), Error> {
         Ok(self
             .rpc
-            .import_private_key(&private_key, Some(DERIVATION_KEY_LABEL), Some(false))?)
+            .import_private_key(private_key, Some(DERIVATION_KEY_LABEL), Some(false))?)
     }
 
     /// Derive and import the private key for the master public key and public secret

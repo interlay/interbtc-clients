@@ -226,11 +226,11 @@ impl PerCurrencyMetrics {
         ) {
             let redeems = redeem_requests
                 .iter()
-                .map(|(id, redeem)| (id.clone(), redeem.transfer_fee_btc));
+                .map(|(id, redeem)| (*id, redeem.transfer_fee_btc));
             let refunds = refund_requests
                 .iter()
-                .map(|(id, refund)| (id.clone(), refund.transfer_fee_btc));
-            let replaces = replace_requests.iter().map(|(id, _)| (id.clone(), 0));
+                .map(|(id, refund)| (*id, refund.transfer_fee_btc));
+            let replaces = replace_requests.iter().map(|(id, _)| (*id, 0));
             let fee_budgets = redeems.chain(refunds).chain(replaces).collect::<HashMap<_, _>>();
             let fee_budgets = &fee_budgets;
 
@@ -242,9 +242,9 @@ impl PerCurrencyMetrics {
                         .await
                         .ok()?;
                     let op_return = transaction.get_op_return()?;
-                    let budget: i64 = fee_budgets.get(&op_return)?.clone().try_into().ok()?;
-                    let surplus = budget.checked_sub(tx.detail.fee?.as_sat().abs());
-                    surplus
+                    let budget: i64 = (*fee_budgets.get(&op_return)?).try_into().ok()?;
+
+                    budget.checked_sub(tx.detail.fee?.as_sat().abs())
                 })
                 .fold(0i64, |acc, x| async move { acc.saturating_add(x) })
                 .await;

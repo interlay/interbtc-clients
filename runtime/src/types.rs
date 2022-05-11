@@ -29,74 +29,72 @@ pub type FixedU128 = sp_arithmetic::FixedU128;
 mod metadata_aliases {
     use super::*;
 
-    pub type BtcPublicKey = metadata::runtime_types::bitcoin::address::PublicKey;
+    pub use metadata::runtime_types::bitcoin::address::PublicKey as BtcPublicKey;
 
-    pub type OracleKey = metadata::runtime_types::interbtc_primitives::oracle::Key;
+    pub use metadata::runtime_types::interbtc_primitives::oracle::Key as OracleKey;
 
-    pub type StatusCode = metadata::runtime_types::security::types::StatusCode;
-    pub type ErrorCode = metadata::runtime_types::security::types::ErrorCode;
-    pub type RawBlockHeader = metadata::runtime_types::bitcoin::types::RawBlockHeader;
-    pub type VaultStatus = metadata::runtime_types::vault_registry::types::VaultStatus;
+    pub use metadata::runtime_types::{
+        bitcoin::types::RawBlockHeader,
+        security::types::{ErrorCode, StatusCode},
+        vault_registry::types::VaultStatus,
+    };
     pub type InterBtcVault =
         metadata::runtime_types::vault_registry::types::Vault<AccountId, BlockNumber, Balance, CurrencyId>;
-    pub type Wallet = metadata::runtime_types::vault_registry::types::Wallet;
+    pub use metadata::runtime_types::vault_registry::types::Wallet;
     pub type InterBtcRichBlockHeader = metadata::runtime_types::btc_relay::types::RichBlockHeader<BlockNumber>;
     pub type BitcoinBlockHeight = u32;
 
-    pub type FeedValuesEvent = metadata::oracle::events::FeedValues;
+    pub use metadata::oracle::events::FeedValues as FeedValuesEvent;
 
-    pub type CancelIssueEvent = metadata::issue::events::CancelIssue;
-    pub type ExecuteIssueEvent = metadata::issue::events::ExecuteIssue;
-    pub type RequestIssueEvent = metadata::issue::events::RequestIssue;
+    pub use metadata::issue::events::{
+        CancelIssue as CancelIssueEvent, ExecuteIssue as ExecuteIssueEvent, RequestIssue as RequestIssueEvent,
+    };
 
-    pub type AcceptReplaceEvent = metadata::replace::events::AcceptReplace;
-    pub type ExecuteReplaceEvent = metadata::replace::events::ExecuteReplace;
-    pub type RequestReplaceEvent = metadata::replace::events::RequestReplace;
-    pub type WithdrawReplaceEvent = metadata::replace::events::WithdrawReplace;
-    pub type CancelReplaceEvent = metadata::replace::events::CancelReplace;
+    pub use metadata::replace::events::{
+        AcceptReplace as AcceptReplaceEvent, CancelReplace as CancelReplaceEvent,
+        ExecuteReplace as ExecuteReplaceEvent, RequestReplace as RequestReplaceEvent,
+        WithdrawReplace as WithdrawReplaceEvent,
+    };
 
-    pub type RequestRefundEvent = metadata::refund::events::RequestRefund;
-    pub type ExecuteRefundEvent = metadata::refund::events::ExecuteRefund;
+    pub use metadata::refund::events::{ExecuteRefund as ExecuteRefundEvent, RequestRefund as RequestRefundEvent};
 
-    pub type RequestRedeemEvent = metadata::redeem::events::RequestRedeem;
-    pub type ExecuteRedeemEvent = metadata::redeem::events::ExecuteRedeem;
+    pub use metadata::redeem::events::{ExecuteRedeem as ExecuteRedeemEvent, RequestRedeem as RequestRedeemEvent};
 
-    pub type UpdateActiveBlockEvent = metadata::security::events::UpdateActiveBlock;
+    pub use metadata::security::events::UpdateActiveBlock as UpdateActiveBlockEvent;
 
-    pub type RegisterVaultEvent = metadata::vault_registry::events::RegisterVault;
-    pub type RegisterAddressEvent = metadata::vault_registry::events::RegisterAddress;
-    pub type DepositCollateralEvent = metadata::vault_registry::events::DepositCollateral;
-    pub type LiquidateVaultEvent = metadata::vault_registry::events::LiquidateVault;
+    pub use metadata::vault_registry::events::{
+        DepositCollateral as DepositCollateralEvent, LiquidateVault as LiquidateVaultEvent,
+        RegisterAddress as RegisterAddressEvent, RegisterVault as RegisterVaultEvent,
+    };
 
-    pub type StoreMainChainHeaderEvent = metadata::btc_relay::events::StoreMainChainHeader;
+    pub use metadata::btc_relay::events::StoreMainChainHeader as StoreMainChainHeaderEvent;
 
-    pub type VaultTheftEvent = metadata::relay::events::VaultTheft;
-    pub type VaultDoublePaymentEvent = metadata::relay::events::VaultDoublePayment;
+    pub use metadata::relay::events::{VaultDoublePayment as VaultDoublePaymentEvent, VaultTheft as VaultTheftEvent};
 
-    pub type EndowedEvent = metadata::tokens::events::Endowed;
+    pub use metadata::tokens::events::Endowed as EndowedEvent;
 
-    pub type BtcRelayPalletError = metadata::runtime_types::btc_relay::pallet::Error;
-    pub type IssuePalletError = metadata::runtime_types::issue::pallet::Error;
-    pub type RedeemPalletError = metadata::runtime_types::redeem::pallet::Error;
-    pub type RelayPalletError = metadata::runtime_types::relay::pallet::Error;
-    pub type SecurityPalletError = metadata::runtime_types::security::pallet::Error;
-    pub type SystemPalletError = metadata::runtime_types::frame_system::pallet::Error;
+    pub use metadata::runtime_types::{
+        btc_relay::pallet::Error as BtcRelayPalletError, frame_system::pallet::Error as SystemPalletError,
+        issue::pallet::Error as IssuePalletError, redeem::pallet::Error as RedeemPalletError,
+        relay::pallet::Error as RelayPalletError, security::pallet::Error as SecurityPalletError,
+    };
 
-    pub type H256Le = metadata::runtime_types::bitcoin::types::H256Le;
+    pub use metadata::runtime_types::bitcoin::types::H256Le;
 
     pub type InterBtcHeader = <InterBtcRuntime as Config>::Header;
 
     pub type InterBtcIssueRequest =
         metadata::runtime_types::interbtc_primitives::issue::IssueRequest<AccountId, BlockNumber, Balance, CurrencyId>;
-    pub type IssueRequestStatus = metadata::runtime_types::interbtc_primitives::issue::IssueRequestStatus;
+    pub use metadata::runtime_types::interbtc_primitives::issue::IssueRequestStatus;
     pub type InterBtcRedeemRequest = metadata::runtime_types::interbtc_primitives::redeem::RedeemRequest<
         AccountId,
         BlockNumber,
         Balance,
         CurrencyId,
     >;
-    pub type RedeemRequestStatus = metadata::runtime_types::interbtc_primitives::redeem::RedeemRequestStatus;
-    pub type ReplaceRequestStatus = metadata::runtime_types::interbtc_primitives::replace::ReplaceRequestStatus;
+    pub use metadata::runtime_types::interbtc_primitives::{
+        redeem::RedeemRequestStatus, replace::ReplaceRequestStatus,
+    };
     pub type InterBtcRefundRequest =
         metadata::runtime_types::interbtc_primitives::refund::RefundRequest<AccountId, Balance, CurrencyId>;
     pub type InterBtcReplaceRequest = metadata::runtime_types::interbtc_primitives::replace::ReplaceRequest<
@@ -117,7 +115,7 @@ mod metadata_aliases {
     #[cfg(feature = "standalone-metadata")]
     pub type EncodedCall = metadata::runtime_types::interbtc_runtime_standalone::Call;
 
-    pub type SecurityCall = metadata::runtime_types::security::pallet::Call;
+    pub use metadata::runtime_types::security::pallet::Call as SecurityCall;
 }
 
 impl crate::RawBlockHeader {
@@ -128,7 +126,7 @@ impl crate::RawBlockHeader {
 
 impl From<[u8; 33]> for crate::BtcPublicKey {
     fn from(input: [u8; 33]) -> Self {
-        crate::BtcPublicKey { 0: input }
+        crate::BtcPublicKey(input)
     }
 }
 

@@ -33,9 +33,7 @@ pub struct MockBitcoinCore {
 }
 
 pub fn to_block_header(value: Vec<u8>) -> RawBlockHeader {
-    crate::RawBlockHeader {
-        0: value.try_into().unwrap(),
-    }
+    crate::RawBlockHeader(value.try_into().unwrap())
 }
 
 impl MockBitcoinCore {
@@ -305,7 +303,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         Ok((self.blocks.read().await.len() - 1).try_into().unwrap())
     }
     async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError> {
-        let transaction = self.get_transaction(txid, Some(block_hash.clone())).await?;
+        let transaction = self.get_transaction(txid, Some(*block_hash)).await?;
         Ok(serialize(&transaction))
     }
     async fn get_transaction(&self, txid: &Txid, _block_hash: Option<BlockHash>) -> Result<Transaction, BitcoinError> {

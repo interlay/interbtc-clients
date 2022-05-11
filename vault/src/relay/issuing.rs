@@ -53,7 +53,7 @@ pub trait Issuing {
 
 fn encode_raw_header(bytes: Vec<u8>) -> Result<RawBlockHeader, Error> {
     let raw = bytes.try_into().map_err(|_| Error::SerializeHeader)?;
-    Ok(RawBlockHeader { 0: raw })
+    Ok(RawBlockHeader(raw))
 }
 
 #[async_trait]
