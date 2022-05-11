@@ -1154,6 +1154,7 @@ async fn test_execute_open_requests_succeeds() {
                 shutdown_tx.clone(),
                 vault_provider,
                 vault_id_manager,
+                btc_rpc.clone(),
                 tx_store,
                 0,
                 Duration::from_secs(0),

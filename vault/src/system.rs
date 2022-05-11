@@ -531,6 +531,7 @@ impl VaultService {
             self.shutdown.clone(),
             self.btc_parachain.clone(),
             self.vault_id_manager.clone(),
+            self.btc_rpc_master_wallet.clone(),
             rocksdb.clone(),
             num_confirmations,
             self.config.payment_margin_minutes,
