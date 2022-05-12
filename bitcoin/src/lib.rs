@@ -397,6 +397,8 @@ impl BitcoinCore {
         let args = [
             serde_json::to_value::<&[json::CreateRawTransactionInput]>(&[])?,
             serde_json::to_value(outputs)?,
+            serde_json::to_value(0i64)?, /* locktime - default 0: see https://developer.bitcoin.org/reference/rpc/createrawtransaction.html */
+            serde_json::to_value(true)?, // BIP125-replaceable, aka Replace By Fee (RBF)
         ];
         Ok(self.rpc.call("createrawtransaction", &args)?)
     }
