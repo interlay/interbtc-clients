@@ -15,7 +15,11 @@ use runtime::{
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
-use std::{sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager};
 
 const TIMEOUT: Duration = Duration::from_secs(90);
@@ -317,6 +321,7 @@ async fn test_redeem_succeeds() {
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
+        let tx_store = Arc::new(Mutex::new(HashMap::new()));
 
         let issue_amount = 100000;
         let vault_collateral =
@@ -341,6 +346,7 @@ async fn test_redeem_succeeds() {
                 shutdown_tx,
                 vault_provider.clone(),
                 vault_id_manager,
+                tx_store,
                 0,
                 Duration::from_secs(0),
             ),
@@ -382,6 +388,7 @@ async fn test_replace_succeeds() {
         let old_btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager =
             VaultIdManager::from_map(old_vault_provider.clone(), old_btc_rpc_master_wallet, btc_rpcs);
+        let tx_store = Arc::new(Mutex::new(HashMap::new()));
 
         let issue_amount = 100000;
         let vault_collateral = get_required_vault_collateral_for_issue(
@@ -425,6 +432,7 @@ async fn test_replace_succeeds() {
                     shutdown_tx.clone(),
                     old_vault_provider.clone(),
                     vault_id_manager.clone(),
+                    tx_store,
                     0,
                     Duration::from_secs(0),
                 ),
@@ -783,10 +791,17 @@ async fn test_refund_succeeds() {
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
+        let tx_store = Arc::new(Mutex::new(HashMap::new()));
 
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
-        let refund_service =
-            vault::service::listen_for_refund_requests(shutdown_tx, vault_provider.clone(), vault_id_manager, 0, true);
+        let refund_service = vault::service::listen_for_refund_requests(
+            shutdown_tx,
+            vault_provider.clone(),
+            vault_id_manager,
+            tx_store,
+            0,
+            true,
+        );
 
         assert_ok!(sudo_provider.set_parachain_confirmations(0).await);
 
@@ -864,10 +879,17 @@ async fn test_issue_overpayment_succeeds() {
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
+        let tx_store = Arc::new(Mutex::new(HashMap::new()));
 
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
-        let refund_service =
-            vault::service::listen_for_refund_requests(shutdown_tx, vault_provider.clone(), vault_id_manager, 0, true);
+        let refund_service = vault::service::listen_for_refund_requests(
+            shutdown_tx,
+            vault_provider.clone(),
+            vault_id_manager,
+            tx_store,
+            0,
+            true,
+        );
 
         let issue_amount = 100000;
         let over_payment_factor = 3;
@@ -1078,6 +1100,7 @@ async fn test_execute_open_requests_succeeds() {
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
+        let tx_store = Arc::new(Mutex::new(HashMap::new()));
 
         let issue_amount = 100000;
         let vault_collateral =
@@ -1132,6 +1155,7 @@ async fn test_execute_open_requests_succeeds() {
                 vault_provider,
                 vault_id_manager,
                 btc_rpc.clone(),
+                tx_store,
                 0,
                 Duration::from_secs(0),
                 true,

@@ -225,6 +225,7 @@ mod tests {
                 sat: u64,
                 request_id: Option<H256>,
             ) -> Result<LockedTransaction, Error>;
+            async fn lock_transaction(&self, transaction: Transaction) -> LockedTransaction;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
             async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
                 &self,

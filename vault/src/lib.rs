@@ -11,6 +11,7 @@ mod redeem;
 mod refund;
 mod relay;
 mod replace;
+mod storage;
 mod system;
 mod types;
 mod vaults;

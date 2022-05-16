@@ -1,6 +1,6 @@
 use crate::{
     cancellation::Event, error::Error, execution::Request, metrics::publish_expected_bitcoin_balance,
-    system::VaultIdManager,
+    storage::TransactionStore, system::VaultIdManager,
 };
 use bitcoin::BitcoinCoreApi;
 use futures::{channel::mpsc::Sender, future::try_join3, SinkExt};
@@ -9,7 +9,7 @@ use runtime::{
     RequestReplaceEvent, UtilFuncs, VaultId, VaultRegistryPallet,
 };
 use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 /// Listen for AcceptReplaceEvent directed at this vault and continue the replacement
 /// procedure by transferring bitcoin and calling execute_replace
@@ -19,16 +19,22 @@ use std::time::Duration;
 /// * `parachain_rpc` - the parachain RPC handle
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `num_confirmations` - the number of bitcoin confirmation to await
-pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn listen_for_accept_replace<B, TS>(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
     vault_id_manager: VaultIdManager<B>,
+    tx_store: Arc<TS>,
     num_confirmations: u32,
     payment_margin: Duration,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError>
+where
+    B: BitcoinCoreApi + Clone + Send + Sync + 'static,
+    TS: TransactionStore + Send + Sync + 'static,
+{
     let parachain_rpc = &parachain_rpc;
     let vault_id_manager = &vault_id_manager;
     let shutdown_tx = &shutdown_tx;
+    let tx_store = &tx_store;
     parachain_rpc
         .on_event::<AcceptReplaceEvent, _, _, _>(
             |event| async move {
@@ -44,6 +50,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
                 // arguments by value rather than by reference, so clone these:
                 let parachain_rpc = parachain_rpc.clone();
+                let tx_store = tx_store.clone();
                 // Spawn a new task so that we handle these events concurrently
                 spawn_cancelable(shutdown_tx.subscribe(), async move {
                     tracing::info!("Executing accept replace #{:?}", event.replace_id);
@@ -54,7 +61,9 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                             parachain_rpc.get_replace_request(event.replace_id).await?,
                             payment_margin,
                         )?;
-                        request.pay_and_execute(parachain_rpc, vault, num_confirmations).await
+                        request
+                            .pay_and_execute(parachain_rpc, vault, tx_store, num_confirmations)
+                            .await
                     }
                     .await;
 
@@ -269,6 +278,7 @@ mod tests {
                 sat: u64,
                 request_id: Option<H256>,
             ) -> Result<LockedTransaction, BitcoinError>;
+            async fn lock_transaction(&self, transaction: Transaction) -> LockedTransaction;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
             async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
                 &self,

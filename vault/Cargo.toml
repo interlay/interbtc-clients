@@ -24,7 +24,7 @@ futures = "0.3.5"
 async-trait = "0.1.40"
 sha2 = "0.8.2"
 git-version = "0.3.4"
-
+rocksdb = { version = "0.18", features = ["snappy"], default-features = false }
 lazy_static = "1.4"
 
 tracing = { version = "0.1", features = ["log"] }

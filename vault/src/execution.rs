@@ -1,6 +1,8 @@
-use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager};
+use crate::{
+    error::Error, metrics::update_bitcoin_metrics, storage::TransactionStore, system::VaultData, VaultIdManager,
+};
 use bitcoin::{
-    BitcoinCoreApi, PartialAddress, Transaction, TransactionExt, TransactionMetadata,
+    BitcoinCoreApi, LockedTransaction, PartialAddress, Transaction, TransactionExt, TransactionMetadata, Txid,
     BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
 use futures::{
@@ -13,7 +15,7 @@ use runtime::{
     ReplaceRequestStatus, RequestRefundEvent, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
 use service::{spawn_cancelable, ShutdownSender};
-use std::{collections::HashMap, convert::TryInto, time::Duration};
+use std::{collections::HashMap, convert::TryInto, sync::Arc, time::Duration};
 use tokio::time::sleep;
 
 const ON_FORK_RETRY_DELAY: Duration = Duration::from_secs(10);
@@ -170,8 +172,7 @@ impl Request {
         }
     }
 
-    /// Makes the bitcoin transfer and executes the request
-    pub async fn pay_and_execute<
+    async fn wait_and_execute<
         B: BitcoinCoreApi + Clone + Send + Sync + 'static,
         P: ReplacePallet
             + RefundPallet
@@ -186,7 +187,61 @@ impl Request {
     >(
         &self,
         parachain_rpc: P,
+        btc_rpc: B,
+        txid: Txid,
+        num_confirmations: u32,
+    ) {
+        // Payment has been made, but it might not have been confirmed enough times yet
+        let tx_metadata = btc_rpc.wait_for_transaction_metadata(txid, num_confirmations).await;
+
+        match tx_metadata {
+            Ok(tx_metadata) => {
+                // we have enough btc confirmations, now make sure they have been relayed before we continue
+                if let Err(e) = parachain_rpc
+                    .wait_for_block_in_relay(
+                        H256Le::from_bytes_le(&tx_metadata.block_hash.to_vec()),
+                        Some(num_confirmations),
+                    )
+                    .await
+                {
+                    tracing::error!(
+                        "Error while waiting for block inclusion for request #{}: {}",
+                        self.hash,
+                        e
+                    );
+                    // continue; try to execute anyway
+                }
+
+                match self.execute(parachain_rpc.clone(), tx_metadata).await {
+                    Ok(_) => {
+                        tracing::info!("Executed request #{:?}", self.hash);
+                    }
+                    Err(e) => tracing::error!("Failed to execute request #{}: {}", self.hash, e),
+                }
+            }
+            Err(e) => tracing::error!("Failed to confirm bitcoin transaction for request {}: {}", self.hash, e),
+        }
+    }
+
+    /// Makes the bitcoin transfer and executes the request
+    pub async fn pay_and_execute<
+        B: BitcoinCoreApi + Clone + Send + Sync + 'static,
+        P: ReplacePallet
+            + RefundPallet
+            + BtcRelayPallet
+            + RedeemPallet
+            + SecurityPallet
+            + VaultRegistryPallet
+            + UtilFuncs
+            + Clone
+            + Send
+            + Sync,
+        TS: TransactionStore,
+    >(
+        &self,
+        parachain_rpc: P,
         vault: VaultData<B>,
+        tx_store: Arc<TS>,
         num_confirmations: u32,
     ) -> Result<(), Error> {
         // ensure the deadline has not expired yet
@@ -199,37 +254,22 @@ impl Request {
         }
 
         let tx_metadata = self
-            .transfer_btc(&parachain_rpc, &vault.btc_rpc, num_confirmations, self.vault_id.clone())
+            .transfer_btc(&parachain_rpc, &vault.btc_rpc, tx_store, num_confirmations)
             .await?;
         update_bitcoin_metrics(&vault, tx_metadata.fee, self.fee_budget).await;
         self.execute(parachain_rpc, tx_metadata).await
     }
 
-    /// Make a bitcoin transfer to fulfil the request
-    #[tracing::instrument(
-        name = "transfer_btc",
-        skip(self, parachain_rpc, btc_rpc),
-        fields(
-            request_type = ?self.request_type,
-            request_id = ?self.hash,
-        )
-    )]
-    async fn transfer_btc<
-        B: BitcoinCoreApi + Clone,
-        P: BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
-    >(
+    async fn register_addresses<B, P>(
         &self,
         parachain_rpc: &P,
         btc_rpc: &B,
-        num_confirmations: u32,
-        vault_id: VaultId,
-    ) -> Result<TransactionMetadata, Error> {
-        let tx = btc_rpc
-            .create_transaction(self.btc_address, self.amount as u64, Some(self.hash))
-            .await?;
-        let recipient = tx.recipient.clone();
-        tracing::info!("Sending bitcoin to {}", recipient);
-
+        tx: &LockedTransaction,
+    ) -> Result<(), Error>
+    where
+        B: BitcoinCoreApi + Clone,
+        P: BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
+    {
         let return_to_self_addresses = tx
             .transaction
             .extract_output_addresses()
@@ -242,18 +282,51 @@ impl Request {
             [] => {} // no return-to-self
             [address] => {
                 // one return-to-self address, make sure it is registered
-                let wallet = parachain_rpc.get_vault(&vault_id).await?.wallet;
+                let wallet = parachain_rpc.get_vault(&self.vault_id).await?.wallet;
                 if !wallet.addresses.contains(address) {
                     let readable_address = address
                         .encode_str(btc_rpc.network())
                         .unwrap_or(format!("{:?}", address));
                     tracing::info!("Registering address {:?}", readable_address);
-                    parachain_rpc.register_address(&vault_id, *address).await?;
+                    parachain_rpc.register_address(&self.vault_id, *address).await?;
                     tracing::debug!("Successfully registered address {:?}", readable_address);
                 }
             }
             _ => return Err(Error::TooManyReturnToSelfAddresses),
         };
+        Ok(())
+    }
+
+    /// Make a bitcoin transfer to fulfil the request
+    #[tracing::instrument(
+        name = "transfer_btc",
+        skip(self, parachain_rpc, btc_rpc, tx_store),
+        fields(
+            request_type = ?self.request_type,
+            request_id = ?self.hash,
+        )
+    )]
+    async fn transfer_btc<B, P, TS>(
+        &self,
+        parachain_rpc: &P,
+        btc_rpc: &B,
+        tx_store: Arc<TS>,
+        num_confirmations: u32,
+    ) -> Result<TransactionMetadata, Error>
+    where
+        B: BitcoinCoreApi + Clone,
+        P: BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
+        TS: TransactionStore,
+    {
+        let tx = btc_rpc
+            .create_transaction(self.btc_address, self.amount as u64, Some(self.hash))
+            .await?;
+        self.register_addresses(parachain_rpc, btc_rpc, &tx).await?;
+
+        let recipient = tx.recipient.clone();
+        tracing::info!("Sending bitcoin to {}", recipient);
+        // don't store tx until addresses are registered
+        tx_store.put_tx(self.hash, tx.transaction.clone())?;
 
         let txid = btc_rpc.send_transaction(tx).await?;
 
@@ -326,15 +399,20 @@ impl Request {
 
 /// Queries the parachain for open requests and executes them. It checks the
 /// bitcoin blockchain to see if a payment has already been made.
-pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn execute_open_requests<B, TS>(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
     vault_id_manager: VaultIdManager<B>,
     read_only_btc_rpc: B,
+    tx_store: Arc<TS>,
     num_confirmations: u32,
     payment_margin: Duration,
     process_refunds: bool,
-) -> Result<(), Error> {
+) -> Result<(), Error>
+where
+    B: BitcoinCoreApi + Clone + Send + Sync + 'static,
+    TS: TransactionStore + Send + Sync + 'static,
+{
     let parachain_rpc = &parachain_rpc;
     let vault_id = parachain_rpc.get_account_id().clone();
 
@@ -384,34 +462,15 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         .map(|x| (x.hash, x))
         .collect::<HashMap<_, _>>();
 
-    // find the height of bitcoin chain corresponding to the earliest btc_height
-    let btc_start_height = match open_requests
-        .iter()
-        .map(|(_, request)| request.btc_height.unwrap_or(u32::MAX))
-        .min()
-    {
-        Some(x) => x,
-        None => return Ok(()), // the iterator is empty so we have nothing to do
-    };
-
-    // iterate through transactions in reverse order, starting from those in the mempool
-    let mut transaction_stream = bitcoin::reverse_stream_transactions(&read_only_btc_rpc, btc_start_height).await?;
-    while let Some(result) = transaction_stream.next().await {
-        let tx = match result {
-            Ok(x) => x,
-            Err(e) => {
-                tracing::warn!("Failed to process transaction: {}", e);
-                continue;
-            }
-        };
-
+    // 1. check tx store for request txs
+    for (hash, request) in open_requests.clone().into_iter() {
         // get the request this transaction corresponds to, if any
-        if let Some(request) = get_request_for_btc_tx(&tx, &open_requests) {
+        if let Ok(tx) = tx_store.get_tx(&hash) {
             // remove request from the hashmap
-            open_requests.retain(|&key, _| key != request.hash);
+            open_requests.remove(&request.hash);
 
             tracing::info!(
-                "{:?} request #{:?} has valid bitcoin payment - processing...",
+                "{:?} request #{:?} has valid bitcoin payment in store - processing...",
                 request.request_type,
                 request.hash
             );
@@ -432,48 +491,75 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                     }
                 };
 
-                // Payment has been made, but it might not have been confirmed enough times yet
-                let tx_metadata = btc_rpc
-                    .clone()
-                    .wait_for_transaction_metadata(tx.txid(), num_confirmations)
+                let txid = tx.txid();
+                let locked_tx = btc_rpc.lock_transaction(tx).await;
+                // tx not stored if there are too many return to self addresses
+                let _ = request.register_addresses(&parachain_rpc, &btc_rpc, &locked_tx).await;
+                // try sending but ignore the result as it may have already been processed
+                let _ = btc_rpc.send_transaction(locked_tx).await;
+
+                request
+                    .wait_and_execute(parachain_rpc, btc_rpc, txid, num_confirmations)
                     .await;
-
-                match tx_metadata {
-                    Ok(tx_metadata) => {
-                        // we have enough btc confirmations, now make sure they have been relayed before we continue
-                        if let Err(e) = parachain_rpc
-                            .wait_for_block_in_relay(
-                                H256Le::from_bytes_le(&tx_metadata.block_hash),
-                                Some(num_confirmations),
-                            )
-                            .await
-                        {
-                            tracing::error!(
-                                "Error while waiting for block inclusion for request #{}: {}",
-                                request.hash,
-                                e
-                            );
-                            // continue; try to execute anyway
-                        }
-
-                        match request.execute(parachain_rpc.clone(), tx_metadata).await {
-                            Ok(_) => {
-                                tracing::info!("Executed request #{:?}", request.hash);
-                            }
-                            Err(e) => tracing::error!("Failed to execute request #{}: {}", request.hash, e),
-                        }
-                    }
-                    Err(e) => tracing::error!(
-                        "Failed to confirm bitcoin transaction for request {}: {}",
-                        request.hash,
-                        e
-                    ),
-                }
             });
         }
     }
 
-    // All requests remaining in the hashmap did not have a bitcoin payment yet, so pay
+    // find the height of bitcoin chain corresponding to the earliest btc_height
+    let btc_start_height = match open_requests
+        .iter()
+        .map(|(_, request)| request.btc_height.unwrap_or(u32::MAX))
+        .min()
+    {
+        Some(x) => x,
+        None => return Ok(()), // the iterator is empty so we have nothing to do
+    };
+
+    // 2. fallback to mempool / blocks to find payments (for backward compatibility)
+    // iterate through transactions in reverse order, starting from those in the mempool
+    let mut transaction_stream = bitcoin::reverse_stream_transactions(&read_only_btc_rpc, btc_start_height).await?;
+    while let Some(result) = transaction_stream.next().await {
+        let tx = match result {
+            Ok(x) => x,
+            Err(e) => {
+                tracing::warn!("Failed to process transaction: {}", e);
+                continue;
+            }
+        };
+
+        // get the request this transaction corresponds to, if any
+        if let Some(request) = get_request_for_btc_tx(&tx, &open_requests) {
+            open_requests.remove(&request.hash);
+
+            tracing::info!(
+                "{:?} request #{:?} has valid bitcoin payment in block - processing...",
+                request.request_type,
+                request.hash
+            );
+            // start a new task to (potentially) await confirmation and to execute on the parachain
+            // make copies of the variables we move into the task
+            let parachain_rpc = parachain_rpc.clone();
+            let btc_rpc = vault_id_manager.clone();
+            spawn_cancelable(shutdown_tx.subscribe(), async move {
+                let btc_rpc = match btc_rpc.get_bitcoin_rpc(&request.vault_id).await {
+                    Some(x) => x,
+                    None => {
+                        tracing::error!(
+                            "Failed to fetch bitcoin rpc for vault {}",
+                            request.vault_id.pretty_print()
+                        );
+                        return; // nothing we can do - bail
+                    }
+                };
+
+                request
+                    .wait_and_execute(parachain_rpc, btc_rpc, tx.txid(), num_confirmations)
+                    .await;
+            });
+        }
+    }
+
+    // All requests remaining in the hashmap do not have a bitcoin payment yet, so pay
     // and execute all of these
     for (_, request) in open_requests {
         // there are potentially a large number of open requests - pay and execute each
@@ -482,6 +568,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         // make copies of the variables we move into the task
         let parachain_rpc = parachain_rpc.clone();
         let vault_id_manager = vault_id_manager.clone();
+        let tx_store = tx_store.clone();
         spawn_cancelable(shutdown_tx.subscribe(), async move {
             let vault = match vault_id_manager.get_vault(&request.vault_id).await {
                 Some(x) => x,
@@ -500,7 +587,10 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                 request.hash
             );
 
-            match request.pay_and_execute(parachain_rpc, vault, num_confirmations).await {
+            match request
+                .pay_and_execute(parachain_rpc, vault, tx_store, num_confirmations)
+                .await
+            {
                 Ok(_) => tracing::info!(
                     "{:?} request #{:?} successfully executed",
                     request.request_type,
@@ -539,8 +629,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        json, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, Network,
-        PartialAddress, PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        json, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, Network, PartialAddress,
+        PrivateKey, Transaction, TransactionMetadata, PUBLIC_KEY_SIZE,
     };
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
@@ -548,7 +638,10 @@ mod tests {
         InterBtcVault, StatusCode, Token, DOT, IBTC,
     };
     use sp_core::H160;
-    use std::collections::BTreeSet;
+    use std::{
+        collections::{BTreeSet, HashMap},
+        sync::Mutex,
+    };
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {
@@ -677,6 +770,7 @@ mod tests {
             async fn get_mempool_transactions<'a>(&'a self) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(&self, txid: Txid, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>) -> Result<LockedTransaction, BitcoinError>;
+            async fn lock_transaction(&self, transaction: Transaction) -> LockedTransaction;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
             async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>) -> Result<Txid, BitcoinError>;
             async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
@@ -825,30 +919,34 @@ mod tests {
         #[tokio::test]
         async fn should_pay_and_execute_redeem_if_neither_parachain_nor_bitcoin_deadlines_expired() {
             let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 50, 100, 50);
+            let tx_store = Arc::new(Mutex::new(HashMap::new()));
 
-            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
+            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, tx_store, 6).await);
         }
 
         #[tokio::test]
         async fn should_pay_and_execute_redeem_if_only_parachain_deadline_expired() {
             let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 101, 100, 50);
+            let tx_store = Arc::new(Mutex::new(HashMap::new()));
 
-            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
+            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, tx_store, 6).await);
         }
 
         #[tokio::test]
         async fn should_pay_and_execute_redeem_if_only_bitcoin_deadline_expired() {
             let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 50, 100, 101);
+            let tx_store = Arc::new(Mutex::new(HashMap::new()));
 
-            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
+            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, tx_store, 6).await);
         }
 
         #[tokio::test]
         async fn should_not_pay_and_execute_redeem_if_both_deadlines_expired() {
             let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 101, 100, 101);
+            let tx_store = Arc::new(Mutex::new(HashMap::new()));
 
             assert_err!(
-                request.pay_and_execute(parachain_rpc, btc_rpc, 6).await,
+                request.pay_and_execute(parachain_rpc, btc_rpc, tx_store, 6).await,
                 Error::DeadlineExpired
             );
         }
@@ -885,8 +983,10 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
+        let tx_store = Arc::new(Mutex::new(HashMap::new()));
+
         assert_err!(
-            request.pay_and_execute(parachain_rpc, vault_data, 6).await,
+            request.pay_and_execute(parachain_rpc, vault_data, tx_store, 6).await,
             Error::DeadlineExpired
         );
     }
@@ -956,6 +1056,8 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
-        assert_ok!(request.pay_and_execute(parachain_rpc, vault_data, 6).await);
+        let tx_store = Arc::new(Mutex::new(HashMap::new()));
+
+        assert_ok!(request.pay_and_execute(parachain_rpc, vault_data, tx_store, 6).await);
     }
 }
