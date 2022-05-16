@@ -690,6 +690,7 @@ mod tests {
         json, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, Network,
         PartialAddress, PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
+    use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
         AccountId, Balance, BlockNumber, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, ErrorCode,
         InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcRefundRequest, InterBtcReplaceRequest, InterBtcVault,
@@ -703,6 +704,7 @@ mod tests {
         #[async_trait]
         pub trait UtilFuncs {
             async fn get_current_chain_height(&self) -> Result<u32, RuntimeError>;
+            async fn get_rpc_properties(&self) -> Result<Map<String, Value>, RuntimeError>;
             fn get_native_currency_id(&self) -> CurrencyId;
             fn get_account_id(&self) -> &AccountId;
             fn is_this_vault(&self, vault_id: &VaultId) -> bool;

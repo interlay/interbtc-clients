@@ -388,6 +388,8 @@ pub trait UtilFuncs {
     /// Gets the current height of the parachain
     async fn get_current_chain_height(&self) -> Result<u32, Error>;
 
+    async fn get_rpc_properties(&self) -> Result<serde_json::Map<String, Value>, Error>;
+
     /// Gets the ID of the native currency.
     fn get_native_currency_id(&self) -> CurrencyId;
 
@@ -402,6 +404,10 @@ impl UtilFuncs for InterBtcParachain {
     async fn get_current_chain_height(&self) -> Result<u32, Error> {
         let head = self.get_latest_block_hash().await?;
         Ok(self.api.storage().system().number(head).await?)
+    }
+
+    async fn get_rpc_properties(&self) -> Result<serde_json::Map<String, Value>, Error> {
+        Ok(self.ext_client.rpc().system_properties().await?)
     }
 
     fn get_native_currency_id(&self) -> CurrencyId {

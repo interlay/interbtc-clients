@@ -57,6 +57,8 @@ pub enum Error {
     InvalidSpecVersion(u32, u32),
     #[error("Client metadata is different from parachain metadata: expected {0}, got {1}")]
     ParachainMetadataMismatch(String, String),
+    #[error("Specified Bitcoin network differs from the one on the parachain: expected {0}, got {1}")]
+    BitcoinNetworkMismatch(String, String),
     #[error("Failed to load credentials from file: {0}")]
     KeyLoadingFailure(#[from] KeyLoadingError),
     #[error("Error serializing: {0}")]

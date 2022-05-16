@@ -478,7 +478,29 @@ impl VaultService {
         }
     }
 
+    async fn validate_bitcoin_network(&self) -> Result<(), Error> {
+        let bitcoin_network = self.btc_rpc_master_wallet.network().to_string();
+        let system_properties = self.btc_parachain.get_rpc_properties().await.unwrap_or_default();
+
+        if let Some(parachain_bitcoin_network) = system_properties.get("bitcoinNetwork") {
+            let parachain_bitcoin_network_string = parachain_bitcoin_network.as_str().unwrap_or_default().to_string();
+            // `parachain_bitcoin_network` can be `bitcoin-mainnet`, `bitcoin-testnet`, or `bitcoin-regtest`
+            // source: https://github.com/interlay/interbtc/blob/a71b970616b0a4a59cd2e709a606a9a78fce80ff/primitives/src/lib.rs#L23
+            // `bitcoin_network` can be `mainnet`, `testnet`, regtest.
+            // source: https://developer.bitcoin.org/reference/rpc/getblockchaininfo.html
+            if !parachain_bitcoin_network_string.contains(&bitcoin_network) {
+                return Err(
+                    runtime::Error::BitcoinNetworkMismatch(parachain_bitcoin_network_string, bitcoin_network).into(),
+                );
+            }
+        }
+
+        Ok(())
+    }
+
     async fn run_service(&self) -> Result<(), Error> {
+        self.validate_bitcoin_network().await?;
+
         let account_id = self.btc_parachain.get_account_id().clone();
 
         // exit if auto-register uses faucet and faucet url not set
