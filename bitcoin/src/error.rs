@@ -54,6 +54,8 @@ pub enum Error {
     WalletNotFound,
     #[error("Invalid Bitcoin network")]
     InvalidBitcoinNetwork,
+    #[error("No change address")]
+    NoChangeAddress,
 }
 
 impl Error {
