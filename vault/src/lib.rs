@@ -1,4 +1,5 @@
 #![recursion_limit = "256"]
+#![feature(array_zip, int_log)]
 
 mod cancellation;
 mod collateral;

@@ -693,6 +693,7 @@ impl VaultService {
                             interval: Some(self.config.bitcoin_poll_interval_ms),
                             btc_confirmations: self.config.bitcoin_relay_confirmations,
                         },
+                        vaults.clone(),
                     )),
                 ),
             ),

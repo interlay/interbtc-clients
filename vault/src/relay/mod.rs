@@ -1,8 +1,10 @@
 use bitcoin::BitcoinCore;
 use runtime::InterBtcParachain;
 use service::Error as ServiceError;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
+
+use crate::vaults::Vaults;
 
 mod backing;
 mod error;
@@ -71,6 +73,7 @@ pub struct Config {
 pub struct Runner<B: Backing, I: Issuing> {
     backing: B,
     issuing: I,
+    other_vaults: Arc<Vaults>,
     start_height: Option<u32>,
     max_batch_size: u32,
     interval: Duration,
@@ -78,10 +81,11 @@ pub struct Runner<B: Backing, I: Issuing> {
 }
 
 impl<B: Backing, I: Issuing> Runner<B, I> {
-    pub fn new(backing: B, issuing: I, conf: Config) -> Runner<B, I> {
+    pub fn new(backing: B, issuing: I, conf: Config, other_vaults: Arc<Vaults>) -> Runner<B, I> {
         Runner {
             backing,
             issuing,
+            other_vaults,
             start_height: conf.start_height,
             max_batch_size: conf.max_batch_size,
             interval: conf.interval.unwrap_or(SLEEP_TIME),
@@ -146,7 +150,7 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
                 tracing::info!("Processing block at height {}", current_height);
                 let header = self.get_block_header(current_height).await?;
                 // TODO: check if block already stored
-                self.issuing.submit_block_header(header).await?;
+                self.issuing.submit_block_header(header, self.other_vaults.clone()).await?;
                 tracing::info!("Submitted block at height {}", current_height);
             }
             _ => {
@@ -238,7 +242,7 @@ mod tests {
             }
         }
 
-        async fn submit_block_header(&self, header: Vec<u8>) -> Result<(), Error> {
+        async fn submit_block_header(&self, header: Vec<u8>, vaults: Arc<Vault>) -> Result<(), Error> {
             let is_stored = self.is_block_stored(header.clone()).await?;
             if is_stored {
                 Err(Error::BlockExists)
@@ -252,7 +256,8 @@ mod tests {
 
         async fn submit_block_header_batch(&self, headers: Vec<Vec<u8>>) -> Result<(), Error> {
             for header in headers {
-                self.submit_block_header(header.to_vec()).await?;
+                self.submit_block_header(header.to_vec(), Arc::new(Vaults::from(HashMap::default())))
+                    .await?;
             }
             Ok(())
         }
@@ -322,10 +327,17 @@ mod tests {
         assert_eq!(issuing.is_block_stored(make_hash("a")).await, Ok(true));
         assert_eq!(issuing.is_block_stored(make_hash("x")).await, Ok(false));
         assert_eq!(
-            issuing.submit_block_header(make_hash("a")).await,
+            issuing
+                .submit_block_header(make_hash("a"), Arc::new(Vaults::from(HashMap::default())))
+                .await,
             Err(Error::BlockExists)
         );
-        assert_eq!(issuing.submit_block_header(make_hash("d")).await, Ok(()));
+        assert_eq!(
+            issuing
+                .submit_block_header(make_hash("d"), Arc::new(Vaults::from(HashMap::default())))
+                .await,
+            Ok(())
+        );
         assert_eq!(issuing.get_best_height().await, Ok(5));
     }
 
@@ -364,6 +376,7 @@ mod tests {
         let runner = Runner::new(
             backing,
             issuing,
+            Arc::new(Vaults::from(HashMap::default())),
             Config {
                 start_height: None,
                 max_batch_size: 1,
@@ -385,6 +398,7 @@ mod tests {
         let runner = Runner::new(
             backing,
             issuing,
+            Arc::new(Vaults::from(HashMap::default())),
             Config {
                 start_height: Some(0),
                 max_batch_size: 16,
@@ -418,6 +432,7 @@ mod tests {
         let runner = Runner::new(
             backing,
             issuing,
+            Arc::new(Vaults::from(HashMap::default())),
             Config {
                 start_height: None,
                 max_batch_size: 1,
@@ -447,6 +462,7 @@ mod tests {
         let runner = Runner::new(
             backing,
             issuing,
+            Arc::new(Vaults::from(HashMap::default())),
             Config {
                 start_height: None,
                 interval: Some(Duration::from_secs(0)),
@@ -479,6 +495,7 @@ mod tests {
         let runner = Runner::new(
             backing,
             issuing,
+            Arc::new(Vaults::from(HashMap::default())),
             Config {
                 start_height: None,
                 max_batch_size: 1,
@@ -512,6 +529,7 @@ mod tests {
         let runner = Runner::new(
             backing,
             issuing,
+            Arc::new(Vaults::from(HashMap::default())),
             Config {
                 start_height: None,
                 max_batch_size: 1,

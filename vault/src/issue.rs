@@ -61,7 +61,7 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
             num_confirmations,
             block_hash,
             transaction,
-            vaults.clone()
+            vaults.clone(),
         )
         .await
         {
@@ -173,9 +173,10 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
 
                 // wait a random amount of blocks, to avoid all vaults flooding the parachain with
                 // this transaction
-                if let Err(err) = delay_random_amount(issue_id, btc_parachain, vaults).await {
+                if let Err(err) = delay_random_amount(&issue_id.to_fixed_bytes(), btc_parachain, vaults).await {
                     return Err(err.into());
                 };
+                // TODO: check issue isn't already executed
 
                 // found tx, submit proof
                 let txid = transaction.txid();
