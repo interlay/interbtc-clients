@@ -14,8 +14,7 @@ use service::Error as ServiceError;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
-#[derive(Default)]
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct Vaults(RwLock<HashMap<BtcAddress, VaultId>>);
 
 impl Vaults {
@@ -47,7 +46,7 @@ impl Vaults {
     /// * `account_id` - the AccountId we wish to order relative to the list of vaults
     pub async fn get_random_position(&self, data: &[u8; 32], account_id: &AccountId) -> usize {
         fn hash_vault(data: &[u8; 32], account_id: &AccountId) -> sha256::Hash {
-            let account_id: [u8; 32] = account_id.into();
+            let account_id: [u8; 32] = account_id.clone().into();
             let xor = data
                 .zip(account_id) // will need to refactor if we don't want experimental array_zip
                 .map(|(a, b)| a ^ b);
@@ -81,9 +80,7 @@ pub async fn delay_random_amount(
     }
 }
 
-pub async fn monitor_btc_txs<
-    B: BitcoinCoreApi + Send + Sync + Clone + 'static,
->(
+pub async fn monitor_btc_txs<B: BitcoinCoreApi + Send + Sync + Clone + 'static>(
     bitcoin_core: B,
     btc_parachain: InterBtcParachain,
     btc_height: u32,
@@ -120,18 +117,14 @@ pub(crate) async fn initialize_active_vaults<P: VaultRegistryPallet + Send + Syn
     Ok(Arc::new(Vaults::from(vaults)))
 }
 
-pub struct BitcoinMonitor<
-    B: BitcoinCoreApi + Send + Sync + Clone + 'static,
-> {
+pub struct BitcoinMonitor<B: BitcoinCoreApi + Send + Sync + Clone + 'static> {
     bitcoin_core: B,
     btc_parachain: InterBtcParachain,
     btc_height: u32,
     vaults: Arc<Vaults>,
 }
 
-impl<B: BitcoinCoreApi + Send + Sync + Clone + 'static>
-    BitcoinMonitor<B>
-{
+impl<B: BitcoinCoreApi + Send + Sync + Clone + 'static> BitcoinMonitor<B> {
     pub fn new(bitcoin_core: B, btc_parachain: InterBtcParachain, btc_height: u32, vaults: Arc<Vaults>) -> Self {
         Self {
             bitcoin_core,
@@ -160,7 +153,9 @@ impl<B: BitcoinCoreApi + Send + Sync + Clone + 'static>
 
         // wait a random amount of blocks before checking, to avoid all vaults
         // flooding the parachain with this transaction
-        if let Err(err) = delay_random_amount(transaction.txid().as_inner(), &self.btc_parachain, self.vaults.clone()).await {
+        if let Err(err) =
+            delay_random_amount(transaction.txid().as_inner(), &self.btc_parachain, self.vaults.clone()).await
+        {
             return Err(err.into());
         };
         // TODO: check vault isn't already reported
