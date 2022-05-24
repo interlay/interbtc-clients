@@ -1,4 +1,8 @@
-use crate::{metrics::publish_expected_bitcoin_balance, Error, Event, IssueRequests, VaultIdManager};
+use crate::{
+    metrics::publish_expected_bitcoin_balance,
+    vaults::{delay_random_amount, Vaults},
+    Error, Event, IssueRequests, VaultIdManager,
+};
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt};
 use runtime::{
@@ -44,6 +48,7 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
     issue_set: Arc<IssueRequests>,
     btc_start_height: u32,
     num_confirmations: u32,
+    vaults: Arc<Vaults>,
 ) -> Result<(), ServiceError> {
     let mut stream =
         bitcoin::stream_in_chain_transactions(bitcoin_core.clone(), btc_start_height, num_confirmations).await;
@@ -56,6 +61,7 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
             num_confirmations,
             block_hash,
             transaction,
+            vaults.clone()
         )
         .await
         {
@@ -119,6 +125,7 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
     num_confirmations: u32,
     block_hash: BlockHash,
     transaction: Transaction,
+    vaults: Arc<Vaults>,
 ) -> Result<(), Error> {
     let addresses = transaction.extract_output_addresses::<BtcAddress>();
     let mut issue_requests = issue_set.lock().await;
@@ -163,6 +170,12 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
                 btc_parachain
                     .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash), Some(num_confirmations))
                     .await?;
+
+                // wait a random amount of blocks, to avoid all vaults flooding the parachain with
+                // this transaction
+                if let Err(err) = delay_random_amount(issue_id, btc_parachain, vaults).await {
+                    return Err(err.into());
+                };
 
                 // found tx, submit proof
                 let txid = transaction.txid();

@@ -5,8 +5,8 @@ use futures::{
     stream::{iter, StreamExt},
 };
 use runtime::{
-    BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcVault, PrettyPrint,
-    RegisterAddressEvent, RegisterVaultEvent, RelayPallet, VaultId, VaultRegistryPallet,
+    AccountId, BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcVault,
+    PrettyPrint, RegisterAddressEvent, RegisterVaultEvent, RelayPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
 use service::Error as ServiceError;
 use std::{collections::HashMap, sync::Arc};
@@ -35,6 +35,57 @@ impl Vaults {
         let vaults = self.0.read().await;
         vaults.get(&key).cloned()
     }
+
+    /// Returns the position of a given vault in a randomised ordering based on a
+    /// piece of seed data.
+    ///
+    /// # Arguments
+    /// * `data` - the seed used as a basis for the ordering (for example, an issue_id)
+    /// * `account_id` - the AccountId we wish to order relative to the list of vaults
+    pub async fn get_random_position(&self, data: H256, account_id: &AccountId) -> usize {
+        fn hash_vault(data: H256, account_id: &AccountId) -> H256 {
+            let account_id: H256 = account_id.into();
+            data ^ account_id
+        }
+
+        let hash = hash_vault(data, account_id);
+        self.0
+            .read()
+            .await
+            .iter()
+            .filter(|&(_, vault_id)| hash_vault(data, &vault_id.account_id) < hash)
+            .count()
+    }
+}
+
+pub async fn delay_random_amount(
+    seed_data: H256,
+    btc_parachain: &InterBtcParachain,
+    vaults: Arc<Vaults>,
+) -> Result<(), Error> {
+    let random_ordering = vaults
+        .get_random_position(seed_data, btc_parachain.get_account_id())
+        .await;
+    let delay: u32 = ((random_ordering + 1) as f32).log2().ceil() as u32;
+    let starting_parachain_height = match btc_parachain.get_current_chain_height().await {
+        Ok(height) => height,
+        Err(err) => return Err(err.into()),
+    };
+
+    // wait for `delay` blocks
+    match btc_parachain
+        .on_block(async |block| {
+            if block.number >= starting_parachain_height + delay {
+                Err(())
+            } else {
+                Ok(())
+            }
+        })
+        .await
+    {
+        Err(()) => Ok(()),
+        Err(err) => return Err(err.into()),
+    }
 }
 
 pub async fn monitor_btc_txs<
@@ -53,6 +104,26 @@ pub async fn monitor_btc_txs<
         Ok(_) => Ok(()),
         Err(err) => Err(ServiceError::RuntimeError(err)),
     }
+}
+
+pub(crate) async fn initialize_active_vaults<P: VaultRegistryPallet + Send + Sync>(btc_parachain: P) -> Result<Arc<Vaults>, Error> {
+    tracing::info!("Fetching all active vaults...");
+    let vaults = btc_parachain
+        .get_all_vaults()
+        .await?
+        .into_iter()
+        .flat_map(|vault| {
+            vault
+                .wallet
+                .addresses
+                .iter()
+                .map(|addr| (*addr, vault.id.clone()))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+    // store vaults in Arc<RwLock>
+    Ok(Arc::new(Vaults::from(vaults)))
 }
 
 pub struct BitcoinMonitor<

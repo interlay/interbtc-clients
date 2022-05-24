@@ -5,7 +5,7 @@ use crate::{
     metrics::{poll_metrics, publish_tokio_metrics, PerCurrencyMetrics},
     relay::run_relayer,
     service::*,
-    vaults::Vaults,
+    vaults::{initialize_active_vaults, Vaults},
     Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
@@ -567,6 +567,8 @@ impl VaultService {
         let oldest_issue_btc_height =
             issue::initialize_issue_set(&self.btc_rpc_master_wallet, &self.btc_parachain, &issue_set).await?;
 
+        let vaults = initialize_active_vaults(self.btc_parachain.clone()).await?;
+
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
         let (replace_event_tx, replace_event_rx) = mpsc::channel::<Event>(16);
 
@@ -704,6 +706,7 @@ impl VaultService {
                         issue_set.clone(),
                         oldest_issue_btc_height,
                         num_confirmations,
+                        vaults.clone(),
                     ),
                 ),
             ),
@@ -732,7 +735,7 @@ impl VaultService {
         ];
 
         if !self.config.no_vault_theft_report {
-            tasks.extend(self.btc_monitor_tasks().await?)
+            tasks.extend(self.btc_monitor_tasks(vaults.clone()).await?)
         }
 
         run_and_monitor_tasks(self.shutdown.clone(), tasks).await;
@@ -817,26 +820,7 @@ impl VaultService {
         Ok(startup_height)
     }
 
-    async fn btc_monitor_tasks(&self) -> Result<Vec<(&str, ServiceTask)>, Error> {
-        tracing::info!("Fetching all active vaults...");
-        let vaults = self
-            .btc_parachain
-            .get_all_vaults()
-            .await?
-            .into_iter()
-            .flat_map(|vault| {
-                vault
-                    .wallet
-                    .addresses
-                    .iter()
-                    .map(|addr| (*addr, vault.id.clone()))
-                    .collect::<Vec<_>>()
-            })
-            .collect();
-
-        // store vaults in Arc<RwLock>
-        let vaults = Arc::new(Vaults::from(vaults));
-
+    async fn btc_monitor_tasks(&self, vaults: Arc<Vaults>) -> Result<Vec<(&str, ServiceTask)>, Error> {
         // scan from custom height or the current tip
         let bitcoin_theft_start_height = self
             .config
