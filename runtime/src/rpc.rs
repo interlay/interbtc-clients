@@ -15,7 +15,7 @@ use module_oracle_rpc_runtime_api::BalanceWrapper;
 use primitives::UnsignedFixedPoint;
 use serde_json::Value;
 use sp_runtime::FixedPointNumber;
-use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, future::Future, ops::RangeInclusive, sync::Arc, time::Duration};
 use subxt::{
     rpc::{rpc_params, ClientT},
     BasicError, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Event, PolkadotExtrinsicParams, RpcClient,
@@ -30,19 +30,19 @@ const TRANSACTION_TIMEOUT: Duration = Duration::from_secs(300); // 5 minute time
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "standalone-metadata")] {
-        const DEFAULT_SPEC_VERSION: u32 = 1;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1..=1;
         const DEFAULT_SPEC_NAME: &str = "interbtc-standalone";
         pub const SS58_PREFIX: u16 = 42;
     } else if #[cfg(feature = "parachain-metadata-interlay")] {
-        const DEFAULT_SPEC_VERSION: u32 = 3;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 3..=3;
         const DEFAULT_SPEC_NAME: &str = "interlay-parachain";
         pub const SS58_PREFIX: u16 = 2032;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: u32 = 16;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 15..=16;
         const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
         pub const SS58_PREFIX: u16 = 2092;
     } else if #[cfg(feature = "parachain-metadata-testnet")] {
-        const DEFAULT_SPEC_VERSION: u32 = 7;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 6..=7;
         const DEFAULT_SPEC_NAME: &str = "testnet-parachain";
         pub const SS58_PREFIX: u16 = 42;
     }
@@ -85,12 +85,13 @@ impl InterBtcParachain {
             ));
         }
 
-        if runtime_version.spec_version == DEFAULT_SPEC_VERSION {
+        if DEFAULT_SPEC_VERSION.contains(&runtime_version.spec_version) {
             log::info!("spec_version={}", runtime_version.spec_version);
             log::info!("transaction_version={}", runtime_version.transaction_version);
         } else {
             return Err(Error::InvalidSpecVersion(
-                DEFAULT_SPEC_VERSION,
+                DEFAULT_SPEC_VERSION.start().clone(),
+                DEFAULT_SPEC_VERSION.end().clone(),
                 runtime_version.spec_version,
             ));
         }
