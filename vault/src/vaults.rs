@@ -9,9 +9,13 @@ use futures::{
 use runtime::{
     AccountId, BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcVault,
     PrettyPrint, RegisterAddressEvent, RegisterVaultEvent, RelayPallet, UtilFuncs, VaultId, VaultRegistryPallet,
+    VaultStatus,
 };
 use service::Error as ServiceError;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use tokio::sync::RwLock;
 
 #[derive(Default, Debug)]
@@ -54,11 +58,12 @@ impl Vaults {
         }
 
         let hash = hash_vault(data, account_id);
+        let mut hash_set = HashSet::new(); // for deduping
         self.0
             .read()
             .await
             .iter()
-            .filter(|&(_, vault_id)| hash_vault(data, &vault_id.account_id) < hash)
+            .filter(|&(_, vault_id)| hash_set.insert(hash_vault(data, &vault_id.account_id) < hash))
             .count()
     }
 }
@@ -158,7 +163,14 @@ impl<B: BitcoinCoreApi + Send + Sync + Clone + 'static> BitcoinMonitor<B> {
         {
             return Err(err.into());
         };
-        // TODO: check vault isn't already reported
+        let vault = self.btc_parachain.get_vault(vault_id).await?;
+        if vault.status == VaultStatus::CommittedTheft {
+            tracing::debug!(
+                "Vault {} has already been reported - doing nothing.",
+                vault_id.pretty_print()
+            );
+            return Ok(());
+        }
 
         if self.btc_parachain.is_transaction_invalid(vault_id, &raw_tx).await? {
             tracing::info!(
@@ -324,7 +336,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        json, Amount, Block, BlockHeader, Error as BitcoinError, GetBlockResult, Hash as _, LockedTransaction,
+        json, Amount, Block, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction,
         PartialAddress, PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{

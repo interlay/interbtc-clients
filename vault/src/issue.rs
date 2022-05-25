@@ -7,7 +7,7 @@ use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt};
 use runtime::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, ExecuteIssueEvent, H256Le, InterBtcParachain,
-    IssuePallet, PrettyPrint, RequestIssueEvent, UtilFuncs, VaultId, H256,
+    IssuePallet, IssueRequestStatus, PrettyPrint, RequestIssueEvent, UtilFuncs, VaultId, H256,
 };
 use service::Error as ServiceError;
 use sha2::{Digest, Sha256};
@@ -176,7 +176,14 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
                 if let Err(err) = delay_random_amount(&issue_id.to_fixed_bytes(), btc_parachain, vaults).await {
                     return Err(err.into());
                 };
-                // TODO: check issue isn't already executed
+                let issue = btc_parachain.get_issue_request(issue_id).await?;
+                match issue.status {
+                    IssueRequestStatus::Completed(_) => {
+                        tracing::info!("Issue {} has already been executed - doing nothing.", issue_id);
+                        return Ok(());
+                    }
+                    _ => (),
+                }
 
                 // found tx, submit proof
                 let txid = transaction.txid();

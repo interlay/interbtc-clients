@@ -244,7 +244,7 @@ mod tests {
             }
         }
 
-        async fn submit_block_header(&self, header: Vec<u8>, vaults: Arc<Vault>) -> Result<(), Error> {
+        async fn submit_block_header(&self, header: Vec<u8>, vaults: Option<Arc<Vaults>>) -> Result<(), Error> {
             let is_stored = self.is_block_stored(header.clone()).await?;
             if is_stored {
                 Err(Error::BlockExists)

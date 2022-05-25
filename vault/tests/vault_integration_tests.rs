@@ -15,8 +15,8 @@ use runtime::{
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
-use std::{sync::Arc, time::Duration};
-use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager, Vaults};
 
 const TIMEOUT: Duration = Duration::from_secs(90);
 
@@ -943,12 +943,13 @@ async fn test_automatic_issue_execution_succeeds() {
         let vault_collateral =
             get_required_vault_collateral_for_issue(&vault1_provider, issue_amount, vault1_id.collateral_currency())
                 .await;
+
         assert_ok!(
             vault1_provider
                 .register_vault_with_public_key(
                     &vault1_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap()
                 )
                 .await
         );
@@ -957,11 +958,12 @@ async fn test_automatic_issue_execution_succeeds() {
                 .register_vault_with_public_key(
                     &vault2_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap()
                 )
                 .await
         );
 
+        let vault1_id_clone = vault1_id.clone();
         let fut_user = async {
             let issue = user_provider.request_issue(issue_amount, &vault1_id).await.unwrap();
             tracing::warn!("REQUESTED ISSUE: {:?}", issue);
@@ -973,11 +975,15 @@ async fn test_automatic_issue_execution_succeeds() {
             );
 
             // wait for vault2 to execute this issue
-            assert_event::<ExecuteIssueEvent, _>(TIMEOUT, user_provider.clone(), move |x| x.vault_id == vault1_id)
+            assert_event::<ExecuteIssueEvent, _>(TIMEOUT, user_provider.clone(), move |x| x.vault_id == vault1_id.clone())
                 .await;
         };
 
         let issue_set = Arc::new(IssueRequests::new());
+        let vaults = Arc::new(Vaults::from(HashMap::from([
+            (BtcAddress::default(), vault1_id_clone),
+            (BtcAddress::default(), vault2_id),
+        ]))); // BTC address used does not matter here
         let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
         let service = join(
             vault::service::listen_for_issue_requests(
@@ -986,7 +992,14 @@ async fn test_automatic_issue_execution_succeeds() {
                 issue_event_tx.clone(),
                 issue_set.clone(),
             ),
-            vault::service::process_issue_requests(btc_rpc.clone(), vault2_provider.clone(), issue_set.clone(), 1, 0),
+            vault::service::process_issue_requests(
+                btc_rpc.clone(),
+                vault2_provider.clone(),
+                issue_set.clone(),
+                1,
+                0,
+                vaults,
+            ),
         );
 
         test_service(service, fut_user).await;
@@ -1036,6 +1049,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
                 .await
         );
 
+        let vault1_id_clone = vault1_id.clone();
         let fut_user = async {
             let issue = user_provider.request_issue(issue_amount, &vault1_id).await.unwrap();
             tracing::warn!("REQUESTED ISSUE: {:?}", issue);
@@ -1052,6 +1066,10 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
         };
 
         let issue_set = Arc::new(IssueRequests::new());
+        let vaults = Arc::new(Vaults::from(HashMap::from([
+            (BtcAddress::default(), vault1_id_clone),
+            (BtcAddress::default(), vault2_id),
+        ]))); // BTC address used does not matter here
         let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
         let service = join(
             vault::service::listen_for_issue_requests(
@@ -1060,7 +1078,14 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
                 issue_event_tx.clone(),
                 issue_set.clone(),
             ),
-            vault::service::process_issue_requests(btc_rpc.clone(), vault2_provider.clone(), issue_set.clone(), 1, 0),
+            vault::service::process_issue_requests(
+                btc_rpc.clone(),
+                vault2_provider.clone(),
+                issue_set.clone(),
+                1,
+                0,
+                vaults,
+            ),
         );
 
         test_service(service, fut_user).await;
