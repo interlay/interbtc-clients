@@ -975,8 +975,10 @@ async fn test_automatic_issue_execution_succeeds() {
             );
 
             // wait for vault2 to execute this issue
-            assert_event::<ExecuteIssueEvent, _>(TIMEOUT, user_provider.clone(), move |x| x.vault_id == vault1_id.clone())
-                .await;
+            assert_event::<ExecuteIssueEvent, _>(TIMEOUT, user_provider.clone(), move |x| {
+                x.vault_id == vault1_id.clone()
+            })
+            .await;
         };
 
         let issue_set = Arc::new(IssueRequests::new());

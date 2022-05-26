@@ -245,11 +245,12 @@ impl InterBtcParachain {
     /// Note: will always wait at least one block.
     pub async fn wait_for_block(&self, height: u32) -> Result<(), Error> {
         let mut sub = self.ext_client.rpc().subscribe_finalized_blocks().await?;
-        loop {
-            if sub.next().await.ok_or(Error::ChannelClosed)??.number >= height {
+        while let Some(block) = sub.next().await {
+            if block?.number >= height {
                 return Ok(());
             }
         }
+        Err(Error::ChannelClosed)
     }
 
     /// Sleep for `delay` parachain blocks
@@ -257,10 +258,7 @@ impl InterBtcParachain {
         if delay == 0 {
             return Ok(());
         }
-        let starting_parachain_height = match self.get_current_chain_height().await {
-            Ok(height) => height,
-            Err(err) => return Err(err.into()),
-        };
+        let starting_parachain_height = self.get_current_chain_height().await?;
         self.wait_for_block(starting_parachain_height + delay).await
     }
 

@@ -1,10 +1,10 @@
 use bitcoin::BitcoinCore;
 use runtime::InterBtcParachain;
 use service::Error as ServiceError;
-use std::{sync::Arc, time::Duration};
+use std::{fmt::Debug, time::Duration};
 use tokio::time::sleep;
 
-use crate::vaults::Vaults;
+use crate::vaults::RandomDelay;
 
 mod backing;
 mod error;
@@ -70,22 +70,22 @@ pub struct Config {
 }
 
 /// Runner implements the main loop for the relayer
-pub struct Runner<B: Backing, I: Issuing> {
+pub struct Runner<B: Backing, I: Issuing, RD: RandomDelay + Debug + Send + Sync + Clone> {
     backing: B,
     issuing: I,
-    other_vaults: Option<Arc<Vaults>>,
+    random_delay: Option<RD>,
     start_height: Option<u32>,
     max_batch_size: u32,
     interval: Duration,
     btc_confirmations: u32,
 }
 
-impl<B: Backing, I: Issuing> Runner<B, I> {
-    pub fn new(backing: B, issuing: I, conf: Config, other_vaults: Option<Arc<Vaults>>) -> Runner<B, I> {
+impl<B: Backing, I: Issuing, RD: RandomDelay + Debug + Send + Sync + Clone> Runner<B, I, RD> {
+    pub fn new(backing: B, issuing: I, conf: Config, random_delay: Option<RD>) -> Runner<B, I, RD> {
         Runner {
             backing,
             issuing,
-            other_vaults,
+            random_delay,
             start_height: conf.start_height,
             max_batch_size: conf.max_batch_size,
             interval: conf.interval.unwrap_or(SLEEP_TIME),
@@ -151,7 +151,7 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
                 let header = self.get_block_header(current_height).await?;
                 // TODO: check if block already stored
                 self.issuing
-                    .submit_block_header(header, self.other_vaults.clone())
+                    .submit_block_header(header, self.random_delay.clone())
                     .await?;
                 tracing::info!("Submitted block at height {}", current_height);
             }
@@ -177,7 +177,9 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
     }
 }
 
-pub async fn run_relayer(runner: Runner<BitcoinCore, InterBtcParachain>) -> Result<(), ServiceError> {
+pub async fn run_relayer<RD: RandomDelay + Debug + Send + Sync + Clone>(
+    runner: Runner<BitcoinCore, InterBtcParachain, RD>,
+) -> Result<(), ServiceError> {
     loop {
         match runner.submit_next().await {
             Ok(_) => (),
@@ -199,11 +201,14 @@ pub async fn run_relayer(runner: Runner<BitcoinCore, InterBtcParachain>) -> Resu
 
 #[cfg(test)]
 mod tests {
+    use crate::vaults::RandomDelay;
+
     use super::*;
     use async_trait::async_trait;
     use std::{
         cell::{Ref, RefCell, RefMut},
         collections::HashMap,
+        fmt::Debug,
         rc::Rc,
     };
 
@@ -244,7 +249,11 @@ mod tests {
             }
         }
 
-        async fn submit_block_header(&self, header: Vec<u8>, vaults: Option<Arc<Vaults>>) -> Result<(), Error> {
+        async fn submit_block_header<RD: RandomDelay + Debug + Send + Sync + Clone>(
+            &self,
+            header: Vec<u8>,
+            random_delay: Option<RD>,
+        ) -> Result<(), Error> {
             let is_stored = self.is_block_stored(header.clone()).await?;
             if is_stored {
                 Err(Error::BlockExists)

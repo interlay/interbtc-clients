@@ -1,7 +1,5 @@
 use crate::{
-    metrics::publish_expected_bitcoin_balance,
-    vaults::{delay_random_amount, Vaults},
-    Error, Event, IssueRequests, VaultIdManager,
+    metrics::publish_expected_bitcoin_balance, vaults::RandomDelay, Error, Event, IssueRequests, VaultIdManager,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt};
@@ -42,13 +40,13 @@ pub(crate) async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync
 
 /// execute issue requests on best-effort (i.e. don't retry on error),
 /// returns an error if stream ends, otherwise runs forever
-pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static, RD: RandomDelay>(
     bitcoin_core: B,
     btc_parachain: InterBtcParachain,
     issue_set: Arc<IssueRequests>,
     btc_start_height: u32,
     num_confirmations: u32,
-    vaults: Arc<Vaults>,
+    random_delay: RD,
 ) -> Result<(), ServiceError> {
     let mut stream =
         bitcoin::stream_in_chain_transactions(bitcoin_core.clone(), btc_start_height, num_confirmations).await;
@@ -61,7 +59,7 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
             num_confirmations,
             block_hash,
             transaction,
-            vaults.clone(),
+            &random_delay,
         )
         .await
         {
@@ -118,14 +116,14 @@ fn chunks(first: usize, last: usize) -> impl Iterator<Item = (usize, usize)> {
 }
 
 /// execute issue requests with a matching Bitcoin payment
-async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send + Sync + 'static, RD: RandomDelay>(
     bitcoin_core: &B,
     btc_parachain: &InterBtcParachain,
     issue_set: &Arc<IssueRequests>,
     num_confirmations: u32,
     block_hash: BlockHash,
     transaction: Transaction,
-    vaults: Arc<Vaults>,
+    random_delay: &RD,
 ) -> Result<(), Error> {
     let addresses = transaction.extract_output_addresses::<BtcAddress>();
     let mut issue_requests = issue_set.lock().await;
@@ -173,16 +171,11 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
 
                 // wait a random amount of blocks, to avoid all vaults flooding the parachain with
                 // this transaction
-                if let Err(err) = delay_random_amount(&issue_id.to_fixed_bytes(), btc_parachain, vaults).await {
-                    return Err(err.into());
-                };
+                random_delay.delay(&issue_id.to_fixed_bytes()).await?;
                 let issue = btc_parachain.get_issue_request(issue_id).await?;
-                match issue.status {
-                    IssueRequestStatus::Completed(_) => {
-                        tracing::info!("Issue {} has already been executed - doing nothing.", issue_id);
-                        return Ok(());
-                    }
-                    _ => (),
+                if let IssueRequestStatus::Completed(_) = issue.status {
+                    tracing::info!("Issue {} has already been executed - doing nothing.", issue_id);
+                    return Ok(());
                 }
 
                 // found tx, submit proof

@@ -1,7 +1,7 @@
-use std::{convert::TryInto, sync::Arc};
+use std::{convert::TryInto, fmt::Debug};
 
 use super::Error;
-use crate::vaults::{delay_random_amount, Vaults};
+use crate::vaults::RandomDelay;
 use async_trait::async_trait;
 use bitcoin::{sha256, Hash};
 use runtime::{BtcRelayPallet, H256Le, InterBtcParachain, RawBlockHeader, RelayPallet};
@@ -24,7 +24,11 @@ pub trait Issuing {
     /// # Arguments
     ///
     /// * `header` - Raw block header
-    async fn submit_block_header(&self, header: Vec<u8>, vaults: Option<Arc<Vaults>>) -> Result<(), Error>;
+    async fn submit_block_header<RD: RandomDelay + Debug + Send + Sync>(
+        &self,
+        header: Vec<u8>,
+        random_delay: Option<RD>,
+    ) -> Result<(), Error>;
 
     /// Submit a batch of block headers and wait for inclusion
     ///
@@ -72,17 +76,19 @@ impl Issuing for InterBtcParachain {
     }
 
     #[tracing::instrument(name = "submit_block_header", skip(self, header))]
-    async fn submit_block_header(&self, header: Vec<u8>, vaults: Option<Arc<Vaults>>) -> Result<(), Error> {
+    async fn submit_block_header<RD: RandomDelay + Debug + Send + Sync>(
+        &self,
+        header: Vec<u8>,
+        random_delay: Option<RD>,
+    ) -> Result<(), Error> {
         let raw_block_header = encode_raw_header(header.clone())?;
 
         // wait a random amount of blocks, to avoid all vaults flooding the parachain with
         // this transaction
-        if let Some(vaults) = vaults {
-            if let Err(err) =
-                delay_random_amount(&sha256::Hash::hash(header.as_slice()).into_inner(), &self, vaults).await
-            {
-                return Err(err.into());
-            };
+        if let Some(random_delay) = random_delay {
+            random_delay
+                .delay(&sha256::Hash::hash(header.as_slice()).into_inner())
+                .await?;
         }
         if self
             .is_block_stored(raw_block_header.hash().to_bytes_le().to_vec())
