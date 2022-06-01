@@ -109,9 +109,21 @@ impl RandomDelay for OrderedVaultsDelay {
     }
 }
 
-pub async fn monitor_btc_txs<B: BitcoinCoreApi + Send + Sync + Clone + 'static, RD: RandomDelay + Send + Sync>(
+/// For testing only
+#[async_trait]
+impl RandomDelay for () {
+    async fn delay(&self, _seed_data: &[u8; 32]) -> Result<(), RuntimeError> {
+        Ok(())
+    }
+}
+
+pub async fn monitor_btc_txs<
+    P: VaultRegistryPallet + RelayPallet + BtcRelayPallet + Send + Sync,
+    B: BitcoinCoreApi + Send + Sync + Clone + 'static,
+    RD: RandomDelay + Send + Sync,
+>(
     bitcoin_core: B,
-    btc_parachain: InterBtcParachain,
+    btc_parachain: P,
     random_delay: RD,
     btc_height: u32,
     vaults: Arc<Vaults>,
@@ -147,22 +159,25 @@ pub(crate) async fn initialize_active_vaults<P: VaultRegistryPallet + Send + Syn
     Ok(Arc::new(Vaults::from(vaults)))
 }
 
-pub struct BitcoinMonitor<B: BitcoinCoreApi + Send + Sync + Clone + 'static, RD: RandomDelay + Send + Sync> {
+pub struct BitcoinMonitor<
+    P: VaultRegistryPallet + RelayPallet + BtcRelayPallet + Send + Sync,
+    B: BitcoinCoreApi + Send + Sync + Clone + 'static,
+    RD: RandomDelay + Send + Sync,
+> {
     bitcoin_core: B,
-    btc_parachain: InterBtcParachain,
+    btc_parachain: P,
     random_delay: RD,
     btc_height: u32,
     vaults: Arc<Vaults>,
 }
 
-impl<B: BitcoinCoreApi + Send + Sync + Clone + 'static, RD: RandomDelay + Send + Sync> BitcoinMonitor<B, RD> {
-    pub fn new(
-        bitcoin_core: B,
-        btc_parachain: InterBtcParachain,
-        random_delay: RD,
-        btc_height: u32,
-        vaults: Arc<Vaults>,
-    ) -> Self {
+impl<
+        P: VaultRegistryPallet + RelayPallet + BtcRelayPallet + Send + Sync,
+        B: BitcoinCoreApi + Send + Sync + Clone + 'static,
+        RD: RandomDelay + Send + Sync,
+    > BitcoinMonitor<P, B, RD>
+{
+    pub fn new(bitcoin_core: B, btc_parachain: P, random_delay: RD, btc_height: u32, vaults: Arc<Vaults>) -> Self {
         Self {
             bitcoin_core,
             btc_parachain,
@@ -369,13 +384,35 @@ mod tests {
         PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
-        AccountId, BitcoinBlockHeight, BlockNumber, Error as RuntimeError, H256Le, InterBtcRichBlockHeader,
-        RawBlockHeader, Token, DOT, IBTC,
+        AccountId, BitcoinBlockHeight, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError, H256Le,
+        InterBtcRichBlockHeader, RawBlockHeader, Token, DOT, IBTC, Wallet,
     };
     use sp_core::{H160, H256};
+    use std::collections::BTreeSet;
 
     mockall::mock! {
         Provider {}
+
+        #[async_trait]
+        pub trait VaultRegistryPallet {
+            async fn get_vault(&self, vault_id: &VaultId) -> Result<InterBtcVault, RuntimeError>;
+            async fn get_vaults_by_account_id(&self, account_id: &AccountId) -> Result<Vec<VaultId>, RuntimeError>;
+            async fn get_all_vaults(&self) -> Result<Vec<InterBtcVault>, RuntimeError>;
+            async fn register_vault(&self, vault_id: &VaultId, collateral: u128) -> Result<(), RuntimeError>;
+            async fn deposit_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
+            async fn withdraw_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
+            async fn get_public_key(&self) -> Result<Option<BtcPublicKey>, RuntimeError>;
+            async fn register_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
+            async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), RuntimeError>;
+            async fn get_required_collateral_for_wrapped(
+                &self,
+                amount_btc: u128,
+                collateral_currency: CurrencyId,
+            ) -> Result<u128, RuntimeError>;
+            async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
+            async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
+            async fn get_collateralization_from_vault(&self, vault_id: VaultId, only_issued: bool) -> Result<u128, RuntimeError>;
+        }
 
         #[async_trait]
         pub trait RelayPallet {
@@ -499,6 +536,12 @@ mod tests {
         VaultId::new(AccountId::new([1u8; 32]), Token(DOT), Token(IBTC))
     }
 
+    fn dummy_wallet() -> Wallet {
+        Wallet {
+            addresses: BTreeSet::default(),
+        }
+    }
+
     #[tokio::test]
     async fn test_filter_matching_vaults() {
         let dummy_vault = dummy_vault_id();
@@ -536,11 +579,24 @@ mod tests {
             .expect_report_vault_theft()
             .never()
             .returning(|_, _, _| Ok(()));
+        parachain.expect_get_vault().returning(|_| Ok(InterBtcVault {
+            id: dummy_vault_id(),
+            wallet: dummy_wallet(),
+            status: VaultStatus::Active(true),
+            banned_until: None,
+            to_be_issued_tokens: 0,
+            issued_tokens: 0,
+            to_be_redeemed_tokens: 0,
+            to_be_replaced_tokens: 0,
+            replace_collateral: 0,
+            active_replace_collateral: 0,
+            liquidated_collateral: 0,
+        }));
 
         let mut bitcoin_core = MockBitcoin::default();
         bitcoin_core.expect_find_duplicate_payments().returning(|_| Ok(vec![]));
 
-        let monitor = BitcoinMonitor::new(bitcoin_core, parachain, 0, Arc::new(Vaults::default()));
+        let monitor = BitcoinMonitor::new(bitcoin_core, parachain, (), 0, Arc::new(Vaults::default()));
 
         let block_hash = BlockHash::from_slice(&[0; 32]).unwrap();
         monitor
@@ -555,9 +611,22 @@ mod tests {
         let mut btc_rpc = MockBitcoin::default();
         parachain.expect_is_transaction_invalid().returning(|_, _| Ok(true));
         parachain.expect_report_vault_theft().once().returning(|_, _, _| Ok(()));
+        parachain.expect_get_vault().returning(|_| Ok(InterBtcVault {
+            id: dummy_vault_id(),
+            wallet: dummy_wallet(),
+            status: VaultStatus::Active(true),
+            banned_until: None,
+            to_be_issued_tokens: 0,
+            issued_tokens: 0,
+            to_be_redeemed_tokens: 0,
+            to_be_replaced_tokens: 0,
+            replace_collateral: 0,
+            active_replace_collateral: 0,
+            liquidated_collateral: 0,
+        }));
         btc_rpc.expect_get_proof().once().returning(|_, _| Ok(vec![]));
 
-        let monitor = BitcoinMonitor::new(btc_rpc, parachain, 0, Arc::new(Vaults::default()));
+        let monitor = BitcoinMonitor::new(btc_rpc, parachain, (), 0, Arc::new(Vaults::default()));
 
         let block_hash = BlockHash::from_slice(&[0; 32]).unwrap();
         monitor

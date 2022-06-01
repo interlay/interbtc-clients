@@ -16,7 +16,7 @@ use runtime::{
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
 use std::{collections::HashMap, sync::Arc, time::Duration};
-use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager, Vaults};
+use vault::{self, Event as CancellationEvent, IssueRequests, OrderedVaultsDelay, VaultIdManager, Vaults};
 
 const TIMEOUT: Duration = Duration::from_secs(90);
 
@@ -198,10 +198,17 @@ async fn test_report_vault_theft_succeeds() {
     );
 
     let vaults = Arc::new(vault::Vaults::from(Default::default()));
+    let random_delay = OrderedVaultsDelay::new(relayer_provider.clone(), vaults.clone());
 
     test_service(
         join(
-            vault::service::monitor_btc_txs(btc_rpc.clone(), relayer_provider.clone(), 0, vaults.clone()),
+            vault::service::monitor_btc_txs(
+                btc_rpc.clone(),
+                relayer_provider.clone(),
+                random_delay.clone(),
+                0,
+                vaults.clone(),
+            ),
             vault::service::listen_for_wallet_updates(relayer_provider.clone(), btc_rpc.network(), vaults.clone()),
         ),
         async {
@@ -282,12 +289,19 @@ async fn test_report_vault_double_payment_succeeds() {
         assert_issue(&user_provider, &btc_rpc, &vault_id, issue_amount).await;
 
         let vaults = Arc::new(vault::Vaults::from(Default::default()));
+        let random_delay = OrderedVaultsDelay::new(relayer_provider.clone(), vaults.clone());
 
         // we make the vault start two listen_for_redeem_requests processes, this way there will be a double payment
         // that should be reported
         test_service(
             join4(
-                vault::service::monitor_btc_txs(btc_rpc.clone(), relayer_provider.clone(), 0, vaults.clone()),
+                vault::service::monitor_btc_txs(
+                    btc_rpc.clone(),
+                    relayer_provider.clone(),
+                    random_delay.clone(),
+                    0,
+                    vaults.clone(),
+                ),
                 vault::service::listen_for_wallet_updates(relayer_provider.clone(), btc_rpc.network(), vaults.clone()),
                 pay_redeem_from_vault_wallet(vault_provider.clone(), btc_rpc.clone(), 2, vault_id.clone()),
                 pay_redeem_from_vault_wallet(vault_provider.clone(), btc_rpc.clone(), 3, vault_id.clone()),
@@ -986,6 +1000,7 @@ async fn test_automatic_issue_execution_succeeds() {
             (BtcAddress::default(), vault1_id_clone),
             (BtcAddress::default(), vault2_id),
         ]))); // BTC address used does not matter here
+        let random_delay = OrderedVaultsDelay::new(relayer_provider.clone(), vaults.clone());
         let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
         let service = join(
             vault::service::listen_for_issue_requests(
@@ -1000,7 +1015,7 @@ async fn test_automatic_issue_execution_succeeds() {
                 issue_set.clone(),
                 1,
                 0,
-                vaults,
+                random_delay,
             ),
         );
 
@@ -1072,6 +1087,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
             (BtcAddress::default(), vault1_id_clone),
             (BtcAddress::default(), vault2_id),
         ]))); // BTC address used does not matter here
+        let random_delay = OrderedVaultsDelay::new(relayer_provider.clone(), vaults.clone());
         let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
         let service = join(
             vault::service::listen_for_issue_requests(
@@ -1086,7 +1102,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
                 issue_set.clone(),
                 1,
                 0,
-                vaults,
+                random_delay,
             ),
         );
 

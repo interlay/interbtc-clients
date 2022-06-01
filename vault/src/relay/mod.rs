@@ -73,7 +73,7 @@ pub struct Config {
 pub struct Runner<B: Backing, I: Issuing, RD: RandomDelay + Debug + Send + Sync + Clone> {
     backing: B,
     issuing: I,
-    random_delay: Option<RD>,
+    random_delay: RD,
     start_height: Option<u32>,
     max_batch_size: u32,
     interval: Duration,
@@ -81,7 +81,7 @@ pub struct Runner<B: Backing, I: Issuing, RD: RandomDelay + Debug + Send + Sync 
 }
 
 impl<B: Backing, I: Issuing, RD: RandomDelay + Debug + Send + Sync + Clone> Runner<B, I, RD> {
-    pub fn new(backing: B, issuing: I, conf: Config, random_delay: Option<RD>) -> Runner<B, I, RD> {
+    pub fn new(backing: B, issuing: I, conf: Config, random_delay: RD) -> Runner<B, I, RD> {
         Runner {
             backing,
             issuing,
@@ -249,10 +249,10 @@ mod tests {
             }
         }
 
-        async fn submit_block_header<RD: RandomDelay + Debug + Send + Sync + Clone>(
+        async fn submit_block_header<RD: RandomDelay + Debug + Send + Sync>(
             &self,
             header: Vec<u8>,
-            random_delay: Option<RD>,
+            _random_delay: RD,
         ) -> Result<(), Error> {
             let is_stored = self.is_block_stored(header.clone()).await?;
             if is_stored {
@@ -267,7 +267,7 @@ mod tests {
 
         async fn submit_block_header_batch(&self, headers: Vec<Vec<u8>>) -> Result<(), Error> {
             for header in headers {
-                self.submit_block_header(header.to_vec(), None).await?;
+                self.submit_block_header(header.to_vec(), ()).await?;
             }
             Ok(())
         }
@@ -337,10 +337,10 @@ mod tests {
         assert_eq!(issuing.is_block_stored(make_hash("a")).await, Ok(true));
         assert_eq!(issuing.is_block_stored(make_hash("x")).await, Ok(false));
         assert_eq!(
-            issuing.submit_block_header(make_hash("a"), None).await,
+            issuing.submit_block_header(make_hash("a"), ()).await,
             Err(Error::BlockExists)
         );
-        assert_eq!(issuing.submit_block_header(make_hash("d"), None).await, Ok(()));
+        assert_eq!(issuing.submit_block_header(make_hash("d"), ()).await, Ok(()));
         assert_eq!(issuing.get_best_height().await, Ok(5));
     }
 
@@ -385,7 +385,7 @@ mod tests {
                 interval: None,
                 btc_confirmations: 0,
             },
-            None,
+            (),
         );
 
         assert_eq!(runner.issuing.get_best_height().await.unwrap(), 4);
@@ -407,7 +407,7 @@ mod tests {
                 interval: None,
                 btc_confirmations: 0,
             },
-            None,
+            (),
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -441,7 +441,7 @@ mod tests {
                 interval: None,
                 btc_confirmations: 0,
             },
-            None,
+            (),
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -471,7 +471,7 @@ mod tests {
                 max_batch_size: 16,
                 btc_confirmations: 1,
             },
-            None,
+            (),
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -504,7 +504,7 @@ mod tests {
                 interval: Some(Duration::from_secs(0)),
                 btc_confirmations: 1,
             },
-            None,
+            (),
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -538,7 +538,7 @@ mod tests {
                 interval: Some(Duration::from_secs(0)),
                 btc_confirmations: 2,
             },
-            None,
+            (),
         );
 
         let height_before = runner.issuing.get_best_height().await?;
