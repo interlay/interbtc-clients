@@ -53,8 +53,8 @@ pub enum Error {
     StorageItemNotFound,
     #[error("Insufficient funds")]
     InsufficientFunds,
-    #[error("Client does not support spec_version: expected {0}, got {1}")]
-    InvalidSpecVersion(u32, u32),
+    #[error("Client does not support spec_version: expected {0}..={1}, got {2}")]
+    InvalidSpecVersion(u32, u32, u32),
     #[error("Client metadata is different from parachain metadata: expected {0}, got {1}")]
     ParachainMetadataMismatch(String, String),
     #[error("Specified Bitcoin network differs from the one on the parachain: expected {0}, got {1}")]

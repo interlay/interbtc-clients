@@ -288,7 +288,7 @@ mod h256_le {
 
 mod dispatch_error {
     use crate::metadata::{
-        runtime_types::sp_runtime::{ArithmeticError, ModuleError, TokenError},
+        runtime_types::sp_runtime::{ArithmeticError, ModuleError, TokenError, TransactionalError},
         DispatchError,
     };
 
@@ -296,6 +296,7 @@ mod dispatch_error {
     type RichArithmeticError = sp_runtime::ArithmeticError;
     type RichDispatchError = sp_runtime::DispatchError;
     type RichModuleError = sp_runtime::ModuleError;
+    type RichTransactionalError = sp_runtime::TransactionalError;
 
     macro_rules! convert_enum{($src: ident, $dst: ident, $($variant: ident,)*)=> {
         impl From<$src> for $dst {
@@ -327,6 +328,8 @@ mod dispatch_error {
         DivisionByZero,
     );
 
+    convert_enum!(RichTransactionalError, TransactionalError, LimitReached, NoLayer,);
+
     impl From<RichDispatchError> for DispatchError {
         fn from(value: RichDispatchError) -> Self {
             match value {
@@ -341,6 +344,9 @@ mod dispatch_error {
                 RichDispatchError::TooManyConsumers => DispatchError::TooManyConsumers,
                 RichDispatchError::Token(token_error) => DispatchError::Token(token_error.into()),
                 RichDispatchError::Arithmetic(arithmetic_error) => DispatchError::Arithmetic(arithmetic_error.into()),
+                RichDispatchError::Transactional(transactional_error) => {
+                    DispatchError::Transactional(transactional_error.into())
+                }
             }
         }
     }
