@@ -385,7 +385,7 @@ mod tests {
     };
     use runtime::{
         AccountId, BitcoinBlockHeight, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError, H256Le,
-        InterBtcRichBlockHeader, RawBlockHeader, Token, DOT, IBTC, Wallet,
+        InterBtcRichBlockHeader, RawBlockHeader, Token, Wallet, DOT, IBTC,
     };
     use sp_core::{H160, H256};
     use std::collections::BTreeSet;
@@ -579,19 +579,21 @@ mod tests {
             .expect_report_vault_theft()
             .never()
             .returning(|_, _, _| Ok(()));
-        parachain.expect_get_vault().returning(|_| Ok(InterBtcVault {
-            id: dummy_vault_id(),
-            wallet: dummy_wallet(),
-            status: VaultStatus::Active(true),
-            banned_until: None,
-            to_be_issued_tokens: 0,
-            issued_tokens: 0,
-            to_be_redeemed_tokens: 0,
-            to_be_replaced_tokens: 0,
-            replace_collateral: 0,
-            active_replace_collateral: 0,
-            liquidated_collateral: 0,
-        }));
+        parachain.expect_get_vault().returning(|_| {
+            Ok(InterBtcVault {
+                id: dummy_vault_id(),
+                wallet: dummy_wallet(),
+                status: VaultStatus::Active(true),
+                banned_until: None,
+                to_be_issued_tokens: 0,
+                issued_tokens: 0,
+                to_be_redeemed_tokens: 0,
+                to_be_replaced_tokens: 0,
+                replace_collateral: 0,
+                active_replace_collateral: 0,
+                liquidated_collateral: 0,
+            })
+        });
 
         let mut bitcoin_core = MockBitcoin::default();
         bitcoin_core.expect_find_duplicate_payments().returning(|_| Ok(vec![]));
@@ -611,19 +613,21 @@ mod tests {
         let mut btc_rpc = MockBitcoin::default();
         parachain.expect_is_transaction_invalid().returning(|_, _| Ok(true));
         parachain.expect_report_vault_theft().once().returning(|_, _, _| Ok(()));
-        parachain.expect_get_vault().returning(|_| Ok(InterBtcVault {
-            id: dummy_vault_id(),
-            wallet: dummy_wallet(),
-            status: VaultStatus::Active(true),
-            banned_until: None,
-            to_be_issued_tokens: 0,
-            issued_tokens: 0,
-            to_be_redeemed_tokens: 0,
-            to_be_replaced_tokens: 0,
-            replace_collateral: 0,
-            active_replace_collateral: 0,
-            liquidated_collateral: 0,
-        }));
+        parachain.expect_get_vault().returning(|_| {
+            Ok(InterBtcVault {
+                id: dummy_vault_id(),
+                wallet: dummy_wallet(),
+                status: VaultStatus::Active(true),
+                banned_until: None,
+                to_be_issued_tokens: 0,
+                issued_tokens: 0,
+                to_be_redeemed_tokens: 0,
+                to_be_replaced_tokens: 0,
+                replace_collateral: 0,
+                active_replace_collateral: 0,
+                liquidated_collateral: 0,
+            })
+        });
         btc_rpc.expect_get_proof().once().returning(|_, _| Ok(vec![]));
 
         let monitor = BitcoinMonitor::new(btc_rpc, parachain, (), 0, Arc::new(Vaults::default()));
