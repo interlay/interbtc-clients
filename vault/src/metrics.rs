@@ -155,8 +155,16 @@ impl PerCurrencyMetrics {
     pub fn new(vault_id: &VaultId) -> Self {
         let label = format!(
             "{}_{}",
-            vault_id.collateral_currency().inner().symbol(),
-            vault_id.wrapped_currency().inner().symbol()
+            vault_id
+                .collateral_currency()
+                .inner()
+                .map(|i| i.symbol().to_string())
+                .unwrap_or_default(),
+            vault_id
+                .wrapped_currency()
+                .inner()
+                .map(|i| i.symbol().to_string())
+                .unwrap_or_default()
         );
         Self::new_with_label(label.as_ref())
     }
@@ -216,7 +224,7 @@ impl PerCurrencyMetrics {
         vault: &VaultData<B>,
         parachain_rpc: P,
         bitcoin_transactions: Vec<ListTransactionResult>,
-    ) {
+    ) -> Result<(), ServiceError> {
         let vault_id = &vault.vault_id;
         // update fee surplus
         if let Ok((redeem_requests, replace_requests, refund_requests)) = try_join!(
@@ -250,9 +258,11 @@ impl PerCurrencyMetrics {
                 .await;
 
             *vault.metrics.fee_budget_surplus.data.write().await = fee_budget_surplus;
-            publish_fee_budget_surplus(vault).await;
+            publish_fee_budget_surplus(vault).await?;
         }
+        Ok(())
     }
+
     pub async fn initialize_values<B: BitcoinCoreApi + Clone + Send + Sync>(
         parachain_rpc: InterBtcParachain,
         vault: &VaultData<B>,
@@ -275,7 +285,7 @@ impl PerCurrencyMetrics {
         publish_utxo_count(vault);
         publish_bitcoin_balance(vault);
 
-        tokio::join!(
+        let _ = tokio::join!(
             Self::initialize_fee_budget_surplus(vault, parachain_rpc.clone(), bitcoin_transactions),
             publish_average_bitcoin_fee(vault),
             publish_expected_bitcoin_balance(vault, parachain_rpc.clone()),
@@ -330,32 +340,34 @@ pub async fn metrics_handler() -> Result<impl Reply, Rejection> {
     Ok(metrics)
 }
 
-fn raw_value_as_currency(value: u128, currency: CurrencyId) -> f64 {
-    let scaling_factor = currency.inner().one() as f64;
-    value as f64 / scaling_factor
+fn raw_value_as_currency(value: u128, currency: CurrencyId) -> Result<f64, ServiceError> {
+    let scaling_factor = currency.inner()?.one() as f64;
+    Ok(value as f64 / scaling_factor)
 }
 
 pub async fn publish_locked_collateral<B: BitcoinCoreApi + Clone + Send + Sync, P: VaultRegistryPallet>(
     vault: &VaultData<B>,
     parachain_rpc: P,
-) {
+) -> Result<(), ServiceError> {
     if let Ok(actual_collateral) = parachain_rpc.get_vault_total_collateral(vault.vault_id.clone()).await {
-        let actual_collateral = raw_value_as_currency(actual_collateral, vault.vault_id.collateral_currency());
+        let actual_collateral = raw_value_as_currency(actual_collateral, vault.vault_id.collateral_currency())?;
         vault.metrics.locked_collateral.set(actual_collateral);
     }
+    Ok(())
 }
 
 pub async fn publish_required_collateral<B: BitcoinCoreApi + Clone + Send + Sync, P: VaultRegistryPallet>(
     vault: &VaultData<B>,
     parachain_rpc: P,
-) {
+) -> Result<(), ServiceError> {
     if let Ok(required_collateral) = parachain_rpc
         .get_required_collateral_for_vault(vault.vault_id.clone())
         .await
     {
-        let required_collateral = raw_value_as_currency(required_collateral, vault.vault_id.collateral_currency());
+        let required_collateral = raw_value_as_currency(required_collateral, vault.vault_id.collateral_currency())?;
         vault.metrics.required_collateral.set(required_collateral);
     }
+    Ok(())
 }
 
 pub async fn publish_collateralization<B: BitcoinCoreApi + Clone + Send + Sync, P: VaultRegistryPallet>(
@@ -376,7 +388,7 @@ pub async fn update_bitcoin_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
     vault: &VaultData<B>,
     new_fee_entry: Option<SignedAmount>,
     fee_budget: Option<u128>,
-) {
+) -> Result<(), ServiceError> {
     // update the average fee
     if let Some(amount) = new_fee_entry {
         {
@@ -393,19 +405,23 @@ pub async fn update_bitcoin_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
             let mut tmp = vault.metrics.fee_budget_surplus.data.write().await;
             *tmp = tmp.saturating_add(surplus);
         }
-        publish_fee_budget_surplus(vault).await;
+        publish_fee_budget_surplus(vault).await?;
     }
 
     publish_bitcoin_balance(vault);
+    Ok(())
 }
 
-async fn publish_fee_budget_surplus<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
+async fn publish_fee_budget_surplus<B: BitcoinCoreApi + Clone + Send + Sync>(
+    vault: &VaultData<B>,
+) -> Result<(), ServiceError> {
     let surplus = *vault.metrics.fee_budget_surplus.data.read().await;
     vault
         .metrics
         .fee_budget_surplus
         .gauge
-        .set(surplus as f64 / vault.vault_id.wrapped_currency().inner().one() as f64);
+        .set(surplus as f64 / vault.vault_id.wrapped_currency().inner()?.one() as f64);
+    Ok(())
 }
 
 async fn publish_average_bitcoin_fee<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
@@ -426,12 +442,15 @@ fn publish_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &Vaul
     }
 }
 
-async fn publish_native_currency_balance<P: CollateralBalancesPallet + UtilFuncs>(parachain_rpc: &P) {
+async fn publish_native_currency_balance<P: CollateralBalancesPallet + UtilFuncs>(
+    parachain_rpc: &P,
+) -> Result<(), ServiceError> {
     let native_currency = parachain_rpc.get_native_currency_id();
     if let Ok(balance) = parachain_rpc.get_free_balance(native_currency).await {
-        let balance = raw_value_as_currency(balance, native_currency);
+        let balance = raw_value_as_currency(balance, native_currency)?;
         NATIVE_CURRENCY_BALANCE.set(balance);
     }
+    Ok(())
 }
 
 fn publish_utxo_count<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
@@ -597,8 +616,8 @@ pub async fn monitor_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
                         .iter()
                         .filter(|vault| &vault.vault_id.collateral_currency() == currency_id)
                     {
-                        publish_locked_collateral(vault, parachain_rpc.clone()).await;
-                        publish_required_collateral(vault, parachain_rpc.clone()).await;
+                        let _ = publish_locked_collateral(vault, parachain_rpc.clone()).await;
+                        let _ = publish_required_collateral(vault, parachain_rpc.clone()).await;
                         publish_collateralization(vault, parachain_rpc.clone()).await;
                     }
                 }
@@ -620,7 +639,7 @@ pub async fn poll_metrics<
     let vault_id_manager = &vault_id_manager;
 
     loop {
-        publish_native_currency_balance(parachain_rpc).await;
+        publish_native_currency_balance(parachain_rpc).await?;
         publish_issue_count(parachain_rpc, vault_id_manager).await;
         if let Ok(redeems) = parachain_rpc
             .get_vault_redeem_requests(parachain_rpc.get_account_id().clone())
@@ -641,11 +660,11 @@ pub async fn poll_metrics<
 pub async fn publish_expected_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync, P: VaultRegistryPallet>(
     vault: &VaultData<B>,
     parachain_rpc: P,
-) {
+) -> Result<(), ServiceError> {
     if let Ok(v) = parachain_rpc.get_vault(&vault.vault_id).await {
         let lowerbound = v.issued_tokens.saturating_sub(v.to_be_redeemed_tokens);
         let upperbound = v.issued_tokens.saturating_add(v.to_be_issued_tokens);
-        let scaling_factor = vault.vault_id.wrapped_currency().inner().one() as f64;
+        let scaling_factor = vault.vault_id.wrapped_currency().inner()?.one() as f64;
         vault
             .metrics
             .btc_balance
@@ -657,6 +676,7 @@ pub async fn publish_expected_bitcoin_balance<B: BitcoinCoreApi + Clone + Send +
             .upperbound
             .set(upperbound as f64 / scaling_factor);
     }
+    Ok(())
 }
 
 pub async fn publish_tokio_metrics(
@@ -1009,7 +1029,9 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
-        publish_expected_bitcoin_balance(&vault_data, parachain_rpc).await;
+        publish_expected_bitcoin_balance(&vault_data, parachain_rpc)
+            .await
+            .unwrap();
         let bitcoin_lower_bound = vault_data.metrics.btc_balance.lowerbound.get();
         let bitcoin_upper_bound = vault_data.metrics.btc_balance.upperbound.get();
 
@@ -1036,7 +1058,9 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
-        update_bitcoin_metrics(&vault_data, Some(SignedAmount::from_sat(125)), Some(122)).await;
+        update_bitcoin_metrics(&vault_data, Some(SignedAmount::from_sat(125)), Some(122))
+            .await
+            .unwrap();
         let average_btc_fee = vault_data.metrics.average_btc_fee.gauge.get();
         let fee_budget_surplus = vault_data.metrics.fee_budget_surplus.gauge.get();
         let bitcoin_balance = vault_data.metrics.btc_balance.actual.get();
@@ -1078,7 +1102,7 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
-        publish_locked_collateral(&vault_data, parachain_rpc).await;
+        publish_locked_collateral(&vault_data, parachain_rpc).await.unwrap();
         let total_collateral = vault_data.metrics.locked_collateral.get();
 
         assert_eq!(total_collateral, 0.0000000075);
@@ -1125,7 +1149,7 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
-        publish_required_collateral(&vault_data, parachain_rpc).await;
+        publish_required_collateral(&vault_data, parachain_rpc).await.unwrap();
         let required_collateral = vault_data.metrics.required_collateral.get();
 
         assert_eq!(required_collateral, 0.000000005);
@@ -1146,7 +1170,7 @@ mod tests {
             .expect_get_native_currency_id()
             .returning(move || Token(INTR));
 
-        publish_native_currency_balance(&parachain_rpc).await;
+        publish_native_currency_balance(&parachain_rpc).await.unwrap();
 
         let native_currency_balance = NATIVE_CURRENCY_BALANCE.get();
         assert_eq!(native_currency_balance, 0.0000000025);

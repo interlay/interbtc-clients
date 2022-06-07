@@ -33,8 +33,9 @@ async fn get_exchange_rate_from_coingecko(currency_id: CurrencyId, url: &Url) ->
         .json::<HashMap<String, HashMap<String, f64>>>()
         .await?;
 
+    let currency_name = currency_id.inner()?.name().to_lowercase();
     let exchange_rate = *resp
-        .get(&currency_id.inner().name().to_lowercase())
+        .get(&currency_name)
         .ok_or(Error::InvalidResponse)?
         .get(BTC_CURRENCY)
         .ok_or(Error::InvalidResponse)?;
@@ -214,7 +215,7 @@ async fn main() -> Result<(), Error> {
                 url.set_path(&format!("{}/simple/price", url.path()));
                 url.set_query(Some(&format!(
                     "ids={}&vs_currencies={}",
-                    currency_id.inner().name().to_lowercase(),
+                    currency_id.inner().unwrap().name().to_lowercase(),
                     BTC_CURRENCY
                 )));
                 if let Some(api_key) = &maybe_api_key {
@@ -234,7 +235,7 @@ async fn main() -> Result<(), Error> {
         .into_iter()
         .map(|(currency_id, value)| {
             let conversion_factor = FixedU128::checked_from_rational(
-                10_u128.pow(currency_id.inner().decimals() as u32),
+                10_u128.pow(currency_id.inner().unwrap().decimals() as u32),
                 10_u128.pow(BTC_DECIMALS),
             )
             .unwrap();
