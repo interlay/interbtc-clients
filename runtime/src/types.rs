@@ -4,7 +4,7 @@ use subxt::sp_core::{crypto::Ss58Codec, sr25519::Pair as KeyPair};
 
 pub use primitives::{
     CurrencyId,
-    CurrencyId::Token,
+    CurrencyId::{ForeignAsset, Token},
     TokenSymbol::{DOT, IBTC, INTR, KBTC, KINT, KSM},
 };
 
@@ -141,6 +141,7 @@ mod currency_id {
         fn inner(&self) -> primitives::TokenSymbol {
             match self {
                 Token(x) => *x,
+                ForeignAsset(_) => unimplemented!("not supported"),
             }
         }
     }

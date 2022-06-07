@@ -331,7 +331,7 @@ pub async fn metrics_handler() -> Result<impl Reply, Rejection> {
 }
 
 fn raw_value_as_currency(value: u128, currency: CurrencyId) -> f64 {
-    let scaling_factor = currency.one() as f64;
+    let scaling_factor = currency.inner().one() as f64;
     value as f64 / scaling_factor
 }
 
@@ -405,7 +405,7 @@ async fn publish_fee_budget_surplus<B: BitcoinCoreApi + Clone + Send + Sync>(vau
         .metrics
         .fee_budget_surplus
         .gauge
-        .set(surplus as f64 / vault.vault_id.wrapped_currency().one() as f64);
+        .set(surplus as f64 / vault.vault_id.wrapped_currency().inner().one() as f64);
 }
 
 async fn publish_average_bitcoin_fee<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
@@ -645,7 +645,7 @@ pub async fn publish_expected_bitcoin_balance<B: BitcoinCoreApi + Clone + Send +
     if let Ok(v) = parachain_rpc.get_vault(&vault.vault_id).await {
         let lowerbound = v.issued_tokens.saturating_sub(v.to_be_redeemed_tokens);
         let upperbound = v.issued_tokens.saturating_add(v.to_be_issued_tokens);
-        let scaling_factor = vault.vault_id.wrapped_currency().one() as f64;
+        let scaling_factor = vault.vault_id.wrapped_currency().inner().one() as f64;
         vault
             .metrics
             .btc_balance
