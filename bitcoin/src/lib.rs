@@ -159,6 +159,7 @@ pub trait BitcoinCoreApi {
         &self,
         address: A,
         sat: u64,
+        fee_rate: u64,
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, Error>;
 
@@ -168,6 +169,7 @@ pub trait BitcoinCoreApi {
         &self,
         address: A,
         sat: u64,
+        fee_rate: u64,
         request_id: Option<H256>,
     ) -> Result<Txid, Error>;
 
@@ -176,6 +178,7 @@ pub trait BitcoinCoreApi {
         address: A,
         sat: u64,
         request_id: Option<H256>,
+        fee_rate: u64,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
@@ -723,11 +726,13 @@ impl BitcoinCoreApi for BitcoinCore {
     /// # Arguments
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
+    /// * `fee_rate` - fee rate in sat/vbyte
     /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
     async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
         &self,
         address: A,
         sat: u64,
+        fee_rate: u64,
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, Error> {
         self.with_wallet(|| async {
@@ -744,9 +749,13 @@ impl BitcoinCoreApi for BitcoinCore {
             // transaction to the bitcoind. If we don't do this, the same uxto may be used
             // as input twice (i.e. double spend)
             let lock = self.transaction_creation_lock.clone().lock_owned().await;
+            let funding_opts = FundRawTransactionOptions {
+                fee_rate: Some(Amount::from_sat(fee_rate)),
+                ..Default::default()
+            };
 
             // fund the transaction: adds required inputs, and possibly a return-to-self output
-            let funded_raw_tx = self.rpc.fund_raw_transaction(raw_tx, None, None)?;
+            let funded_raw_tx = self.rpc.fund_raw_transaction(raw_tx, Some(&funding_opts), None)?;
 
             // sign the transaction
             let signed_funded_raw_tx =
@@ -784,14 +793,16 @@ impl BitcoinCoreApi for BitcoinCore {
     /// # Arguments
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
+    /// * `fee_rate` - fee rate in sat/vbyte
     /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
     async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
         &self,
         address: A,
         sat: u64,
+        fee_rate: u64,
         request_id: Option<H256>,
     ) -> Result<Txid, Error> {
-        let tx = self.create_transaction(address, sat, request_id).await?;
+        let tx = self.create_transaction(address, sat, fee_rate, request_id).await?;
         let txid = self.send_transaction(tx).await?;
         Ok(txid)
     }
@@ -803,15 +814,19 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `address` - Bitcoin address to fund
     /// * `sat` - number of Satoshis to transfer
     /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
+    /// * `fee_rate` - fee rate in sat/vbyte
     /// * `num_confirmations` - how many confirmations we need to wait for
     async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
         &self,
         address: A,
         sat: u64,
         request_id: Option<H256>,
+        fee_rate: u64,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
-        let txid = self.create_and_send_transaction(address, sat, request_id).await?;
+        let txid = self
+            .create_and_send_transaction(address, sat, fee_rate, request_id)
+            .await?;
 
         #[cfg(feature = "regtest-mine-on-tx")]
         self.rpc

@@ -822,10 +822,10 @@ mod tests {
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
             async fn get_mempool_transactions<'a>(&'a self) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(&self, txid: Txid, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
-            async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>) -> Result<LockedTransaction, BitcoinError>;
+            async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, fee_rate: u64, request_id: Option<H256>) -> Result<LockedTransaction, BitcoinError>;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
-            async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>) -> Result<Txid, BitcoinError>;
-            async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
+            async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, fee_rate: u64, request_id: Option<H256>) -> Result<Txid, BitcoinError>;
+            async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>, fee_rate: u64, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;
             async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError> where P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), BitcoinError>;
