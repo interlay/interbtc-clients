@@ -26,9 +26,15 @@ pub async fn maintain_collateralization_rate<B: BitcoinCoreApi + Clone + Send + 
                         .iter()
                         .find(|vault_id| &vault_id.collateral_currency() == currency_id)
                     {
-                        None => tracing::debug!("Ignoring exchange rate update for {}", currency_id.inner().symbol()),
+                        None => tracing::debug!(
+                            "Ignoring exchange rate update for {}",
+                            currency_id.inner().map(|i| i.symbol().to_string()).unwrap_or_default()
+                        ),
                         Some(vault_id) => {
-                            tracing::info!("Received FeedValuesEvent for {}", currency_id.inner().symbol());
+                            tracing::info!(
+                                "Received FeedValuesEvent for {}",
+                                currency_id.inner().map(|i| i.symbol().to_string()).unwrap_or_default()
+                            );
 
                             // TODO: implement retrying
                             if let Err(e) = lock_required_collateral(parachain_rpc.clone(), vault_id.clone()).await {

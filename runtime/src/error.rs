@@ -53,6 +53,8 @@ pub enum Error {
     StorageItemNotFound,
     #[error("Insufficient funds")]
     InsufficientFunds,
+    #[error("Currency not found")]
+    CurrencyNotFound,
     #[error("Client does not support spec_version: expected {0}..={1}, got {2}")]
     InvalidSpecVersion(u32, u32, u32),
     #[error("Client metadata is different from parachain metadata: expected {0}, got {1}")]
