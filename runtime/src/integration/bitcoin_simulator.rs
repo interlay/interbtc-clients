@@ -264,6 +264,7 @@ impl MockBitcoinCore {
         address: A,
         sat: u64,
         request_id: Option<H256>,
+        fee_rate: u64,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, BitcoinError> {
         let tx = self
@@ -463,6 +464,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         &self,
         address: A,
         sat: u64,
+        _fee_rate: u64, // ignored in this impl
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, BitcoinError> {
         let mut transaction = MockBitcoinCore::generate_normal_transaction(&address, sat);
@@ -493,9 +495,10 @@ impl BitcoinCoreApi for MockBitcoinCore {
         &self,
         address: A,
         sat: u64,
+        fee_rate: u64,
         request_id: Option<H256>,
     ) -> Result<Txid, BitcoinError> {
-        let tx = self.create_transaction(address, sat, request_id).await?;
+        let tx = self.create_transaction(address, sat, fee_rate, request_id).await?;
         let txid = self.send_transaction(tx).await?;
         Ok(txid)
     }
@@ -504,10 +507,11 @@ impl BitcoinCoreApi for MockBitcoinCore {
         address: A,
         sat: u64,
         request_id: Option<H256>,
+        fee_rate: u64,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, BitcoinError> {
         let txid = self
-            .create_and_send_transaction(address, sat, request_id)
+            .create_and_send_transaction(address, sat, fee_rate, request_id)
             .await
             .unwrap();
         let metadata = self

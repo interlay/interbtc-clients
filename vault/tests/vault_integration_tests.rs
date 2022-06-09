@@ -108,7 +108,12 @@ async fn pay_redeem_from_vault_wallet(
                 let request = vault_provider.get_redeem_request(event.redeem_id).await.unwrap();
                 // step 1: create a spending transaction from some arbitrary address
                 let mut transaction = btc_rpc
-                    .create_transaction(request.btc_address, request.amount_btc as u64, Some(event.redeem_id))
+                    .create_transaction(
+                        request.btc_address,
+                        request.amount_btc as u64,
+                        1000,
+                        Some(event.redeem_id),
+                    )
                     .await
                     .unwrap();
                 let mut x = [3; 33];
@@ -216,7 +221,7 @@ async fn test_report_vault_theft_succeeds() {
 
             // step 1: create a spending transaction from some arbitrary address
             let mut transaction = btc_rpc
-                .create_transaction(BtcAddress::P2PKH(H160::from_slice(&[4; 20])), 1500, None)
+                .create_transaction(BtcAddress::P2PKH(H160::from_slice(&[4; 20])), 1500, 1000, None)
                 .await
                 .unwrap();
             // set the hash in the input script. Note: p2wpkh needs to start with 2 or 3
@@ -753,7 +758,13 @@ async fn test_cancellation_succeeds() {
                         for _ in 0u32..2 {
                             assert_ok!(
                                 btc_rpc
-                                    .send_to_address(BtcAddress::P2PKH(H160::from_slice(&[0; 20])), 100_000, None, 1)
+                                    .send_to_address(
+                                        BtcAddress::P2PKH(H160::from_slice(&[0; 20])),
+                                        100_000,
+                                        None,
+                                        1000,
+                                        1
+                                    )
                                     .await
                             );
                         }
@@ -814,6 +825,7 @@ async fn test_refund_succeeds() {
                     issue.vault_address,
                     (issue.amount + issue.fee) as u64 + over_payment,
                     None,
+                    1000,
                     0,
                 )
                 .await
@@ -895,6 +907,7 @@ async fn test_issue_overpayment_succeeds() {
                     issue.vault_address,
                     (issue.amount + issue.fee) as u64 * over_payment_factor as u64,
                     None,
+                    1000,
                     0,
                 )
                 .await
@@ -968,7 +981,7 @@ async fn test_automatic_issue_execution_succeeds() {
 
             assert_ok!(
                 btc_rpc
-                    .send_to_address(issue.vault_address, (issue.amount + issue.fee) as u64, None, 0)
+                    .send_to_address(issue.vault_address, (issue.amount + issue.fee) as u64, None, 1000, 0)
                     .await
             );
 
@@ -1042,7 +1055,13 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
 
             assert_ok!(
                 btc_rpc
-                    .send_to_address_with_many_outputs(issue.vault_address, (issue.amount + issue.fee) as u64, None, 0)
+                    .send_to_address_with_many_outputs(
+                        issue.vault_address,
+                        (issue.amount + issue.fee) as u64,
+                        None,
+                        1000,
+                        0
+                    )
                     .await
             );
 
@@ -1114,12 +1133,12 @@ async fn test_execute_open_requests_succeeds() {
         // send btc for redeem 0
         assert_ok!(
             btc_rpc
-                .send_to_address(address, redeems[0].amount_btc as u64, Some(redeem_ids[0]), 0)
+                .send_to_address(address, redeems[0].amount_btc as u64, Some(redeem_ids[0]), 1000, 0)
                 .await
         );
 
         let transaction = btc_rpc
-            .create_transaction(address, redeems[1].amount_btc as u64, Some(redeem_ids[1]))
+            .create_transaction(address, redeems[1].amount_btc as u64, 1000, Some(redeem_ids[1]))
             .await
             .unwrap()
             .transaction;
