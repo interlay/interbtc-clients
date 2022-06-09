@@ -105,8 +105,16 @@ pub async fn assert_issue(
 ) {
     let issue = parachain_rpc.request_issue(amount, vault_id).await.unwrap();
 
+    let fee_rate = 1000;
+
     let metadata = btc_rpc
-        .send_to_address(issue.vault_address, (issue.amount + issue.fee) as u64, None, 0)
+        .send_to_address(
+            issue.vault_address,
+            (issue.amount + issue.fee) as u64,
+            None,
+            fee_rate,
+            0,
+        )
         .await
         .unwrap();
 

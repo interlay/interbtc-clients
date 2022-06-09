@@ -108,8 +108,14 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
                 let wallet_name = format!(
                     "{}-{}-{}",
                     prefix,
-                    collateral_currency.inner().symbol(),
-                    wrapped_currency.inner().symbol()
+                    collateral_currency
+                        .inner()
+                        .map(|i| i.symbol().to_string())
+                        .unwrap_or_default(),
+                    wrapped_currency
+                        .inner()
+                        .map(|i| i.symbol().to_string())
+                        .unwrap_or_default(),
                 );
                 config_copy.new_client_with_network(Some(wallet_name), network_copy)
             };

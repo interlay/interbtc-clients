@@ -38,11 +38,11 @@ cfg_if::cfg_if! {
         const DEFAULT_SPEC_NAME: &str = "interlay-parachain";
         pub const SS58_PREFIX: u16 = 2032;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 15..=16;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 17..=17;
         const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
         pub const SS58_PREFIX: u16 = 2092;
     } else if #[cfg(feature = "parachain-metadata-testnet")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 6..=7;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 8..=8;
         const DEFAULT_SPEC_NAME: &str = "testnet-parachain";
         pub const SS58_PREFIX: u16 = 42;
     }

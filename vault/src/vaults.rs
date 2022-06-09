@@ -467,6 +467,7 @@ mod tests {
                 &self,
                 address: A,
                 sat: u64,
+                fee_rate: u64,
                 request_id: Option<H256>,
             ) -> Result<LockedTransaction, BitcoinError>;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
@@ -474,6 +475,7 @@ mod tests {
                 &self,
                 address: A,
                 sat: u64,
+                fee_rate: u64,
                 request_id: Option<H256>,
             ) -> Result<Txid, BitcoinError>;
             async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
@@ -481,6 +483,7 @@ mod tests {
                 address: A,
                 sat: u64,
                 request_id: Option<H256>,
+                fee_rate: u64,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;

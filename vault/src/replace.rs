@@ -38,7 +38,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                 };
                 tracing::info!("Received accept replace event: {:?}", event);
 
-                publish_expected_bitcoin_balance(&vault, parachain_rpc.clone()).await;
+                let _ = publish_expected_bitcoin_balance(&vault, parachain_rpc.clone()).await;
 
                 // within this event callback, we captured the arguments of listen_for_redeem_requests
                 // by reference. Since spawn requires static lifetimes, we will need to capture the
@@ -267,6 +267,7 @@ mod tests {
                 &self,
                 address: A,
                 sat: u64,
+                fee_rate: u64,
                 request_id: Option<H256>,
             ) -> Result<LockedTransaction, BitcoinError>;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
@@ -274,6 +275,7 @@ mod tests {
                 &self,
                 address: A,
                 sat: u64,
+                fee_rate: u64,
                 request_id: Option<H256>,
             ) -> Result<Txid, BitcoinError>;
             async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
@@ -281,6 +283,7 @@ mod tests {
                 address: A,
                 sat: u64,
                 request_id: Option<H256>,
+                fee_rate: u64,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;

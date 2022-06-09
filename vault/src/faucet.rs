@@ -65,7 +65,7 @@ pub async fn fund_and_register(
 
     let user_allowance_in_dot: u128 = get_faucet_allowance(connection.clone(), "user_allowance").await?;
     let registration_collateral = user_allowance_in_dot
-        .checked_mul(currency_id.inner().one())
+        .checked_mul(currency_id.inner()?.one())
         .ok_or(Error::ArithmeticOverflow)?
         .checked_sub(TX_FEES)
         .ok_or(Error::ArithmeticUnderflow)?;
@@ -79,7 +79,7 @@ pub async fn fund_and_register(
     // TODO: faucet allowance should return planck
     let vault_allowance_in_dot: u128 = get_faucet_allowance(connection.clone(), "vault_allowance").await?;
     let vault_allowance_in_planck = vault_allowance_in_dot
-        .checked_mul(currency_id.inner().one())
+        .checked_mul(currency_id.inner()?.one())
         .ok_or(Error::ArithmeticOverflow)?;
     let operational_collateral = vault_allowance_in_planck
         .checked_div(3)

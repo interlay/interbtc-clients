@@ -8,9 +8,10 @@ use futures::{
     try_join, TryStreamExt,
 };
 use runtime::{
-    BtcAddress, BtcRelayPallet, H256Le, InterBtcParachain, InterBtcRedeemRequest, InterBtcRefundRequest,
-    InterBtcReplaceRequest, IssuePallet, PrettyPrint, RedeemPallet, RedeemRequestStatus, RefundPallet, ReplacePallet,
-    ReplaceRequestStatus, RequestRefundEvent, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
+    BtcAddress, BtcRelayPallet, FixedPointNumber, FixedU128, H256Le, InterBtcParachain, InterBtcRedeemRequest,
+    InterBtcRefundRequest, InterBtcReplaceRequest, IssuePallet, OraclePallet, PrettyPrint, RedeemPallet,
+    RedeemRequestStatus, RefundPallet, ReplacePallet, ReplaceRequestStatus, RequestRefundEvent, SecurityPallet,
+    UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
 use service::{spawn_cancelable, ShutdownSender};
 use std::{collections::HashMap, convert::TryInto, time::Duration};
@@ -170,6 +171,16 @@ impl Request {
         }
     }
 
+    /// returns the fee rate in sat/vByte
+    async fn get_fee_rate<P: OraclePallet + Send + Sync>(&self, parachain_rpc: &P) -> Result<u64, Error> {
+        let fee_rate: FixedU128 = parachain_rpc.get_bitcoin_fees().await?;
+        Ok(fee_rate
+            .into_inner()
+            .checked_div(FixedU128::accuracy())
+            .ok_or(Error::ArithmeticUnderflow)?
+            .try_into()?)
+    }
+
     /// Makes the bitcoin transfer and executes the request
     pub async fn pay_and_execute<
         B: BitcoinCoreApi + Clone + Send + Sync + 'static,
@@ -179,6 +190,7 @@ impl Request {
             + RedeemPallet
             + SecurityPallet
             + VaultRegistryPallet
+            + OraclePallet
             + UtilFuncs
             + Clone
             + Send
@@ -201,7 +213,7 @@ impl Request {
         let tx_metadata = self
             .transfer_btc(&parachain_rpc, &vault.btc_rpc, num_confirmations, self.vault_id.clone())
             .await?;
-        update_bitcoin_metrics(&vault, tx_metadata.fee, self.fee_budget).await;
+        let _ = update_bitcoin_metrics(&vault, tx_metadata.fee, self.fee_budget).await;
         self.execute(parachain_rpc, tx_metadata).await
     }
 
@@ -216,7 +228,7 @@ impl Request {
     )]
     async fn transfer_btc<
         B: BitcoinCoreApi + Clone,
-        P: BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
+        P: OraclePallet + BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
     >(
         &self,
         parachain_rpc: &P,
@@ -224,8 +236,10 @@ impl Request {
         num_confirmations: u32,
         vault_id: VaultId,
     ) -> Result<TransactionMetadata, Error> {
+        let fee_rate = self.get_fee_rate(parachain_rpc).await?;
+
         let tx = btc_rpc
-            .create_transaction(self.btc_address, self.amount as u64, Some(self.hash))
+            .create_transaction(self.btc_address, self.amount as u64, fee_rate, Some(self.hash))
             .await?;
         let recipient = tx.recipient.clone();
         tracing::info!("Sending bitcoin to {}", recipient);
@@ -545,7 +559,7 @@ mod tests {
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
         AccountId, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError, ErrorCode, InterBtcRichBlockHeader,
-        InterBtcVault, StatusCode, Token, DOT, IBTC,
+        InterBtcVault, OracleKey, StatusCode, Token, DOT, IBTC,
     };
     use sp_core::H160;
     use std::collections::BTreeSet;
@@ -641,6 +655,17 @@ mod tests {
             async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, RuntimeError>;
             async fn get_current_active_block_number(&self) -> Result<u32, RuntimeError>;
         }
+
+        #[async_trait]
+        pub trait OraclePallet {
+            async fn get_exchange_rate(&self, currency_id: CurrencyId) -> Result<FixedU128, RuntimeError>;
+            async fn feed_values(&self, values: Vec<(OracleKey, FixedU128)>) -> Result<(), RuntimeError>;
+            async fn set_bitcoin_fees(&self, value: FixedU128) -> Result<(), RuntimeError>;
+            async fn get_bitcoin_fees(&self) -> Result<FixedU128, RuntimeError>;
+            async fn wrapped_to_collateral(&self, amount: u128, currency_id: CurrencyId) -> Result<u128, RuntimeError>;
+            async fn collateral_to_wrapped(&self, amount: u128, currency_id: CurrencyId) -> Result<u128, RuntimeError>;
+            async fn has_updated(&self, key: &OracleKey) -> Result<bool, RuntimeError>;
+        }
     }
 
     impl Clone for MockProvider {
@@ -676,10 +701,10 @@ mod tests {
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
             async fn get_mempool_transactions<'a>(&'a self) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(&self, txid: Txid, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
-            async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>) -> Result<LockedTransaction, BitcoinError>;
+            async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, fee_rate: u64, request_id: Option<H256>) -> Result<LockedTransaction, BitcoinError>;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
-            async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>) -> Result<Txid, BitcoinError>;
-            async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
+            async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, fee_rate: u64, request_id: Option<H256>) -> Result<Txid, BitcoinError>;
+            async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>, fee_rate: u64, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;
             async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError> where P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), BitcoinError>;
@@ -759,6 +784,10 @@ mod tests {
         ) -> (Request, MockProvider, VaultData<MockBitcoin>) {
             let mut parachain_rpc = MockProvider::default();
             parachain_rpc
+                .expect_get_bitcoin_fees()
+                .returning(move || Ok(FixedU128::from(1000)));
+
+            parachain_rpc
                 .expect_get_current_active_block_number()
                 .returning(move || Ok(current_parachain_height));
             parachain_rpc.expect_execute_redeem().returning(|_, _, _| Ok(()));
@@ -770,18 +799,20 @@ mod tests {
                 .expect_get_block_count()
                 .returning(move || Ok(current_bitcoin_height as u64));
 
-            btc_rpc.expect_create_transaction::<BtcAddress>().returning(|_, _, _| {
-                Ok(LockedTransaction::new(
-                    Transaction {
-                        version: 0,
-                        lock_time: 0,
-                        input: vec![],
-                        output: vec![],
-                    },
-                    Default::default(),
-                    None,
-                ))
-            });
+            btc_rpc
+                .expect_create_transaction::<BtcAddress>()
+                .returning(|_, _, _, _| {
+                    Ok(LockedTransaction::new(
+                        Transaction {
+                            version: 0,
+                            lock_time: 0,
+                            input: vec![],
+                            output: vec![],
+                        },
+                        Default::default(),
+                        None,
+                    ))
+                });
 
             btc_rpc.expect_send_transaction().returning(|_| Ok(Txid::default()));
 
@@ -895,6 +926,9 @@ mod tests {
     async fn should_pay_and_execute_replace() {
         let mut parachain_rpc = MockProvider::default();
         parachain_rpc
+            .expect_get_bitcoin_fees()
+            .returning(move || Ok(FixedU128::from(1000)));
+        parachain_rpc
             .expect_get_current_active_block_number()
             .times(1)
             .returning(|| Ok(50));
@@ -908,18 +942,20 @@ mod tests {
             .returning(|_, _| Ok(()));
 
         let mut btc_rpc = MockBitcoin::default();
-        btc_rpc.expect_create_transaction::<BtcAddress>().returning(|_, _, _| {
-            Ok(LockedTransaction::new(
-                Transaction {
-                    version: 0,
-                    lock_time: 0,
-                    input: vec![],
-                    output: vec![],
-                },
-                Default::default(),
-                None,
-            ))
-        });
+        btc_rpc
+            .expect_create_transaction::<BtcAddress>()
+            .returning(|_, _, _, _| {
+                Ok(LockedTransaction::new(
+                    Transaction {
+                        version: 0,
+                        lock_time: 0,
+                        input: vec![],
+                        output: vec![],
+                    },
+                    Default::default(),
+                    None,
+                ))
+            });
 
         btc_rpc.expect_send_transaction().returning(|_| Ok(Txid::default()));
 
