@@ -13,11 +13,7 @@ use runtime::{
     VaultStatus,
 };
 use service::Error as ServiceError;
-use std::{
-    collections::{HashMap, HashSet},
-    fmt,
-    sync::Arc,
-};
+use std::{collections::HashMap, fmt, sync::Arc};
 use tokio::sync::RwLock;
 
 #[derive(Default, Debug)]
@@ -43,31 +39,6 @@ impl Vaults {
         let vaults = self.0.read().await;
         vaults.get(&key).cloned()
     }
-
-    /// Returns the position of a given vault in a randomised ordering based on a
-    /// piece of seed data.
-    ///
-    /// # Arguments
-    /// * `data` - the seed used as a basis for the ordering (for example, an issue_id)
-    /// * `account_id` - the AccountId we wish to order relative to the list of vaults
-    pub async fn get_random_position(&self, data: &[u8; 32], account_id: &AccountId) -> usize {
-        fn hash_vault(data: &[u8; 32], account_id: &AccountId) -> sha256::Hash {
-            let account_id: [u8; 32] = account_id.clone().into();
-            let xor = data
-                .zip(account_id) // will need to refactor if we don't want experimental array_zip
-                .map(|(a, b)| a ^ b);
-            sha256::Hash::hash(&xor)
-        }
-
-        let hash = hash_vault(data, account_id);
-        let mut hash_set = HashSet::new(); // for deduping
-        self.0
-            .read()
-            .await
-            .iter()
-            .filter(|&(_, vault_id)| hash_set.insert(hash_vault(data, &vault_id.account_id) < hash))
-            .count()
-    }
 }
 
 #[async_trait]
@@ -79,12 +50,15 @@ pub trait RandomDelay {
 pub struct OrderedVaultsDelay {
     btc_parachain: InterBtcParachain,
     /// Order relative to this set of vaults
-    vaults: Arc<Vaults>,
+    vaults: Vec<AccountId>,
 }
 
 impl OrderedVaultsDelay {
-    pub fn new(btc_parachain: InterBtcParachain, vaults: Arc<Vaults>) -> Self {
-        Self { btc_parachain, vaults }
+    pub async fn new(btc_parachain: InterBtcParachain, vault_list: Vec<AccountId>) -> Self {
+        Self {
+            btc_parachain,
+            vaults: vault_list,
+        }
     }
 }
 
@@ -99,17 +73,34 @@ impl fmt::Debug for OrderedVaultsDelay {
 
 #[async_trait]
 impl RandomDelay for OrderedVaultsDelay {
+    /// Calculates a delay based on randomly ordering the vaults by hashing their
+    /// account ID with a piece of seed data.
+    /// Then awaits a corresponding amount of blocks on the parachain, with
+    /// logarithmic falloff. E.g. first vault in the ordering waits 0 blocks,
+    /// vaults 2-3 wait 1 block, vaults 4-7 wait 2 blocks, 8-15 wait 3 blocks etc.
+    ///
+    /// # Arguments
+    /// * `data` - the seed used as a basis for the ordering (for example, an issue_id)
     async fn delay(&self, seed_data: &[u8; 32]) -> Result<(), RuntimeError> {
+        fn hash_vault(data: &[u8; 32], account_id: &AccountId) -> sha256::Hash {
+            let account_id: [u8; 32] = account_id.clone().into();
+            let xor = data.zip(account_id).map(|(a, b)| a ^ b);
+            sha256::Hash::hash(&xor)
+        }
+
+        let self_hash = hash_vault(seed_data, self.btc_parachain.get_account_id());
+
         let random_ordering = self
             .vaults
-            .get_random_position(seed_data, self.btc_parachain.get_account_id())
-            .await;
+            .iter()
+            .filter(|account_id| hash_vault(seed_data, account_id) < self_hash)
+            .count();
         let delay: u32 = (random_ordering + 1).log2();
         self.btc_parachain.delay_for_blocks(delay).await
     }
 }
 
-/// For testing only
+#[cfg(test)]
 #[async_trait]
 impl RandomDelay for () {
     async fn delay(&self, _seed_data: &[u8; 32]) -> Result<(), RuntimeError> {
@@ -135,28 +126,6 @@ pub async fn monitor_btc_txs<
         Ok(_) => Ok(()),
         Err(err) => Err(ServiceError::RuntimeError(err)),
     }
-}
-
-pub(crate) async fn initialize_active_vaults<P: VaultRegistryPallet + Send + Sync>(
-    btc_parachain: P,
-) -> Result<Arc<Vaults>, Error> {
-    tracing::info!("Fetching all active vaults...");
-    let vaults = btc_parachain
-        .get_all_vaults()
-        .await?
-        .into_iter()
-        .flat_map(|vault| {
-            vault
-                .wallet
-                .addresses
-                .iter()
-                .map(|addr| (*addr, vault.id.clone()))
-                .collect::<Vec<_>>()
-        })
-        .collect();
-
-    // store vaults in Arc<RwLock>
-    Ok(Arc::new(Vaults::from(vaults)))
 }
 
 pub struct BitcoinMonitor<

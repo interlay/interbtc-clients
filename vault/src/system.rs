@@ -5,7 +5,7 @@ use crate::{
     metrics::{poll_metrics, publish_tokio_metrics, PerCurrencyMetrics},
     relay::run_relayer,
     service::*,
-    vaults::{initialize_active_vaults, OrderedVaultsDelay, RandomDelay, Vaults},
+    vaults::{OrderedVaultsDelay, RandomDelay, Vaults},
     Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
@@ -567,8 +567,14 @@ impl VaultService {
         let oldest_issue_btc_height =
             issue::initialize_issue_set(&self.btc_rpc_master_wallet, &self.btc_parachain, &issue_set).await?;
 
-        let vaults = initialize_active_vaults(self.btc_parachain.clone()).await?;
-        let random_delay = OrderedVaultsDelay::new(self.btc_parachain.clone(), vaults.clone());
+        let vaults = self
+            .btc_parachain
+            .get_all_vaults()
+            .await?
+            .into_iter()
+            .map(|vault| vault.id.account_id)
+            .collect();
+        let random_delay = OrderedVaultsDelay::new(self.btc_parachain.clone(), vaults).await;
 
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
         let (replace_event_tx, replace_event_rx) = mpsc::channel::<Event>(16);
@@ -737,7 +743,7 @@ impl VaultService {
         ];
 
         if !self.config.no_vault_theft_report {
-            tasks.extend(self.btc_monitor_tasks(vaults.clone(), random_delay.clone()).await?)
+            tasks.extend(self.btc_monitor_tasks(random_delay.clone()).await?)
         }
 
         run_and_monitor_tasks(self.shutdown.clone(), tasks).await;
@@ -824,9 +830,27 @@ impl VaultService {
 
     async fn btc_monitor_tasks<RD: RandomDelay + Send + Sync + 'static>(
         &self,
-        vaults: Arc<Vaults>,
         random_delay: RD,
     ) -> Result<Vec<(&str, ServiceTask)>, Error> {
+        tracing::info!("Fetching all active vaults...");
+        let vaults = self
+            .btc_parachain
+            .get_all_vaults()
+            .await?
+            .into_iter()
+            .flat_map(|vault| {
+                vault
+                    .wallet
+                    .addresses
+                    .iter()
+                    .map(|addr| (*addr, vault.id.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
+        // store vaults in Arc<RwLock>
+        let vaults = Arc::new(Vaults::from(vaults));
+
         // scan from custom height or the current tip
         let bitcoin_theft_start_height = self
             .config

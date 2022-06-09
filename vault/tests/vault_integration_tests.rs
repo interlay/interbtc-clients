@@ -15,8 +15,8 @@ use runtime::{
 };
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
-use std::{collections::HashMap, sync::Arc, time::Duration};
-use vault::{self, Event as CancellationEvent, IssueRequests, OrderedVaultsDelay, VaultIdManager, Vaults};
+use std::{sync::Arc, time::Duration};
+use vault::{self, Event as CancellationEvent, IssueRequests, OrderedVaultsDelay, VaultIdManager};
 
 const TIMEOUT: Duration = Duration::from_secs(90);
 
@@ -198,7 +198,7 @@ async fn test_report_vault_theft_succeeds() {
     );
 
     let vaults = Arc::new(vault::Vaults::from(Default::default()));
-    let random_delay = OrderedVaultsDelay::new(relayer_provider.clone(), vaults.clone());
+    let random_delay = OrderedVaultsDelay::new(relayer_provider.clone(), vec![]).await;
 
     test_service(
         join(
@@ -289,7 +289,7 @@ async fn test_report_vault_double_payment_succeeds() {
         assert_issue(&user_provider, &btc_rpc, &vault_id, issue_amount).await;
 
         let vaults = Arc::new(vault::Vaults::from(Default::default()));
-        let random_delay = OrderedVaultsDelay::new(relayer_provider.clone(), vaults.clone());
+        let random_delay = OrderedVaultsDelay::new(relayer_provider.clone(), vec![]).await;
 
         // we make the vault start two listen_for_redeem_requests processes, this way there will be a double payment
         // that should be reported
@@ -996,11 +996,11 @@ async fn test_automatic_issue_execution_succeeds() {
         };
 
         let issue_set = Arc::new(IssueRequests::new());
-        let vaults = Arc::new(Vaults::from(HashMap::from([
-            (BtcAddress::default(), vault1_id_clone),
-            (BtcAddress::default(), vault2_id),
-        ]))); // BTC address used does not matter here
-        let random_delay = OrderedVaultsDelay::new(relayer_provider.clone(), vaults.clone());
+        let random_delay = OrderedVaultsDelay::new(
+            relayer_provider.clone(),
+            vec![vault1_id_clone.account_id, vault2_id.account_id],
+        )
+        .await;
         let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
         let service = join(
             vault::service::listen_for_issue_requests(
@@ -1083,11 +1083,11 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
         };
 
         let issue_set = Arc::new(IssueRequests::new());
-        let vaults = Arc::new(Vaults::from(HashMap::from([
-            (BtcAddress::default(), vault1_id_clone),
-            (BtcAddress::default(), vault2_id),
-        ]))); // BTC address used does not matter here
-        let random_delay = OrderedVaultsDelay::new(relayer_provider.clone(), vaults.clone());
+        let random_delay = OrderedVaultsDelay::new(
+            relayer_provider.clone(),
+            vec![vault1_id_clone.account_id, vault2_id.account_id],
+        )
+        .await;
         let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
         let service = join(
             vault::service::listen_for_issue_requests(
