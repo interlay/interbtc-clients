@@ -54,11 +54,14 @@ pub struct OrderedVaultsDelay {
 }
 
 impl OrderedVaultsDelay {
-    pub async fn new(btc_parachain: InterBtcParachain, vault_list: Vec<AccountId>) -> Self {
-        Self {
-            btc_parachain,
-            vaults: vault_list,
-        }
+    pub async fn new(btc_parachain: InterBtcParachain) -> Result<Self, RuntimeError> {
+        let vaults = btc_parachain
+            .get_all_vaults()
+            .await?
+            .into_iter()
+            .map(|vault| vault.id.account_id)
+            .collect();
+        Ok(Self { btc_parachain, vaults })
     }
 }
 

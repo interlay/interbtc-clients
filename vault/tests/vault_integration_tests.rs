@@ -203,7 +203,7 @@ async fn test_report_vault_theft_succeeds() {
     );
 
     let vaults = Arc::new(vault::Vaults::from(Default::default()));
-    let random_delay = OrderedVaultsDelay::new(relayer_provider.clone(), vec![]).await;
+    let random_delay = OrderedVaultsDelay::new(relayer_provider.clone()).await.unwrap();
 
     test_service(
         join(
@@ -294,7 +294,8 @@ async fn test_report_vault_double_payment_succeeds() {
         assert_issue(&user_provider, &btc_rpc, &vault_id, issue_amount).await;
 
         let vaults = Arc::new(vault::Vaults::from(Default::default()));
-        let random_delay = OrderedVaultsDelay::new(relayer_provider.clone(), vec![]).await;
+
+        let random_delay = OrderedVaultsDelay::new(relayer_provider.clone()).await.unwrap();
 
         // we make the vault start two listen_for_redeem_requests processes, this way there will be a double payment
         // that should be reported
@@ -990,7 +991,6 @@ async fn test_automatic_issue_execution_succeeds() {
                 .await
         );
 
-        let vault1_id_clone = vault1_id.clone();
         let fut_user = async {
             let issue = user_provider.request_issue(issue_amount, &vault1_id).await.unwrap();
             tracing::warn!("REQUESTED ISSUE: {:?}", issue);
@@ -1009,11 +1009,7 @@ async fn test_automatic_issue_execution_succeeds() {
         };
 
         let issue_set = Arc::new(IssueRequests::new());
-        let random_delay = OrderedVaultsDelay::new(
-            relayer_provider.clone(),
-            vec![vault1_id_clone.account_id, vault2_id.account_id],
-        )
-        .await;
+        let random_delay = OrderedVaultsDelay::new(relayer_provider.clone()).await.unwrap();
         let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
         let service = join(
             vault::service::listen_for_issue_requests(
@@ -1079,7 +1075,6 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
                 .await
         );
 
-        let vault1_id_clone = vault1_id.clone();
         let fut_user = async {
             let issue = user_provider.request_issue(issue_amount, &vault1_id).await.unwrap();
             tracing::warn!("REQUESTED ISSUE: {:?}", issue);
@@ -1102,11 +1097,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
         };
 
         let issue_set = Arc::new(IssueRequests::new());
-        let random_delay = OrderedVaultsDelay::new(
-            relayer_provider.clone(),
-            vec![vault1_id_clone.account_id, vault2_id.account_id],
-        )
-        .await;
+        let random_delay = OrderedVaultsDelay::new(relayer_provider.clone()).await.unwrap();
         let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
         let service = join(
             vault::service::listen_for_issue_requests(

@@ -567,14 +567,7 @@ impl VaultService {
         let oldest_issue_btc_height =
             issue::initialize_issue_set(&self.btc_rpc_master_wallet, &self.btc_parachain, &issue_set).await?;
 
-        let vaults = self
-            .btc_parachain
-            .get_all_vaults()
-            .await?
-            .into_iter()
-            .map(|vault| vault.id.account_id)
-            .collect();
-        let random_delay = OrderedVaultsDelay::new(self.btc_parachain.clone(), vaults).await;
+        let random_delay = OrderedVaultsDelay::new(self.btc_parachain.clone()).await?;
 
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
         let (replace_event_tx, replace_event_rx) = mpsc::channel::<Event>(16);
