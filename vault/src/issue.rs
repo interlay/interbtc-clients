@@ -2,7 +2,7 @@ use crate::{
     metrics::publish_expected_bitcoin_balance, vaults::RandomDelay, Error, Event, IssueRequests, VaultIdManager,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
-use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt};
+use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt, TryFutureExt};
 use runtime::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, ExecuteIssueEvent, H256Le, InterBtcParachain,
     IssuePallet, IssueRequestStatus, PrettyPrint, RequestIssueEvent, UtilFuncs, VaultId, H256,
@@ -40,7 +40,10 @@ pub(crate) async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync
 
 /// execute issue requests on best-effort (i.e. don't retry on error),
 /// returns an error if stream ends, otherwise runs forever
-pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static, RD: RandomDelay>(
+pub async fn process_issue_requests<
+    B: BitcoinCoreApi + Clone + Send + Sync + 'static,
+    RD: RandomDelay + Clone + Send + Sync + 'static,
+>(
     bitcoin_core: B,
     btc_parachain: InterBtcParachain,
     issue_set: Arc<IssueRequests>,
@@ -52,19 +55,20 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
         bitcoin::stream_in_chain_transactions(bitcoin_core.clone(), btc_start_height, num_confirmations).await;
 
     while let Some(Ok((block_hash, transaction))) = stream.next().await {
-        if let Err(e) = process_transaction_and_execute_issue(
-            &bitcoin_core,
-            &btc_parachain,
-            &issue_set,
-            num_confirmations,
-            block_hash,
-            transaction,
-            &random_delay,
-        )
-        .await
-        {
-            tracing::warn!("Failed to execute issue request: {}", e.to_string());
-        }
+        tokio::spawn(
+            process_transaction_and_execute_issue(
+                bitcoin_core.clone(),
+                btc_parachain.clone(),
+                issue_set.clone(),
+                num_confirmations,
+                block_hash,
+                transaction,
+                random_delay.clone(),
+            )
+            .map_err(|e| {
+                tracing::warn!("Failed to execute issue request: {}", e.to_string());
+            }),
+        );
     }
 
     // stream closed, restart client
@@ -116,14 +120,17 @@ fn chunks(first: usize, last: usize) -> impl Iterator<Item = (usize, usize)> {
 }
 
 /// execute issue requests with a matching Bitcoin payment
-async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send + Sync + 'static, RD: RandomDelay>(
-    bitcoin_core: &B,
-    btc_parachain: &InterBtcParachain,
-    issue_set: &Arc<IssueRequests>,
+async fn process_transaction_and_execute_issue<
+    B: BitcoinCoreApi + Clone + Send + Sync + 'static,
+    RD: RandomDelay + Clone + Send + Sync + 'static,
+>(
+    bitcoin_core: B,
+    btc_parachain: InterBtcParachain,
+    issue_set: Arc<IssueRequests>,
     num_confirmations: u32,
     block_hash: BlockHash,
     transaction: Transaction,
-    random_delay: &RD,
+    random_delay: RD,
 ) -> Result<(), Error> {
     let addresses = transaction.extract_output_addresses::<BtcAddress>();
     let mut issue_requests = issue_set.lock().await;
