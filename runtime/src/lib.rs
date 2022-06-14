@@ -26,7 +26,11 @@ pub use prometheus;
 pub use retry::{notify_retry, RetryPolicy};
 #[cfg(all(
     feature = "testing-utils",
-    any(feature = "standalone-metadata", feature = "parachain-metadata-testnet")
+    any(
+        feature = "standalone-metadata",
+        feature = "parachain-metadata-interlay-testnet"
+        feature = "parachain-metadata-kintsugi-testnet"
+    )
 ))]
 pub use rpc::SudoPallet;
 pub use rpc::{
@@ -71,9 +75,16 @@ pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
     )
 )]
 #[cfg_attr(
-    feature = "parachain-metadata-testnet",
+    feature = "parachain-metadata-interlay-testnet",
     subxt(
-        runtime_metadata_path = "metadata-parachain-testnet.scale",
+        runtime_metadata_path = "metadata-parachain-interlay-testnet.scale",
+        generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
+    )
+)]
+#[cfg_attr(
+    feature = "parachain-metadata-kintsugi-testnet",
+    subxt(
+        runtime_metadata_path = "metadata-parachain-kintsugi-testnet.scale",
         generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]

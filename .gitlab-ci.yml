@@ -79,7 +79,8 @@ build-clients:
               METADATA:
                 - parachain-metadata-interlay
                 - parachain-metadata-kintsugi
-                - parachain-metadata-testnet
+                - parachain-metadata-interlay-testnet
+                - parachain-metadata-kintsugi-testnet
                 - standalone-metadata
 #            - PLATFORM: x86_64-pc-windows-gnu
 #              FILE_EXTENSION: [".exe"]
@@ -99,7 +100,8 @@ build-docker-images:
               METADATA:
                 - parachain-metadata-interlay
                 - parachain-metadata-kintsugi
-                - parachain-metadata-testnet
+                - parachain-metadata-interlay-testnet
+                - parachain-metadata-kintsugi-testnet
                 - standalone-metadata
     image:
         name: gcr.io/kaniko-project/executor:v1.7.0-debug

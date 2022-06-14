@@ -69,7 +69,8 @@ curl -sX POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","meth
 To build, one of the following mutually-exclusive features must be specified:
 - parachain-metadata-interlay
 - parachain-metadata-kintsugi
-- parachain-metadata-testnet
+- parachain-metadata-interlay-testnet
+- parachain-metadata-kintsugi-testnet
 - standalone-metadata
 
 The default command for building the clients, assuming a standalone chain, is:

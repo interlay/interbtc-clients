@@ -6,7 +6,11 @@ use crate::{
     types::*,
     AccountId, CurrencyId, Error, InterBtcRuntime, InterBtcSigner, RetryPolicy, RichH256Le, SubxtError,
 };
-#[cfg(any(feature = "standalone-metadata", feature = "parachain-metadata-testnet"))]
+#[cfg(any(
+    feature = "standalone-metadata",
+    feature = "parachain-metadata-interlay-testnet"
+    feature = "parachain-metadata-kintsugi-testnet"
+))]
 use crate::{BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CONFIRMATIONS};
 use async_trait::async_trait;
 use codec::Encode;
@@ -41,7 +45,11 @@ cfg_if::cfg_if! {
         const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 17..=17;
         const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
         pub const SS58_PREFIX: u16 = 2092;
-    } else if #[cfg(feature = "parachain-metadata-testnet")] {
+    } else if #[cfg(feature = "parachain-metadata-interlay-testnet")] {
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 8..=8;
+        const DEFAULT_SPEC_NAME: &str = "testnet-interlay";
+        pub const SS58_PREFIX: u16 = 42;
+    }  else if #[cfg(feature = "parachain-metadata-kintsugi-testnet")] {
         const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 8..=8;
         const DEFAULT_SPEC_NAME: &str = "testnet-parachain";
         pub const SS58_PREFIX: u16 = 42;
@@ -1704,7 +1712,11 @@ pub trait SudoPallet {
     async fn set_replace_period(&self, period: u32) -> Result<(), Error>;
 }
 
-#[cfg(any(feature = "standalone-metadata", feature = "parachain-metadata-testnet"))]
+#[cfg(any(
+    feature = "standalone-metadata",
+    feature = "parachain-metadata-interlay-testnet"
+    feature = "parachain-metadata-kintsugi-testnet"
+))]
 #[async_trait]
 impl SudoPallet for InterBtcParachain {
     async fn sudo(&self, call: EncodedCall) -> Result<(), Error> {
