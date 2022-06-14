@@ -219,7 +219,7 @@ async fn main() -> Result<(), Error> {
                     BTC_CURRENCY
                 )));
                 if let Some(api_key) = &maybe_api_key {
-                    url.query_pairs_mut().append_pair(COINGECKO_API_KEY_PARAMETER, &api_key);
+                    url.query_pairs_mut().append_pair(COINGECKO_API_KEY_PARAMETER, api_key);
                 }
                 (*currency_id, UrlOrDefault::Url(url))
             })

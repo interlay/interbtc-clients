@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 pub mod cli;
 
 mod conn;
@@ -28,7 +30,7 @@ pub use retry::{notify_retry, RetryPolicy};
     feature = "testing-utils",
     any(
         feature = "standalone-metadata",
-        feature = "parachain-metadata-interlay-testnet"
+        feature = "parachain-metadata-interlay-testnet",
         feature = "parachain-metadata-kintsugi-testnet"
     )
 ))]

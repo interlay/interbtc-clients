@@ -111,9 +111,9 @@ mod metadata_aliases {
     #[cfg(feature = "parachain-metadata-kintsugi")]
     pub type EncodedCall = metadata::runtime_types::kintsugi_runtime_parachain::Call;
     #[cfg(feature = "parachain-metadata-interlay-testnet")]
-    pub type EncodedCall = metadata::runtime_types::interlay_testnet_runtime_parachain::Call;
+    pub type EncodedCall = metadata::runtime_types::testnet_interlay_runtime_parachain::Call;
     #[cfg(feature = "parachain-metadata-kintsugi-testnet")]
-    pub type EncodedCall = metadata::runtime_types::kintsugi_testnet_runtime_parachain::Call;
+    pub type EncodedCall = metadata::runtime_types::testnet_kintsugi_runtime_parachain::Call;
     #[cfg(feature = "standalone-metadata")]
     pub type EncodedCall = metadata::runtime_types::interbtc_runtime_standalone::Call;
 

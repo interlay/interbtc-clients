@@ -8,7 +8,7 @@ use crate::{
 };
 #[cfg(any(
     feature = "standalone-metadata",
-    feature = "parachain-metadata-interlay-testnet"
+    feature = "parachain-metadata-interlay-testnet",
     feature = "parachain-metadata-kintsugi-testnet"
 ))]
 use crate::{BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CONFIRMATIONS};
@@ -98,8 +98,8 @@ impl InterBtcParachain {
             log::info!("transaction_version={}", runtime_version.transaction_version);
         } else {
             return Err(Error::InvalidSpecVersion(
-                DEFAULT_SPEC_VERSION.start().clone(),
-                DEFAULT_SPEC_VERSION.end().clone(),
+                *DEFAULT_SPEC_VERSION.start(),
+                *DEFAULT_SPEC_VERSION.end(),
                 runtime_version.spec_version,
             ));
         }
@@ -1714,7 +1714,7 @@ pub trait SudoPallet {
 
 #[cfg(any(
     feature = "standalone-metadata",
-    feature = "parachain-metadata-interlay-testnet"
+    feature = "parachain-metadata-interlay-testnet",
     feature = "parachain-metadata-kintsugi-testnet"
 ))]
 #[async_trait]
