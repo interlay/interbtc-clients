@@ -12,7 +12,14 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
-#[cfg(all(feature = "testing-utils", feature = "standalone-metadata"))]
+#[cfg(all(
+    feature = "testing-utils",
+    any(
+        feature = "standalone-metadata",
+        feature = "parachain-metadata-interlay-testnet",
+        feature = "parachain-metadata-kintsugi-testnet"
+    )
+))]
 pub mod integration;
 
 use codec::{Decode, Encode};

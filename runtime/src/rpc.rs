@@ -1734,6 +1734,7 @@ impl SudoPallet for InterBtcParachain {
     }
 
     async fn set_storage<V: Encode + Send + Sync>(&self, module: &str, key: &str, value: V) -> Result<(), Error> {
+        println!("setting {}::{}", module, key);
         let module = subxt::sp_core::twox_128(module.as_bytes());
         let item = subxt::sp_core::twox_128(key.as_bytes());
 

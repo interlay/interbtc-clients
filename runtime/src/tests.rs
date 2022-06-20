@@ -1,4 +1,11 @@
-#![cfg(all(test, feature = "standalone-metadata"))]
+#![cfg(all(
+    test,
+    any(
+        feature = "standalone-metadata",
+        feature = "parachain-metadata-interlay-testnet",
+        feature = "parachain-metadata-kintsugi-testnet"
+    )
+))]
 
 const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
 
@@ -39,8 +46,10 @@ async fn set_exchange_rate(client: SubxtClient) {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_getters() {
+    // env_logger::init();
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    println!("hello");
 
     tokio::join!(
         async {

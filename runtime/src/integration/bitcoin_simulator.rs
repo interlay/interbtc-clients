@@ -1,4 +1,11 @@
-#![cfg(all(feature = "testing-utils", feature = "standalone-metadata"))]
+#![cfg(all(
+    feature = "testing-utils",
+    any(
+        feature = "standalone-metadata",
+        feature = "parachain-metadata-interlay-testnet",
+        feature = "parachain-metadata-kintsugi-testnet"
+    )
+))]
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]

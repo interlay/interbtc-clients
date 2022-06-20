@@ -1,4 +1,11 @@
-#![cfg(all(feature = "testing-utils", feature = "standalone-metadata"))]
+#![cfg(all(
+    feature = "testing-utils",
+    any(
+        feature = "standalone-metadata",
+        feature = "parachain-metadata-interlay-testnet",
+        feature = "parachain-metadata-kintsugi-testnet"
+    )
+))]
 
 mod bitcoin_simulator;
 
@@ -60,7 +67,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
             path: tmp.path().join("keystore"),
             password: None,
         },
-        chain_spec: interbtc::chain_spec::development_config(),
+        chain_spec: interbtc::chain_spec::testnet_kintsugi::development_config(2121u32.into()),
         role: Role::Authority(key),
         telemetry: None,
         wasm_method: WasmExecutionMethod::Compiled,
@@ -71,7 +78,12 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
     let mut service_config = config.into_service_config();
     service_config.offchain_worker.enabled = true;
 
-    let (task_manager, rpc_handlers) = interbtc::service::new_full(service_config).unwrap();
+    let (task_manager, rpc_handlers) = interbtc::service::start_instant::<
+        interbtc_runtime::RuntimeApi,
+        interbtc::service::TestnetKintsugiRuntimeExecutor,
+    >(service_config)
+    .await
+    .unwrap();
 
     let client = SubxtClient::new(task_manager, rpc_handlers);
 
