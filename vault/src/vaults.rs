@@ -103,9 +103,11 @@ impl RandomDelay for OrderedVaultsDelay {
     }
 }
 
-#[cfg(test)]
+#[derive(Clone, Debug)]
+pub struct ZeroDelay;
+
 #[async_trait]
-impl RandomDelay for () {
+impl RandomDelay for ZeroDelay {
     async fn delay(&self, _seed_data: &[u8; 32]) -> Result<(), RuntimeError> {
         Ok(())
     }
@@ -573,7 +575,7 @@ mod tests {
         let mut bitcoin_core = MockBitcoin::default();
         bitcoin_core.expect_find_duplicate_payments().returning(|_| Ok(vec![]));
 
-        let monitor = BitcoinMonitor::new(bitcoin_core, parachain, (), 0, Arc::new(Vaults::default()));
+        let monitor = BitcoinMonitor::new(bitcoin_core, parachain, ZeroDelay, 0, Arc::new(Vaults::default()));
 
         let block_hash = BlockHash::from_slice(&[0; 32]).unwrap();
         monitor
@@ -605,7 +607,7 @@ mod tests {
         });
         btc_rpc.expect_get_proof().once().returning(|_, _| Ok(vec![]));
 
-        let monitor = BitcoinMonitor::new(btc_rpc, parachain, (), 0, Arc::new(Vaults::default()));
+        let monitor = BitcoinMonitor::new(btc_rpc, parachain, ZeroDelay, 0, Arc::new(Vaults::default()));
 
         let block_hash = BlockHash::from_slice(&[0; 32]).unwrap();
         monitor

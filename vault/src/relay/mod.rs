@@ -4,7 +4,7 @@ use service::Error as ServiceError;
 use std::{fmt::Debug, time::Duration};
 use tokio::time::sleep;
 
-use crate::vaults::RandomDelay;
+use crate::vaults::{RandomDelay, ZeroDelay};
 
 mod backing;
 mod error;
@@ -267,7 +267,7 @@ mod tests {
 
         async fn submit_block_header_batch(&self, headers: Vec<Vec<u8>>) -> Result<(), Error> {
             for header in headers {
-                self.submit_block_header(header.to_vec(), ()).await?;
+                self.submit_block_header(header.to_vec(), ZeroDelay).await?;
             }
             Ok(())
         }
@@ -337,10 +337,10 @@ mod tests {
         assert_eq!(issuing.is_block_stored(make_hash("a")).await, Ok(true));
         assert_eq!(issuing.is_block_stored(make_hash("x")).await, Ok(false));
         assert_eq!(
-            issuing.submit_block_header(make_hash("a"), ()).await,
+            issuing.submit_block_header(make_hash("a"), ZeroDelay).await,
             Err(Error::BlockExists)
         );
-        assert_eq!(issuing.submit_block_header(make_hash("d"), ()).await, Ok(()));
+        assert_eq!(issuing.submit_block_header(make_hash("d"), ZeroDelay).await, Ok(()));
         assert_eq!(issuing.get_best_height().await, Ok(5));
     }
 
@@ -385,7 +385,7 @@ mod tests {
                 interval: None,
                 btc_confirmations: 0,
             },
-            (),
+            ZeroDelay,
         );
 
         assert_eq!(runner.issuing.get_best_height().await.unwrap(), 4);
@@ -407,7 +407,7 @@ mod tests {
                 interval: None,
                 btc_confirmations: 0,
             },
-            (),
+            ZeroDelay,
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -441,7 +441,7 @@ mod tests {
                 interval: None,
                 btc_confirmations: 0,
             },
-            (),
+            ZeroDelay,
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -471,7 +471,7 @@ mod tests {
                 max_batch_size: 16,
                 btc_confirmations: 1,
             },
-            (),
+            ZeroDelay,
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -504,7 +504,7 @@ mod tests {
                 interval: Some(Duration::from_secs(0)),
                 btc_confirmations: 1,
             },
-            (),
+            ZeroDelay,
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -538,7 +538,7 @@ mod tests {
                 interval: Some(Duration::from_secs(0)),
                 btc_confirmations: 2,
             },
-            (),
+            ZeroDelay,
         );
 
         let height_before = runner.issuing.get_best_height().await?;
