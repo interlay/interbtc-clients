@@ -107,7 +107,7 @@ async fn test_subxt_processing_events_after_dispatch_error() {
     let invalid_oracle = setup_provider(client, AccountKeyring::Dave).await;
 
     let event_listener =
-        crate::integration::assert_event::<FeedValuesEvent, _>(Duration::from_secs(60), parachain_rpc.clone(), |_| {
+        crate::integration::assert_event::<FeedValuesEvent, _>(Duration::from_secs(80), parachain_rpc.clone(), |_| {
             true
         });
 

@@ -80,9 +80,12 @@ impl SubxtClient {
                     async move {
                         let (resp, mut stream) = rpc.rpc_query(&message).await.unwrap();
                         to_front.send(resp).await.ok();
-                        while let Some(resp) = stream.next().await {
-                            to_front.send(resp).await.ok();
-                        }
+                        // read the rest of the stream but don't block
+                        task::spawn(async move {
+                            while let Some(resp) = stream.next().await {
+                                to_front.send(resp).await.ok();
+                            }
+                        });
                     }
                 })),
                 Box::pin(async move {
@@ -122,9 +125,12 @@ impl Clone for SubxtClient {
             async move {
                 let (resp, mut stream) = rpc.rpc_query(&message).await.unwrap();
                 to_front.send(resp).await.ok();
-                while let Some(resp) = stream.next().await {
-                    to_front.send(resp).await.ok();
-                }
+                // read the rest of the stream but don't block
+                task::spawn(async move {
+                    while let Some(resp) = stream.next().await {
+                        to_front.send(resp).await.ok();
+                    }
+                });
             }
         })));
 
