@@ -749,8 +749,11 @@ impl BitcoinCoreApi for BitcoinCore {
             // transaction to the bitcoind. If we don't do this, the same uxto may be used
             // as input twice (i.e. double spend)
             let lock = self.transaction_creation_lock.clone().lock_owned().await;
+            // FundRawTransactionOptions takes an amount per kvByte, rather than per vByte
+            let fee_rate = fee_rate.saturating_mul(1_000);
             let funding_opts = FundRawTransactionOptions {
                 fee_rate: Some(Amount::from_sat(fee_rate)),
+                replaceable: Some(true),
                 ..Default::default()
             };
 

@@ -10,7 +10,8 @@ integration = []
 standalone-metadata = ["runtime/standalone-metadata"]
 parachain-metadata-interlay = ["runtime/parachain-metadata-interlay"]
 parachain-metadata-kintsugi = ["runtime/parachain-metadata-kintsugi"]
-parachain-metadata-testnet = ["runtime/parachain-metadata-testnet"]
+parachain-metadata-interlay-testnet = ["runtime/parachain-metadata-interlay-testnet"]
+parachain-metadata-kintsugi-testnet = ["runtime/parachain-metadata-kintsugi-testnet"]
 
 [dependencies]
 thiserror = "1.0"
@@ -40,9 +41,9 @@ runtime = { path = "../runtime" }
 service = { path = "../service" }
 
 # Substrate dependencies
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.20" }
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.20" }
-sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.20" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
+sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
 
 [dev-dependencies]
 mockall = "0.8.1"
@@ -51,4 +52,4 @@ mockall = "0.8.1"
 runtime = { path = "../runtime", features = ["testing-utils"] }
 
 # Substrate dependencies
-frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.20" }
+frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
