@@ -1,4 +1,5 @@
 #![recursion_limit = "256"]
+#![feature(array_zip, int_log)]
 
 mod cancellation;
 mod collateral;
@@ -38,7 +39,7 @@ use runtime::{InterBtcParachain, VaultId, VaultRegistryPallet};
 
 pub use crate::{cancellation::Event, error::Error, types::IssueRequests};
 pub use system::VaultIdManager;
-pub use vaults::Vaults;
+pub use vaults::{OrderedVaultsDelay, RandomDelay, Vaults, ZeroDelay};
 
 pub(crate) async fn deposit_collateral(api: &InterBtcParachain, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
     let result = api.deposit_collateral(vault_id, amount).await;

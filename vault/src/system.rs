@@ -5,7 +5,7 @@ use crate::{
     metrics::{poll_metrics, publish_tokio_metrics, PerCurrencyMetrics},
     relay::run_relayer,
     service::*,
-    vaults::Vaults,
+    vaults::{OrderedVaultsDelay, RandomDelay, Vaults},
     Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
@@ -567,6 +567,8 @@ impl VaultService {
         let oldest_issue_btc_height =
             issue::initialize_issue_set(&self.btc_rpc_master_wallet, &self.btc_parachain, &issue_set).await?;
 
+        let random_delay = OrderedVaultsDelay::new(self.btc_parachain.clone()).await?;
+
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
         let (replace_event_tx, replace_event_rx) = mpsc::channel::<Event>(16);
 
@@ -691,6 +693,7 @@ impl VaultService {
                             interval: Some(self.config.bitcoin_poll_interval_ms),
                             btc_confirmations: self.config.bitcoin_relay_confirmations,
                         },
+                        random_delay.clone(),
                     )),
                 ),
             ),
@@ -704,6 +707,7 @@ impl VaultService {
                         issue_set.clone(),
                         oldest_issue_btc_height,
                         num_confirmations,
+                        random_delay.clone(),
                     ),
                 ),
             ),
@@ -732,7 +736,7 @@ impl VaultService {
         ];
 
         if !self.config.no_vault_theft_report {
-            tasks.extend(self.btc_monitor_tasks().await?)
+            tasks.extend(self.btc_monitor_tasks(random_delay.clone()).await?)
         }
 
         run_and_monitor_tasks(self.shutdown.clone(), tasks).await;
@@ -817,7 +821,10 @@ impl VaultService {
         Ok(startup_height)
     }
 
-    async fn btc_monitor_tasks(&self) -> Result<Vec<(&str, ServiceTask)>, Error> {
+    async fn btc_monitor_tasks<RD: RandomDelay + Send + Sync + 'static>(
+        &self,
+        random_delay: RD,
+    ) -> Result<Vec<(&str, ServiceTask)>, Error> {
         tracing::info!("Fetching all active vaults...");
         let vaults = self
             .btc_parachain
@@ -849,6 +856,7 @@ impl VaultService {
                 run(monitor_btc_txs(
                     self.btc_rpc_master_wallet.clone(),
                     self.btc_parachain.clone(),
+                    random_delay,
                     bitcoin_theft_start_height,
                     vaults.clone(),
                 )),

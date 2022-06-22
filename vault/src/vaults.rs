@@ -1,18 +1,22 @@
 use crate::error::Error;
-use bitcoin::{stream_blocks, BitcoinCoreApi, BlockHash, Network, PartialAddress, Transaction, TransactionExt as _};
+use async_trait::async_trait;
+use bitcoin::{
+    sha256, stream_blocks, BitcoinCoreApi, BlockHash, Hash, Network, PartialAddress, Transaction, TransactionExt as _,
+};
 use futures::{
     prelude::*,
     stream::{iter, StreamExt},
 };
 use runtime::{
-    BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcVault, PrettyPrint,
-    RegisterAddressEvent, RegisterVaultEvent, RelayPallet, VaultId, VaultRegistryPallet,
+    AccountId, BtcAddress, BtcRelayPallet, Error as RuntimeError, H256Le, InterBtcParachain, InterBtcVault,
+    PrettyPrint, RegisterAddressEvent, RegisterVaultEvent, RelayPallet, UtilFuncs, VaultId, VaultRegistryPallet,
+    VaultStatus,
 };
 use service::Error as ServiceError;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt, sync::Arc};
 use tokio::sync::RwLock;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Vaults(RwLock<HashMap<BtcAddress, VaultId>>);
 
 impl Vaults {
@@ -37,16 +41,90 @@ impl Vaults {
     }
 }
 
+#[async_trait]
+pub trait RandomDelay {
+    async fn delay(&self, seed_data: &[u8; 32]) -> Result<(), RuntimeError>;
+}
+
+#[derive(Clone)]
+pub struct OrderedVaultsDelay {
+    btc_parachain: InterBtcParachain,
+    /// Order relative to this set of vaults
+    vaults: Vec<AccountId>,
+}
+
+impl OrderedVaultsDelay {
+    pub async fn new(btc_parachain: InterBtcParachain) -> Result<Self, RuntimeError> {
+        let vaults = btc_parachain
+            .get_all_vaults()
+            .await?
+            .into_iter()
+            .map(|vault| vault.id.account_id)
+            .collect();
+        Ok(Self { btc_parachain, vaults })
+    }
+}
+
+impl fmt::Debug for OrderedVaultsDelay {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("OrderedDelayableVaults")
+            .field("btc_parachain", &self.btc_parachain.get_account_id())
+            .field("vaults", &self.vaults)
+            .finish()
+    }
+}
+
+#[async_trait]
+impl RandomDelay for OrderedVaultsDelay {
+    /// Calculates a delay based on randomly ordering the vaults by hashing their
+    /// account ID with a piece of seed data.
+    /// Then awaits a corresponding amount of blocks on the parachain, with
+    /// logarithmic falloff. E.g. first vault in the ordering waits 0 blocks,
+    /// vaults 2-3 wait 1 block, vaults 4-7 wait 2 blocks, 8-15 wait 3 blocks etc.
+    ///
+    /// # Arguments
+    /// * `data` - the seed used as a basis for the ordering (for example, an issue_id)
+    async fn delay(&self, seed_data: &[u8; 32]) -> Result<(), RuntimeError> {
+        fn hash_vault(data: &[u8; 32], account_id: &AccountId) -> sha256::Hash {
+            let account_id: [u8; 32] = account_id.clone().into();
+            let xor = data.zip(account_id).map(|(a, b)| a ^ b);
+            sha256::Hash::hash(&xor)
+        }
+
+        let self_hash = hash_vault(seed_data, self.btc_parachain.get_account_id());
+
+        let random_ordering = self
+            .vaults
+            .iter()
+            .filter(|account_id| hash_vault(seed_data, account_id) < self_hash)
+            .count();
+        let delay: u32 = (random_ordering + 1).log2();
+        self.btc_parachain.delay_for_blocks(delay).await
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ZeroDelay;
+
+#[async_trait]
+impl RandomDelay for ZeroDelay {
+    async fn delay(&self, _seed_data: &[u8; 32]) -> Result<(), RuntimeError> {
+        Ok(())
+    }
+}
+
 pub async fn monitor_btc_txs<
-    P: RelayPallet + BtcRelayPallet + Send + Sync,
+    P: VaultRegistryPallet + RelayPallet + BtcRelayPallet + Send + Sync,
     B: BitcoinCoreApi + Send + Sync + Clone + 'static,
+    RD: RandomDelay + Send + Sync,
 >(
     bitcoin_core: B,
     btc_parachain: P,
+    random_delay: RD,
     btc_height: u32,
     vaults: Arc<Vaults>,
 ) -> Result<(), ServiceError> {
-    match BitcoinMonitor::new(bitcoin_core, btc_parachain, btc_height, vaults)
+    match BitcoinMonitor::new(bitcoin_core, btc_parachain, random_delay, btc_height, vaults)
         .process_blocks()
         .await
     {
@@ -56,22 +134,28 @@ pub async fn monitor_btc_txs<
 }
 
 pub struct BitcoinMonitor<
-    P: RelayPallet + BtcRelayPallet + Send + Sync,
+    P: VaultRegistryPallet + RelayPallet + BtcRelayPallet + Send + Sync,
     B: BitcoinCoreApi + Send + Sync + Clone + 'static,
+    RD: RandomDelay + Send + Sync,
 > {
     bitcoin_core: B,
     btc_parachain: P,
+    random_delay: RD,
     btc_height: u32,
     vaults: Arc<Vaults>,
 }
 
-impl<P: RelayPallet + BtcRelayPallet + Send + Sync, B: BitcoinCoreApi + Send + Sync + Clone + 'static>
-    BitcoinMonitor<P, B>
+impl<
+        P: VaultRegistryPallet + RelayPallet + BtcRelayPallet + Send + Sync,
+        B: BitcoinCoreApi + Send + Sync + Clone + 'static,
+        RD: RandomDelay + Send + Sync,
+    > BitcoinMonitor<P, B, RD>
 {
-    pub fn new(bitcoin_core: B, btc_parachain: P, btc_height: u32, vaults: Arc<Vaults>) -> Self {
+    pub fn new(bitcoin_core: B, btc_parachain: P, random_delay: RD, btc_height: u32, vaults: Arc<Vaults>) -> Self {
         Self {
             bitcoin_core,
             btc_parachain,
+            random_delay,
             btc_height,
             vaults,
         }
@@ -93,6 +177,19 @@ impl<P: RelayPallet + BtcRelayPallet + Send + Sync, B: BitcoinCoreApi + Send + S
         );
         // check if matching redeem or replace request
         let raw_tx = bitcoin::serialize(transaction);
+
+        // wait a random amount of blocks before checking, to avoid all vaults
+        // flooding the parachain with this transaction
+        self.random_delay.delay(transaction.txid().as_inner()).await?;
+        let vault = self.btc_parachain.get_vault(vault_id).await?;
+        if vault.status == VaultStatus::CommittedTheft {
+            tracing::debug!(
+                "Vault {} has already been reported - doing nothing.",
+                vault_id.pretty_print()
+            );
+            return Ok(());
+        }
+
         if self.btc_parachain.is_transaction_invalid(vault_id, &raw_tx).await? {
             tracing::info!(
                 "Detected theft by vault {} - txid {}. Reporting...",
@@ -257,17 +354,39 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        json, Amount, Block, BlockHeader, Error as BitcoinError, GetBlockResult, Hash as _, LockedTransaction,
-        PartialAddress, PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        json, Amount, Block, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, PartialAddress,
+        PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
-        AccountId, BitcoinBlockHeight, BlockNumber, Error as RuntimeError, H256Le, InterBtcRichBlockHeader,
-        RawBlockHeader, Token, DOT, IBTC,
+        AccountId, BitcoinBlockHeight, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError, H256Le,
+        InterBtcRichBlockHeader, RawBlockHeader, Token, Wallet, DOT, IBTC,
     };
     use sp_core::{H160, H256};
+    use std::collections::BTreeSet;
 
     mockall::mock! {
         Provider {}
+
+        #[async_trait]
+        pub trait VaultRegistryPallet {
+            async fn get_vault(&self, vault_id: &VaultId) -> Result<InterBtcVault, RuntimeError>;
+            async fn get_vaults_by_account_id(&self, account_id: &AccountId) -> Result<Vec<VaultId>, RuntimeError>;
+            async fn get_all_vaults(&self) -> Result<Vec<InterBtcVault>, RuntimeError>;
+            async fn register_vault(&self, vault_id: &VaultId, collateral: u128) -> Result<(), RuntimeError>;
+            async fn deposit_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
+            async fn withdraw_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
+            async fn get_public_key(&self) -> Result<Option<BtcPublicKey>, RuntimeError>;
+            async fn register_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
+            async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), RuntimeError>;
+            async fn get_required_collateral_for_wrapped(
+                &self,
+                amount_btc: u128,
+                collateral_currency: CurrencyId,
+            ) -> Result<u128, RuntimeError>;
+            async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
+            async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
+            async fn get_collateralization_from_vault(&self, vault_id: VaultId, only_issued: bool) -> Result<u128, RuntimeError>;
+        }
 
         #[async_trait]
         pub trait RelayPallet {
@@ -394,6 +513,12 @@ mod tests {
         VaultId::new(AccountId::new([1u8; 32]), Token(DOT), Token(IBTC))
     }
 
+    fn dummy_wallet() -> Wallet {
+        Wallet {
+            addresses: BTreeSet::default(),
+        }
+    }
+
     #[tokio::test]
     async fn test_filter_matching_vaults() {
         let dummy_vault = dummy_vault_id();
@@ -431,11 +556,26 @@ mod tests {
             .expect_report_vault_theft()
             .never()
             .returning(|_, _, _| Ok(()));
+        parachain.expect_get_vault().returning(|_| {
+            Ok(InterBtcVault {
+                id: dummy_vault_id(),
+                wallet: dummy_wallet(),
+                status: VaultStatus::Active(true),
+                banned_until: None,
+                to_be_issued_tokens: 0,
+                issued_tokens: 0,
+                to_be_redeemed_tokens: 0,
+                to_be_replaced_tokens: 0,
+                replace_collateral: 0,
+                active_replace_collateral: 0,
+                liquidated_collateral: 0,
+            })
+        });
 
         let mut bitcoin_core = MockBitcoin::default();
         bitcoin_core.expect_find_duplicate_payments().returning(|_| Ok(vec![]));
 
-        let monitor = BitcoinMonitor::new(bitcoin_core, parachain, 0, Arc::new(Vaults::default()));
+        let monitor = BitcoinMonitor::new(bitcoin_core, parachain, ZeroDelay, 0, Arc::new(Vaults::default()));
 
         let block_hash = BlockHash::from_slice(&[0; 32]).unwrap();
         monitor
@@ -450,9 +590,24 @@ mod tests {
         let mut btc_rpc = MockBitcoin::default();
         parachain.expect_is_transaction_invalid().returning(|_, _| Ok(true));
         parachain.expect_report_vault_theft().once().returning(|_, _, _| Ok(()));
+        parachain.expect_get_vault().returning(|_| {
+            Ok(InterBtcVault {
+                id: dummy_vault_id(),
+                wallet: dummy_wallet(),
+                status: VaultStatus::Active(true),
+                banned_until: None,
+                to_be_issued_tokens: 0,
+                issued_tokens: 0,
+                to_be_redeemed_tokens: 0,
+                to_be_replaced_tokens: 0,
+                replace_collateral: 0,
+                active_replace_collateral: 0,
+                liquidated_collateral: 0,
+            })
+        });
         btc_rpc.expect_get_proof().once().returning(|_, _| Ok(vec![]));
 
-        let monitor = BitcoinMonitor::new(btc_rpc, parachain, 0, Arc::new(Vaults::default()));
+        let monitor = BitcoinMonitor::new(btc_rpc, parachain, ZeroDelay, 0, Arc::new(Vaults::default()));
 
         let block_hash = BlockHash::from_slice(&[0; 32]).unwrap();
         monitor

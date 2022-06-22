@@ -12,7 +12,7 @@ pub use bitcoincore_rpc::{
         blockdata::{opcodes::all as opcodes, script::Builder},
         consensus::encode::{deserialize, serialize},
         hash_types::BlockHash,
-        hashes::{hex::ToHex, Hash},
+        hashes::{hex::ToHex, sha256, Hash},
         secp256k1,
         secp256k1::{constants::PUBLIC_KEY_SIZE, SecretKey},
         util::{address::Payload, key, merkleblock::PartialMerkleTree, psbt::serialize::Serialize, uint::Uint256},

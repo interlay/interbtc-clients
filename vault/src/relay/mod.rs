@@ -1,8 +1,10 @@
 use bitcoin::BitcoinCore;
 use runtime::InterBtcParachain;
 use service::Error as ServiceError;
-use std::time::Duration;
+use std::{fmt::Debug, time::Duration};
 use tokio::time::sleep;
+
+use crate::vaults::{RandomDelay, ZeroDelay};
 
 mod backing;
 mod error;
@@ -68,20 +70,22 @@ pub struct Config {
 }
 
 /// Runner implements the main loop for the relayer
-pub struct Runner<B: Backing, I: Issuing> {
+pub struct Runner<B: Backing, I: Issuing, RD: RandomDelay + Debug + Send + Sync + Clone> {
     backing: B,
     issuing: I,
+    random_delay: RD,
     start_height: Option<u32>,
     max_batch_size: u32,
     interval: Duration,
     btc_confirmations: u32,
 }
 
-impl<B: Backing, I: Issuing> Runner<B, I> {
-    pub fn new(backing: B, issuing: I, conf: Config) -> Runner<B, I> {
+impl<B: Backing, I: Issuing, RD: RandomDelay + Debug + Send + Sync + Clone> Runner<B, I, RD> {
+    pub fn new(backing: B, issuing: I, conf: Config, random_delay: RD) -> Runner<B, I, RD> {
         Runner {
             backing,
             issuing,
+            random_delay,
             start_height: conf.start_height,
             max_batch_size: conf.max_batch_size,
             interval: conf.interval.unwrap_or(SLEEP_TIME),
@@ -146,7 +150,9 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
                 tracing::info!("Processing block at height {}", current_height);
                 let header = self.get_block_header(current_height).await?;
                 // TODO: check if block already stored
-                self.issuing.submit_block_header(header).await?;
+                self.issuing
+                    .submit_block_header(header, self.random_delay.clone())
+                    .await?;
                 tracing::info!("Submitted block at height {}", current_height);
             }
             _ => {
@@ -171,7 +177,9 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
     }
 }
 
-pub async fn run_relayer(runner: Runner<BitcoinCore, InterBtcParachain>) -> Result<(), ServiceError> {
+pub async fn run_relayer<RD: RandomDelay + Debug + Send + Sync + Clone>(
+    runner: Runner<BitcoinCore, InterBtcParachain, RD>,
+) -> Result<(), ServiceError> {
     loop {
         match runner.submit_next().await {
             Ok(_) => (),
@@ -193,11 +201,14 @@ pub async fn run_relayer(runner: Runner<BitcoinCore, InterBtcParachain>) -> Resu
 
 #[cfg(test)]
 mod tests {
+    use crate::vaults::RandomDelay;
+
     use super::*;
     use async_trait::async_trait;
     use std::{
         cell::{Ref, RefCell, RefMut},
         collections::HashMap,
+        fmt::Debug,
         rc::Rc,
     };
 
@@ -238,7 +249,11 @@ mod tests {
             }
         }
 
-        async fn submit_block_header(&self, header: Vec<u8>) -> Result<(), Error> {
+        async fn submit_block_header<RD: RandomDelay + Debug + Send + Sync>(
+            &self,
+            header: Vec<u8>,
+            _random_delay: RD,
+        ) -> Result<(), Error> {
             let is_stored = self.is_block_stored(header.clone()).await?;
             if is_stored {
                 Err(Error::BlockExists)
@@ -252,7 +267,7 @@ mod tests {
 
         async fn submit_block_header_batch(&self, headers: Vec<Vec<u8>>) -> Result<(), Error> {
             for header in headers {
-                self.submit_block_header(header.to_vec()).await?;
+                self.submit_block_header(header.to_vec(), ZeroDelay).await?;
             }
             Ok(())
         }
@@ -322,10 +337,10 @@ mod tests {
         assert_eq!(issuing.is_block_stored(make_hash("a")).await, Ok(true));
         assert_eq!(issuing.is_block_stored(make_hash("x")).await, Ok(false));
         assert_eq!(
-            issuing.submit_block_header(make_hash("a")).await,
+            issuing.submit_block_header(make_hash("a"), ZeroDelay).await,
             Err(Error::BlockExists)
         );
-        assert_eq!(issuing.submit_block_header(make_hash("d")).await, Ok(()));
+        assert_eq!(issuing.submit_block_header(make_hash("d"), ZeroDelay).await, Ok(()));
         assert_eq!(issuing.get_best_height().await, Ok(5));
     }
 
@@ -370,6 +385,7 @@ mod tests {
                 interval: None,
                 btc_confirmations: 0,
             },
+            ZeroDelay,
         );
 
         assert_eq!(runner.issuing.get_best_height().await.unwrap(), 4);
@@ -391,6 +407,7 @@ mod tests {
                 interval: None,
                 btc_confirmations: 0,
             },
+            ZeroDelay,
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -424,6 +441,7 @@ mod tests {
                 interval: None,
                 btc_confirmations: 0,
             },
+            ZeroDelay,
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -453,6 +471,7 @@ mod tests {
                 max_batch_size: 16,
                 btc_confirmations: 1,
             },
+            ZeroDelay,
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -485,6 +504,7 @@ mod tests {
                 interval: Some(Duration::from_secs(0)),
                 btc_confirmations: 1,
             },
+            ZeroDelay,
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -518,6 +538,7 @@ mod tests {
                 interval: Some(Duration::from_secs(0)),
                 btc_confirmations: 2,
             },
+            ZeroDelay,
         );
 
         let height_before = runner.issuing.get_best_height().await?;

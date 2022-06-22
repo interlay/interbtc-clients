@@ -250,6 +250,27 @@ impl InterBtcParachain {
         }
     }
 
+    /// Wait for the block at the given height
+    /// Note: will always wait at least one block.
+    pub async fn wait_for_block(&self, height: u32) -> Result<(), Error> {
+        let mut sub = self.ext_client.rpc().subscribe_finalized_blocks().await?;
+        while let Some(block) = sub.next().await {
+            if block?.number >= height {
+                return Ok(());
+            }
+        }
+        Err(Error::ChannelClosed)
+    }
+
+    /// Sleep for `delay` parachain blocks
+    pub async fn delay_for_blocks(&self, delay: u32) -> Result<(), Error> {
+        if delay == 0 {
+            return Ok(());
+        }
+        let starting_parachain_height = self.get_current_chain_height().await?;
+        self.wait_for_block(starting_parachain_height + delay).await
+    }
+
     /// Subscription service that should listen forever, only returns if the initial subscription
     /// cannot be established. Calls `on_error` when an error event has been received, or when an
     /// event has been received that failed to be decoded into a raw event.
