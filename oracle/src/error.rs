@@ -15,9 +15,7 @@ pub enum Error {
     InvalidExchangeRate,
     #[error("Invalid fee estimate")]
     InvalidFeeEstimate,
-    #[error(
-        "Invalid arguments. Either provide as many exchange rates as currencies, or provide none and a coingecko url"
-    )]
+    #[error("Invalid arguments. Either provide explicit exchange rates (e.g. KSM=1) or provide a coingecko url")]
     InvalidArguments,
 
     #[error("ReqwestError: {0}")]

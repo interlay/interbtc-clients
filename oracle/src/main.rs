@@ -57,6 +57,17 @@ fn parse_fixed_point(src: &str) -> Result<FixedU128, Error> {
     FixedU128::checked_from_integer(src.parse::<u128>()?).ok_or(Error::InvalidExchangeRate)
 }
 
+pub fn parse_collateral_and_optional_rate(
+    s: &str,
+) -> Result<(CurrencyId, Option<FixedU128>), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    let parts: Vec<_> = s.split("=").collect();
+    match parts.as_slice() {
+        &[currency, rate] => Ok((parse_collateral_currency(currency)?, Some(parse_fixed_point(rate)?))),
+        &[currency] => Ok((parse_collateral_currency(currency)?, None)),
+        _ => Err(Box::new(Error::InvalidArguments)),
+    }
+}
+
 #[derive(Parser)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
 struct Opts {
@@ -69,14 +80,11 @@ struct Opts {
     #[clap(long, parse(try_from_str = parse_fixed_point), default_value = "1")]
     bitcoin_fee: FixedU128,
 
-    /// Exchange rate from the collateral currency to
-    /// the wrapped currency - i.e. 1 BTC = 2308 DOT.
-    #[clap(long, parse(try_from_str = parse_fixed_point))]
-    exchange_rate: Vec<FixedU128>,
-
-    /// Collateral type for exchange rates, e.g. "DOT" or "KSM".
-    #[clap(long, parse(try_from_str = parse_collateral_currency))]
-    currency_id: Vec<CurrencyId>,
+    /// Collateral type for exchange rates, e.g. "DOT" or "KSM". The exchange rate
+    /// will be fetched from coingecko unless explicitly set as e.g. "KSM=123", in which
+    /// case the given exchange rate will be used. The rate will be in while units e.g. KSM/BTC.
+    #[clap(long, parse(try_from_str = parse_collateral_and_optional_rate))]
+    currency_id: Vec<(CurrencyId, Option<FixedU128>)>,
 
     /// Interval for exchange rate setter, default 25 minutes.
     #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "1500000")]
@@ -91,11 +99,11 @@ struct Opts {
     blockstream: Option<Url>,
 
     /// Fetch the exchange rate from CoinGecko (https://api.coingecko.com/api/v3/).
-    #[clap(long, conflicts_with("exchange-rate"))]
+    #[clap(long)]
     coingecko: Option<Url>,
 
     /// Use a dedicated API key for coingecko pro URL (https://pro-api.coingecko.com/api/v3/)
-    #[clap(long, conflicts_with("exchange-rate"))]
+    #[clap(long)]
     coingecko_api_key: Option<String>,
 
     /// Timeout in milliseconds to wait for connection to btc-parachain.
@@ -190,47 +198,41 @@ async fn main() -> Result<(), Error> {
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = InterBtcSigner::new(key_pair);
 
-    let blockstream_url = if let Some(mut url) = opts.blockstream {
+    let blockstream_url = if let Some(mut url) = opts.blockstream.clone() {
         url.set_path(&format!("{}/fee-estimates", url.path()));
         Some(url)
     } else {
         None
     };
 
-    let exchange_rates_to_set: Vec<_> = match (
-        opts.currency_id,
-        opts.exchange_rate,
-        opts.coingecko,
-        opts.coingecko_api_key,
-    ) {
-        (currencies, exchange_rates, None, None) if currencies.len() == exchange_rates.len() => currencies
-            .iter()
-            .zip(exchange_rates)
-            .map(|(currency_id, exchange_rate)| (*currency_id, UrlOrDefault::Def(exchange_rate)))
-            .collect(),
-        (currencies, exchange_rates, Some(url), maybe_api_key) if exchange_rates.is_empty() => currencies
-            .iter()
-            .map(|currency_id| {
-                let mut url = url.clone();
+    let exchange_rates_to_set = opts
+        .currency_id
+        .clone()
+        .into_iter()
+        .map(|(currency_id, explicit_exchange_rate)| match explicit_exchange_rate {
+            Some(rate) => Ok((currency_id, UrlOrDefault::Def(rate.clone()))),
+            None => {
+                let mut url = match &opts.coingecko {
+                    Some(x) => x.clone(),
+                    None => {
+                        return Err(Error::InvalidArguments);
+                    }
+                };
                 url.set_path(&format!("{}/simple/price", url.path()));
                 url.set_query(Some(&format!(
                     "ids={}&vs_currencies={}",
                     currency_id.inner().unwrap().name().to_lowercase(),
                     BTC_CURRENCY
                 )));
-                if let Some(api_key) = &maybe_api_key {
+                if let Some(api_key) = &opts.coingecko_api_key {
                     url.query_pairs_mut().append_pair(COINGECKO_API_KEY_PARAMETER, api_key);
                 }
-                (*currency_id, UrlOrDefault::Url(url))
-            })
-            .collect(),
-        args => {
-            log::error!("Attempted to start oracle with invalid arguments: {:?}", args);
-            return Err(Error::InvalidArguments);
-        }
-    };
+                Ok((currency_id, UrlOrDefault::Url(url)))
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
 
-    // append the exchange rate
+    // append the conversion_factor
     let exchange_rates_to_set: Vec<_> = exchange_rates_to_set
         .into_iter()
         .map(|(currency_id, value)| {
