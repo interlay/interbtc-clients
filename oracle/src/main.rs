@@ -3,11 +3,12 @@ mod error;
 use backoff::{future::retry_notify, ExponentialBackoff};
 use clap::Parser;
 use error::Error;
+use futures::future::join_all;
 use git_version::git_version;
 use reqwest::Url;
 use runtime::{
     cli::{parse_duration_ms, ProviderUserOpts},
-    parse_collateral_currency, CurrencyId, CurrencyIdExt, CurrencyInfo, FixedPointNumber,
+    CurrencyId, CurrencyIdExt, CurrencyInfo, FixedPointNumber,
     FixedPointTraits::{CheckedDiv, CheckedMul, One},
     FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, OraclePallet,
 };
@@ -59,11 +60,11 @@ fn parse_fixed_point(src: &str) -> Result<FixedU128, Error> {
 
 pub fn parse_collateral_and_optional_rate(
     s: &str,
-) -> Result<(CurrencyId, Option<FixedU128>), Box<dyn std::error::Error + Send + Sync + 'static>> {
+) -> Result<(String, Option<FixedU128>), Box<dyn std::error::Error + Send + Sync + 'static>> {
     let parts: Vec<_> = s.split("=").collect();
     match parts.as_slice() {
-        &[currency, rate] => Ok((parse_collateral_currency(currency)?, Some(parse_fixed_point(rate)?))),
-        &[currency] => Ok((parse_collateral_currency(currency)?, None)),
+        &[currency, rate] => Ok((currency.to_string(), Some(parse_fixed_point(rate)?))),
+        &[currency] => Ok((currency.to_string(), None)),
         _ => Err(Box::new(Error::InvalidArguments)),
     }
 }
@@ -84,7 +85,7 @@ struct Opts {
     /// will be fetched from coingecko unless explicitly set as e.g. "KSM=123", in which
     /// case the given exchange rate will be used. The rate will be in while units e.g. KSM/BTC.
     #[clap(long, parse(try_from_str = parse_collateral_and_optional_rate))]
-    currency_id: Vec<(CurrencyId, Option<FixedU128>)>,
+    currency_id: Vec<(String, Option<FixedU128>)>,
 
     /// Interval for exchange rate setter, default 25 minutes.
     #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "1500000")]
@@ -205,9 +206,28 @@ async fn main() -> Result<(), Error> {
         None
     };
 
-    let exchange_rates_to_set = opts
-        .currency_id
-        .clone()
+    let parsed_currency_ids = {
+        let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
+        let parachain_rpc = &InterBtcParachain::from_url_with_retry(
+            &opts.btc_parachain_url,
+            signer.clone(),
+            opts.connection_timeout_ms,
+            shutdown_tx,
+        )
+        .await?;
+
+        join_all(opts.currency_id.iter().map(|(symbol, amount)| async move {
+            Ok((
+                parachain_rpc.parse_currency_id(symbol.to_string()).await?,
+                amount.clone(),
+            ))
+        }))
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, Error>>()?
+    };
+
+    let exchange_rates_to_set = parsed_currency_ids
         .into_iter()
         .map(|(currency_id, explicit_exchange_rate)| match explicit_exchange_rate {
             Some(rate) => Ok((currency_id, UrlOrDefault::Def(rate.clone()))),

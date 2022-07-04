@@ -9,7 +9,7 @@ mod rpc;
 
 pub mod types;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "standalone-metadata"))]
 mod tests;
 
 #[cfg(all(feature = "testing-utils", feature = "standalone-metadata"))]

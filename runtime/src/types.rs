@@ -74,6 +74,12 @@ mod metadata_aliases {
     pub use metadata::tokens::events::Endowed as EndowedEvent;
 
     pub use metadata::runtime_types::{
+        interbtc_primitives::CustomMetadata as InterBtcAdditionalMetadata,
+        orml_traits::asset_registry::AssetMetadata as GenericAssetMetadata,
+    };
+    pub type AssetMetadata = GenericAssetMetadata<Balance, InterBtcAdditionalMetadata>;
+
+    pub use metadata::runtime_types::{
         btc_relay::pallet::Error as BtcRelayPalletError, frame_system::pallet::Error as SystemPalletError,
         issue::pallet::Error as IssuePalletError, redeem::pallet::Error as RedeemPalletError,
         relay::pallet::Error as RelayPalletError, security::pallet::Error as SecurityPalletError,
