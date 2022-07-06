@@ -92,10 +92,12 @@ pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send +
         None => return Ok(()), // the iterator is empty so we have nothing to do
     };
 
-    for (issue_id, request) in issue_requests.into_iter() {
+    for (issue_id, request) in issue_requests.clone().into_iter() {
         if let Err(e) = add_new_deposit_key(bitcoin_core, issue_id, request.btc_public_key).await {
             tracing::error!("Failed to add deposit key #{}: {}", issue_id, e.to_string());
         }
+        // TODO: get TXs from elects
+        // then importprunedfunds
     }
 
     // read height only _after_ the last add_new_deposit_height.If a new block arrives
@@ -103,10 +105,39 @@ pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send +
     // privkey
     let btc_end_height = bitcoin_core.get_block_count().await? as usize - 1;
 
-    tracing::info!("Rescanning bitcoin chain from height {}...", btc_start_height);
-    for (range_start, range_end) in chunks(btc_start_height, btc_end_height) {
+    // check if the blockchain was pruned after the point where we would need to scan
+    // if it was, we only rescan from the pruned height
+    let btc_pruned_start_height = bitcoin_core.get_pruned_height().await? as usize;
+    let rescan_start_height = btc_start_height.max(btc_pruned_start_height);
+
+    // in parallel, rescan what blockchain we do have stored locally
+    tracing::info!("Rescanning bitcoin chain from height {}...", rescan_start_height);
+    for (range_start, range_end) in chunks(rescan_start_height, btc_end_height) {
         tracing::debug!("Scanning chain blocks {range_start}-{range_end}...");
         bitcoin_core.rescan_blockchain(range_start, range_end).await?;
+    }
+
+    // also check in electrs in case there were any requests from before the pruned height
+    if btc_start_height < rescan_start_height {
+        tracing::info!(
+            "Also checking electrs for isssue requests between {} and {}...",
+            btc_start_height,
+            rescan_start_height
+        );
+        bitcoin_core
+            .rescan_electrs_for_addresses(
+                issue_requests
+                    .into_iter()
+                    .filter_map(|(_, request)| {
+                        if (request.btc_height as usize) < btc_pruned_start_height {
+                            Some(request.btc_address)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect(),
+            )
+            .await?;
     }
 
     Ok(())

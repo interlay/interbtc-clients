@@ -13,7 +13,12 @@ use serde_json::Error as SerdeJsonError;
 use thiserror::Error;
 use tokio::time::error::Elapsed;
 
-pub type ElectrsError = esplora_btc_api::apis::Error<esplora_btc_api::apis::scripthash_api::GetTxsByScripthashError>;
+type ElectrsTxByScriptHashError =
+    esplora_btc_api::apis::Error<esplora_btc_api::apis::scripthash_api::GetTxsByScripthashError>;
+type ElectrsAddressTxHistoryError =
+    esplora_btc_api::apis::Error<esplora_btc_api::apis::address_api::GetAddressTxHistoryError>;
+type ElectrsRawTxError = esplora_btc_api::apis::Error<esplora_btc_api::apis::tx_api::GetTxRawError>;
+type ElectrsMerkleProofError = esplora_btc_api::apis::Error<esplora_btc_api::apis::tx_api::GetTxMerkleProofError>;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -34,7 +39,13 @@ pub enum Error {
     #[error("Timeout: {0}")]
     TimeElapsed(#[from] Elapsed),
     #[error("ElectrsError: {0}")]
-    ElectrsError(#[from] ElectrsError),
+    ElectrsTxByScriptHashError(#[from] ElectrsTxByScriptHashError),
+    #[error("ElectrsError: {0}")]
+    ElectrsAddressTxHistoryError(#[from] ElectrsAddressTxHistoryError),
+    #[error("ElectrsError: {0}")]
+    ElectrsRawTxError(#[from] ElectrsRawTxError),
+    #[error("ElectrsError: {0}")]
+    ElectrsMerkleProofError(#[from] ElectrsMerkleProofError),
     #[error("Connected to incompatable bitcoin core version: {0}")]
     IncompatibleVersion(usize),
 

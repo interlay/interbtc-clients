@@ -1,7 +1,9 @@
-use crate::{BitcoinCoreApi, Error};
+use crate::{BitcoinCoreApi, BitcoinRpcError, Error};
 use bitcoincore_rpc::{
     bitcoin::{Block, BlockHash, Transaction},
     json::GetBlockResult,
+    jsonrpc::Error as JsonRpcError,
+    Error as BitcoinError,
 };
 use futures::{prelude::*, stream::StreamExt};
 use log::trace;
@@ -18,9 +20,10 @@ use std::iter;
 pub async fn reverse_stream_transactions<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     rpc: &B,
     stop_height: u32,
+    stop_at_pruned: bool,
 ) -> Result<impl Stream<Item = Result<Transaction, Error>> + Unpin + '_, Error> {
     let mempool_transactions = stream::iter(rpc.get_mempool_transactions().await?);
-    let in_chain_transactions = reverse_stream_in_chain_transactions(rpc, stop_height).await;
+    let in_chain_transactions = reverse_stream_in_chain_transactions(rpc, stop_height, stop_at_pruned).await;
     Ok(mempool_transactions.chain(in_chain_transactions))
 }
 
@@ -30,19 +33,24 @@ pub async fn reverse_stream_transactions<B: BitcoinCoreApi + Clone + Send + Sync
 ///
 /// * `rpc` - bitcoin rpc
 /// * `stop_height` - height of the last block the iterator will return transactions from
+/// * `stop_at_pruned` - whether to gracefully stop if a pruned blockchain is encountered;
+/// otherwise, will throw an error
 pub async fn reverse_stream_in_chain_transactions<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     rpc: &B,
     stop_height: u32,
+    stop_at_pruned: bool,
 ) -> impl Stream<Item = Result<Transaction, Error>> + Send + Unpin + '_ {
-    reverse_stream_blocks(rpc, stop_height).await.flat_map(|block| {
-        // unfortunately two different iterators don't have compatible types, so we have
-        // to box them to trait objects
-        let transactions: Box<dyn Stream<Item = _> + Unpin + Send> = match block {
-            Ok(e) => Box::new(stream::iter(e.txdata.into_iter().map(Ok))),
-            Err(e) => Box::new(stream::iter(iter::once(Err(e)))),
-        };
-        transactions
-    })
+    reverse_stream_blocks(rpc, stop_height, stop_at_pruned)
+        .await
+        .flat_map(|block| {
+            // unfortunately two different iterators don't have compatible types, so we have
+            // to box them to trait objects
+            let transactions: Box<dyn Stream<Item = _> + Unpin + Send> = match block {
+                Ok(e) => Box::new(stream::iter(e.txdata.into_iter().map(Ok))),
+                Err(e) => Box::new(stream::iter(iter::once(Err(e)))),
+            };
+            transactions
+        })
 }
 
 /// Stream blocks in reverse order, starting at the current best height reported
@@ -55,15 +63,19 @@ pub async fn reverse_stream_in_chain_transactions<B: BitcoinCoreApi + Clone + Se
 ///
 /// * `rpc` - bitcoin rpc
 /// * `stop_height` - height of the last block the stream will return
+/// * `stop_at_pruned` - whether to gracefully stop if a pruned blockchain is encountered;
+/// otherwise, will throw an error
 pub async fn reverse_stream_blocks<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     rpc: &B,
     stop_height: u32,
+    stop_at_pruned: bool,
 ) -> impl Stream<Item = Result<Block, Error>> + Unpin + '_ {
     struct StreamState<B> {
         height: Option<u32>,
         prev_block: Option<Block>,
         rpc: B,
         stop_height: u32,
+        stop_at_pruned: bool,
     }
 
     let state = StreamState {
@@ -71,6 +83,7 @@ pub async fn reverse_stream_blocks<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         prev_block: None,
         rpc,
         stop_height,
+        stop_at_pruned,
     };
 
     Box::pin(
@@ -92,6 +105,12 @@ pub async fn reverse_stream_blocks<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                         state.height = Some(next_height);
                         state.prev_block = Some(block.clone());
                         Ok(block)
+                    }
+                    Err(Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err))))
+                        if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcMiscError
+                            && state.stop_at_pruned =>
+                    {
+                        return None; // pruned block
                     }
                     Err(e) => Err(e),
                 }
@@ -208,6 +227,7 @@ mod tests {
                 secret_key: Vec<u8>,
             ) -> Result<(), Error>;
             async fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
+            async fn get_pruned_height(&self) -> Result<u64, Error>;
             async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
             async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error>;
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
@@ -248,6 +268,10 @@ mod tests {
                     P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error>;
             async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error>;
+            async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(
+                &self,
+                addresses: Vec<A>,
+            ) -> Result<(), Error>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
             fn get_utxo_count(&self) -> Result<usize, Error>;
         }
@@ -339,7 +363,7 @@ mod tests {
             .returning(|&hash| Ok(dummy_block_info(21, hash)));
 
         let btc_rpc = bitcoin;
-        let mut iter = reverse_stream_transactions(&btc_rpc, 20).await.unwrap();
+        let mut iter = reverse_stream_transactions(&btc_rpc, 20, false).await.unwrap();
 
         assert_eq!(iter.next().await.unwrap().unwrap().version, 0);
         assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
@@ -386,7 +410,7 @@ mod tests {
             .returning(|&hash| Ok(dummy_block_info(23, hash)));
 
         let btc_rpc = bitcoin;
-        let mut iter = reverse_stream_transactions(&btc_rpc, 20).await.unwrap();
+        let mut iter = reverse_stream_transactions(&btc_rpc, 20, false).await.unwrap();
 
         assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
         assert_eq!(iter.next().await.unwrap().unwrap().version, 2);
@@ -410,7 +434,7 @@ mod tests {
 
         let btc_rpc = bitcoin;
 
-        let mut iter = reverse_stream_transactions(&btc_rpc, 21).await.unwrap();
+        let mut iter = reverse_stream_transactions(&btc_rpc, 21, false).await.unwrap();
 
         assert!(iter.next().await.is_none());
     }
@@ -430,7 +454,7 @@ mod tests {
 
         let btc_rpc = bitcoin;
 
-        let mut iter = reverse_stream_transactions(&btc_rpc, 21).await.unwrap();
+        let mut iter = reverse_stream_transactions(&btc_rpc, 21, false).await.unwrap();
 
         assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
         assert_eq!(iter.next().await.unwrap().unwrap().version, 2);
@@ -457,7 +481,7 @@ mod tests {
 
         let btc_rpc = bitcoin;
 
-        let mut iter = reverse_stream_transactions(&btc_rpc, 20).await.unwrap();
+        let mut iter = reverse_stream_transactions(&btc_rpc, 20, false).await.unwrap();
 
         assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
         assert!(iter.next().await.is_none());

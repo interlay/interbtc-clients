@@ -139,6 +139,8 @@ pub trait BitcoinCoreApi {
 
     async fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
 
+    async fn get_pruned_height(&self) -> Result<u64, Error>;
+
     async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
 
     async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error>;
@@ -191,6 +193,11 @@ pub trait BitcoinCoreApi {
     async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error>;
 
     async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error>;
+
+    async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(
+        &self,
+        addresses: Vec<A>,
+    ) -> Result<(), Error>;
 
     async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
 
@@ -639,6 +646,10 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(self.rpc.get_best_block_hash()?)
     }
 
+    async fn get_pruned_height(&self) -> Result<u64, Error> {
+        Ok(self.rpc.get_blockchain_info()?.prune_height.unwrap_or(0))
+    }
+
     async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error> {
         Ok(self.rpc.get_block(hash)?)
     }
@@ -877,6 +888,29 @@ impl BitcoinCoreApi for BitcoinCore {
 
     async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error> {
         self.rpc.rescan_blockchain(Some(start_height), Some(end_height))?;
+        Ok(())
+    }
+
+    async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(
+        &self,
+        addresses: Vec<A>,
+    ) -> Result<(), Error> {
+        for address in addresses.into_iter() {
+            let transactions = esplora_btc_api::apis::address_api::get_address_tx_history(
+                &self.electrs_config,
+                &address.encode_str(self.network)?,
+            )
+            .await?;
+            for transaction in transactions.into_iter() {
+                let rawtx = esplora_btc_api::apis::tx_api::get_tx_raw(&self.electrs_config, &transaction.txid).await?;
+                let merkle_proof =
+                    esplora_btc_api::apis::tx_api::get_tx_merkle_proof(&self.electrs_config, &transaction.txid).await?;
+                self.rpc.call(
+                    "importprunedfunds",
+                    &[serde_json::to_value(rawtx)?, serde_json::to_value(merkle_proof)?],
+                )?;
+            }
+        }
         Ok(())
     }
 
