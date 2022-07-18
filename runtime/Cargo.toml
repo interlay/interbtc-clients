@@ -52,7 +52,9 @@ bitcoin = { path = "../bitcoin"}
 
 # Dependencies for the testing utils for integration tests
 tempdir = { version = "0.3.7", optional = true }
-interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "825030f2caaf741c811568b24d42d1a2547810f7", optional = true }
+# interbtc = { package = "interbtc-standalone", git = "https://github.com/interlay/interbtc", rev = "825030f2caaf741c811568b24d42d1a2547810f7", optional = true }
+# interbtc = { path = "../../interbtc/interbtc", package = "interbtc-standalone", optional = true }
+interbtc = { git = "https://github.com/savudani8/interbtc", branch = "feature/vault-release-version", package = "interbtc-standalone", optional = true }
 rand = { version = "0.7", optional = true }
 
 [dependencies.primitives]

@@ -1,0 +1,8 @@
+--bitcoin-rpc-url http://localhost:18443 \
+--bitcoin-rpc-user rpcuser \
+--bitcoin-rpc-pass rpcpassword \
+--keyfile keyfile.json \
+--keyname 0x124809d7f1c144393dca887c1e00ce5f833db196dbf5eba66ccd12fed1723144 \
+--faucet-url http://localhost:3033 \ 
+--auto-register=KSM=faucet \
+--btc-parachain-url ws://localhost:9944
