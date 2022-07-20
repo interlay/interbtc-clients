@@ -118,11 +118,11 @@ pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send +
     }
 
     // also check in electrs in case there were any requests from before the pruned height
-    if btc_start_height < rescan_start_height {
+    if btc_start_height < btc_pruned_start_height {
         tracing::info!(
             "Also checking electrs for isssue requests between {} and {}...",
             btc_start_height,
-            rescan_start_height
+            btc_pruned_start_height
         );
         bitcoin_core
             .rescan_electrs_for_addresses(

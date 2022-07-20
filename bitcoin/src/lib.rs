@@ -902,9 +902,13 @@ impl BitcoinCoreApi for BitcoinCore {
             )
             .await?;
             for transaction in transactions.into_iter() {
-                let rawtx = esplora_btc_api::apis::tx_api::get_tx_raw(&self.electrs_config, &transaction.txid).await?;
+                trace!("Importing pruned transaction {}...", &transaction.txid);
+                let rawtx = esplora_btc_api::apis::tx_api::get_tx_hex(&self.electrs_config, &transaction.txid).await?;
+                trace!("Got rawtx data {}", rawtx);
                 let merkle_proof =
-                    esplora_btc_api::apis::tx_api::get_tx_merkle_proof(&self.electrs_config, &transaction.txid).await?;
+                    esplora_btc_api::apis::tx_api::get_tx_merkle_block_proof(&self.electrs_config, &transaction.txid)
+                        .await?;
+                trace!("Got merkle proof {}", merkle_proof);
                 self.rpc.call(
                     "importprunedfunds",
                     &[serde_json::to_value(rawtx)?, serde_json::to_value(merkle_proof)?],

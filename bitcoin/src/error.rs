@@ -17,8 +17,8 @@ type ElectrsTxByScriptHashError =
     esplora_btc_api::apis::Error<esplora_btc_api::apis::scripthash_api::GetTxsByScripthashError>;
 type ElectrsAddressTxHistoryError =
     esplora_btc_api::apis::Error<esplora_btc_api::apis::address_api::GetAddressTxHistoryError>;
-type ElectrsRawTxError = esplora_btc_api::apis::Error<esplora_btc_api::apis::tx_api::GetTxRawError>;
-type ElectrsMerkleProofError = esplora_btc_api::apis::Error<esplora_btc_api::apis::tx_api::GetTxMerkleProofError>;
+type ElectrsRawTxError = esplora_btc_api::apis::Error<esplora_btc_api::apis::tx_api::GetTxHexError>;
+type ElectrsMerkleProofError = esplora_btc_api::apis::Error<esplora_btc_api::apis::tx_api::GetTxMerkleBlockProofError>;
 
 #[derive(Error, Debug)]
 pub enum Error {
