@@ -1,6 +1,7 @@
 pub mod cli;
 
 mod addr;
+mod electrs;
 mod error;
 mod iter;
 
@@ -27,6 +28,7 @@ pub use bitcoincore_rpc::{
     jsonrpc::{error::RpcError, Error as JsonRpcError},
     Auth, Client, Error as BitcoinError, RpcApi,
 };
+use electrs::{get_tx_hex, get_tx_merkle_block_proof};
 pub use error::{BitcoinRpcError, ConversionError, Error};
 use esplora_btc_api::apis::configuration::Configuration as ElectrsConfiguration;
 pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
@@ -896,19 +898,32 @@ impl BitcoinCoreApi for BitcoinCore {
         addresses: Vec<A>,
     ) -> Result<(), Error> {
         for address in addresses.into_iter() {
-            let transactions = esplora_btc_api::apis::address_api::get_address_tx_history(
-                &self.electrs_config,
-                &address.encode_str(self.network)?,
-            )
-            .await?;
-            for transaction in transactions.into_iter() {
-                trace!("Importing pruned transaction {}...", &transaction.txid);
-                let rawtx = esplora_btc_api::apis::tx_api::get_tx_hex(&self.electrs_config, &transaction.txid).await?;
-                trace!("Got rawtx data {}", rawtx);
-                let merkle_proof =
-                    esplora_btc_api::apis::tx_api::get_tx_merkle_block_proof(&self.electrs_config, &transaction.txid)
-                        .await?;
-                trace!("Got merkle proof {}", merkle_proof);
+            let address = address.encode_str(self.network)?;
+            let all_transactions =
+                esplora_btc_api::apis::address_api::get_address_tx_history(&self.electrs_config, &address).await?;
+            let confirmed_payments_to = all_transactions.into_iter().filter(|tx| {
+                if let Some(status) = &tx.status {
+                    if !status.confirmed {
+                        return false;
+                    }
+                };
+                if let Some(vout) = &tx.vout {
+                    for output in vout {
+                        if let Some(addr) = &output.scriptpubkey_address {
+                            if addr == &address {
+                                return true;
+                            }
+                        }
+                    }
+                };
+                false
+            });
+            for transaction in confirmed_payments_to {
+                info!("Importing pruned transaction {}...", &transaction.txid);
+                let rawtx = get_tx_hex(&self.electrs_config.base_path, &transaction.txid).await?;
+                info!("Got rawtx data {}", rawtx);
+                let merkle_proof = get_tx_merkle_block_proof(&self.electrs_config.base_path, &transaction.txid).await?;
+                info!("Got merkle proof {}", merkle_proof);
                 self.rpc.call(
                     "importprunedfunds",
                     &[serde_json::to_value(rawtx)?, serde_json::to_value(merkle_proof)?],

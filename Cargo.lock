@@ -497,6 +497,7 @@ dependencies = [
  "num-traits",
  "rand 0.7.3",
  "regex",
+ "reqwest",
  "serde_json",
  "sp-core",
  "thiserror",
@@ -1787,9 +1788,9 @@ dependencies = [
 
 [[package]]
 name = "esplora-btc-api"
-version = "1.0.5"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ccc663368a097acaef02957f728141fe5c1a2932073e50044a3b0cea01c7abb"
+checksum = "f0309de257f421df7081bfb9d5c3167adbd2c23c3589e0b6c5a2cdbdb826be65"
 dependencies = [
  "reqwest",
  "serde",

@@ -9,6 +9,7 @@ use bitcoincore_rpc::{
     jsonrpc::{error::RpcError, Error as JsonRpcError},
 };
 use hex::FromHexError;
+use reqwest::Error as ReqwestError;
 use serde_json::Error as SerdeJsonError;
 use thiserror::Error;
 use tokio::time::error::Elapsed;
@@ -17,8 +18,6 @@ type ElectrsTxByScriptHashError =
     esplora_btc_api::apis::Error<esplora_btc_api::apis::scripthash_api::GetTxsByScripthashError>;
 type ElectrsAddressTxHistoryError =
     esplora_btc_api::apis::Error<esplora_btc_api::apis::address_api::GetAddressTxHistoryError>;
-type ElectrsRawTxError = esplora_btc_api::apis::Error<esplora_btc_api::apis::tx_api::GetTxHexError>;
-type ElectrsMerkleProofError = esplora_btc_api::apis::Error<esplora_btc_api::apis::tx_api::GetTxMerkleBlockProofError>;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -43,9 +42,7 @@ pub enum Error {
     #[error("ElectrsError: {0}")]
     ElectrsAddressTxHistoryError(#[from] ElectrsAddressTxHistoryError),
     #[error("ElectrsError: {0}")]
-    ElectrsRawTxError(#[from] ElectrsRawTxError),
-    #[error("ElectrsError: {0}")]
-    ElectrsMerkleProofError(#[from] ElectrsMerkleProofError),
+    ReqwestError(#[from] ReqwestError),
     #[error("Connected to incompatable bitcoin core version: {0}")]
     IncompatibleVersion(usize),
 
@@ -65,6 +62,8 @@ pub enum Error {
     WalletNotFound,
     #[error("Invalid Bitcoin network")]
     InvalidBitcoinNetwork,
+    #[error("Unable to query Electrs for transaction data")]
+    ElectrsQueryFailed,
 }
 
 impl Error {
