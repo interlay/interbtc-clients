@@ -162,23 +162,6 @@ async fn pay_redeem_from_vault_wallet(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_check_provider() {
-    service::init_subscriber();
-
-    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-
-    let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
-    let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-    let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
-    let vault_id = VaultId::new(
-        AccountKeyring::Charlie.into(),
-        DEFAULT_TESTING_CURRENCY,
-        DEFAULT_WRAPPED_CURRENCY,
-    );
-    tokio::time::sleep(Duration::from_secs(1200000)).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn test_report_vault_theft_succeeds() {
     service::init_subscriber();
 

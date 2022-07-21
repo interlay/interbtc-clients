@@ -61,11 +61,10 @@ pub async fn read_chain_storage<T: Decode + Debug>(
     let v = encoded_bytes.to_vec();
     let decoded_entry = T::decode(&mut &v[..])?;
     Ok(decoded_entry)
-    // TODO: get the following to work. Requires merging this parachain PR: https://github.com/interlay/interbtc/pull/668
+    // TODO: To test this, merge this parachain PR: https://github.com/interlay/interbtc/pull/668
     // Then the metadata needs to be updated in interbtc-clients, so a standalone parachain provider can be
     // instantiated, as in the other integration tests. With that, it will be possible to simulate sending extrinsics
-    // to upgrade the clients version. It's also possible to run `curi` commands against the RPC endpoint of the
-    // standalone provider.
+    // to upgrade the clients version.
 }
 
 pub async fn get_release_version(ws_client: &WsClient) -> Result<String, Error> {

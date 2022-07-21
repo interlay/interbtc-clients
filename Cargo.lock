@@ -85,12 +85,12 @@ dependencies = [
 [[package]]
 name = "annuity"
 version = "1.0.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -483,7 +483,7 @@ version = "1.1.0"
 dependencies = [
  "async-trait",
  "backoff",
- "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7)",
+ "bitcoin 1.2.0",
  "bitcoincore-rpc",
  "clap",
  "esplora-btc-api",
@@ -501,25 +501,6 @@ dependencies = [
  "sp-core",
  "thiserror",
  "tokio",
-]
-
-[[package]]
-name = "bitcoin"
-version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
-dependencies = [
- "bitcoin_hashes 0.7.6",
- "frame-support",
- "hex",
- "impl-serde",
- "parity-scale-codec",
- "scale-info",
- "secp256k1 0.20.1",
- "serde",
- "sha2 0.8.2",
- "sp-core",
- "sp-std 4.0.0 (git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.24)",
- "spin 0.7.1",
 ]
 
 [[package]]
@@ -734,36 +715,16 @@ checksum = "bd769563b4ea2953e2825c9e6b7470a5f55f67e0be00030bf3e390a2a6071f64"
 [[package]]
 name = "btc-relay"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
-dependencies = [
- "bitcoin 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "pallet-timestamp",
- "parity-scale-codec",
- "scale-info",
- "security 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
- "sp-arithmetic",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std 4.0.0 (git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.24)",
-]
-
-[[package]]
-name = "btc-relay"
-version = "1.2.0"
 source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
- "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7)",
+ "bitcoin 1.2.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "security 1.2.0 (git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7)",
+ "security",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
@@ -1328,11 +1289,11 @@ dependencies = [
 [[package]]
 name = "currency"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "mocktopus",
  "orml-tokens",
  "orml-traits",
@@ -1447,7 +1408,7 @@ dependencies = [
 [[package]]
 name = "democracy"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -1807,12 +1768,12 @@ dependencies = [
 [[package]]
 name = "escrow"
 version = "1.0.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "parity-scale-codec",
  "reward",
  "scale-info",
@@ -1909,17 +1870,17 @@ dependencies = [
 [[package]]
 name = "fee"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "currency",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "parity-scale-codec",
  "reward",
  "scale-info",
- "security 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "security",
  "serde",
  "sp-arithmetic",
  "sp-core",
@@ -3005,25 +2966,9 @@ dependencies = [
 [[package]]
 name = "interbtc-primitives"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
-dependencies = [
- "bitcoin 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
- "bstringify",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "sp-core",
- "sp-runtime",
- "sp-std 4.0.0 (git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.24)",
- "xcm",
-]
-
-[[package]]
-name = "interbtc-primitives"
-version = "1.2.0"
 source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
- "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7)",
+ "bitcoin 1.2.0",
  "bstringify",
  "parity-scale-codec",
  "scale-info",
@@ -3037,10 +2982,10 @@ dependencies = [
 [[package]]
 name = "interbtc-rpc"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "futures 0.3.21",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "jsonrpsee 0.13.1",
  "module-btc-relay-rpc",
  "module-issue-rpc",
@@ -3067,10 +3012,10 @@ dependencies = [
 [[package]]
 name = "interbtc-runtime-standalone"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "annuity",
- "btc-relay 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "btc-relay",
  "currency",
  "democracy",
  "escrow",
@@ -3080,11 +3025,11 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "issue",
  "module-btc-relay-rpc-runtime-api",
  "module-issue-rpc-runtime-api",
- "module-oracle-rpc-runtime-api 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "module-oracle-rpc-runtime-api",
  "module-redeem-rpc-runtime-api",
  "module-refund-rpc-runtime-api",
  "module-relay-rpc-runtime-api",
@@ -3120,7 +3065,7 @@ dependencies = [
  "replace",
  "reward",
  "scale-info",
- "security 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "security",
  "serde",
  "sp-api",
  "sp-arithmetic",
@@ -3145,15 +3090,15 @@ dependencies = [
 [[package]]
 name = "interbtc-standalone"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
- "bitcoin 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "bitcoin 1.2.0",
  "clap",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-support",
  "hex-literal",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "interbtc-rpc",
  "interbtc-runtime-standalone",
  "log 0.4.17",
@@ -3221,16 +3166,16 @@ checksum = "879d54834c8c76457ef4293a689b2a8c59b076067ad77b15efafbb05f92a592b"
 [[package]]
 name = "issue"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
- "bitcoin 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
- "btc-relay 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "bitcoin 1.2.0",
+ "btc-relay",
  "currency",
  "fee",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "oracle 1.2.0",
  "orml-tokens",
  "orml-traits",
@@ -3238,7 +3183,7 @@ dependencies = [
  "parity-scale-codec",
  "refund",
  "scale-info",
- "security 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "security",
  "serde",
  "sp-arithmetic",
  "sp-core",
@@ -4807,7 +4752,7 @@ dependencies = [
 [[package]]
 name = "module-btc-relay-rpc"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "jsonrpsee 0.13.1",
  "module-btc-relay-rpc-runtime-api",
@@ -4820,7 +4765,7 @@ dependencies = [
 [[package]]
 name = "module-btc-relay-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4831,7 +4776,7 @@ dependencies = [
 [[package]]
 name = "module-issue-rpc"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "jsonrpsee 0.13.1",
  "module-issue-rpc-runtime-api",
@@ -4844,7 +4789,7 @@ dependencies = [
 [[package]]
 name = "module-issue-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4855,26 +4800,14 @@ dependencies = [
 [[package]]
 name = "module-oracle-rpc"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "jsonrpsee 0.13.1",
- "module-oracle-rpc-runtime-api 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "module-oracle-rpc-runtime-api",
  "parity-scale-codec",
  "sp-api",
  "sp-blockchain",
  "sp-runtime",
-]
-
-[[package]]
-name = "module-oracle-rpc-runtime-api"
-version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
-dependencies = [
- "frame-support",
- "parity-scale-codec",
- "serde",
- "sp-api",
- "sp-std 4.0.0 (git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.24)",
 ]
 
 [[package]]
@@ -4892,7 +4825,7 @@ dependencies = [
 [[package]]
 name = "module-redeem-rpc"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "jsonrpsee 0.13.1",
  "module-redeem-rpc-runtime-api",
@@ -4905,7 +4838,7 @@ dependencies = [
 [[package]]
 name = "module-redeem-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4916,7 +4849,7 @@ dependencies = [
 [[package]]
 name = "module-refund-rpc"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "jsonrpsee 0.13.1",
  "module-refund-rpc-runtime-api",
@@ -4929,7 +4862,7 @@ dependencies = [
 [[package]]
 name = "module-refund-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4940,7 +4873,7 @@ dependencies = [
 [[package]]
 name = "module-relay-rpc"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "jsonrpsee 0.13.1",
  "module-relay-rpc-runtime-api",
@@ -4953,7 +4886,7 @@ dependencies = [
 [[package]]
 name = "module-relay-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4964,7 +4897,7 @@ dependencies = [
 [[package]]
 name = "module-replace-rpc"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "jsonrpsee 0.13.1",
  "module-replace-rpc-runtime-api",
@@ -4977,7 +4910,7 @@ dependencies = [
 [[package]]
 name = "module-replace-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4988,10 +4921,10 @@ dependencies = [
 [[package]]
 name = "module-vault-registry-rpc"
 version = "0.3.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "jsonrpsee 0.13.1",
- "module-oracle-rpc-runtime-api 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "module-oracle-rpc-runtime-api",
  "module-vault-registry-rpc-runtime-api",
  "parity-scale-codec",
  "sp-api",
@@ -5002,10 +4935,10 @@ dependencies = [
 [[package]]
 name = "module-vault-registry-rpc-runtime-api"
 version = "0.3.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-support",
- "module-oracle-rpc-runtime-api 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "module-oracle-rpc-runtime-api",
  "parity-scale-codec",
  "sp-api",
  "sp-std 4.0.0 (git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.24)",
@@ -5285,14 +5218,14 @@ dependencies = [
 [[package]]
 name = "nomination"
 version = "0.5.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "currency",
  "fee",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "oracle 1.2.0",
  "orml-tokens",
  "orml-traits",
@@ -5300,7 +5233,7 @@ dependencies = [
  "parity-scale-codec",
  "reward",
  "scale-info",
- "security 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "security",
  "serde",
  "sp-arithmetic",
  "sp-core",
@@ -5549,17 +5482,17 @@ dependencies = [
 [[package]]
 name = "oracle"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "currency",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "security 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "security",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
@@ -6876,23 +6809,23 @@ dependencies = [
 [[package]]
 name = "redeem"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
- "bitcoin 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
- "btc-relay 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "bitcoin 1.2.0",
+ "btc-relay",
  "currency",
  "fee",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "oracle 1.2.0",
  "orml-tokens",
  "orml-traits",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "security 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "security",
  "serde",
  "sp-arithmetic",
  "sp-core",
@@ -6945,23 +6878,23 @@ dependencies = [
 [[package]]
 name = "refund"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
- "bitcoin 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
- "btc-relay 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "bitcoin 1.2.0",
+ "btc-relay",
  "currency",
  "fee",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "oracle 1.2.0",
  "orml-tokens",
  "orml-traits",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "security 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "security",
  "serde",
  "sp-arithmetic",
  "sp-core",
@@ -7023,16 +6956,16 @@ dependencies = [
 [[package]]
 name = "relay"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
- "bitcoin 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
- "btc-relay 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "bitcoin 1.2.0",
+ "btc-relay",
  "currency",
  "fee",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "nomination",
  "oracle 1.2.0",
  "orml-tokens",
@@ -7042,7 +6975,7 @@ dependencies = [
  "refund",
  "replace",
  "scale-info",
- "security 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "security",
  "serde",
  "sp-arithmetic",
  "sp-core",
@@ -7064,16 +6997,16 @@ dependencies = [
 [[package]]
 name = "replace"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
- "bitcoin 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
- "btc-relay 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "bitcoin 1.2.0",
+ "btc-relay",
  "currency",
  "fee",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "nomination",
  "oracle 1.2.0",
  "orml-tokens",
@@ -7081,7 +7014,7 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "security 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "security",
  "serde",
  "sp-arithmetic",
  "sp-core",
@@ -7148,12 +7081,12 @@ checksum = "4389f1d5789befaf6029ebd9f7dac4af7f7e3d61b69d4f30e2ac02b57e7712b0"
 [[package]]
 name = "reward"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -7232,18 +7165,18 @@ dependencies = [
  "async-trait",
  "backoff",
  "bitcoin 1.1.0",
- "bitcoin 1.2.0 (git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7)",
- "btc-relay 1.2.0 (git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7)",
+ "bitcoin 1.2.0",
+ "btc-relay",
  "cfg-if 1.0.0",
  "clap",
  "env_logger 0.8.4",
  "frame-support",
  "futures 0.3.21",
- "interbtc-primitives 1.2.0 (git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7)",
+ "interbtc-primitives",
  "interbtc-standalone",
  "jsonrpsee 0.10.1",
  "log 0.4.17",
- "module-oracle-rpc-runtime-api 1.2.0 (git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7)",
+ "module-oracle-rpc-runtime-api",
  "parity-scale-codec",
  "prometheus 0.12.0",
  "rand 0.7.3",
@@ -8484,22 +8417,6 @@ dependencies = [
 [[package]]
 name = "security"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
-dependencies = [
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "sha2 0.8.2",
- "sp-core",
- "sp-runtime",
- "sp-std 4.0.0 (git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.24)",
-]
-
-[[package]]
-name = "security"
-version = "1.2.0"
 source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-support",
@@ -9595,12 +9512,12 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 [[package]]
 name = "staking"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "orml-tokens",
  "orml-traits",
  "parity-scale-codec",
@@ -9820,12 +9737,12 @@ dependencies = [
 [[package]]
 name = "supply"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -10582,16 +10499,16 @@ dependencies = [
 [[package]]
 name = "vault-registry"
 version = "1.2.0"
-source = "git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version#362f5240eee1e2079d1833ec3eebc6804fa63446"
+source = "git+https://github.com/interlay/interbtc?rev=825030f2caaf741c811568b24d42d1a2547810f7#825030f2caaf741c811568b24d42d1a2547810f7"
 dependencies = [
- "bitcoin 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "bitcoin 1.2.0",
  "currency",
  "fee",
  "fixed-hash",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "interbtc-primitives 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "interbtc-primitives",
  "log 0.4.17",
  "oracle 1.2.0",
  "orml-tokens",
@@ -10600,7 +10517,7 @@ dependencies = [
  "parity-scale-codec",
  "reward",
  "scale-info",
- "security 1.2.0 (git+https://github.com/savudani8/interbtc?branch=feature/vault-release-version)",
+ "security",
  "serde",
  "sp-arithmetic",
  "sp-core",
