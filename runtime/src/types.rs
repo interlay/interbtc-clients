@@ -5,7 +5,7 @@ use subxt::sp_core::{crypto::Ss58Codec, sr25519::Pair as KeyPair};
 pub use primitives::{
     CurrencyId,
     CurrencyId::{ForeignAsset, Token},
-    TokenSymbol::{DOT, IBTC, INTR, KBTC, KINT, KSM},
+    TokenSymbol::{self, DOT, IBTC, INTR, KBTC, KINT, KSM},
 };
 
 pub use currency_id::CurrencyIdExt;

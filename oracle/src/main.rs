@@ -217,10 +217,9 @@ async fn main() -> Result<(), Error> {
         .await?;
 
         join_all(opts.currency_id.iter().map(|(symbol, amount)| async move {
-            Ok((
-                parachain_rpc.parse_currency_id(symbol.to_string()).await?,
-                amount.clone(),
-            ))
+            let currency_id = parachain_rpc.parse_currency_id(symbol.to_string()).await?;
+            let coingecko_id = parachain_rpc.get_coingecko_id(currency_id).await?;
+            Ok((currency_id, coingecko_id, amount.clone()))
         }))
         .await
         .into_iter()
@@ -229,27 +228,26 @@ async fn main() -> Result<(), Error> {
 
     let exchange_rates_to_set = parsed_currency_ids
         .into_iter()
-        .map(|(currency_id, explicit_exchange_rate)| match explicit_exchange_rate {
-            Some(rate) => Ok((currency_id, UrlOrDefault::Def(rate.clone()))),
-            None => {
-                let mut url = match &opts.coingecko {
-                    Some(x) => x.clone(),
-                    None => {
-                        return Err(Error::InvalidArguments);
+        .map(
+            |(currency_id, coingecko_id, explicit_exchange_rate)| match explicit_exchange_rate {
+                Some(rate) => Ok((currency_id, UrlOrDefault::Def(rate.clone()))),
+                None => {
+                    let mut url = match &opts.coingecko {
+                        Some(x) => x.clone(),
+                        None => {
+                            return Err(Error::InvalidArguments);
+                        }
+                    };
+                    url.set_path(&format!("{}/simple/price", url.path()));
+                    url.set_query(Some(&format!("ids={}&vs_currencies={}", coingecko_id, BTC_CURRENCY)));
+                    if let Some(api_key) = &opts.coingecko_api_key {
+                        url.query_pairs_mut().append_pair(COINGECKO_API_KEY_PARAMETER, api_key);
                     }
-                };
-                url.set_path(&format!("{}/simple/price", url.path()));
-                url.set_query(Some(&format!(
-                    "ids={}&vs_currencies={}",
-                    currency_id.inner().unwrap().name().to_lowercase(),
-                    BTC_CURRENCY
-                )));
-                if let Some(api_key) = &opts.coingecko_api_key {
-                    url.query_pairs_mut().append_pair(COINGECKO_API_KEY_PARAMETER, api_key);
+                    log::info!("Url: {}", url.to_string());
+                    Ok((currency_id, UrlOrDefault::Url(url)))
                 }
-                Ok((currency_id, UrlOrDefault::Url(url)))
-            }
-        })
+            },
+        )
         .collect::<Result<Vec<_>, _>>()?;
 
     // append the conversion_factor

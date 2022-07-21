@@ -450,6 +450,19 @@ impl InterBtcParachain {
         Ok(())
     }
 
+    pub async fn get_coingecko_id(&self, currency_id: CurrencyId) -> Result<String, Error> {
+        match currency_id {
+            CurrencyId::Token(x) => Ok(x.name().to_string()),
+            CurrencyId::ForeignAsset(id) => {
+                let metadata = self.get_foreign_asset_metadata(id).await?;
+                let asset_name = std::str::from_utf8(&metadata.name)?.to_lowercase();
+                // todo: replace with coingecko_id from metadata.additional
+                let coingecko_id = asset_name.replace(" ", "-");
+                Ok(coingecko_id)
+            }
+        }
+    }
+
     pub async fn parse_currency_id(&self, symbol: String) -> Result<CurrencyId, Error> {
         let uppercase_symbol = symbol.to_uppercase();
         // try hardcoded currencies first
@@ -493,6 +506,8 @@ pub trait UtilFuncs {
     fn is_this_vault(&self, vault_id: &VaultId) -> bool;
 
     async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, Error>;
+
+    async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, Error>;
 }
 
 #[async_trait]
@@ -533,6 +548,16 @@ impl UtilFuncs for InterBtcParachain {
             ret.push((decoded_key, value));
         }
         Ok(ret)
+    }
+
+    async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, Error> {
+        let head = self.get_latest_block_hash().await?;
+        self.api
+            .storage()
+            .asset_registry()
+            .metadata(&id, head)
+            .await?
+            .ok_or(Error::AssetNotFound)
     }
 }
 
