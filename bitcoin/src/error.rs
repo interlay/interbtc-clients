@@ -64,6 +64,12 @@ pub enum Error {
     InvalidBitcoinNetwork,
     #[error("Unable to query Electrs for transaction data")]
     ElectrsQueryFailed,
+    #[error("Transaction contains more than one return-to-self utxo")]
+    TooManyReturnToSelfAddresses,
+    #[error("ArithmeticError")]
+    ArithmeticError,
+    #[error(transparent)]
+    TryFromIntError(#[from] std::num::TryFromIntError),
 }
 
 impl Error {
