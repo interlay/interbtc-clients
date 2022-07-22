@@ -22,7 +22,16 @@ pub trait PartialAddress: Sized + Eq + PartialOrd {
     ///
     /// # Arguments
     /// * `network` - network to prefix
-    fn encode_str(&self, network: Network) -> Result<String, ConversionError>;
+    fn encode_str(&self, network: Network) -> Result<String, ConversionError> {
+        let address = self.to_address(network)?;
+        Ok(address.to_string())
+    }
+
+    /// Encode the `PartialAddress` as an address that the bitcoin rpc can use.
+    ///
+    /// # Arguments
+    /// * `network` - network to prefix
+    fn to_address(&self, network: Network) -> Result<Address, ConversionError>;
 }
 
 #[cfg(feature = "interbtc")]
@@ -46,7 +55,7 @@ impl PartialAddress for interbtc_bitcoin::Address {
         Self::from_payload(addr.payload)
     }
 
-    fn encode_str(&self, network: Network) -> Result<String, ConversionError> {
+    fn to_address(&self, network: Network) -> Result<Address, ConversionError> {
         let script = match self {
             Self::P2PKH(hash) => Script::new_p2pkh(&PubkeyHash::from_slice(hash.as_bytes())?),
             Self::P2SH(hash) => Script::new_p2sh(&ScriptHash::from_slice(hash.as_bytes())?),
@@ -55,8 +64,7 @@ impl PartialAddress for interbtc_bitcoin::Address {
         };
 
         let payload = Payload::from_script(&script).ok_or(ConversionError::InvalidPayload)?;
-        let address = Address { payload, network };
-        Ok(address.to_string())
+        Ok(Address { payload, network })
     }
 }
 
@@ -70,12 +78,11 @@ impl PartialAddress for Payload {
         Ok(address.payload)
     }
 
-    fn encode_str(&self, network: Network) -> Result<String, ConversionError> {
-        let address = Address {
+    fn to_address(&self, network: Network) -> Result<Address, ConversionError> {
+        Ok(Address {
             network,
             payload: self.clone(),
-        };
-        Ok(address.to_string())
+        })
     }
 }
 
