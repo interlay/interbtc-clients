@@ -96,8 +96,6 @@ pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send +
         if let Err(e) = add_new_deposit_key(bitcoin_core, issue_id, request.btc_public_key).await {
             tracing::error!("Failed to add deposit key #{}: {}", issue_id, e.to_string());
         }
-        // TODO: get TXs from elects
-        // then importprunedfunds
     }
 
     // read height only _after_ the last add_new_deposit_height.If a new block arrives
@@ -120,7 +118,7 @@ pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send +
     // also check in electrs in case there were any requests from before the pruned height
     if btc_start_height < btc_pruned_start_height {
         tracing::info!(
-            "Also checking electrs for isssue requests between {} and {}...",
+            "Also checking electrs for issue requests between {} and {}...",
             btc_start_height,
             btc_pruned_start_height
         );

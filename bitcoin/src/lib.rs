@@ -901,6 +901,9 @@ impl BitcoinCoreApi for BitcoinCore {
             let address = address.encode_str(self.network)?;
             let all_transactions =
                 esplora_btc_api::apis::address_api::get_address_tx_history(&self.electrs_config, &address).await?;
+            // filter to only import a) payments in the blockchain (the API returns mempool transactions
+            // too) and b) payments TO the address (the API also returns any txes that have that
+            // address in the vin, which we will already have since we will have made the payment)
             let confirmed_payments_to = all_transactions.into_iter().filter(|tx| {
                 if let Some(status) = &tx.status {
                     if !status.confirmed {
