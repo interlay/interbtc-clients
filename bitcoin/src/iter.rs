@@ -266,6 +266,14 @@ mod tests {
             ) -> Result<(), Error>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
             fn get_utxo_count(&self) -> Result<usize, Error>;
+            async fn create_bumped_transaction<A: PartialAddress + Send + Sync + 'static>(
+                &self,
+                txid: &Txid,
+                address: A,
+                fee_rate: u64,
+            ) -> Result<LockedTransaction, Error>;
+            fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error>;
+            fn fee_rate(&self, txid: Txid) -> Result<u64, Error>;
         }
     }
 

@@ -281,7 +281,6 @@ impl Request {
         num_confirmations: u32,
         mut txid: Txid,
     ) -> Result<TransactionMetadata, Error> {
-
         loop {
             tracing::info!("Awaiting bitcoin confirmations for {txid}");
 
@@ -725,6 +724,7 @@ mod tests {
             async fn wrapped_to_collateral(&self, amount: u128, currency_id: CurrencyId) -> Result<u128, RuntimeError>;
             async fn collateral_to_wrapped(&self, amount: u128, currency_id: CurrencyId) -> Result<u128, RuntimeError>;
             async fn has_updated(&self, key: &OracleKey) -> Result<bool, RuntimeError>;
+            fn on_fee_rate_change(&self) -> FeeRateUpdateReceiver;
         }
     }
 
@@ -773,6 +773,14 @@ mod tests {
             async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(&self, addresses: Vec<A>) -> Result<(), BitcoinError>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError>;
             fn get_utxo_count(&self) -> Result<usize, BitcoinError>;
+            async fn create_bumped_transaction<A: PartialAddress + Send + Sync + 'static>(
+                &self,
+                txid: &Txid,
+                address: A,
+                fee_rate: u64,
+            ) -> Result<LockedTransaction, BitcoinError>;
+            fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
+            fn fee_rate(&self, txid: Txid) -> Result<u64, BitcoinError>;
         }
     }
 
@@ -854,6 +862,10 @@ mod tests {
                 .returning(move || Ok(current_parachain_height));
             parachain_rpc.expect_execute_redeem().returning(|_, _, _| Ok(()));
             parachain_rpc.expect_wait_for_block_in_relay().returning(|_, _| Ok(()));
+
+            parachain_rpc
+                .expect_on_fee_rate_change()
+                .returning(|| tokio::sync::broadcast::channel(2).1);
 
             let mut btc_rpc = MockBitcoin::default();
 
@@ -1002,6 +1014,9 @@ mod tests {
             .expect_wait_for_block_in_relay()
             .times(1)
             .returning(|_, _| Ok(()));
+        parachain_rpc
+            .expect_on_fee_rate_change()
+            .returning(|| tokio::sync::broadcast::channel(2).1);
 
         let mut btc_rpc = MockBitcoin::default();
         btc_rpc

@@ -558,4 +558,21 @@ impl BitcoinCoreApi for MockBitcoinCore {
     fn get_utxo_count(&self) -> Result<usize, BitcoinError> {
         Ok(0)
     }
+
+    async fn create_bumped_transaction<A: PartialAddress + Send + Sync + 'static>(
+        &self,
+        txid: &Txid,
+        address: A,
+        fee_rate: u64,
+    ) -> Result<LockedTransaction, BitcoinError> {
+        unimplemented!()
+    }
+
+    fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError> {
+        unimplemented!()
+    }
+
+    fn fee_rate(&self, txid: Txid) -> Result<u64, BitcoinError> {
+        unimplemented!()
+    }
 }

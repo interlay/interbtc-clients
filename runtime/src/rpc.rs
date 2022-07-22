@@ -75,7 +75,7 @@ cfg_if::cfg_if! {
 type RuntimeApi = metadata::RuntimeApi<InterBtcRuntime, PolkadotExtrinsicParams<InterBtcRuntime>>;
 pub(crate) type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
 pub(crate) type FeeRateUpdateSender = tokio::sync::broadcast::Sender<FixedU128>;
-pub(crate) type FeeRateUpdateReceiver = tokio::sync::broadcast::Receiver<FixedU128>;
+pub type FeeRateUpdateReceiver = tokio::sync::broadcast::Receiver<FixedU128>;
 
 #[derive(Clone)]
 pub struct InterBtcParachain {
