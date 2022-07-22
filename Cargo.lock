@@ -13171,6 +13171,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite 0.2.9",
  "tokio",
+ "tokio-util 0.7.3",
 ]
 
 [[package]]
@@ -13677,6 +13678,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-metrics",
+ "tokio-stream",
  "tracing",
  "tracing-futures",
  "tracing-subscriber",

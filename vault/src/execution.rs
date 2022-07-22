@@ -15,6 +15,7 @@ use runtime::{
 use service::{spawn_cancelable, ShutdownSender};
 use std::{collections::HashMap, convert::TryInto, time::Duration};
 use tokio::time::sleep;
+use tokio_stream::wrappers::BroadcastStream;
 
 const ON_FORK_RETRY_DELAY: Duration = Duration::from_secs(10);
 
@@ -244,9 +245,109 @@ impl Request {
         tracing::info!("Sending bitcoin to {}", recipient);
 
         let txid = btc_rpc.send_transaction(tx).await?;
+        self.await_inclusion(parachain_rpc, btc_rpc, num_confirmations, txid)
+            .await
+    }
+
+    async fn bump_fee<B: BitcoinCoreApi + Clone>(
+        &self,
+        btc_rpc: &B,
+        old_txid: Txid,
+        fee_rate: u64,
+    ) -> Result<Txid, Error> {
+        let new_tx = btc_rpc
+            .create_bumped_transaction(&old_txid, self.btc_address, fee_rate)
+            .await?;
+        let new_txid = btc_rpc.send_transaction(new_tx).await?;
+        tracing::info!("Bumped fee... {new_txid}");
+        Ok(new_txid)
+    }
+
+    #[tracing::instrument(
+        name = "await_inclusion",
+        skip(self, parachain_rpc, btc_rpc),
+        fields(
+            request_type = ?self.request_type,
+            request_id = ?self.hash,
+        )
+    )]
+    async fn await_inclusion<
+        B: BitcoinCoreApi + Clone,
+        P: OraclePallet + BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
+    >(
+        &self,
+        parachain_rpc: &P,
+        btc_rpc: &B,
+        num_confirmations: u32,
+        mut txid: Txid,
+    ) -> Result<TransactionMetadata, Error> {
 
         loop {
-            let tx_metadata = btc_rpc.wait_for_transaction_metadata(txid, num_confirmations).await?;
+            tracing::info!("Awaiting bitcoin confirmations for {txid}");
+
+            let txid_copy = txid.clone();
+
+            let fee_rate_subscription = parachain_rpc.on_fee_rate_change();
+            let fee_rate_subscription = BroadcastStream::new(fee_rate_subscription);
+            let subscription = fee_rate_subscription
+                .map_err(|e| Into::<Error>::into(e))
+                .and_then(|x| {
+                    tracing::debug!("Received new inclusion fee estimate {}...", x);
+
+                    let ret: Result<u64, _> = x
+                        .into_inner()
+                        .checked_div(FixedU128::accuracy())
+                        .ok_or(Error::ArithmeticUnderflow)
+                        .and_then(|x| x.try_into().map_err(Into::<Error>::into));
+                    futures::future::ready(ret)
+                })
+                .try_filter_map(|x| async move {
+                    match btc_rpc.fee_rate(txid) {
+                        Ok(current_fee) => {
+                            tracing::debug!("Current fee rate = {current_fee}. New estimate = {x}");
+                            if x > current_fee {
+                                Ok(Some((current_fee, x)))
+                            } else {
+                                Ok(None)
+                            }
+                        }
+                        Err(e) => {
+                            tracing::debug!("Failed to get fee_rate: {}", e);
+                            Ok(None)
+                        }
+                    }
+                })
+                .filter_map(|x| async {
+                    match btc_rpc.is_in_mempool(txid_copy) {
+                        Ok(false) => {
+                            //   if not in mempool anymore, don't propagate the event (even if it is an error)
+                            tracing::debug!("Txid not in mempool anymore...");
+                            None
+                        }
+                        Ok(true) => {
+                            tracing::debug!("Txid is still in mempool...");
+                            Some(x)
+                        }
+                        Err(e) => Some(Err(e.into())),
+                    }
+                });
+
+            let wait_for_transaction_metadata = btc_rpc.wait_for_transaction_metadata(txid, num_confirmations);
+            futures::pin_mut!(subscription);
+
+            use futures::future::Either;
+            let tx_metadata = match futures::future::select(wait_for_transaction_metadata, subscription.next()).await {
+                Either::Left((result, _)) => result?,
+                Either::Right((Some(Ok((old_fee, new_fee))), _)) => {
+                    tracing::info!("Bumping fee rate from {old_fee} to {new_fee}...");
+                    txid = self.bump_fee(btc_rpc, txid, new_fee).await?;
+                    continue;
+                }
+                _ => {
+                    tracing::warn!("Unexpected select result");
+                    continue;
+                }
+            };
 
             tracing::info!("Awaiting parachain confirmations...");
 
@@ -307,6 +408,8 @@ impl Request {
             },
         )
         .await?;
+
+        tracing::info!("Executed request #{:?}", self.hash);
 
         Ok(())
     }
@@ -421,42 +524,18 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                     }
                 };
 
-                // Payment has been made, but it might not have been confirmed enough times yet
-                let tx_metadata = btc_rpc
-                    .clone()
-                    .wait_for_transaction_metadata(tx.txid(), num_confirmations)
-                    .await;
-
-                match tx_metadata {
+                match request
+                    .await_inclusion(&parachain_rpc, &btc_rpc, num_confirmations, tx.txid())
+                    .await
+                {
                     Ok(tx_metadata) => {
-                        // we have enough btc confirmations, now make sure they have been relayed before we continue
-                        if let Err(e) = parachain_rpc
-                            .wait_for_block_in_relay(
-                                H256Le::from_bytes_le(&tx_metadata.block_hash),
-                                Some(num_confirmations),
-                            )
-                            .await
-                        {
-                            tracing::error!(
-                                "Error while waiting for block inclusion for request #{}: {}",
-                                request.hash,
-                                e
-                            );
-                            // continue; try to execute anyway
-                        }
-
-                        match request.execute(parachain_rpc.clone(), tx_metadata).await {
-                            Ok(_) => {
-                                tracing::info!("Executed request #{:?}", request.hash);
-                            }
-                            Err(e) => tracing::error!("Failed to execute request #{}: {}", request.hash, e),
+                        if let Err(e) = request.execute(parachain_rpc.clone(), tx_metadata).await {
+                            tracing::error!("Failed to execute request #{}: {}", request.hash, e);
                         }
                     }
-                    Err(e) => tracing::error!(
-                        "Failed to confirm bitcoin transaction for request {}: {}",
-                        request.hash,
-                        e
-                    ),
+                    Err(e) => {
+                        tracing::error!("Error while waiting for inclusion for request #{}: {}", request.hash, e);
+                    }
                 }
             });
         }
