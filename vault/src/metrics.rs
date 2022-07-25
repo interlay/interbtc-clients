@@ -712,9 +712,9 @@ mod tests {
     };
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
-        AccountId, Balance, BlockNumber, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, ErrorCode,
-        InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcRefundRequest, InterBtcReplaceRequest, InterBtcVault,
-        RequestIssueEvent, StatusCode, Token, VaultId, VaultStatus, Wallet, DOT, H256, IBTC, INTR,
+        AccountId, AssetMetadata, Balance, BlockNumber, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError,
+        ErrorCode, InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcRefundRequest, InterBtcReplaceRequest,
+        InterBtcVault, RequestIssueEvent, StatusCode, Token, VaultId, VaultStatus, Wallet, DOT, H256, IBTC, INTR,
     };
     use std::collections::BTreeSet;
 
@@ -728,6 +728,8 @@ mod tests {
             fn get_native_currency_id(&self) -> CurrencyId;
             fn get_account_id(&self) -> &AccountId;
             fn is_this_vault(&self, vault_id: &VaultId) -> bool;
+            async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, RuntimeError>;
+            async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, RuntimeError>;
         }
 
         #[async_trait]

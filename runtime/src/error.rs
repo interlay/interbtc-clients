@@ -5,12 +5,11 @@ use codec::Error as CodecError;
 use jsonrpsee::{client_transport::ws::WsHandshakeError, core::error::Error as RequestError, types::error::CallError};
 use prometheus::Error as PrometheusError;
 use serde_json::Error as SerdeJsonError;
-use std::{array::TryFromSliceError, fmt::Debug, io::Error as IoError, num::TryFromIntError};
+use std::{array::TryFromSliceError, fmt::Debug, io::Error as IoError, num::TryFromIntError, str::Utf8Error};
 use subxt::{sp_core::crypto::SecretStringError, BasicError, ModuleError, TransactionError};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
 use url::ParseError as UrlParseError;
-
 pub type SubxtError = subxt::Error<DispatchError>;
 
 #[derive(Error, Debug)]
@@ -25,6 +24,8 @@ pub enum Error {
     RequestReplaceIDNotFound,
     #[error("Could not get block")]
     BlockNotFound,
+    #[error("Could not get foreign asset")]
+    AssetNotFound,
     #[error("Could not get vault")]
     VaultNotFound,
     #[error("Vault has been liquidated")]
@@ -81,6 +82,8 @@ pub enum Error {
     UrlParseError(#[from] UrlParseError),
     #[error("PrometheusError: {0}")]
     PrometheusError(#[from] PrometheusError),
+    #[error("Utf8Error: {0}")]
+    Utf8Error(#[from] Utf8Error),
 }
 
 impl From<BasicError> for Error {

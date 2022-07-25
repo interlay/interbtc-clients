@@ -558,8 +558,8 @@ mod tests {
     };
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
-        AccountId, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError, ErrorCode, InterBtcRichBlockHeader,
-        InterBtcVault, OracleKey, StatusCode, Token, DOT, IBTC,
+        AccountId, AssetMetadata, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError, ErrorCode,
+        InterBtcRichBlockHeader, InterBtcVault, OracleKey, StatusCode, Token, DOT, IBTC,
     };
     use sp_core::H160;
     use std::collections::BTreeSet;
@@ -587,6 +587,8 @@ mod tests {
             fn get_native_currency_id(&self) -> CurrencyId;
             fn get_account_id(&self) -> &AccountId;
             fn is_this_vault(&self, vault_id: &VaultId) -> bool;
+            async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, RuntimeError>;
+            async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, RuntimeError>;
         }
         #[async_trait]
         pub trait VaultRegistryPallet {
