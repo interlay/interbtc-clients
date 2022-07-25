@@ -28,7 +28,7 @@ pub use bitcoincore_rpc::{
     jsonrpc::{error::RpcError, Error as JsonRpcError},
     Auth, Client, Error as BitcoinError, RpcApi,
 };
-use electrs::{get_tx_hex, get_tx_merkle_block_proof};
+use electrs::{get_address_tx_history_full, get_tx_hex, get_tx_merkle_block_proof};
 pub use error::{BitcoinRpcError, ConversionError, Error};
 use esplora_btc_api::apis::configuration::Configuration as ElectrsConfiguration;
 pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
@@ -899,8 +899,7 @@ impl BitcoinCoreApi for BitcoinCore {
     ) -> Result<(), Error> {
         for address in addresses.into_iter() {
             let address = address.encode_str(self.network)?;
-            let all_transactions =
-                esplora_btc_api::apis::address_api::get_address_tx_history(&self.electrs_config, &address).await?;
+            let all_transactions = get_address_tx_history_full(&self.electrs_config.base_path, &address).await?;
             // filter to only import
             // a) payments in the blockchain (not in mempool), and
             // b) payments TO the address (as bitcoin core will already know about transactions spending FROM it)
