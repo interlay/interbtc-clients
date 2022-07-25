@@ -39,7 +39,7 @@ mod metadata_aliases {
         vault_registry::types::VaultStatus,
     };
     pub type InterBtcVault =
-        metadata::runtime_types::vault_registry::types::Vault<AccountId, BlockNumber, Balance, CurrencyId>;
+        metadata::runtime_types::vault_registry::types::Vault<AccountId, BlockNumber, Balance, CurrencyId, FixedU128>;
     pub use metadata::runtime_types::vault_registry::types::Wallet;
     pub type InterBtcRichBlockHeader = metadata::runtime_types::btc_relay::types::RichBlockHeader<BlockNumber>;
     pub type BitcoinBlockHeight = u32;
