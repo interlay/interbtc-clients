@@ -410,8 +410,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
 
     // iterate through transactions in reverse order, starting from those in the mempool, and
     // gracefully fail on encountering a pruned blockchain
-    let mut transaction_stream =
-        bitcoin::reverse_stream_transactions(&read_only_btc_rpc, btc_start_height, true).await?;
+    let mut transaction_stream = bitcoin::reverse_stream_transactions(&read_only_btc_rpc, btc_start_height).await?;
     while let Some(result) = transaction_stream.next().await {
         let tx = match result {
             Ok(x) => x,

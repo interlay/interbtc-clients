@@ -901,32 +901,24 @@ impl BitcoinCoreApi for BitcoinCore {
             let address = address.encode_str(self.network)?;
             let all_transactions =
                 esplora_btc_api::apis::address_api::get_address_tx_history(&self.electrs_config, &address).await?;
-            // filter to only import a) payments in the blockchain (the API returns mempool transactions
-            // too) and b) payments TO the address (the API also returns any txes that have that
-            // address in the vin, which we will already have since we will have made the payment)
+            // filter to only import
+            // a) payments in the blockchain (not in mempool), and
+            // b) payments TO the address (as bitcoin core will already know about transactions spending FROM it)
             let confirmed_payments_to = all_transactions.into_iter().filter(|tx| {
                 if let Some(status) = &tx.status {
                     if !status.confirmed {
                         return false;
                     }
                 };
-                if let Some(vout) = &tx.vout {
-                    for output in vout {
-                        if let Some(addr) = &output.scriptpubkey_address {
-                            if addr == &address {
-                                return true;
-                            }
-                        }
-                    }
-                };
-                false
+                tx.vout
+                    .as_ref()
+                    .unwrap_or(&vec![])
+                    .iter()
+                    .any(|output| matches!(&output.scriptpubkey_address, Some(addr) if addr == &address))
             });
             for transaction in confirmed_payments_to {
-                info!("Importing pruned transaction {}...", &transaction.txid);
                 let rawtx = get_tx_hex(&self.electrs_config.base_path, &transaction.txid).await?;
-                info!("Got rawtx data {}", rawtx);
                 let merkle_proof = get_tx_merkle_block_proof(&self.electrs_config.base_path, &transaction.txid).await?;
-                info!("Got merkle proof {}", merkle_proof);
                 self.rpc.call(
                     "importprunedfunds",
                     &[serde_json::to_value(rawtx)?, serde_json::to_value(merkle_proof)?],
