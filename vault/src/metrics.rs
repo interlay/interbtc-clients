@@ -961,6 +961,7 @@ mod tests {
                 },
                 status: VaultStatus::Active(true),
                 banned_until: None,
+                secure_collateral_threshold: None,
                 to_be_issued_tokens,
                 issued_tokens,
                 to_be_redeemed_tokens,
