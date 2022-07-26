@@ -458,9 +458,7 @@ impl InterBtcParachain {
             CurrencyId::Token(x) => Ok(x.name().to_string()),
             CurrencyId::ForeignAsset(id) => {
                 let metadata = self.get_foreign_asset_metadata(id).await?;
-                let asset_name = std::str::from_utf8(&metadata.name)?.to_lowercase();
-                // todo: replace with coingecko_id from metadata.additional
-                let coingecko_id = asset_name.replace(" ", "-");
+                let coingecko_id = std::str::from_utf8(&metadata.additional.coingecko_id)?.to_owned();
                 Ok(coingecko_id)
             }
         }
