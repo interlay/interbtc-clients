@@ -8,8 +8,8 @@ use async_trait::async_trait;
 use bitcoin::{
     json,
     secp256k1::{constants::SECRET_KEY_SIZE, PublicKey, Secp256k1, SecretKey},
-    serialize, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, Hash,
-    LockedTransaction, Network, OutPoint, PartialAddress, PartialMerkleTree, PrivateKey, Script, Transaction,
+    serialize, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult,
+    Hash, LockedTransaction, Network, OutPoint, PartialAddress, PartialMerkleTree, PrivateKey, Script, Transaction,
     TransactionExt, TransactionMetadata, TxIn, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
 };
 use rand::{thread_rng, Rng};
@@ -381,6 +381,9 @@ impl BitcoinCoreApi for MockBitcoinCore {
         let blocks = self.blocks.read().await;
         Ok(blocks[blocks.len() - 1].block_hash())
     }
+    async fn get_pruned_height(&self) -> Result<u64, BitcoinError> {
+        Ok(0)
+    }
     async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError> {
         let blocks = self.blocks.read().await;
         let block = blocks
@@ -533,6 +536,13 @@ impl BitcoinCoreApi for MockBitcoinCore {
         Ok(())
     }
     async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), BitcoinError> {
+        Ok(())
+    }
+
+    async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync>(
+        &self,
+        addresses: Vec<A>,
+    ) -> Result<(), BitcoinError> {
         Ok(())
     }
     async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError> {

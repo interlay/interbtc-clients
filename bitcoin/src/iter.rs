@@ -1,7 +1,9 @@
-use crate::{BitcoinCoreApi, Error};
+use crate::{BitcoinCoreApi, BitcoinRpcError, Error};
 use bitcoincore_rpc::{
     bitcoin::{Block, BlockHash, Transaction},
     json::GetBlockResult,
+    jsonrpc::Error as JsonRpcError,
+    Error as BitcoinError,
 };
 use futures::{prelude::*, stream::StreamExt};
 use log::trace;
@@ -30,6 +32,8 @@ pub async fn reverse_stream_transactions<B: BitcoinCoreApi + Clone + Send + Sync
 ///
 /// * `rpc` - bitcoin rpc
 /// * `stop_height` - height of the last block the iterator will return transactions from
+/// * `stop_at_pruned` - whether to gracefully stop if a pruned blockchain is encountered;
+/// otherwise, will throw an error
 pub async fn reverse_stream_in_chain_transactions<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     rpc: &B,
     stop_height: u32,
@@ -55,6 +59,8 @@ pub async fn reverse_stream_in_chain_transactions<B: BitcoinCoreApi + Clone + Se
 ///
 /// * `rpc` - bitcoin rpc
 /// * `stop_height` - height of the last block the stream will return
+/// * `stop_at_pruned` - whether to gracefully stop if a pruned blockchain is encountered;
+/// otherwise, will throw an error
 pub async fn reverse_stream_blocks<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     rpc: &B,
     stop_height: u32,
@@ -92,6 +98,11 @@ pub async fn reverse_stream_blocks<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                         state.height = Some(next_height);
                         state.prev_block = Some(block.clone());
                         Ok(block)
+                    }
+                    Err(Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err))))
+                        if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcMiscError =>
+                    {
+                        return None; // pruned block
                     }
                     Err(e) => Err(e),
                 }
@@ -208,6 +219,7 @@ mod tests {
                 secret_key: Vec<u8>,
             ) -> Result<(), Error>;
             async fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
+            async fn get_pruned_height(&self) -> Result<u64, Error>;
             async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
             async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error>;
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
@@ -248,6 +260,10 @@ mod tests {
                     P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error>;
             async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error>;
+            async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(
+                &self,
+                addresses: Vec<A>,
+            ) -> Result<(), Error>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
             fn get_utxo_count(&self) -> Result<usize, Error>;
         }
@@ -386,6 +402,7 @@ mod tests {
             .returning(|&hash| Ok(dummy_block_info(23, hash)));
 
         let btc_rpc = bitcoin;
+
         let mut iter = reverse_stream_transactions(&btc_rpc, 20).await.unwrap();
 
         assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
