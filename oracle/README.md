@@ -4,8 +4,9 @@ Automated price feeder for interBTC. Values can be set manually or imported from
 
 ## Examples
 
+To use a fixed price for DOT and the coingecko for INTR, use e.g.: 
 ```shell
-cargo run --bin oracle --features standalone-metadata -- --keyring alice --currency-id DOT --exchange-rate 2308 --interval-ms 1000
+cargo run --bin oracle --features standalone-metadata -- --keyring alice --currency-id DOT=2308 --currency-id INTR
 ```
 
 ## Detailed Options
@@ -40,15 +41,19 @@ OPTIONS:
         --coingecko <COINGECKO>
             Fetch the exchange rate from CoinGecko (https://api.coingecko.com/api/v3/)
 
+        --coingecko-api-key <COINGECKO_API_KEY>
+            Use a dedicated API key for coingecko pro URL (https://pro-api.coingecko.com/api/v3/)
+
         --connection-timeout-ms <CONNECTION_TIMEOUT_MS>
             Timeout in milliseconds to wait for connection to btc-parachain [default: 60000]
 
-        --currency-id <CURRENCY_ID>...
-            Collateral type for exchange rates, e.g. "DOT" or "KSM"
+        --currency-id <CURRENCY_ID>
+            Collateral type for exchange rates, e.g. "DOT" or "KSM". The exchange rate will be
+            fetched from coingecko unless explicitly set as e.g. "KSM=123", in which case the given
+            exchange rate will be used. The rate will be in while units e.g. KSM/BTC
 
-        --exchange-rate <EXCHANGE_RATE>...
-            Exchange rate from the collateral currency to the wrapped currency - i.e. 1 BTC = 2308
-            DOT
+    -h, --help
+            Print help information
 
         --interval-ms <INTERVAL_MS>
             Interval for exchange rate setter, default 25 minutes [default: 1500000]
@@ -62,4 +67,7 @@ OPTIONS:
 
         --keyring <KEYRING>
             Keyring to use, mutually exclusive with keyfile
+
+    -V, --version
+            Print version information
 ```
