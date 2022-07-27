@@ -48,11 +48,26 @@ cfg_if::cfg_if! {
     } else if #[cfg(feature = "parachain-metadata-interlay-testnet")] {
         const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1017000..=1017000;
         const DEFAULT_SPEC_NAME: &str = "testnet-interlay";
-        pub const SS58_PREFIX: u16 = 42;
+        pub const SS58_PREFIX: u16 = 2032;
     }  else if #[cfg(feature = "parachain-metadata-kintsugi-testnet")] {
         const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1017000..=1017000;
-        const DEFAULT_SPEC_NAME: &str = "testnet-parachain";
-        pub const SS58_PREFIX: u16 = 42;
+        // fun workaround to migrate allowed spec name
+        struct ThisOrThat<'a>(&'a str, &'a str);
+        impl<'a> PartialEq<String> for ThisOrThat<'a> {
+            fn eq(&self, other: &String) -> bool {
+                self.0 == other || self.1 == other
+            }
+        }
+        impl<'a> From<ThisOrThat<'a>> for String {
+            fn from(tot: ThisOrThat<'a>) -> String {
+                tot.1.into()
+            }
+        }
+        const DEFAULT_SPEC_NAME: ThisOrThat = ThisOrThat(
+            "testnet-parachain",
+            "testnet-kintsugi"
+        );
+        pub const SS58_PREFIX: u16 = 2092;
     }
 }
 
@@ -82,15 +97,16 @@ impl InterBtcParachain {
         let api: RuntimeApi = ext_client.clone().to_runtime_api();
 
         let runtime_version = ext_client.rpc().runtime_version(None).await?;
-        let default_spec_name = &Value::default();
-        let spec_name = runtime_version.other.get("specName").unwrap_or(default_spec_name);
-        if spec_name == DEFAULT_SPEC_NAME {
+        let spec_name: String = runtime_version
+            .other
+            .get("specName")
+            .and_then(|value| value.as_str())
+            .map(ToString::to_string)
+            .unwrap_or_default();
+        if DEFAULT_SPEC_NAME == spec_name {
             log::info!("spec_name={}", spec_name);
         } else {
-            return Err(Error::ParachainMetadataMismatch(
-                DEFAULT_SPEC_NAME.into(),
-                spec_name.as_str().unwrap_or_default().into(),
-            ));
+            return Err(Error::ParachainMetadataMismatch(DEFAULT_SPEC_NAME.into(), spec_name));
         }
 
         if DEFAULT_SPEC_VERSION.contains(&runtime_version.spec_version) {
