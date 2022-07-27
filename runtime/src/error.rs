@@ -114,10 +114,6 @@ impl Error {
         self.is_module_err(ISSUE_MODULE, &format!("{:?}", IssuePalletError::IssueCompleted))
     }
 
-    pub fn is_valid_refund(&self) -> bool {
-        self.is_module_err(RELAY_MODULE, &format!("{:?}", RelayPalletError::ValidRefundTransaction))
-    }
-
     fn map_call_error<T>(&self, call: impl Fn(&CallError) -> Option<T>) -> Option<T> {
         match self {
             Error::SubxtRuntimeError(SubxtError::Rpc(RequestError::Call(err))) => call(err),

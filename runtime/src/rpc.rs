@@ -979,8 +979,6 @@ impl OraclePallet for InterBtcParachain {
 
 #[async_trait]
 pub trait RelayPallet {
-    async fn report_vault_theft(&self, vault_id: &VaultId, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error>;
-
     async fn report_vault_double_payment(
         &self,
         vault_id: &VaultId,
@@ -999,27 +997,6 @@ pub trait RelayPallet {
 
 #[async_trait]
 impl RelayPallet for InterBtcParachain {
-    /// Submit extrinsic to report vault theft, consumer should
-    /// first check `is_transaction_invalid` to ensure this call
-    /// succeeds.
-    ///
-    /// # Arguments
-    /// * `vault_id` - account id for the malicious vault
-    /// * `merkle_proof` - merkle proof to verify inclusion
-    /// * `raw_tx` - raw transaction
-    async fn report_vault_theft(&self, vault_id: &VaultId, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
-        self.with_unique_signer(|signer| async move {
-            self.api
-                .tx()
-                .relay()
-                .report_vault_theft(vault_id.clone(), merkle_proof.into(), raw_tx.into())
-                .sign_and_submit_then_watch_default(&signer)
-                .await
-        })
-        .await?;
-        Ok(())
-    }
-
     /// Submit extrinsic to report that the vault made a duplicate payment (where each individually is valid)
     ///
     /// # Arguments

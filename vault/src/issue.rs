@@ -1,5 +1,5 @@
 use crate::{
-    metrics::publish_expected_bitcoin_balance, vaults::RandomDelay, Error, Event, IssueRequests, VaultIdManager,
+    delay::RandomDelay, metrics::publish_expected_bitcoin_balance, Error, Event, IssueRequests, VaultIdManager,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt, TryFutureExt};

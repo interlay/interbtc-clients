@@ -20,8 +20,8 @@ pub struct BitcoinOpts {
     #[clap(long, default_value = "60000")]
     pub bitcoin_connection_timeout_ms: u64,
 
-    /// Url of the electrs server - used for theft reporting. If unset, a default
-    /// fallback is used depending on the detected network.
+    /// Url of the electrs server. If unset, a default fallback
+    /// is used depending on the detected network.
     #[clap(long)]
     pub electrs_url: Option<String>,
 }

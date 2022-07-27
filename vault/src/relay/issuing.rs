@@ -1,7 +1,7 @@
 use std::{convert::TryInto, fmt::Debug};
 
 use super::Error;
-use crate::vaults::RandomDelay;
+use crate::delay::RandomDelay;
 use async_trait::async_trait;
 use bitcoin::{sha256, Hash};
 use runtime::{BtcRelayPallet, H256Le, InterBtcParachain, RawBlockHeader, RelayPallet};
