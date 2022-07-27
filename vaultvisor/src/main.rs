@@ -2,26 +2,29 @@ mod error;
 mod vaultvisor;
 
 use clap::Parser;
-use vaultvisor::{get_release_uri, ws_client};
+use nix::{
+    sys::signal::{self, Signal},
+    unistd::Pid,
+};
+use vaultvisor::ws_client;
 
 use error::Error;
 use std::{
+    convert::TryInto,
     fmt::Debug,
     fs::{self, File},
     path::Path,
     str,
 };
 
-use crate::vaultvisor::{run_vault_binary, try_download_client_binary};
+use crate::vaultvisor::{get_release, run_vault_binary, try_download_client_binary, BLOCK_TIME};
 
 #[derive(Parser, Debug, Clone)]
-#[clap(author, version, about, long_about = None)]
+#[clap(version, author, about, trailing_var_arg = true)]
 struct Opts {
     #[clap(long)]
     chain_rpc: String,
-
-    #[clap(long)]
-    vault_config_file: String,
+    vault_args: Vec<String>,
 }
 
 fn get_args_from_file(file: &str) -> Vec<String> {
@@ -44,18 +47,34 @@ async fn main() -> Result<(), Error> {
         env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, log::LevelFilter::Info.as_str()),
     );
     let opts: Opts = Opts::parse();
-    let vault_args = get_args_from_file(&opts.vault_config_file);
+    let vault_args = opts.vault_args;
     let rpc_client = ws_client(&opts.chain_rpc).await?;
-    log::info!("Vaultvisor connected to the parachain",);
-    let release_uri = get_release_uri(&rpc_client).await?;
+    log::info!("Vaultvisor connected to the parachain");
+    let mut last_current_release = try_download_client_binary(&rpc_client, false)
+        .await?
+        .expect("No current release");
+    // let last_pending_release = try_download_client_binary(&rpc_client, true).await?;
 
-    let binary_name = try_download_client_binary(release_uri).await?;
-
+    println!("{:?}", last_current_release);
+    let mut vault_process = run_vault_binary(&last_current_release.bin_name, vault_args.clone()).await?;
     loop {
-        match run_vault_binary(&binary_name, vault_args.clone()).await {
-            Err(e) => log::error!("Vault binary crashed: {:?}", e),
-            Ok(_) => log::error!("Vault binary finished execution unexpectedly."),
+        let current_release = try_download_client_binary(&rpc_client, false)
+            .await?
+            .expect("No current release");
+        if current_release.release.uri != last_current_release.release.uri {
+            last_current_release = current_release;
+            // Shut down the outdated binary, start the new one
+            signal::kill(
+                Pid::from_raw(
+                    vault_process
+                        .id()
+                        .try_into()
+                        .map_err(|_| Error::IntegerConversionError)?,
+                ),
+                Signal::SIGINT,
+            )?;
+            vault_process = run_vault_binary(&last_current_release.bin_name, vault_args.clone()).await?;
         }
-        log::info!("Restarting vault...");
+        tokio::time::sleep(BLOCK_TIME).await;
     }
 }

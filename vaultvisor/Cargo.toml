@@ -21,3 +21,5 @@ env_logger = "0.7.1"
 reqwest = "0.11.11"
 # reuse version of `url` depended on by `reqwest`
 url = "2.2.2"
+nix = "0.24.2"
+

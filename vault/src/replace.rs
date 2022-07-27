@@ -6,7 +6,7 @@ use bitcoin::BitcoinCoreApi;
 use futures::{channel::mpsc::Sender, future::try_join3, SinkExt};
 use runtime::{
     AcceptReplaceEvent, CollateralBalancesPallet, ExecuteReplaceEvent, InterBtcParachain, PrettyPrint, ReplacePallet,
-    RequestReplaceEvent, UtilFuncs, VaultId, VaultRegistryPallet,
+    RequestReplaceEvent, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
 use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
 use std::time::Duration;
@@ -324,6 +324,8 @@ mod tests {
         async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
         async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
         async fn get_collateralization_from_vault(&self, vault_id: VaultId, only_issued: bool) -> Result<u128, RuntimeError>;
+        async fn set_current_client_release(&self, uri: &Vec<u8>, code_hash: &H256) -> Result<(), RuntimeError>;
+        async fn set_pending_client_release(&self, uri: &Vec<u8>, code_hash: &H256) -> Result<(), RuntimeError>;
     }
 
     #[async_trait]

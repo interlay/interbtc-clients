@@ -2,8 +2,9 @@
 
 use codec::Error as CodecError;
 use jsonrpsee::core::Error as JsonRpcCoreError;
+use nix::Error as OsError;
 use reqwest::Error as ReqwestError;
-use std::io::Error as OsError;
+use std::io::Error as IoError;
 use thiserror::Error;
 use url::ParseError as UrlParseError;
 
@@ -13,6 +14,8 @@ pub enum Error {
     CodecError(#[from] CodecError),
     #[error("JsonRpcCoreError: {0}")]
     JsonRpcCoreError(#[from] JsonRpcCoreError),
+    #[error("System I/O error: {0}")]
+    IoError(#[from] IoError),
     #[error("System command error: {0}")]
     OsError(#[from] OsError),
     #[error("HTTP request error: {0}")]
@@ -25,4 +28,6 @@ pub enum Error {
     ClientNameDerivationError,
     #[error("Failed to identify vault binary name in release URI")]
     UnknownBinaryName,
+    #[error("Integer conversion error")]
+    IntegerConversionError,
 }
