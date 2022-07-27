@@ -8,4 +8,5 @@ keyfile.json
 .deploy/monitoring/prometheus
 .deploy/monitoring/alertmanager
 args.txt
-vault-standalone-metadata
+vault-*-metadata
+kv

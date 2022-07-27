@@ -1,25 +1,26 @@
 use crate::error::Error;
 use codec::{Decode, Encode};
 use jsonrpsee::{
-    core::{
-        client::{Client as WsClient, ClientT},
-        JsonValue,
-    },
+    core::client::{Client as WsClient, ClientT},
     rpc_params,
     ws_client::WsClientBuilder,
 };
+use reqwest::Url;
 use sp_core::Bytes;
 use sp_core_hashing::twox_128;
 
 use std::{
+    env,
     fmt::Debug,
+    fs::{self, File},
+    io::{copy, Cursor},
+    os::unix::prelude::PermissionsExt,
     process::{Command, Stdio},
     str,
 };
 
-pub const RELEASE_BASE_URL: &str = "https://github.com/interlay/interbtc-clients/releases/download";
 pub const PARACHAIN_MODULE: &str = "VaultRegistry";
-pub const RELEASE_VERSION_STORAGE_ITEM: &str = "LatestClientRelease";
+pub const RELEASE_VERSION_STORAGE_ITEM: &str = "CurrentClientRelease";
 
 #[derive(Encode, Decode, Default, Eq, PartialEq, Debug)]
 pub struct RawClientRelease {
@@ -67,60 +68,10 @@ pub async fn read_chain_storage<T: Decode + Debug>(
     // to upgrade the clients version.
 }
 
-pub async fn get_release_version(ws_client: &WsClient) -> Result<String, Error> {
+pub async fn get_release_uri(ws_client: &WsClient) -> Result<String, Error> {
     let storage_key = compute_storage_key(PARACHAIN_MODULE.to_string(), RELEASE_VERSION_STORAGE_ITEM.to_string());
-    let release = read_chain_storage::<RawClientRelease>(ws_client, Some(storage_key.as_str())).await?;
-    // Convert version array (e.g. `[1, 0, 0]`) to semver (e.g. `1.0.0`)
-    // Assumes the version is always three elements long
-    Ok(format!(
-        "{}.{}.{}",
-        release.version[0], release.version[1], release.version[2]
-    ))
-}
-
-pub async fn get_binary_name(ws_client: &WsClient) -> Result<String, Error> {
-    let runtime_version = ws_client
-        .request::<JsonValue>("state_getRuntimeVersion", rpc_params![])
-        .await?;
-    let spec_name = runtime_version
-        .as_object()
-        .ok_or(Error::ClientNameDerivationError)?
-        .get("specName")
-        .ok_or(Error::ClientNameDerivationError)?
-        .as_str()
-        .ok_or(Error::ClientNameDerivationError)?
-        .to_string();
-    Ok(spec_name_to_vault_binary(spec_name))
-}
-
-fn spec_name_to_vault_binary(spec_name: String) -> String {
-    // This function is based on the chainspec chain identification logic in the parachain.
-    // Source: https://github.com/interlay/interbtc/blob/594d4d023f74fb7a6e935ad71f4292ca949779ed/parachain/src/command.rs#L50
-    let base_name = "vault-";
-    let suffix = if spec_name.starts_with("interlay") {
-        "parachain-metadata-interlay"
-    } else if spec_name.starts_with("kintsugi") {
-        "parachain-metadata-kintsugi"
-    } else if spec_name.starts_with("testnet-interlay") {
-        "parachain-metadata-interlay-testnet"
-    } else if spec_name.starts_with("testnet-kintsugi") || spec_name.starts_with("testnet-parachain") {
-        "parachain-metadata-testnet-kintsugi"
-    } else {
-        // standalone node
-        "standalone-metadata"
-    };
-    format!("{}{}", base_name, suffix)
-}
-
-pub async fn get_release(ws_client: &WsClient) -> Result<ClientRelease, Error> {
-    let version = get_release_version(ws_client).await?;
-    let binary_name = get_binary_name(ws_client).await?;
-    let uri = format!("{}/{}/{}", RELEASE_BASE_URL, version, binary_name);
-    Ok(ClientRelease {
-        uri,
-        binary_name,
-        semver_version: version,
-    })
+    let release_uri = read_chain_storage::<String>(ws_client, Some(storage_key.as_str())).await?;
+    Ok(release_uri)
 }
 
 pub async fn ws_client(url: &str) -> Result<WsClient, Error> {
@@ -145,4 +96,34 @@ pub fn does_vault_binary_exist(release: &ClientRelease) -> Result<bool, Error> {
     // The `ls` command prints results followed by an endline. Remove the endline charachter.
     let stdout = String::from_utf8(output.stdout).unwrap().replace('\n', "");
     Ok(stdout.eq(&release.binary_name))
+}
+
+/// Does not download if a file with the same name already exists
+pub async fn try_download_client_binary(release_uri: String) -> Result<String, Error> {
+    let parsed_uri = Url::parse(&release_uri)?;
+    let bin_name = parsed_uri
+        .path_segments()
+        .and_then(|segments| segments.last())
+        .and_then(|name| if name.is_empty() { None } else { Some(name) })
+        .ok_or(Error::ClientNameDerivationError)?;
+
+    let dir = env::current_dir()?;
+    let bin_path = dir.join(bin_name);
+    if bin_path.as_path().exists() {
+        log::warn!("Vault binary already exists, skipping download.");
+        return Ok(bin_name.to_string());
+    }
+    println!("Downloading {} at: '{:?}'", bin_name, bin_path);
+    let mut bin_file = File::create(bin_path.clone())?;
+
+    let response = reqwest::get(release_uri.clone()).await?;
+    let mut content = Cursor::new(response.bytes().await?);
+
+    copy(&mut content, &mut bin_file)?;
+
+    // Make the binary executable.
+    // The set permissions are: -rwx------
+    fs::set_permissions(bin_path, fs::Permissions::from_mode(0o700))?;
+
+    Ok(bin_name.to_string())
 }

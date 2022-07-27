@@ -10537,11 +10537,13 @@ dependencies = [
  "jsonrpsee 0.14.0",
  "log 0.4.17",
  "parity-scale-codec",
+ "reqwest",
  "serde_json",
  "sp-core",
  "sp-core-hashing 4.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
  "tokio",
+ "url 2.2.2",
 ]
 
 [[package]]

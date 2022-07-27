@@ -2,19 +2,17 @@ mod error;
 mod vaultvisor;
 
 use clap::Parser;
-use vaultvisor::{get_release, ws_client};
+use vaultvisor::{get_release_uri, ws_client};
 
+use error::Error;
 use std::{
     fmt::Debug,
-    fs,
+    fs::{self, File},
     path::Path,
-    process::{Command, Stdio},
     str,
 };
 
-use error::Error;
-
-use crate::vaultvisor::{does_vault_binary_exist, run_vault_binary};
+use crate::vaultvisor::{run_vault_binary, try_download_client_binary};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
@@ -49,32 +47,12 @@ async fn main() -> Result<(), Error> {
     let vault_args = get_args_from_file(&opts.vault_config_file);
     let rpc_client = ws_client(&opts.chain_rpc).await?;
     log::info!("Vaultvisor connected to the parachain",);
-    let release = get_release(&rpc_client).await?;
+    let release_uri = get_release_uri(&rpc_client).await?;
 
-    if !does_vault_binary_exist(&release)? {
-        Command::new("wget")
-            .arg(release.uri.clone())
-            .stdout(Stdio::inherit())
-            .spawn()?
-            .wait_with_output()?;
-        // TODO: Move the binary to a user-specified path?
-        log::info!(
-            "Downloaded vault release v{} from {}",
-            release.semver_version,
-            release.uri
-        );
-        Command::new("chmod")
-            .arg("+x")
-            .arg(release.binary_name.clone())
-            .stdout(Stdio::inherit())
-            .spawn()?
-            .wait_with_output()?;
-    } else {
-        log::info!("Vault binary already exists, skipping download.")
-    }
+    let binary_name = try_download_client_binary(release_uri).await?;
 
     loop {
-        match run_vault_binary(&release.binary_name, vault_args.clone()).await {
+        match run_vault_binary(&binary_name, vault_args.clone()).await {
             Err(e) => log::error!("Vault binary crashed: {:?}", e),
             Ok(_) => log::error!("Vault binary finished execution unexpectedly."),
         }
