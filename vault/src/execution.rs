@@ -408,7 +408,8 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
         None => return Ok(()), // the iterator is empty so we have nothing to do
     };
 
-    // iterate through transactions in reverse order, starting from those in the mempool
+    // iterate through transactions in reverse order, starting from those in the mempool, and
+    // gracefully fail on encountering a pruned blockchain
     let mut transaction_stream = bitcoin::reverse_stream_transactions(&read_only_btc_rpc, btc_start_height).await?;
     while let Some(result) = transaction_stream.next().await {
         let tx = match result {
@@ -558,8 +559,8 @@ mod tests {
     };
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
-        AccountId, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError, ErrorCode, InterBtcRichBlockHeader,
-        InterBtcVault, OracleKey, StatusCode, Token, DOT, IBTC,
+        AccountId, AssetMetadata, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError, ErrorCode,
+        InterBtcRichBlockHeader, InterBtcVault, OracleKey, StatusCode, Token, DOT, IBTC,
     };
     use sp_core::H160;
     use std::collections::BTreeSet;
@@ -587,6 +588,8 @@ mod tests {
             fn get_native_currency_id(&self) -> CurrencyId;
             fn get_account_id(&self) -> &AccountId;
             fn is_this_vault(&self, vault_id: &VaultId) -> bool;
+            async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, RuntimeError>;
+            async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, RuntimeError>;
         }
         #[async_trait]
         pub trait VaultRegistryPallet {
@@ -689,6 +692,7 @@ mod tests {
             async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, BitcoinError>;
             async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError>;
+            async fn get_pruned_height(&self) -> Result<u64, BitcoinError>;
             async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError>;
             async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError>;
             async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, BitcoinError>;
@@ -709,6 +713,7 @@ mod tests {
             async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError> where P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), BitcoinError>;
             async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), BitcoinError>;
+            async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(&self, addresses: Vec<A>) -> Result<(), BitcoinError>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError>;
             fn get_utxo_count(&self) -> Result<usize, BitcoinError>;
         }

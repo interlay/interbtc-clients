@@ -13,10 +13,10 @@ use crate::{
 ))]
 use crate::{BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CONFIRMATIONS};
 use async_trait::async_trait;
-use codec::Encode;
+use codec::{Decode, Encode};
 use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt};
 use module_oracle_rpc_runtime_api::BalanceWrapper;
-use primitives::UnsignedFixedPoint;
+use primitives::{CurrencyInfo, UnsignedFixedPoint};
 use serde_json::Value;
 use sp_runtime::FixedPointNumber;
 use std::{collections::BTreeSet, future::Future, ops::RangeInclusive, sync::Arc, time::Duration};
@@ -38,19 +38,19 @@ cfg_if::cfg_if! {
         const DEFAULT_SPEC_NAME: &str = "interbtc-standalone";
         pub const SS58_PREFIX: u16 = 42;
     } else if #[cfg(feature = "parachain-metadata-interlay")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 3..=4;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1017000..=1017000;
         const DEFAULT_SPEC_NAME: &str = "interlay-parachain";
         pub const SS58_PREFIX: u16 = 2032;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 19..=19;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1017000..=1017000;
         const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
         pub const SS58_PREFIX: u16 = 2092;
     } else if #[cfg(feature = "parachain-metadata-interlay-testnet")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 8..=9;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1017000..=1017000;
         const DEFAULT_SPEC_NAME: &str = "testnet-interlay";
         pub const SS58_PREFIX: u16 = 42;
     }  else if #[cfg(feature = "parachain-metadata-kintsugi-testnet")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 8..=9;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1017000..=1017000;
         const DEFAULT_SPEC_NAME: &str = "testnet-parachain";
         pub const SS58_PREFIX: u16 = 42;
     }
@@ -411,6 +411,84 @@ impl InterBtcParachain {
             .unwrap_err()
             .into()
     }
+
+    #[cfg(all(test, feature = "standalone-metadata"))]
+    pub async fn register_dummy_assets(&self) -> Result<(), Error> {
+        self.with_unique_signer(|signer| async move {
+            let metadatas = ["ABC", "TEst", "QQQ"].map(|symbol| GenericAssetMetadata {
+                decimals: 10,
+                location: None,
+                name: b"irrelevant".to_vec(),
+                symbol: symbol.as_bytes().to_vec(),
+                existential_deposit: 0,
+                additional: metadata::runtime_types::interbtc_primitives::CustomMetadata {
+                    fee_per_second: 0,
+                    coingecko_id: vec![],
+                },
+            });
+
+            let registration_calls = metadatas
+                .map(|metadata| {
+                    EncodedCall::AssetRegistry(
+                        metadata::runtime_types::orml_asset_registry::module::Call::register_asset {
+                            metadata: metadata.clone(),
+                            asset_id: None,
+                        },
+                    )
+                })
+                .to_vec();
+
+            let batch = EncodedCall::Utility(metadata::runtime_types::pallet_utility::pallet::Call::batch {
+                calls: registration_calls,
+            });
+
+            self.api
+                .tx()
+                .sudo()
+                .sudo(batch)
+                .sign_and_submit_then_watch_default(&signer)
+                .await
+        })
+        .await?;
+        Ok(())
+    }
+
+    pub async fn get_coingecko_id(&self, currency_id: CurrencyId) -> Result<String, Error> {
+        match currency_id {
+            CurrencyId::Token(x) => Ok(x.name().to_string()),
+            CurrencyId::ForeignAsset(id) => {
+                let metadata = self.get_foreign_asset_metadata(id).await?;
+                let coingecko_id = std::str::from_utf8(&metadata.additional.coingecko_id)?.to_owned();
+                Ok(coingecko_id)
+            }
+        }
+    }
+
+    pub async fn parse_currency_id(&self, symbol: String) -> Result<CurrencyId, Error> {
+        let uppercase_symbol = symbol.to_uppercase();
+        // try hardcoded currencies first
+        match uppercase_symbol.as_str() {
+            id if id == DOT.symbol() => Ok(Token(DOT)),
+            id if id == IBTC.symbol() => Ok(Token(IBTC)),
+            id if id == INTR.symbol() => Ok(Token(INTR)),
+            id if id == KSM.symbol() => Ok(Token(KSM)),
+            id if id == KBTC.symbol() => Ok(Token(KBTC)),
+            id if id == KINT.symbol() => Ok(Token(KINT)),
+            _ => self
+                .get_foreign_assets_metadata()
+                .await?
+                .into_iter()
+                .find_map(|(key, value)| {
+                    let asset_symbol = std::str::from_utf8(&value.symbol).ok()?.to_uppercase();
+                    if asset_symbol == uppercase_symbol {
+                        Some(Ok(CurrencyId::ForeignAsset(key)))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(Err(Error::InvalidCurrency)),
+        }
+    }
 }
 
 #[async_trait]
@@ -427,6 +505,10 @@ pub trait UtilFuncs {
     fn get_account_id(&self) -> &AccountId;
 
     fn is_this_vault(&self, vault_id: &VaultId) -> bool;
+
+    async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, Error>;
+
+    async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, Error>;
 }
 
 #[async_trait]
@@ -450,6 +532,33 @@ impl UtilFuncs for InterBtcParachain {
 
     fn is_this_vault(&self, vault_id: &VaultId) -> bool {
         &vault_id.account_id == self.get_account_id()
+    }
+
+    async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, Error> {
+        let head = self.get_latest_block_hash().await?;
+
+        let mut ret = Vec::new();
+        let mut metadata_iter = self.api.storage().asset_registry().metadata_iter(head).await?;
+        while let Some((key, value)) = metadata_iter.next().await? {
+            let raw_key = key.0.clone();
+
+            // last bytes are the raw key
+            let mut key = &raw_key[raw_key.len() - 4..];
+
+            let decoded_key: u32 = Decode::decode(&mut key)?;
+            ret.push((decoded_key, value));
+        }
+        Ok(ret)
+    }
+
+    async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, Error> {
+        let head = self.get_latest_block_hash().await?;
+        self.api
+            .storage()
+            .asset_registry()
+            .metadata(&id, head)
+            .await?
+            .ok_or(Error::AssetNotFound)
     }
 }
 

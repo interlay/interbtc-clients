@@ -5,10 +5,11 @@ const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
 use super::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, FixedPointNumber, FixedU128,
     OraclePallet, RawBlockHeader, RelayPallet, ReplacePallet, SecurityPallet, StatusCode, Token, VaultRegistryPallet,
-    DOT, IBTC,
+    DOT, IBTC, KINT,
 };
 use crate::{integration::*, FeedValuesEvent, OracleKey, VaultId, H160, U256};
 use module_bitcoin::{formatter::TryFormattable, types::BlockBuilder};
+pub use primitives::CurrencyId::ForeignAsset;
 use sp_keyring::AccountKeyring;
 use std::{convert::TryInto, time::Duration};
 
@@ -183,4 +184,21 @@ async fn test_btc_relay() {
         assert_eq!(parachain_rpc.get_best_block().await.unwrap(), block_hash.into());
         assert_eq!(parachain_rpc.get_best_block_height().await.unwrap(), height);
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_currency_id_parsing() {
+    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
+    let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    parachain_rpc.register_dummy_assets().await.unwrap();
+
+    // test with different capitalization to make sure the check is not case sensitive
+    assert_eq!(
+        parachain_rpc.parse_currency_id("KiNt".to_string()).await.unwrap(),
+        Token(KINT)
+    );
+    assert_eq!(
+        parachain_rpc.parse_currency_id("TeSt".to_string()).await.unwrap(),
+        ForeignAsset(2)
+    );
 }

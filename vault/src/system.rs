@@ -19,9 +19,9 @@ use futures::{
 use git_version::git_version;
 use runtime::{
     cli::{parse_duration_minutes, parse_duration_ms},
-    parse_collateral_currency, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, Error as RuntimeError,
-    InterBtcParachain, PrettyPrint, RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs,
-    VaultCurrencyPair, VaultId, VaultRegistryPallet,
+    BtcRelayPallet, CollateralBalancesPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, PrettyPrint,
+    RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair, VaultId,
+    VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, MonitoringConfig, Service, ShutdownSender};
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
@@ -36,14 +36,14 @@ const RESTART_INTERVAL: Duration = Duration::from_secs(10800); // restart every 
 
 fn parse_collateral_and_amount(
     s: &str,
-) -> Result<(CurrencyId, Option<u128>), Box<dyn std::error::Error + Send + Sync + 'static>> {
+) -> Result<(String, Option<u128>), Box<dyn std::error::Error + Send + Sync + 'static>> {
     let pos = s
         .find('=')
         .ok_or_else(|| format!("invalid CurrencyId=amount: no `=` found in `{}`", s))?;
 
     let val = &s[pos + 1..];
     Ok((
-        parse_collateral_currency(&s[..pos])?,
+        s[..pos].to_string(),
         if val.contains("faucet") {
             None
         } else {
@@ -56,7 +56,7 @@ fn parse_collateral_and_amount(
 pub struct VaultServiceConfig {
     /// Automatically register the vault with the given amount of collateral and a newly generated address.
     #[clap(long, parse(try_from_str = parse_collateral_and_amount))]
-    pub auto_register: Vec<(CurrencyId, Option<u128>)>,
+    pub auto_register: Vec<(String, Option<u128>)>,
 
     /// Pass the faucet URL for auto-registration.
     #[clap(long)]
@@ -503,8 +503,18 @@ impl VaultService {
 
         let account_id = self.btc_parachain.get_account_id().clone();
 
+        let parsed_auto_register = join_all(self.config.auto_register.iter().map(|(symbol, amount)| async move {
+            Ok((
+                self.btc_parachain.parse_currency_id(symbol.to_string()).await?,
+                amount.clone(),
+            ))
+        }))
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, Error>>()?;
+
         // exit if auto-register uses faucet and faucet url not set
-        if self.config.auto_register.iter().any(|(_, o)| o.is_none()) && self.config.faucet_url.is_none() {
+        if parsed_auto_register.iter().any(|(_, o)| o.is_none()) && self.config.faucet_url.is_none() {
             // TODO: validate before bitcoin / parachain connections
             return Err(Error::FaucetUrlNotSet);
         }
@@ -529,8 +539,7 @@ impl VaultService {
 
         self.maybe_register_public_key().await?;
         join_all(
-            self.config
-                .auto_register
+            parsed_auto_register
                 .iter()
                 .map(|(currency_id, amount)| self.maybe_register_vault(currency_id, amount)),
         )

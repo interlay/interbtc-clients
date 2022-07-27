@@ -1,6 +1,7 @@
 pub mod cli;
 
 mod addr;
+mod electrs;
 mod error;
 mod iter;
 
@@ -27,6 +28,7 @@ pub use bitcoincore_rpc::{
     jsonrpc::{error::RpcError, Error as JsonRpcError},
     Auth, Client, Error as BitcoinError, RpcApi,
 };
+use electrs::{get_address_tx_history_full, get_tx_hex, get_tx_merkle_block_proof};
 pub use error::{BitcoinRpcError, ConversionError, Error};
 use esplora_btc_api::apis::configuration::Configuration as ElectrsConfiguration;
 pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
@@ -139,6 +141,8 @@ pub trait BitcoinCoreApi {
 
     async fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
 
+    async fn get_pruned_height(&self) -> Result<u64, Error>;
+
     async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
 
     async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error>;
@@ -191,6 +195,11 @@ pub trait BitcoinCoreApi {
     async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error>;
 
     async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error>;
+
+    async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(
+        &self,
+        addresses: Vec<A>,
+    ) -> Result<(), Error>;
 
     async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
 
@@ -639,6 +648,10 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(self.rpc.get_best_block_hash()?)
     }
 
+    async fn get_pruned_height(&self) -> Result<u64, Error> {
+        Ok(self.rpc.get_blockchain_info()?.prune_height.unwrap_or(0))
+    }
+
     async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error> {
         Ok(self.rpc.get_block(hash)?)
     }
@@ -877,6 +890,40 @@ impl BitcoinCoreApi for BitcoinCore {
 
     async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error> {
         self.rpc.rescan_blockchain(Some(start_height), Some(end_height))?;
+        Ok(())
+    }
+
+    async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(
+        &self,
+        addresses: Vec<A>,
+    ) -> Result<(), Error> {
+        for address in addresses.into_iter() {
+            let address = address.encode_str(self.network)?;
+            let all_transactions = get_address_tx_history_full(&self.electrs_config.base_path, &address).await?;
+            // filter to only import
+            // a) payments in the blockchain (not in mempool), and
+            // b) payments TO the address (as bitcoin core will already know about transactions spending FROM it)
+            let confirmed_payments_to = all_transactions.into_iter().filter(|tx| {
+                if let Some(status) = &tx.status {
+                    if !status.confirmed {
+                        return false;
+                    }
+                };
+                tx.vout
+                    .as_ref()
+                    .unwrap_or(&vec![])
+                    .iter()
+                    .any(|output| matches!(&output.scriptpubkey_address, Some(addr) if addr == &address))
+            });
+            for transaction in confirmed_payments_to {
+                let rawtx = get_tx_hex(&self.electrs_config.base_path, &transaction.txid).await?;
+                let merkle_proof = get_tx_merkle_block_proof(&self.electrs_config.base_path, &transaction.txid).await?;
+                self.rpc.call(
+                    "importprunedfunds",
+                    &[serde_json::to_value(rawtx)?, serde_json::to_value(merkle_proof)?],
+                )?;
+            }
+        }
         Ok(())
     }
 

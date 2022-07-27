@@ -5,7 +5,7 @@ use subxt::sp_core::{crypto::Ss58Codec, sr25519::Pair as KeyPair};
 pub use primitives::{
     CurrencyId,
     CurrencyId::{ForeignAsset, Token},
-    TokenSymbol::{DOT, IBTC, INTR, KBTC, KINT, KSM},
+    TokenSymbol::{self, DOT, IBTC, INTR, KBTC, KINT, KSM},
 };
 
 pub use currency_id::CurrencyIdExt;
@@ -39,7 +39,7 @@ mod metadata_aliases {
         vault_registry::types::VaultStatus,
     };
     pub type InterBtcVault =
-        metadata::runtime_types::vault_registry::types::Vault<AccountId, BlockNumber, Balance, CurrencyId>;
+        metadata::runtime_types::vault_registry::types::Vault<AccountId, BlockNumber, Balance, CurrencyId, FixedU128>;
     pub use metadata::runtime_types::vault_registry::types::Wallet;
     pub type InterBtcRichBlockHeader = metadata::runtime_types::btc_relay::types::RichBlockHeader<BlockNumber>;
     pub type BitcoinBlockHeight = u32;
@@ -72,6 +72,12 @@ mod metadata_aliases {
     pub use metadata::relay::events::{VaultDoublePayment as VaultDoublePaymentEvent, VaultTheft as VaultTheftEvent};
 
     pub use metadata::tokens::events::Endowed as EndowedEvent;
+
+    pub use metadata::runtime_types::{
+        interbtc_primitives::CustomMetadata as InterBtcAdditionalMetadata,
+        orml_traits::asset_registry::AssetMetadata as GenericAssetMetadata,
+    };
+    pub type AssetMetadata = GenericAssetMetadata<Balance, InterBtcAdditionalMetadata>;
 
     pub use metadata::runtime_types::{
         btc_relay::pallet::Error as BtcRelayPalletError, frame_system::pallet::Error as SystemPalletError,
