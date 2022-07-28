@@ -69,8 +69,6 @@ mod metadata_aliases {
 
     pub use metadata::btc_relay::events::StoreMainChainHeader as StoreMainChainHeaderEvent;
 
-    pub use metadata::relay::events::{VaultDoublePayment as VaultDoublePaymentEvent, VaultTheft as VaultTheftEvent};
-
     pub use metadata::tokens::events::Endowed as EndowedEvent;
 
     pub use metadata::runtime_types::{

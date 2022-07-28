@@ -4,7 +4,7 @@ use service::Error as ServiceError;
 use std::{fmt::Debug, time::Duration};
 use tokio::time::sleep;
 
-use crate::vaults::RandomDelay;
+use crate::delay::RandomDelay;
 
 mod backing;
 mod error;
@@ -201,7 +201,7 @@ pub async fn run_relayer<RD: RandomDelay + Debug + Send + Sync + Clone>(
 
 #[cfg(test)]
 mod tests {
-    use crate::vaults::{RandomDelay, ZeroDelay};
+    use crate::delay::{RandomDelay, ZeroDelay};
 
     use super::*;
     use async_trait::async_trait;

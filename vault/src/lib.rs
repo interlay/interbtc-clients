@@ -3,6 +3,7 @@
 
 mod cancellation;
 mod collateral;
+mod delay;
 mod error;
 mod execution;
 mod faucet;
@@ -14,7 +15,6 @@ mod relay;
 mod replace;
 mod system;
 mod types;
-mod vaults;
 
 pub mod service {
     pub use crate::{
@@ -29,7 +29,6 @@ pub mod service {
         refund::listen_for_refund_requests,
         relay::{Config, Runner},
         replace::{listen_for_accept_replace, listen_for_execute_replace, listen_for_replace_requests},
-        vaults::{listen_for_vaults_registered, listen_for_wallet_updates, monitor_btc_txs},
     };
 }
 use std::time::Duration;
@@ -38,8 +37,8 @@ pub use system::{VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION
 use runtime::{InterBtcParachain, VaultId, VaultRegistryPallet};
 
 pub use crate::{cancellation::Event, error::Error, types::IssueRequests};
+pub use delay::{OrderedVaultsDelay, RandomDelay, ZeroDelay};
 pub use system::VaultIdManager;
-pub use vaults::{OrderedVaultsDelay, RandomDelay, Vaults, ZeroDelay};
 
 pub(crate) async fn deposit_collateral(api: &InterBtcParachain, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
     let result = api.deposit_collateral(vault_id, amount).await;

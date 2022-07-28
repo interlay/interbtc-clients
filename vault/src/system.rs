@@ -1,11 +1,11 @@
 use crate::{
     collateral::lock_required_collateral,
+    delay::OrderedVaultsDelay,
     error::Error,
     faucet, issue,
     metrics::{poll_metrics, publish_tokio_metrics, PerCurrencyMetrics},
     relay::run_relayer,
     service::*,
-    vaults::{OrderedVaultsDelay, RandomDelay, Vaults},
     Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
@@ -87,11 +87,6 @@ pub struct VaultServiceConfig {
     #[clap(long, parse(try_from_str = parse_duration_minutes), default_value = "120")]
     pub payment_margin_minutes: Duration,
 
-    /// Starting height for vault theft checks, if not defined
-    /// automatically start from the chain tip.
-    #[clap(long)]
-    pub bitcoin_theft_start_height: Option<u32>,
-
     /// Timeout in milliseconds to poll Bitcoin.
     #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "6000")]
     pub bitcoin_poll_interval_ms: Duration,
@@ -112,10 +107,6 @@ pub struct VaultServiceConfig {
     /// Don't relay bitcoin block headers.
     #[clap(long)]
     pub no_bitcoin_block_relay: bool,
-
-    /// Don't monitor vault thefts.
-    #[clap(long)]
-    pub no_vault_theft_report: bool,
 
     /// Don't refund overpayments.
     #[clap(long)]
@@ -581,7 +572,7 @@ impl VaultService {
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
         let (replace_event_tx, replace_event_rx) = mpsc::channel::<Event>(16);
 
-        let mut tasks = vec![
+        let tasks = vec![
             (
                 "Issue Request Listener",
                 run(listen_for_issue_requests(
@@ -744,10 +735,6 @@ impl VaultService {
             ),
         ];
 
-        if !self.config.no_vault_theft_report {
-            tasks.extend(self.btc_monitor_tasks(random_delay.clone()).await?)
-        }
-
         run_and_monitor_tasks(self.shutdown.clone(), tasks).await;
 
         Ok(())
@@ -828,63 +815,6 @@ impl VaultService {
         }
         tracing::info!("Got new block...");
         Ok(startup_height)
-    }
-
-    async fn btc_monitor_tasks<RD: RandomDelay + Send + Sync + 'static>(
-        &self,
-        random_delay: RD,
-    ) -> Result<Vec<(&str, ServiceTask)>, Error> {
-        tracing::info!("Fetching all active vaults...");
-        let vaults = self
-            .btc_parachain
-            .get_all_vaults()
-            .await?
-            .into_iter()
-            .flat_map(|vault| {
-                vault
-                    .wallet
-                    .addresses
-                    .iter()
-                    .map(|addr| (*addr, vault.id.clone()))
-                    .collect::<Vec<_>>()
-            })
-            .collect();
-
-        // store vaults in Arc<RwLock>
-        let vaults = Arc::new(Vaults::from(vaults));
-
-        // scan from custom height or the current tip
-        let bitcoin_theft_start_height = self
-            .config
-            .bitcoin_theft_start_height
-            .unwrap_or(self.btc_rpc_master_wallet.get_block_count().await? as u32 + 1);
-
-        Ok(vec![
-            (
-                "Bitcoin tx monitor",
-                run(monitor_btc_txs(
-                    self.btc_rpc_master_wallet.clone(),
-                    self.btc_parachain.clone(),
-                    random_delay,
-                    bitcoin_theft_start_height,
-                    vaults.clone(),
-                )),
-            ),
-            (
-                // keep track of all registered vaults (i.e. keep the `vaults` map up-to-date)
-                "Vault Registration Listener",
-                run(listen_for_vaults_registered(self.btc_parachain.clone(), vaults.clone())),
-            ),
-            (
-                // keep vault wallets up-to-date
-                "Vault Wallet Update Listener",
-                run(listen_for_wallet_updates(
-                    self.btc_parachain.clone(),
-                    self.btc_rpc_master_wallet.network(),
-                    vaults.clone(),
-                )),
-            ),
-        ])
     }
 }
 
