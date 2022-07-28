@@ -40,7 +40,6 @@ mod metadata_aliases {
     };
     pub type InterBtcVault =
         metadata::runtime_types::vault_registry::types::Vault<AccountId, BlockNumber, Balance, CurrencyId, FixedU128>;
-    pub use metadata::runtime_types::vault_registry::types::Wallet;
     pub type InterBtcRichBlockHeader = metadata::runtime_types::btc_relay::types::RichBlockHeader<BlockNumber>;
     pub type BitcoinBlockHeight = u32;
 
@@ -80,7 +79,7 @@ mod metadata_aliases {
     pub use metadata::runtime_types::{
         btc_relay::pallet::Error as BtcRelayPalletError, frame_system::pallet::Error as SystemPalletError,
         issue::pallet::Error as IssuePalletError, redeem::pallet::Error as RedeemPalletError,
-        relay::pallet::Error as RelayPalletError, security::pallet::Error as SecurityPalletError,
+        security::pallet::Error as SecurityPalletError,
     };
 
     pub use metadata::runtime_types::bitcoin::types::H256Le;

@@ -1,6 +1,6 @@
 pub use jsonrpsee::core::Error as JsonRpseeError;
 
-use crate::{metadata::DispatchError, types::*, BTC_RELAY_MODULE, ISSUE_MODULE, RELAY_MODULE, SYSTEM_MODULE};
+use crate::{metadata::DispatchError, types::*, BTC_RELAY_MODULE, ISSUE_MODULE, SYSTEM_MODULE};
 use codec::Error as CodecError;
 use jsonrpsee::{client_transport::ws::WsHandshakeError, core::error::Error as RequestError, types::error::CallError};
 use prometheus::Error as PrometheusError;
@@ -30,8 +30,6 @@ pub enum Error {
     VaultNotFound,
     #[error("Vault has been liquidated")]
     VaultLiquidated,
-    #[error("Vault has stolen BTC")]
-    VaultCommittedTheft,
     #[error("Channel closed unexpectedly")]
     ChannelClosed,
     #[error("Cannot replace existing transaction")]

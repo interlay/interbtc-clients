@@ -38,19 +38,19 @@ cfg_if::cfg_if! {
         const DEFAULT_SPEC_NAME: &str = "interbtc-standalone";
         pub const SS58_PREFIX: u16 = 42;
     } else if #[cfg(feature = "parachain-metadata-interlay")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1017000..=1017000;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1018000..=1018000;
         const DEFAULT_SPEC_NAME: &str = "interlay-parachain";
         pub const SS58_PREFIX: u16 = 2032;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1017000..=1017000;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1018000..=1018000;
         const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
         pub const SS58_PREFIX: u16 = 2092;
     } else if #[cfg(feature = "parachain-metadata-interlay-testnet")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1017000..=1017000;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1018000..=1018000;
         const DEFAULT_SPEC_NAME: &str = "testnet-interlay";
         pub const SS58_PREFIX: u16 = 2032;
     }  else if #[cfg(feature = "parachain-metadata-kintsugi-testnet")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1017000..=1017000;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1018000..=1018000;
         // fun workaround to migrate allowed spec name
         struct ThisOrThat<'a>(&'a str, &'a str);
         impl<'a> PartialEq<String> for ThisOrThat<'a> {
@@ -1016,7 +1016,7 @@ impl RelayPallet for InterBtcParachain {
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
-                .relay()
+                .btc_relay()
                 .initialize(header.clone(), height)
                 .sign_and_submit_then_watch_default(&signer)
                 .await
@@ -1034,7 +1034,7 @@ impl RelayPallet for InterBtcParachain {
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
-                .relay()
+                .btc_relay()
                 .store_block_header(header.clone())
                 .sign_and_submit_then_watch_default(&signer)
                 .await
@@ -1052,7 +1052,7 @@ impl RelayPallet for InterBtcParachain {
             headers
                 .into_iter()
                 .map(|raw_block_header| {
-                    EncodedCall::Relay(metadata::runtime_types::relay::pallet::Call::store_block_header {
+                    EncodedCall::BTCRelay(metadata::runtime_types::btc_relay::pallet::Call::store_block_header {
                         raw_block_header,
                     })
                 })
@@ -1510,8 +1510,6 @@ pub trait VaultRegistryPallet {
 
     async fn register_public_key(&self, public_key: BtcPublicKey) -> Result<(), Error>;
 
-    async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), Error>;
-
     async fn get_required_collateral_for_wrapped(
         &self,
         amount_btc: u128,
@@ -1535,7 +1533,6 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// # Errors
     /// * `VaultNotFound` - if the rpc returned a default value rather than the vault we want
     /// * `VaultLiquidated` - if the vault is liquidated
-    /// * `VaultCommittedTheft` - if the vault is stole BTC
     async fn get_vault(&self, vault_id: &VaultId) -> Result<InterBtcVault, Error> {
         let head = self.get_latest_block_hash().await?;
         match self.api.storage().vault_registry().vaults(vault_id, head).await? {
@@ -1543,10 +1540,6 @@ impl VaultRegistryPallet for InterBtcParachain {
                 status: VaultStatus::Liquidated,
                 ..
             }) => Err(Error::VaultLiquidated),
-            Some(InterBtcVault {
-                status: VaultStatus::CommittedTheft,
-                ..
-            }) => Err(Error::VaultCommittedTheft),
             Some(vault) if &vault.id == vault_id => Ok(vault),
             _ => Err(Error::VaultNotFound),
         }
@@ -1659,23 +1652,6 @@ impl VaultRegistryPallet for InterBtcParachain {
                 .tx()
                 .vault_registry()
                 .register_public_key(public_key.clone())
-                .sign_and_submit_then_watch_default(&signer)
-                .await
-        })
-        .await?;
-        Ok(())
-    }
-
-    /// Register a new BTC address, useful for change addresses.
-    ///
-    /// # Arguments
-    /// * `btc_address` - the new btc address of the vault
-    async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), Error> {
-        self.with_unique_signer(|signer| async move {
-            self.api
-                .tx()
-                .vault_registry()
-                .register_address(vault_id.currencies.clone(), btc_address)
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })

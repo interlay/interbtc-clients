@@ -619,10 +619,6 @@ async fn test_refund_succeeds() {
                 .find_transaction(|tx| tx.get_op_return() == Some(refund_request.refund_id))
                 .await
                 .unwrap();
-
-            // make the vault register the input used in that transaction
-            let input_address = tx.extract_input_addresses::<BtcAddress>()[0];
-            assert_ok!(vault_provider.register_address(&vault_id, input_address).await);
         };
 
         test_service(refund_service, fut_user).await;
