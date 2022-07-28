@@ -22,4 +22,8 @@ reqwest = "0.11.11"
 # reuse version of `url` depended on by `reqwest`
 url = "2.2.2"
 nix = "0.24.2"
+async-trait = "0.1.40"
+bytes = "1.1.0"
 
+[dev-dependencies]
+mockall = "0.8.1"

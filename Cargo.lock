@@ -10544,11 +10544,14 @@ dependencies = [
 name = "vaultvisor"
 version = "0.0.1"
 dependencies = [
+ "async-trait",
+ "bytes",
  "clap",
  "env_logger 0.7.1",
  "hex",
  "jsonrpsee 0.14.0",
  "log 0.4.17",
+ "mockall",
  "nix 0.24.2",
  "parity-scale-codec",
  "reqwest",

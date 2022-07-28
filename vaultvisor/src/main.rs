@@ -2,43 +2,26 @@ mod error;
 mod vaultvisor;
 
 use clap::Parser;
-use nix::{
-    sys::signal::{self, Signal},
-    unistd::Pid,
-};
-use vaultvisor::ws_client;
 
 use error::Error;
 use std::{
-    convert::TryInto,
     fmt::Debug,
     fs::{self, File},
-    path::Path,
+    path::{Path, PathBuf},
+    process::Child,
     str,
 };
 
-use crate::vaultvisor::{get_release, run_vault_binary, try_download_client_binary, BLOCK_TIME};
+use crate::vaultvisor::{Vaultvisor, VaultvisorUtils};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(version, author, about, trailing_var_arg = true)]
 struct Opts {
     #[clap(long)]
     chain_rpc: String,
+    #[clap(long, default_value = ".")]
+    download_path: PathBuf,
     vault_args: Vec<String>,
-}
-
-fn get_args_from_file(file: &str) -> Vec<String> {
-    let args_string = fs::read_to_string(Path::new(file))
-        .expect("Something went wrong reading the vault config file.")
-        // Remove newlines and escape characters
-        .replace(&['\n', '\\'][..], " ");
-
-    // split entries to match the format of `Command::args`
-    args_string
-        .split(' ')
-        .filter(|arg| !arg.is_empty())
-        .map(|s| s.to_string())
-        .collect()
 }
 
 #[tokio::main]
@@ -47,34 +30,55 @@ async fn main() -> Result<(), Error> {
         env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, log::LevelFilter::Info.as_str()),
     );
     let opts: Opts = Opts::parse();
-    let vault_args = opts.vault_args;
-    let rpc_client = ws_client(&opts.chain_rpc).await?;
+    let rpc_client = Vaultvisor::ws_client(&opts.chain_rpc).await?;
     log::info!("Vaultvisor connected to the parachain");
-    let mut last_current_release = try_download_client_binary(&rpc_client, false)
-        .await?
-        .expect("No current release");
-    // let last_pending_release = try_download_client_binary(&rpc_client, true).await?;
 
-    println!("{:?}", last_current_release);
-    let mut vault_process = run_vault_binary(&last_current_release.bin_name, vault_args.clone()).await?;
-    loop {
-        let current_release = try_download_client_binary(&rpc_client, false)
-            .await?
-            .expect("No current release");
-        if current_release.release.uri != last_current_release.release.uri {
-            last_current_release = current_release;
-            // Shut down the outdated binary, start the new one
-            signal::kill(
-                Pid::from_raw(
-                    vault_process
-                        .id()
-                        .try_into()
-                        .map_err(|_| Error::IntegerConversionError)?,
-                ),
-                Signal::SIGINT,
-            )?;
-            vault_process = run_vault_binary(&last_current_release.bin_name, vault_args.clone()).await?;
+    Vaultvisor::new(rpc_client, opts.vault_args, opts.download_path)
+        .run()
+        .await?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::{
+        vaultvisor::{ClientRelease, DownloadedRelease},
+        *,
+    };
+    use mocktopus::{
+        macros::*,
+        mocking::{MockResult, Mockable},
+    };
+
+    mockall::mock! {
+        Vaultvisor {}
+
+        #[async_trait]
+        pub trait VaultvisorUtils {
+            async fn query_storage(&self, maybe_storage_key: Option<&str>, method: &str) -> Option<SpCoreBytes>;
+            async fn read_chain_storage<T: Decode + Debug>(&self, maybe_storage_key: Option<&str>) -> Result<Option<T>, Error>;
+            async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
+            async fn download_binary(&mut self, release: ClientRelease, pending: bool) -> Result<(), Error>;
+            fn delete_downloaded_release(&mut self) -> Result<(), Error>;
+            async fn run_binary(&mut self) -> Result<(), Error>;
+            fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
+            async fn get_request_bytes(url: String) -> Result<Bytes, Error>;
+            async fn ws_client(url: &str) -> Result<WsClient, Error>;
         }
-        tokio::time::sleep(BLOCK_TIME).await;
+    }
+
+    #[tokio::test]
+    async fn test_vaultvisor() {
+        // let mut btc_rpc = MockVaultvisor::new();
+        // btc_rpc
+        //     .expect_get_balance()
+        //     .returning(move |_| Ok(Amount::from_btc(3.0).unwrap()));
+        // let vault_data = VaultData {
+        //     vault_id: dummy_vault_id(),
+        //     btc_rpc,
+        //     metrics: PerCurrencyMetrics::dummy(),
+        // };
     }
 }
