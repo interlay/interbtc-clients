@@ -993,15 +993,6 @@ impl OraclePallet for InterBtcParachain {
 
 #[async_trait]
 pub trait RelayPallet {
-    async fn report_vault_double_payment(
-        &self,
-        vault_id: &VaultId,
-        merkle_proofs: (Vec<u8>, Vec<u8>),
-        raw_txs: (Vec<u8>, Vec<u8>),
-    ) -> Result<(), Error>;
-
-    async fn is_transaction_invalid(&self, vault_id: &VaultId, raw_tx: &[u8]) -> Result<bool, Error>;
-
     async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), Error>;
 
     async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error>;
@@ -1011,52 +1002,6 @@ pub trait RelayPallet {
 
 #[async_trait]
 impl RelayPallet for InterBtcParachain {
-    /// Submit extrinsic to report that the vault made a duplicate payment (where each individually is valid)
-    ///
-    /// # Arguments
-    /// * `vault_id` - account id for the malicious vault
-    /// * `merkle_proofs` - merkle proof to verify inclusion
-    /// * `raw_txs` - raw transaction
-    async fn report_vault_double_payment(
-        &self,
-        vault_id: &VaultId,
-        merkle_proofs: (Vec<u8>, Vec<u8>),
-        raw_txs: (Vec<u8>, Vec<u8>),
-    ) -> Result<(), Error> {
-        let merkle_proofs = &merkle_proofs;
-        let raw_txs = &raw_txs;
-        self.with_unique_signer(|signer| async move {
-            self.api
-                .tx()
-                .relay()
-                .report_vault_double_payment(vault_id.clone(), merkle_proofs.clone(), raw_txs.clone())
-                .sign_and_submit_then_watch_default(&signer)
-                .await
-        })
-        .await?;
-        Ok(())
-    }
-
-    /// Custom RPC that tests whether a Bitcoin transaction is invalid
-    /// according to the following conditions:
-    ///
-    /// - The specified vault is a signer
-    /// - The transaction is an invalid format
-    /// - The transaction is not part of any ongoing request
-    ///
-    /// # Arguments
-    /// * `vault_id` - vault account which features in vin
-    /// * `raw_tx` - raw Bitcoin transaction
-    async fn is_transaction_invalid(&self, vault_id: &VaultId, raw_tx: &[u8]) -> Result<bool, Error> {
-        let head = self.get_latest_block_hash().await?;
-        Ok(matches!(
-            self.rpc()
-                .request("relay_isTransactionInvalid", rpc_params![vault_id, raw_tx, head],)
-                .await,
-            Ok(()),
-        ))
-    }
-
     /// Initializes the relay with the provided block header and height,
     /// should be called automatically by relayer subject to the
     /// result of `is_initialized`.
