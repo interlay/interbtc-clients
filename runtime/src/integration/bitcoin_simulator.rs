@@ -3,7 +3,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
-use crate::{rpc::RelayPallet, BtcAddress, BtcRelayPallet, InterBtcParachain, RawBlockHeader, H160, H256, U256};
+use crate::{BtcAddress, BtcRelayPallet, InterBtcParachain, RawBlockHeader, H160, H256, U256};
 use async_trait::async_trait;
 use bitcoin::{
     json,

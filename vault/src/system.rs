@@ -489,10 +489,7 @@ impl VaultService {
         let account_id = self.btc_parachain.get_account_id().clone();
 
         let parsed_auto_register = join_all(self.config.auto_register.iter().map(|(symbol, amount)| async move {
-            Ok((
-                self.btc_parachain.parse_currency_id(symbol.to_string()).await?,
-                amount.clone(),
-            ))
+            Ok((self.btc_parachain.parse_currency_id(symbol.to_string()).await?, amount))
         }))
         .await
         .into_iter()

@@ -61,10 +61,10 @@ fn parse_fixed_point(src: &str) -> Result<FixedU128, Error> {
 pub fn parse_collateral_and_optional_rate(
     s: &str,
 ) -> Result<(String, Option<FixedU128>), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    let parts: Vec<_> = s.split("=").collect();
+    let parts: Vec<_> = s.split('=').collect();
     match parts.as_slice() {
-        &[currency, rate] => Ok((currency.to_string(), Some(parse_fixed_point(rate)?))),
-        &[currency] => Ok((currency.to_string(), None)),
+        [currency, rate] => Ok((currency.to_string(), Some(parse_fixed_point(rate)?))),
+        [currency] => Ok((currency.to_string(), None)),
         _ => Err(Box::new(Error::InvalidArguments)),
     }
 }
@@ -219,7 +219,7 @@ async fn main() -> Result<(), Error> {
         join_all(opts.currency_id.iter().map(|(symbol, amount)| async move {
             let currency_id = parachain_rpc.parse_currency_id(symbol.to_string()).await?;
             let coingecko_id = parachain_rpc.get_coingecko_id(currency_id).await?;
-            Ok((currency_id, coingecko_id, amount.clone()))
+            Ok((currency_id, coingecko_id, amount))
         }))
         .await
         .into_iter()
@@ -230,7 +230,7 @@ async fn main() -> Result<(), Error> {
         .into_iter()
         .map(
             |(currency_id, coingecko_id, explicit_exchange_rate)| match explicit_exchange_rate {
-                Some(rate) => Ok((currency_id, UrlOrDefault::Def(rate.clone()))),
+                Some(rate) => Ok((currency_id, UrlOrDefault::Def(*rate))),
                 None => {
                     let mut url = match &opts.coingecko {
                         Some(x) => x.clone(),

@@ -1,7 +1,6 @@
 use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager};
 use bitcoin::{
-    BitcoinCoreApi, PartialAddress, Transaction, TransactionExt, TransactionMetadata,
-    BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
+    BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata, BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
 use futures::{
     stream::{self, StreamExt},
@@ -534,8 +533,8 @@ mod tests {
     };
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
-        AccountId, AssetMetadata, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError, ErrorCode,
-        InterBtcRichBlockHeader, InterBtcVault, OracleKey, StatusCode, Token, DOT, IBTC,
+        AccountId, AssetMetadata, BitcoinBlockHeight, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError,
+        ErrorCode, InterBtcRichBlockHeader, InterBtcVault, OracleKey, RawBlockHeader, StatusCode, Token, DOT, IBTC,
     };
     use sp_core::H160;
     use std::collections::BTreeSet;
@@ -624,6 +623,9 @@ mod tests {
             async fn get_parachain_confirmations(&self) -> Result<BlockNumber, RuntimeError>;
             async fn wait_for_block_in_relay(&self, block_hash: H256Le, btc_confirmations: Option<BlockNumber>) -> Result<(), RuntimeError>;
             async fn verify_block_header_inclusion(&self, block_hash: H256Le) -> Result<(), RuntimeError>;
+            async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), RuntimeError>;
+            async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), RuntimeError>;
+            async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), RuntimeError>;
         }
 
         #[async_trait]
