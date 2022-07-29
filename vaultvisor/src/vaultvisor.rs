@@ -1,6 +1,6 @@
 use crate::error::Error;
 use bytes::Bytes;
-use codec::{Decode, Encode};
+use codec::Decode;
 use jsonrpsee::{
     core::client::{Client as WsClient, ClientT},
     rpc_params,
@@ -12,7 +12,6 @@ use sp_core_hashing::twox_128;
 
 use std::{
     convert::TryInto,
-    env,
     fmt::Debug,
     fs::{self, File},
     io::{copy, Cursor},
@@ -35,30 +34,17 @@ pub const CURRENT_RELEASE_STORAGE_ITEM: &str = "CurrentClientRelease";
 pub const PENDING_RELEASE_STORAGE_ITEM: &str = "PendingClientRelease";
 pub const BLOCK_TIME: Duration = Duration::from_secs(6);
 
-#[derive(Encode, Decode, Default, Eq, PartialEq, Debug)]
+#[derive(Decode, Default, Eq, PartialEq, Debug, Clone)]
 pub struct ClientRelease {
     pub uri: String,
     pub code_hash: H256,
 }
 
-#[derive(Default, Eq, PartialEq, Debug)]
+#[derive(Default, Eq, PartialEq, Debug, Clone)]
 pub struct DownloadedRelease {
     pub release: ClientRelease,
     pub path: PathBuf,
     pub bin_name: String,
-}
-
-#[async_trait]
-pub trait VaultvisorUtils {
-    async fn query_storage(&self, maybe_storage_key: Option<&str>, method: &str) -> Option<SpCoreBytes>;
-    async fn read_chain_storage<T: Decode + Debug>(&self, maybe_storage_key: Option<&str>) -> Result<Option<T>, Error>;
-    async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
-    async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
-    fn delete_downloaded_release(&mut self) -> Result<(), Error>;
-    async fn run_binary(&mut self) -> Result<(), Error>;
-    fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
-    async fn get_request_bytes(url: String) -> Result<Bytes, Error>;
-    async fn ws_client(url: &str) -> Result<WsClient, Error>;
 }
 
 pub struct Vaultvisor {
@@ -79,45 +65,95 @@ impl Vaultvisor {
             download_path,
         }
     }
+}
 
-    pub async fn run(&mut self) -> Result<(), Error> {
-        let release = self.try_get_release(false).await?.expect("No current release");
-        // WARNING: This will overwrite any pre-existing binary with the same name
-        self.download_binary(release).await?;
+pub async fn run(vaultvisor: &mut impl VaultvisorUtils) -> Result<(), Error> {
+    // Create all directories for the `download_path` if they don't already exist.
+    fs::create_dir_all(&vaultvisor.download_path())?;
+    let release = vaultvisor.try_get_release(false).await?.expect("No current release");
+    // WARNING: This will overwrite any pre-existing binary with the same name
+    vaultvisor.download_binary(release).await?;
 
-        self.run_binary().await?;
-        loop {
-            if let Some(new_release) = self.try_get_release(false).await? {
-                let downloaded_release = self.downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
-                if new_release.uri != downloaded_release.release.uri {
-                    // Wait for child process to finish completely.
-                    // To ensure there can't be two vault processes using the same Bitcoin wallet.
-                    self.terminate_proc_and_wait()?;
+    vaultvisor.run_binary().await?;
 
-                    // Delete old release
-                    self.delete_downloaded_release()?;
+    loop {
+        if let Some(new_release) = vaultvisor.try_get_release(false).await? {
+            let maybe_downloaded_release = vaultvisor.downloaded_release();
+            let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
+            if new_release.uri != downloaded_release.release.uri {
+                // Wait for child process to finish completely.
+                // To ensure there can't be two vault processes using the same Bitcoin wallet.
+                vaultvisor.terminate_proc_and_wait()?;
 
-                    // Download new release
-                    self.download_binary(new_release).await?;
+                // Delete old release
+                vaultvisor.delete_downloaded_release()?;
 
-                    // Run the downloaded release
-                    self.run_binary().await?;
-                }
+                // Download new release
+                vaultvisor.download_binary(new_release).await?;
+
+                // Run the downloaded release
+                vaultvisor.run_binary().await?;
             }
-            tokio::time::sleep(BLOCK_TIME).await;
         }
+        tokio::time::sleep(BLOCK_TIME).await;
     }
 }
 
 #[async_trait]
+pub trait VaultvisorUtils {
+    fn parachain_rpc(&self) -> &WsClient;
+    fn vault_args(&self) -> &Vec<String>;
+    fn child_proc(&self) -> &Option<Child>;
+    fn downloaded_release(&self) -> &Option<DownloadedRelease>;
+    fn download_path(&self) -> &PathBuf;
+    async fn query_storage(&self, maybe_storage_key: Option<String>, method: String) -> Option<SpCoreBytes>;
+    async fn read_chain_storage<T: 'static + Decode + Debug>(
+        &self,
+        maybe_storage_key: Option<String>,
+    ) -> Result<Option<T>, Error>;
+    async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
+    async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
+    fn delete_downloaded_release(&mut self) -> Result<(), Error>;
+    async fn run_binary(&mut self) -> Result<(), Error>;
+    fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
+    async fn get_request_bytes(url: String) -> Result<Bytes, Error>;
+    async fn ws_client(url: &str) -> Result<WsClient, Error>;
+}
+
+#[async_trait]
 impl VaultvisorUtils for Vaultvisor {
-    async fn query_storage(&self, maybe_storage_key: Option<&str>, method: &str) -> Option<SpCoreBytes> {
-        let params = maybe_storage_key.map_or(rpc_params![], |key| rpc_params![key]);
-        self.parachain_rpc.request(method, params).await.ok()
+    fn parachain_rpc(&self) -> &WsClient {
+        &self.parachain_rpc
     }
 
-    async fn read_chain_storage<T: Decode + Debug>(&self, maybe_storage_key: Option<&str>) -> Result<Option<T>, Error> {
-        let enc_res = self.query_storage(maybe_storage_key, "state_getStorage").await;
+    fn vault_args(&self) -> &Vec<String> {
+        &self.vault_args
+    }
+
+    fn child_proc(&self) -> &Option<Child> {
+        &self.child_proc
+    }
+
+    fn downloaded_release(&self) -> &Option<DownloadedRelease> {
+        &self.downloaded_release
+    }
+
+    fn download_path(&self) -> &PathBuf {
+        &self.download_path
+    }
+
+    async fn query_storage(&self, maybe_storage_key: Option<String>, method: String) -> Option<SpCoreBytes> {
+        let params = maybe_storage_key.map_or(rpc_params![], |key| rpc_params![key]);
+        self.parachain_rpc.request(method.as_str(), params).await.ok()
+    }
+
+    async fn read_chain_storage<T: Decode + Debug>(
+        &self,
+        maybe_storage_key: Option<String>,
+    ) -> Result<Option<T>, Error> {
+        let enc_res = self
+            .query_storage(maybe_storage_key, "state_getStorage".to_string())
+            .await;
         enc_res
             .map(|r| {
                 let v = r.to_vec();
@@ -134,9 +170,7 @@ impl VaultvisorUtils for Vaultvisor {
             CURRENT_RELEASE_STORAGE_ITEM
         };
         let storage_key = compute_storage_key(PARACHAIN_MODULE.to_string(), storage_item.to_string());
-        Ok(self
-            .read_chain_storage::<ClientRelease>(Some(storage_key.as_str()))
-            .await?)
+        Ok(self.read_chain_storage::<ClientRelease>(Some(storage_key)).await?)
     }
 
     async fn run_binary(&mut self) -> Result<(), Error> {
@@ -145,7 +179,7 @@ impl VaultvisorUtils for Vaultvisor {
             return Err(Error::ChildProcessExists);
         }
         let downloaded_release = self.downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
-        let mut child = Command::new(format!("./{}", downloaded_release.bin_name))
+        let mut child = Command::new(downloaded_release.path.as_os_str())
             .args(self.vault_args.clone())
             .stdout(Stdio::inherit())
             .spawn()?;
@@ -214,6 +248,8 @@ impl VaultvisorUtils for Vaultvisor {
         Ok(WsClientBuilder::default().build(url).await?)
     }
 }
+
+// Private utility functions
 
 fn compute_storage_key(module: String, key: String) -> String {
     let module = twox_128(module.as_bytes());

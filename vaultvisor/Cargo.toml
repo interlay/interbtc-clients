@@ -7,7 +7,7 @@ description = "The Vaultvisor runs and auto-updates Vault clients across multipl
 
 
 [dependencies]
-clap = "3.1"
+clap = { version = "3.1", features = ["derive"]}
 sp-core-hashing = "4.0.0"
 hex = "0.4.3"
 tokio = { version = "1.8", features = ["rt-multi-thread", "macros", "time"] }
