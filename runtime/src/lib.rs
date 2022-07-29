@@ -54,7 +54,6 @@ pub const BLOCK_INTERVAL: Duration = Duration::from_millis(MILLISECS_PER_BLOCK);
 
 pub const BTC_RELAY_MODULE: &str = "BTCRelay";
 pub const ISSUE_MODULE: &str = "Issue";
-pub const RELAY_MODULE: &str = "Relay";
 pub const SECURITY_MODULE: &str = "Security";
 pub const SYSTEM_MODULE: &str = "System";
 

@@ -138,8 +138,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use runtime::{
-        AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcVault, Token, Wallet,
-        DOT, IBTC,
+        AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcVault, Token, DOT,
+        IBTC,
     };
 
     macro_rules! assert_ok {
@@ -178,7 +178,6 @@ mod tests {
             async fn withdraw_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
             async fn get_public_key(&self) -> Result<Option<BtcPublicKey>, RuntimeError>;
             async fn register_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
-            async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), RuntimeError>;
             async fn get_required_collateral_for_wrapped(&self, amount_btc: u128, collateral_currency: CurrencyId) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
             async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
@@ -211,9 +210,6 @@ mod tests {
         parachain_rpc.expect_get_vault().returning(move |x| {
             Ok(InterBtcVault {
                 id: x.clone(),
-                wallet: Wallet {
-                    addresses: Default::default(),
-                },
                 status: VaultStatus::Active(true),
                 banned_until: None,
                 secure_collateral_threshold: None,
@@ -342,10 +338,7 @@ mod tests {
         parachain_rpc.expect_get_vault().returning(move |x| {
             Ok(InterBtcVault {
                 id: x.clone(),
-                wallet: Wallet {
-                    addresses: Default::default(),
-                },
-                status: VaultStatus::CommittedTheft,
+                status: VaultStatus::Liquidated,
                 banned_until: None,
                 secure_collateral_threshold: None,
                 to_be_issued_tokens: 0,

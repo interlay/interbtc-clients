@@ -269,12 +269,6 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
                         vault_id.pretty_print()
                     );
                 }
-                Err(Error::RuntimeError(RuntimeError::VaultCommittedTheft)) => {
-                    tracing::error!(
-                        "[{}] Vault committed theft -- not going to process events for this vault.",
-                        vault_id.pretty_print()
-                    );
-                }
                 Ok(_) => {
                     self.add_vault_id(vault_id.clone()).await?;
                 }
@@ -763,9 +757,7 @@ impl VaultService {
         let vault_id = self.get_vault_id(*collateral_currency);
 
         match is_vault_registered(&self.btc_parachain, &vault_id).await {
-            Err(Error::RuntimeError(RuntimeError::VaultLiquidated))
-            | Err(Error::RuntimeError(RuntimeError::VaultCommittedTheft))
-            | Ok(true) => {
+            Err(Error::RuntimeError(RuntimeError::VaultLiquidated)) | Ok(true) => {
                 tracing::info!(
                     "[{}] Not registering vault -- already registered",
                     vault_id.pretty_print()
