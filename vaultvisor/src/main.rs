@@ -60,10 +60,9 @@ mod tests {
             fn child_proc(&self) -> &Option<Child>;
             fn downloaded_release(&self) -> &Option<DownloadedRelease>;
             fn download_path(&self) -> &PathBuf;
-            async fn query_storage(&self, maybe_storage_key: Option<String>, method: String) -> Option<SpCoreBytes>;
-            async fn read_chain_storage<T: 'static + Decode + Debug>(&self, maybe_storage_key: Option<String>) -> Result<Option<T>, Error>;
             async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
             async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
+            fn uri_to_bin_path(&self, uri: &String) -> Result<(String, PathBuf), Error>;
             fn delete_downloaded_release(&mut self) -> Result<(), Error>;
             async fn run_binary(&mut self) -> Result<(), Error>;
             fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
@@ -71,6 +70,13 @@ mod tests {
             async fn ws_client(url: &str) -> Result<WsClient, Error>;
         }
     }
+
+    // #[tokio::test]
+    // async fn test_vaultvisor() {
+    //     let mut vaultvisor = MockVaultvisor::default();
+    //     vault.
+    //     v
+    // }
 
     #[tokio::test]
     async fn test_vaultvisor() {

@@ -72,6 +72,7 @@ pub async fn run(vaultvisor: &mut impl VaultvisorUtils) -> Result<(), Error> {
     fs::create_dir_all(&vaultvisor.download_path())?;
     let release = vaultvisor.try_get_release(false).await?.expect("No current release");
     // WARNING: This will overwrite any pre-existing binary with the same name
+    // TODO: Check if a release with the same version is already at the `download_path`
     vaultvisor.download_binary(release).await?;
 
     vaultvisor.run_binary().await?;
@@ -106,13 +107,9 @@ pub trait VaultvisorUtils {
     fn child_proc(&self) -> &Option<Child>;
     fn downloaded_release(&self) -> &Option<DownloadedRelease>;
     fn download_path(&self) -> &PathBuf;
-    async fn query_storage(&self, maybe_storage_key: Option<String>, method: String) -> Option<SpCoreBytes>;
-    async fn read_chain_storage<T: 'static + Decode + Debug>(
-        &self,
-        maybe_storage_key: Option<String>,
-    ) -> Result<Option<T>, Error>;
     async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
     async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
+    fn uri_to_bin_path(&self, uri: &String) -> Result<(String, PathBuf), Error>;
     fn delete_downloaded_release(&mut self) -> Result<(), Error>;
     async fn run_binary(&mut self) -> Result<(), Error>;
     fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
@@ -142,35 +139,14 @@ impl VaultvisorUtils for Vaultvisor {
         &self.download_path
     }
 
-    async fn query_storage(&self, maybe_storage_key: Option<String>, method: String) -> Option<SpCoreBytes> {
-        let params = maybe_storage_key.map_or(rpc_params![], |key| rpc_params![key]);
-        self.parachain_rpc.request(method.as_str(), params).await.ok()
-    }
-
-    async fn read_chain_storage<T: Decode + Debug>(
-        &self,
-        maybe_storage_key: Option<String>,
-    ) -> Result<Option<T>, Error> {
-        let enc_res = self
-            .query_storage(maybe_storage_key, "state_getStorage".to_string())
-            .await;
-        enc_res
-            .map(|r| {
-                let v = r.to_vec();
-                T::decode(&mut &v[..])
-            })
-            .transpose()
-            .map_err(Into::into)
-    }
-
     async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error> {
         let storage_item = if pending {
             PENDING_RELEASE_STORAGE_ITEM
         } else {
             CURRENT_RELEASE_STORAGE_ITEM
         };
-        let storage_key = compute_storage_key(PARACHAIN_MODULE.to_string(), storage_item.to_string());
-        Ok(self.read_chain_storage::<ClientRelease>(Some(storage_key)).await?)
+        let storage_key = Self::compute_storage_key(PARACHAIN_MODULE.to_string(), storage_item.to_string());
+        Ok(Self::read_chain_storage::<ClientRelease>(self.parachain_rpc(), Some(storage_key)).await?)
     }
 
     async fn run_binary(&mut self) -> Result<(), Error> {
@@ -188,14 +164,7 @@ impl VaultvisorUtils for Vaultvisor {
     }
 
     async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error> {
-        // Remove any trailing slashes from the release URI
-        let parsed_uri = Url::parse(&release.uri.trim_end_matches("/"))?;
-        let bin_name = parsed_uri
-            .path_segments()
-            .and_then(|segments| segments.last())
-            .and_then(|name| if name.is_empty() { None } else { Some(name) })
-            .ok_or(Error::ClientNameDerivationError)?;
-        let bin_path = self.download_path.join(bin_name);
+        let (bin_name, bin_path) = self.uri_to_bin_path(&release.uri)?;
         log::info!("Downloading {} at: {:?}", bin_name, bin_path);
         let mut bin_file = File::create(bin_path.clone())?;
 
@@ -216,8 +185,20 @@ impl VaultvisorUtils for Vaultvisor {
         Ok(())
     }
 
+    fn uri_to_bin_path(&self, uri: &String) -> Result<(String, PathBuf), Error> {
+        // Remove any trailing slashes from the release URI
+        let parsed_uri = Url::parse(uri.trim_end_matches("/"))?;
+        let bin_name = parsed_uri
+            .path_segments()
+            .and_then(|segments| segments.last())
+            .and_then(|name| if name.is_empty() { None } else { Some(name) })
+            .ok_or(Error::ClientNameDerivationError)?;
+        let bin_path = self.download_path.join(bin_name);
+        Ok((bin_name.to_string(), bin_path))
+    }
+
     fn delete_downloaded_release(&mut self) -> Result<(), Error> {
-        let release = self.downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
+        let release = self.downloaded_release().as_ref().ok_or(Error::NoDownloadedRelease)?;
         log::info!("Removing old release, with path {:?}", release.path);
         fs::remove_file(release.path.clone())?;
         self.downloaded_release = None;
@@ -249,11 +230,49 @@ impl VaultvisorUtils for Vaultvisor {
     }
 }
 
-// Private utility functions
+#[async_trait]
+pub trait StorageReader {
+    fn compute_storage_key(module: String, key: String) -> String;
+    async fn query_storage(
+        parachain_rpc: &WsClient,
+        maybe_storage_key: Option<String>,
+        method: String,
+    ) -> Option<SpCoreBytes>;
+    async fn read_chain_storage<T: Decode + Debug>(
+        parachain_rpc: &WsClient,
+        maybe_storage_key: Option<String>,
+    ) -> Result<Option<T>, Error>;
+}
 
-fn compute_storage_key(module: String, key: String) -> String {
-    let module = twox_128(module.as_bytes());
-    let item = twox_128(key.as_bytes());
-    let key = hex::encode([module, item].concat());
-    format!("0x{}", key)
+#[async_trait]
+impl StorageReader for Vaultvisor {
+    fn compute_storage_key(module: String, key: String) -> String {
+        let module = twox_128(module.as_bytes());
+        let item = twox_128(key.as_bytes());
+        let key = hex::encode([module, item].concat());
+        format!("0x{}", key)
+    }
+
+    async fn query_storage(
+        parachain_rpc: &WsClient,
+        maybe_storage_key: Option<String>,
+        method: String,
+    ) -> Option<SpCoreBytes> {
+        let params = maybe_storage_key.map_or(rpc_params![], |key| rpc_params![key]);
+        parachain_rpc.request(method.as_str(), params).await.ok()
+    }
+
+    async fn read_chain_storage<T: Decode + Debug>(
+        parachain_rpc: &WsClient,
+        maybe_storage_key: Option<String>,
+    ) -> Result<Option<T>, Error> {
+        let enc_res = Self::query_storage(parachain_rpc, maybe_storage_key, "state_getStorage".to_string()).await;
+        enc_res
+            .map(|r| {
+                let v = r.to_vec();
+                T::decode(&mut &v[..])
+            })
+            .transpose()
+            .map_err(Into::into)
+    }
 }
