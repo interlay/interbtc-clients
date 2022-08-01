@@ -6,6 +6,7 @@ use jsonrpsee::{
     rpc_params,
     ws_client::WsClientBuilder,
 };
+use mockall_double::double;
 use reqwest::Url;
 use sp_core::{Bytes as SpCoreBytes, H256};
 use sp_core_hashing::twox_128;
@@ -33,6 +34,28 @@ pub const CURRENT_RELEASE_STORAGE_ITEM: &str = "CurrentClientRelease";
 pub const PENDING_RELEASE_STORAGE_ITEM: &str = "PendingClientRelease";
 pub const BLOCK_TIME: Duration = Duration::from_secs(6);
 
+// Wrap `WsClient` in a newtype pattern to be able to mock it.
+mod ws_client_newtype {
+    use crate::runner::WsClient;
+    use mockall::automock;
+
+    pub struct WebsocketClient(WsClient);
+
+    #[automock]
+    impl WebsocketClient {
+        pub fn new(ws_client: WsClient) -> Self {
+            Self(ws_client)
+        }
+
+        pub fn inner(&self) -> &WsClient {
+            &self.0
+        }
+    }
+}
+
+#[double]
+use ws_client_newtype::WebsocketClient;
+
 #[derive(Decode, Default, Eq, PartialEq, Debug, Clone)]
 pub struct ClientRelease {
     pub uri: String,
@@ -47,7 +70,7 @@ pub struct DownloadedRelease {
 }
 
 pub struct Runner {
-    parachain_rpc: WsClient,
+    parachain_rpc: WebsocketClient,
     vault_args: Vec<String>,
     child_proc: Option<Child>,
     downloaded_release: Option<DownloadedRelease>,
@@ -55,7 +78,7 @@ pub struct Runner {
 }
 
 impl Runner {
-    pub fn new(parachain_rpc: WsClient, vault_args: Vec<String>, download_path: PathBuf) -> Self {
+    pub fn new(parachain_rpc: WebsocketClient, vault_args: Vec<String>, download_path: PathBuf) -> Self {
         Self {
             parachain_rpc,
             vault_args,
@@ -101,7 +124,7 @@ pub async fn run(runner: &mut impl RunnerExt) -> Result<(), Error> {
 
 #[async_trait]
 pub trait RunnerExt {
-    fn parachain_rpc(&self) -> &WsClient;
+    fn parachain_rpc(&self) -> &WebsocketClient;
     fn vault_args(&self) -> &Vec<String>;
     fn child_proc(&mut self) -> &mut Option<Child>;
     fn set_child_proc(&mut self, child_proc: Child);
@@ -120,7 +143,7 @@ pub trait RunnerExt {
 
 #[async_trait]
 impl RunnerExt for Runner {
-    fn parachain_rpc(&self) -> &WsClient {
+    fn parachain_rpc(&self) -> &WebsocketClient {
         &self.parachain_rpc
     }
 
@@ -196,13 +219,13 @@ pub trait StorageReader {
     fn compute_storage_key(&self, module: String, key: String) -> String;
     async fn query_storage(
         &self,
-        parachain_rpc: &WsClient,
+        parachain_rpc: &WebsocketClient,
         maybe_storage_key: Option<String>,
         method: String,
     ) -> Option<SpCoreBytes>;
     async fn read_chain_storage<T: 'static + Decode + Debug>(
         &self,
-        parachain_rpc: &WsClient,
+        parachain_rpc: &WebsocketClient,
         maybe_storage_key: Option<String>,
     ) -> Result<Option<T>, Error>;
 }
@@ -218,25 +241,26 @@ impl StorageReader for Runner {
 
     async fn query_storage(
         &self,
-        parachain_rpc: &WsClient,
+        parachain_rpc: &WebsocketClient,
         maybe_storage_key: Option<String>,
         method: String,
     ) -> Option<SpCoreBytes> {
         let params = maybe_storage_key.map_or(rpc_params![], |key| rpc_params![key]);
-        parachain_rpc.request(method.as_str(), params).await.ok()
+        parachain_rpc.inner().request(method.as_str(), params).await.ok()
     }
 
     async fn read_chain_storage<T: 'static + Decode + Debug>(
         &self,
-        parachain_rpc: &WsClient,
+        parachain_rpc: &WebsocketClient,
         maybe_storage_key: Option<String>,
     ) -> Result<Option<T>, Error> {
         read_chain_storage(self, parachain_rpc, maybe_storage_key).await
     }
 }
 
-pub async fn ws_client(url: &str) -> Result<WsClient, Error> {
-    Ok(WsClientBuilder::default().build(url).await?)
+pub async fn ws_client(url: &str) -> Result<WebsocketClient, Error> {
+    let ws_client = WsClientBuilder::default().build(url).await?;
+    Ok(WebsocketClient::new(ws_client))
 }
 
 async fn download_binary(runner: &impl RunnerExt, release: ClientRelease) -> Result<DownloadedRelease, Error> {
@@ -308,7 +332,7 @@ async fn try_get_release<T: RunnerExt + StorageReader>(
 
 async fn read_chain_storage<T: 'static + Decode + Debug, V: RunnerExt + StorageReader>(
     runner: &V,
-    parachain_rpc: &WsClient,
+    parachain_rpc: &WebsocketClient,
     maybe_storage_key: Option<String>,
 ) -> Result<Option<T>, Error> {
     let enc_res = runner
@@ -341,7 +365,7 @@ mod tests {
     use async_trait::async_trait;
     use bytes::Bytes;
     use codec::Decode;
-    use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+
     use sp_core::{Bytes as SpCoreBytes, H256};
 
     use std::{
@@ -357,10 +381,7 @@ mod tests {
 
     use crate::error::Error;
 
-    use super::{
-        delete_downloaded_release, download_binary, read_chain_storage, run_binary, terminate_proc_and_wait,
-        uri_to_bin_path, ClientRelease, DownloadedRelease, RunnerExt, StorageReader,
-    };
+    use super::*;
 
     use sysinfo::{Pid, System, SystemExt};
 
@@ -369,7 +390,7 @@ mod tests {
 
         #[async_trait]
         pub trait RunnerExt {
-            fn parachain_rpc(&self) -> &WsClient;
+            fn parachain_rpc(&self) -> &WebsocketClient;
             fn vault_args(&self) -> &Vec<String>;
             fn child_proc(&mut self) -> &mut Option<Child>;
             fn set_child_proc(&mut self, child_proc: Child);
@@ -391,13 +412,13 @@ mod tests {
             fn compute_storage_key(&self, module: String, key: String) -> String;
             async fn query_storage(
                 &self,
-                parachain_rpc: &WsClient,
+                parachain_rpc: &WebsocketClient,
                 maybe_storage_key: Option<String>,
                 method: String,
             ) -> Option<SpCoreBytes>;
             async fn read_chain_storage<T: 'static + Decode + Debug>(
                 &self,
-                parachain_rpc: &WsClient,
+                parachain_rpc: &WebsocketClient,
                 maybe_storage_key: Option<String>,
             ) -> Result<Option<T>, Error>;
         }
@@ -524,8 +545,7 @@ mod tests {
             116, 97, 100, 97, 116, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18, 48, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0,
         ];
-        let mock_ws_url = "ws://localhost:9944";
-        let mock_ws_client = WsClientBuilder::default().build(mock_ws_url).await.unwrap();
+        let mock_ws_client = WebsocketClient::default();
         runner
             .expect_query_storage()
             .return_const(Some(SpCoreBytes::from(mock_storage_value)));
