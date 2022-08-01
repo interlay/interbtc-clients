@@ -244,31 +244,6 @@ impl Request {
         let recipient = tx.recipient.clone();
         tracing::info!("Sending bitcoin to {}", recipient);
 
-        let return_to_self_addresses = tx
-            .transaction
-            .extract_output_addresses()
-            .into_iter()
-            .filter(|x| x != &self.btc_address)
-            .collect::<Vec<_>>();
-
-        // register return-to-self address if it exists
-        match return_to_self_addresses.as_slice() {
-            [] => {} // no return-to-self
-            [address] => {
-                // one return-to-self address, make sure it is registered
-                let wallet = parachain_rpc.get_vault(&vault_id).await?.wallet;
-                if !wallet.addresses.contains(address) {
-                    let readable_address = address
-                        .encode_str(btc_rpc.network())
-                        .unwrap_or(format!("{:?}", address));
-                    tracing::info!("Registering address {:?}", readable_address);
-                    parachain_rpc.register_address(&vault_id, *address).await?;
-                    tracing::debug!("Successfully registered address {:?}", readable_address);
-                }
-            }
-            _ => return Err(Error::TooManyReturnToSelfAddresses),
-        };
-
         let txid = btc_rpc.send_transaction(tx).await?;
 
         loop {
@@ -601,7 +576,6 @@ mod tests {
             async fn withdraw_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
             async fn get_public_key(&self) -> Result<Option<BtcPublicKey>, RuntimeError>;
             async fn register_public_key(&self, public_key: BtcPublicKey) -> Result<(), RuntimeError>;
-            async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), RuntimeError>;
             async fn get_required_collateral_for_wrapped(&self, amount_btc: u128, collateral_currency: CurrencyId) -> Result<u128, RuntimeError>;
             async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;
             async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, RuntimeError>;

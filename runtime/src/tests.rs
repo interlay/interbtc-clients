@@ -60,28 +60,6 @@ async fn test_getters() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_is_transaction_invalid() {
-    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-    let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
-    let vault_id = VaultId::new(AccountKeyring::Alice.into(), Token(DOT), Token(IBTC));
-    let err = parachain_rpc.is_transaction_invalid(&vault_id, &[]).await;
-
-    parachain_rpc
-        .get_vaults_by_account_id(&AccountKeyring::Alice.into())
-        .await
-        .unwrap();
-    let key = OracleKey::ExchangeRate(DEFAULT_TESTING_CURRENCY);
-    let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
-    parachain_rpc
-        .feed_values(vec![(key.clone(), exchange_rate)])
-        .await
-        .unwrap();
-    parachain_rpc.feed_values(vec![(key, exchange_rate)]).await.unwrap();
-    parachain_rpc.wrapped_to_collateral(2532523, Token(DOT)).await.unwrap();
-    err.unwrap();
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn test_invalid_tx_matching() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;

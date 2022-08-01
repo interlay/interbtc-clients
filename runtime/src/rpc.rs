@@ -38,21 +38,36 @@ cfg_if::cfg_if! {
         const DEFAULT_SPEC_NAME: &str = "interbtc-standalone";
         pub const SS58_PREFIX: u16 = 42;
     } else if #[cfg(feature = "parachain-metadata-interlay")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1017000..=1017000;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1018000..=1018000;
         const DEFAULT_SPEC_NAME: &str = "interlay-parachain";
         pub const SS58_PREFIX: u16 = 2032;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1017000..=1017000;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1018000..=1018000;
         const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
         pub const SS58_PREFIX: u16 = 2092;
     } else if #[cfg(feature = "parachain-metadata-interlay-testnet")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1017000..=1017000;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1018000..=1018000;
         const DEFAULT_SPEC_NAME: &str = "testnet-interlay";
-        pub const SS58_PREFIX: u16 = 42;
+        pub const SS58_PREFIX: u16 = 2032;
     }  else if #[cfg(feature = "parachain-metadata-kintsugi-testnet")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1017000..=1017000;
-        const DEFAULT_SPEC_NAME: &str = "testnet-parachain";
-        pub const SS58_PREFIX: u16 = 42;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1018000..=1018000;
+        // fun workaround to migrate allowed spec name
+        struct ThisOrThat<'a>(&'a str, &'a str);
+        impl<'a> PartialEq<String> for ThisOrThat<'a> {
+            fn eq(&self, other: &String) -> bool {
+                self.0 == other || self.1 == other
+            }
+        }
+        impl<'a> From<ThisOrThat<'a>> for String {
+            fn from(tot: ThisOrThat<'a>) -> String {
+                tot.1.into()
+            }
+        }
+        const DEFAULT_SPEC_NAME: ThisOrThat = ThisOrThat(
+            "testnet-parachain",
+            "testnet-kintsugi"
+        );
+        pub const SS58_PREFIX: u16 = 2092;
     }
 }
 
@@ -82,15 +97,16 @@ impl InterBtcParachain {
         let api: RuntimeApi = ext_client.clone().to_runtime_api();
 
         let runtime_version = ext_client.rpc().runtime_version(None).await?;
-        let default_spec_name = &Value::default();
-        let spec_name = runtime_version.other.get("specName").unwrap_or(default_spec_name);
-        if spec_name == DEFAULT_SPEC_NAME {
+        let spec_name: String = runtime_version
+            .other
+            .get("specName")
+            .and_then(|value| value.as_str())
+            .map(ToString::to_string)
+            .unwrap_or_default();
+        if DEFAULT_SPEC_NAME == spec_name {
             log::info!("spec_name={}", spec_name);
         } else {
-            return Err(Error::ParachainMetadataMismatch(
-                DEFAULT_SPEC_NAME.into(),
-                spec_name.as_str().unwrap_or_default().into(),
-            ));
+            return Err(Error::ParachainMetadataMismatch(DEFAULT_SPEC_NAME.into(), spec_name));
         }
 
         if DEFAULT_SPEC_VERSION.contains(&runtime_version.spec_version) {
@@ -977,17 +993,6 @@ impl OraclePallet for InterBtcParachain {
 
 #[async_trait]
 pub trait RelayPallet {
-    async fn report_vault_theft(&self, vault_id: &VaultId, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error>;
-
-    async fn report_vault_double_payment(
-        &self,
-        vault_id: &VaultId,
-        merkle_proofs: (Vec<u8>, Vec<u8>),
-        raw_txs: (Vec<u8>, Vec<u8>),
-    ) -> Result<(), Error>;
-
-    async fn is_transaction_invalid(&self, vault_id: &VaultId, raw_tx: &[u8]) -> Result<bool, Error>;
-
     async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), Error>;
 
     async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error>;
@@ -997,73 +1002,6 @@ pub trait RelayPallet {
 
 #[async_trait]
 impl RelayPallet for InterBtcParachain {
-    /// Submit extrinsic to report vault theft, consumer should
-    /// first check `is_transaction_invalid` to ensure this call
-    /// succeeds.
-    ///
-    /// # Arguments
-    /// * `vault_id` - account id for the malicious vault
-    /// * `merkle_proof` - merkle proof to verify inclusion
-    /// * `raw_tx` - raw transaction
-    async fn report_vault_theft(&self, vault_id: &VaultId, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
-        self.with_unique_signer(|signer| async move {
-            self.api
-                .tx()
-                .relay()
-                .report_vault_theft(vault_id.clone(), merkle_proof.into(), raw_tx.into())
-                .sign_and_submit_then_watch_default(&signer)
-                .await
-        })
-        .await?;
-        Ok(())
-    }
-
-    /// Submit extrinsic to report that the vault made a duplicate payment (where each individually is valid)
-    ///
-    /// # Arguments
-    /// * `vault_id` - account id for the malicious vault
-    /// * `merkle_proofs` - merkle proof to verify inclusion
-    /// * `raw_txs` - raw transaction
-    async fn report_vault_double_payment(
-        &self,
-        vault_id: &VaultId,
-        merkle_proofs: (Vec<u8>, Vec<u8>),
-        raw_txs: (Vec<u8>, Vec<u8>),
-    ) -> Result<(), Error> {
-        let merkle_proofs = &merkle_proofs;
-        let raw_txs = &raw_txs;
-        self.with_unique_signer(|signer| async move {
-            self.api
-                .tx()
-                .relay()
-                .report_vault_double_payment(vault_id.clone(), merkle_proofs.clone(), raw_txs.clone())
-                .sign_and_submit_then_watch_default(&signer)
-                .await
-        })
-        .await?;
-        Ok(())
-    }
-
-    /// Custom RPC that tests whether a Bitcoin transaction is invalid
-    /// according to the following conditions:
-    ///
-    /// - The specified vault is a signer
-    /// - The transaction is an invalid format
-    /// - The transaction is not part of any ongoing request
-    ///
-    /// # Arguments
-    /// * `vault_id` - vault account which features in vin
-    /// * `raw_tx` - raw Bitcoin transaction
-    async fn is_transaction_invalid(&self, vault_id: &VaultId, raw_tx: &[u8]) -> Result<bool, Error> {
-        let head = self.get_latest_block_hash().await?;
-        Ok(matches!(
-            self.rpc()
-                .request("relay_isTransactionInvalid", rpc_params![vault_id, raw_tx, head],)
-                .await,
-            Ok(()),
-        ))
-    }
-
     /// Initializes the relay with the provided block header and height,
     /// should be called automatically by relayer subject to the
     /// result of `is_initialized`.
@@ -1078,7 +1016,7 @@ impl RelayPallet for InterBtcParachain {
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
-                .relay()
+                .btc_relay()
                 .initialize(header.clone(), height)
                 .sign_and_submit_then_watch_default(&signer)
                 .await
@@ -1096,7 +1034,7 @@ impl RelayPallet for InterBtcParachain {
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
-                .relay()
+                .btc_relay()
                 .store_block_header(header.clone())
                 .sign_and_submit_then_watch_default(&signer)
                 .await
@@ -1114,7 +1052,7 @@ impl RelayPallet for InterBtcParachain {
             headers
                 .into_iter()
                 .map(|raw_block_header| {
-                    EncodedCall::Relay(metadata::runtime_types::relay::pallet::Call::store_block_header {
+                    EncodedCall::BTCRelay(metadata::runtime_types::btc_relay::pallet::Call::store_block_header {
                         raw_block_header,
                     })
                 })
@@ -1572,8 +1510,6 @@ pub trait VaultRegistryPallet {
 
     async fn register_public_key(&self, public_key: BtcPublicKey) -> Result<(), Error>;
 
-    async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), Error>;
-
     async fn get_required_collateral_for_wrapped(
         &self,
         amount_btc: u128,
@@ -1601,7 +1537,6 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// # Errors
     /// * `VaultNotFound` - if the rpc returned a default value rather than the vault we want
     /// * `VaultLiquidated` - if the vault is liquidated
-    /// * `VaultCommittedTheft` - if the vault is stole BTC
     async fn get_vault(&self, vault_id: &VaultId) -> Result<InterBtcVault, Error> {
         let head = self.get_latest_block_hash().await?;
         match self.api.storage().vault_registry().vaults(vault_id, head).await? {
@@ -1609,10 +1544,6 @@ impl VaultRegistryPallet for InterBtcParachain {
                 status: VaultStatus::Liquidated,
                 ..
             }) => Err(Error::VaultLiquidated),
-            Some(InterBtcVault {
-                status: VaultStatus::CommittedTheft,
-                ..
-            }) => Err(Error::VaultCommittedTheft),
             Some(vault) if &vault.id == vault_id => Ok(vault),
             _ => Err(Error::VaultNotFound),
         }
@@ -1725,23 +1656,6 @@ impl VaultRegistryPallet for InterBtcParachain {
                 .tx()
                 .vault_registry()
                 .register_public_key(public_key.clone())
-                .sign_and_submit_then_watch_default(&signer)
-                .await
-        })
-        .await?;
-        Ok(())
-    }
-
-    /// Register a new BTC address, useful for change addresses.
-    ///
-    /// # Arguments
-    /// * `btc_address` - the new btc address of the vault
-    async fn register_address(&self, vault_id: &VaultId, btc_address: BtcAddress) -> Result<(), Error> {
-        self.with_unique_signer(|signer| async move {
-            self.api
-                .tx()
-                .vault_registry()
-                .register_address(vault_id.currencies.clone(), btc_address)
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })

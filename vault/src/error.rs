@@ -12,8 +12,6 @@ pub enum Error {
     InsufficientFunds,
     #[error("Failed to load or create bitcoin wallet: {0}")]
     WalletInitializationFailure(BitcoinError),
-    #[error("Transaction contains more than one return-to-self uxto")]
-    TooManyReturnToSelfAddresses,
     #[error("Mathematical operation caused an overflow")]
     ArithmeticOverflow,
     #[error("Mathematical operation caused an underflow")]
