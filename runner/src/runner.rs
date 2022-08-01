@@ -134,7 +134,7 @@ pub trait RunnerExt {
     fn set_download_path(&mut self, download_path: PathBuf);
     async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
     async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
-    fn uri_to_bin_path(&self, uri: &String) -> Result<(String, PathBuf), Error>;
+    fn uri_to_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error>;
     fn delete_downloaded_release(&mut self) -> Result<(), Error>;
     async fn run_binary(&mut self) -> Result<(), Error>;
     fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
@@ -191,7 +191,7 @@ impl RunnerExt for Runner {
         Ok(())
     }
 
-    fn uri_to_bin_path(&self, uri: &String) -> Result<(String, PathBuf), Error> {
+    fn uri_to_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error> {
         uri_to_bin_path(self, uri)
     }
 
@@ -282,9 +282,9 @@ async fn download_binary(runner: &impl RunnerExt, release: ClientRelease) -> Res
     })
 }
 
-fn uri_to_bin_path(runner: &impl RunnerExt, uri: &String) -> Result<(String, PathBuf), Error> {
+fn uri_to_bin_path(runner: &impl RunnerExt, uri: &str) -> Result<(String, PathBuf), Error> {
     // Remove any trailing slashes from the release URI
-    let parsed_uri = Url::parse(uri.trim_end_matches("/"))?;
+    let parsed_uri = Url::parse(uri.trim_end_matches('/'))?;
     let bin_name = parsed_uri
         .path_segments()
         .and_then(|segments| segments.last())
@@ -325,9 +325,9 @@ async fn try_get_release<T: RunnerExt + StorageReader>(
         CURRENT_RELEASE_STORAGE_ITEM
     };
     let storage_key = runner.compute_storage_key(PARACHAIN_MODULE.to_string(), storage_item.to_string());
-    Ok(runner
+    runner
         .read_chain_storage::<ClientRelease>(runner.parachain_rpc(), Some(storage_key))
-        .await?)
+        .await
 }
 
 async fn read_chain_storage<T: 'static + Decode + Debug, V: RunnerExt + StorageReader>(
@@ -400,7 +400,7 @@ mod tests {
             fn set_download_path(&mut self, download_path: PathBuf);
             async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
             async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
-            fn uri_to_bin_path(&self, uri: &String) -> Result<(String, PathBuf), Error>;
+            fn uri_to_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error>;
             fn delete_downloaded_release(&mut self) -> Result<(), Error>;
             async fn run_binary(&mut self) -> Result<(), Error>;
             fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
@@ -435,6 +435,7 @@ mod tests {
                 .to_string(),
             code_hash: H256::default(),
         };
+
         runner.expect_uri_to_bin_path().returning(|_| {
             Ok((
                 "vault-standalone-metadata".to_string(),
