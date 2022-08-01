@@ -5,11 +5,9 @@ use clap::Parser;
 
 use error::Error;
 
-use std::{fmt::Debug, path::PathBuf, str};
+use std::{fmt::Debug, path::PathBuf};
 
-use async_trait::async_trait;
-
-use crate::vaultvisor::{run, ws_client, Vaultvisor, VaultvisorUtils};
+use crate::vaultvisor::{run, ws_client, Vaultvisor};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(version, author, about, trailing_var_arg = true)]
@@ -27,6 +25,7 @@ async fn main() -> Result<(), Error> {
         env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, log::LevelFilter::Info.as_str()),
     );
     let opts: Opts = Opts::parse();
+    println!("{:?}", opts.vault_args);
     let rpc_client = ws_client(&opts.chain_rpc).await?;
     log::info!("Connected to the parachain");
 

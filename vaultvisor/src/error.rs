@@ -26,8 +26,6 @@ pub enum Error {
     // JsonRpcHttpError(#[from] JsonRpcHttpError),
     #[error("Failed to derive the release name of the vault")]
     ClientNameDerivationError,
-    #[error("Failed to identify vault binary name in release URI")]
-    UnknownBinaryName,
     #[error("Integer conversion error")]
     IntegerConversionError,
     #[error("A client release has not been downloaded")]

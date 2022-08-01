@@ -66,7 +66,7 @@ impl Vaultvisor {
     }
 }
 
-pub async fn run(vaultvisor: &mut impl VaultvisorUtils) -> Result<(), Error> {
+pub async fn run(vaultvisor: &mut impl VaultvisorExt) -> Result<(), Error> {
     // Create all directories for the `download_path` if they don't already exist.
     fs::create_dir_all(&vaultvisor.download_path())?;
     let release = vaultvisor.try_get_release(false).await?.expect("No current release");
@@ -100,7 +100,7 @@ pub async fn run(vaultvisor: &mut impl VaultvisorUtils) -> Result<(), Error> {
 }
 
 #[async_trait]
-pub trait VaultvisorUtils {
+pub trait VaultvisorExt {
     fn parachain_rpc(&self) -> &WsClient;
     fn vault_args(&self) -> &Vec<String>;
     fn child_proc(&mut self) -> &mut Option<Child>;
@@ -119,7 +119,7 @@ pub trait VaultvisorUtils {
 }
 
 #[async_trait]
-impl VaultvisorUtils for Vaultvisor {
+impl VaultvisorExt for Vaultvisor {
     fn parachain_rpc(&self) -> &WsClient {
         &self.parachain_rpc
     }
@@ -153,26 +153,12 @@ impl VaultvisorUtils for Vaultvisor {
     }
 
     async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error> {
-        let storage_item = if pending {
-            PENDING_RELEASE_STORAGE_ITEM
-        } else {
-            CURRENT_RELEASE_STORAGE_ITEM
-        };
-        let storage_key = Self::compute_storage_key(PARACHAIN_MODULE.to_string(), storage_item.to_string());
-        Ok(Self::read_chain_storage::<ClientRelease>(self.parachain_rpc(), Some(storage_key)).await?)
+        try_get_release(self, pending).await
     }
 
     async fn run_binary(&mut self) -> Result<(), Error> {
-        // Ensure there is no other child running
-        if self.child_proc.is_some() {
-            return Err(Error::ChildProcessExists);
-        }
-        let downloaded_release = self.downloaded_release().as_ref().ok_or(Error::NoDownloadedRelease)?;
-        let child = Command::new(downloaded_release.path.as_os_str())
-            .args(self.vault_args.clone())
-            .stdout(Stdio::inherit())
-            .spawn()?;
-        self.child_proc = Some(child);
+        let child = run_binary(self, Stdio::inherit()).await?;
+        self.set_child_proc(child);
         Ok(())
     }
 
@@ -207,13 +193,15 @@ impl VaultvisorUtils for Vaultvisor {
 
 #[async_trait]
 pub trait StorageReader {
-    fn compute_storage_key(module: String, key: String) -> String;
+    fn compute_storage_key(&self, module: String, key: String) -> String;
     async fn query_storage(
+        &self,
         parachain_rpc: &WsClient,
         maybe_storage_key: Option<String>,
         method: String,
     ) -> Option<SpCoreBytes>;
-    async fn read_chain_storage<T: Decode + Debug>(
+    async fn read_chain_storage<T: 'static + Decode + Debug>(
+        &self,
         parachain_rpc: &WsClient,
         maybe_storage_key: Option<String>,
     ) -> Result<Option<T>, Error>;
@@ -221,7 +209,7 @@ pub trait StorageReader {
 
 #[async_trait]
 impl StorageReader for Vaultvisor {
-    fn compute_storage_key(module: String, key: String) -> String {
+    fn compute_storage_key(&self, module: String, key: String) -> String {
         let module = twox_128(module.as_bytes());
         let item = twox_128(key.as_bytes());
         let key = hex::encode([module, item].concat());
@@ -229,6 +217,7 @@ impl StorageReader for Vaultvisor {
     }
 
     async fn query_storage(
+        &self,
         parachain_rpc: &WsClient,
         maybe_storage_key: Option<String>,
         method: String,
@@ -237,18 +226,12 @@ impl StorageReader for Vaultvisor {
         parachain_rpc.request(method.as_str(), params).await.ok()
     }
 
-    async fn read_chain_storage<T: Decode + Debug>(
+    async fn read_chain_storage<T: 'static + Decode + Debug>(
+        &self,
         parachain_rpc: &WsClient,
         maybe_storage_key: Option<String>,
     ) -> Result<Option<T>, Error> {
-        let enc_res = Self::query_storage(parachain_rpc, maybe_storage_key, "state_getStorage".to_string()).await;
-        enc_res
-            .map(|r| {
-                let v = r.to_vec();
-                T::decode(&mut &v[..])
-            })
-            .transpose()
-            .map_err(Into::into)
+        read_chain_storage(self, parachain_rpc, maybe_storage_key).await
     }
 }
 
@@ -256,13 +239,9 @@ pub async fn ws_client(url: &str) -> Result<WsClient, Error> {
     Ok(WsClientBuilder::default().build(url).await?)
 }
 
-async fn download_binary(
-    vaultvisor: &impl VaultvisorUtils,
-    release: ClientRelease,
-) -> Result<DownloadedRelease, Error> {
+async fn download_binary(vaultvisor: &impl VaultvisorExt, release: ClientRelease) -> Result<DownloadedRelease, Error> {
     let (bin_name, bin_path) = vaultvisor.uri_to_bin_path(&release.uri)?;
     log::info!("Downloading {} at: {:?}", bin_name, bin_path);
-    println!("Downloading {} at: {:?}", bin_name, bin_path);
     File::create(bin_path.clone())?;
 
     let bytes = vaultvisor.get_request_bytes(release.uri.clone()).await?;
@@ -279,7 +258,7 @@ async fn download_binary(
     })
 }
 
-fn uri_to_bin_path(vaultvisor: &impl VaultvisorUtils, uri: &String) -> Result<(String, PathBuf), Error> {
+fn uri_to_bin_path(vaultvisor: &impl VaultvisorExt, uri: &String) -> Result<(String, PathBuf), Error> {
     // Remove any trailing slashes from the release URI
     let parsed_uri = Url::parse(uri.trim_end_matches("/"))?;
     let bin_name = parsed_uri
@@ -291,17 +270,17 @@ fn uri_to_bin_path(vaultvisor: &impl VaultvisorUtils, uri: &String) -> Result<(S
     Ok((bin_name.to_string(), bin_path))
 }
 
-fn delete_downloaded_release(vaultvisor: &impl VaultvisorUtils) -> Result<(), Error> {
+fn delete_downloaded_release(vaultvisor: &impl VaultvisorExt) -> Result<(), Error> {
     let release = vaultvisor
         .downloaded_release()
         .as_ref()
         .ok_or(Error::NoDownloadedRelease)?;
     log::info!("Removing old release, with path {:?}", release.path);
-    fs::remove_file(release.path.clone())?;
+    fs::remove_file(&release.path)?;
     Ok(())
 }
 
-fn terminate_proc_and_wait(vaultvisor: &mut impl VaultvisorUtils) -> Result<u32, Error> {
+fn terminate_proc_and_wait(vaultvisor: &mut impl VaultvisorExt) -> Result<u32, Error> {
     let child_proc = vaultvisor.child_proc().as_mut().ok_or(Error::NoChildProcess)?;
     signal::kill(
         Pid::from_raw(child_proc.id().try_into().map_err(|_| Error::IntegerConversionError)?),
@@ -315,34 +294,87 @@ fn terminate_proc_and_wait(vaultvisor: &mut impl VaultvisorUtils) -> Result<u32,
     Ok(child_proc.id())
 }
 
+async fn try_get_release<T: VaultvisorExt + StorageReader>(
+    vaultvisor: &T,
+    pending: bool,
+) -> Result<Option<ClientRelease>, Error> {
+    let storage_item = if pending {
+        PENDING_RELEASE_STORAGE_ITEM
+    } else {
+        CURRENT_RELEASE_STORAGE_ITEM
+    };
+    let storage_key = vaultvisor.compute_storage_key(PARACHAIN_MODULE.to_string(), storage_item.to_string());
+    Ok(vaultvisor
+        .read_chain_storage::<ClientRelease>(vaultvisor.parachain_rpc(), Some(storage_key))
+        .await?)
+}
+
+async fn read_chain_storage<T: 'static + Decode + Debug, V: VaultvisorExt + StorageReader>(
+    vaultvisor: &V,
+    parachain_rpc: &WsClient,
+    maybe_storage_key: Option<String>,
+) -> Result<Option<T>, Error> {
+    let enc_res = vaultvisor
+        .query_storage(parachain_rpc, maybe_storage_key, "state_getStorage".to_string())
+        .await;
+    enc_res
+        .map(|r| {
+            let v = r.to_vec();
+            T::decode(&mut &v[..])
+        })
+        .transpose()
+        .map_err(Into::into)
+}
+
+async fn run_binary(vaultvisor: &mut impl VaultvisorExt, stdout_mode: impl Into<Stdio>) -> Result<Child, Error> {
+    // Ensure there is no other child running
+    if vaultvisor.child_proc().is_some() {
+        return Err(Error::ChildProcessExists);
+    }
+    let downloaded_release = vaultvisor
+        .downloaded_release()
+        .as_ref()
+        .ok_or(Error::NoDownloadedRelease)?;
+    let child = Command::new(downloaded_release.path.as_os_str())
+        .args(vaultvisor.vault_args().clone())
+        .stdout(stdout_mode)
+        .spawn()?;
+    Ok(child)
+}
+
 #[cfg(test)]
 mod tests {
-    use sp_core::H256;
+    use async_trait::async_trait;
+    use bytes::Bytes;
+    use codec::Decode;
+    use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+    use sp_core::{Bytes as SpCoreBytes, H256};
+
     use std::{
         convert::TryInto,
+        fmt::Debug,
         fs::{self, File},
+        io::Write,
         os::unix::prelude::PermissionsExt,
         path::PathBuf,
-        process::{Child, Command},
+        process::{Child, Command, Stdio},
         str::FromStr,
     };
 
-    use crate::{
-        vaultvisor::{
-            delete_downloaded_release, download_binary, terminate_proc_and_wait, ClientRelease, DownloadedRelease,
-        },
-        *,
+    use crate::error::Error;
+
+    use super::{
+        delete_downloaded_release, download_binary, read_chain_storage, run_binary, terminate_proc_and_wait,
+        uri_to_bin_path, ClientRelease, DownloadedRelease, StorageReader, VaultvisorExt,
     };
 
-    use super::uri_to_bin_path;
-
-    use sysinfo::{Pid, ProcessExt, ProcessStatus, System, SystemExt};
+    use sysinfo::{Pid, System, SystemExt};
 
     mockall::mock! {
         Vaultvisor {}
 
         #[async_trait]
-        pub trait VaultvisorUtils {
+        pub trait VaultvisorExt {
             fn parachain_rpc(&self) -> &WsClient;
             fn vault_args(&self) -> &Vec<String>;
             fn child_proc(&mut self) -> &mut Option<Child>;
@@ -358,6 +390,22 @@ mod tests {
             async fn run_binary(&mut self) -> Result<(), Error>;
             fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
             async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error>;
+        }
+
+        #[async_trait]
+        pub trait StorageReader {
+            fn compute_storage_key(&self, module: String, key: String) -> String;
+            async fn query_storage(
+                &self,
+                parachain_rpc: &WsClient,
+                maybe_storage_key: Option<String>,
+                method: String,
+            ) -> Option<SpCoreBytes>;
+            async fn read_chain_storage<T: 'static + Decode + Debug>(
+                &self,
+                parachain_rpc: &WsClient,
+                maybe_storage_key: Option<String>,
+            ) -> Result<Option<T>, Error>;
         }
     }
 
@@ -468,5 +516,104 @@ mod tests {
         let child_process = processes.get(&Pid::from(pid_i32));
 
         assert_eq!(child_process.is_none(), true);
+    }
+
+    #[tokio::test]
+    async fn test_vaultvisor_try_get_release() {
+        let mut vaultvisor = MockVaultvisor::default();
+        let expected_storage_key = "0x8402aaa79721798ff725d48776181a4428c2fc0938165431e2fa3fc50f072550".to_string();
+        let mock_storage_value = vec![
+            125, 1, 104, 116, 116, 112, 115, 58, 47, 47, 103, 105, 116, 104, 117, 98, 46, 99, 111, 109, 47, 105, 110,
+            116, 101, 114, 108, 97, 121, 47, 105, 110, 116, 101, 114, 98, 116, 99, 45, 99, 108, 105, 101, 110, 116,
+            115, 47, 114, 101, 108, 101, 97, 115, 101, 115, 47, 100, 111, 119, 110, 108, 111, 97, 100, 47, 49, 46, 49,
+            53, 46, 48, 47, 118, 97, 117, 108, 116, 45, 115, 116, 97, 110, 100, 97, 108, 111, 110, 101, 45, 109, 101,
+            116, 97, 100, 97, 116, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18, 48, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0,
+        ];
+        let mock_ws_url = "ws://localhost:9944";
+        let mock_ws_client = WsClientBuilder::default().build(mock_ws_url).await.unwrap();
+        vaultvisor
+            .expect_query_storage()
+            .return_const(Some(SpCoreBytes::from(mock_storage_value)));
+
+        let release = read_chain_storage::<ClientRelease, MockVaultvisor>(
+            &vaultvisor,
+            &mock_ws_client,
+            Some(expected_storage_key),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let expected_uri =
+            "https://github.com/interlay/interbtc-clients/releases/download/1.15.0/vault-standalone-metadata"
+                .to_string();
+        assert_eq!(
+            release,
+            ClientRelease {
+                uri: expected_uri,
+                code_hash: H256::from_str("0x0000000000000000000000000000000000000000123000000000000000000000")
+                    .unwrap()
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn test_vaultvisor_run_binary() {
+        let mock_executable_path = PathBuf::from_str("./print_cli_input").unwrap();
+        {
+            let mut file = File::create(mock_executable_path.clone()).unwrap();
+
+            // Script that prints CLI input to stdout
+            file.write_all(b"#!/bin/bash\necho $@").unwrap();
+
+            // make it executable
+            file.set_permissions(fs::Permissions::from_mode(0o700)).unwrap();
+
+            file.sync_all().unwrap();
+            // drop `file` here to close it and avoid `ExecutableFileBusy` errors
+        }
+
+        let mut vaultvisor = MockVaultvisor::default();
+        let mock_vault_args: Vec<String> = vec![
+            "--bitcoin-rpc-url",
+            "http://localhost:18443",
+            "--bitcoin-rpc-user",
+            "rpcuser",
+            "--bitcoin-rpc-pass",
+            "rpcpassword",
+            "--keyfile",
+            "keyfile.json",
+            "--keyname",
+            "0xa81f76187f1e5d2059f67439c4242a92a5cd66a409579db73f156c6e2aae5102",
+            "--faucet-url",
+            "http://localhost:3033",
+            "--auto-register=KSM=faucet",
+            "--btc-parachain-url",
+            "ws://localhost:9944",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+
+        let mock_downloaded_release = DownloadedRelease {
+            release: ClientRelease::default(),
+            path: mock_executable_path.clone(),
+            bin_name: String::default(),
+        };
+        vaultvisor.expect_child_proc().return_var(None);
+        vaultvisor
+            .expect_downloaded_release()
+            .return_const(Some(mock_downloaded_release));
+        vaultvisor.expect_vault_args().return_const(mock_vault_args.clone());
+        vaultvisor.expect_set_child_proc().return_const(());
+        let child = run_binary(&mut vaultvisor, Stdio::piped()).await.unwrap();
+
+        let output = child.wait_with_output().unwrap();
+
+        let mut expected_output = mock_vault_args.join(" ");
+        expected_output.push('\n');
+        assert_eq!(output.stdout, expected_output.as_bytes());
+        // Clean up temporary executable
+        fs::remove_file(mock_executable_path).unwrap();
     }
 }
