@@ -1,5 +1,5 @@
 mod error;
-mod vaultvisor;
+mod runner;
 
 use clap::Parser;
 
@@ -7,7 +7,7 @@ use error::Error;
 
 use std::{fmt::Debug, path::PathBuf};
 
-use crate::vaultvisor::{run, ws_client, Vaultvisor};
+use crate::runner::{run, ws_client, Runner};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(version, author, about, trailing_var_arg = true)]
@@ -29,7 +29,7 @@ async fn main() -> Result<(), Error> {
     let rpc_client = ws_client(&opts.chain_rpc).await?;
     log::info!("Connected to the parachain");
 
-    let mut vaultvisor = Vaultvisor::new(rpc_client, opts.vault_args, opts.download_path);
-    run(&mut vaultvisor).await?;
+    let mut runner = Runner::new(rpc_client, opts.vault_args, opts.download_path);
+    run(&mut runner).await?;
     Ok(())
 }

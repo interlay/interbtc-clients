@@ -7181,6 +7181,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "runner"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "clap",
+ "env_logger 0.7.1",
+ "hex",
+ "jsonrpsee 0.14.0",
+ "log 0.4.17",
+ "mockall",
+ "nix 0.24.2",
+ "parity-scale-codec",
+ "reqwest",
+ "serde_json",
+ "sp-core",
+ "sp-core-hashing 4.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sysinfo",
+ "thiserror",
+ "tokio",
+ "url 2.2.2",
+]
+
+[[package]]
 name = "runtime"
 version = "1.1.0"
 dependencies = [
@@ -10562,30 +10586,6 @@ dependencies = [
  "sp-runtime",
  "sp-std 4.0.0 (git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.24)",
  "staking",
-]
-
-[[package]]
-name = "vaultvisor"
-version = "0.0.1"
-dependencies = [
- "async-trait",
- "bytes",
- "clap",
- "env_logger 0.7.1",
- "hex",
- "jsonrpsee 0.14.0",
- "log 0.4.17",
- "mockall",
- "nix 0.24.2",
- "parity-scale-codec",
- "reqwest",
- "serde_json",
- "sp-core",
- "sp-core-hashing 4.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sysinfo",
- "thiserror",
- "tokio",
- "url 2.2.2",
 ]
 
 [[package]]

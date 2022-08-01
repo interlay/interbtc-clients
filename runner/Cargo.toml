@@ -1,9 +1,9 @@
 [package]
-name = "vaultvisor"
+name = "runner"
 version = "0.0.1"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
-description = "The Vaultvisor runs and auto-updates Vault clients across multiple networks (Interlay, Kintsugi, testnets)."
+description = "The Runner runs and auto-updates Vault clients across multiple networks (Interlay, Kintsugi, testnets)."
 
 
 [dependencies]

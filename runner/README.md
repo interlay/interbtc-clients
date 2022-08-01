@@ -1,11 +1,11 @@
-# Vaultvisor
+# Runner
 
 Auto-updater software for the vault client. On crash or termination, it restarts the vault to remove the need for running as systemd.
 
 
 ```bash
 USAGE:
-    vaultvisor --chain-rpc <CHAIN_RPC> --vault-config-file <VAULT_CONFIG_FILE>
+    runner --chain-rpc <CHAIN_RPC> --vault-config-file <VAULT_CONFIG_FILE>
 
 OPTIONS:
         --chain-rpc <CHAIN_RPC>                    
@@ -30,10 +30,10 @@ Example:
 --btc-parachain-url ws://localhost:9944
 ```
 
-Pass the path to the file to the vaultvisor, along with the websocket URL of the parachain (the same value as that 
+Pass the path to the file to the runner, along with the websocket URL of the parachain (the same value as that 
 of the `btc-parachain-url` flag). Example:
 ```bash
-./vaultvisor --chain-rpc 'ws://localhost:9944'   --vault-config-file args.txt
+./runner --chain-rpc 'ws://localhost:9944'   --vault-config-file args.txt
 ```
 
 ## Test
@@ -53,7 +53,7 @@ cargo run --bin interbtc-standalone -- --dev
 
 Go to the [apps](https://polkadot.js.org/apps/) explorer on the local node and use sudo to send a `VaultRegistry::setClientRelease` extrinsic with version `1.14.0` and a random 32 byte value for the checksum (not used yet), e.g. `0x122132098310183201928012823109812098210198201298012980981098211`.
 
-Run the vaultvisor:
+Run the runner:
 ```bash
-./vaultvisor --chain-rpc 'ws://localhost:9944' --vault-config-file args.txt
+./runner --chain-rpc 'ws://localhost:9944' --vault-config-file args.txt
 ```

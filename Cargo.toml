@@ -7,7 +7,7 @@ members = [
   "bitcoin",
   "faucet",
   "service",
-  "vaultvisor"
+  "runner"
 ]
 
 [patch.crates-io]

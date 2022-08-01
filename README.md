@@ -75,7 +75,7 @@ To build, one of the following mutually-exclusive features must be specified:
 
 The default command for building the clients, assuming a standalone chain, is:
 ```shell
-cargo run --features=standalone-metadata --bin vaultvisor -- --chain-rpc 'ws://localhost:9944'   --vault-config-file args.txt
+cargo run --features=standalone-metadata --bin runner -- --chain-rpc 'ws://localhost:9944'   --vault-config-file args.txt
 ```
 
 <p align="center">
