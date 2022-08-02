@@ -7,15 +7,20 @@ use error::Error;
 
 use std::{fmt::Debug, path::PathBuf};
 
-use crate::runner::{run, ws_client, Runner};
+use crate::runner::{ws_client, Runner};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(version, author, about, trailing_var_arg = true)]
 struct Opts {
+    /// Parachain websocket URL.
     #[clap(long)]
-    chain_rpc: String,
+    parachain_ws: String,
+
+    /// Download path for the vault executable.
     #[clap(long, default_value = ".")]
     download_path: PathBuf,
+
+    /// CLI arguments to pass to the vault executable.
     vault_args: Vec<String>,
 }
 
@@ -25,11 +30,10 @@ async fn main() -> Result<(), Error> {
         env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, log::LevelFilter::Info.as_str()),
     );
     let opts: Opts = Opts::parse();
-    println!("{:?}", opts.vault_args);
-    let rpc_client = ws_client(&opts.chain_rpc).await?;
+    let rpc_client = ws_client(&opts.parachain_ws).await?;
     log::info!("Connected to the parachain");
 
     let mut runner = Runner::new(rpc_client, opts.vault_args, opts.download_path);
-    run(&mut runner).await?;
+    Runner::run(&mut runner).await?;
     Ok(())
 }

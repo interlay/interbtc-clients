@@ -22,8 +22,6 @@ pub enum Error {
     HttpError(#[from] ReqwestError),
     #[error("UrlParseError: {0}")]
     UrlParseError(#[from] UrlParseError),
-    // #[error("JsonRpcHttpError: {0}")]
-    // JsonRpcHttpError(#[from] JsonRpcHttpError),
     #[error("Failed to derive the release name of the vault")]
     ClientNameDerivationError,
     #[error("Integer conversion error")]

@@ -87,38 +87,38 @@ impl Runner {
             download_path,
         }
     }
-}
 
-pub async fn run(runner: &mut impl RunnerExt) -> Result<(), Error> {
-    // Create all directories for the `download_path` if they don't already exist.
-    fs::create_dir_all(&runner.download_path())?;
-    let release = runner.try_get_release(false).await?.expect("No current release");
-    // WARNING: This will overwrite any pre-existing binary with the same name
-    // TODO: Check if a release with the same version is already at the `download_path`
-    runner.download_binary(release).await?;
+    pub async fn run(runner: &mut impl RunnerExt) -> Result<(), Error> {
+        // Create all directories for the `download_path` if they don't already exist.
+        fs::create_dir_all(&runner.download_path())?;
+        let release = runner.try_get_release(false).await?.expect("No current release");
+        // WARNING: This will overwrite any pre-existing binary with the same name
+        // TODO: Check if a release with the same version is already at the `download_path`
+        runner.download_binary(release).await?;
 
-    runner.run_binary().await?;
+        runner.run_binary().await?;
 
-    loop {
-        if let Some(new_release) = runner.try_get_release(false).await? {
-            let maybe_downloaded_release = runner.downloaded_release();
-            let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
-            if new_release.uri != downloaded_release.release.uri {
-                // Wait for child process to finish completely.
-                // To ensure there can't be two vault processes using the same Bitcoin wallet.
-                runner.terminate_proc_and_wait()?;
+        loop {
+            if let Some(new_release) = runner.try_get_release(false).await? {
+                let maybe_downloaded_release = runner.downloaded_release();
+                let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
+                if new_release.uri != downloaded_release.release.uri {
+                    // Wait for child process to finish completely.
+                    // To ensure there can't be two vault processes using the same Bitcoin wallet.
+                    runner.terminate_proc_and_wait()?;
 
-                // Delete old release
-                runner.delete_downloaded_release()?;
+                    // Delete old release
+                    runner.delete_downloaded_release()?;
 
-                // Download new release
-                runner.download_binary(new_release).await?;
+                    // Download new release
+                    runner.download_binary(new_release).await?;
 
-                // Run the downloaded release
-                runner.run_binary().await?;
+                    // Run the downloaded release
+                    runner.run_binary().await?;
+                }
             }
+            tokio::time::sleep(BLOCK_TIME).await;
         }
-        tokio::time::sleep(BLOCK_TIME).await;
     }
 }
 
@@ -367,6 +367,7 @@ mod tests {
     use codec::Decode;
 
     use sp_core::{Bytes as SpCoreBytes, H256};
+    use tempdir::TempDir;
 
     use std::{
         convert::TryInto,
@@ -427,7 +428,9 @@ mod tests {
     #[tokio::test]
     async fn test_runner_download_binary() {
         let mut runner = MockRunner::default();
-        let mock_path = PathBuf::from_str("./vault-standalone-metadata").unwrap();
+        let tmp = TempDir::new("runner-tests").expect("failed to create tempdir");
+        let mock_path = tmp.path().clone().join("vault-standalone-metadata");
+        let moved_mock_path = tmp.path().clone().join("vault-standalone-metadata");
         let mock_bin_name = "vault-standalone-metadata".to_string();
 
         let client_release = ClientRelease {
@@ -436,12 +439,9 @@ mod tests {
             code_hash: H256::default(),
         };
 
-        runner.expect_uri_to_bin_path().returning(|_| {
-            Ok((
-                "vault-standalone-metadata".to_string(),
-                PathBuf::from_str("./vault-standalone-metadata").unwrap(),
-            ))
-        });
+        runner
+            .expect_uri_to_bin_path()
+            .returning(move |_| Ok(("vault-standalone-metadata".to_string(), moved_mock_path.clone())));
         runner
             .expect_get_request_bytes()
             .returning(|_| Ok(Bytes::from_static(&[1, 2, 3, 4])));
@@ -472,9 +472,6 @@ mod tests {
 
         let file_content = fs::read(mock_path.clone()).unwrap();
         assert_eq!(file_content, vec![1, 2, 3, 4]);
-
-        // Remove mock from file system
-        fs::remove_file(mock_path).unwrap();
     }
 
     #[tokio::test]
@@ -495,8 +492,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_runner_delete_downloaded_release() {
+        let tmp = TempDir::new("runner-tests").expect("failed to create tempdir");
         // Create dummy file
-        let mock_path = PathBuf::from_str("./mock_file").unwrap();
+        let mock_path = tmp.path().join("mock_file");
         File::create(mock_path.clone()).unwrap();
 
         let mut runner = MockRunner::default();
@@ -571,7 +569,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_runner_run_binary() {
-        let mock_executable_path = PathBuf::from_str("./print_cli_input").unwrap();
+        let tmp = TempDir::new("runner-tests").expect("failed to create tempdir");
+
+        let mock_executable_path = tmp.path().join("print_cli_input");
         {
             let mut file = File::create(mock_executable_path.clone()).unwrap();
 
@@ -625,7 +625,5 @@ mod tests {
         let mut expected_output = mock_vault_args.join(" ");
         expected_output.push('\n');
         assert_eq!(output.stdout, expected_output.as_bytes());
-        // Clean up temporary executable
-        fs::remove_file(mock_executable_path).unwrap();
     }
 }

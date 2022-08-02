@@ -1522,9 +1522,9 @@ pub trait VaultRegistryPallet {
 
     async fn get_collateralization_from_vault(&self, vault_id: VaultId, only_issued: bool) -> Result<u128, Error>;
 
-    async fn set_current_client_release(&self, uri: &Vec<u8>, code_hash: &H256) -> Result<(), Error>;
+    async fn set_current_client_release(&self, uri: &[u8], code_hash: &H256) -> Result<(), Error>;
 
-    async fn set_pending_client_release(&self, uri: &Vec<u8>, code_hash: &H256) -> Result<(), Error>;
+    async fn set_pending_client_release(&self, uri: &[u8], code_hash: &H256) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -1727,12 +1727,12 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// # Arguments
     /// * `uri` - URI to the client release binary
     /// * `code_hash` - The runtime code hash associated with this client release
-    async fn set_current_client_release(&self, uri: &Vec<u8>, code_hash: &H256) -> Result<(), Error> {
+    async fn set_current_client_release(&self, uri: &[u8], code_hash: &H256) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
                 .vault_registry()
-                .set_current_client_release(uri.clone(), code_hash.clone())
+                .set_current_client_release(uri.to_vec(), *code_hash)
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1745,12 +1745,12 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// # Arguments
     /// * `uri` - URI to the client release binary
     /// * `code_hash` - The runtime code hash associated with this client release
-    async fn set_pending_client_release(&self, uri: &Vec<u8>, code_hash: &H256) -> Result<(), Error> {
+    async fn set_pending_client_release(&self, uri: &[u8], code_hash: &H256) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             self.api
                 .tx()
                 .vault_registry()
-                .set_pending_client_release(uri.clone(), code_hash.clone())
+                .set_pending_client_release(uri.to_vec(), *code_hash)
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })

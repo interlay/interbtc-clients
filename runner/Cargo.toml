@@ -25,8 +25,8 @@ nix = "0.24.2"
 async-trait = "0.1.40"
 bytes = "1.1.0"
 mockall_double = "0.3.0"
-# Declaring `mockall` as a dev-dependency makes clippy fail
 mockall = "0.8.1"
 
 [dev-dependencies]
 sysinfo = "0.25.1"
+tempdir = "0.3.7"
