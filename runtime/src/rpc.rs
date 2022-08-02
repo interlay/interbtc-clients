@@ -30,7 +30,11 @@ use tokio::{
     time::{sleep, timeout},
 };
 
-const TRANSACTION_TIMEOUT: Duration = Duration::from_secs(300); // 5 minute timeout
+// timeout before retrying parachain calls (5 minutes)
+const TRANSACTION_TIMEOUT: Duration = Duration::from_secs(300);
+
+// timeout before re-verifying block header inclusion
+const BLOCK_WAIT_TIMEOUT: Duration = Duration::from_secs(6);
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "standalone-metadata")] {
@@ -992,77 +996,6 @@ impl OraclePallet for InterBtcParachain {
 }
 
 #[async_trait]
-pub trait RelayPallet {
-    async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), Error>;
-
-    async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error>;
-
-    async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error>;
-}
-
-#[async_trait]
-impl RelayPallet for InterBtcParachain {
-    /// Initializes the relay with the provided block header and height,
-    /// should be called automatically by relayer subject to the
-    /// result of `is_initialized`.
-    ///
-    /// # Arguments
-    /// * `header` - raw block header
-    /// * `height` - starting height
-    async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), Error> {
-        let header = &header;
-        // TODO: can we initialize the relay through the chain-spec?
-        // we would also need to consider re-initialization per governance
-        self.with_unique_signer(|signer| async move {
-            self.api
-                .tx()
-                .btc_relay()
-                .initialize(header.clone(), height)
-                .sign_and_submit_then_watch_default(&signer)
-                .await
-        })
-        .await?;
-        Ok(())
-    }
-
-    /// Stores a block header in the BTC-Relay.
-    ///
-    /// # Arguments
-    /// * `header` - raw block header
-    async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error> {
-        let header = &header;
-        self.with_unique_signer(|signer| async move {
-            self.api
-                .tx()
-                .btc_relay()
-                .store_block_header(header.clone())
-                .sign_and_submit_then_watch_default(&signer)
-                .await
-        })
-        .await?;
-        Ok(())
-    }
-
-    /// Stores multiple block headers in the BTC-Relay.
-    ///
-    /// # Arguments
-    /// * `headers` - raw block headers
-    async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error> {
-        self.batch(
-            headers
-                .into_iter()
-                .map(|raw_block_header| {
-                    EncodedCall::BTCRelay(metadata::runtime_types::btc_relay::pallet::Call::store_block_header {
-                        raw_block_header,
-                    })
-                })
-                .collect(),
-        )
-        .await
-    }
-}
-
-#[async_trait]
 pub trait SecurityPallet {
     async fn get_parachain_status(&self) -> Result<StatusCode, Error>;
 
@@ -1375,8 +1308,6 @@ impl RefundPallet for InterBtcParachain {
     }
 }
 
-const BLOCK_WAIT_TIMEOUT: u64 = 6;
-
 #[async_trait]
 pub trait BtcRelayPallet {
     async fn get_best_block(&self) -> Result<H256Le, Error>;
@@ -1398,6 +1329,12 @@ pub trait BtcRelayPallet {
     ) -> Result<(), Error>;
 
     async fn verify_block_header_inclusion(&self, block_hash: H256Le) -> Result<(), Error>;
+
+    async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), Error>;
+
+    async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error>;
+
+    async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -1466,11 +1403,11 @@ impl BtcRelayPallet for InterBtcParachain {
                 Err(e) if e.is_invalid_chain_id() => return Err(e),
                 _ => {
                     log::trace!(
-                        "block {} not found or confirmed, waiting for {} seconds",
+                        "block {} not found or confirmed, waiting for {:?}",
                         Into::<RichH256Le>::into(block_hash.clone()),
                         BLOCK_WAIT_TIMEOUT
                     );
-                    sleep(Duration::from_secs(BLOCK_WAIT_TIMEOUT)).await;
+                    sleep(BLOCK_WAIT_TIMEOUT).await;
                 }
             };
         }
@@ -1489,6 +1426,65 @@ impl BtcRelayPallet for InterBtcParachain {
             .await?;
 
         result.map_err(|err| Error::SubxtRuntimeError(SubxtError::Runtime(subxt::RuntimeError(err))))
+    }
+
+    /// Initializes the relay with the provided block header and height,
+    /// should be called automatically by relayer subject to the
+    /// result of `is_initialized`.
+    ///
+    /// # Arguments
+    /// * `header` - raw block header
+    /// * `height` - starting height
+    async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), Error> {
+        let header = &header;
+        // TODO: can we initialize the relay through the chain-spec?
+        // we would also need to consider re-initialization per governance
+        self.with_unique_signer(|signer| async move {
+            self.api
+                .tx()
+                .btc_relay()
+                .initialize(header.clone(), height)
+                .sign_and_submit_then_watch_default(&signer)
+                .await
+        })
+        .await?;
+        Ok(())
+    }
+
+    /// Stores a block header in the BTC-Relay.
+    ///
+    /// # Arguments
+    /// * `header` - raw block header
+    async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error> {
+        let header = &header;
+        self.with_unique_signer(|signer| async move {
+            self.api
+                .tx()
+                .btc_relay()
+                .store_block_header(header.clone())
+                .sign_and_submit_then_watch_default(&signer)
+                .await
+        })
+        .await?;
+        Ok(())
+    }
+
+    /// Stores multiple block headers in the BTC-Relay.
+    ///
+    /// # Arguments
+    /// * `headers` - raw block headers
+    async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error> {
+        self.batch(
+            headers
+                .into_iter()
+                .map(|raw_block_header| {
+                    EncodedCall::BTCRelay(metadata::runtime_types::btc_relay::pallet::Call::store_block_header {
+                        raw_block_header,
+                    })
+                })
+                .collect(),
+        )
+        .await
     }
 }
 

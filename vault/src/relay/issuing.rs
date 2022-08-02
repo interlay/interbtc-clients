@@ -4,7 +4,7 @@ use super::Error;
 use crate::delay::RandomDelay;
 use async_trait::async_trait;
 use bitcoin::{sha256, Hash};
-use runtime::{BtcRelayPallet, H256Le, InterBtcParachain, RawBlockHeader, RelayPallet};
+use runtime::{BtcRelayPallet, H256Le, InterBtcParachain, RawBlockHeader};
 
 #[async_trait]
 pub trait Issuing {
@@ -70,7 +70,7 @@ impl Issuing for InterBtcParachain {
     }
 
     async fn initialize(&self, header: Vec<u8>, height: u32) -> Result<(), Error> {
-        RelayPallet::initialize_btc_relay(self, encode_raw_header(header)?, height)
+        BtcRelayPallet::initialize_btc_relay(self, encode_raw_header(header)?, height)
             .await
             .map_err(Into::into)
     }
@@ -94,14 +94,14 @@ impl Issuing for InterBtcParachain {
         {
             return Ok(());
         }
-        RelayPallet::store_block_header(self, raw_block_header)
+        BtcRelayPallet::store_block_header(self, raw_block_header)
             .await
             .map_err(Into::into)
     }
 
     #[tracing::instrument(name = "submit_block_header_batch", skip(self, headers))]
     async fn submit_block_header_batch(&self, headers: Vec<Vec<u8>>) -> Result<(), Error> {
-        RelayPallet::store_block_headers(
+        BtcRelayPallet::store_block_headers(
             self,
             headers
                 .iter()

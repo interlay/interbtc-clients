@@ -4,8 +4,8 @@ const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
 
 use super::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, FixedPointNumber, FixedU128,
-    OraclePallet, RawBlockHeader, RelayPallet, ReplacePallet, SecurityPallet, StatusCode, Token, VaultRegistryPallet,
-    DOT, IBTC, KINT,
+    OraclePallet, RawBlockHeader, ReplacePallet, SecurityPallet, StatusCode, Token, VaultRegistryPallet, DOT, IBTC,
+    KINT,
 };
 use crate::{integration::*, FeedValuesEvent, OracleKey, VaultId, H160, U256};
 use module_bitcoin::{formatter::TryFormattable, types::BlockBuilder};

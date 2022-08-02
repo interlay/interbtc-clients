@@ -138,8 +138,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use runtime::{
-        AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcVault, Token, DOT,
-        IBTC,
+        AccountId, Balance, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcVault, Token, DOT, IBTC,
     };
 
     macro_rules! assert_ok {

@@ -5,12 +5,12 @@ use bitcoin::{stream_blocks, BitcoinCoreApi, TransactionExt};
 use frame_support::assert_ok;
 use futures::{
     channel::mpsc,
-    future::{join, join3, join4, join5, try_join},
+    future::{join, join3, join5},
     Future, FutureExt, SinkExt, TryStreamExt,
 };
 use runtime::{
     integration::*, types::*, BtcAddress, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain,
-    InterBtcRedeemRequest, IssuePallet, RedeemPallet, RelayPallet, ReplacePallet, SudoPallet, UtilFuncs, VaultId,
+    InterBtcRedeemRequest, IssuePallet, RedeemPallet, ReplacePallet, SudoPallet, UtilFuncs, VaultId,
     VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
@@ -615,10 +615,10 @@ async fn test_refund_succeeds() {
             assert_eq!(refund_execution.amount, (over_payment as f64 / 1.005) as u128);
 
             // fetch the tx that was used to execute the redeem
-            let tx = btc_rpc
+            btc_rpc
                 .find_transaction(|tx| tx.get_op_return() == Some(refund_request.refund_id))
                 .await
-                .unwrap();
+                .expect("transaction not found");
         };
 
         test_service(refund_service, fut_user).await;
