@@ -4,8 +4,6 @@ use crate::{
 };
 use bitcoin::BitcoinCoreApi;
 use futures::{channel::mpsc::Sender, future::try_join3, SinkExt};
-#[cfg(test)]
-use runtime::H256;
 use runtime::{
     AcceptReplaceEvent, CollateralBalancesPallet, ExecuteReplaceEvent, InterBtcParachain, PrettyPrint, ReplacePallet,
     RequestReplaceEvent, UtilFuncs, VaultId, VaultRegistryPallet,
@@ -216,7 +214,7 @@ mod tests {
     };
     use runtime::{
         AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcReplaceRequest,
-        InterBtcVault, Token, DOT, H256, IBTC,
+        InterBtcVault, Token, DOT, IBTC,
     };
 
     macro_rules! assert_err {

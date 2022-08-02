@@ -87,33 +87,33 @@ impl Runner {
         }
     }
 
-    pub async fn run(runner: &mut impl RunnerExt) -> Result<(), Error> {
+    pub async fn run(&mut self) -> Result<(), Error> {
         // Create all directories for the `download_path` if they don't already exist.
-        fs::create_dir_all(&runner.download_path())?;
-        let release = runner.try_get_release(false).await?.expect("No current release");
+        fs::create_dir_all(&self.download_path())?;
+        let release = self.try_get_release(false).await?.expect("No current release");
         // WARNING: This will overwrite any pre-existing binary with the same name
         // TODO: Check if a release with the same version is already at the `download_path`
-        runner.download_binary(release).await?;
+        self.download_binary(release).await?;
 
-        runner.run_binary().await?;
+        self.run_binary().await?;
 
         loop {
-            if let Some(new_release) = runner.try_get_release(false).await? {
-                let maybe_downloaded_release = runner.downloaded_release();
+            if let Some(new_release) = self.try_get_release(false).await? {
+                let maybe_downloaded_release = self.downloaded_release();
                 let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
                 if new_release.uri != downloaded_release.release.uri {
                     // Wait for child process to finish completely.
                     // To ensure there can't be two vault processes using the same Bitcoin wallet.
-                    runner.terminate_proc_and_wait()?;
+                    self.terminate_proc_and_wait()?;
 
                     // Delete old release
-                    runner.delete_downloaded_release()?;
+                    self.delete_downloaded_release()?;
 
                     // Download new release
-                    runner.download_binary(new_release).await?;
+                    self.download_binary(new_release).await?;
 
                     // Run the downloaded release
-                    runner.run_binary().await?;
+                    self.run_binary().await?;
                 }
             }
             tokio::time::sleep(BLOCK_TIME).await;

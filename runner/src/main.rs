@@ -34,6 +34,6 @@ async fn main() -> Result<(), Error> {
     log::info!("Connected to the parachain");
 
     let mut runner = Runner::new(rpc_client, opts.vault_args, opts.download_path);
-    Runner::run(&mut runner).await?;
+    runner.run().await?;
     Ok(())
 }
