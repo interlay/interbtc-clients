@@ -1,9 +1,11 @@
 use crate::{error::Error, system::VaultIdManager};
 use bitcoin::BitcoinCoreApi;
 use futures::future;
+#[cfg(test)]
+use runtime::H256;
 use runtime::{
     CollateralBalancesPallet, CurrencyIdExt, CurrencyInfo, FeedValuesEvent, InterBtcParachain, OracleKey, VaultId,
-    VaultRegistryPallet, VaultStatus, H256,
+    VaultRegistryPallet, VaultStatus,
 };
 use service::Error as ServiceError;
 

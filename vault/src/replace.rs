@@ -4,9 +4,11 @@ use crate::{
 };
 use bitcoin::BitcoinCoreApi;
 use futures::{channel::mpsc::Sender, future::try_join3, SinkExt};
+#[cfg(test)]
+use runtime::H256;
 use runtime::{
     AcceptReplaceEvent, CollateralBalancesPallet, ExecuteReplaceEvent, InterBtcParachain, PrettyPrint, ReplacePallet,
-    RequestReplaceEvent, UtilFuncs, VaultId, VaultRegistryPallet, H256,
+    RequestReplaceEvent, UtilFuncs, VaultId, VaultRegistryPallet,
 };
 use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
 use std::time::Duration;

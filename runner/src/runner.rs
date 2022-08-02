@@ -37,11 +37,10 @@ pub const BLOCK_TIME: Duration = Duration::from_secs(6);
 // Wrap `WsClient` in a newtype pattern to be able to mock it.
 mod ws_client_newtype {
     use crate::runner::WsClient;
-    use mockall::automock;
 
     pub struct WebsocketClient(WsClient);
 
-    #[automock]
+    #[cfg_attr(test, mockall::automock)]
     impl WebsocketClient {
         pub fn new(ws_client: WsClient) -> Self {
             Self(ws_client)
