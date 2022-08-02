@@ -214,7 +214,7 @@ mod tests {
     };
     use runtime::{
         AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcReplaceRequest,
-        InterBtcVault, Token, DOT, IBTC,
+        InterBtcVault, Token, DOT, H256, IBTC,
     };
 
     macro_rules! assert_err {
