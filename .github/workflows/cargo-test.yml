@@ -56,7 +56,7 @@ jobs:
           RUST_LOG: info,regalloc=warn
         with:
           command: test
-          args: --release --workspace --features ${{ matrix.metadata }}
+          args: --release --workspace --features parachain-metadata-kintsugi-testnet
       - name: upload artifacts - vault
         uses: actions/upload-artifact@v2
         with:
