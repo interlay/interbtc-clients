@@ -580,6 +580,7 @@ mod tests {
             // make it executable
             file.set_permissions(fs::Permissions::from_mode(0o700)).unwrap();
 
+            file.flush().unwrap();
             file.sync_all().unwrap();
             // drop `file` here to close it and avoid `ExecutableFileBusy` errors
         }
