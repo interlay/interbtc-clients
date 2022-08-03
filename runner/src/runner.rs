@@ -15,10 +15,15 @@ use std::{
     convert::TryInto,
     fmt::Debug,
     fs::{self, File},
+    ops::Add,
     os::unix::prelude::PermissionsExt,
     path::PathBuf,
     process::{Child, Command, Stdio},
     str,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -33,6 +38,7 @@ pub const PARACHAIN_MODULE: &str = "VaultRegistry";
 pub const CURRENT_RELEASE_STORAGE_ITEM: &str = "CurrentClientRelease";
 pub const PENDING_RELEASE_STORAGE_ITEM: &str = "PendingClientRelease";
 pub const BLOCK_TIME: Duration = Duration::from_secs(6);
+pub const OS_SIGNAL_PROCESSING_DELAY: Duration = Duration::from_millis(500);
 
 // Wrap `WsClient` in a newtype pattern to be able to mock it.
 mod ws_client_newtype {
@@ -74,6 +80,7 @@ pub struct Runner {
     child_proc: Option<Child>,
     downloaded_release: Option<DownloadedRelease>,
     download_path: PathBuf,
+    shutdown_flag: Arc<AtomicBool>,
 }
 
 impl Runner {
@@ -84,39 +91,7 @@ impl Runner {
             child_proc: None,
             downloaded_release: None,
             download_path,
-        }
-    }
-
-    pub async fn run(&mut self) -> Result<(), Error> {
-        // Create all directories for the `download_path` if they don't already exist.
-        fs::create_dir_all(&self.download_path())?;
-        let release = self.try_get_release(false).await?.expect("No current release");
-        // WARNING: This will overwrite any pre-existing binary with the same name
-        // TODO: Check if a release with the same version is already at the `download_path`
-        self.download_binary(release).await?;
-
-        self.run_binary().await?;
-
-        loop {
-            if let Some(new_release) = self.try_get_release(false).await? {
-                let maybe_downloaded_release = self.downloaded_release();
-                let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
-                if new_release.uri != downloaded_release.release.uri {
-                    // Wait for child process to finish completely.
-                    // To ensure there can't be two vault processes using the same Bitcoin wallet.
-                    self.terminate_proc_and_wait()?;
-
-                    // Delete old release
-                    self.delete_downloaded_release()?;
-
-                    // Download new release
-                    self.download_binary(new_release).await?;
-
-                    // Run the downloaded release
-                    self.run_binary().await?;
-                }
-            }
-            tokio::time::sleep(BLOCK_TIME).await;
+            shutdown_flag: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -131,6 +106,7 @@ pub trait RunnerExt {
     fn set_downloaded_release(&mut self, downloaded_release: DownloadedRelease);
     fn download_path(&self) -> &PathBuf;
     fn set_download_path(&mut self, download_path: PathBuf);
+    fn shutdown_flag(&self) -> Arc<AtomicBool>;
     async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
     async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
     fn uri_to_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error>;
@@ -138,6 +114,8 @@ pub trait RunnerExt {
     async fn run_binary(&mut self) -> Result<(), Error>;
     fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
     async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error>;
+    async fn run(&mut self) -> Result<(), Error>;
+    fn subscribe_to_shutdown_signals(&mut self) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -172,6 +150,10 @@ impl RunnerExt for Runner {
 
     fn set_download_path(&mut self, download_path: PathBuf) {
         self.download_path = download_path;
+    }
+
+    fn shutdown_flag(&self) -> Arc<AtomicBool> {
+        self.shutdown_flag.clone()
     }
 
     async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error> {
@@ -210,6 +192,25 @@ impl RunnerExt for Runner {
     async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error> {
         let response = reqwest::get(url.clone()).await?;
         Ok(response.bytes().await?)
+    }
+
+    async fn run(&mut self) -> Result<(), Error> {
+        run(self).await
+    }
+
+    fn subscribe_to_shutdown_signals(&mut self) -> Result<(), Error> {
+        let termination_sigs = vec![
+            signal_hook::consts::SIGTERM,
+            signal_hook::consts::SIGINT,
+            signal_hook::consts::SIGQUIT,
+            signal_hook::consts::SIGHUP,
+        ];
+        termination_sigs.iter().try_for_each(|sig| -> Result<(), Error> {
+            // The sig_id can be used to deregister an action and can be ignored in this case.
+            let _sig_id = signal_hook::flag::register(*sig, self.shutdown_flag());
+            Ok(())
+        })?;
+        Ok(())
     }
 }
 
@@ -308,8 +309,12 @@ fn terminate_proc_and_wait(runner: &mut impl RunnerExt) -> Result<u32, Error> {
     )?;
 
     match child_proc.wait() {
-        Ok(exit_code) => log::info!("Outdated vault killed with exit code {}", exit_code),
-        Err(error) => log::warn!("Outdated vault shutdown error: {}", error),
+        Ok(exit_code) => log::info!(
+            "Terminated vault process (pid: {}) with exit code {}",
+            child_proc.id(),
+            exit_code
+        ),
+        Err(error) => log::warn!("Vault process termination error: {}", error),
     };
     Ok(child_proc.id())
 }
@@ -359,6 +364,59 @@ async fn run_binary(runner: &mut impl RunnerExt, stdout_mode: impl Into<Stdio>) 
     Ok(child)
 }
 
+async fn run(runner: &mut impl RunnerExt) -> Result<(), Error> {
+    runner.subscribe_to_shutdown_signals()?;
+    // Create all directories for the `download_path` if they don't already exist.
+    fs::create_dir_all(&runner.download_path())?;
+    let release = runner.try_get_release(false).await?.expect("No current release");
+    // WARNING: This will overwrite any pre-existing binary with the same name
+    // TODO: Check if a release with the same version is already at the `download_path`
+    runner.download_binary(release).await?;
+
+    runner.run_binary().await?;
+
+    let mut loop_delay_counter = Duration::from_secs(0);
+    loop {
+        if runner.shutdown_flag().load(Ordering::Relaxed) {
+            // Terminate child process
+            runner.terminate_proc_and_wait()?;
+
+            // Break the loop to gracefully terminate the main process.
+            break;
+        }
+
+        tokio::time::sleep(OS_SIGNAL_PROCESSING_DELAY).await;
+        loop_delay_counter = loop_delay_counter.add(OS_SIGNAL_PROCESSING_DELAY);
+
+        // Only check for a new release if `BLOCK_TIME` has elapsed since the last check
+        if loop_delay_counter.lt(&BLOCK_TIME) {
+            continue;
+        }
+        // Reset the delay counter
+        loop_delay_counter = Duration::from_secs(0);
+
+        if let Some(new_release) = runner.try_get_release(false).await? {
+            let maybe_downloaded_release = runner.downloaded_release();
+            let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
+            if new_release.uri != downloaded_release.release.uri {
+                // Wait for child process to finish completely.
+                // To ensure there can't be two vault processes using the same Bitcoin wallet.
+                runner.terminate_proc_and_wait()?;
+
+                // Delete old release
+                runner.delete_downloaded_release()?;
+
+                // Download new release
+                runner.download_binary(new_release).await?;
+
+                // Run the downloaded release
+                runner.run_binary().await?;
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
@@ -398,6 +456,7 @@ mod tests {
             fn set_downloaded_release(&mut self, downloaded_release: DownloadedRelease);
             fn download_path(&self) -> &PathBuf;
             fn set_download_path(&mut self, download_path: PathBuf);
+            fn shutdown_flag(&self) -> Arc<AtomicBool>;
             async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
             async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
             fn uri_to_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error>;
@@ -405,6 +464,8 @@ mod tests {
             async fn run_binary(&mut self) -> Result<(), Error>;
             fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
             async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error>;
+            async fn run(&mut self) -> Result<(), Error>;
+            fn subscribe_to_shutdown_signals(&mut self) -> Result<(), Error>;
         }
 
         #[async_trait]
@@ -625,5 +686,56 @@ mod tests {
         let mut expected_output = mock_vault_args.join(" ");
         expected_output.push('\n');
         assert_eq!(output.stdout, expected_output.as_bytes());
+    }
+
+    fn set_mocks(
+        runner: &mut MockRunner,
+        shutdown_flag: Arc<AtomicBool>,
+        shutdown_flag_count: usize,
+        terminate_proc_count: usize,
+    ) {
+        let tmp = TempDir::new("runner-tests").expect("failed to create tempdir");
+        let mock_path = tmp.path().to_path_buf();
+        runner.expect_subscribe_to_shutdown_signals().returning(|| Ok(()));
+        runner.expect_download_path().return_const(mock_path.clone());
+        runner
+            .expect_try_get_release()
+            .returning(|_| Ok(Some(ClientRelease::default())));
+        runner.expect_download_binary().returning(|_| Ok(()));
+        runner.expect_run_binary().returning(|| Ok(()));
+        runner
+            .expect_shutdown_flag()
+            .times(shutdown_flag_count)
+            .return_const(shutdown_flag);
+        // expect this to be called once
+        runner
+            .expect_terminate_proc_and_wait()
+            .times(terminate_proc_count)
+            .returning(|| Ok(()));
+
+        let downloaded_release = DownloadedRelease {
+            release: ClientRelease {
+                uri: String::default(),
+                code_hash: H256::default(),
+            },
+            path: mock_path.clone(),
+            bin_name: String::default(),
+        };
+        runner
+            .expect_downloaded_release()
+            .return_const(Some(downloaded_release));
+        runner.expect_delete_downloaded_release().returning(|| Ok(()));
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "MockRunner::shutdown_flag: Expectation(<anything>) called more than 2 times")]
+    async fn test_runner_terminate_child_procs_on_shutdown() {
+        let mut runner = MockRunner::default();
+        set_mocks(&mut runner, Arc::new(AtomicBool::new(true)), 1, 1);
+        run(&mut runner).await.unwrap();
+        runner.checkpoint();
+        // Set an additional mock that will crash the runner, since the process will run indefinitely
+        set_mocks(&mut runner, Arc::new(AtomicBool::new(false)), 2, 0);
+        run(&mut runner).await.unwrap();
     }
 }

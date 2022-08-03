@@ -7150,6 +7150,7 @@ dependencies = [
  "parity-scale-codec",
  "reqwest",
  "serde_json",
+ "signal-hook",
  "sp-core",
  "sp-core-hashing 4.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sysinfo",

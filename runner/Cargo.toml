@@ -25,6 +25,7 @@ nix = "0.24.2"
 async-trait = "0.1.40"
 bytes = "1.1.0"
 mockall_double = "0.3.0"
+signal-hook = "0.3.14"
 
 [dev-dependencies]
 sysinfo = "0.25.1"
