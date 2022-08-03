@@ -1,0 +1,32 @@
+[package]
+name = "runner"
+version = "0.0.1"
+authors = ["Interlay <contact@interlay.io>"]
+edition = "2018"
+description = "The Runner runs and auto-updates Vault clients across multiple networks (Interlay, Kintsugi, testnets)."
+
+
+[dependencies]
+clap = { version = "3.1", features = ["derive"]}
+sp-core-hashing = "4.0.0"
+hex = "0.4.3"
+tokio = { version = "1.8", features = ["rt-multi-thread", "macros", "time"] }
+jsonrpsee = { version = "0.14.0", features = ["macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full", "bit-vec"] }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
+serde_json = "1.0.71"
+thiserror = "1.0.0"
+log = "0.4.0"
+env_logger = "0.7.1"
+reqwest = "0.11.11"
+# reuse version of `url` depended on by `reqwest`
+url = "2.2.2"
+nix = "0.24.2"
+async-trait = "0.1.40"
+bytes = "1.1.0"
+mockall_double = "0.3.0"
+
+[dev-dependencies]
+sysinfo = "0.25.1"
+tempdir = "0.3.7"
+mockall = "0.8.1"

@@ -75,7 +75,7 @@ To build, one of the following mutually-exclusive features must be specified:
 
 The default command for building the clients, assuming a standalone chain, is:
 ```shell
-cargo build --features=standalone-metadata
+cargo run --features=standalone-metadata --bin runner -- --parachain-ws 'ws://localhost:9944'   --vault-config-file args.txt
 ```
 
 <p align="center">
