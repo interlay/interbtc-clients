@@ -51,12 +51,13 @@ jobs:
           command: check
           args: --release --workspace --features ${{ matrix.metadata }}
       - name: test
+        if: matrix.metadata == 'parachain-metadata-kintsugi-testnet'
         uses: actions-rs/cargo@v1
         env:
           RUST_LOG: info,regalloc=warn
         with:
           command: test
-          args: --release --workspace --features parachain-metadata-kintsugi-testnet
+          args: --release --workspace --features ${{ matrix.metadata }}
       - name: upload artifacts - vault
         uses: actions/upload-artifact@v2
         with:
