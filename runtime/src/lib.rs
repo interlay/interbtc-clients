@@ -81,13 +81,6 @@ pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
         generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]
-#[cfg_attr(
-    feature = "standalone-metadata",
-    subxt(
-        runtime_metadata_path = "metadata-standalone.scale",
-        generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
-    )
-)]
 pub mod metadata {
     #[subxt(substitute_type = "BTreeSet")]
     use sp_std::collections::btree_set::BTreeSet;

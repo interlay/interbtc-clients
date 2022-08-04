@@ -12,7 +12,7 @@ Transfer collateral (e.g. DOT/KSM) and native fees (e.g. INTR/KINT) to users.
 Run the faucet client:
 
 ```
-cargo run --bin faucet --features standalone-metadata -- --keyring alice --native-currency-id INTR
+cargo run --bin faucet --features parachain-metadata-kintsugi -- --keyring alice --native-currency-id INTR
 ```
 
 ### Options
@@ -20,7 +20,7 @@ cargo run --bin faucet --features standalone-metadata -- --keyring alice --nativ
 When using cargo to run this binary, arguments to cargo and the binary are separated by `--`. For example, to pass `--help` to the faucet to get a list of all command line options that is guaranteed to be up date, run:
 
 ```
-cargo run --bin faucet --features standalone-metadata -- --help
+cargo run --bin faucet --features parachain-metadata-kintsugi -- --help
 ```
 
 For convenience, a copy of this output is included below.
