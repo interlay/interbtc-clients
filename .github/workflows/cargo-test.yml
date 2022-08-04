@@ -62,6 +62,8 @@ jobs:
         with:
           command: test
           args: --release --workspace --features ${{ matrix.metadata }} --features uses-bitcoind
+          env:
+            BITCOIN_RPC_URL: bitcoind:18443
       - name: upload artifacts - vault
         uses: actions/upload-artifact@v2
         with:
