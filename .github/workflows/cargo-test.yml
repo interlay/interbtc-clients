@@ -31,6 +31,7 @@ jobs:
         run: |
             sudo apt-get update && sudo apt-get install -y \
             cmake pkg-config libssl-dev git clang curl libc6-dev
+            curl -v http://localhost:18443
       - name: Set variables
         run: |
             echo "TOOLCHAIN=$(rustup show active-toolchain | cut -d " " -f1)" >> $GITHUB_ENV
@@ -59,7 +60,7 @@ jobs:
         uses: actions-rs/cargo@v1
         env:
           RUST_LOG: info,regalloc=warn
-          BITCOIN_RPC_URL: localhost:18443
+          BITCOIN_RPC_URL: http://localhost:18443
           BITCOIN_RPC_USER: ""
           BITCOIN_RPC_PASS: ""
         with:
