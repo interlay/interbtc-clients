@@ -9,10 +9,10 @@ mod rpc;
 
 pub mod types;
 
-#[cfg(all(test, feature = "standalone-metadata"))]
+#[cfg(test)]
 mod tests;
 
-#[cfg(all(feature = "testing-utils", feature = "standalone-metadata"))]
+#[cfg(feature = "testing-utils")]
 pub mod integration;
 
 use codec::{Decode, Encode};
@@ -26,14 +26,7 @@ pub use error::{Error, SubxtError};
 pub use primitives::CurrencyInfo;
 pub use prometheus;
 pub use retry::{notify_retry, RetryPolicy};
-#[cfg(all(
-    feature = "testing-utils",
-    any(
-        feature = "standalone-metadata",
-        feature = "parachain-metadata-interlay-testnet",
-        feature = "parachain-metadata-kintsugi-testnet"
-    )
-))]
+#[cfg(feature = "testing-utils")]
 pub use rpc::SudoPallet;
 pub use rpc::{
     BtcRelayPallet, CollateralBalancesPallet, FeePallet, InterBtcParachain, IssuePallet, OraclePallet, RedeemPallet,

@@ -51,6 +51,7 @@ jobs:
           command: check
           args: --release --workspace --features ${{ matrix.metadata }}
       - name: test
+        if: matrix.metadata == 'parachain-metadata-kintsugi-testnet'
         uses: actions-rs/cargo@v1
         env:
           RUST_LOG: info,regalloc=warn

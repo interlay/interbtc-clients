@@ -521,7 +521,7 @@ fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -
     }
 }
 
-#[cfg(all(test, feature = "standalone-metadata"))]
+#[cfg(all(test, feature = "parachain-metadata-kintsugi-testnet"))]
 mod tests {
     use crate::metrics::PerCurrencyMetrics;
 

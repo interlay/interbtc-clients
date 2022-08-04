@@ -204,7 +204,7 @@ pub async fn listen_for_execute_replace(
     Ok(())
 }
 
-#[cfg(all(test, feature = "standalone-metadata"))]
+#[cfg(all(test, feature = "parachain-metadata-kintsugi-testnet"))]
 mod tests {
     use super::*;
     use async_trait::async_trait;
