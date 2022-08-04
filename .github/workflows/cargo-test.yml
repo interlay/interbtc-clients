@@ -59,7 +59,7 @@ jobs:
         uses: actions-rs/cargo@v1
         env:
           RUST_LOG: info,regalloc=warn
-          BITCOIN_RPC_URL: bitcoind:18443
+          BITCOIN_RPC_URL: localhost:18443
           BITCOIN_RPC_USER: ""
           BITCOIN_RPC_PASS: ""
         with:
