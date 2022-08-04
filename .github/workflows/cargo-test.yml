@@ -60,6 +60,8 @@ jobs:
         env:
           RUST_LOG: info,regalloc=warn
           BITCOIN_RPC_URL: bitcoind:18443
+          BITCOIN_RPC_USER: ""
+          BITCOIN_RPC_PASS: ""
         with:
           command: test
           args: --release --workspace --features ${{ matrix.metadata }} --features uses-bitcoind
