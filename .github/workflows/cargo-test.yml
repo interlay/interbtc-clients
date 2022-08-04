@@ -59,11 +59,10 @@ jobs:
         uses: actions-rs/cargo@v1
         env:
           RUST_LOG: info,regalloc=warn
+          BITCOIN_RPC_URL: bitcoind:18443
         with:
           command: test
           args: --release --workspace --features ${{ matrix.metadata }} --features uses-bitcoind
-          env:
-            BITCOIN_RPC_URL: bitcoind:18443
       - name: upload artifacts - vault
         uses: actions/upload-artifact@v2
         with:
