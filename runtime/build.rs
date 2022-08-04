@@ -4,5 +4,4 @@ fn main() {
     println!("cargo:rerun-if-changed=metadata-parachain-kintsugi.scale");
     println!("cargo:rerun-if-changed=metadata-parachain-kintsugi-testnet.scale");
     println!("cargo:rerun-if-changed=metadata-parachain-interlay-testnet.scale");
-    println!("cargo:rerun-if-changed=metadata-standalone.scale");
 }

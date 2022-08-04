@@ -38,11 +38,7 @@ const BLOCK_WAIT_TIMEOUT: Duration = Duration::from_secs(6);
 compile_error!("Tests are only supported for the kintsugi testnet metadata");
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "standalone-metadata")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1..=1;
-        const DEFAULT_SPEC_NAME: &str = "interbtc-standalone";
-        pub const SS58_PREFIX: u16 = 42;
-    } else if #[cfg(feature = "parachain-metadata-interlay")] {
+    if #[cfg(feature = "parachain-metadata-interlay")] {
         const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1018000..=1018000;
         const DEFAULT_SPEC_NAME: &str = "interlay-parachain";
         pub const SS58_PREFIX: u16 = 2032;
@@ -1868,7 +1864,6 @@ pub trait SudoPallet {
 }
 
 #[cfg(any(
-    feature = "standalone-metadata",
     feature = "parachain-metadata-interlay-testnet",
     feature = "parachain-metadata-kintsugi-testnet"
 ))]
