@@ -61,9 +61,9 @@ jobs:
         uses: actions-rs/cargo@v1
         env:
           RUST_LOG: info,regalloc=warn
-          BITCOIN_RPC_URL: http://[::1]:18443
-          BITCOIN_RPC_USER: ""
-          BITCOIN_RPC_PASS: ""
+          BITCOIN_RPC_URL: http://127.0.0.1:18443
+          BITCOIN_RPC_USER: user
+          BITCOIN_RPC_PASS: pass
         with:
           command: test
           args: --release --workspace --features ${{ matrix.metadata }} --features uses-bitcoind
