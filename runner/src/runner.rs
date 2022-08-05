@@ -1,4 +1,5 @@
 use crate::error::Error;
+use backoff::{retry, Error as BackoffError, ExponentialBackoff};
 use bytes::Bytes;
 use codec::Decode;
 use jsonrpsee::{
@@ -14,8 +15,9 @@ use sp_core_hashing::twox_128;
 use std::{
     convert::TryInto,
     fmt::Debug,
-    fs::{self, File},
-    os::unix::prelude::PermissionsExt,
+    fs::{self, OpenOptions},
+    io::Write,
+    os::unix::prelude::OpenOptionsExt,
     path::PathBuf,
     process::{Child, Command, Stdio},
     str,
@@ -95,7 +97,7 @@ impl Runner {
         // TODO: Check if a release with the same version is already at the `download_path`
         self.download_binary(release).await?;
 
-        self.run_binary().await?;
+        self.run_binary_with_retry()?;
 
         loop {
             if let Some(new_release) = self.try_get_release(false).await? {
@@ -113,7 +115,7 @@ impl Runner {
                     self.download_binary(new_release).await?;
 
                     // Run the downloaded release
-                    self.run_binary().await?;
+                    self.run_binary_with_retry()?;
                 }
             }
             tokio::time::sleep(BLOCK_TIME).await;
@@ -135,7 +137,7 @@ pub trait RunnerExt {
     async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
     fn uri_to_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error>;
     fn delete_downloaded_release(&mut self) -> Result<(), Error>;
-    async fn run_binary(&mut self) -> Result<(), Error>;
+    fn run_binary_with_retry(&mut self) -> Result<(), Error>;
     fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
     async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error>;
 }
@@ -178,8 +180,8 @@ impl RunnerExt for Runner {
         try_get_release(self, pending).await
     }
 
-    async fn run_binary(&mut self) -> Result<(), Error> {
-        let child = run_binary(self, Stdio::inherit()).await?;
+    fn run_binary_with_retry(&mut self) -> Result<(), Error> {
+        let child = run_binary_with_retry(self, Stdio::inherit())?;
         self.set_child_proc(child);
         Ok(())
     }
@@ -265,14 +267,18 @@ pub async fn ws_client(url: &str) -> Result<WebsocketClient, Error> {
 async fn download_binary(runner: &impl RunnerExt, release: ClientRelease) -> Result<DownloadedRelease, Error> {
     let (bin_name, bin_path) = runner.uri_to_bin_path(&release.uri)?;
     log::info!("Downloading {} at: {:?}", bin_name, bin_path);
-    File::create(bin_path.clone())?;
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        // Make the binary executable.
+        // The set permissions are: -rwx------
+        .mode(0o700)
+        .create(true)
+        .open(bin_path.clone())?;
 
     let bytes = runner.get_request_bytes(release.uri.clone()).await?;
-    fs::write(&bin_path, &bytes)?;
-
-    // Make the binary executable.
-    // The set permissions are: -rwx------
-    fs::set_permissions(bin_path.clone(), fs::Permissions::from_mode(0o700))?;
+    file.write_all(&bytes)?;
+    file.sync_all()?;
 
     Ok(DownloadedRelease {
         release,
@@ -346,17 +352,24 @@ async fn read_chain_storage<T: 'static + Decode + Debug, V: RunnerExt + StorageR
         .map_err(Into::into)
 }
 
-async fn run_binary(runner: &mut impl RunnerExt, stdout_mode: impl Into<Stdio>) -> Result<Child, Error> {
+fn run_binary_with_retry(runner: &mut impl RunnerExt, stdout_mode: impl Into<Stdio>) -> Result<Child, Error> {
     // Ensure there is no other child running
     if runner.child_proc().is_some() {
         return Err(Error::ChildProcessExists);
     }
     let downloaded_release = runner.downloaded_release().as_ref().ok_or(Error::NoDownloadedRelease)?;
-    let child = Command::new(downloaded_release.path.as_os_str())
-        .args(runner.vault_args().clone())
-        .stdout(stdout_mode)
-        .spawn()?;
-    Ok(child)
+    let mut command = Command::new(downloaded_release.path.as_os_str());
+    command.args(runner.vault_args().clone()).stdout(stdout_mode);
+    match retry::<_, _, Child, _>(ExponentialBackoff::default(), || {
+        command
+            .spawn()
+            // The `Transient` error type means the closure will be retried
+            .map_err(BackoffError::Transient)
+    }) {
+        Ok(child) => Ok(child),
+        Err(BackoffError::Permanent(err)) => Err(err.into()),
+        Err(BackoffError::Transient(err)) => Err(err.into()),
+    }
 }
 
 #[cfg(test)]
@@ -402,7 +415,7 @@ mod tests {
             async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
             fn uri_to_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error>;
             fn delete_downloaded_release(&mut self) -> Result<(), Error>;
-            async fn run_binary(&mut self) -> Result<(), Error>;
+            fn run_binary_with_retry(&mut self) -> Result<(), Error>;
             fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
             async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error>;
         }
@@ -567,20 +580,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_runner_run_binary() {
+    async fn test_runner_run_binary_with_retry() {
         let tmp = TempDir::new("runner-tests").expect("failed to create tempdir");
 
         let mock_executable_path = tmp.path().join("print_cli_input");
         {
-            let mut file = File::create(mock_executable_path.clone()).unwrap();
+            let mut file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .mode(0o700)
+                .create(true)
+                .open(mock_executable_path.clone())
+                .unwrap();
 
             // Script that prints CLI input to stdout
             file.write_all(b"#!/bin/bash\necho $@").unwrap();
 
-            // make it executable
-            file.set_permissions(fs::Permissions::from_mode(0o700)).unwrap();
-
-            file.flush().unwrap();
             file.sync_all().unwrap();
             // drop `file` here to close it and avoid `ExecutableFileBusy` errors
         }
@@ -618,7 +633,7 @@ mod tests {
             .return_const(Some(mock_downloaded_release));
         runner.expect_vault_args().return_const(mock_vault_args.clone());
         runner.expect_set_child_proc().return_const(());
-        let child = run_binary(&mut runner, Stdio::piped()).await.unwrap();
+        let child = run_binary_with_retry(&mut runner, Stdio::piped()).unwrap();
 
         let output = child.wait_with_output().unwrap();
 

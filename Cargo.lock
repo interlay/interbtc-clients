@@ -7138,6 +7138,7 @@ name = "runner"
 version = "0.0.1"
 dependencies = [
  "async-trait",
+ "backoff",
  "bytes",
  "clap",
  "env_logger 0.7.1",
