@@ -36,6 +36,15 @@ pub const CURRENT_RELEASE_STORAGE_ITEM: &str = "CurrentClientRelease";
 pub const PENDING_RELEASE_STORAGE_ITEM: &str = "PendingClientRelease";
 pub const BLOCK_TIME: Duration = Duration::from_secs(6);
 
+// One minute
+pub const RETRY_TIMEOUT_MS: u64 = 60_000;
+
+// One second
+pub const RETRY_INTERVAL_MS: u64 = 1_000;
+
+// Constant interval retry
+pub const RETRY_MULTIPLIER: f64 = 1.0;
+
 // Wrap `WsClient` in a newtype pattern to be able to mock it.
 mod ws_client_newtype {
     use crate::runner::WsClient;
@@ -360,7 +369,13 @@ fn run_binary_with_retry(runner: &mut impl RunnerExt, stdout_mode: impl Into<Std
     let downloaded_release = runner.downloaded_release().as_ref().ok_or(Error::NoDownloadedRelease)?;
     let mut command = Command::new(downloaded_release.path.as_os_str());
     command.args(runner.vault_args().clone()).stdout(stdout_mode);
-    match retry::<_, _, Child, _>(ExponentialBackoff::default(), || {
+    let exponential_backoff = ExponentialBackoff {
+        initial_interval: Duration::from_millis(RETRY_INTERVAL_MS),
+        max_elapsed_time: Some(Duration::from_millis(RETRY_TIMEOUT_MS)),
+        multiplier: RETRY_MULTIPLIER,
+        ..ExponentialBackoff::default()
+    };
+    match retry::<_, _, Child, _>(exponential_backoff, || {
         command
             .spawn()
             // The `Transient` error type means the closure will be retried
