@@ -1,7 +1,7 @@
 use bitcoin::BitcoinCore;
 use runtime::InterBtcParachain;
 use service::Error as ServiceError;
-use std::{fmt::Debug, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
 
 use crate::delay::RandomDelay;
@@ -70,18 +70,23 @@ pub struct Config {
 }
 
 /// Runner implements the main loop for the relayer
-pub struct Runner<B: Backing, I: Issuing, RD: RandomDelay + Debug + Send + Sync + Clone> {
+pub struct Runner<B: Backing, I: Issuing> {
     backing: B,
     issuing: I,
-    random_delay: RD,
+    random_delay: Arc<Box<dyn RandomDelay + Send + Sync>>,
     start_height: Option<u32>,
     max_batch_size: u32,
     interval: Duration,
     btc_confirmations: u32,
 }
 
-impl<B: Backing, I: Issuing, RD: RandomDelay + Debug + Send + Sync + Clone> Runner<B, I, RD> {
-    pub fn new(backing: B, issuing: I, conf: Config, random_delay: RD) -> Runner<B, I, RD> {
+impl<B: Backing, I: Issuing> Runner<B, I> {
+    pub fn new(
+        backing: B,
+        issuing: I,
+        conf: Config,
+        random_delay: Arc<Box<dyn RandomDelay + Send + Sync>>,
+    ) -> Runner<B, I> {
         Runner {
             backing,
             issuing,
@@ -177,9 +182,7 @@ impl<B: Backing, I: Issuing, RD: RandomDelay + Debug + Send + Sync + Clone> Runn
     }
 }
 
-pub async fn run_relayer<RD: RandomDelay + Debug + Send + Sync + Clone>(
-    runner: Runner<BitcoinCore, InterBtcParachain, RD>,
-) -> Result<(), ServiceError> {
+pub async fn run_relayer(runner: Runner<BitcoinCore, InterBtcParachain>) -> Result<(), ServiceError> {
     loop {
         match runner.submit_next().await {
             Ok(_) => (),
@@ -208,7 +211,6 @@ mod tests {
     use std::{
         cell::{Ref, RefCell, RefMut},
         collections::HashMap,
-        fmt::Debug,
         rc::Rc,
     };
 
@@ -249,10 +251,10 @@ mod tests {
             }
         }
 
-        async fn submit_block_header<RD: RandomDelay + Debug + Send + Sync>(
+        async fn submit_block_header(
             &self,
             header: Vec<u8>,
-            _random_delay: RD,
+            _random_delay: Arc<Box<dyn RandomDelay + Send + Sync>>,
         ) -> Result<(), Error> {
             let is_stored = self.is_block_stored(header.clone()).await?;
             if is_stored {
@@ -267,7 +269,8 @@ mod tests {
 
         async fn submit_block_header_batch(&self, headers: Vec<Vec<u8>>) -> Result<(), Error> {
             for header in headers {
-                self.submit_block_header(header.to_vec(), ZeroDelay).await?;
+                self.submit_block_header(header.to_vec(), Arc::new(Box::new(ZeroDelay)))
+                    .await?;
             }
             Ok(())
         }
@@ -337,10 +340,17 @@ mod tests {
         assert_eq!(issuing.is_block_stored(make_hash("a")).await, Ok(true));
         assert_eq!(issuing.is_block_stored(make_hash("x")).await, Ok(false));
         assert_eq!(
-            issuing.submit_block_header(make_hash("a"), ZeroDelay).await,
+            issuing
+                .submit_block_header(make_hash("a"), Arc::new(Box::new(ZeroDelay)))
+                .await,
             Err(Error::BlockExists)
         );
-        assert_eq!(issuing.submit_block_header(make_hash("d"), ZeroDelay).await, Ok(()));
+        assert_eq!(
+            issuing
+                .submit_block_header(make_hash("d"), Arc::new(Box::new(ZeroDelay)))
+                .await,
+            Ok(())
+        );
         assert_eq!(issuing.get_best_height().await, Ok(5));
     }
 
@@ -385,7 +395,7 @@ mod tests {
                 interval: None,
                 btc_confirmations: 0,
             },
-            ZeroDelay,
+            Arc::new(Box::new(ZeroDelay)),
         );
 
         assert_eq!(runner.issuing.get_best_height().await.unwrap(), 4);
@@ -407,7 +417,7 @@ mod tests {
                 interval: None,
                 btc_confirmations: 0,
             },
-            ZeroDelay,
+            Arc::new(Box::new(ZeroDelay)),
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -441,7 +451,7 @@ mod tests {
                 interval: None,
                 btc_confirmations: 0,
             },
-            ZeroDelay,
+            Arc::new(Box::new(ZeroDelay)),
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -471,7 +481,7 @@ mod tests {
                 max_batch_size: 16,
                 btc_confirmations: 1,
             },
-            ZeroDelay,
+            Arc::new(Box::new(ZeroDelay)),
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -504,7 +514,7 @@ mod tests {
                 interval: Some(Duration::from_secs(0)),
                 btc_confirmations: 1,
             },
-            ZeroDelay,
+            Arc::new(Box::new(ZeroDelay)),
         );
 
         let height_before = runner.issuing.get_best_height().await?;
@@ -538,7 +548,7 @@ mod tests {
                 interval: Some(Duration::from_secs(0)),
                 btc_confirmations: 2,
             },
-            ZeroDelay,
+            Arc::new(Box::new(ZeroDelay)),
         );
 
         let height_before = runner.issuing.get_best_height().await?;

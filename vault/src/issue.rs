@@ -40,16 +40,13 @@ pub(crate) async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync
 
 /// execute issue requests on best-effort (i.e. don't retry on error),
 /// returns an error if stream ends, otherwise runs forever
-pub async fn process_issue_requests<
-    B: BitcoinCoreApi + Clone + Send + Sync + 'static,
-    RD: RandomDelay + Clone + Send + Sync + 'static,
->(
+pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     bitcoin_core: B,
     btc_parachain: InterBtcParachain,
     issue_set: Arc<IssueRequests>,
     btc_start_height: u32,
     num_confirmations: u32,
-    random_delay: RD,
+    random_delay: Arc<Box<dyn RandomDelay + Send + Sync>>,
 ) -> Result<(), ServiceError> {
     let mut stream =
         bitcoin::stream_in_chain_transactions(bitcoin_core.clone(), btc_start_height, num_confirmations).await;
@@ -149,17 +146,14 @@ fn chunks(first: usize, last: usize) -> impl Iterator<Item = (usize, usize)> {
 }
 
 /// execute issue requests with a matching Bitcoin payment
-async fn process_transaction_and_execute_issue<
-    B: BitcoinCoreApi + Clone + Send + Sync + 'static,
-    RD: RandomDelay + Clone + Send + Sync + 'static,
->(
+async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     bitcoin_core: B,
     btc_parachain: InterBtcParachain,
     issue_set: Arc<IssueRequests>,
     num_confirmations: u32,
     block_hash: BlockHash,
     transaction: Transaction,
-    random_delay: RD,
+    random_delay: Arc<Box<dyn RandomDelay + Send + Sync>>,
 ) -> Result<(), Error> {
     let addresses = transaction.extract_output_addresses::<BtcAddress>();
     let mut issue_requests = issue_set.lock().await;
@@ -207,7 +201,7 @@ async fn process_transaction_and_execute_issue<
 
                 // wait a random amount of blocks, to avoid all vaults flooding the parachain with
                 // this transaction
-                random_delay.delay(&issue_id.to_fixed_bytes()).await?;
+                (*random_delay).delay(&issue_id.to_fixed_bytes()).await?;
                 let issue = btc_parachain.get_issue_request(issue_id).await?;
                 if let IssueRequestStatus::Completed(_) = issue.status {
                     tracing::info!("Issue {} has already been executed - doing nothing.", issue_id);

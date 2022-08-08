@@ -754,7 +754,6 @@ async fn test_automatic_issue_execution_succeeds() {
         };
 
         let issue_set = Arc::new(IssueRequests::new());
-        let random_delay = ZeroDelay;
         let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
         let service = join(
             vault::service::listen_for_issue_requests(
@@ -769,7 +768,7 @@ async fn test_automatic_issue_execution_succeeds() {
                 issue_set.clone(),
                 1,
                 0,
-                random_delay,
+                Arc::new(Box::new(ZeroDelay)),
             ),
         );
 
@@ -842,7 +841,6 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
         };
 
         let issue_set = Arc::new(IssueRequests::new());
-        let random_delay = ZeroDelay;
         let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
         let service = join(
             vault::service::listen_for_issue_requests(
@@ -857,7 +855,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
                 issue_set.clone(),
                 1,
                 0,
-                random_delay,
+                Arc::new(Box::new(ZeroDelay)),
             ),
         );
 
