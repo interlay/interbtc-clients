@@ -7,7 +7,7 @@ use error::Error;
 
 use std::{fmt::Debug, path::PathBuf};
 
-use crate::runner::{ws_client, Runner, RunnerExt};
+use crate::runner::{ws_client, Runner};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(version, author, about, trailing_var_arg = true)]

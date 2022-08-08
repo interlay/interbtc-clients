@@ -22,7 +22,7 @@ pub enum Error {
     HttpError(#[from] ReqwestError),
     #[error("UrlParseError: {0}")]
     UrlParseError(#[from] UrlParseError),
-    #[error("Failed to perform operation on a process")]
+    #[error("Failed to derive the release name of the vault")]
     ClientNameDerivationError,
     #[error("Integer conversion error")]
     IntegerConversionError,
