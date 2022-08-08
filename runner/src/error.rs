@@ -32,4 +32,6 @@ pub enum Error {
     NoChildProcess,
     #[error("A child process is already running")]
     ChildProcessExists,
+    #[error("Auto-updater terminated unexpectedly")]
+    AutoUpdaterTerminated,
 }

@@ -5,9 +5,11 @@ use clap::Parser;
 
 use error::Error;
 
+use signal_hook::consts::*;
+use signal_hook_tokio::Signals;
 use std::{fmt::Debug, path::PathBuf};
 
-use crate::runner::{ws_client, Runner};
+use crate::runner::{run, ws_client, Runner};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(version, author, about, trailing_var_arg = true)]
@@ -33,7 +35,8 @@ async fn main() -> Result<(), Error> {
     let rpc_client = ws_client(&opts.parachain_ws).await?;
     log::info!("Connected to the parachain");
 
-    let mut runner = Runner::new(rpc_client, opts.vault_args, opts.download_path);
-    runner.run().await?;
+    let runner = Runner::new(rpc_client, opts.vault_args, opts.download_path);
+    let shutdown_signals = Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
+    run(Box::new(runner), shutdown_signals).await?;
     Ok(())
 }
