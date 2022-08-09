@@ -310,14 +310,14 @@ pub async fn start_http(
     close_handle
 }
 
-#[cfg(all(test, feature = "standalone-metadata"))]
+#[cfg(all(test, feature = "parachain-metadata-kintsugi-testnet"))]
 mod tests {
     use crate::error::Error;
-    use runtime::{CurrencyId, CurrencyIdExt, OracleKey, Token, VaultId, DOT, IBTC, KBTC, KSM};
+    use runtime::{CurrencyId, CurrencyIdExt, OracleKey, Token, VaultId, KBTC, KINT, KSM};
     use std::{collections::HashMap, sync::Arc};
 
-    const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
-    const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(IBTC);
+    const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(KSM);
+    const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(KBTC);
 
     use super::{
         fund_account, open_kv_store, CollateralBalancesPallet, FundAccountJsonRpcRequest, FundingRequestAccountType,
@@ -564,7 +564,7 @@ mod tests {
         let kv = open_kv_store(store.clone()).unwrap();
         kv.clear().unwrap();
 
-        for currency_id in [Token(DOT), Token(KSM)] {
+        for currency_id in [Token(KINT), Token(KSM)] {
             let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
             let bob_vault_id = VaultId::new(bob_account_id.clone(), currency_id, DEFAULT_WRAPPED_CURRENCY);
             let user_allowance_dot: u128 = 1;

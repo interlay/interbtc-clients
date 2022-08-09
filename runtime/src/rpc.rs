@@ -6,12 +6,6 @@ use crate::{
     types::*,
     AccountId, CurrencyId, Error, InterBtcRuntime, InterBtcSigner, RetryPolicy, RichH256Le, SubxtError,
 };
-#[cfg(any(
-    feature = "standalone-metadata",
-    feature = "parachain-metadata-interlay-testnet",
-    feature = "parachain-metadata-kintsugi-testnet"
-))]
-use crate::{BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS, STABLE_PARACHAIN_CONFIRMATIONS};
 use async_trait::async_trait;
 use codec::{Decode, Encode};
 use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt};
@@ -36,12 +30,15 @@ const TRANSACTION_TIMEOUT: Duration = Duration::from_secs(300);
 // timeout before re-verifying block header inclusion
 const BLOCK_WAIT_TIMEOUT: Duration = Duration::from_secs(6);
 
+// sanity check to be sure that testing-utils is not accidentally selected
+#[cfg(all(
+    any(test, feature = "testing-utils"),
+    not(feature = "parachain-metadata-kintsugi-testnet")
+))]
+compile_error!("Tests are only supported for the kintsugi testnet metadata");
+
 cfg_if::cfg_if! {
-    if #[cfg(feature = "standalone-metadata")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1..=1;
-        const DEFAULT_SPEC_NAME: &str = "interbtc-standalone";
-        pub const SS58_PREFIX: u16 = 42;
-    } else if #[cfg(feature = "parachain-metadata-interlay")] {
+    if #[cfg(feature = "parachain-metadata-interlay")] {
         const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1018000..=1018000;
         const DEFAULT_SPEC_NAME: &str = "interlay-parachain";
         pub const SS58_PREFIX: u16 = 2032;
@@ -143,6 +140,40 @@ impl InterBtcParachain {
         Ok(parachain_rpc)
     }
 
+    #[cfg(feature = "testing-utils")]
+    pub async fn manual_seal(&self) {
+        // rather than adding a conditional dependency on substrate, just re-define the
+        // struct. We don't really care about the contents anyway, and if this is ever
+        // to change upstream we'll know from failing tests
+        #[derive(Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
+        pub struct ImportedAux {
+            /// Only the header has been imported. Block body verification was skipped.
+            pub header_only: bool,
+            /// Clear all pending justification requests.
+            pub clear_justification_requests: bool,
+            /// Request a justification for the given block.
+            pub needs_justification: bool,
+            /// Received a bad justification.
+            pub bad_justification: bool,
+            /// Whether the block that was imported is the new best block.
+            pub is_new_best: bool,
+        }
+        #[derive(Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
+        pub struct CreatedBlock<Hash> {
+            /// hash of the created block.
+            pub hash: Hash,
+            /// some extra details about the import operation
+            pub aux: ImportedAux,
+        }
+
+        let head = self.get_latest_block_hash().await.unwrap();
+        let _: CreatedBlock<interbtc_runtime::Hash> = self
+            .rpc()
+            .request("engine_createBlock", rpc_params![true, true, head])
+            .await
+            .expect("failed to create block");
+    }
+
     fn rpc(&self) -> Arc<RpcClient> {
         self.ext_client.rpc().client.clone()
     }
@@ -218,7 +249,11 @@ impl InterBtcParachain {
                     cloned_signer
                 };
                 match timeout(TRANSACTION_TIMEOUT, async {
-                    call(signer).await?.wait_for_finalized_success().await
+                    if cfg!(feature = "testing-utils") {
+                        call(signer).await?.wait_for_in_block().await?.wait_for_success().await
+                    } else {
+                        call(signer).await?.wait_for_finalized_success().await
+                    }
                 })
                 .await
                 {
@@ -255,7 +290,11 @@ impl InterBtcParachain {
     }
 
     pub async fn get_latest_block_hash(&self) -> Result<Option<H256>, Error> {
-        Ok(Some(self.ext_client.rpc().finalized_head().await?))
+        if cfg!(feature = "testing-utils") {
+            Ok(None)
+        } else {
+            Ok(Some(self.ext_client.rpc().finalized_head().await?))
+        }
     }
 
     /// Subscribe to new parachain blocks.
@@ -264,7 +303,11 @@ impl InterBtcParachain {
         F: Fn(InterBtcHeader) -> R,
         R: Future<Output = Result<(), Error>>,
     {
-        let mut sub = self.ext_client.rpc().subscribe_finalized_blocks().await?;
+        let mut sub = if cfg!(feature = "testing-utils") {
+            self.ext_client.rpc().subscribe_blocks().await?
+        } else {
+            self.ext_client.rpc().subscribe_finalized_blocks().await?
+        };
         loop {
             on_block(sub.next().await.ok_or(Error::ChannelClosed)??).await?;
         }
@@ -273,7 +316,11 @@ impl InterBtcParachain {
     /// Wait for the block at the given height
     /// Note: will always wait at least one block.
     pub async fn wait_for_block(&self, height: u32) -> Result<(), Error> {
-        let mut sub = self.ext_client.rpc().subscribe_finalized_blocks().await?;
+        let mut sub = if cfg!(feature = "testing-utils") {
+            self.ext_client.rpc().subscribe_blocks().await?
+        } else {
+            self.ext_client.rpc().subscribe_finalized_blocks().await?
+        };
         while let Some(block) = sub.next().await {
             if block?.number >= height {
                 return Ok(());
@@ -291,6 +338,30 @@ impl InterBtcParachain {
         self.wait_for_block(starting_parachain_height + delay).await
     }
 
+    #[cfg(feature = "testing-utils")]
+    async fn subscribe_events(
+        &self,
+    ) -> Result<
+        subxt::events::EventSubscription<'_, subxt::events::EventSub<InterBtcHeader>, InterBtcRuntime, metadata::Event>,
+        Error,
+    > {
+        Ok(self.api.events().subscribe().await?)
+    }
+
+    #[cfg(not(feature = "testing-utils"))]
+    async fn subscribe_events(
+        &self,
+    ) -> Result<
+        subxt::events::EventSubscription<
+            '_,
+            subxt::events::FinalizedEventSub<'_, InterBtcHeader>,
+            InterBtcRuntime,
+            metadata::Event,
+        >,
+        Error,
+    > {
+        Ok(self.api.events().subscribe_finalized().await?)
+    }
     /// Subscription service that should listen forever, only returns if the initial subscription
     /// cannot be established. Calls `on_error` when an error event has been received, or when an
     /// event has been received that failed to be decoded into a raw event.
@@ -298,7 +369,7 @@ impl InterBtcParachain {
     /// # Arguments
     /// * `on_error` - callback for decoding errors, is not allowed to take too long
     pub async fn on_event_error<E: Fn(BasicError)>(&self, on_error: E) -> Result<(), Error> {
-        let mut sub = self.api.events().subscribe_finalized().await?;
+        let mut sub = self.subscribe_events().await?;
 
         loop {
             match sub.next().await {
@@ -327,7 +398,7 @@ impl InterBtcParachain {
         R: Future<Output = ()>,
         E: Fn(SubxtError),
     {
-        let mut sub = self.api.events().subscribe_finalized().await?.filter_events::<(T,)>();
+        let mut sub = self.subscribe_events().await?.filter_events::<(T,)>();
         let (tx, mut rx) = futures::channel::mpsc::channel::<T>(32);
 
         // two tasks: one for event listening and one for callback calling
@@ -432,7 +503,7 @@ impl InterBtcParachain {
             .into()
     }
 
-    #[cfg(all(test, feature = "standalone-metadata"))]
+    #[cfg(test)]
     pub async fn register_dummy_assets(&self) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
             let metadatas = ["ABC", "TEst", "QQQ"].map(|symbol| GenericAssetMetadata {
@@ -1793,7 +1864,6 @@ pub trait SudoPallet {
 }
 
 #[cfg(any(
-    feature = "standalone-metadata",
     feature = "parachain-metadata-interlay-testnet",
     feature = "parachain-metadata-kintsugi-testnet"
 ))]
@@ -1836,13 +1906,13 @@ impl SudoPallet for InterBtcParachain {
 
     /// Set the global security parameter for stable parachain confirmations
     async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), Error> {
-        self.set_storage(BTC_RELAY_MODULE, STABLE_PARACHAIN_CONFIRMATIONS, value)
+        self.set_storage(crate::BTC_RELAY_MODULE, crate::STABLE_PARACHAIN_CONFIRMATIONS, value)
             .await
     }
 
     /// Set the global security parameter k for stable Bitcoin transactions
     async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), Error> {
-        self.set_storage(BTC_RELAY_MODULE, STABLE_BITCOIN_CONFIRMATIONS, value)
+        self.set_storage(crate::BTC_RELAY_MODULE, crate::STABLE_BITCOIN_CONFIRMATIONS, value)
             .await
     }
 

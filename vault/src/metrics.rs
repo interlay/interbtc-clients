@@ -702,7 +702,7 @@ pub async fn publish_tokio_metrics(
     }
 }
 
-#[cfg(all(test, feature = "standalone-metadata"))]
+#[cfg(all(test, feature = "parachain-metadata-kintsugi-testnet"))]
 mod tests {
     use super::*;
     use async_trait::async_trait;

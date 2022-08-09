@@ -1,5 +1,3 @@
-#![cfg(feature = "standalone-metadata")]
-
 use async_trait::async_trait;
 use bitcoin::{stream_blocks, BitcoinCoreApi, TransactionExt};
 use frame_support::assert_ok;
@@ -20,9 +18,9 @@ use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager, Zer
 
 const TIMEOUT: Duration = Duration::from_secs(90);
 
-const DEFAULT_NATIVE_CURRENCY: CurrencyId = Token(INTR);
-const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
-const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(IBTC);
+const DEFAULT_NATIVE_CURRENCY: CurrencyId = Token(KINT);
+const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(KSM);
+const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(KBTC);
 
 async fn test_with<F, R>(execute: impl FnOnce(SubxtClient) -> F) -> R
 where
@@ -113,12 +111,15 @@ async fn test_redeem_succeeds() {
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
 
         test_service(
-            vault::service::listen_for_redeem_requests(
-                shutdown_tx,
-                vault_provider.clone(),
-                vault_id_manager,
-                0,
-                Duration::from_secs(0),
+            join(
+                vault::service::listen_for_redeem_requests(
+                    shutdown_tx,
+                    vault_provider.clone(),
+                    vault_id_manager,
+                    0,
+                    Duration::from_secs(0),
+                ),
+                periodically_produce_blocks(user_provider.clone()),
             ),
             async {
                 let address = BtcAddress::P2PKH(H160::from_slice(&[2; 20]));
@@ -190,7 +191,7 @@ async fn test_replace_succeeds() {
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
         let (replace_event_tx, _) = mpsc::channel::<CancellationEvent>(16);
         test_service(
-            join(
+            join3(
                 vault::service::listen_for_replace_requests(
                     new_vault_provider.clone(),
                     vault_id_manager.clone(),
@@ -204,6 +205,7 @@ async fn test_replace_succeeds() {
                     0,
                     Duration::from_secs(0),
                 ),
+                periodically_produce_blocks(old_vault_provider.clone()),
             ),
             async {
                 old_vault_provider
@@ -756,7 +758,7 @@ async fn test_automatic_issue_execution_succeeds() {
         let issue_set = Arc::new(IssueRequests::new());
         let random_delay = ZeroDelay;
         let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
-        let service = join(
+        let service = join3(
             vault::service::listen_for_issue_requests(
                 vault_id_manager.clone(),
                 vault2_provider.clone(),
@@ -771,6 +773,7 @@ async fn test_automatic_issue_execution_succeeds() {
                 0,
                 random_delay,
             ),
+            periodically_produce_blocks(vault2_provider.clone()),
         );
 
         test_service(service, fut_user).await;
@@ -844,7 +847,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
         let issue_set = Arc::new(IssueRequests::new());
         let random_delay = ZeroDelay;
         let (issue_event_tx, _issue_event_rx) = mpsc::channel::<CancellationEvent>(16);
-        let service = join(
+        let service = join3(
             vault::service::listen_for_issue_requests(
                 vault_id_manager.clone(),
                 vault2_provider.clone(),
@@ -859,6 +862,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
                 0,
                 random_delay,
             ),
+            periodically_produce_blocks(vault2_provider.clone()),
         );
 
         test_service(service, fut_user).await;
@@ -942,7 +946,11 @@ async fn test_execute_open_requests_succeeds() {
 
         // now move from mempool into chain and await the remaining redeem
         btc_rpc.flush_mempool().await;
-        assert_redeem_event(TIMEOUT, user_provider, redeem_ids[1]).await;
+        test_service(
+            periodically_produce_blocks(user_provider.clone()),
+            assert_redeem_event(TIMEOUT, user_provider, redeem_ids[1]),
+        )
+        .await;
     })
     .await;
 }
