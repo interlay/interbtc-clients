@@ -1,6 +1,7 @@
 use crate::error::Error;
 use bytes::Bytes;
 use codec::Decode;
+use futures::{future::BoxFuture, TryFutureExt};
 use jsonrpsee::{
     core::client::{Client as WsClient, ClientT},
     rpc_params,
@@ -22,7 +23,7 @@ use std::{
     time::Duration,
 };
 
-use futures_util::StreamExt;
+use futures_util::{FutureExt, StreamExt};
 use nix::{
     sys::signal::{self, Signal},
     unistd::Pid,
@@ -107,7 +108,7 @@ pub trait RunnerExt {
     async fn run_binary(&mut self) -> Result<(), Error>;
     fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
     async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error>;
-    async fn auto_update(&mut self) -> Result<(), Error>;
+    fn auto_update(&mut self) -> BoxFuture<'_, Result<(), Error>>;
 }
 
 #[async_trait]
@@ -182,37 +183,8 @@ impl RunnerExt for Runner {
         Ok(response.bytes().await?)
     }
 
-    async fn auto_update(&mut self) -> Result<(), Error> {
-        // Create all directories for the `download_path` if they don't already exist.
-        fs::create_dir_all(&self.download_path())?;
-        let release = self.try_get_release(false).await?.expect("No current release");
-        // WARNING: This will overwrite any pre-existing binary with the same name
-        // TODO: Check if a release with the same version is already at the `download_path`
-        self.download_binary(release).await?;
-
-        self.run_binary().await?;
-
-        loop {
-            if let Some(new_release) = self.try_get_release(false).await? {
-                let maybe_downloaded_release = self.downloaded_release();
-                let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
-                if new_release.uri != downloaded_release.release.uri {
-                    // Wait for child process to finish completely.
-                    // To ensure there can't be two vault processes using the same Bitcoin wallet.
-                    self.terminate_proc_and_wait()?;
-
-                    // Delete old release
-                    self.delete_downloaded_release()?;
-
-                    // Download new release
-                    self.download_binary(new_release).await?;
-
-                    // Run the downloaded release
-                    self.run_binary().await?;
-                }
-            }
-            tokio::time::sleep(BLOCK_TIME).await;
-        }
+    fn auto_update(&mut self) -> BoxFuture<'_, Result<(), Error>> {
+        auto_update(self).into_future().boxed()
     }
 }
 
@@ -382,12 +354,46 @@ pub async fn run(mut runner: Box<dyn RunnerExt + Send>, mut shutdown_signals: Si
     Ok(())
 }
 
+async fn auto_update(runner: &mut impl RunnerExt) -> Result<(), Error> {
+    // Create all directories for the `download_path` if they don't already exist.
+    fs::create_dir_all(&runner.download_path())?;
+    let release = runner.try_get_release(false).await?.expect("No current release");
+    // WARNING: This will overwrite any pre-existing binary with the same name
+    // TODO: Check if a release with the same version is already at the `download_path`
+    runner.download_binary(release).await?;
+
+    runner.run_binary().await?;
+
+    loop {
+        if let Some(new_release) = runner.try_get_release(false).await? {
+            let maybe_downloaded_release = runner.downloaded_release();
+            let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
+            if new_release.uri != downloaded_release.release.uri {
+                // Wait for child process to finish completely.
+                // To ensure there can't be two vault processes using the same Bitcoin wallet.
+                runner.terminate_proc_and_wait()?;
+
+                // Delete old release
+                runner.delete_downloaded_release()?;
+
+                // Download new release
+                runner.download_binary(new_release).await?;
+
+                // Run the downloaded release
+                runner.run_binary().await?;
+            }
+        }
+        tokio::time::sleep(BLOCK_TIME).await;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
     use bytes::Bytes;
     use codec::Decode;
 
+    use futures::future::BoxFuture;
     use sp_core::{Bytes as SpCoreBytes, H256};
     use tempdir::TempDir;
 
@@ -432,7 +438,7 @@ mod tests {
             async fn run_binary(&mut self) -> Result<(), Error>;
             fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
             async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error>;
-            async fn auto_update(&mut self) -> Result<(), Error>;
+            fn auto_update(&mut self) ->  BoxFuture<'static, Result<(), Error>>;
         }
 
         #[async_trait]
@@ -660,8 +666,10 @@ mod tests {
         let mut runner = MockRunner::default();
         runner.expect_terminate_proc_and_wait().once().returning(|| Ok(()));
         runner.expect_auto_update().returning(|| {
-            thread::sleep(Duration::from_millis(100_000));
-            Ok(())
+            Box::pin(async {
+                tokio::time::sleep(Duration::from_millis(100_000)).await;
+                Ok(())
+            })
         });
         let shutdown_signals = Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT]).unwrap();
         let task = tokio::spawn(run(Box::new(runner), shutdown_signals));
@@ -670,7 +678,6 @@ mod tests {
         // https://github.com/vorner/signal-hook/blob/a9e5ca5e46c9c8e6de89ff1b3ce63c5ff89cd708/signal-hook-tokio/tests/tests.rs#L50
         thread::sleep(Duration::from_millis(100));
         signal_hook::low_level::raise(SIGTERM).unwrap();
-
         task.await.unwrap().unwrap();
     }
 }
