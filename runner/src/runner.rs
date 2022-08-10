@@ -2,6 +2,7 @@ use crate::error::Error;
 use backoff::{retry, Error as BackoffError, ExponentialBackoff};
 use bytes::Bytes;
 use codec::Decode;
+use futures::{future::BoxFuture, TryFutureExt};
 use jsonrpsee::{
     core::client::{Client as WsClient, ClientT},
     rpc_params,
@@ -24,10 +25,12 @@ use std::{
     time::Duration,
 };
 
+use futures_util::{FutureExt, StreamExt};
 use nix::{
     sys::signal::{self, Signal},
     unistd::Pid,
 };
+use signal_hook_tokio::SignalsInfo;
 
 use async_trait::async_trait;
 
@@ -97,39 +100,6 @@ impl Runner {
             download_path,
         }
     }
-
-    pub async fn run(&mut self) -> Result<(), Error> {
-        // Create all directories for the `download_path` if they don't already exist.
-        fs::create_dir_all(&self.download_path())?;
-        let release = self.try_get_release(false).await?.expect("No current release");
-        // WARNING: This will overwrite any pre-existing binary with the same name
-        // TODO: Check if a release with the same version is already at the `download_path`
-        self.download_binary(release).await?;
-
-        self.run_binary_with_retry()?;
-
-        loop {
-            if let Some(new_release) = self.try_get_release(false).await? {
-                let maybe_downloaded_release = self.downloaded_release();
-                let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
-                if new_release.uri != downloaded_release.release.uri {
-                    // Wait for child process to finish completely.
-                    // To ensure there can't be two vault processes using the same Bitcoin wallet.
-                    self.terminate_proc_and_wait()?;
-
-                    // Delete old release
-                    self.delete_downloaded_release()?;
-
-                    // Download new release
-                    self.download_binary(new_release).await?;
-
-                    // Run the downloaded release
-                    self.run_binary_with_retry()?;
-                }
-            }
-            tokio::time::sleep(BLOCK_TIME).await;
-        }
-    }
 }
 
 #[async_trait]
@@ -149,6 +119,7 @@ pub trait RunnerExt {
     fn run_binary_with_retry(&mut self) -> Result<(), Error>;
     fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
     async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error>;
+    fn auto_update(&mut self) -> BoxFuture<'_, Result<(), Error>>;
 }
 
 #[async_trait]
@@ -221,6 +192,10 @@ impl RunnerExt for Runner {
     async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error> {
         let response = reqwest::get(url.clone()).await?;
         Ok(response.bytes().await?)
+    }
+
+    fn auto_update(&mut self) -> BoxFuture<'_, Result<(), Error>> {
+        auto_update(self).into_future().boxed()
     }
 }
 
@@ -323,8 +298,12 @@ fn terminate_proc_and_wait(runner: &mut impl RunnerExt) -> Result<u32, Error> {
     )?;
 
     match child_proc.wait() {
-        Ok(exit_code) => log::info!("Outdated vault killed with exit code {}", exit_code),
-        Err(error) => log::warn!("Outdated vault shutdown error: {}", error),
+        Ok(exit_status) => log::info!(
+            "Terminated vault process (pid: {}) with exit status {}",
+            child_proc.id(),
+            exit_status
+        ),
+        Err(error) => log::warn!("Vault process termination error: {}", error),
     };
     Ok(child_proc.id())
 }
@@ -381,9 +360,59 @@ fn run_binary_with_retry(runner: &mut impl RunnerExt, stdout_mode: impl Into<Std
             // The `Transient` error type means the closure will be retried
             .map_err(BackoffError::Transient)
     }) {
-        Ok(child) => Ok(child),
+        Ok(child) => {
+            log::info!("Vault started, with pid {}", child.id());
+            Ok(child)
+        }
         Err(BackoffError::Permanent(err)) => Err(err.into()),
         Err(BackoffError::Transient(err)) => Err(err.into()),
+    }
+}
+
+pub async fn run(mut runner: Box<dyn RunnerExt + Send>, mut shutdown_signals: SignalsInfo) -> Result<(), Error> {
+    tokio::select! {
+        _ = shutdown_signals.next() => {
+            log::info!("Terminating vault...");
+            runner.terminate_proc_and_wait()?;
+        },
+        _ = runner.as_mut().auto_update() => {
+            log::error!("Auto-updater unexpectedly terminated.");
+            return Err(Error::AutoUpdaterTerminated);
+        }
+    };
+    Ok(())
+}
+
+async fn auto_update(runner: &mut impl RunnerExt) -> Result<(), Error> {
+    // Create all directories for the `download_path` if they don't already exist.
+    fs::create_dir_all(&runner.download_path())?;
+    let release = runner.try_get_release(false).await?.expect("No current release");
+    // WARNING: This will overwrite any pre-existing binary with the same name
+    // TODO: Check if a release with the same version is already at the `download_path`
+    runner.download_binary(release).await?;
+
+    runner.run_binary_with_retry()?;
+
+    loop {
+        if let Some(new_release) = runner.try_get_release(false).await? {
+            let maybe_downloaded_release = runner.downloaded_release();
+            let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
+            if new_release.uri != downloaded_release.release.uri {
+                // Wait for child process to finish completely.
+                // To ensure there can't be two vault processes using the same Bitcoin wallet.
+                runner.terminate_proc_and_wait()?;
+
+                // Delete old release
+                runner.delete_downloaded_release()?;
+
+                // Download new release
+                runner.download_binary(new_release).await?;
+
+                // Run the downloaded release
+                runner.run_binary_with_retry()?;
+            }
+        }
+        tokio::time::sleep(BLOCK_TIME).await;
     }
 }
 
@@ -393,6 +422,7 @@ mod tests {
     use bytes::Bytes;
     use codec::Decode;
 
+    use futures::future::BoxFuture;
     use sp_core::{Bytes as SpCoreBytes, H256};
     use tempdir::TempDir;
 
@@ -405,7 +435,11 @@ mod tests {
         path::PathBuf,
         process::{Child, Command, Stdio},
         str::FromStr,
+        thread,
     };
+
+    use signal_hook::consts::*;
+    use signal_hook_tokio::Signals;
 
     use crate::error::Error;
 
@@ -433,6 +467,7 @@ mod tests {
             fn run_binary_with_retry(&mut self) -> Result<(), Error>;
             fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
             async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error>;
+            fn auto_update(&mut self) ->  BoxFuture<'static, Result<(), Error>>;
         }
 
         #[async_trait]
@@ -655,5 +690,25 @@ mod tests {
         let mut expected_output = mock_vault_args.join(" ");
         expected_output.push('\n');
         assert_eq!(output.stdout, expected_output.as_bytes());
+    }
+
+    #[tokio::test]
+    async fn test_runner_terminate_child_proc() {
+        let mut runner = MockRunner::default();
+        runner.expect_terminate_proc_and_wait().once().returning(|| Ok(()));
+        runner.expect_auto_update().returning(|| {
+            Box::pin(async {
+                tokio::time::sleep(Duration::from_millis(100_000)).await;
+                Ok(())
+            })
+        });
+        let shutdown_signals = Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT]).unwrap();
+        let task = tokio::spawn(run(Box::new(runner), shutdown_signals));
+        // Wait for the signals iterator to be polled
+        // This `sleep` is based on the test case in `signal-hook-tokio` itself:
+        // https://github.com/vorner/signal-hook/blob/a9e5ca5e46c9c8e6de89ff1b3ce63c5ff89cd708/signal-hook-tokio/tests/tests.rs#L50
+        thread::sleep(Duration::from_millis(100));
+        signal_hook::low_level::raise(SIGTERM).unwrap();
+        task.await.unwrap().unwrap();
     }
 }

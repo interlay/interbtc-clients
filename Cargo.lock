@@ -9796,10 +9796,12 @@ name = "runner"
 version = "0.0.1"
 dependencies = [
  "async-trait",
- "backoff",
+ "backoff 0.3.0",
  "bytes",
  "clap",
  "env_logger 0.7.1",
+ "futures 0.3.21",
+ "futures-util",
  "hex",
  "jsonrpsee 0.14.0",
  "log 0.4.17",
@@ -9809,6 +9811,8 @@ dependencies = [
  "parity-scale-codec",
  "reqwest",
  "serde_json",
+ "signal-hook",
+ "signal-hook-tokio",
  "sp-core",
  "sp-core-hashing 4.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sysinfo",
@@ -11450,6 +11454,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e51e73328dc4ac0c7ccbda3a494dfa03df1de2f46018127f60c693f2648455b0"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "signal-hook-tokio"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "213241f76fb1e37e27de3b6aa1b068a2c333233b59cca6634f634b80a27ecf1e"
+dependencies = [
+ "futures-core",
+ "libc",
+ "signal-hook",
+ "tokio",
 ]
 
 [[package]]
