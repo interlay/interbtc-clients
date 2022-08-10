@@ -1,6 +1,6 @@
 use crate::{
     collateral::lock_required_collateral,
-    delay::OrderedVaultsDelay,
+    delay::{OrderedVaultsDelay, RandomDelay, ZeroDelay},
     error::Error,
     faucet, issue,
     metrics::{poll_metrics, publish_tokio_metrics, PerCurrencyMetrics},
@@ -73,6 +73,10 @@ pub struct VaultServiceConfig {
     /// Don't run the RPC API.
     #[clap(long)]
     pub no_api: bool,
+
+    /// Attempt to execute best-effort transactions immediately, rather than using a random delay.
+    #[clap(long)]
+    pub no_random_delay: bool,
 
     /// Timeout in milliseconds to repeat collateralization checks.
     #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "5000")]
@@ -558,7 +562,11 @@ impl VaultService {
         let oldest_issue_btc_height =
             issue::initialize_issue_set(&self.btc_rpc_master_wallet, &self.btc_parachain, &issue_set).await?;
 
-        let random_delay = OrderedVaultsDelay::new(self.btc_parachain.clone()).await?;
+        let random_delay: Arc<Box<dyn RandomDelay + Send + Sync>> = if self.config.no_random_delay {
+            Arc::new(Box::new(ZeroDelay))
+        } else {
+            Arc::new(Box::new(OrderedVaultsDelay::new(self.btc_parachain.clone()).await?))
+        };
 
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
         let (replace_event_tx, replace_event_rx) = mpsc::channel::<Event>(16);
@@ -698,7 +706,7 @@ impl VaultService {
                         issue_set.clone(),
                         oldest_issue_btc_height,
                         num_confirmations,
-                        random_delay.clone(),
+                        random_delay,
                     ),
                 ),
             ),

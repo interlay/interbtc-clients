@@ -4,7 +4,7 @@ use runtime::{AccountId, Error as RuntimeError, InterBtcParachain, UtilFuncs, Va
 use std::fmt;
 
 #[async_trait]
-pub trait RandomDelay {
+pub trait RandomDelay: fmt::Debug {
     async fn delay(&self, seed_data: &[u8; 32]) -> Result<(), RuntimeError>;
 }
 
