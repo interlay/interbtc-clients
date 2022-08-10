@@ -1,11 +1,11 @@
-#![cfg(all(test, feature = "standalone-metadata"))]
+#![cfg(test)]
 
-const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(DOT);
+const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(KSM);
 
 use super::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, FixedPointNumber, FixedU128,
-    OraclePallet, RawBlockHeader, ReplacePallet, SecurityPallet, StatusCode, Token, VaultRegistryPallet, DOT, IBTC,
-    KINT,
+    OraclePallet, RawBlockHeader, ReplacePallet, SecurityPallet, StatusCode, Token, VaultRegistryPallet, KBTC, KINT,
+    KSM,
 };
 use crate::{integration::*, FeedValuesEvent, OracleKey, VaultId, H160, U256};
 use module_bitcoin::{formatter::TryFormattable, types::BlockBuilder};
@@ -45,7 +45,7 @@ async fn test_getters() {
 
     tokio::join!(
         async {
-            assert_eq!(parachain_rpc.get_free_balance(Token(DOT)).await.unwrap(), 1 << 60);
+            assert_eq!(parachain_rpc.get_free_balance(Token(KSM)).await.unwrap(), 1 << 60);
         },
         async {
             assert_eq!(parachain_rpc.get_parachain_status().await.unwrap(), StatusCode::Error);
@@ -110,7 +110,7 @@ async fn test_register_vault() {
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
     set_exchange_rate(client.clone()).await;
 
-    let vault_id = VaultId::new(AccountKeyring::Alice.into(), Token(DOT), Token(IBTC));
+    let vault_id = VaultId::new(AccountKeyring::Alice.into(), Token(KSM), Token(KBTC));
 
     parachain_rpc.register_public_key(dummy_public_key()).await.unwrap();
     parachain_rpc.register_vault(&vault_id, 100).await.unwrap();

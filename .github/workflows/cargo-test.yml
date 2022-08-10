@@ -3,12 +3,17 @@ name: Continuous integration
 permissions:
   contents: read
 
-on: [pull_request, push]
+on: [pull_request]
 
 jobs:
   test:
     name: Test Suite
     runs-on: [self-hosted, linux]
+    services:
+      bitcoind:
+        image: docker.io/interlayhq/bitcoin-core:22.0
+        ports:
+          - 18443:18443
 
     strategy:
       matrix:
@@ -17,7 +22,6 @@ jobs:
           - parachain-metadata-kintsugi
           - parachain-metadata-interlay-testnet
           - parachain-metadata-kintsugi-testnet
-          - standalone-metadata
 
     steps:
       - uses: actions/checkout@v2
@@ -51,12 +55,16 @@ jobs:
           command: check
           args: --release --workspace --features ${{ matrix.metadata }}
       - name: test
+        if: matrix.metadata == 'parachain-metadata-kintsugi-testnet'
         uses: actions-rs/cargo@v1
         env:
           RUST_LOG: info,regalloc=warn
+          BITCOIN_RPC_URL: http://127.0.0.1:18443
+          BITCOIN_RPC_USER: user
+          BITCOIN_RPC_PASS: pass
         with:
           command: test
-          args: --release --workspace --features ${{ matrix.metadata }}
+          args: --release --workspace --features ${{ matrix.metadata }} --features uses-bitcoind
       - name: upload artifacts - vault
         uses: actions/upload-artifact@v2
         with:

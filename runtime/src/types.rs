@@ -117,8 +117,6 @@ mod metadata_aliases {
     pub type EncodedCall = metadata::runtime_types::testnet_interlay_runtime_parachain::Call;
     #[cfg(feature = "parachain-metadata-kintsugi-testnet")]
     pub type EncodedCall = metadata::runtime_types::testnet_kintsugi_runtime_parachain::Call;
-    #[cfg(feature = "standalone-metadata")]
-    pub type EncodedCall = metadata::runtime_types::interbtc_runtime_standalone::Call;
 
     pub use metadata::runtime_types::security::pallet::Call as SecurityCall;
 }

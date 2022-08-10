@@ -1,4 +1,4 @@
-#![cfg(all(feature = "testing-utils", feature = "standalone-metadata"))]
+#![cfg(feature = "testing-utils")]
 
 mod bitcoin_simulator;
 
@@ -63,7 +63,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
             path: tmp.path().join("keystore"),
             password: None,
         },
-        chain_spec: interbtc::chain_spec::development_config(),
+        chain_spec: interbtc::chain_spec::testnet_kintsugi::development_config(2121u32.into()),
         role: Role::Authority(key),
         telemetry: None,
         wasm_method: WasmExecutionMethod::Compiled {
@@ -76,7 +76,12 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
     let mut service_config = config.into_service_config();
     service_config.offchain_worker.enabled = true;
 
-    let (task_manager, rpc_handlers) = interbtc::service::new_full(service_config).unwrap();
+    let (task_manager, rpc_handlers) = interbtc::service::start_instant::<
+        interbtc_runtime::RuntimeApi,
+        interbtc::service::TestnetKintsugiRuntimeExecutor,
+    >(service_config)
+    .await
+    .unwrap();
 
     let client = SubxtClient::new(task_manager, rpc_handlers);
 
@@ -142,11 +147,13 @@ async fn wait_for_aggregate(parachain_rpc: &InterBtcParachain, key: &OracleKey) 
 pub async fn set_exchange_rate_and_wait(parachain_rpc: &InterBtcParachain, currency_id: CurrencyId, value: FixedU128) {
     let key = OracleKey::ExchangeRate(currency_id);
     assert_ok!(parachain_rpc.feed_values(vec![(key.clone(), value)]).await);
+    parachain_rpc.manual_seal().await; // we need a new block to get on_initialize to run
     assert_ok!(timeout(TIMEOUT_DURATION, wait_for_aggregate(parachain_rpc, &key)).await);
 }
 
 pub async fn set_bitcoin_fees(parachain_rpc: &InterBtcParachain, value: FixedU128) {
     assert_ok!(parachain_rpc.set_bitcoin_fees(value).await);
+    parachain_rpc.manual_seal().await; // we need a new block to get on_initialize to run
     assert_ok!(
         timeout(
             TIMEOUT_DURATION,
@@ -205,5 +212,12 @@ pub async fn test_service<T: Future, U: Future>(service: T, fut: U) -> U::Output
     match futures::future::select(service, fut).await {
         Either::Right((ret, _)) => ret,
         _ => panic!(),
+    }
+}
+
+pub async fn periodically_produce_blocks(parachain_rpc: InterBtcParachain) {
+    loop {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        parachain_rpc.manual_seal().await;
     }
 }
