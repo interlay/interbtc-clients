@@ -1,5 +1,6 @@
 #![allow(clippy::enum_variant_names)]
 
+use backoff::Error as BackoffError;
 use codec::Error as CodecError;
 use jsonrpsee::core::Error as JsonRpcCoreError;
 use nix::Error as OsError;
@@ -32,6 +33,17 @@ pub enum Error {
     NoChildProcess,
     #[error("A child process is already running")]
     ChildProcessExists,
+    #[error("Failed to terminate child process")]
+    ProcessTerminationFailure,
     #[error("Auto-updater terminated unexpectedly")]
     AutoUpdaterTerminated,
+}
+
+impl<E: Into<Error> + Sized> From<BackoffError<E>> for Error {
+    fn from(e: BackoffError<E>) -> Self {
+        match e {
+            BackoffError::Permanent(err) => err.into(),
+            BackoffError::Transient(err) => err.into(),
+        }
+    }
 }
