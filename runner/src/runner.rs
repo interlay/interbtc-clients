@@ -15,7 +15,7 @@ use sp_core_hashing::twox_128;
 
 use std::{
     convert::TryInto,
-    fmt::Debug,
+    fmt::{Debug, Display},
     fs::{self, OpenOptions},
     io::Write,
     os::unix::prelude::OpenOptionsExt,
@@ -162,7 +162,8 @@ impl Runner {
                 ))
             },
             "Failed to kill child process".to_string(),
-        )?;
+        )
+        .map_err(|_| Error::ProcessTerminationFailure)?;
 
         match child_proc.wait() {
             Ok(exit_status) => log::info!(
@@ -274,12 +275,10 @@ impl Runner {
         let downloaded_release = runner.downloaded_release().as_ref().ok_or(Error::NoDownloadedRelease)?;
         let mut command = Command::new(downloaded_release.path.as_os_str());
         command.args(runner.vault_args().clone()).stdout(stdout_mode);
-        let child = retry::<_, _, Child, _>(custom_retry_config(), || {
-            command
-                .spawn()
-                // The `Transient` error type means the closure will be retried
-                .map_err(BackoffError::Transient)
-        })?;
+        let child = retry_with_log(
+            || command.spawn().map_err(|e| e.into()),
+            "Failed to spawn child process".to_string(),
+        )?;
         log::info!("Vault started, with pid {}", child.id());
         Ok(child)
     }
@@ -443,30 +442,32 @@ pub fn custom_retry_config() -> ExponentialBackoff {
     }
 }
 
-pub fn retry_with_log<T, F>(f: F, log_msg: String) -> Result<T, Error>
+pub fn retry_with_log<T, F>(mut f: F, log_msg: String) -> Result<T, Error>
 where
-    F: Fn() -> Result<T, Error>,
+    F: FnMut() -> Result<T, Error>,
 {
-    Ok(retry(custom_retry_config(), || {
+    retry(custom_retry_config(), || {
         f().map_err(|e| {
             log::info!("{}: {}. Retrying...", log_msg, e.to_string());
-            BackoffError::Transient(Error::ProcessTerminationFailure)
+            BackoffError::Transient(e)
         })
-    })?)
+    })
+    .map_err(|e| e.into())
 }
 
 pub async fn retry_with_log_async<'a, T, F, E>(f: F, log_msg: String) -> Result<T, Error>
 where
     F: Fn() -> BoxFuture<'a, Result<T, E>>,
-    E: Into<Error> + Sized,
+    E: Into<Error> + Sized + Display,
 {
     backoff::future::retry(custom_retry_config(), || async {
         f().await.map_err(|e| {
-            log::info!("{}: {}. Retrying...", log_msg, e.into().to_string());
-            BackoffError::Transient(Error::ProcessTerminationFailure)
+            log::info!("{}: {}. Retrying...", log_msg, e.to_string());
+            BackoffError::Transient(e)
         })
     })
     .await
+    .map_err(|e| e.into())
 }
 
 #[cfg(test)]
