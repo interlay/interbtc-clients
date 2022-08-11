@@ -10,7 +10,7 @@ use jsonrpsee::{
 };
 use mockall_double::double;
 use reqwest::Url;
-use sp_core::{Bytes as SpCoreBytes, H256};
+use sp_core::{hexdisplay::AsBytesRef, Bytes as SpCoreBytes, H256};
 use sp_core_hashing::twox_128;
 
 use std::{
@@ -113,7 +113,12 @@ impl Runner {
             .create(true)
             .open(bin_path.clone())?;
 
-        let bytes = runner.get_request_bytes(release.uri.clone()).await?;
+        let bytes = retry_with_log_async(
+            || runner.get_request_bytes(release.uri.clone()).into_future().boxed(),
+            "Error fetching executable".to_string(),
+        )
+        .await?;
+
         file.write_all(&bytes)?;
         file.sync_all()?;
 
@@ -212,10 +217,7 @@ impl Runner {
             .query_storage(parachain_rpc, maybe_storage_key, "state_getStorage".to_string())
             .await;
         enc_res
-            .map(|r| {
-                let v = r.to_vec();
-                T::decode(&mut &v[..])
-            })
+            .map(|r| T::decode(&mut r.as_bytes_ref()))
             .transpose()
             .map_err(Into::into)
     }
@@ -370,13 +372,8 @@ impl RunnerExt for Runner {
     // Declaring as a static method would highly complicate mocking
     async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error> {
         log::info!("Fetching executable from {}", url);
-        Ok(retry_with_log_async(
-            || reqwest::get(url.clone()).into_future().boxed(),
-            "Error fetching executable".to_string(),
-        )
-        .await?
-        .bytes()
-        .await?)
+        let response = reqwest::get(url.clone()).await?;
+        Ok(response.bytes().await?)
     }
 
     fn auto_update(&mut self) -> BoxFuture<'_, Result<(), Error>> {
