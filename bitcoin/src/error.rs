@@ -70,6 +70,8 @@ pub enum Error {
     ArithmeticError,
     #[error(transparent)]
     TryFromIntError(#[from] std::num::TryFromIntError),
+    #[error("MissingBitcoinFeeInfo")]
+    MissingBitcoinFeeInfo,
 }
 
 impl Error {
@@ -88,6 +90,13 @@ impl Error {
         matches!(self,
             Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
                 if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcWalletError
+        )
+    }
+
+    pub fn rejected_by_network_rules(&self) -> bool {
+        matches!(self,
+            Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
+                if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcVerifyRejected
         )
     }
 

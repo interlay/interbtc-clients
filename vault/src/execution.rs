@@ -1,16 +1,17 @@
 use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager};
 use bitcoin::{
-    BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata, BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
+    BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata, Txid, BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
 use futures::{
+    future::Either,
     stream::{self, StreamExt},
     try_join, TryStreamExt,
 };
 use runtime::{
-    BtcAddress, BtcRelayPallet, FixedPointNumber, FixedU128, H256Le, InterBtcParachain, InterBtcRedeemRequest,
-    InterBtcRefundRequest, InterBtcReplaceRequest, IssuePallet, OraclePallet, PrettyPrint, RedeemPallet,
-    RedeemRequestStatus, RefundPallet, ReplacePallet, ReplaceRequestStatus, RequestRefundEvent, SecurityPallet,
-    UtilFuncs, VaultId, VaultRegistryPallet, H256,
+    BtcAddress, BtcRelayPallet, Error as RuntimeError, FixedPointNumber, FixedU128, H256Le, InterBtcParachain,
+    InterBtcRedeemRequest, InterBtcRefundRequest, InterBtcReplaceRequest, IssuePallet, OraclePallet, PrettyPrint,
+    RedeemPallet, RedeemRequestStatus, RefundPallet, ReplacePallet, ReplaceRequestStatus, RequestRefundEvent,
+    SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
 use service::{spawn_cancelable, ShutdownSender};
 use std::{collections::HashMap, convert::TryInto, time::Duration};
@@ -238,6 +239,8 @@ impl Request {
     ) -> Result<TransactionMetadata, Error> {
         let fee_rate = self.get_fee_rate(parachain_rpc).await?;
 
+        tracing::debug!("Using fee_rate = {fee_rate}");
+
         let tx = btc_rpc
             .create_transaction(self.btc_address, self.amount as u64, fee_rate, Some(self.hash))
             .await?;
@@ -281,7 +284,7 @@ impl Request {
         num_confirmations: u32,
         mut txid: Txid,
     ) -> Result<TransactionMetadata, Error> {
-        loop {
+        'outer: loop {
             tracing::info!("Awaiting bitcoin confirmations for {txid}");
 
             let txid_copy = txid.clone();
@@ -289,7 +292,7 @@ impl Request {
             let fee_rate_subscription = parachain_rpc.on_fee_rate_change();
             let fee_rate_subscription = BroadcastStream::new(fee_rate_subscription);
             let subscription = fee_rate_subscription
-                .map_err(|e| Into::<Error>::into(e))
+                .map_err(Into::<Error>::into)
                 .and_then(|x| {
                     tracing::debug!("Received new inclusion fee estimate {}...", x);
 
@@ -303,8 +306,7 @@ impl Request {
                 .try_filter_map(|x| async move {
                     match btc_rpc.fee_rate(txid) {
                         Ok(current_fee) => {
-                            tracing::debug!("Current fee rate = {current_fee}. New estimate = {x}");
-                            if x > current_fee {
+                            if x >= current_fee {
                                 Ok(Some((current_fee, x)))
                             } else {
                                 Ok(None)
@@ -334,17 +336,36 @@ impl Request {
             let wait_for_transaction_metadata = btc_rpc.wait_for_transaction_metadata(txid, num_confirmations);
             futures::pin_mut!(subscription);
 
-            use futures::future::Either;
-            let tx_metadata = match futures::future::select(wait_for_transaction_metadata, subscription.next()).await {
-                Either::Left((result, _)) => result?,
-                Either::Right((Some(Ok((old_fee, new_fee))), _)) => {
-                    tracing::info!("Bumping fee rate from {old_fee} to {new_fee}...");
-                    txid = self.bump_fee(btc_rpc, txid, new_fee).await?;
-                    continue;
-                }
-                _ => {
-                    tracing::warn!("Unexpected select result");
-                    continue;
+            let mut metadata_fut = wait_for_transaction_metadata;
+
+            // The code below looks a little bit complicated but the idea is simple:
+            // we keep waiting for inclusion until it's either included in the bitcoin chain,
+            // or we successfully bump fees
+            let tx_metadata = loop {
+                match futures::future::select(metadata_fut, subscription.next()).await {
+                    Either::Left((result, _)) => break result?,
+                    Either::Right((None, _)) => return Err(Error::RuntimeError(RuntimeError::ChannelClosed)),
+                    Either::Right((Some(Err(x)), continuation)) => {
+                        tracing::warn!("Received an error from the fee rate subscription: {x}");
+                        // continue with the unchanged fee rate
+                        metadata_fut = continuation;
+                    }
+                    Either::Right((Some(Ok((old_fee, new_fee))), continuation)) => {
+                        tracing::debug!("Attempting to bump fee rate from {old_fee} to {new_fee}...");
+                        match self.bump_fee(btc_rpc, txid, new_fee).await {
+                            Ok(new_txid) => {
+                                tracing::info!("Bumped fee rate. Old txid = {txid}, new txid = {new_txid}");
+                                txid = new_txid;
+                                continue 'outer;
+                            }
+                            Err(Error::BitcoinError(x)) if x.rejected_by_network_rules() => {
+                                tracing::debug!("Failed to bump fees: {:?}", x);
+                                // bump not big enough: this is not unexpected - just continue
+                                metadata_fut = continuation;
+                            }
+                            Err(x) => return Err(x),
+                        };
+                    }
                 }
             };
 
@@ -612,7 +633,8 @@ mod tests {
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
         AccountId, AssetMetadata, BitcoinBlockHeight, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError,
-        ErrorCode, InterBtcRichBlockHeader, InterBtcVault, OracleKey, RawBlockHeader, StatusCode, Token, DOT, IBTC,
+        ErrorCode, FeeRateUpdateReceiver, InterBtcRichBlockHeader, InterBtcVault, OracleKey, RawBlockHeader,
+        StatusCode, Token, DOT, IBTC,
     };
     use sp_core::H160;
     use std::collections::BTreeSet;

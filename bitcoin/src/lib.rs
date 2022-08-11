@@ -364,6 +364,8 @@ pub struct BitcoinCore {
     network: Network,
     transaction_creation_lock: Arc<Mutex<()>>,
     electrs_config: ElectrsConfiguration,
+    #[cfg(feature = "regtest-manual-mining")]
+    auto_mine: bool,
 }
 
 impl BitcoinCore {
@@ -384,7 +386,14 @@ impl BitcoinCore {
                 }),
                 ..Default::default()
             },
+            #[cfg(feature = "regtest-manual-mining")]
+            auto_mine: false,
         }
+    }
+
+    #[cfg(feature = "regtest-manual-mining")]
+    pub fn set_auto_mining(&mut self, enable: bool) {
+        self.auto_mine = enable;
     }
 
     /// Wait indefinitely for the node to sync.
@@ -469,10 +478,10 @@ impl BitcoinCore {
     }
 
     #[cfg(feature = "regtest-manual-mining")]
-    pub fn mine_block(&self) -> Result<(), Error> {
-        self.rpc
-            .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
-        Ok(())
+    pub fn mine_block(&self) -> Result<BlockHash, Error> {
+        Ok(self
+            .rpc
+            .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?[0])
     }
 
     pub fn encode_address<A: PartialAddress + Send + 'static>(&self, address: A) -> Result<String, Error> {
@@ -825,7 +834,7 @@ impl BitcoinCoreApi for BitcoinCore {
     ) -> Result<LockedTransaction, Error> {
         let (raw_tx, return_to_self_address) = self
             .with_wallet(|| async {
-                let mut existing_transaction = self.rpc.get_raw_transaction(&txid, None)?;
+                let mut existing_transaction = self.rpc.get_raw_transaction(txid, None)?;
 
                 let return_to_self = existing_transaction
                     .extract_return_to_self_address(&address)?
@@ -854,6 +863,15 @@ impl BitcoinCoreApi for BitcoinCore {
         let txid = self
             .with_wallet(|| async { Ok(self.rpc.send_raw_transaction(&transaction.transaction)?) })
             .await?;
+
+        #[cfg(feature = "regtest-manual-mining")]
+        if self.auto_mine {
+            log::debug!("Auto-mining!");
+
+            self.rpc
+                .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
+        }
+
         Ok(txid)
     }
 
@@ -898,10 +916,6 @@ impl BitcoinCoreApi for BitcoinCore {
         let txid = self
             .create_and_send_transaction(address, sat, fee_rate, request_id)
             .await?;
-
-        #[cfg(feature = "regtest-mine-on-tx")]
-        self.rpc
-            .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
 
         Ok(self.wait_for_transaction_metadata(txid, num_confirmations).await?)
     }
@@ -1019,10 +1033,12 @@ impl BitcoinCoreApi for BitcoinCore {
     fn get_utxo_count(&self) -> Result<usize, Error> {
         Ok(self.rpc.list_unspent(None, None, None, None, None)?.len())
     }
+
     fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error> {
         let get_tx_result = self.rpc.get_transaction(&txid, None)?;
         Ok(get_tx_result.info.confirmations == 0)
     }
+
     fn fee_rate(&self, txid: Txid) -> Result<u64, Error> {
         // unfortunately we need both of these rpc results. The result of the second call
         // is not a parsed tx, but rather a GetTransactionResult.
@@ -1041,7 +1057,7 @@ impl BitcoinCoreApi for BitcoinCore {
 
         let fee = get_tx_result
             .fee
-            .unwrap()
+            .ok_or(Error::MissingBitcoinFeeInfo)?
             .as_sat()
             .checked_abs()
             .ok_or(Error::ArithmeticError)?;
