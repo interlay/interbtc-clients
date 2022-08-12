@@ -34,24 +34,32 @@ use signal_hook_tokio::SignalsInfo;
 
 use async_trait::async_trait;
 
+/// Pallet in the parachain where the client release is assumed to be stored
 pub const PARACHAIN_MODULE: &str = "VaultRegistry";
+
+/// Storage item in the Pallet where the client release is assumed to be stored
 pub const CURRENT_RELEASE_STORAGE_ITEM: &str = "CurrentClientRelease";
+
+/// (Currently unused) Storage item in the Pallet where the upcoming client release is assumed to be stored
 pub const PENDING_RELEASE_STORAGE_ITEM: &str = "PendingClientRelease";
+
+/// Parachain block time
 pub const BLOCK_TIME: Duration = Duration::from_secs(6);
 
-// One minute
+/// Timeout used by the retry utilities: One minute
 pub const RETRY_TIMEOUT_MS: u64 = 60_000;
 
-// One second
+/// Waiting interval used by the retry utilities: One minute
 pub const RETRY_INTERVAL_MS: u64 = 1_000;
 
-// Constant interval retry
+/// Multiplier for the interval in retry utilities: Constant interval retry
 pub const RETRY_MULTIPLIER: f64 = 1.0;
 
-// Wrap `WsClient` in a newtype pattern to be able to mock it.
+///  Module used for wrapping `WsClient` in a New Type pattern to be able to mock it.
 mod ws_client_newtype {
     use crate::runner::WsClient;
 
+    /// Wrapper around `WsClient` (to simplify mocking)
     pub struct WebsocketClient(WsClient);
 
     #[cfg_attr(test, mockall::automock)]
@@ -69,24 +77,39 @@ mod ws_client_newtype {
 #[double]
 use ws_client_newtype::WebsocketClient;
 
+/// Data type assumed to be used by the parachain to store the client release.
+/// If this type is different from the on-chain one, decoding will fail.
 #[derive(Decode, Default, Eq, PartialEq, Debug, Clone)]
 pub struct ClientRelease {
+    /// A link to the Releases page of the `interbtc-clients` repo.
+    /// Example: https://github.com/interlay/interbtc-clients/releases/download/1.16.0/vault-parachain-metadata-interlay
     pub uri: String,
+    /// Code hash of the parachain runtime compatible with this release
     pub code_hash: H256,
 }
 
+/// Wrapper around `ClientRelease`, which includes details for running the executable.
 #[derive(Default, Eq, PartialEq, Debug, Clone)]
 pub struct DownloadedRelease {
+    /// Release data read from the parachain
     pub release: ClientRelease,
+    /// OS path where this release is stored
     pub path: PathBuf,
+    /// Name of the executable
     pub bin_name: String,
 }
 
+/// Per-network manager of the vault executable
 pub struct Runner {
+    /// WS connection to the parachain
     parachain_rpc: WebsocketClient,
+    /// Unparsed CLI arguments for the vault executable
     vault_args: Vec<String>,
+    /// The child process (vault) spawned by this runner
     child_proc: Option<Child>,
+    /// Details about the currently run release
     downloaded_release: Option<DownloadedRelease>,
+    /// User-configured path for storing the vault executable
     download_path: PathBuf,
 }
 
@@ -208,6 +231,7 @@ impl Runner {
         .await
     }
 
+    /// Read parachain storage via an RPC call, and decode the result
     async fn read_chain_storage<T: 'static + Decode + Debug, V: RunnerExt + StorageReader>(
         runner: &V,
         parachain_rpc: &WebsocketClient,
@@ -222,6 +246,7 @@ impl Runner {
             .map_err(Into::into)
     }
 
+    /// Run the auto-updater while concurrently listening for termination signals.
     pub async fn run(mut runner: Box<dyn RunnerExt + Send>, mut shutdown_signals: SignalsInfo) -> Result<(), Error> {
         tokio::select! {
             _ = shutdown_signals.next() => {
@@ -296,13 +321,24 @@ pub trait RunnerExt {
     fn set_downloaded_release(&mut self, downloaded_release: Option<DownloadedRelease>);
     fn download_path(&self) -> &PathBuf;
     fn set_download_path(&mut self, download_path: PathBuf);
+    /// Read the current client release from the parachain, retrying for `RETRY_TIMEOUT_MS` if there is a network error.
     async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
+    /// Download the vault binary and make it executable, retrying for `RETRY_TIMEOUT_MS` if there is a network error.
     async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
+    /// Convert a release URI (e.g. a GitHub link) to an executable name and OS path (after download)
     fn uri_to_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error>;
+    /// Remove downloaded release from the file system. This is only supposed to occur _after_ the vault process
+    /// has been killed. In case of failure, removing is retried for `RETRY_TIMEOUT_MS`.
     fn delete_downloaded_release(&mut self) -> Result<(), Error>;
+    /// Spawn a the client as a child process with the CLI arguments set in the `Runner`, retrying for
+    /// `RETRY_TIMEOUT_MS`.
     fn run_binary(&mut self) -> Result<(), Error>;
+    /// Send a `SIGTERM` to the child process (via the underlying `kill` system call).
+    /// If `kill` returns an error code, the operation is retried for `RETRY_TIMEOUT_MS`.
     fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
+    /// Get the client release executable, as `Bytes`
     async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error>;
+    /// Main loop, checks the parachain for new releases and updates the client accordingly.
     fn auto_update(&mut self) -> BoxFuture<'_, Result<(), Error>>;
 }
 
