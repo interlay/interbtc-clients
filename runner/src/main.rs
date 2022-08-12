@@ -5,8 +5,7 @@ use clap::Parser;
 
 use error::Error;
 
-use futures::TryFutureExt;
-use futures_util::FutureExt;
+use futures::{FutureExt, TryFutureExt};
 use signal_hook::consts::*;
 use signal_hook_tokio::Signals;
 use std::{fmt::Debug, path::PathBuf};

@@ -2,17 +2,20 @@ use crate::error::Error;
 use backoff::{retry, Error as BackoffError, ExponentialBackoff};
 use bytes::Bytes;
 use codec::Decode;
-use futures::{future::BoxFuture, TryFutureExt};
+use futures::{future::BoxFuture, FutureExt, StreamExt, TryFutureExt};
 use jsonrpsee::{
     core::client::{Client as WsClient, ClientT},
     rpc_params,
     ws_client::WsClientBuilder,
 };
 use mockall_double::double;
+use nix::{
+    sys::signal::{self, Signal},
+    unistd::Pid,
+};
 use reqwest::Url;
-use sp_core::{hexdisplay::AsBytesRef, Bytes as SpCoreBytes, H256};
-use sp_core_hashing::twox_128;
-
+use signal_hook_tokio::SignalsInfo;
+use sp_core::{hashing::twox_128, hexdisplay::AsBytesRef, Bytes as SpCoreBytes, H256};
 use std::{
     convert::TryInto,
     fmt::{Debug, Display},
@@ -24,13 +27,6 @@ use std::{
     str,
     time::Duration,
 };
-
-use futures_util::{FutureExt, StreamExt};
-use nix::{
-    sys::signal::{self, Signal},
-    unistd::Pid,
-};
-use signal_hook_tokio::SignalsInfo;
 
 use async_trait::async_trait;
 
@@ -47,10 +43,10 @@ pub const PENDING_RELEASE_STORAGE_ITEM: &str = "PendingClientRelease";
 pub const BLOCK_TIME: Duration = Duration::from_secs(6);
 
 /// Timeout used by the retry utilities: One minute
-pub const RETRY_TIMEOUT_MS: u64 = 60_000;
+pub const RETRY_TIMEOUT: Duration = Duration::from_millis(60_000);
 
 /// Waiting interval used by the retry utilities: One minute
-pub const RETRY_INTERVAL_MS: u64 = 1_000;
+pub const RETRY_INTERVAL: Duration = Duration::from_millis(1_000);
 
 /// Multiplier for the interval in retry utilities: Constant interval retry
 pub const RETRY_MULTIPLIER: f64 = 1.0;
@@ -60,14 +56,17 @@ mod ws_client_newtype {
     use crate::runner::WsClient;
 
     /// Wrapper around `WsClient` (to simplify mocking)
+    #[allow(dead_code)]
     pub struct WebsocketClient(WsClient);
 
     #[cfg_attr(test, mockall::automock)]
     impl WebsocketClient {
+        #[allow(dead_code)]
         pub fn new(ws_client: WsClient) -> Self {
             Self(ws_client)
         }
 
+        #[allow(dead_code)]
         pub fn inner(&self) -> &WsClient {
             &self.0
         }
@@ -303,7 +302,7 @@ impl Runner {
         let mut command = Command::new(downloaded_release.path.as_os_str());
         command.args(runner.vault_args().clone()).stdout(stdout_mode);
         let child = retry_with_log(
-            || command.spawn().map_err(|e| e.into()),
+            || command.spawn().map_err(Into::into),
             "Failed to spawn child process".to_string(),
         )?;
         log::info!("Vault started, with pid {}", child.id());
@@ -321,20 +320,20 @@ pub trait RunnerExt {
     fn set_downloaded_release(&mut self, downloaded_release: Option<DownloadedRelease>);
     fn download_path(&self) -> &PathBuf;
     fn set_download_path(&mut self, download_path: PathBuf);
-    /// Read the current client release from the parachain, retrying for `RETRY_TIMEOUT_MS` if there is a network error.
+    /// Read the current client release from the parachain, retrying for `RETRY_TIMEOUT` if there is a network error.
     async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
-    /// Download the vault binary and make it executable, retrying for `RETRY_TIMEOUT_MS` if there is a network error.
+    /// Download the vault binary and make it executable, retrying for `RETRY_TIMEOUT` if there is a network error.
     async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
     /// Convert a release URI (e.g. a GitHub link) to an executable name and OS path (after download)
     fn uri_to_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error>;
     /// Remove downloaded release from the file system. This is only supposed to occur _after_ the vault process
-    /// has been killed. In case of failure, removing is retried for `RETRY_TIMEOUT_MS`.
+    /// has been killed. In case of failure, removing is retried for `RETRY_TIMEOUT`.
     fn delete_downloaded_release(&mut self) -> Result<(), Error>;
     /// Spawn a the client as a child process with the CLI arguments set in the `Runner`, retrying for
-    /// `RETRY_TIMEOUT_MS`.
+    /// `RETRY_TIMEOUT`.
     fn run_binary(&mut self) -> Result<(), Error>;
     /// Send a `SIGTERM` to the child process (via the underlying `kill` system call).
-    /// If `kill` returns an error code, the operation is retried for `RETRY_TIMEOUT_MS`.
+    /// If `kill` returns an error code, the operation is retried for `RETRY_TIMEOUT`.
     fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
     /// Get the client release executable, as `Bytes`
     async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error>;
@@ -468,8 +467,8 @@ pub async fn ws_client(url: &str) -> Result<WebsocketClient, Error> {
 
 pub fn custom_retry_config() -> ExponentialBackoff {
     ExponentialBackoff {
-        initial_interval: Duration::from_millis(RETRY_INTERVAL_MS),
-        max_elapsed_time: Some(Duration::from_millis(RETRY_TIMEOUT_MS)),
+        initial_interval: RETRY_INTERVAL,
+        max_elapsed_time: Some(RETRY_TIMEOUT),
         multiplier: RETRY_MULTIPLIER,
         ..ExponentialBackoff::default()
     }
@@ -485,7 +484,7 @@ where
             BackoffError::Transient(e)
         })
     })
-    .map_err(|e| e.into())
+    .map_err(Into::into)
 }
 
 pub async fn retry_with_log_async<'a, T, F, E>(f: F, log_msg: String) -> Result<T, Error>
@@ -500,7 +499,7 @@ where
         })
     })
     .await
-    .map_err(|e| e.into())
+    .map_err(Into::into)
 }
 
 #[cfg(test)]
