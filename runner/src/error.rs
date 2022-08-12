@@ -35,8 +35,6 @@ pub enum Error {
     ChildProcessExists,
     #[error("Failed to terminate child process")]
     ProcessTerminationFailure,
-    #[error("Auto-updater terminated unexpectedly")]
-    AutoUpdaterTerminated,
 }
 
 impl<E: Into<Error> + Sized> From<BackoffError<E>> for Error {

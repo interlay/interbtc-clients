@@ -5,7 +5,7 @@ testnets).
 
 > **IMPORTANT**
 > 
-> It is CRITICAL that the runner is shut down gracefully, otherwise the spawned vault process will keep running. If there are multiple running vault executables for the same [Vault ID(s)](https://docs.interlay.io/#/vault/overview?id=multi-collateral-system), redeem requests be fulfilled by all vault executables, leading to double-spending the BTC in the vault's wallet! The Vault operator will need to provide its own BTC to cover for the loss, to avoid having its [collateral slashed](https://docs.interlay.io/#/guides/bridge?id=_4-optional-retry-or-reimburse-your-request).
+> It is CRITICAL that the runner is shut down gracefully, otherwise the spawned vault process will keep running. If there are multiple running vault executables for the same [Vault ID(s)](https://docs.interlay.io/#/vault/overview?id=multi-collateral-system), redeem requests will be fulfilled by all vault executables, leading to double-spending the BTC in the vault's wallet! The Vault operator will need to provide its own BTC to cover for the loss, to avoid having its [collateral slashed](https://docs.interlay.io/#/guides/bridge?id=_4-optional-retry-or-reimburse-your-request).
 > 
 > Supported process signals for graceful termination: `SIGHUP`, `SIGTERM`, `SIGINT`, `SIGQUIT`.
 

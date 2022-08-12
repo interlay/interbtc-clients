@@ -179,6 +179,7 @@ impl Runner {
     }
 
     fn terminate_proc_and_wait(runner: &mut impl RunnerExt) -> Result<u32, Error> {
+        log::info!("Terminating child process...");
         let child_proc = runner.child_proc().as_mut().ok_or(Error::NoChildProcess)?;
 
         let _ = retry_with_log(
@@ -249,12 +250,14 @@ impl Runner {
     pub async fn run(mut runner: Box<dyn RunnerExt + Send>, mut shutdown_signals: SignalsInfo) -> Result<(), Error> {
         tokio::select! {
             _ = shutdown_signals.next() => {
-                log::info!("Terminating vault...");
                 runner.terminate_proc_and_wait()?;
-            },
-            _ = runner.as_mut().auto_update() => {
-                log::error!("Auto-updater unexpectedly terminated.");
-                return Err(Error::AutoUpdaterTerminated);
+            }
+            result = runner.as_mut().auto_update() => {
+                match result {
+                    Ok(_) => log::error!("Auto-updater unexpectedly terminated."),
+                    Err(e) => log::error!("Runner error: {}", e),
+                }
+                runner.terminate_proc_and_wait()?;
             }
         };
         Ok(())
@@ -271,6 +274,7 @@ impl Runner {
         runner.run_binary()?;
 
         loop {
+            runner.maybe_restart_client()?;
             if let Some(new_release) = runner.try_get_release(false).await? {
                 let maybe_downloaded_release = runner.downloaded_release();
                 let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
@@ -293,6 +297,31 @@ impl Runner {
         }
     }
 
+    fn maybe_restart_client(runner: &mut impl RunnerExt) -> Result<(), Error> {
+        if !runner.check_child_proc_alive()? {
+            runner.run_binary()?;
+        }
+        Ok(())
+    }
+
+    fn check_child_proc_alive(runner: &mut impl RunnerExt) -> Result<bool, Error> {
+        if let Some(child) = runner.child_proc() {
+            // `try_wait` only returns if the child has already exited,
+            // without actually doing any waiting
+            match child.try_wait()? {
+                Some(status) => {
+                    log::info!("Child exited with: {status}");
+                    runner.set_child_proc(None);
+                    return Ok(false);
+                }
+                None => {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
     fn run_binary(runner: &mut impl RunnerExt, stdout_mode: impl Into<Stdio>) -> Result<Child, Error> {
         // Ensure there is no other child running
         if runner.child_proc().is_some() {
@@ -307,6 +336,19 @@ impl Runner {
         )?;
         log::info!("Vault started, with pid {}", child.id());
         Ok(child)
+    }
+}
+
+impl Drop for Runner {
+    fn drop(&mut self) {
+        if self
+            .check_child_proc_alive()
+            .expect("Failed to check child process status")
+        {
+            if let Err(e) = self.terminate_proc_and_wait() {
+                log::warn!("Failed to terminate child process: {}", e);
+            }
+        }
     }
 }
 
@@ -339,6 +381,10 @@ pub trait RunnerExt {
     async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error>;
     /// Main loop, checks the parachain for new releases and updates the client accordingly.
     fn auto_update(&mut self) -> BoxFuture<'_, Result<(), Error>>;
+    /// Returns whether the child is alive and sets the `runner.child` field to `None` if not.
+    fn check_child_proc_alive(&mut self) -> Result<bool, Error>;
+    /// If the child process crashed, start it again
+    fn maybe_restart_client(&mut self) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -413,6 +459,14 @@ impl RunnerExt for Runner {
 
     fn auto_update(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         Runner::auto_update(self).into_future().boxed()
+    }
+
+    fn check_child_proc_alive(&mut self) -> Result<bool, Error> {
+        Runner::check_child_proc_alive(self)
+    }
+
+    fn maybe_restart_client(&mut self) -> Result<(), Error> {
+        Runner::maybe_restart_client(self)
     }
 }
 
@@ -554,6 +608,8 @@ mod tests {
             fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
             async fn get_request_bytes(&self, url: String) -> Result<Bytes, Error>;
             fn auto_update(&mut self) ->  BoxFuture<'static, Result<(), Error>>;
+            fn check_child_proc_alive(&mut self) -> Result<bool, Error>;
+            fn maybe_restart_client(&mut self) -> Result<(), Error>;
         }
 
         #[async_trait]
@@ -787,7 +843,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_runner_terminate_child_proc() {
+    async fn test_runner_terminate_child_proc_on_signal() {
         let mut runner = MockRunner::default();
         runner.expect_terminate_proc_and_wait().once().returning(|| Ok(()));
         runner.expect_auto_update().returning(|| {
@@ -804,5 +860,31 @@ mod tests {
         thread::sleep(Duration::from_millis(100));
         signal_hook::low_level::raise(SIGTERM).unwrap();
         task.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_runner_terminate_child_proc_on_crash() {
+        let mut runner = MockRunner::default();
+        // Assume the auto-updater crashes
+        runner.expect_auto_update().returning(|| {
+            // return an arbitrary error
+            Box::pin(async { Err(Error::ProcessTerminationFailure) })
+        });
+        // The child process must be killed before shutting down the runner
+        runner.expect_terminate_proc_and_wait().once().returning(|| Ok(()));
+
+        let shutdown_signals = Signals::new(&[]).unwrap();
+        let task = tokio::spawn(Runner::run(Box::new(runner), shutdown_signals));
+        task.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_runner_child_restarts_if_crashed() {
+        let mut runner = MockRunner::default();
+        runner.expect_check_child_proc_alive().returning(|| Ok(false));
+
+        // The test passes as long as `run_binary` is called
+        runner.expect_run_binary().once().returning(|| Ok(()));
+        Runner::maybe_restart_client(&mut runner).unwrap();
     }
 }
