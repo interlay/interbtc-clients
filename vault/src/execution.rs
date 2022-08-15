@@ -248,7 +248,7 @@ impl Request {
         tracing::info!("Sending bitcoin to {}", recipient);
 
         let txid = btc_rpc.send_transaction(tx).await?;
-        self.await_inclusion(parachain_rpc, btc_rpc, num_confirmations, txid)
+        self.wait_for_inclusion(parachain_rpc, btc_rpc, num_confirmations, txid)
             .await
     }
 
@@ -267,14 +267,14 @@ impl Request {
     }
 
     #[tracing::instrument(
-        name = "await_inclusion",
+        name = "wait_for_inclusion",
         skip(self, parachain_rpc, btc_rpc),
         fields(
             request_type = ?self.request_type,
             request_id = ?self.hash,
         )
     )]
-    async fn await_inclusion<
+    async fn wait_for_inclusion<
         B: BitcoinCoreApi + Clone,
         P: OraclePallet + BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
     >(
@@ -287,7 +287,7 @@ impl Request {
         'outer: loop {
             tracing::info!("Awaiting bitcoin confirmations for {txid}");
 
-            let txid_copy = txid.clone();
+            let txid_copy = txid; // we get borrow check error if we don't use a copy
 
             let fee_rate_subscription = parachain_rpc.on_fee_rate_change();
             let fee_rate_subscription = BroadcastStream::new(fee_rate_subscription);
@@ -545,7 +545,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                 };
 
                 match request
-                    .await_inclusion(&parachain_rpc, &btc_rpc, num_confirmations, tx.txid())
+                    .wait_for_inclusion(&parachain_rpc, &btc_rpc, num_confirmations, tx.txid())
                     .await
                 {
                     Ok(tx_metadata) => {
