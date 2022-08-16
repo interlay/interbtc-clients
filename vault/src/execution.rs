@@ -1,6 +1,7 @@
 use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager};
 use bitcoin::{
-    BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata, Txid, BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
+    BitcoinCoreApi, SatPerVbyte, Transaction, TransactionExt, TransactionMetadata, Txid,
+    BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
 use futures::{
     future::Either,
@@ -173,13 +174,14 @@ impl Request {
     }
 
     /// returns the fee rate in sat/vByte
-    async fn get_fee_rate<P: OraclePallet + Send + Sync>(&self, parachain_rpc: &P) -> Result<u64, Error> {
+    async fn get_fee_rate<P: OraclePallet + Send + Sync>(&self, parachain_rpc: &P) -> Result<SatPerVbyte, Error> {
         let fee_rate: FixedU128 = parachain_rpc.get_bitcoin_fees().await?;
-        Ok(fee_rate
+        let rate = fee_rate
             .into_inner()
             .checked_div(FixedU128::accuracy())
             .ok_or(Error::ArithmeticUnderflow)?
-            .try_into()?)
+            .try_into()?;
+        Ok(SatPerVbyte(rate))
     }
 
     /// Makes the bitcoin transfer and executes the request
@@ -239,7 +241,7 @@ impl Request {
     ) -> Result<TransactionMetadata, Error> {
         let fee_rate = self.get_fee_rate(parachain_rpc).await?;
 
-        tracing::debug!("Using fee_rate = {fee_rate}");
+        tracing::debug!("Using fee_rate = {} sat/vByte", fee_rate.0);
 
         let tx = btc_rpc
             .create_transaction(self.btc_address, self.amount as u64, fee_rate, Some(self.hash))
@@ -256,7 +258,7 @@ impl Request {
         &self,
         btc_rpc: &B,
         old_txid: Txid,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
     ) -> Result<Txid, Error> {
         let new_tx = btc_rpc
             .create_bumped_transaction(&old_txid, self.btc_address, fee_rate)
@@ -296,11 +298,11 @@ impl Request {
                 .and_then(|x| {
                     tracing::debug!("Received new inclusion fee estimate {}...", x);
 
-                    let ret: Result<u64, _> = x
+                    let ret: Result<SatPerVbyte, _> = x
                         .into_inner()
                         .checked_div(FixedU128::accuracy())
                         .ok_or(Error::ArithmeticUnderflow)
-                        .and_then(|x| x.try_into().map_err(Into::<Error>::into));
+                        .and_then(|x| x.try_into().map(|x| SatPerVbyte(x)).map_err(Into::<Error>::into));
                     futures::future::ready(ret)
                 })
                 .try_filter_map(|x| async move {
@@ -354,7 +356,7 @@ impl Request {
                         metadata_fut = continuation;
                     }
                     Either::Right((Some(Ok((old_fee, new_fee))), continuation)) => {
-                        tracing::debug!("Attempting to bump fee rate from {old_fee} to {new_fee}...");
+                        tracing::debug!("Attempting to bump fee rate from {} to {}...", old_fee.0, new_fee.0);
                         match self.bump_fee(btc_rpc, txid, new_fee).await {
                             Ok(new_txid) => {
                                 tracing::info!("Bumped fee rate. Old txid = {txid}, new txid = {new_txid}");
@@ -795,10 +797,10 @@ mod tests {
             async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError>;
             async fn get_mempool_transactions<'a>(&'a self) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(&self, txid: Txid, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
-            async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, fee_rate: u64, request_id: Option<H256>) -> Result<LockedTransaction, BitcoinError>;
+            async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, fee_rate: SatPerVbyte, request_id: Option<H256>) -> Result<LockedTransaction, BitcoinError>;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
-            async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, fee_rate: u64, request_id: Option<H256>) -> Result<Txid, BitcoinError>;
-            async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>, fee_rate: u64, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
+            async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, fee_rate: SatPerVbyte, request_id: Option<H256>) -> Result<Txid, BitcoinError>;
+            async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>, fee_rate: SatPerVbyte, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;
             async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, BitcoinError> where P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
             async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), BitcoinError>;
@@ -810,10 +812,10 @@ mod tests {
                 &self,
                 txid: &Txid,
                 address: A,
-                fee_rate: u64,
+                fee_rate: SatPerVbyte,
             ) -> Result<LockedTransaction, BitcoinError>;
             fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
-            fn fee_rate(&self, txid: Txid) -> Result<u64, BitcoinError>;
+            fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
         }
     }
 

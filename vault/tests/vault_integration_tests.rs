@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use bitcoin::{stream_blocks, BitcoinCoreApi, TransactionExt};
+use bitcoin::{stream_blocks, BitcoinCoreApi, SatPerVbyte, TransactionExt};
 use frame_support::assert_ok;
 use futures::{
     channel::mpsc,
@@ -7,7 +7,7 @@ use futures::{
     Future, FutureExt, SinkExt, TryStreamExt,
 };
 use runtime::{
-    integration::*, types::*, BtcAddress, BtcRelayPallet, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain,
+    integration::*, types::*, BtcAddress, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain,
     InterBtcRedeemRequest, IssuePallet, RedeemPallet, ReplacePallet, SudoPallet, UtilFuncs, VaultId,
     VaultRegistryPallet,
 };
@@ -534,7 +534,7 @@ async fn test_cancellation_succeeds() {
                                         BtcAddress::P2PKH(H160::from_slice(&[0; 20])),
                                         100_000,
                                         None,
-                                        1000,
+                                        SatPerVbyte(1000),
                                         1
                                     )
                                     .await
@@ -598,7 +598,7 @@ async fn test_refund_succeeds() {
                     issue.vault_address,
                     (issue.amount + issue.fee) as u64 + over_payment,
                     None,
-                    1000,
+                    SatPerVbyte(1000),
                     0,
                 )
                 .await
@@ -669,7 +669,7 @@ async fn test_issue_overpayment_succeeds() {
                     issue.vault_address,
                     (issue.amount + issue.fee) as u64 * over_payment_factor as u64,
                     None,
-                    1000,
+                    SatPerVbyte(1000),
                     0,
                 )
                 .await
@@ -744,7 +744,13 @@ async fn test_automatic_issue_execution_succeeds() {
 
             assert_ok!(
                 btc_rpc
-                    .send_to_address(issue.vault_address, (issue.amount + issue.fee) as u64, None, 1000, 0)
+                    .send_to_address(
+                        issue.vault_address,
+                        (issue.amount + issue.fee) as u64,
+                        None,
+                        SatPerVbyte(1000),
+                        0
+                    )
                     .await
             );
 
@@ -832,7 +838,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
                         issue.vault_address,
                         (issue.amount + issue.fee) as u64,
                         None,
-                        1000,
+                        SatPerVbyte(1000),
                         0
                     )
                     .await
@@ -914,12 +920,23 @@ async fn test_execute_open_requests_succeeds() {
         // send btc for redeem 0
         assert_ok!(
             btc_rpc
-                .send_to_address(address, redeems[0].amount_btc as u64, Some(redeem_ids[0]), 1000, 0)
+                .send_to_address(
+                    address,
+                    redeems[0].amount_btc as u64,
+                    Some(redeem_ids[0]),
+                    SatPerVbyte(1000),
+                    0
+                )
                 .await
         );
 
         let transaction = btc_rpc
-            .create_transaction(address, redeems[1].amount_btc as u64, 1000, Some(redeem_ids[1]))
+            .create_transaction(
+                address,
+                redeems[1].amount_btc as u64,
+                SatPerVbyte(1000),
+                Some(redeem_ids[1]),
+            )
             .await
             .unwrap()
             .transaction;
@@ -1067,6 +1084,7 @@ impl InterBtcParachainExt for InterBtcParachain {
 #[cfg(feature = "uses-bitcoind")]
 mod test_with_bitcoind {
     use bitcoin::BitcoinCore;
+    use runtime::BtcRelayPallet;
     use vault::service::Runner;
 
     use std::cmp::max;
@@ -1107,7 +1125,7 @@ mod test_with_bitcoind {
     ) {
         let issue = parachain_rpc.request_issue(amount, vault_id).await.unwrap();
 
-        let fee_rate = 1000;
+        let fee_rate = SatPerVbyte(1000);
 
         let metadata = btc_rpc
             .send_to_address(
@@ -1225,7 +1243,7 @@ mod test_with_bitcoind {
         };
 
         tracing::trace!("Step 2: signal an increase in bitcoin fees");
-        set_bitcoin_fees(&relayer_provider, FixedU128::from(2)).await;
+        set_bitcoin_fees(&relayer_provider, FixedU128::from(3)).await;
 
         tracing::trace!("Step 3: wait for new tx in mempool");
         let new_tx = loop {
@@ -1247,7 +1265,7 @@ mod test_with_bitcoind {
         };
 
         tracing::trace!("Step 4: check fee rate");
-        assert_eq!(btc_rpc.fee_rate(new_tx.txid()).unwrap(), 2);
+        assert_eq!(btc_rpc.fee_rate(new_tx.txid()).unwrap(), SatPerVbyte(3));
 
         tracing::trace!("Step 5: mine bitcoin block");
         let block_hash = btc_rpc.mine_block().unwrap();

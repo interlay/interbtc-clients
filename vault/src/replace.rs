@@ -210,7 +210,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::{
         json, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, Network,
-        PartialAddress, PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        PartialAddress, PrivateKey, SatPerVbyte, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
         AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcReplaceRequest,
@@ -268,7 +268,7 @@ mod tests {
                 &self,
                 address: A,
                 sat: u64,
-                fee_rate: u64,
+                fee_rate: SatPerVbyte,
                 request_id: Option<H256>,
             ) -> Result<LockedTransaction, BitcoinError>;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
@@ -276,7 +276,7 @@ mod tests {
                 &self,
                 address: A,
                 sat: u64,
-                fee_rate: u64,
+                fee_rate: SatPerVbyte,
                 request_id: Option<H256>,
             ) -> Result<Txid, BitcoinError>;
             async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
@@ -284,7 +284,7 @@ mod tests {
                 address: A,
                 sat: u64,
                 request_id: Option<H256>,
-                fee_rate: u64,
+                fee_rate: SatPerVbyte,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;
@@ -300,10 +300,10 @@ mod tests {
                 &self,
                 txid: &Txid,
                 address: A,
-                fee_rate: u64,
+                fee_rate: SatPerVbyte,
             ) -> Result<LockedTransaction, BitcoinError>;
             fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
-            fn fee_rate(&self, txid: Txid) -> Result<u64, BitcoinError>;
+            fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
         }
     }
 

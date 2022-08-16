@@ -91,6 +91,9 @@ fn get_exponential_backoff() -> ExponentialBackoff {
     }
 }
 
+#[derive(PartialEq, PartialOrd, Clone, Copy, Debug)]
+pub struct SatPerVbyte(pub u64);
+
 #[derive(Debug, Clone)]
 pub struct TransactionMetadata {
     pub txid: Txid,
@@ -164,7 +167,7 @@ pub trait BitcoinCoreApi {
         &self,
         address: A,
         sat: u64,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, Error>;
 
@@ -172,7 +175,7 @@ pub trait BitcoinCoreApi {
         &self,
         txid: &Txid,
         address: A,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
     ) -> Result<LockedTransaction, Error>;
 
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
@@ -181,7 +184,7 @@ pub trait BitcoinCoreApi {
         &self,
         address: A,
         sat: u64,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         request_id: Option<H256>,
     ) -> Result<Txid, Error>;
 
@@ -190,7 +193,7 @@ pub trait BitcoinCoreApi {
         address: A,
         sat: u64,
         request_id: Option<H256>,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
@@ -215,7 +218,7 @@ pub trait BitcoinCoreApi {
 
     fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error>;
 
-    fn fee_rate(&self, txid: Txid) -> Result<u64, Error>;
+    fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error>;
 }
 
 pub struct LockedTransaction {
@@ -438,7 +441,7 @@ impl BitcoinCore {
 
     async fn fund_and_sign_transaction<A: PartialAddress + Send + Sync + 'static>(
         &self,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         raw_tx: &str,
         return_to_self_address: &Option<Address>,
         recipient: &str,
@@ -449,7 +452,7 @@ impl BitcoinCore {
             // as input twice (i.e. double spend)
             let lock = self.transaction_creation_lock.clone().lock_owned().await;
             // FundRawTransactionOptions takes an amount per kvByte, rather than per vByte
-            let fee_rate = fee_rate.saturating_mul(1_000);
+            let fee_rate = fee_rate.0.saturating_mul(1_000);
             let funding_opts = FundRawTransactionOptions {
                 fee_rate: Some(Amount::from_sat(fee_rate)),
                 change_address: return_to_self_address.clone(),
@@ -807,7 +810,7 @@ impl BitcoinCoreApi for BitcoinCore {
         &self,
         address: A,
         sat: u64,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, Error> {
         let recipient = address.encode_str(self.network)?;
@@ -830,7 +833,7 @@ impl BitcoinCoreApi for BitcoinCore {
         &self,
         txid: &Txid,
         address: A,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
     ) -> Result<LockedTransaction, Error> {
         let (raw_tx, return_to_self_address) = self
             .with_wallet(|| async {
@@ -888,7 +891,7 @@ impl BitcoinCoreApi for BitcoinCore {
         &self,
         address: A,
         sat: u64,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         request_id: Option<H256>,
     ) -> Result<Txid, Error> {
         let tx = self.create_transaction(address, sat, fee_rate, request_id).await?;
@@ -910,7 +913,7 @@ impl BitcoinCoreApi for BitcoinCore {
         address: A,
         sat: u64,
         request_id: Option<H256>,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
         let txid = self
@@ -1039,7 +1042,7 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(get_tx_result.info.confirmations == 0)
     }
 
-    fn fee_rate(&self, txid: Txid) -> Result<u64, Error> {
+    fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error> {
         // unfortunately we need both of these rpc results. The result of the second call
         // is not a parsed tx, but rather a GetTransactionResult.
         let tx = self.rpc.get_raw_transaction(&txid, None)?;
@@ -1065,7 +1068,7 @@ impl BitcoinCoreApi for BitcoinCore {
         log::debug!("fee: {fee}, size: {vsize}");
 
         let fee_rate = fee.checked_div(vsize).ok_or(Error::ArithmeticError)?;
-        Ok(fee_rate.try_into()?)
+        Ok(SatPerVbyte(fee_rate.try_into()?))
     }
 }
 

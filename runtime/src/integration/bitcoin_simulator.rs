@@ -9,8 +9,8 @@ use bitcoin::{
     json,
     secp256k1::{constants::SECRET_KEY_SIZE, PublicKey, Secp256k1, SecretKey},
     serialize, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult,
-    Hash, LockedTransaction, Network, OutPoint, PartialAddress, PartialMerkleTree, PrivateKey, Script, Transaction,
-    TransactionExt, TransactionMetadata, TxIn, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
+    Hash, LockedTransaction, Network, OutPoint, PartialAddress, PartialMerkleTree, PrivateKey, SatPerVbyte, Script,
+    Transaction, TransactionExt, TransactionMetadata, TxIn, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
 };
 use rand::{thread_rng, Rng};
 use std::{convert::TryInto, sync::Arc, time::Duration};
@@ -264,7 +264,7 @@ impl MockBitcoinCore {
         address: A,
         sat: u64,
         request_id: Option<H256>,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, BitcoinError> {
         let tx = self
@@ -467,7 +467,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         &self,
         address: A,
         sat: u64,
-        _fee_rate: u64, // ignored in this impl
+        _fee_rate: SatPerVbyte, // ignored in this impl
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, BitcoinError> {
         let mut transaction = MockBitcoinCore::generate_normal_transaction(&address, sat);
@@ -498,7 +498,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         &self,
         address: A,
         sat: u64,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         request_id: Option<H256>,
     ) -> Result<Txid, BitcoinError> {
         let tx = self.create_transaction(address, sat, fee_rate, request_id).await?;
@@ -510,7 +510,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         address: A,
         sat: u64,
         request_id: Option<H256>,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, BitcoinError> {
         let txid = self
@@ -563,7 +563,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         &self,
         txid: &Txid,
         address: A,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
     ) -> Result<LockedTransaction, BitcoinError> {
         unimplemented!()
     }
@@ -572,7 +572,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         unimplemented!()
     }
 
-    fn fee_rate(&self, txid: Txid) -> Result<u64, BitcoinError> {
+    fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError> {
         unimplemented!()
     }
 }
