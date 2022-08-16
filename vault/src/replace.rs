@@ -296,12 +296,12 @@ mod tests {
             async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(&self, addresses: Vec<A>) -> Result<(), BitcoinError>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError>;
             fn get_utxo_count(&self) -> Result<usize, BitcoinError>;
-            async fn create_bumped_transaction<A: PartialAddress + Send + Sync + 'static>(
+            async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
                 &self,
                 txid: &Txid,
                 address: A,
                 fee_rate: SatPerVbyte,
-            ) -> Result<LockedTransaction, BitcoinError>;
+            ) -> Result<Txid, BitcoinError>;
             fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
             fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
         }

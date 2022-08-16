@@ -171,12 +171,12 @@ pub trait BitcoinCoreApi {
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, Error>;
 
-    async fn create_bumped_transaction<A: PartialAddress + Send + Sync + 'static>(
+    async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
         &self,
         txid: &Txid,
         address: A,
         fee_rate: SatPerVbyte,
-    ) -> Result<LockedTransaction, Error>;
+    ) -> Result<Txid, Error>;
 
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
 
@@ -445,8 +445,9 @@ impl BitcoinCore {
         raw_tx: &str,
         return_to_self_address: &Option<Address>,
         recipient: &str,
+        auto_retry: bool,
     ) -> Result<LockedTransaction, Error> {
-        self.with_wallet(|| async {
+        self.with_wallet_inner(auto_retry, || async {
             // ensure no other fund_raw_transaction calls are made until we submitted the
             // transaction to the bitcoind. If we don't do this, the same uxto may be used
             // as input twice (i.e. double spend)
@@ -496,6 +497,15 @@ impl BitcoinCore {
         F: Fn() -> R,
         R: Future<Output = Result<T, Error>>,
     {
+        self.with_wallet_inner(true, call).await
+    }
+
+    /// Exactly like with_wallet, but with with opt-out of retrying wallet error
+    async fn with_wallet_inner<F, R, T>(&self, retry_on_wallet_error: bool, call: F) -> Result<T, Error>
+    where
+        F: Fn() -> R,
+        R: Future<Output = Result<T, Error>>,
+    {
         let mut backoff = get_exponential_backoff();
         loop {
             let err = match call().await.map_err(Error::from) {
@@ -504,7 +514,7 @@ impl BitcoinCore {
                     self.create_or_load_wallet().await?;
                     inner
                 }
-                Err(inner) if inner.is_wallet_error() => {
+                Err(inner) if retry_on_wallet_error && inner.is_wallet_error() => {
                     // fee estimation failed or other
                     inner
                 }
@@ -825,18 +835,18 @@ impl BitcoinCoreApi for BitcoinCore {
             })
             .await?;
 
-        self.fund_and_sign_transaction::<A>(fee_rate, &raw_tx, &None, &recipient)
+        self.fund_and_sign_transaction::<A>(fee_rate, &raw_tx, &None, &recipient, true)
             .await
     }
 
-    async fn create_bumped_transaction<A: PartialAddress + Send + Sync + 'static>(
+    async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
         &self,
         txid: &Txid,
         address: A,
         fee_rate: SatPerVbyte,
-    ) -> Result<LockedTransaction, Error> {
+    ) -> Result<Txid, Error> {
         let (raw_tx, return_to_self_address) = self
-            .with_wallet(|| async {
+            .with_wallet_inner(false, || async {
                 let mut existing_transaction = self.rpc.get_raw_transaction(txid, None)?;
 
                 let return_to_self = existing_transaction
@@ -853,8 +863,23 @@ impl BitcoinCoreApi for BitcoinCore {
             .await?;
 
         let recipient = address.encode_str(self.network)?;
-        self.fund_and_sign_transaction::<A>(fee_rate, &raw_tx, &return_to_self_address, &recipient)
-            .await
+        let tx = self
+            .fund_and_sign_transaction::<A>(fee_rate, &raw_tx, &return_to_self_address, &recipient, false)
+            .await?;
+
+        let txid = self
+            .with_wallet_inner(false, || async { Ok(self.rpc.send_raw_transaction(&tx.transaction)?) })
+            .await?;
+
+        #[cfg(feature = "regtest-manual-mining")]
+        if self.auto_mine {
+            log::debug!("Auto-mining!");
+
+            self.rpc
+                .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
+        }
+
+        Ok(txid)
     }
 
     /// Submits a transaction to the mempool

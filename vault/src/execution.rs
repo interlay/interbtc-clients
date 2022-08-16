@@ -254,20 +254,6 @@ impl Request {
             .await
     }
 
-    async fn bump_fee<B: BitcoinCoreApi + Clone>(
-        &self,
-        btc_rpc: &B,
-        old_txid: Txid,
-        fee_rate: SatPerVbyte,
-    ) -> Result<Txid, Error> {
-        let new_tx = btc_rpc
-            .create_bumped_transaction(&old_txid, self.btc_address, fee_rate)
-            .await?;
-        let new_txid = btc_rpc.send_transaction(new_tx).await?;
-        tracing::info!("Bumped fee... {new_txid}");
-        Ok(new_txid)
-    }
-
     #[tracing::instrument(
         name = "wait_for_inclusion",
         skip(self, parachain_rpc, btc_rpc),
@@ -308,7 +294,7 @@ impl Request {
                 .try_filter_map(|x| async move {
                     match btc_rpc.fee_rate(txid) {
                         Ok(current_fee) => {
-                            if x >= current_fee {
+                            if x > current_fee {
                                 Ok(Some((current_fee, x)))
                             } else {
                                 Ok(None)
@@ -357,17 +343,17 @@ impl Request {
                     }
                     Either::Right((Some(Ok((old_fee, new_fee))), continuation)) => {
                         tracing::debug!("Attempting to bump fee rate from {} to {}...", old_fee.0, new_fee.0);
-                        match self.bump_fee(btc_rpc, txid, new_fee).await {
+                        match btc_rpc.bump_fee(&txid, self.btc_address, new_fee).await {
                             Ok(new_txid) => {
                                 tracing::info!("Bumped fee rate. Old txid = {txid}, new txid = {new_txid}");
                                 txid = new_txid;
                                 continue 'outer;
                             }
-                            Err(Error::BitcoinError(x)) if x.rejected_by_network_rules() => {
+                            Err(x) if x.rejected_by_network_rules() => {
                                 // bump not big enough. This is not unexpected, so only debug print
                                 tracing::debug!("Failed to bump fees: {:?}", x);
                             }
-                            Err(Error::BitcoinError(x)) if x.could_be_insufficient_funds() => {
+                            Err(x) if x.could_be_insufficient_funds() => {
                                 // Unexpected: likely (but no certainly) there are insufficient
                                 // funds in the wallet to pay the increased fee.
                                 tracing::warn!("Failed to bump fees - likely due to insufficient funds: {:?}", x);
@@ -808,12 +794,12 @@ mod tests {
             async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(&self, addresses: Vec<A>) -> Result<(), BitcoinError>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError>;
             fn get_utxo_count(&self) -> Result<usize, BitcoinError>;
-            async fn create_bumped_transaction<A: PartialAddress + Send + Sync + 'static>(
+            async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
                 &self,
                 txid: &Txid,
                 address: A,
                 fee_rate: SatPerVbyte,
-            ) -> Result<LockedTransaction, BitcoinError>;
+            ) -> Result<Txid, BitcoinError>;
             fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
             fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
         }

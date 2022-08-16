@@ -559,12 +559,12 @@ impl BitcoinCoreApi for MockBitcoinCore {
         Ok(0)
     }
 
-    async fn create_bumped_transaction<A: PartialAddress + Send + Sync + 'static>(
+    async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
         &self,
         txid: &Txid,
         address: A,
         fee_rate: SatPerVbyte,
-    ) -> Result<LockedTransaction, BitcoinError> {
+    ) -> Result<Txid, BitcoinError> {
         unimplemented!()
     }
 

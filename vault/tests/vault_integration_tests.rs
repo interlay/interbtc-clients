@@ -1243,7 +1243,7 @@ mod test_with_bitcoind {
         };
 
         tracing::trace!("Step 2: signal an increase in bitcoin fees");
-        set_bitcoin_fees(&relayer_provider, FixedU128::from(3)).await;
+        set_bitcoin_fees(&relayer_provider, FixedU128::from(10)).await;
 
         tracing::trace!("Step 3: wait for new tx in mempool");
         let new_tx = loop {
@@ -1265,7 +1265,9 @@ mod test_with_bitcoind {
         };
 
         tracing::trace!("Step 4: check fee rate");
-        assert_eq!(btc_rpc.fee_rate(new_tx.txid()).unwrap(), SatPerVbyte(3));
+        // don't check for strict equality - sometimes bitcoin core decides to use
+        // a higher fee
+        assert!(btc_rpc.fee_rate(new_tx.txid()).unwrap().0 >= 10);
 
         tracing::trace!("Step 5: mine bitcoin block");
         let block_hash = btc_rpc.mine_block().unwrap();
