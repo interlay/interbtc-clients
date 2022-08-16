@@ -100,6 +100,19 @@ impl Error {
         )
     }
 
+    /// Naming is intentionally somewhat unusual: RpcWalletError can also have other causes.
+    pub fn could_be_insufficient_funds(&self) -> bool {
+        // Regtest on bitcoind 0.22 gives "-4: insufficient funds", where -4 is RpcWalletError.
+        // We additionally filter for RpcWalletInsufficientFunds because the name suggests
+        // (and bitcoin source confirms) that some calls/versions will throw this error instead.
+        // See e.g. https://github.com/bitcoin/bitcoin/blob/bd616bc16a3a7f70f60ca5034b5a91e5ac89ac9d/test/functional/interface_usdt_coinselection.py#L188
+        matches!(self,
+            Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
+                if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcWalletError ||
+                BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcWalletInsufficientFunds
+        )
+    }
+
     pub fn is_wallet_not_found(&self) -> bool {
         matches!(self,
             Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))

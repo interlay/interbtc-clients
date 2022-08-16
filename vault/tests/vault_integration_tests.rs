@@ -1164,6 +1164,7 @@ mod test_with_bitcoind {
         tracing::trace!("Step 2: update bitcoin fees");
         set_bitcoin_fees(&relayer_provider, FixedU128::from(3)).await; // no change
         set_bitcoin_fees(&relayer_provider, FixedU128::from(2)).await; // decrease
+        set_bitcoin_fees(&relayer_provider, FixedU128::from(1000000000)).await; // such a high increase that vault is not able to pay the fees
 
         // give redeem handler time to react
         tokio::time::sleep(Duration::from_secs(1)).await;

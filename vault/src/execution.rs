@@ -329,7 +329,10 @@ impl Request {
                             tracing::debug!("Txid is still in mempool...");
                             Some(x)
                         }
-                        Err(e) => Some(Err(e.into())),
+                        Err(e) => {
+                            tracing::warn!("Unexpected bitcoin error: {}", e);
+                            Some(Err(e.into()))
+                        }
                     }
                 });
 
@@ -359,12 +362,20 @@ impl Request {
                                 continue 'outer;
                             }
                             Err(Error::BitcoinError(x)) if x.rejected_by_network_rules() => {
+                                // bump not big enough. This is not unexpected, so only debug print
                                 tracing::debug!("Failed to bump fees: {:?}", x);
-                                // bump not big enough: this is not unexpected - just continue
-                                metadata_fut = continuation;
                             }
-                            Err(x) => return Err(x),
+                            Err(Error::BitcoinError(x)) if x.could_be_insufficient_funds() => {
+                                // Unexpected: likely (but no certainly) there are insufficient
+                                // funds in the wallet to pay the increased fee.
+                                tracing::warn!("Failed to bump fees - likely due to insufficient funds: {:?}", x);
+                            }
+                            Err(x) => {
+                                // unexpected error. Just continue waiting for the original tx
+                                tracing::warn!("Failed to bump fees due to unexpected reasons: {:?}", x);
+                            }
                         };
+                        metadata_fut = continuation;
                     }
                 }
             };
