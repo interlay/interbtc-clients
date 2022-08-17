@@ -8,7 +8,7 @@ pub use primitives::{
     TokenSymbol::{self, DOT, IBTC, INTR, KBTC, KINT, KSM},
 };
 
-pub use currency_id::CurrencyIdExt;
+pub use currency_id::{CurrencyIdExt, RuntimeCurrencyId};
 pub use h256_le::RichH256Le;
 pub use module_btc_relay::{RichBlockHeader, MAIN_CHAIN_ID};
 
@@ -106,7 +106,9 @@ mod metadata_aliases {
         Balance,
         CurrencyId,
     >;
+    pub type AnyVaultId<C> = metadata::runtime_types::interbtc_primitives::VaultId<AccountId, C>;
     pub type VaultId = metadata::runtime_types::interbtc_primitives::VaultId<AccountId, CurrencyId>;
+    pub type AnyVaultCurrencyPair<C> = metadata::runtime_types::interbtc_primitives::VaultCurrencyPair<C>;
     pub type VaultCurrencyPair = metadata::runtime_types::interbtc_primitives::VaultCurrencyPair<CurrencyId>;
 
     #[cfg(feature = "parachain-metadata-interlay")]
@@ -133,9 +135,20 @@ impl From<[u8; 33]> for crate::BtcPublicKey {
     }
 }
 
+pub trait PrettyPrint {
+    fn pretty_print(&self) -> String;
+}
+
 mod currency_id {
     use super::*;
     use crate::Error;
+    use primitives::CurrencyInfo;
+
+    impl PrettyPrint for CurrencyId {
+        fn pretty_print(&self) -> String {
+            self.inner().map(|i| i.symbol().to_string()).unwrap_or_default()
+        }
+    }
 
     pub trait CurrencyIdExt {
         fn inner(&self) -> Result<primitives::TokenSymbol, Error>;
@@ -149,10 +162,75 @@ mod currency_id {
             }
         }
     }
-}
 
-pub trait PrettyPrint {
-    fn pretty_print(&self) -> String;
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct RuntimeCurrencyId {
+        pub(crate) currency_id: CurrencyId,
+        pub(crate) asset_metadata: Option<AssetMetadata>,
+    }
+
+    impl RuntimeCurrencyId {
+        pub fn name(&self) -> Option<String> {
+            match self.currency_id {
+                CurrencyId::Token(token_symbol) => Some(token_symbol.name().to_string()),
+                CurrencyId::ForeignAsset(_) => self
+                    .asset_metadata
+                    .as_ref()
+                    .and_then(|asset_metadata| String::from_utf8(asset_metadata.name.clone()).ok()),
+            }
+        }
+
+        pub fn symbol(&self) -> Option<String> {
+            match self.currency_id {
+                CurrencyId::Token(token_symbol) => Some(token_symbol.symbol().to_string()),
+                CurrencyId::ForeignAsset(_) => self
+                    .asset_metadata
+                    .as_ref()
+                    .and_then(|asset_metadata| String::from_utf8(asset_metadata.symbol.clone()).ok()),
+            }
+        }
+
+        pub fn decimals(&self) -> Option<u32> {
+            match self.currency_id {
+                CurrencyId::Token(token_symbol) => Some(token_symbol.decimals().into()),
+                CurrencyId::ForeignAsset(_) => self
+                    .asset_metadata
+                    .as_ref()
+                    .map(|asset_metadata| asset_metadata.decimals.clone()),
+            }
+        }
+
+        pub fn coingecko_id(&self) -> Option<String> {
+            match self.currency_id {
+                CurrencyId::Token(token_symbol) => Some(token_symbol.name().to_string()),
+                CurrencyId::ForeignAsset(_) => self
+                    .asset_metadata
+                    .as_ref()
+                    .and_then(|asset_metadata| String::from_utf8(asset_metadata.additional.coingecko_id.clone()).ok()),
+            }
+        }
+    }
+
+    impl From<CurrencyId> for RuntimeCurrencyId {
+        fn from(currency_id: CurrencyId) -> Self {
+            Self {
+                currency_id,
+                asset_metadata: None,
+            }
+        }
+    }
+
+    impl From<RuntimeCurrencyId> for CurrencyId {
+        fn from(runtime_currency_id: RuntimeCurrencyId) -> Self {
+            runtime_currency_id.currency_id
+        }
+    }
+
+    impl PrettyPrint for RuntimeCurrencyId {
+        fn pretty_print(&self) -> String {
+            self.symbol().unwrap_or_default()
+        }
+    }
 }
 
 mod account_id {
@@ -167,46 +245,49 @@ mod account_id {
 
 mod vault_id {
     use super::*;
-    use primitives::CurrencyInfo;
 
     type RichVaultId = primitives::VaultId<AccountId, primitives::CurrencyId>;
 
-    impl crate::VaultId {
-        pub fn new(account_id: AccountId, collateral_currency: CurrencyId, wrapped_currency: CurrencyId) -> Self {
+    impl<C: Clone> AnyVaultId<C> {
+        pub fn new(account_id: AccountId, collateral_currency: C, wrapped_currency: C) -> Self {
             Self {
                 account_id,
-                currencies: VaultCurrencyPair {
+                currencies: AnyVaultCurrencyPair {
                     collateral: collateral_currency,
                     wrapped: wrapped_currency,
                 },
             }
         }
 
-        pub fn collateral_currency(&self) -> CurrencyId {
-            self.currencies.collateral
+        pub fn collateral_currency(&self) -> C {
+            self.currencies.collateral.clone()
         }
 
-        pub fn wrapped_currency(&self) -> CurrencyId {
-            self.currencies.wrapped
+        pub fn wrapped_currency(&self) -> C {
+            self.currencies.wrapped.clone()
         }
     }
 
-    impl PrettyPrint for VaultId {
+    impl<C: PrettyPrint> PrettyPrint for AnyVaultId<C> {
         fn pretty_print(&self) -> String {
-            let collateral_currency: CurrencyId = self.collateral_currency();
-            let wrapped_currency: CurrencyId = self.wrapped_currency();
             format!(
                 "{}[{}->{}]",
                 self.account_id.pretty_print(),
-                collateral_currency
-                    .inner()
-                    .map(|i| i.symbol().to_string())
-                    .unwrap_or_default(),
-                wrapped_currency
-                    .inner()
-                    .map(|i| i.symbol().to_string())
-                    .unwrap_or_default()
+                self.currencies.collateral.pretty_print(),
+                self.currencies.wrapped.pretty_print(),
             )
+        }
+    }
+
+    impl From<AnyVaultId<RuntimeCurrencyId>> for VaultId {
+        fn from(vault_id: AnyVaultId<RuntimeCurrencyId>) -> Self {
+            Self {
+                account_id: vault_id.account_id,
+                currencies: VaultCurrencyPair {
+                    collateral: vault_id.currencies.collateral.into(),
+                    wrapped: vault_id.currencies.wrapped.into(),
+                },
+            }
         }
     }
 

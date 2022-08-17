@@ -173,10 +173,10 @@ async fn test_currency_id_parsing() {
     // test with different capitalization to make sure the check is not case sensitive
     assert_eq!(
         parachain_rpc.parse_currency_id("KiNt".to_string()).await.unwrap(),
-        Token(KINT)
+        Token(KINT).into()
     );
     assert_eq!(
         parachain_rpc.parse_currency_id("TeSt".to_string()).await.unwrap(),
-        ForeignAsset(2)
+        ForeignAsset(2).into()
     );
 }

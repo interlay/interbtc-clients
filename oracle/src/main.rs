@@ -8,9 +8,9 @@ use git_version::git_version;
 use reqwest::Url;
 use runtime::{
     cli::{parse_duration_ms, ProviderUserOpts},
-    CurrencyId, CurrencyIdExt, CurrencyInfo, FixedPointNumber,
+    FixedPointNumber,
     FixedPointTraits::{CheckedDiv, CheckedMul, One},
-    FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, OraclePallet,
+    FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, OraclePallet, RuntimeCurrencyId,
 };
 use std::{collections::HashMap, time::Duration};
 use tokio::{join, time::sleep};
@@ -27,16 +27,16 @@ const BTC_CURRENCY: &str = "btc";
 
 const COINGECKO_API_KEY_PARAMETER: &str = "x_cg_pro_api_key";
 
-async fn get_exchange_rate_from_coingecko(currency_id: CurrencyId, url: &Url) -> Result<FixedU128, Error> {
+async fn get_exchange_rate_from_coingecko(currency_id: RuntimeCurrencyId, url: &Url) -> Result<FixedU128, Error> {
     // https://www.coingecko.com/api/documentations/v3
     let resp = reqwest::get(url.clone())
         .await?
         .json::<HashMap<String, HashMap<String, f64>>>()
         .await?;
 
-    let currency_name = currency_id.inner()?.name().to_lowercase();
+    let coingecko_id = currency_id.coingecko_id().ok_or(Error::InvalidCoinGeckoId)?;
     let exchange_rate = *resp
-        .get(&currency_name)
+        .get(&coingecko_id)
         .ok_or(Error::InvalidResponse)?
         .get(BTC_CURRENCY)
         .ok_or(Error::InvalidResponse)?;
@@ -142,13 +142,13 @@ fn get_exponential_backoff() -> ExponentialBackoff {
 async fn submit_exchange_rate(
     parachain_rpc: &InterBtcParachain,
     url_or_def: UrlOrDefault<FixedU128>,
-    currency_id: CurrencyId,
+    currency_id: RuntimeCurrencyId,
     conversion_factor: FixedU128,
 ) -> Result<(), Error> {
     let exchange_rate = match url_or_def {
         UrlOrDefault::Url(url) => {
-            // exchange_rate given in BTC/DOT so convert after
-            get_exchange_rate_from_coingecko(currency_id, &url).await?
+            // exchange_rate given in BTC so convert after
+            get_exchange_rate_from_coingecko(currency_id.clone(), &url).await?
         }
         UrlOrDefault::Def(def) => def,
     };
@@ -158,16 +158,18 @@ async fn submit_exchange_rate(
         .ok_or(Error::InvalidExchangeRate)?;
 
     log::info!(
-        "Attempting to set exchange rate: {} ({})",
+        "[{}] Attempting to set exchange rate: {} ({})",
+        currency_id.symbol().unwrap_or_default(),
         exchange_rate,
         chrono::offset::Local::now()
     );
 
-    let key = OracleKey::ExchangeRate(currency_id);
+    let key = OracleKey::ExchangeRate(currency_id.clone().into());
     parachain_rpc.feed_values(vec![(key, exchange_rate)]).await?;
 
     log::info!(
-        "Successfully set exchange rate: {} ({})",
+        "[{}] Successfully set exchange rate: {} ({})",
+        currency_id.symbol().unwrap_or_default(),
         exchange_rate,
         chrono::offset::Local::now()
     );
@@ -234,8 +236,7 @@ async fn main() -> Result<(), Error> {
 
         join_all(opts.currency_id.iter().map(|(symbol, amount)| async move {
             let currency_id = parachain_rpc.parse_currency_id(symbol.to_string()).await?;
-            let coingecko_id = parachain_rpc.get_coingecko_id(currency_id).await?;
-            Ok((currency_id, coingecko_id, amount))
+            Ok((currency_id, amount))
         }))
         .await
         .into_iter()
@@ -244,26 +245,28 @@ async fn main() -> Result<(), Error> {
 
     let exchange_rates_to_set = parsed_currency_ids
         .into_iter()
-        .map(
-            |(currency_id, coingecko_id, explicit_exchange_rate)| match explicit_exchange_rate {
-                Some(rate) => Ok((currency_id, UrlOrDefault::Def(*rate))),
-                None => {
-                    let mut url = match &opts.coingecko {
-                        Some(x) => x.clone(),
-                        None => {
-                            return Err(Error::InvalidArguments);
-                        }
-                    };
-                    url.set_path(&format!("{}/simple/price", url.path()));
-                    url.set_query(Some(&format!("ids={}&vs_currencies={}", coingecko_id, BTC_CURRENCY)));
-                    if let Some(api_key) = &opts.coingecko_api_key {
-                        url.query_pairs_mut().append_pair(COINGECKO_API_KEY_PARAMETER, api_key);
+        .map(|(currency_id, explicit_exchange_rate)| match explicit_exchange_rate {
+            Some(rate) => Ok((currency_id, UrlOrDefault::Def(*rate))),
+            None => {
+                let mut url = match &opts.coingecko {
+                    Some(x) => x.clone(),
+                    None => {
+                        return Err(Error::InvalidArguments);
                     }
-                    log::info!("Url: {}", url.to_string());
-                    Ok((currency_id, UrlOrDefault::Url(url)))
+                };
+                url.set_path(&format!("{}/simple/price", url.path()));
+                url.set_query(Some(&format!(
+                    "ids={}&vs_currencies={}",
+                    currency_id.coingecko_id().ok_or(Error::InvalidCoinGeckoId)?,
+                    BTC_CURRENCY
+                )));
+                if let Some(api_key) = &opts.coingecko_api_key {
+                    url.query_pairs_mut().append_pair(COINGECKO_API_KEY_PARAMETER, api_key);
                 }
-            },
-        )
+                log::info!("Url: {}", url.to_string());
+                Ok((currency_id, UrlOrDefault::Url(url)))
+            }
+        })
         .collect::<Result<Vec<_>, _>>()?;
 
     // append the conversion_factor
@@ -271,7 +274,7 @@ async fn main() -> Result<(), Error> {
         .into_iter()
         .map(|(currency_id, value)| {
             let conversion_factor = FixedU128::checked_from_rational(
-                10_u128.pow(currency_id.inner().unwrap().decimals() as u32),
+                10_u128.pow(currency_id.decimals().unwrap()),
                 10_u128.pow(BTC_DECIMALS),
             )
             .unwrap();
@@ -308,7 +311,7 @@ async fn main() -> Result<(), Error> {
                 || async {
                     let result = futures::future::join_all(exchange_rates_to_set.iter().map(
                         |(currency_id, value, conversion_factor)| {
-                            submit_exchange_rate(&parachain_rpc, value.clone(), *currency_id, *conversion_factor)
+                            submit_exchange_rate(&parachain_rpc, value.clone(), currency_id.clone(), *conversion_factor)
                         },
                     ))
                     .await

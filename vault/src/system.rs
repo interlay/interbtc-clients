@@ -19,9 +19,9 @@ use futures::{
 use git_version::git_version;
 use runtime::{
     cli::{parse_duration_minutes, parse_duration_ms},
-    BtcRelayPallet, CollateralBalancesPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, PrettyPrint,
-    RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair, VaultId,
-    VaultRegistryPallet,
+    AnyVaultCurrencyPair, AnyVaultId, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, Error as RuntimeError,
+    InterBtcParachain, PrettyPrint, RegisterVaultEvent, RuntimeCurrencyId, StoreMainChainHeaderEvent,
+    UpdateActiveBlockEvent, UtilFuncs, VaultId, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, MonitoringConfig, Service, ShutdownSender};
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
@@ -454,15 +454,15 @@ impl VaultService {
         }
     }
 
-    fn get_vault_id(&self, collateral_currency: CurrencyId) -> VaultId {
+    fn get_vault_id<C: From<CurrencyId>>(&self, collateral_currency: C) -> AnyVaultId<C> {
         let account_id = self.btc_parachain.get_account_id();
         let wrapped_currency = self.btc_parachain.wrapped_currency_id;
 
-        VaultId {
+        AnyVaultId {
             account_id: account_id.clone(),
-            currencies: VaultCurrencyPair {
+            currencies: AnyVaultCurrencyPair {
                 collateral: collateral_currency,
-                wrapped: wrapped_currency,
+                wrapped: wrapped_currency.into(),
             },
         }
     }
@@ -529,7 +529,9 @@ impl VaultService {
                 .iter()
                 .map(|(currency_id, amount)| self.maybe_register_vault(currency_id, amount)),
         )
-        .await;
+        .await
+        .into_iter()
+        .collect::<Result<_, Error>>()?;
 
         // purposefully _after_ maybe_register_vault and _before_ other calls
         self.vault_id_manager.fetch_vault_ids(false).await?;
@@ -756,12 +758,12 @@ impl VaultService {
 
     async fn maybe_register_vault(
         &self,
-        collateral_currency: &CurrencyId,
+        collateral_currency: &RuntimeCurrencyId,
         maybe_collateral_amount: &Option<u128>,
     ) -> Result<(), Error> {
-        let vault_id = self.get_vault_id(*collateral_currency);
+        let vault_id = self.get_vault_id(collateral_currency.clone());
 
-        match is_vault_registered(&self.btc_parachain, &vault_id).await {
+        match is_vault_registered(&self.btc_parachain, &vault_id.clone().into()).await {
             Err(Error::RuntimeError(RuntimeError::VaultLiquidated)) | Ok(true) => {
                 tracing::info!(
                     "[{}] Not registering vault -- already registered",
@@ -774,11 +776,11 @@ impl VaultService {
                     tracing::info!("[{}] Automatically registering...", vault_id.pretty_print());
                     let free_balance = self
                         .btc_parachain
-                        .get_free_balance(vault_id.collateral_currency())
+                        .get_free_balance(vault_id.collateral_currency().into())
                         .await?;
                     self.btc_parachain
                         .register_vault(
-                            &vault_id,
+                            &vault_id.into(),
                             if collateral.gt(&free_balance) {
                                 tracing::warn!(
                                     "Cannot register with {}, using the available free balance: {}",
@@ -793,7 +795,7 @@ impl VaultService {
                         .await?;
                 } else if let Some(faucet_url) = &self.config.faucet_url {
                     tracing::info!("[{}] Automatically registering...", vault_id.pretty_print());
-                    faucet::fund_and_register(&self.btc_parachain, faucet_url, &vault_id).await?;
+                    faucet::fund_and_register(&self.btc_parachain, faucet_url, &vault_id.into()).await?;
                 }
             }
             Err(x) => return Err(x),

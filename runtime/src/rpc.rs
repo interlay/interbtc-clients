@@ -544,18 +544,7 @@ impl InterBtcParachain {
         Ok(())
     }
 
-    pub async fn get_coingecko_id(&self, currency_id: CurrencyId) -> Result<String, Error> {
-        match currency_id {
-            CurrencyId::Token(x) => Ok(x.name().to_string()),
-            CurrencyId::ForeignAsset(id) => {
-                let metadata = self.get_foreign_asset_metadata(id).await?;
-                let coingecko_id = std::str::from_utf8(&metadata.additional.coingecko_id)?.to_owned();
-                Ok(coingecko_id)
-            }
-        }
-    }
-
-    pub async fn parse_currency_id(&self, symbol: String) -> Result<CurrencyId, Error> {
+    pub async fn parse_currency_id(&self, symbol: String) -> Result<RuntimeCurrencyId, Error> {
         let uppercase_symbol = symbol.to_uppercase();
         // try hardcoded currencies first
         match uppercase_symbol.as_str() {
@@ -565,20 +554,26 @@ impl InterBtcParachain {
             id if id == KSM.symbol() => Ok(Token(KSM)),
             id if id == KBTC.symbol() => Ok(Token(KBTC)),
             id if id == KINT.symbol() => Ok(Token(KINT)),
-            _ => self
-                .get_foreign_assets_metadata()
-                .await?
-                .into_iter()
-                .find_map(|(key, value)| {
-                    let asset_symbol = std::str::from_utf8(&value.symbol).ok()?.to_uppercase();
-                    if asset_symbol == uppercase_symbol {
-                        Some(Ok(CurrencyId::ForeignAsset(key)))
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or(Err(Error::InvalidCurrency)),
+            _ => {
+                return self
+                    .get_foreign_assets_metadata()
+                    .await?
+                    .into_iter()
+                    .find_map(|(key, value)| {
+                        let asset_symbol = std::str::from_utf8(&value.symbol).ok()?.to_uppercase();
+                        if asset_symbol == uppercase_symbol {
+                            Some(Ok(RuntimeCurrencyId {
+                                currency_id: CurrencyId::ForeignAsset(key),
+                                asset_metadata: Some(value),
+                            }))
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(Err(Error::InvalidCurrency))
+            }
         }
+        .map(Into::into)
     }
 }
 
