@@ -158,13 +158,21 @@ async fn submit_exchange_rate(
         .ok_or(Error::InvalidExchangeRate)?;
 
     log::info!(
-        "Setting exchange rate: {} ({})",
+        "Attempting to set exchange rate: {} ({})",
         exchange_rate,
         chrono::offset::Local::now()
     );
 
     let key = OracleKey::ExchangeRate(currency_id);
-    Ok(parachain_rpc.feed_values(vec![(key, exchange_rate)]).await?)
+    parachain_rpc.feed_values(vec![(key, exchange_rate)]).await?;
+
+    log::info!(
+        "Successfully set exchange rate: {} ({})",
+        exchange_rate,
+        chrono::offset::Local::now()
+    );
+
+    Ok(())
 }
 
 /// Fetches the Bitcoin fee estimate from Blockstream or uses the provided default.
@@ -179,12 +187,20 @@ async fn submit_bitcoin_fees(
     };
 
     log::info!(
-        "Setting fee estimate: {} ({})",
+        "Attempting to set fee estimate: {} ({})",
         bitcoin_fee,
         chrono::offset::Local::now()
     );
 
-    Ok(parachain_rpc.set_bitcoin_fees(bitcoin_fee).await?)
+    parachain_rpc.set_bitcoin_fees(bitcoin_fee).await?;
+
+    log::info!(
+        "Successfully set fee estimate: {} ({})",
+        bitcoin_fee,
+        chrono::offset::Local::now()
+    );
+
+    Ok(())
 }
 
 #[tokio::main]
