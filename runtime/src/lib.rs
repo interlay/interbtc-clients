@@ -29,8 +29,9 @@ pub use retry::{notify_retry, RetryPolicy};
 #[cfg(feature = "testing-utils")]
 pub use rpc::SudoPallet;
 pub use rpc::{
-    BtcRelayPallet, CollateralBalancesPallet, FeePallet, InterBtcParachain, IssuePallet, OraclePallet, RedeemPallet,
-    RefundPallet, ReplacePallet, SecurityPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet, SS58_PREFIX,
+    BtcRelayPallet, CollateralBalancesPallet, FeePallet, FeeRateUpdateReceiver, InterBtcParachain, IssuePallet,
+    OraclePallet, RedeemPallet, RefundPallet, ReplacePallet, SecurityPallet, TimestampPallet, UtilFuncs,
+    VaultRegistryPallet, SS58_PREFIX,
 };
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
 use std::time::Duration;

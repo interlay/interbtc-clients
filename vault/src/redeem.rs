@@ -19,6 +19,7 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
     vault_id_manager: VaultIdManager<B>,
     num_confirmations: u32,
     payment_margin: Duration,
+    auto_rbf: bool,
 ) -> Result<(), ServiceError> {
     parachain_rpc
         .on_event::<RequestRedeemEvent, _, _, _>(
@@ -45,7 +46,9 @@ pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                             parachain_rpc.get_redeem_request(event.redeem_id).await?,
                             payment_margin,
                         )?;
-                        request.pay_and_execute(parachain_rpc, vault, num_confirmations).await
+                        request
+                            .pay_and_execute(parachain_rpc, vault, num_confirmations, auto_rbf)
+                            .await
                     }
                     .await;
 

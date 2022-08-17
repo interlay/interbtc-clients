@@ -8,6 +8,7 @@ mod iter;
 pub use addr::PartialAddress;
 use async_trait::async_trait;
 use backoff::{backoff::Backoff, future::retry, ExponentialBackoff};
+use bitcoincore_rpc::bitcoin::consensus::encode::serialize_hex;
 pub use bitcoincore_rpc::{
     bitcoin::{
         blockdata::{opcodes::all as opcodes, script::Builder},
@@ -90,6 +91,9 @@ fn get_exponential_backoff() -> ExponentialBackoff {
     }
 }
 
+#[derive(PartialEq, PartialOrd, Clone, Copy, Debug)]
+pub struct SatPerVbyte(pub u64);
+
 #[derive(Debug, Clone)]
 pub struct TransactionMetadata {
     pub txid: Txid,
@@ -163,9 +167,16 @@ pub trait BitcoinCoreApi {
         &self,
         address: A,
         sat: u64,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, Error>;
+
+    async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
+        &self,
+        txid: &Txid,
+        address: A,
+        fee_rate: SatPerVbyte,
+    ) -> Result<Txid, Error>;
 
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
 
@@ -173,7 +184,7 @@ pub trait BitcoinCoreApi {
         &self,
         address: A,
         sat: u64,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         request_id: Option<H256>,
     ) -> Result<Txid, Error>;
 
@@ -182,7 +193,7 @@ pub trait BitcoinCoreApi {
         address: A,
         sat: u64,
         request_id: Option<H256>,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
@@ -204,6 +215,10 @@ pub trait BitcoinCoreApi {
     async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
 
     fn get_utxo_count(&self) -> Result<usize, Error>;
+
+    fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error>;
+
+    fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error>;
 }
 
 pub struct LockedTransaction {
@@ -352,6 +367,8 @@ pub struct BitcoinCore {
     network: Network,
     transaction_creation_lock: Arc<Mutex<()>>,
     electrs_config: ElectrsConfiguration,
+    #[cfg(feature = "regtest-manual-mining")]
+    auto_mine: bool,
 }
 
 impl BitcoinCore {
@@ -372,7 +389,14 @@ impl BitcoinCore {
                 }),
                 ..Default::default()
             },
+            #[cfg(feature = "regtest-manual-mining")]
+            auto_mine: false,
         }
+    }
+
+    #[cfg(feature = "regtest-manual-mining")]
+    pub fn set_auto_mining(&mut self, enable: bool) {
+        self.auto_mine = enable;
     }
 
     /// Wait indefinitely for the node to sync.
@@ -415,11 +439,53 @@ impl BitcoinCore {
         Ok(self.rpc.call("createrawtransaction", &args)?)
     }
 
+    async fn fund_and_sign_transaction<A: PartialAddress + Send + Sync + 'static>(
+        &self,
+        fee_rate: SatPerVbyte,
+        raw_tx: &str,
+        return_to_self_address: &Option<Address>,
+        recipient: &str,
+        auto_retry: bool,
+    ) -> Result<LockedTransaction, Error> {
+        self.with_wallet_inner(auto_retry, || async {
+            // ensure no other fund_raw_transaction calls are made until we submitted the
+            // transaction to the bitcoind. If we don't do this, the same uxto may be used
+            // as input twice (i.e. double spend)
+            let lock = self.transaction_creation_lock.clone().lock_owned().await;
+            // FundRawTransactionOptions takes an amount per kvByte, rather than per vByte
+            let fee_rate = fee_rate.0.saturating_mul(1_000);
+            let funding_opts = FundRawTransactionOptions {
+                fee_rate: Some(Amount::from_sat(fee_rate)),
+                change_address: return_to_self_address.clone(),
+                replaceable: Some(true),
+                ..Default::default()
+            };
+
+            // fund the transaction: adds required inputs, and possibly a return-to-self output
+            let funded_raw_tx = self.rpc.fund_raw_transaction(raw_tx, Some(&funding_opts), None)?;
+
+            // sign the transaction
+            let signed_funded_raw_tx =
+                self.rpc
+                    .sign_raw_transaction_with_wallet(&funded_raw_tx.transaction()?, None, None)?;
+
+            // Make sure signing is successful
+            if signed_funded_raw_tx.errors.is_some() {
+                return Err(Error::TransactionSigningError);
+            }
+
+            let transaction = signed_funded_raw_tx.transaction()?;
+
+            Ok(LockedTransaction::new(transaction, recipient.to_string(), Some(lock)))
+        })
+        .await
+    }
+
     #[cfg(feature = "regtest-manual-mining")]
-    pub fn mine_block(&self) -> Result<(), Error> {
-        self.rpc
-            .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
-        Ok(())
+    pub fn mine_block(&self) -> Result<BlockHash, Error> {
+        Ok(self
+            .rpc
+            .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?[0])
     }
 
     pub fn encode_address<A: PartialAddress + Send + 'static>(&self, address: A) -> Result<String, Error> {
@@ -427,6 +493,15 @@ impl BitcoinCore {
     }
 
     async fn with_wallet<F, R, T>(&self, call: F) -> Result<T, Error>
+    where
+        F: Fn() -> R,
+        R: Future<Output = Result<T, Error>>,
+    {
+        self.with_wallet_inner(true, call).await
+    }
+
+    /// Exactly like with_wallet, but with with opt-out of retrying wallet error
+    async fn with_wallet_inner<F, R, T>(&self, retry_on_wallet_error: bool, call: F) -> Result<T, Error>
     where
         F: Fn() -> R,
         R: Future<Output = Result<T, Error>>,
@@ -439,7 +514,7 @@ impl BitcoinCore {
                     self.create_or_load_wallet().await?;
                     inner
                 }
-                Err(inner) if inner.is_wallet_error() => {
+                Err(inner) if retry_on_wallet_error && inner.is_wallet_error() => {
                     // fee estimation failed or other
                     inner
                 }
@@ -745,49 +820,66 @@ impl BitcoinCoreApi for BitcoinCore {
         &self,
         address: A,
         sat: u64,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, Error> {
-        self.with_wallet(|| async {
-            let address_string = address.encode_str(self.network)?;
+        let recipient = address.encode_str(self.network)?;
+        let raw_tx = self
+            .with_wallet(|| async {
+                // create raw transaction that includes the op_return (if any). If we were to add the op_return
+                // after funding, the fees might be insufficient. An alternative to our own version of
+                // this function would be to call create_raw_transaction (without the _hex suffix), and
+                // to add the op_return afterwards. However, this function fails if no inputs are
+                // specified, as is the case for us prior to calling fund_raw_transaction.
+                self.create_raw_transaction_hex(recipient.clone(), Amount::from_sat(sat), request_id)
+            })
+            .await?;
 
-            // create raw transaction that includes the op_return (if any). If we were to add the op_return
-            // after funding, the fees might be insufficient. An alternative to our own version of
-            // this function would be to call create_raw_transaction (without the _hex suffix), and
-            // to add the op_return afterwards. However, this function fails if no inputs are
-            // specified, as is the case for us prior to calling fund_raw_transaction.
-            let raw_tx = self.create_raw_transaction_hex(address_string.clone(), Amount::from_sat(sat), request_id)?;
+        self.fund_and_sign_transaction::<A>(fee_rate, &raw_tx, &None, &recipient, true)
+            .await
+    }
 
-            // ensure no other fund_raw_transaction calls are made until we submitted the
-            // transaction to the bitcoind. If we don't do this, the same uxto may be used
-            // as input twice (i.e. double spend)
-            let lock = self.transaction_creation_lock.clone().lock_owned().await;
-            // FundRawTransactionOptions takes an amount per kvByte, rather than per vByte
-            let fee_rate = fee_rate.saturating_mul(1_000);
-            let funding_opts = FundRawTransactionOptions {
-                fee_rate: Some(Amount::from_sat(fee_rate)),
-                replaceable: Some(true),
-                ..Default::default()
-            };
+    async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
+        &self,
+        txid: &Txid,
+        address: A,
+        fee_rate: SatPerVbyte,
+    ) -> Result<Txid, Error> {
+        let (raw_tx, return_to_self_address) = self
+            .with_wallet_inner(false, || async {
+                let mut existing_transaction = self.rpc.get_raw_transaction(txid, None)?;
 
-            // fund the transaction: adds required inputs, and possibly a return-to-self output
-            let funded_raw_tx = self.rpc.fund_raw_transaction(raw_tx, Some(&funding_opts), None)?;
+                let return_to_self = existing_transaction
+                    .extract_return_to_self_address(&address)?
+                    .map(|(idx, x)| {
+                        existing_transaction.output.remove(idx);
+                        x.to_address(self.network)
+                    })
+                    .transpose()?;
 
-            // sign the transaction
-            let signed_funded_raw_tx =
-                self.rpc
-                    .sign_raw_transaction_with_wallet(&funded_raw_tx.transaction()?, None, None)?;
+                let raw_tx = serialize_hex(&existing_transaction);
+                Ok((raw_tx, return_to_self))
+            })
+            .await?;
 
-            // Make sure signing is successful
-            if signed_funded_raw_tx.errors.is_some() {
-                return Err(Error::TransactionSigningError);
-            }
+        let recipient = address.encode_str(self.network)?;
+        let tx = self
+            .fund_and_sign_transaction::<A>(fee_rate, &raw_tx, &return_to_self_address, &recipient, false)
+            .await?;
 
-            let transaction = signed_funded_raw_tx.transaction()?;
+        let txid = self
+            .with_wallet_inner(false, || async { Ok(self.rpc.send_raw_transaction(&tx.transaction)?) })
+            .await?;
 
-            Ok(LockedTransaction::new(transaction, address_string, Some(lock)))
-        })
-        .await
+        #[cfg(feature = "regtest-manual-mining")]
+        if self.auto_mine {
+            log::debug!("Auto-mining!");
+
+            self.rpc
+                .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
+        }
+
+        Ok(txid)
     }
 
     /// Submits a transaction to the mempool
@@ -799,6 +891,15 @@ impl BitcoinCoreApi for BitcoinCore {
         let txid = self
             .with_wallet(|| async { Ok(self.rpc.send_raw_transaction(&transaction.transaction)?) })
             .await?;
+
+        #[cfg(feature = "regtest-manual-mining")]
+        if self.auto_mine {
+            log::debug!("Auto-mining!");
+
+            self.rpc
+                .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
+        }
+
         Ok(txid)
     }
 
@@ -815,7 +916,7 @@ impl BitcoinCoreApi for BitcoinCore {
         &self,
         address: A,
         sat: u64,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         request_id: Option<H256>,
     ) -> Result<Txid, Error> {
         let tx = self.create_transaction(address, sat, fee_rate, request_id).await?;
@@ -837,16 +938,12 @@ impl BitcoinCoreApi for BitcoinCore {
         address: A,
         sat: u64,
         request_id: Option<H256>,
-        fee_rate: u64,
+        fee_rate: SatPerVbyte,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error> {
         let txid = self
             .create_and_send_transaction(address, sat, fee_rate, request_id)
             .await?;
-
-        #[cfg(feature = "regtest-mine-on-tx")]
-        self.rpc
-            .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
 
         Ok(self.wait_for_transaction_metadata(txid, num_confirmations).await?)
     }
@@ -964,6 +1061,40 @@ impl BitcoinCoreApi for BitcoinCore {
     fn get_utxo_count(&self) -> Result<usize, Error> {
         Ok(self.rpc.list_unspent(None, None, None, None, None)?.len())
     }
+
+    fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error> {
+        let get_tx_result = self.rpc.get_transaction(&txid, None)?;
+        Ok(get_tx_result.info.confirmations == 0)
+    }
+
+    fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error> {
+        // unfortunately we need both of these rpc results. The result of the second call
+        // is not a parsed tx, but rather a GetTransactionResult.
+        let tx = self.rpc.get_raw_transaction(&txid, None)?;
+        let get_tx_result = self.rpc.get_transaction(&txid, None)?;
+
+        // to get from weight to vsize we divide by 4, but round up by first adding 3
+        // Note that we can not rely on tx.get_size() since it doesn't 'discount' witness bytes
+        let vsize = tx
+            .get_weight()
+            .checked_add(3)
+            .ok_or(Error::ArithmeticError)?
+            .checked_div(4)
+            .ok_or(Error::ArithmeticError)?
+            .try_into()?;
+
+        let fee = get_tx_result
+            .fee
+            .ok_or(Error::MissingBitcoinFeeInfo)?
+            .as_sat()
+            .checked_abs()
+            .ok_or(Error::ArithmeticError)?;
+
+        log::debug!("fee: {fee}, size: {vsize}");
+
+        let fee_rate = fee.checked_div(vsize).ok_or(Error::ArithmeticError)?;
+        Ok(SatPerVbyte(fee_rate.try_into()?))
+    }
 }
 
 /// Extension trait for transaction, adding methods to help to match the Transaction to Replace/Redeem requests
@@ -973,6 +1104,11 @@ pub trait TransactionExt {
     fn get_payment_amount_to<A: PartialAddress + PartialEq>(&self, dest: A) -> Option<u64>;
     fn extract_input_addresses<A: PartialAddress>(&self) -> Vec<A>;
     fn extract_output_addresses<A: PartialAddress>(&self) -> Vec<A>;
+    fn extract_indexed_output_addresses<A: PartialAddress>(&self) -> Vec<(usize, A)>;
+    fn extract_return_to_self_address<A: PartialAddress>(
+        &self,
+        destination_address: &A,
+    ) -> Result<Option<(usize, A)>, Error>;
 }
 
 impl TransactionExt for Transaction {
@@ -1018,14 +1154,43 @@ impl TransactionExt for Transaction {
 
     /// return the addresses that are used as outputs with non-zero value in this transaction
     fn extract_output_addresses<A: PartialAddress>(&self) -> Vec<A> {
+        self.extract_indexed_output_addresses::<A>()
+            .into_iter()
+            .map(|(_idx, val)| val)
+            .collect()
+    }
+
+    /// return the addresses that are used as outputs with non-zero value in this transaction,
+    /// together with their index
+    fn extract_indexed_output_addresses<A: PartialAddress>(&self) -> Vec<(usize, A)> {
         self.output
             .iter()
-            .filter(|x| x.value > 0)
-            .filter_map(|tx_out| {
+            .enumerate()
+            .filter(|(_, x)| x.value > 0)
+            .filter_map(|(idx, tx_out)| {
                 let payload = Payload::from_script(&tx_out.script_pubkey)?;
-                PartialAddress::from_payload(payload).ok()
+                Some((idx, PartialAddress::from_payload(payload).ok()?))
             })
             .collect()
+    }
+
+    /// return index and address of the return-to-self (or None if it does not exist)
+    fn extract_return_to_self_address<A: PartialAddress>(
+        &self,
+        destination_address: &A,
+    ) -> Result<Option<(usize, A)>, Error> {
+        let mut return_to_self_addresses = self
+            .extract_indexed_output_addresses()
+            .into_iter()
+            .filter(|(_idx, x)| x != destination_address)
+            .collect::<Vec<_>>();
+
+        // register return-to-self address if it exists
+        match return_to_self_addresses.len() {
+            0 => Ok(None),                                     // no return-to-self
+            1 => Ok(Some(return_to_self_addresses.remove(0))), // one return-to-self address
+            _ => Err(Error::TooManyReturnToSelfAddresses),
+        }
     }
 }
 

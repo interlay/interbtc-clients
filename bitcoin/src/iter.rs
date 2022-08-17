@@ -235,7 +235,7 @@ mod tests {
                 &self,
                 address: A,
                 sat: u64,
-                fee_rate: u64,
+                fee_rate: SatPerVbyte,
                 request_id: Option<H256>,
             ) -> Result<LockedTransaction, Error>;
             async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
@@ -243,7 +243,7 @@ mod tests {
                 &self,
                 address: A,
                 sat: u64,
-                fee_rate: u64,
+                fee_rate: SatPerVbyte,
                 request_id: Option<H256>,
             ) -> Result<Txid, Error>;
             async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
@@ -251,7 +251,7 @@ mod tests {
                 address: A,
                 sat: u64,
                 request_id: Option<H256>,
-                fee_rate: u64,
+                fee_rate: SatPerVbyte,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
             async fn create_or_load_wallet(&self) -> Result<(), Error>;
@@ -266,6 +266,14 @@ mod tests {
             ) -> Result<(), Error>;
             async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
             fn get_utxo_count(&self) -> Result<usize, Error>;
+            async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
+                &self,
+                txid: &Txid,
+                address: A,
+                fee_rate: SatPerVbyte,
+            ) -> Result<Txid, Error>;
+            fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error>;
+            fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error>;
         }
     }
 

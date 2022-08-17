@@ -74,6 +74,8 @@ cfg_if::cfg_if! {
 
 type RuntimeApi = metadata::RuntimeApi<InterBtcRuntime, PolkadotExtrinsicParams<InterBtcRuntime>>;
 pub(crate) type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
+pub(crate) type FeeRateUpdateSender = tokio::sync::broadcast::Sender<FixedU128>;
+pub type FeeRateUpdateReceiver = tokio::sync::broadcast::Receiver<FixedU128>;
 
 #[derive(Clone)]
 pub struct InterBtcParachain {
@@ -82,6 +84,7 @@ pub struct InterBtcParachain {
     account_id: AccountId,
     api: Arc<RuntimeApi>,
     shutdown_tx: ShutdownSender,
+    fee_rate_update_tx: FeeRateUpdateSender,
     pub native_currency_id: CurrencyId,
     pub relay_chain_currency_id: CurrencyId,
     pub wrapped_currency_id: CurrencyId,
@@ -126,12 +129,17 @@ impl InterBtcParachain {
         let relay_chain_currency_id = currency_constants.get_relay_chain_currency_id()?;
         let wrapped_currency_id = currency_constants.get_wrapped_currency_id()?;
 
+        // low capacity channel since we generally only care about the newest value, so it's ok
+        // if we miss an event
+        let (fee_rate_update_tx, _) = tokio::sync::broadcast::channel(2);
+
         let parachain_rpc = Self {
             ext_client: Arc::new(ext_client),
             api: Arc::new(api),
             signer: Arc::new(RwLock::new(signer)),
             account_id,
             shutdown_tx,
+            fee_rate_update_tx,
             native_currency_id,
             relay_chain_currency_id,
             wrapped_currency_id,
@@ -580,6 +588,27 @@ impl InterBtcParachain {
                 .unwrap_or(Err(Error::InvalidCurrency)),
         }
     }
+
+    /// Listen to fee_rate changes and broadcast new values on the fee_rate_update_tx channel
+    pub async fn listen_for_fee_rate_changes(&self) -> Result<(), Error> {
+        self.on_event::<FeedValuesEvent, _, _, _>(
+            |event| async move {
+                for (key, value) in event.values {
+                    if let OracleKey::FeeEstimation = key {
+                        let _ = self.fee_rate_update_tx.send(value);
+                    }
+                }
+            },
+            |_error| {
+                // Don't propagate error, it's unlikely to be useful.
+                // We assume critical errors will cause the system to restart.
+                // Note that we can't send the error itself due to the channel requiring
+                // the type to be clonable, which Error isn't
+            },
+        )
+        .await?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -960,6 +989,8 @@ pub trait OraclePallet {
     async fn collateral_to_wrapped(&self, amount: u128, currency_id: CurrencyId) -> Result<u128, Error>;
 
     async fn has_updated(&self, key: &OracleKey) -> Result<bool, Error>;
+
+    fn on_fee_rate_change(&self) -> FeeRateUpdateReceiver;
 }
 
 #[async_trait]
@@ -1063,6 +1094,10 @@ impl OraclePallet for InterBtcParachain {
             .raw_values_updated(key, head)
             .await?
             .unwrap_or(false))
+    }
+
+    fn on_fee_rate_change(&self) -> FeeRateUpdateReceiver {
+        self.fee_rate_update_tx.subscribe()
     }
 }
 

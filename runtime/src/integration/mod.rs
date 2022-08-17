@@ -6,7 +6,7 @@ use crate::{
     rpc::{IssuePallet, OraclePallet, SudoPallet, VaultRegistryPallet},
     CurrencyId, FixedU128, H256Le, InterBtcParachain, InterBtcSigner, OracleKey, VaultId,
 };
-use bitcoin::{BitcoinCoreApi, BlockHash, Txid};
+use bitcoin::{BitcoinCoreApi, BlockHash, SatPerVbyte, Txid};
 use frame_support::assert_ok;
 use futures::{
     future::{try_join, Either},
@@ -115,7 +115,7 @@ pub async fn assert_issue(
 ) {
     let issue = parachain_rpc.request_issue(amount, vault_id).await.unwrap();
 
-    let fee_rate = 1000;
+    let fee_rate = SatPerVbyte(1000);
 
     let metadata = btc_rpc
         .send_to_address(

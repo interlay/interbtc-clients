@@ -3,7 +3,7 @@
 
 mod cancellation;
 mod collateral;
-mod delay;
+pub mod delay;
 mod error;
 mod execution;
 mod faucet;
@@ -11,7 +11,7 @@ mod issue;
 pub mod metrics;
 mod redeem;
 mod refund;
-mod relay;
+pub mod relay;
 mod replace;
 mod system;
 mod types;

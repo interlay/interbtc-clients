@@ -5,6 +5,7 @@ use parity_scale_codec::Error as CodecError;
 use runtime::{Error as RuntimeError, SubxtError};
 use service::Error as ServiceError;
 use thiserror::Error;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -37,4 +38,6 @@ pub enum Error {
     SubxtError(#[from] SubxtError),
     #[error("CodecError: {0}")]
     CodecError(#[from] CodecError),
+    #[error("BroadcastStreamRecvError: {0}")]
+    BroadcastStreamRecvError(#[from] BroadcastStreamRecvError),
 }

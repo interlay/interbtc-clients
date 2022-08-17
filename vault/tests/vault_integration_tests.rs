@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use bitcoin::{stream_blocks, BitcoinCoreApi, TransactionExt};
+use bitcoin::{stream_blocks, BitcoinCoreApi, SatPerVbyte, TransactionExt};
 use frame_support::assert_ok;
 use futures::{
     channel::mpsc,
@@ -15,7 +15,6 @@ use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
 use std::{sync::Arc, time::Duration};
 use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager, ZeroDelay};
-
 const TIMEOUT: Duration = Duration::from_secs(90);
 
 const DEFAULT_NATIVE_CURRENCY: CurrencyId = Token(KINT);
@@ -43,7 +42,7 @@ where
         FixedU128::saturating_from_rational(1u128, 100u128),
     )
     .await;
-    set_bitcoin_fees(&parachain_rpc, FixedU128::from(0)).await;
+    set_bitcoin_fees(&parachain_rpc, FixedU128::from(1)).await;
 
     execute(client).await
 }
@@ -69,7 +68,7 @@ where
         FixedU128::saturating_from_rational(1u128, 100u128),
     )
     .await;
-    set_bitcoin_fees(&parachain_rpc, FixedU128::from(0)).await;
+    set_bitcoin_fees(&parachain_rpc, FixedU128::from(1)).await;
 
     let vault_provider = setup_provider(client.clone(), AccountKeyring::Charlie).await;
     let vault_id = VaultId::new(
@@ -118,6 +117,7 @@ async fn test_redeem_succeeds() {
                     vault_id_manager,
                     0,
                     Duration::from_secs(0),
+                    true,
                 ),
                 periodically_produce_blocks(user_provider.clone()),
             ),
@@ -204,6 +204,7 @@ async fn test_replace_succeeds() {
                     vault_id_manager.clone(),
                     0,
                     Duration::from_secs(0),
+                    true,
                 ),
                 periodically_produce_blocks(old_vault_provider.clone()),
             ),
@@ -535,7 +536,7 @@ async fn test_cancellation_succeeds() {
                                         BtcAddress::P2PKH(H160::from_slice(&[0; 20])),
                                         100_000,
                                         None,
-                                        1000,
+                                        SatPerVbyte(1000),
                                         1
                                     )
                                     .await
@@ -562,6 +563,7 @@ async fn test_refund_succeeds() {
         let sudo_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
+        set_bitcoin_fees(&relayer_provider, FixedU128::from(0)).await;
 
         let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
@@ -569,8 +571,14 @@ async fn test_refund_succeeds() {
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
 
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
-        let refund_service =
-            vault::service::listen_for_refund_requests(shutdown_tx, vault_provider.clone(), vault_id_manager, 0, true);
+        let refund_service = vault::service::listen_for_refund_requests(
+            shutdown_tx,
+            vault_provider.clone(),
+            vault_id_manager,
+            0,
+            true,
+            true,
+        );
 
         assert_ok!(sudo_provider.set_parachain_confirmations(0).await);
 
@@ -598,7 +606,7 @@ async fn test_refund_succeeds() {
                     issue.vault_address,
                     (issue.amount + issue.fee) as u64 + over_payment,
                     None,
-                    1000,
+                    SatPerVbyte(1000),
                     0,
                 )
                 .await
@@ -640,8 +648,14 @@ async fn test_issue_overpayment_succeeds() {
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
 
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
-        let refund_service =
-            vault::service::listen_for_refund_requests(shutdown_tx, vault_provider.clone(), vault_id_manager, 0, true);
+        let refund_service = vault::service::listen_for_refund_requests(
+            shutdown_tx,
+            vault_provider.clone(),
+            vault_id_manager,
+            0,
+            true,
+            true,
+        );
 
         let issue_amount = 100000;
         let over_payment_factor = 3;
@@ -669,7 +683,7 @@ async fn test_issue_overpayment_succeeds() {
                     issue.vault_address,
                     (issue.amount + issue.fee) as u64 * over_payment_factor as u64,
                     None,
-                    1000,
+                    SatPerVbyte(1000),
                     0,
                 )
                 .await
@@ -744,7 +758,13 @@ async fn test_automatic_issue_execution_succeeds() {
 
             assert_ok!(
                 btc_rpc
-                    .send_to_address(issue.vault_address, (issue.amount + issue.fee) as u64, None, 1000, 0)
+                    .send_to_address(
+                        issue.vault_address,
+                        (issue.amount + issue.fee) as u64,
+                        None,
+                        SatPerVbyte(1000),
+                        0
+                    )
                     .await
             );
 
@@ -832,7 +852,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
                         issue.vault_address,
                         (issue.amount + issue.fee) as u64,
                         None,
-                        1000,
+                        SatPerVbyte(1000),
                         0
                     )
                     .await
@@ -914,12 +934,23 @@ async fn test_execute_open_requests_succeeds() {
         // send btc for redeem 0
         assert_ok!(
             btc_rpc
-                .send_to_address(address, redeems[0].amount_btc as u64, Some(redeem_ids[0]), 1000, 0)
+                .send_to_address(
+                    address,
+                    redeems[0].amount_btc as u64,
+                    Some(redeem_ids[0]),
+                    SatPerVbyte(1000),
+                    0
+                )
                 .await
         );
 
         let transaction = btc_rpc
-            .create_transaction(address, redeems[1].amount_btc as u64, 1000, Some(redeem_ids[1]))
+            .create_transaction(
+                address,
+                redeems[1].amount_btc as u64,
+                SatPerVbyte(1000),
+                Some(redeem_ids[1]),
+            )
             .await
             .unwrap()
             .transaction;
@@ -934,6 +965,7 @@ async fn test_execute_open_requests_succeeds() {
                 btc_rpc.clone(),
                 0,
                 Duration::from_secs(0),
+                true,
                 true,
             )
             .map(Result::unwrap),
@@ -1061,5 +1093,302 @@ impl InterBtcParachainExt for InterBtcParachain {
         self.register_public_key(public_key).await.unwrap();
         self.register_vault(vault_id, collateral).await.unwrap();
         Ok(())
+    }
+}
+
+#[cfg(feature = "uses-bitcoind")]
+mod test_with_bitcoind {
+    use bitcoin::BitcoinCore;
+    use runtime::BtcRelayPallet;
+    use vault::service::Runner;
+
+    use std::cmp::max;
+    use vault::{delay::ZeroDelay, relay::Config};
+
+    use super::*;
+
+    async fn get_bitcoin_core() -> BitcoinCore {
+        use bitcoin::{cli::BitcoinOpts, Network};
+        use std::env::var;
+
+        let opts = BitcoinOpts {
+            bitcoin_rpc_url: var("BITCOIN_RPC_URL").expect("BITCOIN_RPC_URL not set").to_string(),
+            bitcoin_rpc_user: var("BITCOIN_RPC_USER").expect("BITCOIN_RPC_USER not set").to_string(),
+            bitcoin_rpc_pass: var("BITCOIN_RPC_PASS").expect("BITCOIN_RPC_PASS not set").to_string(),
+            bitcoin_connection_timeout_ms: 10000,
+            electrs_url: None,
+        };
+        let ret = opts
+            .new_client_with_network(Some("regtest-wallet".to_string()), Network::Regtest)
+            .unwrap();
+        ret.create_or_load_wallet().await.unwrap();
+
+        // fund the wallet by mining blocks
+        for _ in 0..102 {
+            ret.mine_block().unwrap();
+        }
+
+        ret
+    }
+
+    /// request, pay and execute an issue
+    pub async fn assert_issue_bitcoind(
+        parachain_rpc: &InterBtcParachain,
+        btc_rpc: &BitcoinCore,
+        vault_id: &VaultId,
+        amount: u128,
+    ) {
+        let issue = parachain_rpc.request_issue(amount, vault_id).await.unwrap();
+
+        let fee_rate = SatPerVbyte(1000);
+
+        let metadata = btc_rpc
+            .send_to_address(
+                issue.vault_address,
+                (issue.amount + issue.fee) as u64,
+                None,
+                fee_rate,
+                0,
+            )
+            .await
+            .unwrap();
+
+        parachain_rpc
+            .wait_for_block_in_relay(H256Le::from_bytes_le(&metadata.block_hash), Some(0))
+            .await
+            .unwrap();
+
+        parachain_rpc
+            .execute_issue(issue.issue_id, &metadata.proof, &metadata.raw_tx)
+            .await
+            .unwrap();
+    }
+
+    #[tracing::instrument(skip(user_provider, relayer_provider, btc_rpc, vault_id))]
+    async fn test_execute_redeem_succeeds_after_non_increasing_fee_change(
+        user_provider: InterBtcParachain,
+        relayer_provider: InterBtcParachain,
+        btc_rpc: BitcoinCore,
+        vault_id: VaultId,
+    ) {
+        let address = BtcAddress::P2PKH(H160::random());
+        set_bitcoin_fees(&relayer_provider, FixedU128::from(3)).await;
+
+        let redeem_id = user_provider.request_redeem(10000, address, &vault_id).await.unwrap();
+
+        tracing::trace!("Step 1: waiting for initial tx...");
+        let initial_tx = loop {
+            match btc_rpc
+                .get_mempool_transactions()
+                .await
+                .unwrap()
+                .map(|tx| tx.unwrap())
+                .find(|tx| {
+                    let addresses = tx.extract_output_addresses::<BtcAddress>();
+                    addresses.into_iter().any(|x| x == address)
+                }) {
+                None => {
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                }
+                Some(tx) => break tx,
+            }
+        };
+
+        tracing::trace!("Step 2: update bitcoin fees");
+        set_bitcoin_fees(&relayer_provider, FixedU128::from(3)).await; // no change
+        set_bitcoin_fees(&relayer_provider, FixedU128::from(2)).await; // decrease
+        set_bitcoin_fees(&relayer_provider, FixedU128::from(1000000000)).await; // such a high increase that vault is not able to pay the fees
+
+        // give redeem handler time to react
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        tracing::trace!("Step 3: check that no other transactions were made");
+        assert!(!btc_rpc
+            .get_mempool_transactions()
+            .await
+            .unwrap()
+            .map(|tx| tx.unwrap())
+            .filter(|tx| tx != &initial_tx)
+            .any(|tx| {
+                let addresses = tx.extract_output_addresses::<BtcAddress>();
+                addresses.into_iter().any(|x| x == address)
+            }));
+
+        tracing::trace!("Step 4: mine bitcoin block");
+        let block_hash = btc_rpc.mine_block().unwrap();
+
+        tracing::trace!("Step 5: check that tx got included without changes");
+        btc_rpc
+            .get_transaction(&initial_tx.txid(), Some(block_hash))
+            .await
+            .unwrap();
+
+        tracing::trace!("Step 6: check redeem event");
+        assert_redeem_event(TIMEOUT, user_provider, redeem_id).await;
+    }
+
+    #[tracing::instrument(skip(user_provider, relayer_provider, btc_rpc, vault_id))]
+    async fn test_execute_redeem_succeeds_after_fee_bump(
+        user_provider: InterBtcParachain,
+        relayer_provider: InterBtcParachain,
+        btc_rpc: BitcoinCore,
+        vault_id: VaultId,
+    ) {
+        set_bitcoin_fees(&relayer_provider, FixedU128::from(1)).await;
+
+        let address = BtcAddress::P2PKH(H160::random());
+        let redeem_id = user_provider.request_redeem(10000, address, &vault_id).await.unwrap();
+
+        tracing::trace!("Step 1: waiting for initial tx...");
+        let initial_tx = loop {
+            match btc_rpc
+                .get_mempool_transactions()
+                .await
+                .unwrap()
+                .map(|tx| tx.unwrap())
+                .find(|tx| {
+                    let addresses = tx.extract_output_addresses::<BtcAddress>();
+                    addresses.into_iter().any(|x| x == address)
+                }) {
+                None => {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+                Some(tx) => break tx,
+            }
+        };
+
+        tracing::trace!("Step 2: signal an increase in bitcoin fees");
+        set_bitcoin_fees(&relayer_provider, FixedU128::from(10)).await;
+
+        tracing::trace!("Step 3: wait for new tx in mempool");
+        let new_tx = loop {
+            match btc_rpc
+                .get_mempool_transactions()
+                .await
+                .unwrap()
+                .map(|tx| tx.unwrap())
+                .filter(|tx| tx != &initial_tx)
+                .find(|tx| {
+                    let addresses = tx.extract_output_addresses::<BtcAddress>();
+                    addresses.into_iter().any(|x| x == address)
+                }) {
+                None => {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+                Some(tx) => break tx,
+            }
+        };
+
+        tracing::trace!("Step 4: check fee rate");
+        // don't check for strict equality - sometimes bitcoin core decides to use
+        // a higher fee
+        assert!(btc_rpc.fee_rate(new_tx.txid()).unwrap().0 >= 10);
+
+        tracing::trace!("Step 5: mine bitcoin block");
+        let block_hash = btc_rpc.mine_block().unwrap();
+
+        tracing::trace!("Step 6: check that only new tx got included");
+        btc_rpc.get_transaction(&new_tx.txid(), Some(block_hash)).await.unwrap();
+        assert!(btc_rpc.get_transaction(&initial_tx.txid(), None).await.is_err());
+
+        tracing::trace!("Step 7: check redeem event");
+        assert_redeem_event(TIMEOUT, user_provider, redeem_id).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_automatic_rbf_succeeds() {
+        use vault::relay::run_relayer;
+
+        test_with_vault(|client, vault_id, vault_provider| async move {
+            let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
+            let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
+
+            let mut btc_rpc = get_bitcoin_core().await;
+
+            let height = btc_rpc.get_block_count().await.unwrap() as u32;
+            let relayer = Runner::new(
+                btc_rpc.clone(),
+                user_provider.clone(),
+                Config {
+                    start_height: Some(max(1, height.saturating_sub(200))), /* important to skip the genesis block
+                                                                             * since it has nVersion < 4, so it would
+                                                                             * get rejected */
+                    max_batch_size: 256,
+                    interval: Some(std::time::Duration::from_secs(1)),
+                    btc_confirmations: 0,
+                },
+                Arc::new(Box::new(ZeroDelay)),
+            );
+
+            relayer.submit_next().await.unwrap(); // make sure the relay is initialized
+
+            let parachain_miner = join(run_relayer(relayer), periodically_produce_blocks(user_provider.clone()));
+            tokio::spawn(parachain_miner);
+
+            // setup vault id manager
+            let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
+            let btc_rpc_master_wallet = btc_rpc.clone();
+            let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
+
+            let issue_amount = 100000;
+            let vault_collateral =
+                get_required_vault_collateral_for_issue(&vault_provider, issue_amount, vault_id.collateral_currency())
+                    .await;
+
+            assert_ok!(
+                vault_provider
+                    .register_vault_with_public_key(
+                        &vault_id,
+                        vault_collateral,
+                        btc_rpc.get_new_public_key().await.unwrap(),
+                    )
+                    .await
+            );
+
+            // set automining for the issue below. Note that the btc_rpc inside
+            // vault_id_manager is a clone that still has auto mining disabled
+            btc_rpc.set_auto_mining(true);
+            assert_issue_bitcoind(&user_provider, &btc_rpc, &vault_id, issue_amount).await;
+
+            // setup the service to test including necessary auxiliary services
+            let service = join(
+                vault::service::listen_for_redeem_requests(
+                    tokio::sync::broadcast::channel(16).0,
+                    vault_provider.clone(),
+                    vault_id_manager,
+                    0,
+                    Duration::from_secs(0),
+                    true,
+                ),
+                vault_provider.listen_for_fee_rate_changes(),
+            );
+
+            // setup the code we'll use to verify that rbf works
+            let validation = async {
+                // run these two tests sequentially for now since running these
+                // concurrently would result in them interfering with each other.
+                // Todo if we to have more tests with bitcoind is to treat mining
+                // as a shared resource that tests can requests exclusive or
+                // shared access to
+                test_execute_redeem_succeeds_after_non_increasing_fee_change(
+                    user_provider.clone(),
+                    relayer_provider.clone(),
+                    btc_rpc.clone(),
+                    vault_id.clone(),
+                )
+                .await;
+
+                test_execute_redeem_succeeds_after_fee_bump(
+                    user_provider.clone(),
+                    relayer_provider.clone(),
+                    btc_rpc.clone(),
+                    vault_id.clone(),
+                )
+                .await;
+            };
+
+            test_service(service, validation).await;
+        })
+        .await;
     }
 }

@@ -115,6 +115,11 @@ pub struct VaultServiceConfig {
     /// Don't refund overpayments.
     #[clap(long)]
     pub no_auto_refund: bool,
+
+    /// Bump bitcoin tx fees whenever the oracle reports a new,
+    /// higher inclusion fee estimate.
+    #[clap(long)]
+    pub auto_rbf: bool,
 }
 
 async fn active_block_listener(
@@ -544,6 +549,7 @@ impl VaultService {
             num_confirmations,
             self.config.payment_margin_minutes,
             !self.config.no_auto_refund,
+            self.config.auto_rbf,
         );
         tokio::spawn(async move {
             tracing::info!("Checking for open requests...");
@@ -571,7 +577,14 @@ impl VaultService {
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
         let (replace_event_tx, replace_event_rx) = mpsc::channel::<Event>(16);
 
+        let listen_for_fee_rate_estimate_changes =
+            |rpc: InterBtcParachain| async move { rpc.listen_for_fee_rate_changes().await };
+
         let tasks = vec![
+            (
+                "Fee Estimate Listener",
+                run(listen_for_fee_rate_estimate_changes(self.btc_parachain.clone())),
+            ),
             (
                 "Issue Request Listener",
                 run(listen_for_issue_requests(
@@ -620,6 +633,7 @@ impl VaultService {
                     self.vault_id_manager.clone(),
                     num_confirmations,
                     self.config.payment_margin_minutes,
+                    self.config.auto_rbf,
                 )),
             ),
             (
@@ -663,6 +677,7 @@ impl VaultService {
                     self.vault_id_manager.clone(),
                     num_confirmations,
                     self.config.payment_margin_minutes,
+                    self.config.auto_rbf,
                 )),
             ),
             (
@@ -673,6 +688,7 @@ impl VaultService {
                     self.vault_id_manager.clone(),
                     num_confirmations,
                     !self.config.no_auto_refund,
+                    self.config.auto_rbf,
                 )),
             ),
             (
