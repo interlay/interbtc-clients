@@ -115,6 +115,11 @@ pub struct VaultServiceConfig {
     /// Don't refund overpayments.
     #[clap(long)]
     pub no_auto_refund: bool,
+
+    /// Bump bitcoin tx fees whenever the oracle reports a new,
+    /// higher inclusion fee estimate.
+    #[clap(long)]
+    pub auto_rbf: bool,
 }
 
 async fn active_block_listener(
@@ -544,6 +549,7 @@ impl VaultService {
             num_confirmations,
             self.config.payment_margin_minutes,
             !self.config.no_auto_refund,
+            self.config.auto_rbf,
         );
         tokio::spawn(async move {
             tracing::info!("Checking for open requests...");
@@ -627,6 +633,7 @@ impl VaultService {
                     self.vault_id_manager.clone(),
                     num_confirmations,
                     self.config.payment_margin_minutes,
+                    self.config.auto_rbf,
                 )),
             ),
             (
@@ -670,6 +677,7 @@ impl VaultService {
                     self.vault_id_manager.clone(),
                     num_confirmations,
                     self.config.payment_margin_minutes,
+                    self.config.auto_rbf,
                 )),
             ),
             (
@@ -680,6 +688,7 @@ impl VaultService {
                     self.vault_id_manager.clone(),
                     num_confirmations,
                     !self.config.no_auto_refund,
+                    self.config.auto_rbf,
                 )),
             ),
             (

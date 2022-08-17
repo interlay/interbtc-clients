@@ -25,6 +25,7 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
     vault_id_manager: VaultIdManager<B>,
     num_confirmations: u32,
     payment_margin: Duration,
+    auto_rbf: bool,
 ) -> Result<(), ServiceError> {
     let parachain_rpc = &parachain_rpc;
     let vault_id_manager = &vault_id_manager;
@@ -54,7 +55,9 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
                             parachain_rpc.get_replace_request(event.replace_id).await?,
                             payment_margin,
                         )?;
-                        request.pay_and_execute(parachain_rpc, vault, num_confirmations).await
+                        request
+                            .pay_and_execute(parachain_rpc, vault, num_confirmations, auto_rbf)
+                            .await
                     }
                     .await;
 

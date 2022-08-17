@@ -19,6 +19,7 @@ pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync 
     vault_id_manager: VaultIdManager<B>,
     num_confirmations: u32,
     process_refunds: bool,
+    auto_rbf: bool,
 ) -> Result<(), ServiceError> {
     parachain_rpc
         .on_event::<RequestRefundEvent, _, _, _>(
@@ -43,7 +44,9 @@ pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync 
                     tracing::info!("Executing refund #{:?}", event.refund_id);
                     // prepare the action that will be executed after the bitcoin transfer
                     let request = Request::from_refund_request_event(&event);
-                    let result = request.pay_and_execute(parachain_rpc, vault, num_confirmations).await;
+                    let result = request
+                        .pay_and_execute(parachain_rpc, vault, num_confirmations, auto_rbf)
+                        .await;
 
                     match result {
                         Ok(_) => tracing::info!(

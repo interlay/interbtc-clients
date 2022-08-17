@@ -117,6 +117,7 @@ async fn test_redeem_succeeds() {
                     vault_id_manager,
                     0,
                     Duration::from_secs(0),
+                    true,
                 ),
                 periodically_produce_blocks(user_provider.clone()),
             ),
@@ -203,6 +204,7 @@ async fn test_replace_succeeds() {
                     vault_id_manager.clone(),
                     0,
                     Duration::from_secs(0),
+                    true,
                 ),
                 periodically_produce_blocks(old_vault_provider.clone()),
             ),
@@ -569,8 +571,14 @@ async fn test_refund_succeeds() {
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
 
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
-        let refund_service =
-            vault::service::listen_for_refund_requests(shutdown_tx, vault_provider.clone(), vault_id_manager, 0, true);
+        let refund_service = vault::service::listen_for_refund_requests(
+            shutdown_tx,
+            vault_provider.clone(),
+            vault_id_manager,
+            0,
+            true,
+            true,
+        );
 
         assert_ok!(sudo_provider.set_parachain_confirmations(0).await);
 
@@ -640,8 +648,14 @@ async fn test_issue_overpayment_succeeds() {
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
 
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
-        let refund_service =
-            vault::service::listen_for_refund_requests(shutdown_tx, vault_provider.clone(), vault_id_manager, 0, true);
+        let refund_service = vault::service::listen_for_refund_requests(
+            shutdown_tx,
+            vault_provider.clone(),
+            vault_id_manager,
+            0,
+            true,
+            true,
+        );
 
         let issue_amount = 100000;
         let over_payment_factor = 3;
@@ -951,6 +965,7 @@ async fn test_execute_open_requests_succeeds() {
                 btc_rpc.clone(),
                 0,
                 Duration::from_secs(0),
+                true,
                 true,
             )
             .map(Result::unwrap),
@@ -1343,6 +1358,7 @@ mod test_with_bitcoind {
                     vault_id_manager,
                     0,
                     Duration::from_secs(0),
+                    true,
                 ),
                 vault_provider.listen_for_fee_rate_changes(),
             );

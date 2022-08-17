@@ -203,6 +203,7 @@ impl Request {
         parachain_rpc: P,
         vault: VaultData<B>,
         num_confirmations: u32,
+        auto_rbf: bool,
     ) -> Result<(), Error> {
         // ensure the deadline has not expired yet
         if let Some(ref deadline) = self.deadline {
@@ -214,7 +215,13 @@ impl Request {
         }
 
         let tx_metadata = self
-            .transfer_btc(&parachain_rpc, &vault.btc_rpc, num_confirmations, self.vault_id.clone())
+            .transfer_btc(
+                &parachain_rpc,
+                &vault.btc_rpc,
+                num_confirmations,
+                self.vault_id.clone(),
+                auto_rbf,
+            )
             .await?;
         let _ = update_bitcoin_metrics(&vault, tx_metadata.fee, self.fee_budget).await;
         self.execute(parachain_rpc, tx_metadata).await
@@ -238,6 +245,7 @@ impl Request {
         btc_rpc: &B,
         num_confirmations: u32,
         vault_id: VaultId,
+        auto_rbf: bool,
     ) -> Result<TransactionMetadata, Error> {
         let fee_rate = self.get_fee_rate(parachain_rpc).await?;
 
@@ -250,7 +258,7 @@ impl Request {
         tracing::info!("Sending bitcoin to {}", recipient);
 
         let txid = btc_rpc.send_transaction(tx).await?;
-        self.wait_for_inclusion(parachain_rpc, btc_rpc, num_confirmations, txid)
+        self.wait_for_inclusion(parachain_rpc, btc_rpc, num_confirmations, txid, auto_rbf)
             .await
     }
 
@@ -271,6 +279,7 @@ impl Request {
         btc_rpc: &B,
         num_confirmations: u32,
         mut txid: Txid,
+        auto_rbf: bool,
     ) -> Result<TransactionMetadata, Error> {
         'outer: loop {
             tracing::info!("Awaiting bitcoin confirmations for {txid}");
@@ -288,9 +297,10 @@ impl Request {
                         .into_inner()
                         .checked_div(FixedU128::accuracy())
                         .ok_or(Error::ArithmeticUnderflow)
-                        .and_then(|x| x.try_into().map(|x| SatPerVbyte(x)).map_err(Into::<Error>::into));
+                        .and_then(|x| x.try_into().map(SatPerVbyte).map_err(Into::<Error>::into));
                     futures::future::ready(ret)
                 })
+                .filter(|_| futures::future::ready(auto_rbf)) // if auto-rbf is disabled, don't propagate the events
                 .try_filter_map(|x| async move {
                     match btc_rpc.fee_rate(txid) {
                         Ok(current_fee) => {
@@ -444,6 +454,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
     num_confirmations: u32,
     payment_margin: Duration,
     process_refunds: bool,
+    auto_rbf: bool,
 ) -> Result<(), Error> {
     let parachain_rpc = &parachain_rpc;
     let vault_id = parachain_rpc.get_account_id().clone();
@@ -544,7 +555,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                 };
 
                 match request
-                    .wait_for_inclusion(&parachain_rpc, &btc_rpc, num_confirmations, tx.txid())
+                    .wait_for_inclusion(&parachain_rpc, &btc_rpc, num_confirmations, tx.txid(), auto_rbf)
                     .await
                 {
                     Ok(tx_metadata) => {
@@ -587,7 +598,10 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
                 request.hash
             );
 
-            match request.pay_and_execute(parachain_rpc, vault, num_confirmations).await {
+            match request
+                .pay_and_execute(parachain_rpc, vault, num_confirmations, auto_rbf)
+                .await
+            {
                 Ok(_) => tracing::info!(
                     "{:?} request #{:?} successfully executed",
                     request.request_type,
@@ -952,21 +966,21 @@ mod tests {
         async fn should_pay_and_execute_redeem_if_neither_parachain_nor_bitcoin_deadlines_expired() {
             let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 50, 100, 50);
 
-            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
+            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6, true).await);
         }
 
         #[tokio::test]
         async fn should_pay_and_execute_redeem_if_only_parachain_deadline_expired() {
             let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 101, 100, 50);
 
-            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
+            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6, true).await);
         }
 
         #[tokio::test]
         async fn should_pay_and_execute_redeem_if_only_bitcoin_deadline_expired() {
             let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 50, 100, 101);
 
-            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6).await);
+            assert_ok!(request.pay_and_execute(parachain_rpc, btc_rpc, 6, true).await);
         }
 
         #[tokio::test]
@@ -974,7 +988,7 @@ mod tests {
             let (request, parachain_rpc, btc_rpc) = should_pay_and_execute_with_deadlines(100, 101, 100, 101);
 
             assert_err!(
-                request.pay_and_execute(parachain_rpc, btc_rpc, 6).await,
+                request.pay_and_execute(parachain_rpc, btc_rpc, 6, true).await,
                 Error::DeadlineExpired
             );
         }
@@ -1012,7 +1026,7 @@ mod tests {
         };
 
         assert_err!(
-            request.pay_and_execute(parachain_rpc, vault_data, 6).await,
+            request.pay_and_execute(parachain_rpc, vault_data, 6, true).await,
             Error::DeadlineExpired
         );
     }
@@ -1090,6 +1104,6 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
-        assert_ok!(request.pay_and_execute(parachain_rpc, vault_data, 6).await);
+        assert_ok!(request.pay_and_execute(parachain_rpc, vault_data, 6, true).await);
     }
 }
