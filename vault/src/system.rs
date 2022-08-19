@@ -534,7 +534,9 @@ impl VaultService {
                 .iter()
                 .map(|(currency_id, amount)| self.maybe_register_vault(currency_id, amount)),
         )
-        .await;
+        .await
+        .into_iter()
+        .collect::<Result<_, Error>>()?;
 
         // purposefully _after_ maybe_register_vault and _before_ other calls
         self.vault_id_manager.fetch_vault_ids(false).await?;
