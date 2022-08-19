@@ -552,9 +552,19 @@ impl InterBtcParachain {
         Ok(())
     }
 
+    pub async fn get_decimals(&self, currency_id: CurrencyId) -> Result<u32, Error> {
+        match currency_id {
+            CurrencyId::Token(x) => Ok(x.decimals().into()),
+            CurrencyId::ForeignAsset(id) => {
+                let metadata = self.get_foreign_asset_metadata(id).await?;
+                Ok(metadata.decimals)
+            }
+        }
+    }
+
     pub async fn get_coingecko_id(&self, currency_id: CurrencyId) -> Result<String, Error> {
         match currency_id {
-            CurrencyId::Token(x) => Ok(x.name().to_string()),
+            CurrencyId::Token(x) => Ok(x.name().to_string().to_lowercase()),
             CurrencyId::ForeignAsset(id) => {
                 let metadata = self.get_foreign_asset_metadata(id).await?;
                 let coingecko_id = std::str::from_utf8(&metadata.additional.coingecko_id)?.to_owned();
