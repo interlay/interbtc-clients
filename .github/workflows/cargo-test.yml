@@ -83,3 +83,9 @@ jobs:
           name: faucet-${{ matrix.metadata }}-${{ github.sha }}
           path: target/release/faucet
           retention-days: 10
+      - name: upload artifacts - runner
+        uses: actions/upload-artifact@v2
+        with:
+          name: runner-${{ github.sha }}
+          path: target/release/runner
+          retention-days: 10
