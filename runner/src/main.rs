@@ -14,17 +14,17 @@ use crate::runner::{retry_with_log_async, ws_client, Runner};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(version, author, about, trailing_var_arg = true)]
-struct Opts {
+pub struct Opts {
     /// Parachain websocket URL.
     #[clap(long)]
-    parachain_ws: String,
+    pub parachain_ws: String,
 
     /// Download path for the vault executable.
     #[clap(long, default_value = ".")]
-    download_path: PathBuf,
+    pub download_path: PathBuf,
 
     /// CLI arguments to pass to the vault executable.
-    vault_args: Vec<String>,
+    pub vault_args: Vec<String>,
 }
 
 #[tokio::main]
@@ -40,7 +40,7 @@ async fn main() -> Result<(), Error> {
     .await?;
     log::info!("Connected to the parachain");
 
-    let runner = Runner::new(rpc_client, opts.vault_args, opts.download_path);
+    let runner = Runner::new(rpc_client, opts);
     let shutdown_signals = Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
     Runner::run(Box::new(runner), shutdown_signals).await?;
     Ok(())

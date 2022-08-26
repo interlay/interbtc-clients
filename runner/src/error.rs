@@ -23,14 +23,10 @@ pub enum Error {
     HttpError(#[from] ReqwestError),
     #[error("UrlParseError: {0}")]
     UrlParseError(#[from] UrlParseError),
-    #[error("Failed to derive the release name of the vault")]
-    ClientNameDerivationError,
     #[error("Integer conversion error")]
     IntegerConversionError,
     #[error("A client release has not been downloaded")]
     NoDownloadedRelease,
-    #[error("No child process has been spawned")]
-    NoChildProcess,
     #[error("A child process is already running")]
     ChildProcessExists,
     #[error("Failed to terminate child process")]
