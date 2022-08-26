@@ -26,6 +26,8 @@ pub enum Error {
     BlockNotFound,
     #[error("Could not get foreign asset")]
     AssetNotFound,
+    #[error("Could not unlock local asset registry")]
+    CannotOpenAssetRegistry,
     #[error("Could not get vault")]
     VaultNotFound,
     #[error("Vault has been liquidated")]

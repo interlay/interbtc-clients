@@ -2,6 +2,7 @@
 
 pub mod cli;
 
+mod assets;
 mod conn;
 mod error;
 mod retry;
@@ -22,6 +23,7 @@ use subxt::{
     subxt, Config,
 };
 
+pub use assets::{AssetRegistry, RuntimeCurrencyInfo, TryFromSymbol};
 pub use error::{Error, SubxtError};
 pub use primitives::CurrencyInfo;
 pub use prometheus;

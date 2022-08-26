@@ -4,13 +4,13 @@ use crate::{
     metadata::{DispatchError, Event as InterBtcEvent},
     notify_retry,
     types::*,
-    AccountId, CurrencyId, Error, InterBtcRuntime, InterBtcSigner, RetryPolicy, RichH256Le, SubxtError,
+    AccountId, AssetRegistry, CurrencyId, Error, InterBtcRuntime, InterBtcSigner, RetryPolicy, RichH256Le, SubxtError,
 };
 use async_trait::async_trait;
 use codec::{Decode, Encode};
 use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt};
 use module_oracle_rpc_runtime_api::BalanceWrapper;
-use primitives::{CurrencyInfo, UnsignedFixedPoint};
+use primitives::UnsignedFixedPoint;
 use serde_json::Value;
 use sp_runtime::FixedPointNumber;
 use std::{collections::BTreeSet, future::Future, ops::RangeInclusive, sync::Arc, time::Duration};
@@ -145,6 +145,8 @@ impl InterBtcParachain {
             wrapped_currency_id,
         };
         parachain_rpc.refresh_nonce().await;
+        // TODO: refresh on registration
+        parachain_rpc.store_assets_metadata().await?;
         Ok(parachain_rpc)
     }
 
@@ -552,51 +554,8 @@ impl InterBtcParachain {
         Ok(())
     }
 
-    pub async fn get_decimals(&self, currency_id: CurrencyId) -> Result<u32, Error> {
-        match currency_id {
-            CurrencyId::Token(x) => Ok(x.decimals().into()),
-            CurrencyId::ForeignAsset(id) => {
-                let metadata = self.get_foreign_asset_metadata(id).await?;
-                Ok(metadata.decimals)
-            }
-        }
-    }
-
-    pub async fn get_coingecko_id(&self, currency_id: CurrencyId) -> Result<String, Error> {
-        match currency_id {
-            CurrencyId::Token(x) => Ok(x.name().to_string().to_lowercase()),
-            CurrencyId::ForeignAsset(id) => {
-                let metadata = self.get_foreign_asset_metadata(id).await?;
-                let coingecko_id = std::str::from_utf8(&metadata.additional.coingecko_id)?.to_owned();
-                Ok(coingecko_id)
-            }
-        }
-    }
-
-    pub async fn parse_currency_id(&self, symbol: String) -> Result<CurrencyId, Error> {
-        let uppercase_symbol = symbol.to_uppercase();
-        // try hardcoded currencies first
-        match uppercase_symbol.as_str() {
-            id if id == DOT.symbol() => Ok(Token(DOT)),
-            id if id == IBTC.symbol() => Ok(Token(IBTC)),
-            id if id == INTR.symbol() => Ok(Token(INTR)),
-            id if id == KSM.symbol() => Ok(Token(KSM)),
-            id if id == KBTC.symbol() => Ok(Token(KBTC)),
-            id if id == KINT.symbol() => Ok(Token(KINT)),
-            _ => self
-                .get_foreign_assets_metadata()
-                .await?
-                .into_iter()
-                .find_map(|(key, value)| {
-                    let asset_symbol = std::str::from_utf8(&value.symbol).ok()?.to_uppercase();
-                    if asset_symbol == uppercase_symbol {
-                        Some(Ok(CurrencyId::ForeignAsset(key)))
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or(Err(Error::InvalidCurrency)),
-        }
+    pub async fn store_assets_metadata(&self) -> Result<(), Error> {
+        AssetRegistry::global()?.extend(self.get_foreign_assets_metadata().await?)
     }
 
     /// Listen to fee_rate changes and broadcast new values on the fee_rate_update_tx channel

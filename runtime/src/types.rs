@@ -1,4 +1,4 @@
-use crate::{metadata, Config, InterBtcRuntime, SS58_PREFIX};
+use crate::{metadata, Config, InterBtcRuntime, RuntimeCurrencyInfo, SS58_PREFIX};
 pub use metadata_aliases::*;
 use subxt::sp_core::{crypto::Ss58Codec, sr25519::Pair as KeyPair};
 
@@ -167,7 +167,6 @@ mod account_id {
 
 mod vault_id {
     use super::*;
-    use primitives::CurrencyInfo;
 
     type RichVaultId = primitives::VaultId<AccountId, primitives::CurrencyId>;
 
@@ -198,14 +197,8 @@ mod vault_id {
             format!(
                 "{}[{}->{}]",
                 self.account_id.pretty_print(),
-                collateral_currency
-                    .inner()
-                    .map(|i| i.symbol().to_string())
-                    .unwrap_or_default(),
-                wrapped_currency
-                    .inner()
-                    .map(|i| i.symbol().to_string())
-                    .unwrap_or_default()
+                collateral_currency.symbol().unwrap_or_default(),
+                wrapped_currency.symbol().unwrap_or_default(),
             )
         }
     }

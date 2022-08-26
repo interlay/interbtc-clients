@@ -1,0 +1,218 @@
+use crate::{types::*, AssetMetadata, Error};
+use lazy_static::lazy_static;
+use primitives::{CurrencyId, CurrencyInfo};
+use std::{
+    collections::BTreeMap,
+    sync::{Mutex, MutexGuard},
+};
+
+lazy_static! {
+    static ref ASSET_REGISTRY: Mutex<AssetRegistry> = Mutex::new(AssetRegistry::default());
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AssetRegistry {
+    symbol_lookup: BTreeMap<String, u32>,
+    metadata_lookup: BTreeMap<u32, AssetMetadata>,
+}
+
+impl AssetRegistry {
+    /// Fetch the global, mutable singleton
+    pub(crate) fn global() -> Result<MutexGuard<'static, Self>, Error> {
+        ASSET_REGISTRY.lock().map_err(|_| Error::CannotOpenAssetRegistry)
+    }
+
+    pub(crate) fn insert(&mut self, foreign_asset_id: u32, asset_metadata: AssetMetadata) -> Result<(), Error> {
+        let asset_name = String::from_utf8(asset_metadata.symbol.clone())
+            .map_err(|_| Error::InvalidCurrency)?
+            .to_uppercase();
+        log::info!("Found asset: {}", asset_name);
+        self.symbol_lookup.insert(asset_name, foreign_asset_id);
+        self.metadata_lookup.insert(foreign_asset_id, asset_metadata);
+        Ok(())
+    }
+
+    pub(crate) fn extend(&mut self, assets: Vec<(u32, AssetMetadata)>) -> Result<(), Error> {
+        for (foreign_asset_id, asset_metadata) in assets {
+            // TODO: check for duplicates?
+            self.insert(foreign_asset_id, asset_metadata)?;
+        }
+        Ok(())
+    }
+
+    /// Fetch the currency for a ticker symbol
+    pub fn get_foreign_asset_by_symbol(&self, symbol: String) -> Result<CurrencyId, Error> {
+        self.symbol_lookup
+            .get(&symbol)
+            .and_then(|foreign_asset_id| Some(CurrencyId::ForeignAsset(*foreign_asset_id)))
+            .ok_or(Error::AssetNotFound)
+    }
+
+    /// Fetch the asset metadata for a foreign asset
+    pub fn get_asset_metadata_by_id(&self, foreign_asset_id: u32) -> Result<AssetMetadata, Error> {
+        self.metadata_lookup
+            .get(&foreign_asset_id)
+            .cloned()
+            .ok_or(Error::AssetNotFound)
+    }
+}
+
+/// Convert a ticker symbol into a `CurrencyId` at runtime
+pub trait TryFromSymbol: Sized {
+    fn try_from_symbol(symbol: String) -> Result<Self, Error>;
+}
+
+impl TryFromSymbol for CurrencyId {
+    fn try_from_symbol(symbol: String) -> Result<Self, Error> {
+        let uppercase_symbol = symbol.to_uppercase();
+        // try hardcoded currencies first
+        match uppercase_symbol.as_str() {
+            id if id == DOT.symbol() => Ok(Token(DOT)),
+            id if id == IBTC.symbol() => Ok(Token(IBTC)),
+            id if id == INTR.symbol() => Ok(Token(INTR)),
+            id if id == KSM.symbol() => Ok(Token(KSM)),
+            id if id == KBTC.symbol() => Ok(Token(KBTC)),
+            id if id == KINT.symbol() => Ok(Token(KINT)),
+            _ => AssetRegistry::global()?.get_foreign_asset_by_symbol(uppercase_symbol),
+        }
+    }
+}
+
+/// Fallible operations on currencies
+pub trait RuntimeCurrencyInfo {
+    fn name(&self) -> Result<String, Error>;
+    fn symbol(&self) -> Result<String, Error>;
+    fn decimals(&self) -> Result<u32, Error>;
+    fn coingecko_id(&self) -> Result<String, Error>;
+}
+
+impl RuntimeCurrencyInfo for CurrencyId {
+    fn name(&self) -> Result<String, Error> {
+        match self {
+            CurrencyId::Token(token_symbol) => Ok(token_symbol.name().to_string()),
+            CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::global()?
+                .get_asset_metadata_by_id(*foreign_asset_id)
+                .and_then(|asset_metadata| {
+                    String::from_utf8(asset_metadata.name.clone()).map_err(|_| Error::InvalidCurrency)
+                }),
+        }
+    }
+
+    fn symbol(&self) -> Result<String, Error> {
+        match self {
+            CurrencyId::Token(token_symbol) => Ok(token_symbol.symbol().to_string()),
+            CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::global()?
+                .get_asset_metadata_by_id(*foreign_asset_id)
+                .and_then(|asset_metadata| {
+                    String::from_utf8(asset_metadata.symbol.clone()).map_err(|_| Error::InvalidCurrency)
+                }),
+        }
+    }
+
+    fn decimals(&self) -> Result<u32, Error> {
+        match self {
+            CurrencyId::Token(token_symbol) => Ok(token_symbol.decimals().into()),
+            CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::global()?
+                .get_asset_metadata_by_id(*foreign_asset_id)
+                .map(|asset_metadata| asset_metadata.decimals),
+        }
+    }
+
+    fn coingecko_id(&self) -> Result<String, Error> {
+        match self {
+            CurrencyId::Token(token_symbol) => Ok(token_symbol.name().to_string().to_lowercase()),
+            CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::global()?
+                .get_asset_metadata_by_id(*foreign_asset_id)
+                .and_then(|asset_metadata| {
+                    String::from_utf8(asset_metadata.additional.coingecko_id.clone())
+                        .map_err(|_| Error::InvalidCurrency)
+                }),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::metadata::runtime_types::interbtc_primitives::CustomMetadata;
+
+    #[test]
+    fn should_store_metadata() -> Result<(), Error> {
+        let expected_asset_metadata = AssetMetadata {
+            decimals: 10,
+            location: None,
+            name: b"Asset 1".to_vec(),
+            symbol: b"AST1".to_vec(),
+            existential_deposit: 0,
+            additional: CustomMetadata {
+                fee_per_second: 0,
+                coingecko_id: vec![],
+            },
+        };
+        AssetRegistry::global()?.insert(0, expected_asset_metadata.clone())?;
+
+        let actual_asset_metadata = AssetRegistry::global()?.get_asset_metadata_by_id(0)?;
+        assert_eq!(expected_asset_metadata, actual_asset_metadata);
+
+        Ok(())
+    }
+
+    #[test]
+    fn should_convert_token_symbol() -> Result<(), Error> {
+        assert_eq!(CurrencyId::try_from_symbol("DOT".to_string())?, Token(DOT));
+        assert_eq!(CurrencyId::try_from_symbol("INTR".to_string())?, Token(INTR));
+        assert_eq!(CurrencyId::try_from_symbol("IBTC".to_string())?, Token(IBTC));
+        Ok(())
+    }
+
+    #[test]
+    fn should_get_runtime_info_for_token_symbol() -> Result<(), Error> {
+        assert_eq!(Token(DOT).name()?, "Polkadot");
+        assert_eq!(Token(DOT).symbol()?, "DOT");
+        assert_eq!(Token(DOT).decimals()?, 10);
+        Ok(())
+    }
+
+    #[test]
+    fn should_convert_foreign_asset() -> Result<(), Error> {
+        AssetRegistry::global()?.insert(
+            0,
+            AssetMetadata {
+                decimals: 10,
+                location: None,
+                name: b"Asset 1".to_vec(),
+                symbol: b"AST1".to_vec(),
+                existential_deposit: 0,
+                additional: CustomMetadata {
+                    fee_per_second: 0,
+                    coingecko_id: vec![],
+                },
+            },
+        )?;
+        assert_eq!(CurrencyId::try_from_symbol("AST1".to_string())?, ForeignAsset(0));
+        Ok(())
+    }
+
+    #[test]
+    fn should_get_runtime_info_for_foreign_asset() -> Result<(), Error> {
+        AssetRegistry::global()?.insert(
+            0,
+            AssetMetadata {
+                decimals: 10,
+                location: None,
+                name: b"Asset 1".to_vec(),
+                symbol: b"AST1".to_vec(),
+                existential_deposit: 0,
+                additional: CustomMetadata {
+                    fee_per_second: 0,
+                    coingecko_id: vec![],
+                },
+            },
+        )?;
+
+        assert_eq!(ForeignAsset(0).name()?, "Asset 1");
+        assert_eq!(ForeignAsset(0).symbol()?, "AST1");
+        assert_eq!(ForeignAsset(0).decimals()?, 10);
+        Ok(())
+    }
+}
