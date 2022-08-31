@@ -1,0 +1,194 @@
+#![allow(clippy::upper_case_acronyms)]
+
+use crate::Error;
+use runtime::{CurrencyId, FixedPointNumber, FixedPointTraits::*, FixedU128, TokenSymbol};
+use std::{
+    convert::TryInto,
+    fmt::{self, Debug},
+    str::FromStr,
+};
+
+pub trait ExchangeRate {
+    fn invert(self) -> Self;
+}
+
+impl ExchangeRate for f64 {
+    fn invert(self) -> Self {
+        1.0 / self
+    }
+}
+
+pub trait CurrencyInfo {
+    fn name(&self) -> &str;
+    fn symbol(&self) -> &str;
+    fn decimals(&self) -> u8;
+}
+
+macro_rules! create_currency {
+    ($(#[$meta:meta])*
+	$vis:vis enum Currency {
+        $($(#[$vmeta:meta])* $symbol:ident($name:expr, $deci:literal),)*
+    }) => {
+		$(#[$meta])*
+		$vis enum Currency {
+			$($(#[$vmeta])* $symbol,)*
+		}
+
+        $(pub const $symbol: Currency = Currency::$symbol;)*
+
+		impl CurrencyInfo for Currency {
+			fn name(&self) -> &str {
+				match self {
+					$(Currency::$symbol => $name,)*
+				}
+			}
+			fn symbol(&self) -> &str {
+				match self {
+					$(Currency::$symbol => stringify!($symbol),)*
+				}
+			}
+			fn decimals(&self) -> u8 {
+				match self {
+					$(Currency::$symbol => $deci,)*
+				}
+            }
+		}
+
+        impl FromStr for Currency {
+            type Err = Error;
+            fn from_str(symbol: &str) -> Result<Self, Self::Err> {
+                let uppercase_symbol = symbol.to_uppercase();
+                // try hardcoded currencies first
+                match uppercase_symbol.as_str() {
+                    $(stringify!($symbol) => Ok(Currency::$symbol),)*
+                    _ => Err(Error::InvalidCurrency),
+                }
+            }
+        }
+    }
+}
+
+create_currency! {
+    #[derive(PartialEq, Eq, Copy, Clone, Debug)]
+    #[repr(u8)]
+    pub enum Currency {
+        DOT("Polkadot", 10),
+        INTR("Interlay", 10),
+        KSM("Kusama", 12),
+        KINT("Kintsugi", 12),
+        BTC("Bitcoin", 8),
+        USDT("Tether", 6),
+        USD("United State Dollar", 2),
+        // TODO: add alias for exchange id
+        AUSD("Acala-Dollar", 12),
+    }
+}
+
+impl TryInto<CurrencyId> for Currency {
+    type Error = Error;
+    fn try_into(self) -> Result<CurrencyId, Self::Error> {
+        match self {
+            DOT => Ok(CurrencyId::Token(TokenSymbol::DOT)),
+            INTR => Ok(CurrencyId::Token(TokenSymbol::INTR)),
+            KSM => Ok(CurrencyId::Token(TokenSymbol::KSM)),
+            KINT => Ok(CurrencyId::Token(TokenSymbol::KINT)),
+            _ => Err(Error::InvalidCurrency),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CurrencyPair {
+    pub base: Currency,
+    pub quote: Currency,
+}
+
+impl From<(Currency, Currency)> for CurrencyPair {
+    fn from((base, quote): (Currency, Currency)) -> Self {
+        CurrencyPair { base, quote }
+    }
+}
+
+impl CurrencyPair {
+    pub fn contains(&self, currency: Currency) -> bool {
+        self.base == currency || self.quote == currency
+    }
+
+    pub fn invert(self) -> Self {
+        Self {
+            base: self.quote,
+            quote: self.base,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CurrencyPairAndPrice {
+    pub pair: CurrencyPair,
+    pub price: f64,
+}
+
+impl fmt::Display for CurrencyPairAndPrice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "({}, {}) => {}",
+            self.pair.base.symbol(),
+            self.pair.quote.symbol(),
+            self.price
+        )
+    }
+}
+
+impl CurrencyPairAndPrice {
+    pub fn invert(self) -> Self {
+        Self {
+            pair: self.pair.invert(),
+            price: self.price.invert(),
+        }
+    }
+
+    pub fn exchange_rate(&self) -> Option<FixedU128> {
+        FixedU128::from_float(self.price).checked_mul(&FixedU128::checked_from_rational(
+            10_u128.pow(self.pair.quote.decimals().into()),
+            10_u128.pow(self.pair.base.decimals().into()),
+        )?)
+    }
+
+    pub fn reduce(self, other: Self) -> Self {
+        let other = if self.pair.quote == other.pair.quote {
+            // quote is same so invert other
+            other.invert()
+        } else {
+            other
+        };
+
+        Self {
+            pair: CurrencyPair {
+                base: self.pair.base,
+                quote: other.pair.quote,
+            },
+            price: self.price * other.price,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn should_invert_currency_pair_and_price() {
+        assert_eq!(
+            CurrencyPairAndPrice {
+                pair: CurrencyPair { base: BTC, quote: DOT },
+                price: 2333.0,
+            }
+            .invert(),
+            CurrencyPairAndPrice {
+                pair: CurrencyPair { base: DOT, quote: BTC },
+                price: 0.0004286326618088298,
+            }
+        );
+    }
+}
