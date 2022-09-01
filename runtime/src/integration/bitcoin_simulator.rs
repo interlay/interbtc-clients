@@ -545,16 +545,6 @@ impl BitcoinCoreApi for MockBitcoinCore {
     ) -> Result<(), BitcoinError> {
         Ok(())
     }
-    async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, BitcoinError> {
-        let op_return = transaction.get_op_return().unwrap();
-        Ok((*self.blocks.read().await)
-            .clone()
-            .iter()
-            .filter(|block| block.txdata[1].txid() != transaction.txid()) // filter self
-            .filter(|block| block.txdata[1].get_op_return() == Some(op_return))
-            .map(|block| (block.txdata[1].txid(), block.block_hash()))
-            .collect())
-    }
     fn get_utxo_count(&self) -> Result<usize, BitcoinError> {
         Ok(0)
     }

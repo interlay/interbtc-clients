@@ -212,8 +212,6 @@ pub trait BitcoinCoreApi {
         addresses: Vec<A>,
     ) -> Result<(), Error>;
 
-    async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
-
     fn get_utxo_count(&self) -> Result<usize, Error>;
 
     fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error>;
@@ -1024,39 +1022,6 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(())
     }
 
-    async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error> {
-        let op_return_bytes = transaction.get_op_return_bytes().unwrap();
-        let script_hash = bitcoincore_rpc::bitcoin::hashes::sha256::Hash::hash(&op_return_bytes);
-        let txs = esplora_btc_api::apis::scripthash_api::get_txs_by_scripthash(
-            &self.electrs_config,
-            &hex::encode(script_hash),
-        )
-        .await?;
-
-        let extract_block_hash = |tx: &esplora_btc_api::models::Transaction| {
-            if let Some(status) = &tx.status {
-                if let Some(block_hash) = &status.block_hash {
-                    return Ok(BlockHash::from_str(block_hash)?);
-                }
-            }
-            Err(ConversionError::BlockHashError)
-        };
-        let extract_data = |tx: &esplora_btc_api::models::Transaction| {
-            let txid = Txid::from_str(&tx.txid)?;
-            let block_hash = extract_block_hash(tx)?;
-            Ok((txid, block_hash))
-        };
-
-        let ret: Result<Vec<_>, ConversionError> = txs
-            .iter()
-            .filter_map(|x| match extract_data(x) {
-                Ok((txid, _)) if txid == transaction.txid() => None,
-                ret => Some(ret),
-            })
-            .collect();
-        Ok(ret?)
-    }
-
     /// Get the number of unspent transaction outputs.
     fn get_utxo_count(&self) -> Result<usize, Error> {
         Ok(self.rpc.list_unspent(None, None, None, None, None)?.len())
@@ -1264,22 +1229,6 @@ mod tests {
     use super::*;
 
     use bitcoincore_rpc::bitcoin::{hashes::hex::FromHex, OutPoint, Script, Transaction};
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_find_duplicate_payments_succeeds() {
-        let bitcoin_core = BitcoinCoreBuilder::new("localhost".to_string())
-            .build_with_network(Network::Testnet)
-            .unwrap();
-
-        let raw_tx = Vec::from_hex("020000000001011f876af6685f6e872b18d288a614adfd21d0246f52e3ca086cdb15d125837a270100000000fdffffff020000000000000000226a208b26f7cf49e1ad4d9f81d237933da8810644a85ac25b3c22a6a2324e1ba02efcba0e0000000000001600148cb0d2c0597a4b496370f94c2e1424d6d1e3432d02473044022023159d039a42095066036b25f08bf77dbf8a8813bf3d842aa998f7437e0da5d002202a102568194e3bba597a31f432c8d3beb5fca9129366f115831b4abba356aa4001210223a4dbc56f6d53a2014dfb106e754323da8e9c095cf9d68f627169f7c059d07a08e71f00").unwrap();
-        let transaction: Transaction = deserialize(&raw_tx).unwrap();
-        let result = bitcoin_core.find_duplicate_payments(&transaction).await.unwrap();
-        // check that the transaction arg is excluded from the results
-        assert!(!result.iter().any(|(txid, _)| txid == &transaction.txid()));
-        // check that it does find the other transaction with the same op_return
-        assert!(result.iter().any(|(txid, _)| txid
-            == &Txid::from_hex("8bb6dacf9fca12550c2be9350994737e45cdcbd05d3ce6132141b0872661baec").unwrap()));
-    }
 
     async fn test_electrs(url: &str, script_hex: &str, expected_txid: &str) {
         let config = ElectrsConfiguration {
