@@ -9,6 +9,7 @@ mod execution;
 mod faucet;
 mod issue;
 pub mod metrics;
+pub mod process;
 mod redeem;
 mod refund;
 pub mod relay;

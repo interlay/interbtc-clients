@@ -1,14 +1,15 @@
 use clap::Parser;
 use futures::Future;
-use runtime::InterBtcSigner;
+use runtime::{InterBtcSigner, DEFAULT_SPEC_NAME};
 use service::{warp, warp::Filter, ConnectionManager, Error, MonitoringConfig, ServiceConfig};
 use signal_hook::consts::*;
 use signal_hook_tokio::Signals;
 use std::net::{Ipv4Addr, SocketAddr};
+use sysinfo::{System, SystemExt};
 use tokio_stream::StreamExt;
 use vault::{
     metrics::{self, increment_restart_counter},
-    VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION,
+    process, VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION,
 };
 
 #[derive(Parser, Debug, Clone)]
@@ -58,6 +59,10 @@ where
 }
 
 async fn start() -> Result<(), Error> {
+    // The system information struct should only be created once.
+    // Source: https://docs.rs/sysinfo/0.26.1/sysinfo/#usage
+    let mut sys = System::new_all();
+
     let opts: Opts = Opts::parse();
     opts.service.logging_format.init_subscriber();
 
@@ -96,14 +101,19 @@ async fn start() -> Result<(), Error> {
                 .await;
         });
     }
-    vault_connection_manager.start().await?;
-    Ok(())
+
+    process::try_create_pid_file(String::from(DEFAULT_SPEC_NAME), signer.account_id().to_string(), &mut sys)?;
+    let result = catch_signals(
+        Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT]).expect("Failed to set up signal listener."),
+        vault_connection_manager.start()
+    ).await;
+    process::remove_pid_file(String::from(DEFAULT_SPEC_NAME), signer.account_id().to_string())?;
+    result
 }
 
 #[tokio::main]
 async fn main() {
     let exit_code = if let Err(err) = catch_signals(
-        Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT]).expect("Failed to set up signal listener."),
         start(),
     )
     .await
