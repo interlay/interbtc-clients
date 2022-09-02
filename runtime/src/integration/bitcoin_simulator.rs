@@ -341,9 +341,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         let block = blocks.get(height as usize).ok_or(BitcoinError::InvalidBitcoinHeight)?;
         Ok(block.header.block_hash())
     }
-    async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, BitcoinError> {
-        Ok(self.blocks.read().await.iter().any(|x| x.block_hash() == block_hash))
-    }
+
     async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, BitcoinError> {
         let bytes: [u8; 20] = (0..20)
             .map(|_| thread_rng().gen::<u8>())
@@ -399,36 +397,6 @@ impl BitcoinCoreApi for MockBitcoinCore {
             .find(|x| &x.block_hash() == hash)
             .ok_or(BitcoinError::InvalidBitcoinHeight)?;
         Ok(block.header)
-    }
-    async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, BitcoinError> {
-        let blocks = self.blocks.read().await;
-
-        let (block_height, block) = blocks
-            .iter()
-            .enumerate()
-            .find(|x| &x.1.block_hash() == hash)
-            .ok_or(BitcoinError::InvalidBitcoinHeight)?;
-        Ok(GetBlockResult {
-            height: block_height,
-            hash: block.block_hash(),
-            confirmations: Default::default(),
-            size: Default::default(),
-            strippedsize: Default::default(),
-            weight: Default::default(),
-            version: Default::default(),
-            version_hex: Default::default(),
-            merkleroot: Default::default(),
-            tx: Default::default(),
-            time: Default::default(),
-            mediantime: Default::default(),
-            nonce: Default::default(),
-            bits: Default::default(),
-            difficulty: Default::default(),
-            chainwork: Default::default(),
-            n_tx: Default::default(),
-            previousblockhash: Default::default(),
-            nextblockhash: Default::default(),
-        })
     }
     async fn get_mempool_transactions<'a>(
         &'a self,
@@ -524,15 +492,6 @@ impl BitcoinCoreApi for MockBitcoinCore {
         Ok(metadata)
     }
     async fn create_or_load_wallet(&self) -> Result<(), BitcoinError> {
-        Ok(())
-    }
-    async fn wallet_has_public_key<P>(&self, _public_key: P) -> Result<bool, BitcoinError>
-    where
-        P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static,
-    {
-        Ok(true)
-    }
-    async fn import_private_key(&self, _privkey: PrivateKey) -> Result<(), BitcoinError> {
         Ok(())
     }
     async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), BitcoinError> {

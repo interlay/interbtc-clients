@@ -124,8 +124,6 @@ pub trait BitcoinCoreApi {
 
     async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
 
-    async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error>;
-
     async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
 
     async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error>;
@@ -150,8 +148,6 @@ pub trait BitcoinCoreApi {
     async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error>;
 
     async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error>;
-
-    async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error>;
 
     async fn get_mempool_transactions<'a>(
         &'a self,
@@ -198,12 +194,6 @@ pub trait BitcoinCoreApi {
     ) -> Result<TransactionMetadata, Error>;
 
     async fn create_or_load_wallet(&self) -> Result<(), Error>;
-
-    async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
-    where
-        P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static;
-
-    async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error>;
 
     async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error>;
 
@@ -531,6 +521,25 @@ impl BitcoinCore {
             }
         }
     }
+
+    pub async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
+    where
+        P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static,
+    {
+        self.with_wallet(|| async {
+            let address = Address::p2wpkh(&PublicKey::from_slice(&public_key.clone().into())?, self.network)
+                .map_err(ConversionError::from)?;
+            let address_info = self.rpc.get_address_info(&address)?;
+            let wallet_pubkey = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
+            Ok(P::from(wallet_pubkey.key.serialize()) == public_key)
+        })
+        .await
+    }
+
+    pub async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error> {
+        self.with_wallet(|| async { Ok(self.rpc.import_private_key(&privkey, None, None)?) })
+            .await
+    }
 }
 
 /// true if the given indicates that the item was not found in the mempool
@@ -648,22 +657,6 @@ impl BitcoinCoreApi for BitcoinCore {
         }
     }
 
-    /// Checks if the local full node has seen the specified block hash.
-    ///
-    /// # Arguments
-    /// * `block_hash` - hash of the block to verify
-    async fn is_block_known(&self, block_hash: BlockHash) -> Result<bool, Error> {
-        match self.rpc.get_block(&block_hash) {
-            Ok(_) => Ok(true),
-            Err(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
-                if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcInvalidAddressOrKey =>
-            {
-                Ok(false) // block not found
-            }
-            Err(e) => Err(e.into()),
-        }
-    }
-
     /// Gets a new address from the wallet
     async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error> {
         let address = self.rpc.get_new_address(None, Some(AddressType::Bech32))?;
@@ -733,10 +726,6 @@ impl BitcoinCoreApi for BitcoinCore {
 
     async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error> {
         Ok(self.rpc.get_block_header(hash)?)
-    }
-
-    async fn get_block_info(&self, hash: &BlockHash) -> Result<GetBlockResult, Error> {
-        Ok(self.rpc.get_block_info(hash)?)
     }
 
     /// Get the transactions that are currently in the mempool. Since `impl trait` is not
@@ -964,25 +953,6 @@ impl BitcoinCoreApi for BitcoinCore {
         // wallet does not exist, create
         self.rpc.create_wallet(wallet_name, None, None, None, None)?;
         Ok(())
-    }
-
-    async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
-    where
-        P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static,
-    {
-        self.with_wallet(|| async {
-            let address = Address::p2wpkh(&PublicKey::from_slice(&public_key.clone().into())?, self.network)
-                .map_err(ConversionError::from)?;
-            let address_info = self.rpc.get_address_info(&address)?;
-            let wallet_pubkey = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
-            Ok(P::from(wallet_pubkey.key.serialize()) == public_key)
-        })
-        .await
-    }
-
-    async fn import_private_key(&self, privkey: PrivateKey) -> Result<(), Error> {
-        self.with_wallet(|| async { Ok(self.rpc.import_private_key(&privkey, None, None)?) })
-            .await
     }
 
     async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error> {
