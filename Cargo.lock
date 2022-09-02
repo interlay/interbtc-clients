@@ -603,10 +603,13 @@ dependencies = [
  "rand 0.7.3",
  "regex",
  "reqwest",
+ "serde",
  "serde_json",
+ "sha2 0.8.2",
  "sp-core",
  "thiserror",
  "tokio",
+ "url 2.2.2",
 ]
 
 [[package]]

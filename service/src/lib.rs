@@ -1,11 +1,13 @@
 use async_trait::async_trait;
-use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
+use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCoreApi, Error as BitcoinError};
 use futures::{future::Either, Future, FutureExt};
 use runtime::{
     cli::ConnectionOpts as ParachainConfig, CurrencyId, CurrencyIdExt, CurrencyInfo, Error as RuntimeError,
     InterBtcParachain as BtcParachain, InterBtcSigner, PrettyPrint, VaultId,
 };
 use std::marker::PhantomData;
+
+use bitcoin::light::BitcoinLight as BitcoinCore;
 
 mod cli;
 mod error;
@@ -83,9 +85,10 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
             let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
 
             let prefix = self.wallet_name.clone().unwrap_or_else(|| "vault".to_string());
-            let bitcoin_core = self.bitcoin_config.new_client(Some(format!("{prefix}-master"))).await?;
-            bitcoin_core.sync().await?;
-            bitcoin_core.create_or_load_wallet().await?;
+            // let bitcoin_core = self.bitcoin_config.new_client(Some(format!("{prefix}-master"))).await?;
+            // bitcoin_core.sync().await?;
+            // bitcoin_core.create_or_load_wallet().await?;
+            let bitcoin_core = bitcoin::light::BitcoinLight::default();
 
             // only open connection to parachain after bitcoind sync to prevent timeout
             let signer = self.signer.clone();
@@ -99,8 +102,8 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
             )
             .await?;
 
-            let config_copy = self.bitcoin_config.clone();
-            let network_copy = bitcoin_core.network();
+            // let config_copy = self.bitcoin_config.clone();
+            // let network_copy = bitcoin_core.network();
             let constructor = move |vault_id: VaultId| {
                 let collateral_currency: CurrencyId = vault_id.collateral_currency();
                 let wrapped_currency: CurrencyId = vault_id.wrapped_currency();
@@ -117,7 +120,8 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
                         .map(|i| i.symbol().to_string())
                         .unwrap_or_default(),
                 );
-                config_copy.new_client_with_network(Some(wallet_name), network_copy)
+                // config_copy.new_client_with_network(Some(wallet_name), network_copy)
+                Ok(bitcoin::light::BitcoinLight::default())
             };
 
             let service = S::new_service(
@@ -151,6 +155,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
     }
 }
 
+// TODO: propagate error
 pub async fn wait_or_shutdown<F>(shutdown_tx: ShutdownSender, future2: F)
 where
     F: Future<Output = Result<(), Error>>,
@@ -159,7 +164,8 @@ where
         TerminationStatus::Cancelled => {
             tracing::trace!("Received shutdown signal");
         }
-        TerminationStatus::Completed => {
+        TerminationStatus::Completed(ret) => {
+            tracing::info!("{:?}", ret);
             tracing::trace!("Sending shutdown signal");
             // TODO: shutdown signal should be error
             let _ = shutdown_tx.send(Some(()));
@@ -167,11 +173,12 @@ where
     }
 }
 
-pub enum TerminationStatus {
+pub enum TerminationStatus<Ret> {
     Cancelled,
-    Completed,
+    Completed(Ret),
 }
-async fn run_cancelable<F, Ret>(mut shutdown_rx: ShutdownReceiver, future2: F) -> TerminationStatus
+
+async fn run_cancelable<F, Ret>(mut shutdown_rx: ShutdownReceiver, future2: F) -> TerminationStatus<Ret>
 where
     F: Future<Output = Ret>,
 {
@@ -183,11 +190,14 @@ where
 
     match futures::future::select(future1, future2).await {
         Either::Left((_, _)) => TerminationStatus::Cancelled,
-        Either::Right((_, _)) => TerminationStatus::Completed,
+        Either::Right((ret, _)) => TerminationStatus::Completed(ret),
     }
 }
 
-pub fn spawn_cancelable<T: Future + Send + 'static>(shutdown_rx: ShutdownReceiver, future: T) {
+pub fn spawn_cancelable<T: Future + Send + 'static>(shutdown_rx: ShutdownReceiver, future: T)
+where
+    <T as futures::Future>::Output: Send,
+{
     tokio::spawn(run_cancelable(shutdown_rx, future));
 }
 

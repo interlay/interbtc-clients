@@ -1,6 +1,6 @@
 use super::Error;
 use async_trait::async_trait;
-use bitcoin::{serialize, BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
+use bitcoin::{serialize, BitcoinCoreApi, Error as BitcoinError};
 
 #[async_trait]
 pub trait Backing {
@@ -23,7 +23,10 @@ pub trait Backing {
 }
 
 #[async_trait]
-impl Backing for BitcoinCore {
+impl<T> Backing for T
+where
+    T: BitcoinCoreApi + Sync,
+{
     async fn get_block_count(&self) -> Result<u32, Error> {
         let count = BitcoinCoreApi::get_block_count(self).await?;
         return Ok(count as u32);

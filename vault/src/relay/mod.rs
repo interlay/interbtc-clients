@@ -1,4 +1,4 @@
-use bitcoin::BitcoinCore;
+use bitcoin::light::BitcoinLight as BitcoinCore;
 use runtime::InterBtcParachain;
 use service::Error as ServiceError;
 use std::{sync::Arc, time::Duration};

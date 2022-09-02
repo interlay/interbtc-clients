@@ -1,4 +1,7 @@
+#![feature(map_first_last)]
+
 pub mod cli;
+pub mod light;
 
 mod addr;
 mod electrs;
@@ -12,12 +15,20 @@ use bitcoincore_rpc::bitcoin::consensus::encode::serialize_hex;
 pub use bitcoincore_rpc::{
     bitcoin::{
         blockdata::{opcodes::all as opcodes, script::Builder},
+        consensus,
         consensus::encode::{deserialize, serialize},
         hash_types::BlockHash,
-        hashes::{hex::ToHex, sha256, Hash},
+        hashes::{
+            self,
+            hex::{FromHex, ToHex},
+            sha256, Hash,
+        },
         secp256k1,
         secp256k1::{constants::PUBLIC_KEY_SIZE, SecretKey},
-        util::{address::Payload, key, merkleblock::PartialMerkleTree, psbt::serialize::Serialize, uint::Uint256},
+        util::{
+            self, address::Payload, key, merkleblock::PartialMerkleTree, psbt, psbt::serialize::Serialize,
+            uint::Uint256,
+        },
         Address, Amount, Block, BlockHeader, Network, OutPoint, PrivateKey, PubkeyHash, PublicKey, Script, ScriptHash,
         SignedAmount, Transaction, TxIn, TxMerkleNode, TxOut, Txid, WPubkeyHash, WScriptHash,
     },
@@ -35,7 +46,7 @@ use esplora_btc_api::apis::configuration::Configuration as ElectrsConfiguration;
 pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
 use log::{info, trace};
 use serde_json::error::Category as SerdeJsonCategory;
-use sp_core::H256;
+pub use sp_core::H256;
 use std::{convert::TryInto, future::Future, str::FromStr, sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, OwnedMutexGuard},
@@ -79,7 +90,7 @@ const ELECTRS_TESTNET_URL: &str = "https://btc-testnet.interlay.io";
 const ELECTRS_MAINNET_URL: &str = "https://btc-mainnet.interlay.io";
 const ELECTRS_LOCALHOST_URL: &str = "http://localhost:3002";
 
-fn get_exponential_backoff() -> ExponentialBackoff {
+pub fn get_exponential_backoff() -> ExponentialBackoff {
     ExponentialBackoff {
         current_interval: INITIAL_INTERVAL,
         initial_interval: INITIAL_INTERVAL,

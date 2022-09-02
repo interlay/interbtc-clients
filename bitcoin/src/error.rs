@@ -72,6 +72,11 @@ pub enum Error {
     TryFromIntError(#[from] std::num::TryFromIntError),
     #[error("MissingBitcoinFeeInfo")]
     MissingBitcoinFeeInfo,
+
+    #[error("Operation not supported")]
+    NotSupported,
+    #[error("LightClientError: {0}")]
+    LightClientError(#[from] crate::light::LightClientError),
 }
 
 impl Error {

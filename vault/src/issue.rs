@@ -51,21 +51,24 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
     let mut stream =
         bitcoin::stream_in_chain_transactions(bitcoin_core.clone(), btc_start_height, num_confirmations).await;
 
-    while let Some(Ok((block_hash, transaction))) = stream.next().await {
-        tokio::spawn(
-            process_transaction_and_execute_issue(
-                bitcoin_core.clone(),
-                btc_parachain.clone(),
-                issue_set.clone(),
-                num_confirmations,
-                block_hash,
-                transaction,
-                random_delay.clone(),
-            )
-            .map_err(|e| {
-                tracing::warn!("Failed to execute issue request: {}", e.to_string());
-            }),
-        );
+    while let Some(result) = stream.next().await {
+        match result {
+            Ok((block_hash, transaction)) => tokio::spawn(
+                process_transaction_and_execute_issue(
+                    bitcoin_core.clone(),
+                    btc_parachain.clone(),
+                    issue_set.clone(),
+                    num_confirmations,
+                    block_hash,
+                    transaction,
+                    random_delay.clone(),
+                )
+                .map_err(|e| {
+                    tracing::warn!("Failed to execute issue request: {}", e.to_string());
+                }),
+            ),
+            Err(err) => return Err(err.into()),
+        };
     }
 
     // stream closed, restart client

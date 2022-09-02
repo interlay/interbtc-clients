@@ -1,7 +1,6 @@
 use crate::{BitcoinCoreApi, BitcoinRpcError, Error};
 use bitcoincore_rpc::{
     bitcoin::{Block, BlockHash, Transaction},
-    json::GetBlockResult,
     jsonrpc::Error as JsonRpcError,
     Error as BitcoinError,
 };
@@ -85,7 +84,7 @@ pub async fn reverse_stream_blocks<B: BitcoinCoreApi + Clone + Send + Sync + 'st
             let (next_height, next_hash) = match (&state.height, &state.prev_block) {
                 (Some(height), Some(block)) => (height.saturating_sub(1), block.header.prev_blockhash),
                 _ => match get_best_block_info(state.rpc).await {
-                    Ok(info) => (info.height as u32, info.hash),
+                    Ok((height, hash)) => (height, hash),
                     Err(e) => return Some((Err(e), state)), // abort
                 },
             };
@@ -182,16 +181,20 @@ pub async fn stream_blocks<B: BitcoinCoreApi + Clone>(
 
 /// small helper function for getting the block info of the best block. This simplifies
 /// error handling a little bit
-async fn get_best_block_info<B: BitcoinCoreApi + Clone>(rpc: &B) -> Result<GetBlockResult, Error> {
-    let hash = rpc.get_best_block_hash().await?;
-    rpc.get_block_info(&hash).await
+async fn get_best_block_info<B: BitcoinCoreApi + Clone>(rpc: &B) -> Result<(u32, BlockHash), Error> {
+    let height = rpc.get_block_count().await? as u32;
+    let hash = rpc.get_block_hash(height).await?;
+    Ok((height, hash))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::*;
-    pub use bitcoincore_rpc::bitcoin::{Amount, Network, TxMerkleNode};
+    pub use bitcoincore_rpc::{
+        bitcoin::{Amount, Network, TxMerkleNode},
+        json::GetBlockResult,
+    };
     use sp_core::H256;
 
     mockall::mock! {

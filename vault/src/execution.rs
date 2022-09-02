@@ -14,7 +14,7 @@ use runtime::{
     RedeemPallet, RedeemRequestStatus, RefundPallet, ReplacePallet, ReplaceRequestStatus, RequestRefundEvent,
     SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
-use service::{spawn_cancelable, ShutdownSender};
+use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
 use std::{collections::HashMap, convert::TryInto, time::Duration};
 use tokio::time::sleep;
 use tokio_stream::wrappers::BroadcastStream;
@@ -455,7 +455,7 @@ pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'st
     payment_margin: Duration,
     process_refunds: bool,
     auto_rbf: bool,
-) -> Result<(), Error> {
+) -> Result<(), ServiceError> {
     let parachain_rpc = &parachain_rpc;
     let vault_id = parachain_rpc.get_account_id().clone();
 

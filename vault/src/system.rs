@@ -9,7 +9,7 @@ use crate::{
     Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
-use bitcoin::{BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
+use bitcoin::{light::BitcoinLight as BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
 use clap::Parser;
 use futures::{
     channel::{mpsc, mpsc::Sender},
@@ -582,6 +582,7 @@ impl VaultService {
         let listen_for_fee_rate_estimate_changes =
             |rpc: InterBtcParachain| async move { rpc.listen_for_fee_rate_changes().await };
 
+        tracing::info!("Starting all services...");
         let tasks = vec![
             (
                 "Fee Estimate Listener",
