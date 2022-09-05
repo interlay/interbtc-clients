@@ -13662,6 +13662,7 @@ dependencies = [
  "sp-core",
  "sp-keyring",
  "sysinfo 0.26.1",
+ "tempdir",
  "thiserror",
  "tokio",
  "tokio-metrics",

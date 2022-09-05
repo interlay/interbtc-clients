@@ -16,6 +16,8 @@ pub enum Error {
     OsStringError,
     #[error("There is a service already running on the system, with pid {0}")]
     ServiceAlreadyRunning(String),
+    #[error("Process with pid {0} not found")]
+    ProcessNotFound(String),
 
     #[error("SerdeJsonError: {0}")]
     SerdeJsonError(#[from] SerdeJsonError),

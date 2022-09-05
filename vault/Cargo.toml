@@ -50,6 +50,7 @@ sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "pol
 
 [dev-dependencies]
 mockall = "0.8.1"
+tempdir = "0.3.7"
 
 # Workspace dependencies
 runtime = { path = "../runtime", features = ["testing-utils"] }
