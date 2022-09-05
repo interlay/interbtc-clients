@@ -1,7 +1,7 @@
 use std::{
     fs::{self, File},
     io::Write,
-    path::{PathBuf, Path},
+    path::{Path, PathBuf},
     process,
     str::FromStr,
 };
