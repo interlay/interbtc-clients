@@ -264,7 +264,6 @@ mod tests {
                 &self,
                 addresses: Vec<A>,
             ) -> Result<(), Error>;
-            async fn find_duplicate_payments(&self, transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error>;
             fn get_utxo_count(&self) -> Result<usize, Error>;
             async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
                 &self,
