@@ -555,7 +555,7 @@ impl InterBtcParachain {
     }
 
     pub async fn store_assets_metadata(&self) -> Result<(), Error> {
-        AssetRegistry::global()?.extend(self.get_foreign_assets_metadata().await?)
+        AssetRegistry::extend(self.get_foreign_assets_metadata().await?)
     }
 
     /// Listen to fee_rate changes and broadcast new values on the fee_rate_update_tx channel

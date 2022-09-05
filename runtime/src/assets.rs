@@ -7,6 +7,7 @@ use std::{
 };
 
 lazy_static! {
+    // NOTE: restrict access to the lock to ensure that no async code yields while holding the mutex
     static ref ASSET_REGISTRY: Mutex<AssetRegistry> = Mutex::new(AssetRegistry::default());
 }
 
@@ -18,11 +19,11 @@ pub struct AssetRegistry {
 
 impl AssetRegistry {
     /// Fetch the global, mutable singleton
-    pub(crate) fn global() -> Result<MutexGuard<'static, Self>, Error> {
+    fn global() -> Result<MutexGuard<'static, Self>, Error> {
         ASSET_REGISTRY.lock().map_err(|_| Error::CannotOpenAssetRegistry)
     }
 
-    pub(crate) fn insert(&mut self, foreign_asset_id: u32, asset_metadata: AssetMetadata) -> Result<(), Error> {
+    fn insert(&mut self, foreign_asset_id: u32, asset_metadata: AssetMetadata) -> Result<(), Error> {
         let asset_name = String::from_utf8(asset_metadata.symbol.clone())
             .map_err(|_| Error::InvalidCurrency)?
             .to_uppercase();
@@ -32,25 +33,28 @@ impl AssetRegistry {
         Ok(())
     }
 
-    pub(crate) fn extend(&mut self, assets: Vec<(u32, AssetMetadata)>) -> Result<(), Error> {
+    pub(crate) fn extend(assets: Vec<(u32, AssetMetadata)>) -> Result<(), Error> {
+        let mut asset_registry = Self::global()?;
         for (foreign_asset_id, asset_metadata) in assets {
             // TODO: check for duplicates?
-            self.insert(foreign_asset_id, asset_metadata)?;
+            asset_registry.insert(foreign_asset_id, asset_metadata)?;
         }
         Ok(())
     }
 
     /// Fetch the currency for a ticker symbol
-    pub fn get_foreign_asset_by_symbol(&self, symbol: String) -> Result<CurrencyId, Error> {
-        self.symbol_lookup
+    pub fn get_foreign_asset_by_symbol(symbol: String) -> Result<CurrencyId, Error> {
+        Self::global()?
+            .symbol_lookup
             .get(&symbol)
             .and_then(|foreign_asset_id| Some(CurrencyId::ForeignAsset(*foreign_asset_id)))
             .ok_or(Error::AssetNotFound)
     }
 
     /// Fetch the asset metadata for a foreign asset
-    pub fn get_asset_metadata_by_id(&self, foreign_asset_id: u32) -> Result<AssetMetadata, Error> {
-        self.metadata_lookup
+    pub fn get_asset_metadata_by_id(foreign_asset_id: u32) -> Result<AssetMetadata, Error> {
+        Self::global()?
+            .metadata_lookup
             .get(&foreign_asset_id)
             .cloned()
             .ok_or(Error::AssetNotFound)
@@ -73,7 +77,7 @@ impl TryFromSymbol for CurrencyId {
             id if id == KSM.symbol() => Ok(Token(KSM)),
             id if id == KBTC.symbol() => Ok(Token(KBTC)),
             id if id == KINT.symbol() => Ok(Token(KINT)),
-            _ => AssetRegistry::global()?.get_foreign_asset_by_symbol(uppercase_symbol),
+            _ => AssetRegistry::get_foreign_asset_by_symbol(uppercase_symbol),
         }
     }
 }
@@ -90,8 +94,7 @@ impl RuntimeCurrencyInfo for CurrencyId {
     fn name(&self) -> Result<String, Error> {
         match self {
             CurrencyId::Token(token_symbol) => Ok(token_symbol.name().to_string()),
-            CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::global()?
-                .get_asset_metadata_by_id(*foreign_asset_id)
+            CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::get_asset_metadata_by_id(*foreign_asset_id)
                 .and_then(|asset_metadata| {
                     String::from_utf8(asset_metadata.name.clone()).map_err(|_| Error::InvalidCurrency)
                 }),
@@ -101,8 +104,7 @@ impl RuntimeCurrencyInfo for CurrencyId {
     fn symbol(&self) -> Result<String, Error> {
         match self {
             CurrencyId::Token(token_symbol) => Ok(token_symbol.symbol().to_string()),
-            CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::global()?
-                .get_asset_metadata_by_id(*foreign_asset_id)
+            CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::get_asset_metadata_by_id(*foreign_asset_id)
                 .and_then(|asset_metadata| {
                     String::from_utf8(asset_metadata.symbol.clone()).map_err(|_| Error::InvalidCurrency)
                 }),
@@ -112,17 +114,16 @@ impl RuntimeCurrencyInfo for CurrencyId {
     fn decimals(&self) -> Result<u32, Error> {
         match self {
             CurrencyId::Token(token_symbol) => Ok(token_symbol.decimals().into()),
-            CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::global()?
-                .get_asset_metadata_by_id(*foreign_asset_id)
-                .map(|asset_metadata| asset_metadata.decimals),
+            CurrencyId::ForeignAsset(foreign_asset_id) => {
+                AssetRegistry::get_asset_metadata_by_id(*foreign_asset_id).map(|asset_metadata| asset_metadata.decimals)
+            }
         }
     }
 
     fn coingecko_id(&self) -> Result<String, Error> {
         match self {
             CurrencyId::Token(token_symbol) => Ok(token_symbol.name().to_string().to_lowercase()),
-            CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::global()?
-                .get_asset_metadata_by_id(*foreign_asset_id)
+            CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::get_asset_metadata_by_id(*foreign_asset_id)
                 .and_then(|asset_metadata| {
                     String::from_utf8(asset_metadata.additional.coingecko_id.clone())
                         .map_err(|_| Error::InvalidCurrency)
@@ -151,7 +152,7 @@ mod tests {
         };
         AssetRegistry::global()?.insert(0, expected_asset_metadata.clone())?;
 
-        let actual_asset_metadata = AssetRegistry::global()?.get_asset_metadata_by_id(0)?;
+        let actual_asset_metadata = AssetRegistry::get_asset_metadata_by_id(0)?;
         assert_eq!(expected_asset_metadata, actual_asset_metadata);
 
         Ok(())
