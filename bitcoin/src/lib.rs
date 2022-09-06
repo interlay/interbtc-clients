@@ -159,22 +159,12 @@ pub trait BitcoinCoreApi {
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
-    async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
-        &self,
-        address: A,
-        sat: u64,
-        fee_rate: SatPerVbyte,
-        request_id: Option<H256>,
-    ) -> Result<LockedTransaction, Error>;
-
     async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
         &self,
         txid: &Txid,
         address: A,
         fee_rate: SatPerVbyte,
     ) -> Result<Txid, Error>;
-
-    async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
 
     async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
         &self,
@@ -209,9 +199,9 @@ pub trait BitcoinCoreApi {
     fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error>;
 }
 
-pub struct LockedTransaction {
-    pub transaction: Transaction,
-    pub recipient: String,
+struct LockedTransaction {
+    transaction: Transaction,
+    recipient: String,
     _lock: Option<OwnedMutexGuard<()>>,
 }
 
@@ -467,6 +457,61 @@ impl BitcoinCore {
             Ok(LockedTransaction::new(transaction, recipient.to_string(), Some(lock)))
         })
         .await
+    }
+
+    /// Creates and return a transaction; it is not submitted to the mempool. While the returned value
+    /// is alive, no other transactions can be created (this is guarded by a mutex). This prevents
+    /// accidental double spending.
+    ///
+    /// # Arguments
+    /// * `address` - Bitcoin address to fund
+    /// * `sat` - number of Satoshis to transfer
+    /// * `fee_rate` - fee rate in sat/vbyte
+    /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
+    async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
+        &self,
+        address: A,
+        sat: u64,
+        fee_rate: SatPerVbyte,
+        request_id: Option<H256>,
+    ) -> Result<LockedTransaction, Error> {
+        let recipient = address.encode_str(self.network)?;
+        let raw_tx = self
+            .with_wallet(|| async {
+                // create raw transaction that includes the op_return (if any). If we were to add the op_return
+                // after funding, the fees might be insufficient. An alternative to our own version of
+                // this function would be to call create_raw_transaction (without the _hex suffix), and
+                // to add the op_return afterwards. However, this function fails if no inputs are
+                // specified, as is the case for us prior to calling fund_raw_transaction.
+                self.create_raw_transaction_hex(recipient.clone(), Amount::from_sat(sat), request_id)
+            })
+            .await?;
+
+        self.fund_and_sign_transaction::<A>(fee_rate, &raw_tx, &None, &recipient, true)
+            .await
+    }
+
+    /// Submits a transaction to the mempool
+    ///
+    /// # Arguments
+    /// * `transaction` - The transaction created by create_transaction
+    async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error> {
+        log::info!("Sending bitcoin to {}", transaction.recipient);
+
+        // place the transaction into the mempool, this is fine to retry
+        let txid = self
+            .with_wallet(|| async { Ok(self.rpc.send_raw_transaction(&transaction.transaction)?) })
+            .await?;
+
+        #[cfg(feature = "regtest-manual-mining")]
+        if self.auto_mine {
+            log::debug!("Auto-mining!");
+
+            self.rpc
+                .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
+        }
+
+        Ok(txid)
     }
 
     #[cfg(feature = "regtest-manual-mining")]
@@ -794,38 +839,6 @@ impl BitcoinCoreApi for BitcoinCore {
         })
     }
 
-    /// Creates and return a transaction; it is not submitted to the mempool. While the returned value
-    /// is alive, no other transactions can be created (this is guarded by a mutex). This prevents
-    /// accidental double spending.
-    ///
-    /// # Arguments
-    /// * `address` - Bitcoin address to fund
-    /// * `sat` - number of Satoshis to transfer
-    /// * `fee_rate` - fee rate in sat/vbyte
-    /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
-    async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
-        &self,
-        address: A,
-        sat: u64,
-        fee_rate: SatPerVbyte,
-        request_id: Option<H256>,
-    ) -> Result<LockedTransaction, Error> {
-        let recipient = address.encode_str(self.network)?;
-        let raw_tx = self
-            .with_wallet(|| async {
-                // create raw transaction that includes the op_return (if any). If we were to add the op_return
-                // after funding, the fees might be insufficient. An alternative to our own version of
-                // this function would be to call create_raw_transaction (without the _hex suffix), and
-                // to add the op_return afterwards. However, this function fails if no inputs are
-                // specified, as is the case for us prior to calling fund_raw_transaction.
-                self.create_raw_transaction_hex(recipient.clone(), Amount::from_sat(sat), request_id)
-            })
-            .await?;
-
-        self.fund_and_sign_transaction::<A>(fee_rate, &raw_tx, &None, &recipient, true)
-            .await
-    }
-
     async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
         &self,
         txid: &Txid,
@@ -856,27 +869,6 @@ impl BitcoinCoreApi for BitcoinCore {
 
         let txid = self
             .with_wallet_inner(false, || async { Ok(self.rpc.send_raw_transaction(&tx.transaction)?) })
-            .await?;
-
-        #[cfg(feature = "regtest-manual-mining")]
-        if self.auto_mine {
-            log::debug!("Auto-mining!");
-
-            self.rpc
-                .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
-        }
-
-        Ok(txid)
-    }
-
-    /// Submits a transaction to the mempool
-    ///
-    /// # Arguments
-    /// * `transaction` - The transaction created by create_transaction
-    async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error> {
-        // place the transaction into the mempool, this is fine to retry
-        let txid = self
-            .with_wallet(|| async { Ok(self.rpc.send_raw_transaction(&transaction.transaction)?) })
             .await?;
 
         #[cfg(feature = "regtest-manual-mining")]
