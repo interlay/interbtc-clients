@@ -9,7 +9,8 @@ use sysinfo::{System, SystemExt};
 use tokio_stream::StreamExt;
 use vault::{
     metrics::{self, increment_restart_counter},
-    process, VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION,
+    process::PidFile,
+    VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION,
 };
 
 #[derive(Parser, Debug, Clone)]
@@ -59,10 +60,6 @@ where
 }
 
 async fn start() -> Result<(), Error> {
-    // The system information struct should only be created once.
-    // Source: https://docs.rs/sysinfo/0.26.1/sysinfo/#usage
-    let mut sys = System::new_all();
-
     let opts: Opts = Opts::parse();
     opts.service.logging_format.init_subscriber();
 
@@ -102,22 +99,25 @@ async fn start() -> Result<(), Error> {
         });
     }
 
-    process::try_create_pid_file(String::from(DEFAULT_SPEC_NAME), signer.account_id().to_string(), &mut sys)?;
-    let result = catch_signals(
+    // The system information struct should only be created once.
+    // Source: https://docs.rs/sysinfo/0.26.1/sysinfo/#usage
+    let mut sys = System::new_all();
+
+    // Create a PID file to signal to other processes that a vault is running.
+    // This file is auto-removed when `drop`ped.
+    let _pidfile = PidFile::create(&String::from(DEFAULT_SPEC_NAME), signer.account_id(), &mut sys)?;
+
+    // Unless termination signals are caught, the PID file is not dropped.
+    catch_signals(
         Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT]).expect("Failed to set up signal listener."),
-        vault_connection_manager.start()
-    ).await;
-    process::remove_pid_file(String::from(DEFAULT_SPEC_NAME), signer.account_id().to_string())?;
-    result
+        vault_connection_manager.start(),
+    )
+    .await
 }
 
 #[tokio::main]
 async fn main() {
-    let exit_code = if let Err(err) = catch_signals(
-        start(),
-    )
-    .await
-    {
+    let exit_code = if let Err(err) = start().await {
         tracing::error!("Exiting: {}", err);
         1
     } else {
@@ -128,6 +128,8 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
+    use runtime::AccountId;
+
     use super::*;
     use std::{thread, time::Duration};
 
@@ -146,5 +148,33 @@ mod tests {
             signal_hook::low_level::raise(*sig).unwrap();
             task.await.unwrap().unwrap();
         }
+    }
+
+    #[tokio::test]
+    async fn test_vault_pid_file() {
+        let dummy_account_id = AccountId::new(Default::default());
+        let dummy_spec_name = "kintsugi-testnet".to_string();
+        let termination_signals = &[SIGHUP, SIGTERM, SIGINT, SIGQUIT];
+        let mut sys = System::new_all();
+
+        let task = tokio::spawn({
+            let _pidfile = PidFile::create(&dummy_spec_name, &dummy_account_id, &mut sys).unwrap();
+            catch_signals(Signals::new(termination_signals).unwrap(), async {
+                tokio::time::sleep(Duration::from_millis(100_000)).await;
+                Ok(())
+            })
+        });
+        // Wait for the signals iterator to be polled
+        // This `sleep` is based on the test case in `signal-hook-tokio` itself:
+        // https://github.com/vorner/signal-hook/blob/a9e5ca5e46c9c8e6de89ff1b3ce63c5ff89cd708/signal-hook-tokio/tests/tests.rs#L50
+        thread::sleep(Duration::from_millis(1000));
+        signal_hook::low_level::raise(SIGINT).unwrap();
+        task.await.unwrap().unwrap();
+
+        // the pidfile must have been dropped after the signal was received
+        assert_eq!(
+            PidFile::compute_path(&dummy_spec_name, &dummy_account_id).exists(),
+            false
+        );
     }
 }
