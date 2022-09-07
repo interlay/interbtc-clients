@@ -2,7 +2,6 @@
 #![feature(array_zip, int_log)]
 
 mod cancellation;
-mod collateral;
 pub mod delay;
 mod error;
 mod execution;
@@ -19,7 +18,6 @@ mod types;
 pub mod service {
     pub use crate::{
         cancellation::{CancellationScheduler, IssueCanceller, ReplaceCanceller},
-        collateral::maintain_collateralization_rate,
         execution::execute_open_requests,
         issue::{
             listen_for_issue_cancels, listen_for_issue_executes, listen_for_issue_requests, process_issue_requests,

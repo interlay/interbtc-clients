@@ -36,7 +36,7 @@ pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_trans
 use log::{info, trace};
 use serde_json::error::Category as SerdeJsonCategory;
 use sp_core::H256;
-use std::{convert::TryInto, future::Future, str::FromStr, sync::Arc, time::Duration};
+use std::{convert::TryInto, future::Future, sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, OwnedMutexGuard},
     time::{sleep, timeout},
