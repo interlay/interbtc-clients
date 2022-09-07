@@ -901,8 +901,7 @@ async fn test_execute_open_requests_succeeds() {
                 Some(redeem_ids[1]),
             )
             .await
-            .unwrap()
-            .transaction;
+            .unwrap();
         btc_rpc.send_to_mempool(transaction).await;
 
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
