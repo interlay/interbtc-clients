@@ -123,16 +123,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_vault_termination_signal() {
-        let shutdown_signals = Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT]).unwrap();
-        let task = tokio::spawn(catch_signals(shutdown_signals, async {
-            tokio::time::sleep(Duration::from_millis(100_000)).await;
-            Ok(())
-        }));
-        // Wait for the signals iterator to be polled
-        // This `sleep` is based on the test case in `signal-hook-tokio` itself:
-        // https://github.com/vorner/signal-hook/blob/a9e5ca5e46c9c8e6de89ff1b3ce63c5ff89cd708/signal-hook-tokio/tests/tests.rs#L50
-        thread::sleep(Duration::from_millis(100));
-        signal_hook::low_level::raise(SIGTERM).unwrap();
-        task.await.unwrap().unwrap();
+        let termination_signals = &[SIGHUP, SIGTERM, SIGINT, SIGQUIT];
+        for sig in termination_signals {
+            let task = tokio::spawn(catch_signals(Signals::new(termination_signals).unwrap(), async {
+                tokio::time::sleep(Duration::from_millis(100_000)).await;
+                Ok(())
+            }));
+            // Wait for the signals iterator to be polled
+            // This `sleep` is based on the test case in `signal-hook-tokio` itself:
+            // https://github.com/vorner/signal-hook/blob/a9e5ca5e46c9c8e6de89ff1b3ce63c5ff89cd708/signal-hook-tokio/tests/tests.rs#L50
+            thread::sleep(Duration::from_millis(100));
+            signal_hook::low_level::raise(*sig).unwrap();
+            task.await.unwrap().unwrap();
+        }
     }
 }
