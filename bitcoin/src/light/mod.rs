@@ -38,6 +38,36 @@ impl BitcoinLight {
             .ok_or(LightClientError::NoChangeAddress)
             .map_err(Into::into)
     }
+
+    async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
+        &self,
+        address: A,
+        sat: u64,
+        fee_rate: SatPerVbyte,
+        request_id: Option<H256>,
+    ) -> Result<LockedTransaction, Error> {
+        let lock = self.transaction_creation_lock.clone().lock_owned().await;
+
+        let recipient = address.to_address(self.network)?;
+        let unsigned_tx = self.wallet.create_transaction(recipient.clone(), sat, request_id);
+
+        let change_address = self.get_change_address()?;
+
+        // TODO: implement fee estimation
+        let mut psbt = self
+            .wallet
+            .fund_transaction(unsigned_tx, change_address, fee_rate.0 * 265)
+            .await?;
+        self.wallet.sign_transaction(&mut psbt)?;
+        let signed_tx = psbt.extract_tx();
+
+        Ok(LockedTransaction::new(signed_tx, recipient.to_string(), Some(lock)))
+    }
+
+    async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error> {
+        let txid = self.electrs.send_transaction(transaction.transaction).await?;
+        Ok(txid)
+    }
 }
 
 impl Default for BitcoinLight {
@@ -118,11 +148,6 @@ impl BitcoinCoreApi for BitcoinLight {
         }
     }
 
-    async fn is_block_known(&self, _block_hash: BlockHash) -> Result<bool, Error> {
-        // TODO: remove, unused
-        Ok(true)
-    }
-
     async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error> {
         let address = self.get_change_address()?;
         Ok(A::decode_str(&address.to_string())?)
@@ -181,10 +206,6 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(self.electrs.get_block_header(hash).await?)
     }
 
-    async fn get_block_info(&self, _hash: &BlockHash) -> Result<GetBlockResult, Error> {
-        Err(Error::NotSupported)
-    }
-
     async fn get_mempool_transactions<'a>(
         &'a self,
     ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + Send + 'a>, Error> {
@@ -225,31 +246,6 @@ impl BitcoinCoreApi for BitcoinLight {
         })
     }
 
-    async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
-        &self,
-        address: A,
-        sat: u64,
-        fee_rate: SatPerVbyte,
-        request_id: Option<H256>,
-    ) -> Result<LockedTransaction, Error> {
-        let lock = self.transaction_creation_lock.clone().lock_owned().await;
-
-        let recipient = address.to_address(self.network)?;
-        let unsigned_tx = self.wallet.create_transaction(recipient.clone(), sat, request_id);
-
-        let change_address = self.get_change_address()?;
-
-        // TODO: implement fee estimation
-        let mut psbt = self
-            .wallet
-            .fund_transaction(unsigned_tx, change_address, fee_rate.0 * 265)
-            .await?;
-        self.wallet.sign_transaction(&mut psbt)?;
-        let signed_tx = psbt.extract_tx();
-
-        Ok(LockedTransaction::new(signed_tx, recipient.to_string(), Some(lock)))
-    }
-
     async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
         &self,
         _txid: &Txid,
@@ -257,11 +253,6 @@ impl BitcoinCoreApi for BitcoinLight {
         _fee_rate: SatPerVbyte,
     ) -> Result<Txid, Error> {
         Err(Error::NotSupported)
-    }
-
-    async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error> {
-        let txid = self.electrs.send_transaction(transaction.transaction).await?;
-        Ok(txid)
     }
 
     async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
@@ -296,19 +287,6 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(())
     }
 
-    async fn wallet_has_public_key<P>(&self, _public_key: P) -> Result<bool, Error>
-    where
-        P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static,
-    {
-        // TODO: remove, only used for testing
-        Ok(true)
-    }
-
-    async fn import_private_key(&self, _privkey: PrivateKey) -> Result<(), Error> {
-        // TODO: remove, only used for testing
-        Ok(())
-    }
-
     async fn rescan_blockchain(&self, _start_height: usize, _end_height: usize) -> Result<(), Error> {
         // nothing to do
         Ok(())
@@ -320,11 +298,6 @@ impl BitcoinCoreApi for BitcoinLight {
     ) -> Result<(), Error> {
         // nothing to do
         Ok(())
-    }
-
-    async fn find_duplicate_payments(&self, _transaction: &Transaction) -> Result<Vec<(Txid, BlockHash)>, Error> {
-        // nothing to do
-        Ok(Default::default())
     }
 
     fn get_utxo_count(&self) -> Result<usize, Error> {

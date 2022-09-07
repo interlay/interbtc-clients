@@ -234,57 +234,6 @@ async fn test_replace_succeeds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore]
-async fn test_maintain_collateral_succeeds() {
-    test_with_vault(|client, vault_id, vault_provider| async move {
-        let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
-        let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
-
-        let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
-        let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
-        let btc_rpc_master_wallet = btc_rpc.clone();
-        let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
-
-        let issue_amount = 100000;
-        let vault_collateral =
-            get_required_vault_collateral_for_issue(&vault_provider, issue_amount, vault_id.collateral_currency())
-                .await;
-        assert_ok!(
-            vault_provider
-                .register_vault_with_public_key(
-                    &vault_id,
-                    vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
-                )
-                .await
-        );
-
-        assert_issue(&user_provider, &btc_rpc, &vault_id, issue_amount).await;
-
-        test_service(
-            vault::service::maintain_collateralization_rate(vault_provider.clone(), vault_id_manager),
-            async {
-                // dot per btc increases by 10%
-                set_exchange_rate_and_wait(
-                    &relayer_provider,
-                    DEFAULT_TESTING_CURRENCY,
-                    FixedU128::saturating_from_rational(110u128, 10000u128),
-                )
-                .await;
-
-                assert_event::<DepositCollateralEvent, _>(TIMEOUT, vault_provider.clone(), |e| {
-                    assert_eq!(e.new_collateral, vault_collateral / 10);
-                    true
-                })
-                .await;
-            },
-        )
-        .await;
-    })
-    .await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn test_withdraw_replace_succeeds() {
     test_with_vault(|client, old_vault_id, old_vault_provider| async move {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
@@ -952,8 +901,7 @@ async fn test_execute_open_requests_succeeds() {
                 Some(redeem_ids[1]),
             )
             .await
-            .unwrap()
-            .transaction;
+            .unwrap();
         btc_rpc.send_to_mempool(transaction).await;
 
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);

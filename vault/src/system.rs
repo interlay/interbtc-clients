@@ -1,5 +1,4 @@
 use crate::{
-    collateral::lock_required_collateral,
     delay::{OrderedVaultsDelay, RandomDelay, ZeroDelay},
     error::Error,
     faucet, issue,
@@ -265,7 +264,7 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
         Ok(())
     }
 
-    pub async fn fetch_vault_ids(&self, startup_collateral_increase: bool) -> Result<(), Error> {
+    pub async fn fetch_vault_ids(&self) -> Result<(), Error> {
         for vault_id in self
             .btc_parachain
             .get_vaults_by_account_id(self.btc_parachain.get_account_id())
@@ -284,15 +283,6 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
                 Err(x) => {
                     return Err(x);
                 }
-            }
-
-            if startup_collateral_increase {
-                // check if the vault is registered
-                match lock_required_collateral(self.btc_parachain.clone(), vault_id).await {
-                    Err(Error::RuntimeError(runtime::Error::VaultNotFound)) => {} // not registered
-                    Err(e) => tracing::error!("Failed to lock required additional collateral: {}", e),
-                    _ => {} // collateral level now OK
-                };
             }
         }
         Ok(())
@@ -539,7 +529,7 @@ impl VaultService {
         .collect::<Result<_, Error>>()?;
 
         // purposefully _after_ maybe_register_vault and _before_ other calls
-        self.vault_id_manager.fetch_vault_ids(false).await?;
+        self.vault_id_manager.fetch_vault_ids().await?;
 
         let startup_height = self.await_parachain_block().await?;
 

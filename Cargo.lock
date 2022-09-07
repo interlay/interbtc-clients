@@ -13644,6 +13644,8 @@ dependencies = [
  "serde",
  "service",
  "sha2 0.8.2",
+ "signal-hook",
+ "signal-hook-tokio",
  "sp-arithmetic",
  "sp-core",
  "sp-keyring",
