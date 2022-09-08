@@ -1029,7 +1029,6 @@ pub trait TransactionExt {
     fn get_op_return(&self) -> Option<H256>;
     fn get_op_return_bytes(&self) -> Option<[u8; 34]>;
     fn get_payment_amount_to<A: PartialAddress + PartialEq>(&self, dest: A) -> Option<u64>;
-    fn extract_input_addresses<A: PartialAddress>(&self) -> Vec<A>;
     fn extract_output_addresses<A: PartialAddress>(&self) -> Vec<A>;
     fn extract_indexed_output_addresses<A: PartialAddress>(&self) -> Vec<(usize, A)>;
     fn extract_return_to_self_address<A: PartialAddress>(
@@ -1069,14 +1068,6 @@ impl TransactionExt for Transaction {
                 None
             }
         })
-    }
-
-    /// return the addresses that are used as inputs in this transaction
-    fn extract_input_addresses<A: PartialAddress>(&self) -> Vec<A> {
-        self.input
-            .iter()
-            .filter_map(|vin| vin_to_address(vin.clone()).ok())
-            .collect::<Vec<A>>()
     }
 
     /// return the addresses that are used as outputs with non-zero value in this transaction
@@ -1119,71 +1110,6 @@ impl TransactionExt for Transaction {
             _ => Err(Error::TooManyReturnToSelfAddresses),
         }
     }
-}
-
-// https://github.com/interlay/interbtc/blob/cc5c16b28ef705e0774654dd94b813d9d35e12ec/crates/bitcoin/src/parser.rs#L277
-fn parse_compact_uint(varint: &[u8]) -> Result<(u64, usize), Error> {
-    match varint.get(0).ok_or(Error::ParsingError)? {
-        0xfd => {
-            let mut num_bytes: [u8; 2] = Default::default();
-            num_bytes.copy_from_slice(varint.get(1..3).ok_or(Error::ParsingError)?);
-            Ok((u16::from_le_bytes(num_bytes) as u64, 3))
-        }
-        0xfe => {
-            let mut num_bytes: [u8; 4] = Default::default();
-            num_bytes.copy_from_slice(varint.get(1..5).ok_or(Error::ParsingError)?);
-            Ok((u32::from_le_bytes(num_bytes) as u64, 5))
-        }
-        0xff => {
-            let mut num_bytes: [u8; 8] = Default::default();
-            num_bytes.copy_from_slice(varint.get(1..9).ok_or(Error::ParsingError)?);
-            Ok((u64::from_le_bytes(num_bytes) as u64, 9))
-        }
-        _ => Ok((varint[0] as u64, 1)),
-    }
-}
-
-fn vin_to_address<A: PartialAddress>(vin: TxIn) -> Result<A, Error> {
-    let script = if vin.witness.len() >= 2 {
-        Script::new_v0_wpkh(&WPubkeyHash::hash(&vin.witness[1]))
-    } else {
-        let input_script = vin.script_sig.as_bytes();
-        if input_script.is_empty() {
-            // ignore empty scripts (i.e. witness)
-            return Err(Error::ParsingError);
-        }
-
-        let mut p2pkh = true;
-        let mut pos = if input_script[0] == 0x00 {
-            p2pkh = false;
-            1
-        } else {
-            0
-        };
-
-        // TODO: reuse logic from bitcoin crate
-        let last = std::cmp::min(pos + 3, input_script.len());
-        let (size, len) = parse_compact_uint(input_script.get(pos..last).ok_or(Error::ParsingError)?)?;
-        pos += len;
-        // skip sigs
-        pos += size as usize;
-        // parse redeem_script or compressed public_key
-        let last = std::cmp::min(pos + 3, input_script.len());
-        let (_size, len) = parse_compact_uint(input_script.get(pos..last).ok_or(Error::ParsingError)?)?;
-        pos += len;
-
-        let bytes = input_script.get(pos..).ok_or(Error::ParsingError)?;
-
-        if p2pkh {
-            Script::new_p2pkh(&PubkeyHash::hash(bytes))
-        } else {
-            Script::new_p2sh(&ScriptHash::hash(bytes))
-        }
-    };
-
-    Ok(PartialAddress::from_payload(
-        Payload::from_script(&script).ok_or(ConversionError::InvalidPayload)?,
-    )?)
 }
 
 #[cfg(test)]
@@ -1238,98 +1164,5 @@ mod tests {
         let expected = bitcoincore_rpc::bitcoin::hashes::sha256::Hash::from_hex(expected).unwrap();
 
         assert_eq!(expected, script_hash);
-    }
-
-    #[test]
-    fn test_vin_to_address() {
-        assert_eq!(
-            // 1fd696a71ce2d9533d1e22cd113c8c8b33da4845716f42eb99968f3d88a4042c
-            Address {
-                payload: vin_to_address::<Payload>(TxIn {
-                    previous_output: OutPoint::default(),
-                    script_sig: Script::default(),
-                    sequence: 0,
-                    witness: vec![
-                        hex::decode("304402207abd7b0bf0b7c2c695293b5bac23ae2b5c0806a1a124dd39e693de3bec67a723022014bd3a35f2ba31768e1ed3e7bbc645e1c6c69218fa72edb2325c7580af62e46901").unwrap(),
-                        hex::decode("037dbedcebf19e92d3d2f10846f3470797d7ba74f3faf111ab2fa94f77fd7e58d7").unwrap(),
-                    ],
-                }).unwrap(), network: Network::Testnet
-            }.to_string(),
-            "tb1q7e9x3k5gkx8dsgqwm455z3sa7maj4mc05mqnvf".to_string(),
-            "p2wpkh"
-        );
-
-        assert_eq!(
-            // 5ce470709bd532e092ddc01cf906c80e34d19ff7541ef03dabaedacfd7233f8d
-            Address {
-                payload: vin_to_address::<Payload>(TxIn {
-                    previous_output: OutPoint::default(),
-                    script_sig: deserialize::<Script>(&hex::decode("1600144d99b19e36a28fc6a6bab9f48ba98652351bb3cb").unwrap()).unwrap(),
-                    sequence: 0,
-                    witness: vec![
-                        hex::decode("30440220202345f4ef3f715a14e8e15e7ed54813c0d56d546c02fe1a419c1ce86d82c9ee0220180445abea2125cbde0db6ee5436cb9a98f5dad12865a6855e8a1c7f45c2984a01").unwrap(),
-                        hex::decode("02b309205f020e2c9643f12ce0eea9ec5b3e1e3be99df61f629fe22687d7d80238").unwrap(),
-                    ],
-                }).unwrap(), network: Network::Testnet
-            }.to_string(),
-            "tb1qfkvmr83k528udf46h86gh2vx2g63hv7tkdufks".to_string(),
-            "p2wpkh"
-        );
-
-        {
-            // e9affb84743b91034582a56ac8a6f9c6815057edb7a1f4c0df6e78a4af4a9c7a
-            let tx = deserialize::<Transaction>(&hex::decode("0100000001a2a20766d15406c23841d4e7a7348403624c723fcdbae1ce44654975f5400584010000006a47304402201f1ba72b4071b38905135ed08acbafb0926c42b9f709ff6d3e7d4f557b58e92f02203b2bcb227085c1a37d22fdc0a9c1ba73f69560aadaacf1144cb7d614bba7cd430121020c57dafca427593d3b9e323098c2ca0bb0512a23efa08d388147e1877cabc037ffffffff02f82a0000000000001976a9142c8e6dcfb9a2eb49118886f0ac1e6e6574d1636188ac30689359000000001976a914935bd02d1337ec8ff9b914f4a0159f1240d530f688ac00000000").unwrap()).unwrap();
-            assert_eq!(
-                Address {
-                    payload: vin_to_address::<Payload>(tx.input[0].clone()).unwrap(),
-                    network: Network::Testnet
-                }
-                .to_string(),
-                "mgJnpiNHvZpTLZ8yX1Tnw8ieErvJt9gkA9".to_string(),
-                "p2pkh"
-            );
-        }
-
-        {
-            // d3daa640b29ecbd306fcaede8d1e9b7c89e48f160c377247c5259ba73d1efcb8
-            let tx = deserialize::<Transaction>(&hex::decode("01000000014f287eabcbb1656713a584763da163a7b58f58047f8e5576283cee592c1bb2e101000000910047304402205b8029966035bb3fe68135ead2ba15bb6226ff701e1be41d848c9b3e7bd8e8a80220487eb3cf8e086308204ef4a66aa0cfe33dd2aceaea5d3b9f4f0cc2f0d4037832014751210371d183b1091df2e50fd9f7a54e6f504f32c875501ee9d2a785af3efd867fd433210280c8b8eb94192b221cad3736bda4bbf3f3980754d2559cee4d61bcf0a2c5693e52aeffffffff0140aeeb02000000001976a914394c0ce031df961094c1531f81bfeed5e341a2c388ac00000000").unwrap()).unwrap();
-            assert_eq!(
-                Address {
-                    payload: vin_to_address::<Payload>(tx.input[0].clone()).unwrap(),
-                    network: Network::Testnet
-                }
-                .to_string(),
-                "2NCwKFvap8M8q2c4qLRPdhyaEneQXTxynzM".to_string(),
-                "p2sh"
-            );
-        }
-    }
-
-    #[test]
-    fn test_extract_input_addresses() {
-        // 5de91933c40bbb2ed7532e352e52e99a51987fd85d92fecee5fb1c0abccdc40a
-        let tx = deserialize::<Transaction>(&hex::decode("0100000000010a6f3696e148abd79a11de9c856de2ab8c5d577dfb11504098dd7b20aebb5df1fb0100000000ffffffff2d0a3a53efdb9137335196b8e8411a7875a25e7f8f0d1caf2f8b34228f1d5378000000006b483045022100f5a08d7fec0f14dfb2951eb4ed1258819fe7581b1d1f3f80dac124bdb89c793f0220307b9864355f86f2fa89978514bcdc239452f77d6ff40ab1124e73a4487c01a80121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffba1431cf2a5dc4b07d86d788bd2e8444cbd3dd0cb35820be30eb7b90d3e48f0c000000006a4730440220377ea3fdead5fab0f771bfe1e7ac2084583dda7b7bdb39cce8a62a1092bed1ba0220608092e7233938de44329bb2eeabaae2911f06b224bbbc38228397bfc73011500121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffba0a2f37ffbe96731a0871b31da5dc9220d8b74895f56ec070e8587d9dd9ea06000000006a47304402206e3223bc0724e48416ebd05e94c1ccd249d00da81132a57b97ba6ae68c1e726802201de050b8e7138e774575b0d024a324d900476955144ad87b8a1bf876136bc1f60121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffba073447d593711edffe4dc94266b1c5b1985099854e99dd930185a66a4acd60000000006a47304402202974974b80aa509fbc5c8e6ac05667f41889dd89a49363715d0d3e9e0b68be1d022074d2dd3fe6db508081a829bf200f3d70f2366e797f2bf30ae4401d397da8f9370121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffb9fb6cf24186598c6bbcac7fef988a8e78ba40c619a3258673b460202364346a000000006a47304402206329eca504a17a00ec1425b95bc5659bda7f5d284920df966dd27c72ff2d6a4f0220068a83a3380def3ea19cc6506d1c5ea75e7299716d00aadcdc87065444b763cd0121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffb9f27cd3878f205d8dcc252b5a862cdfbede877dc88d0fec2c0d659b3bb3d767000000006b483045022100d9a019c934e7e8da7add5798e7795b0e910df87d755c8de83fd169415c085c410220723dd326f45c3ab40a9a6870400507cb76914cf40625df0c9aad60b2871ad5ba0121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffb9e4c0dd11326ea85d8804e4ed4a956fa2c80412b10f05a9243f788d9fb2c38a000000006b483045022100cac5e6c793cb0b8a2456d7e69170e796822d268aa82b01ea2796dec7d6c7138e0220326110c2b44dcb787689b8fbb435c1374fc5f14ec31754b065518dc0fe3e2c450121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffb9e158a00f1ed11728561655ccb43c3aa149343dd67d1f0e08a1788cdbec238d000000006b483045022100e53756fb299901d2093b1a94cbc23c133173ddf56ec7e24f80608c6f693f3e6302201f6e8f47a6943f4bb5c86ddc50ec89a5e914426d8c9e52796612a3e5e86da8540121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffb9e0b662cb8d716ff42cc206e5142a17800fd1896022fad533f7931bf8bda19a000000006b483045022100db6b34d039b5a4de0621ceedf81c9871fe2a424211cf9e64bde58220fe4eef070220032d7bfdaee069627b4c2c6b7eff0510d56fdfb51a09ff1f887f21fa048b67820121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffff02e2cb21000000000016001474542d769d4dcb7b988bd029f215ffb43370572db35de9210b00000016001487ca9164c3c704701e5f669b472287d4ec55f71a02483045022100c1b1c3576c05c6a9e7130f1353bde96044a3eeb420979e0539d38880058d9fe402201760bab2d7f5ca4ec206682244e8ba421a5358abdd8579d06a1bfda684bb87e00121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4ece00000000000000000000000000").unwrap()).unwrap();
-        assert_eq!(
-            tx.extract_input_addresses::<Payload>()
-                .iter()
-                .map(|payload| Address {
-                    payload: payload.clone(),
-                    network: Network::Testnet
-                }
-                .to_string())
-                .collect::<Vec<String>>(),
-            vec![
-                "tb1qsl9fzexrcuz8q8jlv6d5wg586nk9tac6ghv2qu",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC"
-            ]
-        );
     }
 }
