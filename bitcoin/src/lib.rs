@@ -29,9 +29,8 @@ pub use bitcoincore_rpc::{
     jsonrpc::{error::RpcError, Error as JsonRpcError},
     Auth, Client, Error as BitcoinError, RpcApi,
 };
-use electrs::{get_address_tx_history_full, get_tx_hex, get_tx_merkle_block_proof};
+use electrs::ElectrsClient;
 pub use error::{BitcoinRpcError, ConversionError, Error};
-use esplora_btc_api::apis::configuration::Configuration as ElectrsConfiguration;
 pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
 use log::{info, trace};
 use serde_json::error::Category as SerdeJsonCategory;
@@ -74,10 +73,6 @@ const RANDOMIZATION_FACTOR: f64 = 0.25;
 
 const DERIVATION_KEY_LABEL: &str = "derivation-key";
 const DEPOSIT_LABEL: &str = "deposit";
-
-const ELECTRS_TESTNET_URL: &str = "https://btc-testnet.interlay.io";
-const ELECTRS_MAINNET_URL: &str = "https://btc-mainnet.interlay.io";
-const ELECTRS_LOCALHOST_URL: &str = "http://localhost:3002";
 
 fn get_exponential_backoff() -> ExponentialBackoff {
     ExponentialBackoff {
@@ -323,18 +318,13 @@ impl BitcoinCoreBuilder {
     }
 
     pub fn build_with_network(self, network: Network) -> Result<BitcoinCore, Error> {
-        Ok(BitcoinCore::new(
-            self.new_client()?,
-            self.wallet_name,
-            network,
-            self.electrs_url,
-        ))
+        BitcoinCore::new(self.new_client()?, self.wallet_name, network, self.electrs_url)
     }
 
     pub async fn build_and_connect(self, connection_timeout: Duration) -> Result<BitcoinCore, Error> {
         let client = self.new_client()?;
         let network = connect(&client, connection_timeout).await?;
-        Ok(BitcoinCore::new(client, self.wallet_name, network, self.electrs_url))
+        BitcoinCore::new(client, self.wallet_name, network, self.electrs_url)
     }
 }
 
@@ -344,32 +334,27 @@ pub struct BitcoinCore {
     wallet_name: Option<String>,
     network: Network,
     transaction_creation_lock: Arc<Mutex<()>>,
-    electrs_config: ElectrsConfiguration,
+    electrs_client: ElectrsClient,
     #[cfg(feature = "regtest-manual-mining")]
     auto_mine: bool,
 }
 
 impl BitcoinCore {
-    fn new(client: Client, wallet_name: Option<String>, network: Network, electrs_url: Option<String>) -> Self {
-        BitcoinCore {
+    fn new(
+        client: Client,
+        wallet_name: Option<String>,
+        network: Network,
+        electrs_url: Option<String>,
+    ) -> Result<Self, Error> {
+        Ok(BitcoinCore {
             rpc: Arc::new(client),
             wallet_name,
             network,
             transaction_creation_lock: Arc::new(Mutex::new(())),
-            electrs_config: ElectrsConfiguration {
-                base_path: electrs_url.unwrap_or_else(|| {
-                    match network {
-                        Network::Bitcoin => ELECTRS_MAINNET_URL,
-                        Network::Testnet => ELECTRS_TESTNET_URL,
-                        _ => ELECTRS_LOCALHOST_URL,
-                    }
-                    .to_owned()
-                }),
-                ..Default::default()
-            },
+            electrs_client: ElectrsClient::new(electrs_url, network)?,
             #[cfg(feature = "regtest-manual-mining")]
             auto_mine: false,
-        }
+        })
     }
 
     #[cfg(feature = "regtest-manual-mining")]
@@ -956,7 +941,7 @@ impl BitcoinCoreApi for BitcoinCore {
     ) -> Result<(), Error> {
         for address in addresses.into_iter() {
             let address = address.encode_str(self.network)?;
-            let all_transactions = get_address_tx_history_full(&self.electrs_config.base_path, &address).await?;
+            let all_transactions = self.electrs_client.get_address_tx_history_full(&address).await?;
             // filter to only import
             // a) payments in the blockchain (not in mempool), and
             // b) payments TO the address (as bitcoin core will already know about transactions spending FROM it)
@@ -973,11 +958,14 @@ impl BitcoinCoreApi for BitcoinCore {
                     .any(|output| matches!(&output.scriptpubkey_address, Some(addr) if addr == &address))
             });
             for transaction in confirmed_payments_to {
-                let rawtx = get_tx_hex(&self.electrs_config.base_path, &transaction.txid).await?;
-                let merkle_proof = get_tx_merkle_block_proof(&self.electrs_config.base_path, &transaction.txid).await?;
+                let (raw_tx, raw_merkle_proof) = futures::future::try_join(
+                    self.electrs_client.get_tx_hex(&transaction.txid),
+                    self.electrs_client.get_tx_merkle_block_proof(&transaction.txid),
+                )
+                .await?;
                 self.rpc.call(
                     "importprunedfunds",
-                    &[serde_json::to_value(rawtx)?, serde_json::to_value(merkle_proof)?],
+                    &[serde_json::to_value(raw_tx)?, serde_json::to_value(raw_merkle_proof)?],
                 )?;
             }
         }
@@ -1114,54 +1102,15 @@ impl TransactionExt for Transaction {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    use bitcoincore_rpc::bitcoin::{hashes::hex::FromHex, OutPoint, Script, Transaction};
-
-    async fn test_electrs(url: &str, script_hex: &str, expected_txid: &str) {
-        let config = ElectrsConfiguration {
-            base_path: url.to_owned(),
-            ..Default::default()
-        };
-
-        let script_bytes = Vec::from_hex(script_hex).unwrap();
-        let script_hash = bitcoincore_rpc::bitcoin::hashes::sha256::Hash::hash(&script_bytes);
-
-        let txs = esplora_btc_api::apis::scripthash_api::get_txs_by_scripthash(&config, &hex::encode(script_hash))
-            .await
-            .unwrap();
-        assert!(txs.iter().any(|tx| { &tx.txid == expected_txid }));
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    #[ignore] // disabled until mainnet electrs is up and running
-    async fn test_find_esplora_mainnet() {
-        let script_hex = "6a24aa21a9ed932d00baa7d428106db4f785d398d60d0b9c1369c38448717db4a8f36d2512e3";
-        let expected_txid = "d734d56c70ee7ac67d31a22f4b9a781619c5cff1803942b52036cd7eab1692e7";
-        test_electrs(ELECTRS_MAINNET_URL, script_hex, expected_txid).await;
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_find_esplora_testnet() {
-        let script_hex = "6a208b26f7cf49e1ad4d9f81d237933da8810644a85ac25b3c22a6a2324e1ba02efc";
-        let expected_txid = "ec736ccba2cb7d1a97145a7e98d32f8eec362cd140e917ce40842a492f43b49b";
-        test_electrs(ELECTRS_TESTNET_URL, script_hex, expected_txid).await;
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_find_esplora_testnet2() {
-        let script_hex = "6a4c5054325b0f43c54432b8df76322d225c9759359f73b283e108441862c2ee6fe4a021f6825bee72311ec0f53dd7197d0e325dca9a45aa3af296294b42c667b6db214a5174001fe7f40004001f7a07000b02";
-        let expected_txid = "ddfaa4f63b9cbdf72299b91074fbff13b02816f2a29109b2fecfd912a7476807";
-        test_electrs(ELECTRS_TESTNET_URL, script_hex, expected_txid).await;
-    }
+    use bitcoincore_rpc::bitcoin::hashes::{hex::FromHex, sha256::Hash as Sha256Hash, Hash};
 
     #[test]
     fn test_op_return_hashing() {
         let raw = Vec::from_hex("6a208703723a787b0f989110b49fd5e1cf1c2571525d564bf384b5aa9e340c9ad8bd").unwrap();
-        let script_hash = bitcoincore_rpc::bitcoin::hashes::sha256::Hash::hash(&raw);
+        let script_hash = Sha256Hash::hash(&raw);
 
         let expected = "6ed3928fdcf7375b9622746eb46f8e97a2832a0c43000e3d86774fecb74ee67e";
-        let expected = bitcoincore_rpc::bitcoin::hashes::sha256::Hash::from_hex(expected).unwrap();
+        let expected = Sha256Hash::from_hex(expected).unwrap();
 
         assert_eq!(expected, script_hash);
     }
