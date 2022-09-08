@@ -140,7 +140,7 @@ impl Wallet {
 
             let prev_out = psbt_input.witness_utxo.clone().unwrap();
 
-            let sighash_ty = psbt_input.sighash_type.unwrap_or_else(|| SigHashType::All.into());
+            let sighash_ty = psbt_input.sighash_type.unwrap_or(SigHashType::All);
 
             let script_code = if prev_out.script_pubkey.is_v0_p2wpkh() {
                 Ok(p2wpkh_script_code(&prev_out.script_pubkey))
@@ -171,7 +171,7 @@ impl Wallet {
                     self.sig
                         .serialize_der()
                         .iter()
-                        .map(|x| *x)
+                        .copied()
                         .chain(std::iter::once(self.hash_ty as u8))
                         .collect()
                 }

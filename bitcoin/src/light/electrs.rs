@@ -195,12 +195,10 @@ impl ElectrsClient {
     }
 
     pub(crate) async fn get_utxos_for_address(&self, address: Address) -> Result<Vec<Utxo>, Error> {
-        let url = self
-            .url
-            .join(&format!("/address/{address}/utxo", address = address.to_string()))?;
+        let url = self.url.join(&format!("/address/{address}/utxo"))?;
         let utxos: Vec<electrs_types::Utxo> = self.get_and_decode(url).await?;
 
-        Ok(utxos
+        utxos
             .into_iter()
             .map(|utxo| {
                 Ok(Utxo {
@@ -211,13 +209,11 @@ impl ElectrsClient {
                     value: utxo.value,
                 })
             })
-            .collect::<Result<Vec<_>, Error>>()?)
+            .collect::<Result<Vec<_>, Error>>()
     }
 
     pub(crate) async fn get_script_pubkey(&self, outpoint: OutPoint) -> Result<Script, Error> {
-        let url = self
-            .url
-            .join(&format!("/tx/{txid}", txid = outpoint.txid.to_string()))?;
+        let url = self.url.join(&format!("/tx/{txid}", txid = outpoint.txid))?;
 
         let tx: electrs_types::Transaction = self.get_and_decode(url).await?;
         Ok(Script::from_str(
