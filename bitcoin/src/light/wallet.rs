@@ -416,7 +416,7 @@ impl Wallet {
 mod tests {
     use std::str::FromStr;
 
-    use bitcoincore_rpc::bitcoin::Txid;
+    use bitcoincore_rpc::bitcoin::{hashes::hex::ToHex, Txid};
 
     use super::*;
 
@@ -500,6 +500,81 @@ mod tests {
         .get_serialize_size();
 
         assert_eq!(input_bytes + tx_noinputs_size + change_output_size, 184);
+
+        Ok(())
+    }
+
+    macro_rules! map_btree {
+        ($($k:expr => $v:expr),* $(,)?) => {{
+            core::convert::From::from([$(($k, $v),)*])
+        }};
+    }
+
+    #[test]
+    fn should_sign_transaction() -> Result<(), Box<dyn std::error::Error>> {
+        let secp = Secp256k1::new();
+
+        let key_store: BTreeMap<_, _> = map_btree! {
+            Address::from_str("bcrt1qxu0en0v9dsywqchvpr6g9aa5vh9wyeupys2ka8").unwrap() =>
+            PrivateKey::from_wif("cNbq2Es45c5E8hYt6MT2Phk84A4tN3KSWxPzi8JpH61eW6Ttpusf").unwrap()
+        };
+        let wallet = Wallet {
+            secp,
+            network: Network::Regtest,
+            electrs: ElectrsClient::new(None, Network::Regtest),
+            key_store: Arc::new(RwLock::new(key_store)),
+        };
+
+        // 020000000001018971609cf35253baa5164e95f79effd9ed466a2a58e6a723b38327b81e5cd2dc0000000000fdffffff02a086010000000000160014998fced992b90c49c2295c5724edf0daf4748dca5c60042a01000000160014709467f945841c6bb638f9e107de2933e214f1c502473044022057aeb22db1f8656513b7f44df3a30d8405ba040cb250d731379307f1799f9cad02201582f355d461fd0c8ced789eb02053995663c66fc63a80341da9354ce3b23e580121028d16c10d62693f938deb171ad0a8323e389e79685da23795bb6e6503cb5db1c000000000
+        let mut psbt = PartiallySignedTransaction {
+            global: psbt::Global {
+                unsigned_tx: Transaction {
+                    version: 2,
+                    lock_time: 0,
+                    input: vec![TxIn {
+                        previous_output: OutPoint {
+                            txid: Txid::from_str("dcd25c1eb82783b323a7e6582a6a46edd9ff9ef7954e16a5ba5352f39c607189")?,
+                            vout: 0,
+                        },
+                        script_sig: Default::default(),
+                        sequence: 4294967293,
+                        witness: Default::default(),
+                    }],
+                    output: vec![
+                        TxOut {
+                            value: 100000,
+                            // bcrt1qnx8uakvjhyxyns3ft3tjfm0smt68frw2c9adgx
+                            script_pubkey: Script::from_str("0014998fced992b90c49c2295c5724edf0daf4748dca")?,
+                        },
+                        TxOut {
+                            value: 4999897180,
+                            // bcrt1qwz2x0729sswxhd3cl8ss0h3fx03pfuw9anc7ww
+                            script_pubkey: Script::from_str("0014709467f945841c6bb638f9e107de2933e214f1c5")?,
+                        },
+                    ],
+                },
+                xpub: Default::default(),
+                version: 0,
+                proprietary: Default::default(),
+                unknown: Default::default(),
+            },
+            inputs: vec![psbt::Input {
+                witness_utxo: Some(TxOut {
+                    value: 5000000000,
+                    script_pubkey: Address::from_str("bcrt1qxu0en0v9dsywqchvpr6g9aa5vh9wyeupys2ka8")?.script_pubkey(),
+                }),
+                ..Default::default()
+            }],
+            outputs: vec![Default::default(); 2],
+        };
+
+        wallet.sign_transaction(&mut psbt)?;
+        let signed_tx = psbt.extract_tx();
+
+        assert_eq!(
+            "3044022057aeb22db1f8656513b7f44df3a30d8405ba040cb250d731379307f1799f9cad02201582f355d461fd0c8ced789eb02053995663c66fc63a80341da9354ce3b23e5801",
+            signed_tx.input[0].witness[0].to_hex()
+        );
 
         Ok(())
     }
