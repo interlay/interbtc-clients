@@ -1,3 +1,5 @@
+use bitcoincore_rpc::bitcoin::{blockdata::constants::WITNESS_SCALE_FACTOR, PublicKey};
+
 use super::{electrs::ElectrsClient, error::Error};
 use crate::{
     hashes::Hash,
@@ -6,7 +8,7 @@ use crate::{
     psbt::PartiallySignedTransaction,
     secp256k1::{All, Message, Secp256k1, SecretKey, Signature},
     util::bip143::SigHashCache,
-    Address, Builder as ScriptBuilder, Network, PrivateKey, Script, Transaction, TxIn, TxOut, H256,
+    Address, Builder as ScriptBuilder, Network, OutPoint, PrivateKey, Script, Transaction, TxIn, TxOut, VarInt, H256,
 };
 use std::{
     collections::BTreeMap,
@@ -33,6 +35,163 @@ pub struct Wallet {
     pub(crate) key_store: KeyStore,
 }
 
+trait GetSerializeSize {
+    fn get_serialize_size(&self) -> u64;
+}
+
+impl GetSerializeSize for TxOut {
+    // https://github.com/bitcoin/bitcoin/blob/2ab4a80480b6d538ec2a642f7f96c635c725317b/src/primitives/transaction.h#L161
+    fn get_serialize_size(&self) -> u64 {
+        (8 + VarInt(self.script_pubkey.len() as u64).len() + self.script_pubkey.len()) as u64
+    }
+}
+
+impl GetSerializeSize for TxIn {
+    // https://github.com/bitcoin/bitcoin/blob/2ab4a80480b6d538ec2a642f7f96c635c725317b/src/primitives/transaction.h#L128
+    fn get_serialize_size(&self) -> u64 {
+        (32 + 4 + 4 + VarInt(self.script_sig.len() as u64).len() + self.script_sig.len()) as u64
+    }
+}
+
+impl GetSerializeSize for Vec<Vec<u8>> {
+    fn get_serialize_size(&self) -> u64 {
+        let mut input_weight = 0;
+        input_weight += VarInt(self.len() as u64).len();
+        for elem in self {
+            input_weight += VarInt(elem.len() as u64).len() + elem.len();
+        }
+        input_weight as u64
+    }
+}
+
+// https://github.com/bitcoin/bitcoin/blob/607d5a46aa0f5053d8643a3e2c31a69bfdeb6e9f/src/script/sign.cpp#L611
+fn dummy_sign_input(txin: &mut TxIn, public_key: PublicKey) {
+    // Create a dummy signature that is a valid DER-encoding
+    let dummy_signature = {
+        let m_r_len = 32;
+        let m_s_len = 32;
+
+        // vch_sig.assign(m_r_len + m_s_len + 7, '\000');
+        let mut vch_sig = vec![0; m_r_len + m_s_len + 7];
+        vch_sig[0] = 0x30;
+        vch_sig[1] = (m_r_len + m_s_len + 4) as u8;
+        vch_sig[2] = 0x02;
+        vch_sig[3] = m_r_len as u8;
+        vch_sig[4] = 0x01;
+        vch_sig[4 + m_r_len] = 0x02;
+        vch_sig[5 + m_r_len] = m_s_len as u8;
+        vch_sig[6 + m_r_len] = 0x01;
+        vch_sig[6 + m_r_len + m_s_len] = SigHashType::All as u8;
+        vch_sig
+    };
+
+    // update input (only works with segwit for now)
+    txin.witness = vec![dummy_signature.to_vec(), public_key.to_bytes()];
+}
+
+// https://github.com/bitcoin/bitcoin/blob/e9035f867a36a430998e3811385958229ac79cf5/src/consensus/validation.h#L156
+fn get_transaction_input_weight(txin: TxIn) -> u64 {
+    txin.get_serialize_size() * (WITNESS_SCALE_FACTOR as u64 - 1)
+        + txin.get_serialize_size()
+        + txin.witness.get_serialize_size()
+}
+
+// https://github.com/bitcoin/bitcoin/blob/f6fdedf850d10d877316871aacfd5b6656178e70/src/policy/policy.cpp#L295
+fn get_virtual_transaction_size(n_weight: u64) -> u64 {
+    (n_weight + WITNESS_SCALE_FACTOR as u64 - 1) / WITNESS_SCALE_FACTOR as u64
+}
+
+// https://github.com/bitcoin/bitcoin/blob/01e1627e25bc5477c40f51da03c3c31b609a85c9/src/wallet/spend.cpp#L30
+fn calculate_maximum_signed_input_size(outpoint: OutPoint, public_key: PublicKey) -> u64 {
+    let mut txin = TxIn {
+        previous_output: outpoint,
+        ..Default::default()
+    };
+    dummy_sign_input(&mut txin, public_key);
+
+    // GetVirtualTransactionInputSize = GetVirtualTransactionSize(GetTransactionInputWeight(txin));
+    get_virtual_transaction_size(get_transaction_input_weight(txin))
+}
+
+// https://github.com/bitcoin/bitcoin/blob/01e1627e25bc5477c40f51da03c3c31b609a85c9/src/wallet/spend.cpp#L47
+fn calculate_maximum_signed_tx_size(psbt: &PartiallySignedTransaction, wallet: &Wallet) -> u64 {
+    let mut tx = psbt.clone().extract_tx();
+
+    // https://github.com/bitcoin/bitcoin/blob/5291933fedceb9df16eb9e4627b1d7386b53ba07/src/wallet/wallet.cpp#L1608
+    for (i, txin) in tx.input.iter_mut().enumerate() {
+        let tx_out = psbt.inputs[i].witness_utxo.as_ref().expect("psbt has witness utxo");
+        let public_key = wallet.get_pub_key(&tx_out.script_pubkey).expect("wallet has key");
+        dummy_sign_input(txin, public_key)
+    }
+
+    // GetVirtualTransactionSize = GetVirtualTransactionSize(GetTransactionWeight(tx))
+    get_virtual_transaction_size(tx.get_weight() as u64)
+}
+
+struct FeeRate {
+    // Fee rate in sat/kvB (satoshis per 1000 virtualbytes)
+    n_satoshis_per_k: u64,
+}
+
+impl FeeRate {
+    // https://github.com/bitcoin/bitcoin/blob/2ab4a80480b6d538ec2a642f7f96c635c725317b/src/policy/feerate.cpp#L23
+    fn get_fee(&self, num_bytes: u64) -> u64 {
+        self.n_satoshis_per_k.saturating_mul(num_bytes).div_ceil(1000)
+    }
+}
+
+struct CoinOutput {
+    value: u64,
+    fee: u64,
+}
+
+impl CoinOutput {
+    // output's value minus fees required to spend it
+    fn get_effective_value(&self) -> u64 {
+        self.value.saturating_sub(self.fee)
+    }
+}
+
+struct SelectCoins {
+    preset_inputs: Vec<CoinOutput>,
+    target_value: u64,
+}
+
+impl SelectCoins {
+    fn new(target_value: u64) -> Self {
+        Self {
+            preset_inputs: vec![],
+            target_value,
+        }
+    }
+
+    fn add(&mut self, coin_output: CoinOutput) {
+        self.preset_inputs.push(coin_output);
+    }
+
+    // https://github.com/bitcoin/bitcoin/blob/2bd9aa5a44b88c866c4d98f8a7bf7154049cba31/src/wallet/coinselection.cpp#L425
+    fn get_selected_value(&self) -> u64 {
+        self.preset_inputs.iter().map(|input| input.value).sum()
+    }
+
+    // https://github.com/bitcoin/bitcoin/blob/2bd9aa5a44b88c866c4d98f8a7bf7154049cba31/src/wallet/coinselection.cpp#L430
+    fn get_selected_effective_value(&self) -> u64 {
+        self.preset_inputs.iter().map(|input| input.get_effective_value()).sum()
+    }
+
+    // https://github.com/bitcoin/bitcoin/blob/2bd9aa5a44b88c866c4d98f8a7bf7154049cba31/src/wallet/coinselection.cpp#L495
+    fn get_change(&self, min_viable_change: u64, change_fee: u64) -> u64 {
+        // change = SUM(inputs) - SUM(outputs) - fees
+        let change = self.get_selected_effective_value() - self.target_value - change_fee;
+
+        if change < min_viable_change {
+            0
+        } else {
+            change
+        }
+    }
+}
+
 impl Wallet {
     pub fn new(network: Network, electrs: ElectrsClient) -> Self {
         Self {
@@ -42,37 +201,70 @@ impl Wallet {
             key_store: Arc::new(RwLock::new(Default::default())),
         }
     }
-}
 
-impl Wallet {
+    pub fn get_priv_key(&self, script_pubkey: &Script) -> Result<PrivateKey, Error> {
+        let address = Address::from_script(script_pubkey, self.network).ok_or(Error::InvalidAddress)?;
+        let key_store = self.key_store.read()?;
+        let private_key = key_store.get(&address).ok_or(Error::NoPrivateKey)?;
+        Ok(private_key.clone())
+    }
+
+    pub fn get_pub_key(&self, script_pubkey: &Script) -> Result<PublicKey, Error> {
+        Ok(self.get_priv_key(script_pubkey)?.public_key(&self.secp))
+    }
+
     pub async fn fund_transaction(
         &self,
         tx: Transaction,
         change_address: Address,
-        fee: u64,
+        n_satoshis_per_k: u64,
     ) -> Result<PartiallySignedTransaction, Error> {
-        // TODO: estimate tx fee
-        let mut total_in = 0;
-        let total_out = tx
-            .output
-            .iter()
-            .map(|tx_out| tx_out.value)
-            .sum::<u64>()
-            .saturating_add(fee);
+        let recipients_sum = tx.output.iter().map(|tx_out| tx_out.value).sum::<u64>();
+
+        let m_effective_feerate = FeeRate { n_satoshis_per_k };
+
+        // TODO: calculate actual minimum
+        let min_viable_change = 0;
+        let change_output_size = TxOut {
+            value: 0,
+            script_pubkey: change_address.script_pubkey(),
+        }
+        .get_serialize_size();
+        let change_fee = m_effective_feerate.get_fee(change_output_size);
+
+        let tx_noinputs_size = 10
+            + VarInt(tx.output.len() as u64).len() as u64
+            + tx.output.iter().map(|tx_out| tx_out.get_serialize_size()).sum::<u64>();
+        let not_input_fees = m_effective_feerate.get_fee(tx_noinputs_size);
+
+        // https://github.com/bitcoin/bitcoin/blob/01e1627e25bc5477c40f51da03c3c31b609a85c9/src/wallet/spend.cpp#L896
+        let selection_target = recipients_sum + not_input_fees;
+        let mut value_to_select = selection_target;
 
         let mut psbt = PartiallySignedTransaction::from_unsigned_tx(tx).unwrap();
+        let mut select_coins = SelectCoins::new(selection_target);
 
-        let addresses = self.key_store.read().unwrap().keys().cloned().collect::<Vec<_>>();
+        // get available coins
+        let addresses = self.key_store.read()?.keys().cloned().collect::<Vec<_>>();
         for address in addresses {
             log::info!("Found address: {}", address);
             // get utxos for address
             let utxos = self.electrs.get_utxos_for_address(address).await?;
+            // TODO: stream this
             for utxo in utxos {
                 log::info!("Found utxo: {}", utxo.outpoint.txid);
 
-                total_in += utxo.value;
-
                 let script_pubkey = self.electrs.get_script_pubkey(utxo.outpoint).await?;
+                let public_key = self.get_pub_key(&script_pubkey).expect("wallet has key");
+                let input_bytes = calculate_maximum_signed_input_size(utxo.outpoint, public_key);
+                let coin_output = CoinOutput {
+                    value: utxo.value,
+                    fee: m_effective_feerate.get_fee(input_bytes),
+                };
+
+                let effective_value = coin_output.get_effective_value();
+                select_coins.add(coin_output);
+                value_to_select = value_to_select.saturating_sub(effective_value);
 
                 psbt.global.unsigned_tx.input.push(TxIn {
                     previous_output: utxo.outpoint,
@@ -87,12 +279,31 @@ impl Wallet {
                     ..Default::default()
                 });
 
-                if total_in >= total_out {
-                    // add change output
-                    psbt.global.unsigned_tx.output.push(TxOut {
-                        value: total_in.saturating_sub(total_out),
-                        script_pubkey: change_address.script_pubkey(),
-                    });
+                if value_to_select == 0 {
+                    // add change output before computing maximum size
+                    let change_amount = select_coins.get_change(min_viable_change, change_fee);
+                    let mut n_change_pos_in_out = None;
+                    if change_amount > 0 {
+                        n_change_pos_in_out = Some(psbt.global.unsigned_tx.output.len());
+                        // add change output
+                        psbt.global.unsigned_tx.output.push(TxOut {
+                            value: change_amount,
+                            script_pubkey: change_address.script_pubkey(),
+                        });
+                    }
+
+                    // https://github.com/bitcoin/bitcoin/blob/01e1627e25bc5477c40f51da03c3c31b609a85c9/src/wallet/spend.cpp#L945
+                    let n_bytes = calculate_maximum_signed_tx_size(&psbt, &self);
+                    let fee_needed = m_effective_feerate.get_fee(n_bytes);
+                    let n_fee_ret = select_coins.get_selected_value() - recipients_sum - change_amount;
+
+                    if let Some(change_pos) = n_change_pos_in_out {
+                        if fee_needed < n_fee_ret {
+                            log::info!("Fee needed is less than expected");
+                            let mut change_output = &mut psbt.global.unsigned_tx.output[change_pos];
+                            change_output.value += n_fee_ret - fee_needed;
+                        }
+                    }
 
                     return Ok(psbt);
                 }
@@ -107,7 +318,7 @@ impl Wallet {
         let public_key = private_key.public_key(&self.secp);
         let address = Address::p2wpkh(&public_key, self.network)?;
         log::info!("Added key for address {}", address);
-        self.key_store.write().unwrap().insert(address, private_key);
+        self.key_store.write()?.insert(address, private_key);
         Ok(())
     }
 
@@ -138,6 +349,7 @@ impl Wallet {
         for inp in 0..psbt.inputs.len() {
             let psbt_input = &psbt.inputs[inp];
 
+            // TODO: use expect instead
             let prev_out = psbt_input.witness_utxo.clone().unwrap();
 
             let sighash_ty = psbt_input.sighash_type.unwrap_or(SigHashType::All);
@@ -151,9 +363,7 @@ impl Wallet {
             let mut sig_hasher = SigHashCache::new(&psbt.global.unsigned_tx);
             let sig_hash = sig_hasher.signature_hash(inp, &script_code, prev_out.value, sighash_ty);
 
-            let address = Address::from_script(&prev_out.script_pubkey, self.network).ok_or(Error::InvalidAddress)?;
-            let key_store = self.key_store.read().unwrap();
-            let private_key = key_store.get(&address).ok_or(Error::NoPrivateKey)?;
+            let private_key = self.get_priv_key(&prev_out.script_pubkey)?;
 
             let sig = self.secp.sign(
                 &Message::from_slice(&sig_hash.into_inner()[..]).unwrap(),
@@ -194,9 +404,102 @@ impl Wallet {
 
         for psbt_input in psbt.inputs.iter_mut() {
             let (key, sig) = psbt_input.partial_sigs.iter().next().unwrap();
-
+            // https://github.com/bitcoin/bitcoin/blob/607d5a46aa0f5053d8643a3e2c31a69bfdeb6e9f/src/script/sign.cpp#L125
             psbt_input.final_script_witness = Some(vec![sig.clone().to_vec(), key.to_bytes()]);
         }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use bitcoincore_rpc::bitcoin::Txid;
+
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_calculate_fees() -> Result<(), Box<dyn std::error::Error>> {
+        let tx = Transaction {
+            version: 2,
+            lock_time: Default::default(),
+            input: vec![TxIn {
+                // value: 100000
+                previous_output: OutPoint {
+                    txid: Txid::from_str("0243dee566c0bf1b887416caa0e625b447c793786f1e6a5fc9c24f0d583f4c07")?,
+                    vout: 0,
+                },
+                script_sig: Script::new(),
+                sequence: 4294967293,
+                witness: vec![
+                    hex::decode("3044022025f214b6b3f1a0b9e1110367e260ca2ff8c614272b284839be77e06607d5f8f9022056404808a029bc0fee409ca4de812e0289b092d32299340fdaa13232f367d0f801")?,
+                    hex::decode("0251bc49a18fc5af7662d04faa1929d44b7155ec723cc7f590efbf4e0fe18b14c6")?,
+                ],
+            }],
+            output: vec![
+                TxOut {
+                   value: 0,
+                   script_pubkey: Script::from_str("6a20f66966cde9d87d08cc58e6378cde0a57b21dd21a9688f2723aad4b184c56005b")?
+                },
+                TxOut {
+                    value: 700,
+                    script_pubkey: Script::from_str("0014810b092d165f424556b1c33fd343871a0cf4d36b")?
+                },
+                TxOut {
+                    value: 99116,
+                    script_pubkey: Script::from_str("00146b980ce352f5389938fae6ecd905d4c8af25b8d6")?
+                }
+            ],
+        };
+
+        assert_eq!(tx.get_size(), 265);
+        assert_eq!(tx.get_weight(), 733);
+        // vsize [vB] = weight [wu] / 4
+        assert_eq!(tx.get_weight().div_ceil(4), 184);
+        assert_eq!(get_virtual_transaction_size(tx.get_weight() as u64), 184);
+
+        let fee_rate = FeeRate { n_satoshis_per_k: 1000 };
+        assert_eq!(fee_rate.get_fee(tx.get_weight().div_ceil(4) as u64), 184);
+
+        let actual_fee = 100000 - tx.output.iter().map(|tx_out| tx_out.value).sum::<u64>();
+        assert_eq!(actual_fee, 184);
+
+        let input_bytes = calculate_maximum_signed_input_size(
+            OutPoint {
+                txid: Txid::from_str("0243dee566c0bf1b887416caa0e625b447c793786f1e6a5fc9c24f0d583f4c07")?,
+                vout: 0,
+            },
+            PublicKey::from_str("0251bc49a18fc5af7662d04faa1929d44b7155ec723cc7f590efbf4e0fe18b14c6")?,
+        );
+
+        let outputs_no_change = vec![
+            TxOut {
+                value: 0,
+                script_pubkey: Script::from_str(
+                    "6a20f66966cde9d87d08cc58e6378cde0a57b21dd21a9688f2723aad4b184c56005b",
+                )?,
+            },
+            TxOut {
+                value: 99116,
+                script_pubkey: Script::from_str("00146b980ce352f5389938fae6ecd905d4c8af25b8d6")?,
+            },
+        ];
+
+        let tx_noinputs_size = 10
+            + VarInt(outputs_no_change.len() as u64).len() as u64
+            + outputs_no_change
+                .iter()
+                .map(|tx_out| tx_out.get_serialize_size())
+                .sum::<u64>();
+        let change_output_size = TxOut {
+            value: 0,
+            script_pubkey: Script::from_str("0014810b092d165f424556b1c33fd343871a0cf4d36b")?,
+        }
+        .get_serialize_size();
+
+        assert_eq!(input_bytes + tx_noinputs_size + change_output_size, 184);
 
         Ok(())
     }

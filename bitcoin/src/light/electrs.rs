@@ -235,6 +235,7 @@ impl ElectrsClient {
             .body(serialize(&tx).to_hex())
             .send()
             .await?
+            .error_for_status()?
             .text()
             .await?;
         Ok(Txid::from_str(&txid)?)

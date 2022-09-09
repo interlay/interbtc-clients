@@ -1,4 +1,5 @@
 #![feature(map_first_last)]
+#![feature(int_roundings)]
 
 pub mod cli;
 pub mod light;
@@ -30,7 +31,7 @@ pub use bitcoincore_rpc::{
             uint::Uint256,
         },
         Address, Amount, Block, BlockHeader, Network, OutPoint, PrivateKey, PubkeyHash, PublicKey, Script, ScriptHash,
-        SignedAmount, Transaction, TxIn, TxMerkleNode, TxOut, Txid, WPubkeyHash, WScriptHash,
+        SignedAmount, Transaction, TxIn, TxMerkleNode, TxOut, Txid, VarInt, WPubkeyHash, WScriptHash,
     },
     bitcoincore_rpc_json::{
         CreateRawTransactionInput, FundRawTransactionOptions, GetBlockchainInfoResult, GetTransactionResult,

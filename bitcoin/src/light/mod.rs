@@ -53,10 +53,9 @@ impl BitcoinLight {
 
         let change_address = self.get_change_address()?;
 
-        // TODO: implement fee estimation
         let mut psbt = self
             .wallet
-            .fund_transaction(unsigned_tx, change_address, fee_rate.0 * 265)
+            .fund_transaction(unsigned_tx, change_address, fee_rate.0.saturating_mul(1000))
             .await?;
         self.wallet.sign_transaction(&mut psbt)?;
         let signed_tx = psbt.extract_tx();
