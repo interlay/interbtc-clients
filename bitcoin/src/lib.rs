@@ -4,6 +4,8 @@
 pub mod cli;
 pub mod light;
 
+pub use light::BitcoinLight;
+
 mod addr;
 mod electrs;
 mod error;

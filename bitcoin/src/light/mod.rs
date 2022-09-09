@@ -24,19 +24,25 @@ pub struct BitcoinLight {
 
 impl BitcoinLight {
     // TODO: implement cli config
-    pub fn new() -> Self {
-        Self { ..Default::default() }
+    pub fn new(electrs_url: Option<String>, network: Network, private_key: PrivateKey) -> Self {
+        let electrs_client = electrs::ElectrsClient::new(electrs_url, network);
+        Self {
+            network,
+            private_key,
+            secp_ctx: secp256k1::Secp256k1::new(),
+            electrs: electrs_client.clone(),
+            transaction_creation_lock: Arc::new(Mutex::new(())),
+            wallet: wallet::Wallet::new(network, electrs_client),
+        }
     }
 
-    fn get_change_address(&self) -> Result<Address, Error> {
+    fn get_change_address(&self) -> Result<Address, LightClientError> {
         self.wallet
             .key_store
-            .read()
-            .unwrap()
+            .read()?
             .first_key_value()
             .map(|(address, _)| address.clone())
             .ok_or(LightClientError::NoChangeAddress)
-            .map_err(Into::into)
     }
 
     async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
@@ -63,22 +69,11 @@ impl BitcoinLight {
         Ok(LockedTransaction::new(signed_tx, recipient.to_string(), Some(lock)))
     }
 
+    // TODO: hold tx lock until inclusion
+    // otherwise electrs may report stale utxos
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error> {
         let txid = self.electrs.send_transaction(transaction.transaction).await?;
         Ok(txid)
-    }
-}
-
-impl Default for BitcoinLight {
-    fn default() -> Self {
-        Self {
-            network: Network::Testnet,
-            private_key: PrivateKey::from_wif("cVgjoVHdAWYUzJekLLSenGDmqj5nQ75DgbjYSE4Ncza3gLpfGz9o").unwrap(),
-            secp_ctx: secp256k1::Secp256k1::new(),
-            electrs: electrs::ElectrsClient::new(None, Network::Testnet),
-            transaction_creation_lock: Arc::new(Mutex::new(())),
-            wallet: wallet::Wallet::new(Network::Testnet, electrs::ElectrsClient::new(None, Network::Testnet)),
-        }
     }
 }
 
