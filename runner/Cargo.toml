@@ -9,7 +9,6 @@ description = "The Runner runs and auto-updates Vault clients across multiple ne
 clap = { version = "3.1", features = ["derive"]}
 hex = "0.4.3"
 tokio = { version = "1.8", features = ["rt-multi-thread", "macros", "time"] }
-jsonrpsee = { version = "0.14.0", features = ["macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full", "bit-vec"] }
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
 thiserror = "1.0.0"
@@ -21,11 +20,11 @@ url = "2.2.2"
 nix = "0.24.2"
 async-trait = "0.1.40"
 bytes = "1.1.0"
-mockall_double = "0.3.0"
 signal-hook = "0.3.14"
 signal-hook-tokio = { version = "0.3.1", features = ["futures-v0_3"] }
 futures = "0.3.21"
 backoff = { version = "0.3.0", features = ["tokio"] }
+subxt = "0.23.0"
 
 [dev-dependencies]
 sysinfo = "0.25.1"

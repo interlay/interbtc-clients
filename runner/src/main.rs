@@ -10,7 +10,7 @@ use signal_hook::consts::*;
 use signal_hook_tokio::Signals;
 use std::{fmt::Debug, path::PathBuf};
 
-use crate::runner::{retry_with_log_async, ws_client, Runner};
+use crate::runner::{retry_with_log_async, subxt_api, Runner};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(version, author, about, trailing_var_arg = true)]
@@ -34,7 +34,7 @@ async fn main() -> Result<(), Error> {
     );
     let opts: Opts = Opts::parse();
     let rpc_client = retry_with_log_async(
-        || ws_client(&opts.parachain_ws).into_future().boxed(),
+        || subxt_api(&opts.parachain_ws).into_future().boxed(),
         "Error fetching executable".to_string(),
     )
     .await?;
