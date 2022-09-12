@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::{error::Error, Opts};
 use backoff::{retry, Error as BackoffError, ExponentialBackoff};
 use bytes::Bytes;
 use codec::Decode;
@@ -13,7 +13,6 @@ use nix::{
     sys::signal::{self, Signal},
     unistd::Pid,
 };
-use reqwest::Url;
 use signal_hook_tokio::SignalsInfo;
 use sp_core::{hashing::twox_128, hexdisplay::AsBytesRef, Bytes as SpCoreBytes, H256};
 use std::{
@@ -29,6 +28,9 @@ use std::{
 };
 
 use async_trait::async_trait;
+
+/// Name of the downloaded client executable.
+pub const EXECUTABLE_NAME: &str = "vault";
 
 /// Pallet in the parachain where the client release is assumed to be stored
 pub const PARACHAIN_MODULE: &str = "VaultRegistry";
@@ -102,29 +104,26 @@ pub struct DownloadedRelease {
 pub struct Runner {
     /// WS connection to the parachain
     parachain_rpc: WebsocketClient,
-    /// Unparsed CLI arguments for the vault executable
-    vault_args: Vec<String>,
     /// The child process (vault) spawned by this runner
     child_proc: Option<Child>,
     /// Details about the currently run release
     downloaded_release: Option<DownloadedRelease>,
-    /// User-configured path for storing the vault executable
-    download_path: PathBuf,
+    /// Runner CLI arguments
+    opts: Opts,
 }
 
 impl Runner {
-    pub fn new(parachain_rpc: WebsocketClient, vault_args: Vec<String>, download_path: PathBuf) -> Self {
+    pub fn new(parachain_rpc: WebsocketClient, opts: Opts) -> Self {
         Self {
             parachain_rpc,
-            vault_args,
             child_proc: None,
             downloaded_release: None,
-            download_path,
+            opts,
         }
     }
 
     async fn download_binary(runner: &mut impl RunnerExt, release: ClientRelease) -> Result<DownloadedRelease, Error> {
-        let (bin_name, bin_path) = runner.uri_to_bin_path(&release.uri)?;
+        let (bin_name, bin_path) = runner.get_bin_path()?;
         log::info!("Downloading {} at: {:?}", bin_name, bin_path);
         let mut file = OpenOptions::new()
             .read(true)
@@ -153,14 +152,8 @@ impl Runner {
         Ok(downloaded_release)
     }
 
-    fn uri_to_bin_path(runner: &impl RunnerExt, uri: &str) -> Result<(String, PathBuf), Error> {
-        // Remove any trailing slashes from the release URI
-        let parsed_uri = Url::parse(uri.trim_end_matches('/'))?;
-        let bin_name = parsed_uri
-            .path_segments()
-            .and_then(|segments| segments.last())
-            .and_then(|name| if name.is_empty() { None } else { Some(name) })
-            .ok_or(Error::ClientNameDerivationError)?;
+    fn get_bin_path(runner: &impl RunnerExt) -> Result<(String, PathBuf), Error> {
+        let bin_name = EXECUTABLE_NAME;
         let bin_path = runner.download_path().join(bin_name);
         Ok((bin_name.to_string(), bin_path))
     }
@@ -179,8 +172,14 @@ impl Runner {
     }
 
     fn terminate_proc_and_wait(runner: &mut impl RunnerExt) -> Result<u32, Error> {
-        log::info!("Terminating child process...");
-        let child_proc = runner.child_proc().as_mut().ok_or(Error::NoChildProcess)?;
+        log::info!("Trying to terminate child process...");
+        let child_proc = match runner.child_proc().as_mut() {
+            Some(x) => x,
+            None => {
+                log::warn!("No child process to terminate.");
+                return Ok(0);
+            }
+        };
 
         let _ = retry_with_log(
             || {
@@ -266,7 +265,10 @@ impl Runner {
     async fn auto_update(runner: &mut impl RunnerExt) -> Result<(), Error> {
         // Create all directories for the `download_path` if they don't already exist.
         fs::create_dir_all(&runner.download_path())?;
-        let release = runner.try_get_release(false).await?.expect("No current release");
+        let release = runner
+            .try_get_release(false)
+            .await?
+            .expect("No current client release set on-chain.");
         // WARNING: This will overwrite any pre-existing binary with the same name
         // TODO: Check if a release with the same version is already at the `download_path`
         runner.download_binary(release).await?;
@@ -323,7 +325,6 @@ impl Runner {
     }
 
     fn run_binary(runner: &mut impl RunnerExt, stdout_mode: impl Into<Stdio>) -> Result<Child, Error> {
-        // Ensure there is no other child running
         if runner.child_proc().is_some() {
             return Err(Error::ChildProcessExists);
         }
@@ -334,7 +335,7 @@ impl Runner {
             || command.spawn().map_err(Into::into),
             "Failed to spawn child process".to_string(),
         )?;
-        log::info!("Vault started, with pid {}", child.id());
+        log::info!("Client started, with pid {}", child.id());
         Ok(child)
     }
 }
@@ -361,13 +362,13 @@ pub trait RunnerExt {
     fn downloaded_release(&self) -> &Option<DownloadedRelease>;
     fn set_downloaded_release(&mut self, downloaded_release: Option<DownloadedRelease>);
     fn download_path(&self) -> &PathBuf;
-    fn set_download_path(&mut self, download_path: PathBuf);
+    fn parachain_url(&self) -> String;
     /// Read the current client release from the parachain, retrying for `RETRY_TIMEOUT` if there is a network error.
     async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
     /// Download the vault binary and make it executable, retrying for `RETRY_TIMEOUT` if there is a network error.
     async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
     /// Convert a release URI (e.g. a GitHub link) to an executable name and OS path (after download)
-    fn uri_to_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error>;
+    fn get_bin_path(&self) -> Result<(String, PathBuf), Error>;
     /// Remove downloaded release from the file system. This is only supposed to occur _after_ the vault process
     /// has been killed. In case of failure, removing is retried for `RETRY_TIMEOUT`.
     fn delete_downloaded_release(&mut self) -> Result<(), Error>;
@@ -394,7 +395,7 @@ impl RunnerExt for Runner {
     }
 
     fn vault_args(&self) -> &Vec<String> {
-        &self.vault_args
+        &self.opts.vault_args
     }
 
     fn child_proc(&mut self) -> &mut Option<Child> {
@@ -414,11 +415,11 @@ impl RunnerExt for Runner {
     }
 
     fn download_path(&self) -> &PathBuf {
-        &self.download_path
+        &self.opts.download_path
     }
 
-    fn set_download_path(&mut self, download_path: PathBuf) {
-        self.download_path = download_path;
+    fn parachain_url(&self) -> String {
+        self.opts.parachain_ws.clone()
     }
 
     async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error> {
@@ -436,8 +437,8 @@ impl RunnerExt for Runner {
         Ok(())
     }
 
-    fn uri_to_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error> {
-        Runner::uri_to_bin_path(self, uri)
+    fn get_bin_path(&self) -> Result<(String, PathBuf), Error> {
+        Runner::get_bin_path(self)
     }
 
     fn delete_downloaded_release(&mut self) -> Result<(), Error> {
@@ -599,10 +600,10 @@ mod tests {
             fn downloaded_release(&self) -> &Option<DownloadedRelease>;
             fn set_downloaded_release(&mut self, downloaded_release: Option<DownloadedRelease>);
             fn download_path(&self) -> &PathBuf;
-            fn set_download_path(&mut self, download_path: PathBuf);
+            fn parachain_url(&self) -> String;
             async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
             async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
-            fn uri_to_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error>;
+            fn get_bin_path(&self) -> Result<(String, PathBuf), Error>;
             fn delete_downloaded_release(&mut self) -> Result<(), Error>;
             fn run_binary(&mut self) -> Result<(), Error>;
             fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
@@ -644,8 +645,8 @@ mod tests {
         };
 
         runner
-            .expect_uri_to_bin_path()
-            .returning(move |_| Ok(("vault-standalone-metadata".to_string(), moved_mock_path.clone())));
+            .expect_get_bin_path()
+            .returning(move || Ok(("vault-standalone-metadata".to_string(), moved_mock_path.clone())));
         runner
             .expect_get_request_bytes()
             .returning(|_| Ok(Bytes::from_static(&[1, 2, 3, 4])));
@@ -682,19 +683,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_runner_uri_to_bin_path() {
+    async fn test_runner_get_bin_path() {
         let mut runner = MockRunner::default();
         runner
             .expect_download_path()
             .return_const(PathBuf::from_str("./mock_download_dir").unwrap());
-        let uri = "https://github.com/interlay/interbtc-clients/releases/download/1.15.0/vault-standalone-metadata"
-            .to_string();
-        let (bin_name, bin_path) = Runner::uri_to_bin_path(&runner, &uri).unwrap();
-        assert_eq!(bin_name, "vault-standalone-metadata".to_string());
-        assert_eq!(
-            bin_path,
-            PathBuf::from_str("./mock_download_dir/vault-standalone-metadata").unwrap()
-        );
+        let (bin_name, bin_path) = Runner::get_bin_path(&runner).unwrap();
+        assert_eq!(bin_name, "vault".to_string());
+        assert_eq!(bin_path, PathBuf::from_str("./mock_download_dir/vault").unwrap());
     }
 
     #[tokio::test]
@@ -886,5 +882,12 @@ mod tests {
         // The test passes as long as `run_binary` is called
         runner.expect_run_binary().once().returning(|| Ok(()));
         Runner::maybe_restart_client(&mut runner).unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_runner_terminate_child_process_does_not_throw() {
+        let mut runner = MockRunner::default();
+        runner.expect_child_proc().return_var(None);
+        assert_eq!(Runner::terminate_proc_and_wait(&mut runner).unwrap(), 0);
     }
 }
