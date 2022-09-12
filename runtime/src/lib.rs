@@ -2,6 +2,7 @@
 
 pub mod cli;
 
+mod addr;
 mod conn;
 mod error;
 mod retry;
@@ -22,6 +23,7 @@ use subxt::{
     subxt, Config,
 };
 
+pub use addr::PartialAddress;
 pub use error::{Error, SubxtError};
 pub use primitives::CurrencyInfo;
 pub use prometheus;

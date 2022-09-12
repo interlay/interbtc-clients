@@ -588,7 +588,6 @@ version = "1.1.0"
 dependencies = [
  "async-trait",
  "backoff 0.3.0",
- "bitcoin 1.2.0",
  "bitcoincore-rpc",
  "clap",
  "esplora-btc-api",
