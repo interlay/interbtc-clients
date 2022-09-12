@@ -104,35 +104,32 @@ impl ElectrsClient {
         }
     }
 
-    async fn get(&self, url: Url) -> Result<String, Error> {
+    async fn get(&self, path: &str) -> Result<String, Error> {
+        let url = self.url.join(path)?;
         Ok(self.cli.get(url).send().await?.error_for_status()?.text().await?)
     }
 
-    async fn get_and_decode<T: serde::de::DeserializeOwned>(&self, url: Url) -> Result<T, Error> {
-        let body = self.get(url).await?;
+    async fn get_and_decode<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, Error> {
+        let body = self.get(path).await?;
         Ok(serde_json::from_str(&body)?)
     }
 
     pub(crate) async fn get_blocks_tip_height(&self) -> Result<u32, Error> {
-        let url = self.url.join("/blocks/tip/height")?;
-        Ok(self.get(url).await?.parse()?)
+        Ok(self.get("/blocks/tip/height").await?.parse()?)
     }
 
     pub(crate) async fn get_blocks_tip_hash(&self) -> Result<BlockHash, Error> {
-        let url = self.url.join("/blocks/tip/hash")?;
-        let response = self.get(url).await?;
+        let response = self.get("/blocks/tip/hash").await?;
         Ok(BlockHash::from_str(&response)?)
     }
 
     pub(crate) async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error> {
-        let url = self.url.join(&format!("/block/{hash}/header"))?;
-        let raw_block_header = Vec::<u8>::from_hex(&self.get(url).await?)?;
+        let raw_block_header = Vec::<u8>::from_hex(&self.get(&format!("/block/{hash}/header")).await?)?;
         Ok(deserialize(&raw_block_header)?)
     }
 
     pub(crate) async fn get_transactions_in_block(&self, hash: &BlockHash) -> Result<Vec<Transaction>, Error> {
-        let url = self.url.join(&format!("/block/{hash}/txids"))?;
-        let raw_txids: Vec<String> = self.get_and_decode(url).await?;
+        let raw_txids: Vec<String> = self.get_and_decode(&format!("/block/{hash}/txids")).await?;
         let txids: Vec<Txid> = raw_txids
             .iter()
             .map(|txid| Txid::from_str(txid))
@@ -154,14 +151,12 @@ impl ElectrsClient {
     }
 
     pub(crate) async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error> {
-        let url = self.url.join(&format!("/block-height/{height}"))?;
-        let response = self.get(url).await?;
+        let response = self.get(&format!("/block-height/{height}")).await?;
         Ok(BlockHash::from_str(&response)?)
     }
 
     pub(crate) async fn get_raw_mempool(&self) -> Result<Vec<Txid>, Error> {
-        let url = self.url.join("/mempool/txids")?;
-        let txs: Vec<String> = self.get_and_decode(url).await?;
+        let txs: Vec<String> = self.get_and_decode("/mempool/txids").await?;
         Ok(txs
             .iter()
             .map(|txid| Txid::from_str(txid))
@@ -169,18 +164,17 @@ impl ElectrsClient {
     }
 
     pub(crate) async fn get_raw_merkle_proof(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
-        let url = self.url.join(&format!("/tx/{txid}/merkleblock-proof"))?;
-        Ok(Vec::<u8>::from_hex(&self.get(url).await?)?)
+        Ok(Vec::<u8>::from_hex(
+            &self.get(&format!("/tx/{txid}/merkleblock-proof")).await?,
+        )?)
     }
 
     pub(crate) async fn get_raw_tx(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
-        let url = self.url.join(&format!("/tx/{txid}/hex"))?;
-        Ok(Vec::<u8>::from_hex(&self.get(url).await?)?)
+        Ok(Vec::<u8>::from_hex(&self.get(&format!("/tx/{txid}/hex")).await?)?)
     }
 
     pub(crate) async fn get_tx_info(&self, txid: &Txid) -> Result<TxInfo, Error> {
-        let url = self.url.join(&format!("/tx/{txid}"))?;
-        let tx: electrs_types::Transaction = self.get_and_decode(url).await?;
+        let tx: electrs_types::Transaction = self.get_and_decode(&format!("/tx/{txid}")).await?;
         let tip = self.get_blocks_tip_height().await?;
         let (height, hash) = match (tx.status.block_height, tx.status.block_hash) {
             (Some(height), Some(hash)) => (height, hash),
@@ -195,8 +189,7 @@ impl ElectrsClient {
     }
 
     pub(crate) async fn get_utxos_for_address(&self, address: Address) -> Result<Vec<Utxo>, Error> {
-        let url = self.url.join(&format!("/address/{address}/utxo"))?;
-        let utxos: Vec<electrs_types::Utxo> = self.get_and_decode(url).await?;
+        let utxos: Vec<electrs_types::Utxo> = self.get_and_decode(&format!("/address/{address}/utxo")).await?;
 
         utxos
             .into_iter()
@@ -213,9 +206,9 @@ impl ElectrsClient {
     }
 
     pub(crate) async fn get_script_pubkey(&self, outpoint: OutPoint) -> Result<Script, Error> {
-        let url = self.url.join(&format!("/tx/{txid}", txid = outpoint.txid))?;
-
-        let tx: electrs_types::Transaction = self.get_and_decode(url).await?;
+        let tx: electrs_types::Transaction = self
+            .get_and_decode(&format!("/tx/{txid}", txid = outpoint.txid))
+            .await?;
         Ok(Script::from_str(
             &tx.vout
                 .ok_or(Error::NoPrevOut)?
@@ -254,12 +247,12 @@ impl ElectrsClient {
             hasher.result().as_slice().to_vec()
         };
 
-        let url = self.url.join(&format!(
-            "/scripthash/{scripthash}/txs",
-            scripthash = script_hash.to_hex()
-        ))?;
-
-        let txs: Vec<electrs_types::Transaction> = self.get_and_decode(url).await?;
+        let txs: Vec<electrs_types::Transaction> = self
+            .get_and_decode(&format!(
+                "/scripthash/{scripthash}/txs",
+                scripthash = script_hash.to_hex()
+            ))
+            .await?;
         log::info!("Found {} transactions", txs.len());
 
         // for now, use the first tx - should probably return
