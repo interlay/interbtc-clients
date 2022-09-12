@@ -693,7 +693,7 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, Error> {
-        let address = Address::p2wpkh(&public_key, self.network).map_err(ConversionError::from)?;
+        let address = Address::p2wpkh(public_key, self.network).map_err(ConversionError::from)?;
         Ok(self.rpc.dump_private_key(&address)?)
     }
 

@@ -9773,6 +9773,7 @@ dependencies = [
  "interbtc-parachain",
  "interbtc-primitives",
  "jsonrpsee 0.10.1",
+ "lazy_static",
  "log 0.4.17",
  "module-oracle-rpc-runtime-api",
  "parity-scale-codec",

@@ -19,8 +19,8 @@ use git_version::git_version;
 use runtime::{
     cli::{parse_duration_minutes, parse_duration_ms},
     BtcRelayPallet, CollateralBalancesPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, PrettyPrint,
-    RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair, VaultId,
-    VaultRegistryPallet,
+    RegisterVaultEvent, StoreMainChainHeaderEvent, TryFromSymbol, UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair,
+    VaultId, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, Error as ServiceError, MonitoringConfig, Service, ShutdownSender};
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
@@ -499,12 +499,14 @@ impl VaultService {
 
         let account_id = self.btc_parachain.get_account_id().clone();
 
-        let parsed_auto_register = join_all(self.config.auto_register.iter().map(|(symbol, amount)| async move {
-            Ok((self.btc_parachain.parse_currency_id(symbol.to_string()).await?, amount))
-        }))
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, Error>>()?;
+        let parsed_auto_register = self
+            .config
+            .auto_register
+            .clone()
+            .into_iter()
+            .map(|(symbol, amount)| Ok((CurrencyId::try_from_symbol(symbol)?, amount)))
+            .into_iter()
+            .collect::<Result<Vec<_>, Error>>()?;
 
         // exit if auto-register uses faucet and faucet url not set
         if parsed_auto_register.iter().any(|(_, o)| o.is_none()) && self.config.faucet_url.is_none() {

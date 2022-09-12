@@ -4,10 +4,10 @@ const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(KSM);
 
 use super::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, FixedPointNumber, FixedU128,
-    OraclePallet, RawBlockHeader, ReplacePallet, SecurityPallet, StatusCode, Token, VaultRegistryPallet, KBTC, KINT,
-    KSM,
+    OraclePallet, RawBlockHeader, ReplacePallet, SecurityPallet, StatusCode, Token, TryFromSymbol, VaultRegistryPallet,
+    KBTC, KINT, KSM,
 };
-use crate::{integration::*, FeedValuesEvent, OracleKey, VaultId, H160, U256};
+use crate::{integration::*, FeedValuesEvent, OracleKey, RuntimeCurrencyInfo, VaultId, H160, U256};
 use module_bitcoin::{formatter::TryFormattable, types::BlockBuilder};
 pub use primitives::CurrencyId::ForeignAsset;
 use sp_keyring::AccountKeyring;
@@ -169,14 +169,14 @@ async fn test_currency_id_parsing() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
     parachain_rpc.register_dummy_assets().await.unwrap();
+    parachain_rpc.store_assets_metadata().await.unwrap();
 
     // test with different capitalization to make sure the check is not case sensitive
+
+    assert_eq!(CurrencyId::try_from_symbol("KiNt".to_string()).unwrap(), Token(KINT));
     assert_eq!(
-        parachain_rpc.parse_currency_id("KiNt".to_string()).await.unwrap(),
-        Token(KINT)
-    );
-    assert_eq!(
-        parachain_rpc.parse_currency_id("TeSt".to_string()).await.unwrap(),
+        CurrencyId::try_from_symbol("TeSt".to_string()).unwrap(),
         ForeignAsset(2)
     );
+    assert_eq!(ForeignAsset(2).decimals().unwrap(), 10);
 }

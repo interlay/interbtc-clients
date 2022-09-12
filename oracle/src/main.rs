@@ -3,14 +3,13 @@ mod error;
 use backoff::{future::retry_notify, ExponentialBackoff};
 use clap::Parser;
 use error::Error;
-use futures::future::join_all;
 use git_version::git_version;
 use reqwest::Url;
 use runtime::{
     cli::{parse_duration_ms, ProviderUserOpts},
     CurrencyId, FixedPointNumber,
     FixedPointTraits::{CheckedDiv, CheckedMul, One},
-    FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, OraclePallet,
+    FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, OraclePallet, RuntimeCurrencyInfo, TryFromSymbol,
 };
 use std::{collections::HashMap, time::Duration};
 use tokio::{join, time::sleep};
@@ -144,7 +143,7 @@ async fn submit_exchange_rate(
     currency_id: CurrencyId,
     conversion_factor: FixedU128,
 ) -> Result<(), Error> {
-    let coingecko_id = parachain_rpc.get_coingecko_id(currency_id).await?;
+    let coingecko_id = currency_id.coingecko_id()?;
     let exchange_rate = match url_or_def {
         UrlOrDefault::Url(url) => {
             // exchange_rate given in BTC so convert after
@@ -226,7 +225,9 @@ async fn main() -> Result<(), Error> {
 
     let parsed_currency_ids = {
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
-        let parachain_rpc = &InterBtcParachain::from_url_with_retry(
+        // NOTE: we need to connect to the parachain to get the foreign assets
+        // this will be refactored in a future PR
+        let _parachain_rpc = &InterBtcParachain::from_url_with_retry(
             &opts.btc_parachain_url,
             signer.clone(),
             opts.connection_timeout_ms,
@@ -234,39 +235,34 @@ async fn main() -> Result<(), Error> {
         )
         .await?;
 
-        join_all(opts.currency_id.iter().map(|(symbol, amount)| async move {
-            let currency_id = parachain_rpc.parse_currency_id(symbol.to_string()).await?;
-            let coingecko_id = parachain_rpc.get_coingecko_id(currency_id).await?;
-            let decimals = parachain_rpc.get_decimals(currency_id).await?;
-            Ok((currency_id, decimals, coingecko_id, amount))
-        }))
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, Error>>()?
+        opts.currency_id
+            .iter()
+            .map(|(symbol, amount)| Ok((CurrencyId::try_from_symbol(symbol.clone())?, amount)))
+            .into_iter()
+            .collect::<Result<Vec<_>, Error>>()?
     };
 
     let exchange_rates_to_set = parsed_currency_ids
         .into_iter()
-        .map(
-            |(currency_id, decimals, coingecko_id, explicit_exchange_rate)| match explicit_exchange_rate {
-                Some(rate) => Ok((currency_id, decimals, UrlOrDefault::Def(*rate))),
-                None => {
-                    let mut url = match &opts.coingecko {
-                        Some(x) => x.clone(),
-                        None => {
-                            return Err(Error::InvalidArguments);
-                        }
-                    };
-                    url.set_path(&format!("{}/simple/price", url.path()));
-                    url.set_query(Some(&format!("ids={}&vs_currencies={}", coingecko_id, BTC_CURRENCY)));
-                    if let Some(api_key) = &opts.coingecko_api_key {
-                        url.query_pairs_mut().append_pair(COINGECKO_API_KEY_PARAMETER, api_key);
+        .map(|(currency_id, explicit_exchange_rate)| match explicit_exchange_rate {
+            Some(rate) => Ok((currency_id, currency_id.decimals()?, UrlOrDefault::Def(*rate))),
+            None => {
+                let mut url = match &opts.coingecko {
+                    Some(x) => x.clone(),
+                    None => {
+                        return Err(Error::InvalidArguments);
                     }
-                    log::info!("Url: {}", url.to_string());
-                    Ok((currency_id, decimals, UrlOrDefault::Url(url)))
+                };
+                let coingecko_id = currency_id.coingecko_id()?;
+                url.set_path(&format!("{}/simple/price", url.path()));
+                url.set_query(Some(&format!("ids={}&vs_currencies={}", coingecko_id, BTC_CURRENCY)));
+                if let Some(api_key) = &opts.coingecko_api_key {
+                    url.query_pairs_mut().append_pair(COINGECKO_API_KEY_PARAMETER, api_key);
                 }
-            },
-        )
+                log::info!("Url: {}", url.to_string());
+                Ok((currency_id, currency_id.decimals()?, UrlOrDefault::Url(url)))
+            }
+        })
         .collect::<Result<Vec<_>, _>>()?;
 
     // append the conversion_factor
