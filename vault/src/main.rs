@@ -45,7 +45,7 @@ async fn catch_signals<F>(mut shutdown_signals: Signals, future: F) -> Result<()
 where
     F: Future<Output = Result<(), Error>> + Send + 'static,
 {
-    let blocking_task = tokio::task::spawn_blocking(|| future);
+    let blocking_task = tokio::task::spawn_blocking(|| futures::executor::block_on(future));
     tokio::select! {
         res = blocking_task => {
             let _ = res?;
