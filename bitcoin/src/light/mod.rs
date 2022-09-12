@@ -45,16 +45,15 @@ impl BitcoinLight {
             .ok_or(LightClientError::NoChangeAddress)
     }
 
-    async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
+    async fn create_transaction(
         &self,
-        address: A,
+        recipient: Address,
         sat: u64,
         fee_rate: SatPerVbyte,
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, Error> {
         let lock = self.transaction_creation_lock.clone().lock_owned().await;
 
-        let recipient = address.to_address(self.network)?;
         let unsigned_tx = self.wallet.create_transaction(recipient.clone(), sat, request_id);
 
         let change_address = self.get_change_address()?;
@@ -142,20 +141,15 @@ impl BitcoinCoreApi for BitcoinLight {
         }
     }
 
-    async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error> {
-        let address = self.get_change_address()?;
-        Ok(A::decode_str(&address.to_string())?)
+    async fn get_new_address(&self) -> Result<Address, Error> {
+        Ok(self.get_change_address()?)
     }
 
-    async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error> {
-        let public_key = self.private_key.public_key(&self.secp_ctx);
-        Ok(P::from(public_key.key.serialize()))
+    async fn get_new_public_key(&self) -> Result<PublicKey, Error> {
+        Ok(self.private_key.public_key(&self.secp_ctx))
     }
 
-    fn dump_derivation_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
-        &self,
-        _public_key: P,
-    ) -> Result<PrivateKey, Error> {
+    fn dump_derivation_key(&self, _public_key: &PublicKey) -> Result<PrivateKey, Error> {
         Ok(self.private_key)
     }
 
@@ -164,11 +158,7 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(())
     }
 
-    async fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
-        &self,
-        _public_key: P,
-        secret_key: Vec<u8>,
-    ) -> Result<(), Error> {
+    async fn add_new_deposit_key(&self, _public_key: PublicKey, secret_key: Vec<u8>) -> Result<(), Error> {
         fn mul_secret_key(vault_key: SecretKey, issue_key: SecretKey) -> Result<SecretKey, Error> {
             let mut deposit_key = vault_key;
             deposit_key.mul_assign(&issue_key[..])?;
@@ -240,18 +230,13 @@ impl BitcoinCoreApi for BitcoinLight {
         })
     }
 
-    async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
-        &self,
-        _txid: &Txid,
-        _address: A,
-        _fee_rate: SatPerVbyte,
-    ) -> Result<Txid, Error> {
+    async fn bump_fee(&self, _txid: &Txid, _address: Address, _fee_rate: SatPerVbyte) -> Result<Txid, Error> {
         Err(Error::NotSupported)
     }
 
-    async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
+    async fn create_and_send_transaction(
         &self,
-        address: A,
+        address: Address,
         sat: u64,
         fee_rate: SatPerVbyte,
         request_id: Option<H256>,
@@ -261,9 +246,9 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(txid)
     }
 
-    async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
+    async fn send_to_address(
         &self,
-        address: A,
+        address: Address,
         sat: u64,
         request_id: Option<H256>,
         fee_rate: SatPerVbyte,
@@ -286,10 +271,7 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(())
     }
 
-    async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(
-        &self,
-        _addresses: Vec<A>,
-    ) -> Result<(), Error> {
+    async fn rescan_electrs_for_addresses(&self, _addresses: Vec<Address>) -> Result<(), Error> {
         // nothing to do
         Ok(())
     }

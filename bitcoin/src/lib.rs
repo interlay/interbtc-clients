@@ -11,7 +11,6 @@ mod electrs;
 mod error;
 mod iter;
 
-pub use addr::PartialAddress;
 use async_trait::async_trait;
 use backoff::{backoff::Backoff, future::retry, ExponentialBackoff};
 use bitcoincore_rpc::bitcoin::consensus::encode::serialize_hex;
@@ -43,9 +42,8 @@ pub use bitcoincore_rpc::{
     jsonrpc::{error::RpcError, Error as JsonRpcError},
     Auth, Client, Error as BitcoinError, RpcApi,
 };
-use electrs::{get_address_tx_history_full, get_tx_hex, get_tx_merkle_block_proof};
+use electrs::ElectrsClient;
 pub use error::{BitcoinRpcError, ConversionError, Error};
-use esplora_btc_api::apis::configuration::Configuration as ElectrsConfiguration;
 pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
 use log::{info, trace};
 use serde_json::error::Category as SerdeJsonCategory;
@@ -89,11 +87,7 @@ const RANDOMIZATION_FACTOR: f64 = 0.25;
 const DERIVATION_KEY_LABEL: &str = "derivation-key";
 const DEPOSIT_LABEL: &str = "deposit";
 
-const ELECTRS_TESTNET_URL: &str = "https://btc-testnet.interlay.io";
-const ELECTRS_MAINNET_URL: &str = "https://btc-mainnet.interlay.io";
-const ELECTRS_LOCALHOST_URL: &str = "http://localhost:3002";
-
-pub fn get_exponential_backoff() -> ExponentialBackoff {
+fn get_exponential_backoff() -> ExponentialBackoff {
     ExponentialBackoff {
         current_interval: INITIAL_INTERVAL,
         initial_interval: INITIAL_INTERVAL,
@@ -138,22 +132,15 @@ pub trait BitcoinCoreApi {
 
     async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
 
-    async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
+    async fn get_new_address(&self) -> Result<Address, Error>;
 
-    async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error>;
+    async fn get_new_public_key(&self) -> Result<PublicKey, Error>;
 
-    fn dump_derivation_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
-        &self,
-        public_key: P,
-    ) -> Result<PrivateKey, Error>;
+    fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, Error>;
 
     fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), Error>;
 
-    async fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
-        &self,
-        public_key: P,
-        secret_key: Vec<u8>,
-    ) -> Result<(), Error>;
+    async fn add_new_deposit_key(&self, public_key: PublicKey, secret_key: Vec<u8>) -> Result<(), Error>;
 
     async fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
 
@@ -173,24 +160,19 @@ pub trait BitcoinCoreApi {
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
 
-    async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
-        &self,
-        txid: &Txid,
-        address: A,
-        fee_rate: SatPerVbyte,
-    ) -> Result<Txid, Error>;
+    async fn bump_fee(&self, txid: &Txid, address: Address, fee_rate: SatPerVbyte) -> Result<Txid, Error>;
 
-    async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
+    async fn create_and_send_transaction(
         &self,
-        address: A,
+        address: Address,
         sat: u64,
         fee_rate: SatPerVbyte,
         request_id: Option<H256>,
     ) -> Result<Txid, Error>;
 
-    async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
+    async fn send_to_address(
         &self,
-        address: A,
+        address: Address,
         sat: u64,
         request_id: Option<H256>,
         fee_rate: SatPerVbyte,
@@ -201,10 +183,7 @@ pub trait BitcoinCoreApi {
 
     async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error>;
 
-    async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(
-        &self,
-        addresses: Vec<A>,
-    ) -> Result<(), Error>;
+    async fn rescan_electrs_for_addresses(&self, addresses: Vec<Address>) -> Result<(), Error>;
 
     fn get_utxo_count(&self) -> Result<usize, Error>;
 
@@ -337,18 +316,13 @@ impl BitcoinCoreBuilder {
     }
 
     pub fn build_with_network(self, network: Network) -> Result<BitcoinCore, Error> {
-        Ok(BitcoinCore::new(
-            self.new_client()?,
-            self.wallet_name,
-            network,
-            self.electrs_url,
-        ))
+        BitcoinCore::new(self.new_client()?, self.wallet_name, network, self.electrs_url)
     }
 
     pub async fn build_and_connect(self, connection_timeout: Duration) -> Result<BitcoinCore, Error> {
         let client = self.new_client()?;
         let network = connect(&client, connection_timeout).await?;
-        Ok(BitcoinCore::new(client, self.wallet_name, network, self.electrs_url))
+        BitcoinCore::new(client, self.wallet_name, network, self.electrs_url)
     }
 }
 
@@ -358,32 +332,27 @@ pub struct BitcoinCore {
     wallet_name: Option<String>,
     network: Network,
     transaction_creation_lock: Arc<Mutex<()>>,
-    electrs_config: ElectrsConfiguration,
+    electrs_client: ElectrsClient,
     #[cfg(feature = "regtest-manual-mining")]
     auto_mine: bool,
 }
 
 impl BitcoinCore {
-    fn new(client: Client, wallet_name: Option<String>, network: Network, electrs_url: Option<String>) -> Self {
-        BitcoinCore {
+    fn new(
+        client: Client,
+        wallet_name: Option<String>,
+        network: Network,
+        electrs_url: Option<String>,
+    ) -> Result<Self, Error> {
+        Ok(BitcoinCore {
             rpc: Arc::new(client),
             wallet_name,
             network,
             transaction_creation_lock: Arc::new(Mutex::new(())),
-            electrs_config: ElectrsConfiguration {
-                base_path: electrs_url.unwrap_or_else(|| {
-                    match network {
-                        Network::Bitcoin => ELECTRS_MAINNET_URL,
-                        Network::Testnet => ELECTRS_TESTNET_URL,
-                        _ => ELECTRS_LOCALHOST_URL,
-                    }
-                    .to_owned()
-                }),
-                ..Default::default()
-            },
+            electrs_client: ElectrsClient::new(electrs_url, network)?,
             #[cfg(feature = "regtest-manual-mining")]
             auto_mine: false,
-        }
+        })
     }
 
     #[cfg(feature = "regtest-manual-mining")]
@@ -431,7 +400,7 @@ impl BitcoinCore {
         Ok(self.rpc.call("createrawtransaction", &args)?)
     }
 
-    async fn fund_and_sign_transaction<A: PartialAddress + Send + Sync + 'static>(
+    async fn fund_and_sign_transaction(
         &self,
         fee_rate: SatPerVbyte,
         raw_tx: &str,
@@ -482,14 +451,14 @@ impl BitcoinCore {
     /// * `sat` - number of Satoshis to transfer
     /// * `fee_rate` - fee rate in sat/vbyte
     /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
-    async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
+    async fn create_transaction(
         &self,
-        address: A,
+        address: Address,
         sat: u64,
         fee_rate: SatPerVbyte,
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, Error> {
-        let recipient = address.encode_str(self.network)?;
+        let recipient = address.to_string();
         let raw_tx = self
             .with_wallet(|| async {
                 // create raw transaction that includes the op_return (if any). If we were to add the op_return
@@ -501,7 +470,7 @@ impl BitcoinCore {
             })
             .await?;
 
-        self.fund_and_sign_transaction::<A>(fee_rate, &raw_tx, &None, &recipient, true)
+        self.fund_and_sign_transaction(fee_rate, &raw_tx, &None, &recipient, true)
             .await
     }
 
@@ -533,10 +502,6 @@ impl BitcoinCore {
         Ok(self
             .rpc
             .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?[0])
-    }
-
-    pub fn encode_address<A: PartialAddress + Send + 'static>(&self, address: A) -> Result<String, Error> {
-        Ok(address.encode_str(self.network)?)
     }
 
     async fn with_wallet<F, R, T>(&self, call: F) -> Result<T, Error>
@@ -579,16 +544,12 @@ impl BitcoinCore {
         }
     }
 
-    pub async fn wallet_has_public_key<P>(&self, public_key: P) -> Result<bool, Error>
-    where
-        P: Into<[u8; PUBLIC_KEY_SIZE]> + From<[u8; PUBLIC_KEY_SIZE]> + Clone + PartialEq + Send + Sync + 'static,
-    {
+    pub async fn wallet_has_public_key(&self, public_key: PublicKey) -> Result<bool, Error> {
         self.with_wallet(|| async {
-            let address = Address::p2wpkh(&PublicKey::from_slice(&public_key.clone().into())?, self.network)
-                .map_err(ConversionError::from)?;
+            let address = Address::p2wpkh(&public_key, self.network).map_err(ConversionError::from)?;
             let address_info = self.rpc.get_address_info(&address)?;
             let wallet_pubkey = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
-            Ok(P::from(wallet_pubkey.key.serialize()) == public_key)
+            Ok(wallet_pubkey == public_key)
         })
         .await
     }
@@ -715,27 +676,22 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     /// Gets a new address from the wallet
-    async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error> {
-        let address = self.rpc.get_new_address(None, Some(AddressType::Bech32))?;
-        Ok(A::decode_str(&address.to_string())?)
+    async fn get_new_address(&self) -> Result<Address, Error> {
+        Ok(self.rpc.get_new_address(None, Some(AddressType::Bech32))?)
     }
 
     /// Gets a new public key for an address in the wallet
-    async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error> {
+    async fn get_new_public_key(&self) -> Result<PublicKey, Error> {
         let address = self
             .rpc
             .get_new_address(Some(DERIVATION_KEY_LABEL), Some(AddressType::Bech32))?;
         let address_info = self.rpc.get_address_info(&address)?;
         let public_key = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
-        Ok(P::from(public_key.key.serialize()))
+        Ok(public_key)
     }
 
-    fn dump_derivation_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
-        &self,
-        public_key: P,
-    ) -> Result<PrivateKey, Error> {
-        let address = Address::p2wpkh(&PublicKey::from_slice(&public_key.into())?, self.network)
-            .map_err(ConversionError::from)?;
+    fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, Error> {
+        let address = Address::p2wpkh(&public_key, self.network).map_err(ConversionError::from)?;
         Ok(self.rpc.dump_private_key(&address)?)
     }
 
@@ -746,13 +702,8 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     /// Derive and import the private key for the master public key and public secret
-    async fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
-        &self,
-        public_key: P,
-        secret_key: Vec<u8>,
-    ) -> Result<(), Error> {
-        let address = Address::p2wpkh(&PublicKey::from_slice(&public_key.into())?, self.network)
-            .map_err(ConversionError::from)?;
+    async fn add_new_deposit_key(&self, public_key: PublicKey, secret_key: Vec<u8>) -> Result<(), Error> {
+        let address = Address::p2wpkh(&public_key, self.network).map_err(ConversionError::from)?;
         let private_key = self.rpc.dump_private_key(&address)?;
         let deposit_secret_key =
             addr::calculate_deposit_secret_key(private_key.key, SecretKey::from_slice(&secret_key)?)?;
@@ -853,32 +804,29 @@ impl BitcoinCoreApi for BitcoinCore {
         })
     }
 
-    async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
-        &self,
-        txid: &Txid,
-        address: A,
-        fee_rate: SatPerVbyte,
-    ) -> Result<Txid, Error> {
+    async fn bump_fee(&self, txid: &Txid, address: Address, fee_rate: SatPerVbyte) -> Result<Txid, Error> {
         let (raw_tx, return_to_self_address) = self
             .with_wallet_inner(false, || async {
                 let mut existing_transaction = self.rpc.get_raw_transaction(txid, None)?;
 
                 let return_to_self = existing_transaction
-                    .extract_return_to_self_address(&address)?
-                    .map(|(idx, x)| {
+                    .extract_return_to_self_address(&address.payload)?
+                    .map(|(idx, payload)| {
                         existing_transaction.output.remove(idx);
-                        x.to_address(self.network)
-                    })
-                    .transpose()?;
+                        Address {
+                            payload,
+                            network: self.network(),
+                        }
+                    });
 
                 let raw_tx = serialize_hex(&existing_transaction);
                 Ok((raw_tx, return_to_self))
             })
             .await?;
 
-        let recipient = address.encode_str(self.network)?;
+        let recipient = address.to_string();
         let tx = self
-            .fund_and_sign_transaction::<A>(fee_rate, &raw_tx, &return_to_self_address, &recipient, false)
+            .fund_and_sign_transaction(fee_rate, &raw_tx, &return_to_self_address, &recipient, false)
             .await?;
 
         let txid = self
@@ -905,9 +853,9 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `sat` - number of Satoshis to transfer
     /// * `fee_rate` - fee rate in sat/vbyte
     /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
-    async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
+    async fn create_and_send_transaction(
         &self,
-        address: A,
+        address: Address,
         sat: u64,
         fee_rate: SatPerVbyte,
         request_id: Option<H256>,
@@ -926,9 +874,9 @@ impl BitcoinCoreApi for BitcoinCore {
     /// * `request_id` - the issue/redeem/replace id for which this transfer is being made
     /// * `fee_rate` - fee rate in sat/vbyte
     /// * `num_confirmations` - how many confirmations we need to wait for
-    async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
+    async fn send_to_address(
         &self,
-        address: A,
+        address: Address,
         sat: u64,
         request_id: Option<H256>,
         fee_rate: SatPerVbyte,
@@ -964,13 +912,10 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(())
     }
 
-    async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(
-        &self,
-        addresses: Vec<A>,
-    ) -> Result<(), Error> {
+    async fn rescan_electrs_for_addresses(&self, addresses: Vec<Address>) -> Result<(), Error> {
         for address in addresses.into_iter() {
-            let address = address.encode_str(self.network)?;
-            let all_transactions = get_address_tx_history_full(&self.electrs_config.base_path, &address).await?;
+            let address = address.to_string();
+            let all_transactions = self.electrs_client.get_address_tx_history_full(&address).await?;
             // filter to only import
             // a) payments in the blockchain (not in mempool), and
             // b) payments TO the address (as bitcoin core will already know about transactions spending FROM it)
@@ -987,11 +932,14 @@ impl BitcoinCoreApi for BitcoinCore {
                     .any(|output| matches!(&output.scriptpubkey_address, Some(addr) if addr == &address))
             });
             for transaction in confirmed_payments_to {
-                let rawtx = get_tx_hex(&self.electrs_config.base_path, &transaction.txid).await?;
-                let merkle_proof = get_tx_merkle_block_proof(&self.electrs_config.base_path, &transaction.txid).await?;
+                let (raw_tx, raw_merkle_proof) = futures::future::try_join(
+                    self.electrs_client.get_tx_hex(&transaction.txid),
+                    self.electrs_client.get_tx_merkle_block_proof(&transaction.txid),
+                )
+                .await?;
                 self.rpc.call(
                     "importprunedfunds",
-                    &[serde_json::to_value(rawtx)?, serde_json::to_value(merkle_proof)?],
+                    &[serde_json::to_value(raw_tx)?, serde_json::to_value(raw_merkle_proof)?],
                 )?;
             }
         }
@@ -1042,14 +990,10 @@ impl BitcoinCoreApi for BitcoinCore {
 pub trait TransactionExt {
     fn get_op_return(&self) -> Option<H256>;
     fn get_op_return_bytes(&self) -> Option<[u8; 34]>;
-    fn get_payment_amount_to<A: PartialAddress + PartialEq>(&self, dest: A) -> Option<u64>;
-    fn extract_input_addresses<A: PartialAddress>(&self) -> Vec<A>;
-    fn extract_output_addresses<A: PartialAddress>(&self) -> Vec<A>;
-    fn extract_indexed_output_addresses<A: PartialAddress>(&self) -> Vec<(usize, A)>;
-    fn extract_return_to_self_address<A: PartialAddress>(
-        &self,
-        destination_address: &A,
-    ) -> Result<Option<(usize, A)>, Error>;
+    fn get_payment_amount_to(&self, dest: Payload) -> Option<u64>;
+    fn extract_output_addresses(&self) -> Vec<Payload>;
+    fn extract_indexed_output_addresses(&self) -> Vec<(usize, Payload)>;
+    fn extract_return_to_self_address(&self, destination: &Payload) -> Result<Option<(usize, Payload)>, Error>;
 }
 
 impl TransactionExt for Transaction {
@@ -1073,11 +1017,10 @@ impl TransactionExt for Transaction {
     }
 
     /// Get the amount of btc that self sent to `dest`, if any
-    fn get_payment_amount_to<A: PartialAddress + PartialEq>(&self, dest: A) -> Option<u64> {
+    fn get_payment_amount_to(&self, dest: Payload) -> Option<u64> {
         self.output.iter().find_map(|uxto| {
             let payload = Payload::from_script(&uxto.script_pubkey)?;
-            let address = A::from_payload(payload).ok()?;
-            if address == dest {
+            if payload == dest {
                 Some(uxto.value)
             } else {
                 None
@@ -1085,17 +1028,9 @@ impl TransactionExt for Transaction {
         })
     }
 
-    /// return the addresses that are used as inputs in this transaction
-    fn extract_input_addresses<A: PartialAddress>(&self) -> Vec<A> {
-        self.input
-            .iter()
-            .filter_map(|vin| vin_to_address(vin.clone()).ok())
-            .collect::<Vec<A>>()
-    }
-
     /// return the addresses that are used as outputs with non-zero value in this transaction
-    fn extract_output_addresses<A: PartialAddress>(&self) -> Vec<A> {
-        self.extract_indexed_output_addresses::<A>()
+    fn extract_output_addresses(&self) -> Vec<Payload> {
+        self.extract_indexed_output_addresses()
             .into_iter()
             .map(|(_idx, val)| val)
             .collect()
@@ -1103,27 +1038,21 @@ impl TransactionExt for Transaction {
 
     /// return the addresses that are used as outputs with non-zero value in this transaction,
     /// together with their index
-    fn extract_indexed_output_addresses<A: PartialAddress>(&self) -> Vec<(usize, A)> {
+    fn extract_indexed_output_addresses(&self) -> Vec<(usize, Payload)> {
         self.output
             .iter()
             .enumerate()
             .filter(|(_, x)| x.value > 0)
-            .filter_map(|(idx, tx_out)| {
-                let payload = Payload::from_script(&tx_out.script_pubkey)?;
-                Some((idx, PartialAddress::from_payload(payload).ok()?))
-            })
+            .filter_map(|(idx, tx_out)| Some((idx, Payload::from_script(&tx_out.script_pubkey)?)))
             .collect()
     }
 
     /// return index and address of the return-to-self (or None if it does not exist)
-    fn extract_return_to_self_address<A: PartialAddress>(
-        &self,
-        destination_address: &A,
-    ) -> Result<Option<(usize, A)>, Error> {
+    fn extract_return_to_self_address(&self, destination: &Payload) -> Result<Option<(usize, Payload)>, Error> {
         let mut return_to_self_addresses = self
             .extract_indexed_output_addresses()
             .into_iter()
-            .filter(|(_idx, x)| x != destination_address)
+            .filter(|(_idx, x)| x != destination)
             .collect::<Vec<_>>();
 
         // register return-to-self address if it exists
@@ -1135,215 +1064,18 @@ impl TransactionExt for Transaction {
     }
 }
 
-// https://github.com/interlay/interbtc/blob/cc5c16b28ef705e0774654dd94b813d9d35e12ec/crates/bitcoin/src/parser.rs#L277
-fn parse_compact_uint(varint: &[u8]) -> Result<(u64, usize), Error> {
-    match varint.get(0).ok_or(Error::ParsingError)? {
-        0xfd => {
-            let mut num_bytes: [u8; 2] = Default::default();
-            num_bytes.copy_from_slice(varint.get(1..3).ok_or(Error::ParsingError)?);
-            Ok((u16::from_le_bytes(num_bytes) as u64, 3))
-        }
-        0xfe => {
-            let mut num_bytes: [u8; 4] = Default::default();
-            num_bytes.copy_from_slice(varint.get(1..5).ok_or(Error::ParsingError)?);
-            Ok((u32::from_le_bytes(num_bytes) as u64, 5))
-        }
-        0xff => {
-            let mut num_bytes: [u8; 8] = Default::default();
-            num_bytes.copy_from_slice(varint.get(1..9).ok_or(Error::ParsingError)?);
-            Ok((u64::from_le_bytes(num_bytes) as u64, 9))
-        }
-        _ => Ok((varint[0] as u64, 1)),
-    }
-}
-
-fn vin_to_address<A: PartialAddress>(vin: TxIn) -> Result<A, Error> {
-    let script = if vin.witness.len() >= 2 {
-        Script::new_v0_wpkh(&WPubkeyHash::hash(&vin.witness[1]))
-    } else {
-        let input_script = vin.script_sig.as_bytes();
-        if input_script.is_empty() {
-            // ignore empty scripts (i.e. witness)
-            return Err(Error::ParsingError);
-        }
-
-        let mut p2pkh = true;
-        let mut pos = if input_script[0] == 0x00 {
-            p2pkh = false;
-            1
-        } else {
-            0
-        };
-
-        // TODO: reuse logic from bitcoin crate
-        let last = std::cmp::min(pos + 3, input_script.len());
-        let (size, len) = parse_compact_uint(input_script.get(pos..last).ok_or(Error::ParsingError)?)?;
-        pos += len;
-        // skip sigs
-        pos += size as usize;
-        // parse redeem_script or compressed public_key
-        let last = std::cmp::min(pos + 3, input_script.len());
-        let (_size, len) = parse_compact_uint(input_script.get(pos..last).ok_or(Error::ParsingError)?)?;
-        pos += len;
-
-        let bytes = input_script.get(pos..).ok_or(Error::ParsingError)?;
-
-        if p2pkh {
-            Script::new_p2pkh(&PubkeyHash::hash(bytes))
-        } else {
-            Script::new_p2sh(&ScriptHash::hash(bytes))
-        }
-    };
-
-    Ok(PartialAddress::from_payload(
-        Payload::from_script(&script).ok_or(ConversionError::InvalidPayload)?,
-    )?)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    use bitcoincore_rpc::bitcoin::{hashes::hex::FromHex, OutPoint, Script, Transaction};
-
-    async fn test_electrs(url: &str, script_hex: &str, expected_txid: &str) {
-        let config = ElectrsConfiguration {
-            base_path: url.to_owned(),
-            ..Default::default()
-        };
-
-        let script_bytes = Vec::from_hex(script_hex).unwrap();
-        let script_hash = bitcoincore_rpc::bitcoin::hashes::sha256::Hash::hash(&script_bytes);
-
-        let txs = esplora_btc_api::apis::scripthash_api::get_txs_by_scripthash(&config, &hex::encode(script_hash))
-            .await
-            .unwrap();
-        assert!(txs.iter().any(|tx| { &tx.txid == expected_txid }));
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    #[ignore] // disabled until mainnet electrs is up and running
-    async fn test_find_esplora_mainnet() {
-        let script_hex = "6a24aa21a9ed932d00baa7d428106db4f785d398d60d0b9c1369c38448717db4a8f36d2512e3";
-        let expected_txid = "d734d56c70ee7ac67d31a22f4b9a781619c5cff1803942b52036cd7eab1692e7";
-        test_electrs(ELECTRS_MAINNET_URL, script_hex, expected_txid).await;
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_find_esplora_testnet() {
-        let script_hex = "6a208b26f7cf49e1ad4d9f81d237933da8810644a85ac25b3c22a6a2324e1ba02efc";
-        let expected_txid = "ec736ccba2cb7d1a97145a7e98d32f8eec362cd140e917ce40842a492f43b49b";
-        test_electrs(ELECTRS_TESTNET_URL, script_hex, expected_txid).await;
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_find_esplora_testnet2() {
-        let script_hex = "6a4c5054325b0f43c54432b8df76322d225c9759359f73b283e108441862c2ee6fe4a021f6825bee72311ec0f53dd7197d0e325dca9a45aa3af296294b42c667b6db214a5174001fe7f40004001f7a07000b02";
-        let expected_txid = "ddfaa4f63b9cbdf72299b91074fbff13b02816f2a29109b2fecfd912a7476807";
-        test_electrs(ELECTRS_TESTNET_URL, script_hex, expected_txid).await;
-    }
+    use bitcoincore_rpc::bitcoin::hashes::{hex::FromHex, sha256::Hash as Sha256Hash, Hash};
 
     #[test]
     fn test_op_return_hashing() {
         let raw = Vec::from_hex("6a208703723a787b0f989110b49fd5e1cf1c2571525d564bf384b5aa9e340c9ad8bd").unwrap();
-        let script_hash = bitcoincore_rpc::bitcoin::hashes::sha256::Hash::hash(&raw);
+        let script_hash = Sha256Hash::hash(&raw);
 
         let expected = "6ed3928fdcf7375b9622746eb46f8e97a2832a0c43000e3d86774fecb74ee67e";
-        let expected = bitcoincore_rpc::bitcoin::hashes::sha256::Hash::from_hex(expected).unwrap();
+        let expected = Sha256Hash::from_hex(expected).unwrap();
 
         assert_eq!(expected, script_hash);
-    }
-
-    #[test]
-    fn test_vin_to_address() {
-        assert_eq!(
-            // 1fd696a71ce2d9533d1e22cd113c8c8b33da4845716f42eb99968f3d88a4042c
-            Address {
-                payload: vin_to_address::<Payload>(TxIn {
-                    previous_output: OutPoint::default(),
-                    script_sig: Script::default(),
-                    sequence: 0,
-                    witness: vec![
-                        hex::decode("304402207abd7b0bf0b7c2c695293b5bac23ae2b5c0806a1a124dd39e693de3bec67a723022014bd3a35f2ba31768e1ed3e7bbc645e1c6c69218fa72edb2325c7580af62e46901").unwrap(),
-                        hex::decode("037dbedcebf19e92d3d2f10846f3470797d7ba74f3faf111ab2fa94f77fd7e58d7").unwrap(),
-                    ],
-                }).unwrap(), network: Network::Testnet
-            }.to_string(),
-            "tb1q7e9x3k5gkx8dsgqwm455z3sa7maj4mc05mqnvf".to_string(),
-            "p2wpkh"
-        );
-
-        assert_eq!(
-            // 5ce470709bd532e092ddc01cf906c80e34d19ff7541ef03dabaedacfd7233f8d
-            Address {
-                payload: vin_to_address::<Payload>(TxIn {
-                    previous_output: OutPoint::default(),
-                    script_sig: deserialize::<Script>(&hex::decode("1600144d99b19e36a28fc6a6bab9f48ba98652351bb3cb").unwrap()).unwrap(),
-                    sequence: 0,
-                    witness: vec![
-                        hex::decode("30440220202345f4ef3f715a14e8e15e7ed54813c0d56d546c02fe1a419c1ce86d82c9ee0220180445abea2125cbde0db6ee5436cb9a98f5dad12865a6855e8a1c7f45c2984a01").unwrap(),
-                        hex::decode("02b309205f020e2c9643f12ce0eea9ec5b3e1e3be99df61f629fe22687d7d80238").unwrap(),
-                    ],
-                }).unwrap(), network: Network::Testnet
-            }.to_string(),
-            "tb1qfkvmr83k528udf46h86gh2vx2g63hv7tkdufks".to_string(),
-            "p2wpkh"
-        );
-
-        {
-            // e9affb84743b91034582a56ac8a6f9c6815057edb7a1f4c0df6e78a4af4a9c7a
-            let tx = deserialize::<Transaction>(&hex::decode("0100000001a2a20766d15406c23841d4e7a7348403624c723fcdbae1ce44654975f5400584010000006a47304402201f1ba72b4071b38905135ed08acbafb0926c42b9f709ff6d3e7d4f557b58e92f02203b2bcb227085c1a37d22fdc0a9c1ba73f69560aadaacf1144cb7d614bba7cd430121020c57dafca427593d3b9e323098c2ca0bb0512a23efa08d388147e1877cabc037ffffffff02f82a0000000000001976a9142c8e6dcfb9a2eb49118886f0ac1e6e6574d1636188ac30689359000000001976a914935bd02d1337ec8ff9b914f4a0159f1240d530f688ac00000000").unwrap()).unwrap();
-            assert_eq!(
-                Address {
-                    payload: vin_to_address::<Payload>(tx.input[0].clone()).unwrap(),
-                    network: Network::Testnet
-                }
-                .to_string(),
-                "mgJnpiNHvZpTLZ8yX1Tnw8ieErvJt9gkA9".to_string(),
-                "p2pkh"
-            );
-        }
-
-        {
-            // d3daa640b29ecbd306fcaede8d1e9b7c89e48f160c377247c5259ba73d1efcb8
-            let tx = deserialize::<Transaction>(&hex::decode("01000000014f287eabcbb1656713a584763da163a7b58f58047f8e5576283cee592c1bb2e101000000910047304402205b8029966035bb3fe68135ead2ba15bb6226ff701e1be41d848c9b3e7bd8e8a80220487eb3cf8e086308204ef4a66aa0cfe33dd2aceaea5d3b9f4f0cc2f0d4037832014751210371d183b1091df2e50fd9f7a54e6f504f32c875501ee9d2a785af3efd867fd433210280c8b8eb94192b221cad3736bda4bbf3f3980754d2559cee4d61bcf0a2c5693e52aeffffffff0140aeeb02000000001976a914394c0ce031df961094c1531f81bfeed5e341a2c388ac00000000").unwrap()).unwrap();
-            assert_eq!(
-                Address {
-                    payload: vin_to_address::<Payload>(tx.input[0].clone()).unwrap(),
-                    network: Network::Testnet
-                }
-                .to_string(),
-                "2NCwKFvap8M8q2c4qLRPdhyaEneQXTxynzM".to_string(),
-                "p2sh"
-            );
-        }
-    }
-
-    #[test]
-    fn test_extract_input_addresses() {
-        // 5de91933c40bbb2ed7532e352e52e99a51987fd85d92fecee5fb1c0abccdc40a
-        let tx = deserialize::<Transaction>(&hex::decode("0100000000010a6f3696e148abd79a11de9c856de2ab8c5d577dfb11504098dd7b20aebb5df1fb0100000000ffffffff2d0a3a53efdb9137335196b8e8411a7875a25e7f8f0d1caf2f8b34228f1d5378000000006b483045022100f5a08d7fec0f14dfb2951eb4ed1258819fe7581b1d1f3f80dac124bdb89c793f0220307b9864355f86f2fa89978514bcdc239452f77d6ff40ab1124e73a4487c01a80121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffba1431cf2a5dc4b07d86d788bd2e8444cbd3dd0cb35820be30eb7b90d3e48f0c000000006a4730440220377ea3fdead5fab0f771bfe1e7ac2084583dda7b7bdb39cce8a62a1092bed1ba0220608092e7233938de44329bb2eeabaae2911f06b224bbbc38228397bfc73011500121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffba0a2f37ffbe96731a0871b31da5dc9220d8b74895f56ec070e8587d9dd9ea06000000006a47304402206e3223bc0724e48416ebd05e94c1ccd249d00da81132a57b97ba6ae68c1e726802201de050b8e7138e774575b0d024a324d900476955144ad87b8a1bf876136bc1f60121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffba073447d593711edffe4dc94266b1c5b1985099854e99dd930185a66a4acd60000000006a47304402202974974b80aa509fbc5c8e6ac05667f41889dd89a49363715d0d3e9e0b68be1d022074d2dd3fe6db508081a829bf200f3d70f2366e797f2bf30ae4401d397da8f9370121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffb9fb6cf24186598c6bbcac7fef988a8e78ba40c619a3258673b460202364346a000000006a47304402206329eca504a17a00ec1425b95bc5659bda7f5d284920df966dd27c72ff2d6a4f0220068a83a3380def3ea19cc6506d1c5ea75e7299716d00aadcdc87065444b763cd0121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffb9f27cd3878f205d8dcc252b5a862cdfbede877dc88d0fec2c0d659b3bb3d767000000006b483045022100d9a019c934e7e8da7add5798e7795b0e910df87d755c8de83fd169415c085c410220723dd326f45c3ab40a9a6870400507cb76914cf40625df0c9aad60b2871ad5ba0121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffb9e4c0dd11326ea85d8804e4ed4a956fa2c80412b10f05a9243f788d9fb2c38a000000006b483045022100cac5e6c793cb0b8a2456d7e69170e796822d268aa82b01ea2796dec7d6c7138e0220326110c2b44dcb787689b8fbb435c1374fc5f14ec31754b065518dc0fe3e2c450121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffb9e158a00f1ed11728561655ccb43c3aa149343dd67d1f0e08a1788cdbec238d000000006b483045022100e53756fb299901d2093b1a94cbc23c133173ddf56ec7e24f80608c6f693f3e6302201f6e8f47a6943f4bb5c86ddc50ec89a5e914426d8c9e52796612a3e5e86da8540121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffffb9e0b662cb8d716ff42cc206e5142a17800fd1896022fad533f7931bf8bda19a000000006b483045022100db6b34d039b5a4de0621ceedf81c9871fe2a424211cf9e64bde58220fe4eef070220032d7bfdaee069627b4c2c6b7eff0510d56fdfb51a09ff1f887f21fa048b67820121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4eceffffffff02e2cb21000000000016001474542d769d4dcb7b988bd029f215ffb43370572db35de9210b00000016001487ca9164c3c704701e5f669b472287d4ec55f71a02483045022100c1b1c3576c05c6a9e7130f1353bde96044a3eeb420979e0539d38880058d9fe402201760bab2d7f5ca4ec206682244e8ba421a5358abdd8579d06a1bfda684bb87e00121033cbadaa31a30b53d7f22d3560527c1ecbac52d902738dac6520820730ffe4ece00000000000000000000000000").unwrap()).unwrap();
-        assert_eq!(
-            tx.extract_input_addresses::<Payload>()
-                .iter()
-                .map(|payload| Address {
-                    payload: payload.clone(),
-                    network: Network::Testnet
-                }
-                .to_string())
-                .collect::<Vec<String>>(),
-            vec![
-                "tb1qsl9fzexrcuz8q8jlv6d5wg586nk9tac6ghv2qu",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC",
-                "mstxBcqFZHroNeVAEBc9NiV383KTUXFyCC"
-            ]
-        );
     }
 }

@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCoreApi, Error as BitcoinError, Network};
 use futures::{future::Either, Future, FutureExt};
 use runtime::{
-    cli::ConnectionOpts as ParachainConfig, CurrencyId, CurrencyIdExt, CurrencyInfo, Error as RuntimeError,
-    InterBtcParachain as BtcParachain, InterBtcSigner, PrettyPrint, VaultId,
+    cli::ConnectionOpts as ParachainConfig, CurrencyId, CurrencyIdExt, CurrencyInfo, InterBtcParachain as BtcParachain,
+    InterBtcSigner, PrettyPrint, VaultId,
 };
 use std::marker::PhantomData;
 
@@ -18,8 +18,8 @@ pub use error::Error;
 pub use trace::init_subscriber;
 pub use warp;
 
-pub type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
-pub type ShutdownReceiver = tokio::sync::broadcast::Receiver<Option<()>>;
+pub type ShutdownSender = tokio::sync::broadcast::Sender<()>;
+pub type ShutdownReceiver = tokio::sync::broadcast::Receiver<()>;
 
 #[async_trait]
 pub trait Service<Config> {
@@ -132,15 +132,9 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
                 Box::new(constructor),
             );
             if let Err(outer) = service.start().await {
-                match outer {
-                    Error::BitcoinError(ref inner) if inner.is_transport_error() || inner.is_json_decode_error() => {}
-                    Error::RuntimeError(RuntimeError::ChannelClosed) => (),
-                    Error::RuntimeError(ref inner) if inner.is_rpc_error() => (),
-                    other => return Err(other),
-                };
-                tracing::info!("Disconnected: {}", outer);
+                tracing::warn!("Disconnected: {}", outer);
             } else {
-                tracing::info!("Disconnected");
+                tracing::warn!("Disconnected");
             }
 
             match self.service_config.restart_policy {
@@ -154,32 +148,31 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
     }
 }
 
-// TODO: propagate error
-pub async fn wait_or_shutdown<F>(shutdown_tx: ShutdownSender, future2: F)
+pub async fn wait_or_shutdown<F>(shutdown_tx: ShutdownSender, future2: F) -> Result<(), Error>
 where
     F: Future<Output = Result<(), Error>>,
 {
     match run_cancelable(shutdown_tx.subscribe(), future2).await {
         TerminationStatus::Cancelled => {
             tracing::trace!("Received shutdown signal");
+            Ok(())
         }
-        TerminationStatus::Completed(ret) => {
-            tracing::info!("{:?}", ret);
+        TerminationStatus::Completed(res) => {
             tracing::trace!("Sending shutdown signal");
-            // TODO: shutdown signal should be error
-            let _ = shutdown_tx.send(Some(()));
+            let _ = shutdown_tx.send(());
+            res
         }
     }
 }
 
-pub enum TerminationStatus<Ret> {
+pub enum TerminationStatus<Res> {
     Cancelled,
-    Completed(Ret),
+    Completed(Res),
 }
 
-async fn run_cancelable<F, Ret>(mut shutdown_rx: ShutdownReceiver, future2: F) -> TerminationStatus<Ret>
+async fn run_cancelable<F, Res>(mut shutdown_rx: ShutdownReceiver, future2: F) -> TerminationStatus<Res>
 where
-    F: Future<Output = Ret>,
+    F: Future<Output = Res>,
 {
     let future1 = shutdown_rx.recv().fuse();
     let future2 = future2.fuse();
@@ -189,7 +182,7 @@ where
 
     match futures::future::select(future1, future2).await {
         Either::Left((_, _)) => TerminationStatus::Cancelled,
-        Either::Right((ret, _)) => TerminationStatus::Completed(ret),
+        Either::Right((res, _)) => TerminationStatus::Completed(res),
     }
 }
 

@@ -5,11 +5,10 @@ authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 
 [features]
-default = ["interbtc"]
+default = []
 regtest-mine-on-tx = []
 regtest-manual-mining = []
 cli = ["clap"]
-interbtc = ["interbtc-bitcoin"]
 uses-bitcoind = []
 
 [dependencies]
@@ -27,8 +26,9 @@ futures = "0.3.5"
 log = "0.4.0"
 hyper = "0.10"
 esplora-btc-api = "1.0.3"
-reqwest = "0.11.11"
 sha2 = "0.8.2"
+
+reqwest = "0.11.11"
 url = "2.2.2"
 
 serde = "1.0.139"
@@ -36,12 +36,6 @@ serde_json = "1.0.82"
 
 # Substrate dependencies
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
-
-[dependencies.interbtc-bitcoin]
-git = "https://github.com/interlay/interbtc"
-rev = "2ddb5eba6fdb42125805bf15d8a4caf30556e0ab"
-package = "bitcoin"
-optional = true
 
 [dev-dependencies]
 mockall = "0.8.1"

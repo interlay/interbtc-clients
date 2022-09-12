@@ -8,7 +8,7 @@ use crate::{
     Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
-use bitcoin::{light::BitcoinLight as BitcoinCore, BitcoinCoreApi, Error as BitcoinError};
+use bitcoin::{light::BitcoinLight as BitcoinCore, BitcoinCoreApi, Error as BitcoinError, PublicKey};
 use clap::Parser;
 use futures::{
     channel::{mpsc, mpsc::Sender},
@@ -227,17 +227,18 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
             .btc_parachain
             .get_public_key()
             .await?
-            .ok_or(bitcoin::Error::MissingPublicKey)?;
+            .ok_or(BitcoinError::MissingPublicKey)?;
 
         // migration to the new shared public key setup: copy the public key from the
         // currency-specific wallet to the master wallet. This can be removed once all
         // vaults have migrated
-        if let Ok(private_key) = btc_rpc.dump_derivation_key(derivation_key.0) {
+        let public_key = PublicKey::from_slice(&derivation_key.0).map_err(BitcoinError::KeyError)?;
+        if let Ok(private_key) = btc_rpc.dump_derivation_key(&public_key) {
             self.btc_rpc_master_wallet.import_derivation_key(&private_key)?;
         }
 
         // Copy the derivation key from the master wallet to use currency-specific wallet
-        match self.btc_rpc_master_wallet.dump_derivation_key(derivation_key.0) {
+        match self.btc_rpc_master_wallet.dump_derivation_key(&public_key) {
             Ok(private_key) => {
                 btc_rpc.import_derivation_key(&private_key)?;
             }
@@ -377,12 +378,16 @@ impl Service<VaultServiceConfig> for VaultService {
             Ok(_) => Ok(()),
             Err(Error::RuntimeError(err)) => Err(ServiceError::RuntimeError(err)),
             Err(Error::BitcoinError(err)) => Err(ServiceError::BitcoinError(err)),
+            Err(Error::ServiceError(err)) => Err(err),
             Err(err) => Err(ServiceError::Other(err.to_string())),
         }
     }
 }
 
-async fn run_and_monitor_tasks(shutdown_tx: ShutdownSender, items: Vec<(&str, ServiceTask)>) {
+async fn run_and_monitor_tasks(
+    shutdown_tx: ShutdownSender,
+    items: Vec<(&str, ServiceTask)>,
+) -> Result<(), ServiceError> {
     let (metrics_iterators, tasks): (HashMap<String, _>, Vec<_>) = items
         .into_iter()
         .filter_map(|(name, task)| {
@@ -405,7 +410,14 @@ async fn run_and_monitor_tasks(shutdown_tx: ShutdownSender, items: Vec<(&str, Se
         publish_tokio_metrics(metrics_iterators),
     ));
 
-    let _ = join(tokio_metrics, join_all(tasks)).await;
+    match join(tokio_metrics, join_all(tasks)).await {
+        (Ok(Err(err)), _) => Err(err),
+        (_, results) => results
+            .into_iter()
+            .find(|res| matches!(res, Ok(Err(_))))
+            .and_then(|res| res.ok())
+            .unwrap_or(Ok(())),
+    }
 }
 
 type Task = Pin<Box<dyn Future<Output = Result<(), service::Error>> + Send + 'static>>;
@@ -743,9 +755,9 @@ impl VaultService {
             ),
         ];
 
-        run_and_monitor_tasks(self.shutdown.clone(), tasks).await;
-
-        Ok(())
+        run_and_monitor_tasks(self.shutdown.clone(), tasks)
+            .await
+            .map_err(Error::ServiceError)
     }
 
     async fn maybe_register_public_key(&self) -> Result<(), Error> {
@@ -756,8 +768,10 @@ impl VaultService {
 
         if self.btc_parachain.get_public_key().await?.is_none() {
             tracing::info!("Registering bitcoin public key to the parachain...");
-            let new_key = self.btc_rpc_master_wallet.get_new_public_key().await?;
-            self.btc_parachain.register_public_key(new_key).await?;
+            let public_key = self.btc_rpc_master_wallet.get_new_public_key().await?;
+            self.btc_parachain
+                .register_public_key(public_key.key.serialize().into())
+                .await?;
         }
 
         Ok(())
