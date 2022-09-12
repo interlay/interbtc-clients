@@ -459,6 +459,7 @@ impl Request {
 
 /// Queries the parachain for open requests and executes them. It checks the
 /// bitcoin blockchain to see if a payment has already been made.
+#[allow(clippy::too_many_arguments)]
 pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,

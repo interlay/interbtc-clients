@@ -47,7 +47,7 @@ impl AssetRegistry {
         Self::global()?
             .symbol_lookup
             .get(&symbol)
-            .and_then(|foreign_asset_id| Some(CurrencyId::ForeignAsset(*foreign_asset_id)))
+            .map(|foreign_asset_id| CurrencyId::ForeignAsset(*foreign_asset_id))
             .ok_or(Error::AssetNotFound)
     }
 
@@ -95,9 +95,7 @@ impl RuntimeCurrencyInfo for CurrencyId {
         match self {
             CurrencyId::Token(token_symbol) => Ok(token_symbol.name().to_string()),
             CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::get_asset_metadata_by_id(*foreign_asset_id)
-                .and_then(|asset_metadata| {
-                    String::from_utf8(asset_metadata.name.clone()).map_err(|_| Error::InvalidCurrency)
-                }),
+                .and_then(|asset_metadata| String::from_utf8(asset_metadata.name).map_err(|_| Error::InvalidCurrency)),
         }
     }
 
@@ -106,7 +104,7 @@ impl RuntimeCurrencyInfo for CurrencyId {
             CurrencyId::Token(token_symbol) => Ok(token_symbol.symbol().to_string()),
             CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::get_asset_metadata_by_id(*foreign_asset_id)
                 .and_then(|asset_metadata| {
-                    String::from_utf8(asset_metadata.symbol.clone()).map_err(|_| Error::InvalidCurrency)
+                    String::from_utf8(asset_metadata.symbol).map_err(|_| Error::InvalidCurrency)
                 }),
         }
     }
@@ -125,8 +123,7 @@ impl RuntimeCurrencyInfo for CurrencyId {
             CurrencyId::Token(token_symbol) => Ok(token_symbol.name().to_string().to_lowercase()),
             CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::get_asset_metadata_by_id(*foreign_asset_id)
                 .and_then(|asset_metadata| {
-                    String::from_utf8(asset_metadata.additional.coingecko_id.clone())
-                        .map_err(|_| Error::InvalidCurrency)
+                    String::from_utf8(asset_metadata.additional.coingecko_id).map_err(|_| Error::InvalidCurrency)
                 }),
         }
     }
