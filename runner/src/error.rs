@@ -23,14 +23,10 @@ pub enum Error {
     UrlParseError(#[from] UrlParseError),
     #[error("SubxtError: {0}")]
     SubxtError(#[from] SubxtError),
-    #[error("Failed to derive the release name of the vault")]
-    ClientNameDerivationError,
     #[error("Integer conversion error")]
     IntegerConversionError,
     #[error("A client release has not been downloaded")]
     NoDownloadedRelease,
-    #[error("No child process has been spawned")]
-    NoChildProcess,
     #[error("A child process is already running")]
     ChildProcessExists,
     #[error("Failed to terminate child process")]

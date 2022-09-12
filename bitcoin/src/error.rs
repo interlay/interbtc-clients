@@ -13,11 +13,7 @@ use reqwest::Error as ReqwestError;
 use serde_json::Error as SerdeJsonError;
 use thiserror::Error;
 use tokio::time::error::Elapsed;
-
-type ElectrsTxByScriptHashError =
-    esplora_btc_api::apis::Error<esplora_btc_api::apis::scripthash_api::GetTxsByScripthashError>;
-type ElectrsAddressTxHistoryError =
-    esplora_btc_api::apis::Error<esplora_btc_api::apis::address_api::GetAddressTxHistoryError>;
+use url::ParseError;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -37,12 +33,10 @@ pub enum Error {
     KeyError(#[from] KeyError),
     #[error("Timeout: {0}")]
     TimeElapsed(#[from] Elapsed),
-    #[error("ElectrsError: {0}")]
-    ElectrsTxByScriptHashError(#[from] ElectrsTxByScriptHashError),
-    #[error("ElectrsError: {0}")]
-    ElectrsAddressTxHistoryError(#[from] ElectrsAddressTxHistoryError),
-    #[error("ElectrsError: {0}")]
+    #[error("ReqwestError: {0}")]
     ReqwestError(#[from] ReqwestError),
+    #[error("ParseError: {0}")]
+    ParseError(#[from] ParseError),
     #[error("Connected to incompatable bitcoin core version: {0}")]
     IncompatibleVersion(usize),
 
