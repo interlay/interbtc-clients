@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use bitcoin::{stream_blocks, BitcoinCoreApi, SatPerVbyte, TransactionExt};
+use bitcoin::{stream_blocks, BitcoinCoreApi, SatPerVbyte, Transaction, TransactionExt};
 use frame_support::assert_ok;
 use futures::{
     channel::mpsc,
@@ -8,7 +8,7 @@ use futures::{
 };
 use runtime::{
     integration::*, types::*, BtcAddress, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain,
-    InterBtcRedeemRequest, IssuePallet, RedeemPallet, ReplacePallet, SudoPallet, UtilFuncs, VaultId,
+    InterBtcRedeemRequest, IssuePallet, PartialAddress, RedeemPallet, ReplacePallet, SudoPallet, UtilFuncs, VaultId,
     VaultRegistryPallet,
 };
 use sp_core::{H160, H256};
@@ -100,7 +100,7 @@ async fn test_redeem_succeeds() {
                 .register_vault_with_public_key(
                     &vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -172,7 +172,7 @@ async fn test_replace_succeeds() {
                 .register_vault_with_public_key(
                     &old_vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -181,7 +181,7 @@ async fn test_replace_succeeds() {
                 .register_vault_with_public_key(
                     &new_vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -259,7 +259,7 @@ async fn test_withdraw_replace_succeeds() {
                 .register_vault_with_public_key(
                     &old_vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -268,7 +268,7 @@ async fn test_withdraw_replace_succeeds() {
                 .register_vault_with_public_key(
                     &new_vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -337,7 +337,7 @@ async fn test_cancellation_succeeds() {
                 .register_vault_with_public_key(
                     &old_vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -346,7 +346,7 @@ async fn test_cancellation_succeeds() {
                 .register_vault_with_public_key(
                     &new_vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -482,7 +482,9 @@ async fn test_cancellation_succeeds() {
                             assert_ok!(
                                 btc_rpc
                                     .send_to_address(
-                                        BtcAddress::P2PKH(H160::from_slice(&[0; 20])),
+                                        BtcAddress::P2PKH(H160::from_slice(&[0; 20]))
+                                            .to_address(btc_rpc.network())
+                                            .unwrap(),
                                         100_000,
                                         None,
                                         SatPerVbyte(1000),
@@ -540,7 +542,7 @@ async fn test_refund_succeeds() {
                 .register_vault_with_public_key(
                     &vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -552,7 +554,7 @@ async fn test_refund_succeeds() {
 
             let metadata = btc_rpc
                 .send_to_address(
-                    issue.vault_address,
+                    issue.vault_address.to_address(btc_rpc.network()).unwrap(),
                     (issue.amount + issue.fee) as u64 + over_payment,
                     None,
                     SatPerVbyte(1000),
@@ -619,7 +621,7 @@ async fn test_issue_overpayment_succeeds() {
                 .register_vault_with_public_key(
                     &vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -629,7 +631,7 @@ async fn test_issue_overpayment_succeeds() {
 
             let metadata = btc_rpc
                 .send_to_address(
-                    issue.vault_address,
+                    issue.vault_address.to_address(btc_rpc.network()).unwrap(),
                     (issue.amount + issue.fee) as u64 * over_payment_factor as u64,
                     None,
                     SatPerVbyte(1000),
@@ -687,7 +689,7 @@ async fn test_automatic_issue_execution_succeeds() {
                 .register_vault_with_public_key(
                     &vault1_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap()
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -696,7 +698,7 @@ async fn test_automatic_issue_execution_succeeds() {
                 .register_vault_with_public_key(
                     &vault2_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap()
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -708,7 +710,7 @@ async fn test_automatic_issue_execution_succeeds() {
             assert_ok!(
                 btc_rpc
                     .send_to_address(
-                        issue.vault_address,
+                        issue.vault_address.to_address(btc_rpc.network()).unwrap(),
                         (issue.amount + issue.fee) as u64,
                         None,
                         SatPerVbyte(1000),
@@ -777,7 +779,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
                 .register_vault_with_public_key(
                     &vault1_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -786,7 +788,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
                 .register_vault_with_public_key(
                     &vault2_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -798,7 +800,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
             assert_ok!(
                 btc_rpc
                     .send_to_address_with_many_outputs(
-                        issue.vault_address,
+                        issue.vault_address.to_address(btc_rpc.network()).unwrap(),
                         (issue.amount + issue.fee) as u64,
                         None,
                         SatPerVbyte(1000),
@@ -857,7 +859,7 @@ async fn test_execute_open_requests_succeeds() {
                 .register_vault_with_public_key(
                     &vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -884,7 +886,7 @@ async fn test_execute_open_requests_succeeds() {
         assert_ok!(
             btc_rpc
                 .send_to_address(
-                    address,
+                    address.to_address(btc_rpc.network()).unwrap(),
                     redeems[0].amount_btc as u64,
                     Some(redeem_ids[0]),
                     SatPerVbyte(1000),
@@ -895,7 +897,7 @@ async fn test_execute_open_requests_succeeds() {
 
         let transaction = btc_rpc
             .create_transaction(
-                address,
+                address.to_address(btc_rpc.network()).unwrap(),
                 redeems[1].amount_btc as u64,
                 SatPerVbyte(1000),
                 Some(redeem_ids[1]),
@@ -950,7 +952,7 @@ async fn test_off_chain_liquidation() {
                 .register_vault_with_public_key(
                     &vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap(),
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                 )
                 .await
         );
@@ -979,7 +981,11 @@ async fn test_shutdown() {
         let btc_rpc = MockBitcoinCore::new(sudo_provider.clone()).await;
         assert_ok!(
             sudo_provider
-                .register_vault_with_public_key(&sudo_vault_id, 1000000, btc_rpc.get_new_public_key().await.unwrap(),)
+                .register_vault_with_public_key(
+                    &sudo_vault_id,
+                    1000000,
+                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                )
                 .await
         );
 
@@ -1092,7 +1098,7 @@ mod test_with_bitcoind {
 
         let metadata = btc_rpc
             .send_to_address(
-                issue.vault_address,
+                issue.vault_address.to_address(btc_rpc.network()).unwrap(),
                 (issue.amount + issue.fee) as u64,
                 None,
                 fee_rate,
@@ -1110,6 +1116,13 @@ mod test_with_bitcoind {
             .execute_issue(issue.issue_id, &metadata.proof, &metadata.raw_tx)
             .await
             .unwrap();
+    }
+
+    fn extract_output_addresses(tx: &Transaction) -> Vec<BtcAddress> {
+        tx.extract_output_addresses()
+            .into_iter()
+            .filter_map(|payload| BtcAddress::from_payload(payload).ok())
+            .collect()
     }
 
     #[tracing::instrument(skip(user_provider, relayer_provider, btc_rpc, vault_id))]
@@ -1132,7 +1145,7 @@ mod test_with_bitcoind {
                 .unwrap()
                 .map(|tx| tx.unwrap())
                 .find(|tx| {
-                    let addresses = tx.extract_output_addresses::<BtcAddress>();
+                    let addresses = extract_output_addresses(tx);
                     addresses.into_iter().any(|x| x == address)
                 }) {
                 None => {
@@ -1158,7 +1171,7 @@ mod test_with_bitcoind {
             .map(|tx| tx.unwrap())
             .filter(|tx| tx != &initial_tx)
             .any(|tx| {
-                let addresses = tx.extract_output_addresses::<BtcAddress>();
+                let addresses = extract_output_addresses(&tx);
                 addresses.into_iter().any(|x| x == address)
             }));
 
@@ -1195,7 +1208,7 @@ mod test_with_bitcoind {
                 .unwrap()
                 .map(|tx| tx.unwrap())
                 .find(|tx| {
-                    let addresses = tx.extract_output_addresses::<BtcAddress>();
+                    let addresses = extract_output_addresses(tx);
                     addresses.into_iter().any(|x| x == address)
                 }) {
                 None => {
@@ -1217,7 +1230,7 @@ mod test_with_bitcoind {
                 .map(|tx| tx.unwrap())
                 .filter(|tx| tx != &initial_tx)
                 .find(|tx| {
-                    let addresses = tx.extract_output_addresses::<BtcAddress>();
+                    let addresses = extract_output_addresses(tx);
                     addresses.into_iter().any(|x| x == address)
                 }) {
                 None => {
@@ -1288,7 +1301,7 @@ mod test_with_bitcoind {
                     .register_vault_with_public_key(
                         &vault_id,
                         vault_collateral,
-                        btc_rpc.get_new_public_key().await.unwrap(),
+                        btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
                     )
                     .await
             );

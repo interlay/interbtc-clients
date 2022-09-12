@@ -191,7 +191,7 @@ async fn get_best_block_info<B: BitcoinCoreApi + Clone>(rpc: &B) -> Result<(u32,
 mod tests {
     use super::*;
     use crate::*;
-    pub use bitcoincore_rpc::bitcoin::{Amount, Network, TxMerkleNode};
+    pub use bitcoincore_rpc::bitcoin::{Address, Amount, Network, PublicKey, TxMerkleNode};
     use sp_core::H256;
 
     mockall::mock! {
@@ -208,13 +208,13 @@ mod tests {
             async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, Error>;
             async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
             async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
-            async fn get_new_address<A: PartialAddress + Send + 'static>(&self) -> Result<A, Error>;
-            async fn get_new_public_key<P: From<[u8; PUBLIC_KEY_SIZE]> + 'static>(&self) -> Result<P, Error>;
-            fn dump_derivation_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(&self, public_key: P) -> Result<PrivateKey, Error>;
+            async fn get_new_address(&self) -> Result<Address, Error>;
+            async fn get_new_public_key(&self) -> Result<PublicKey, Error>;
+            fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, Error>;
             fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), Error>;
-            async fn add_new_deposit_key<P: Into<[u8; PUBLIC_KEY_SIZE]> + Send + Sync + 'static>(
+            async fn add_new_deposit_key(
                 &self,
-                public_key: P,
+                public_key: PublicKey,
                 secret_key: Vec<u8>,
             ) -> Result<(), Error>;
             async fn get_best_block_hash(&self) -> Result<BlockHash, Error>;
@@ -229,16 +229,16 @@ mod tests {
                 txid: Txid,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
-            async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
+            async fn create_and_send_transaction(
                 &self,
-                address: A,
+                address: Address,
                 sat: u64,
                 fee_rate: SatPerVbyte,
                 request_id: Option<H256>,
             ) -> Result<Txid, Error>;
-            async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(
+            async fn send_to_address(
                 &self,
-                address: A,
+                address: Address,
                 sat: u64,
                 request_id: Option<H256>,
                 fee_rate: SatPerVbyte,
@@ -246,15 +246,15 @@ mod tests {
             ) -> Result<TransactionMetadata, Error>;
             async fn create_or_load_wallet(&self) -> Result<(), Error>;
             async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error>;
-            async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(
+            async fn rescan_electrs_for_addresses(
                 &self,
-                addresses: Vec<A>,
+                addresses: Vec<Address>,
             ) -> Result<(), Error>;
             fn get_utxo_count(&self) -> Result<usize, Error>;
-            async fn bump_fee<A: PartialAddress + Send + Sync + 'static>(
+            async fn bump_fee(
                 &self,
                 txid: &Txid,
-                address: A,
+                address: Address,
                 fee_rate: SatPerVbyte,
             ) -> Result<Txid, Error>;
             fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error>;
