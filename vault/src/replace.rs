@@ -212,8 +212,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        json, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, Network,
-        PartialAddress, PrivateKey, SatPerVbyte, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        json, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, Network, PartialAddress, PrivateKey,
+        SatPerVbyte, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use runtime::{
         AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcReplaceRequest,
@@ -265,14 +265,6 @@ mod tests {
                 txid: Txid,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
-            async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
-                &self,
-                address: A,
-                sat: u64,
-                fee_rate: SatPerVbyte,
-                request_id: Option<H256>,
-            ) -> Result<LockedTransaction, BitcoinError>;
-            async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
             async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
                 &self,
                 address: A,

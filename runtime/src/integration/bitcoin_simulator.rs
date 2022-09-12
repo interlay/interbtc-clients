@@ -9,13 +9,13 @@ use bitcoin::{
     json,
     secp256k1::{constants::SECRET_KEY_SIZE, PublicKey, Secp256k1, SecretKey},
     serialize, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult,
-    Hash, LockedTransaction, Network, OutPoint, PartialAddress, PartialMerkleTree, PrivateKey, SatPerVbyte, Script,
-    Transaction, TransactionExt, TransactionMetadata, TxIn, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
+    Hash, Network, OutPoint, PartialAddress, PartialMerkleTree, PrivateKey, SatPerVbyte, Script, Transaction,
+    TransactionExt, TransactionMetadata, TxIn, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
 };
 use rand::{thread_rng, Rng};
 use std::{convert::TryInto, sync::Arc, time::Duration};
 use tokio::{
-    sync::{Mutex, RwLock},
+    sync::{Mutex, OwnedMutexGuard, RwLock},
     time::sleep,
 };
 
@@ -228,7 +228,7 @@ impl MockBitcoinCore {
         address: A,
         sat: u64,
         request_id: Option<H256>,
-    ) -> Result<LockedTransaction, BitcoinError> {
+    ) -> Result<Transaction, BitcoinError> {
         let mut transaction = MockBitcoinCore::generate_normal_transaction(&address, sat);
 
         for _ in 1..100 {
@@ -253,12 +253,9 @@ impl MockBitcoinCore {
             transaction.output.push(op_return);
         }
 
-        Ok(LockedTransaction::new(
-            transaction,
-            Default::default(),
-            Some(self.transaction_creation_lock.clone().lock_owned().await),
-        ))
+        Ok(transaction)
     }
+
     pub async fn send_to_address_with_many_outputs<A: PartialAddress + Send + Sync + 'static>(
         &self,
         address: A,
@@ -270,12 +267,41 @@ impl MockBitcoinCore {
         let tx = self
             .create_transaction_with_many_inputs(address, sat, request_id)
             .await?;
-        let txid = self.send_transaction(tx).await?;
+        let txid = self.send_transaction(&tx).await?;
         let metadata = self
             .wait_for_transaction_metadata(txid, num_confirmations)
             .await
             .unwrap();
         Ok(metadata)
+    }
+
+    async fn send_transaction(&self, transaction: &Transaction) -> Result<Txid, BitcoinError> {
+        let block = self.generate_block_with_transaction(transaction).await;
+        self.send_block(block.clone()).await;
+        Ok(transaction.txid())
+    }
+
+    pub async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
+        &self,
+        address: A,
+        sat: u64,
+        _fee_rate: SatPerVbyte, // ignored in this impl
+        request_id: Option<H256>,
+    ) -> Result<Transaction, BitcoinError> {
+        let mut transaction = MockBitcoinCore::generate_normal_transaction(&address, sat);
+
+        if let Some(request_id) = request_id {
+            // add an output with the op_return to the transaction
+            let mut op_return_script = vec![0x6a, 32];
+            op_return_script.append(&mut request_id.to_fixed_bytes().to_vec());
+            let op_return = TxOut {
+                value: 0,
+                script_pubkey: Script::from(op_return_script),
+            };
+            transaction.output.push(op_return);
+        }
+
+        Ok(transaction)
     }
 }
 
@@ -431,37 +457,6 @@ impl BitcoinCoreApi for MockBitcoinCore {
             fee: None,
         })
     }
-    async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
-        &self,
-        address: A,
-        sat: u64,
-        _fee_rate: SatPerVbyte, // ignored in this impl
-        request_id: Option<H256>,
-    ) -> Result<LockedTransaction, BitcoinError> {
-        let mut transaction = MockBitcoinCore::generate_normal_transaction(&address, sat);
-
-        if let Some(request_id) = request_id {
-            // add an output with the op_return to the transaction
-            let mut op_return_script = vec![0x6a, 32];
-            op_return_script.append(&mut request_id.to_fixed_bytes().to_vec());
-            let op_return = TxOut {
-                value: 0,
-                script_pubkey: Script::from(op_return_script),
-            };
-            transaction.output.push(op_return);
-        }
-
-        Ok(LockedTransaction::new(
-            transaction,
-            Default::default(),
-            Some(self.transaction_creation_lock.clone().lock_owned().await),
-        ))
-    }
-    async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError> {
-        let block = self.generate_block_with_transaction(&transaction.transaction).await;
-        self.send_block(block.clone()).await;
-        Ok(transaction.transaction.txid())
-    }
     async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(
         &self,
         address: A,
@@ -470,7 +465,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         request_id: Option<H256>,
     ) -> Result<Txid, BitcoinError> {
         let tx = self.create_transaction(address, sat, fee_rate, request_id).await?;
-        let txid = self.send_transaction(tx).await?;
+        let txid = self.send_transaction(&tx).await?;
         Ok(txid)
     }
     async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(

@@ -251,13 +251,10 @@ impl Request {
 
         tracing::debug!("Using fee_rate = {} sat/vByte", fee_rate.0);
 
-        let tx = btc_rpc
-            .create_transaction(self.btc_address, self.amount as u64, fee_rate, Some(self.hash))
+        let txid = btc_rpc
+            .create_and_send_transaction(self.btc_address, self.amount as u64, fee_rate, Some(self.hash))
             .await?;
-        let recipient = tx.recipient.clone();
-        tracing::info!("Sending bitcoin to {}", recipient);
 
-        let txid = btc_rpc.send_transaction(tx).await?;
         self.wait_for_inclusion(parachain_rpc, btc_rpc, num_confirmations, txid, auto_rbf)
             .await
     }
@@ -640,8 +637,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        json, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult, LockedTransaction, Network,
-        PartialAddress, PrivateKey, Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
+        json, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, Network, PartialAddress, PrivateKey,
+        Transaction, TransactionMetadata, Txid, PUBLIC_KEY_SIZE,
     };
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
@@ -795,8 +792,6 @@ mod tests {
             async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, BitcoinError>;
             async fn get_mempool_transactions<'a>(&'a self) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>;
             async fn wait_for_transaction_metadata(&self, txid: Txid, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
-            async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, fee_rate: SatPerVbyte, request_id: Option<H256>) -> Result<LockedTransaction, BitcoinError>;
-            async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError>;
             async fn create_and_send_transaction<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, fee_rate: SatPerVbyte, request_id: Option<H256>) -> Result<Txid, BitcoinError>;
             async fn send_to_address<A: PartialAddress + Send + Sync + 'static>(&self, address: A, sat: u64, request_id: Option<H256>, fee_rate: SatPerVbyte, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;
@@ -904,21 +899,8 @@ mod tests {
                 .returning(move || Ok(current_bitcoin_height as u64));
 
             btc_rpc
-                .expect_create_transaction::<BtcAddress>()
-                .returning(|_, _, _, _| {
-                    Ok(LockedTransaction::new(
-                        Transaction {
-                            version: 0,
-                            lock_time: 0,
-                            input: vec![],
-                            output: vec![],
-                        },
-                        Default::default(),
-                        None,
-                    ))
-                });
-
-            btc_rpc.expect_send_transaction().returning(|_| Ok(Txid::default()));
+                .expect_create_and_send_transaction::<BtcAddress>()
+                .returning(|_, _, _, _| Ok(Txid::default()));
 
             btc_rpc.expect_wait_for_transaction_metadata().returning(|_, _| {
                 Ok(TransactionMetadata {
@@ -1049,22 +1031,10 @@ mod tests {
             .returning(|| tokio::sync::broadcast::channel(2).1);
 
         let mut btc_rpc = MockBitcoin::default();
-        btc_rpc
-            .expect_create_transaction::<BtcAddress>()
-            .returning(|_, _, _, _| {
-                Ok(LockedTransaction::new(
-                    Transaction {
-                        version: 0,
-                        lock_time: 0,
-                        input: vec![],
-                        output: vec![],
-                    },
-                    Default::default(),
-                    None,
-                ))
-            });
 
-        btc_rpc.expect_send_transaction().returning(|_| Ok(Txid::default()));
+        btc_rpc
+            .expect_create_and_send_transaction::<BtcAddress>()
+            .returning(|_, _, _, _| Ok(Txid::default()));
 
         btc_rpc.expect_wait_for_transaction_metadata().returning(|_, _| {
             Ok(TransactionMetadata {

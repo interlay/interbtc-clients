@@ -229,14 +229,6 @@ mod tests {
                 txid: Txid,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
-            async fn create_transaction<A: PartialAddress + Send + Sync + 'static>(
-                &self,
-                address: A,
-                sat: u64,
-                fee_rate: SatPerVbyte,
-                request_id: Option<H256>,
-            ) -> Result<LockedTransaction, Error>;
-            async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error>;
             async fn create_and_send_transaction<A: PartialAddress + Send + 'static>(
                 &self,
                 address: A,
