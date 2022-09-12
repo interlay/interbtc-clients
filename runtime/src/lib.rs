@@ -3,6 +3,7 @@
 pub mod cli;
 
 mod addr;
+mod assets;
 mod conn;
 mod error;
 mod retry;
@@ -24,6 +25,7 @@ use subxt::{
 };
 
 pub use addr::PartialAddress;
+pub use assets::{AssetRegistry, RuntimeCurrencyInfo, TryFromSymbol};
 pub use error::{Error, SubxtError};
 pub use primitives::CurrencyInfo;
 pub use prometheus;

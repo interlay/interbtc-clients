@@ -9750,7 +9750,7 @@ dependencies = [
  "signal-hook-tokio",
  "sp-core 6.0.0 (git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.24)",
  "subxt 0.23.0",
- "sysinfo 0.25.3",
+ "sysinfo 0.25.1",
  "tempdir",
  "thiserror",
  "tokio",
@@ -9774,6 +9774,7 @@ dependencies = [
  "interbtc-parachain",
  "interbtc-primitives",
  "jsonrpsee 0.10.1",
+ "lazy_static",
  "log 0.4.17",
  "module-oracle-rpc-runtime-api",
  "parity-scale-codec",
@@ -13037,9 +13038,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.25.3"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71eb43e528fdc239f08717ec2a378fdb017dddbc3412de15fff527554591a66c"
+checksum = "373e4bc9213f734126e2be3e2e118dbc9b909c37487d8d755822bc90f70ae62a"
 dependencies = [
  "cfg-if 1.0.0",
  "core-foundation-sys",
@@ -13052,9 +13053,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.26.1"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "621609553b14bca49448b3c97e625d7187980cc2a42fd169b4c3b306dcc4a7e9"
+checksum = "4ae2421f3e16b3afd4aa692d23b83d0ba42ee9b0081d5deeb7d21428d7195fb1"
 dependencies = [
  "cfg-if 1.0.0",
  "core-foundation-sys",
@@ -14034,7 +14035,7 @@ dependencies = [
  "sp-arithmetic 5.0.0 (git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.24)",
  "sp-core 6.0.0 (git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.24)",
  "sp-keyring",
- "sysinfo 0.26.1",
+ "sysinfo 0.26.2",
  "thiserror",
  "tokio",
  "tokio-metrics",

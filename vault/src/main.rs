@@ -43,10 +43,11 @@ pub struct Opts {
 
 async fn catch_signals<F>(mut shutdown_signals: Signals, future: F) -> Result<(), Error>
 where
-    F: Future<Output = Result<(), Error>>,
+    F: Future<Output = Result<(), Error>> + Send + 'static,
 {
+    let blocking_task = tokio::task::spawn_blocking(|| future);
     tokio::select! {
-        res = future => {
+        res = blocking_task => {
             let _ = res?;
         },
         signal_option = shutdown_signals.next() => {
@@ -108,9 +109,10 @@ async fn start() -> Result<(), Error> {
     let _pidfile = PidFile::create(&String::from(DEFAULT_SPEC_NAME), signer.account_id(), &mut sys)?;
 
     // Unless termination signals are caught, the PID file is not dropped.
+    let main_task = async move { vault_connection_manager.start().await };
     catch_signals(
         Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT]).expect("Failed to set up signal listener."),
-        vault_connection_manager.start(),
+        main_task,
     )
     .await
 }

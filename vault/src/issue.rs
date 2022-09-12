@@ -11,10 +11,6 @@ use service::{DynBitcoinCoreApi, Error as ServiceError};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
-// we have seen scanning rates as low as 61 blocks/s. Process 100 blocks per time so that we
-// don't run into the 15 s timeout.
-const SCAN_CHUNK_SIZE: usize = 100;
-
 // initialize `issue_set` with currently open issues, and return the block height
 // from which to start watching the bitcoin chain
 pub(crate) async fn initialize_issue_set(
@@ -110,10 +106,9 @@ pub async fn add_keys_from_past_issue_request(
 
     // in parallel, rescan what blockchain we do have stored locally
     tracing::info!("Rescanning bitcoin chain from height {}...", rescan_start_height);
-    for (range_start, range_end) in chunks(rescan_start_height, btc_end_height) {
-        tracing::debug!("Scanning chain blocks {range_start}-{range_end}...");
-        bitcoin_core.rescan_blockchain(range_start, range_end).await?;
-    }
+    bitcoin_core
+        .rescan_blockchain(rescan_start_height, btc_end_height)
+        .await?;
 
     // also check in electrs in case there were any requests from before the pruned height
     if btc_start_height < btc_pruned_start_height {
@@ -139,13 +134,6 @@ pub async fn add_keys_from_past_issue_request(
     }
 
     Ok(())
-}
-
-/// Return the chunks of size SCAN_CHUNK_SIZE from first..last (including).
-fn chunks(first: usize, last: usize) -> impl Iterator<Item = (usize, usize)> {
-    (first..last)
-        .step_by(SCAN_CHUNK_SIZE)
-        .map(move |x| (x, usize::min(x + SCAN_CHUNK_SIZE - 1, last)))
 }
 
 /// execute issue requests with a matching Bitcoin payment
@@ -383,15 +371,4 @@ pub async fn listen_for_issue_cancels(
         )
         .await?;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_chunks() {
-        let result: Vec<_> = chunks(50, 316).collect();
-        assert_eq!(result, vec![(50, 149), (150, 249), (250, 316)]);
-    }
 }

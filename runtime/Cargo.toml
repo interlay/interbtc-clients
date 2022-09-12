@@ -32,6 +32,7 @@ log = "0.4.0"
 url = "2"
 cfg-if = "1.0"
 prometheus = { version = "0.12.0", features = ["process"] }
+lazy_static = "1.4.0"
 
 # Substrate dependencies
 sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
