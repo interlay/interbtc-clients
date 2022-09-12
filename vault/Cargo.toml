@@ -25,6 +25,7 @@ futures = "0.3.5"
 async-trait = "0.1.40"
 sha2 = "0.8.2"
 git-version = "0.3.4"
+sysinfo = "0.26.1"
 signal-hook = "0.3.14"
 signal-hook-tokio = { version = "0.3.1", features = ["futures-v0_3"] }
 
@@ -49,6 +50,7 @@ sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "pol
 
 [dev-dependencies]
 mockall = "0.8.1"
+serial_test = "0.9.0"
 
 # Workspace dependencies
 runtime = { path = "../runtime", features = ["testing-utils"] }

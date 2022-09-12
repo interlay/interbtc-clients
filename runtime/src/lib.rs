@@ -33,7 +33,7 @@ pub use rpc::SudoPallet;
 pub use rpc::{
     BtcRelayPallet, CollateralBalancesPallet, FeePallet, FeeRateUpdateReceiver, InterBtcParachain, IssuePallet,
     OraclePallet, RedeemPallet, RefundPallet, ReplacePallet, SecurityPallet, TimestampPallet, UtilFuncs,
-    VaultRegistryPallet, SS58_PREFIX,
+    VaultRegistryPallet, DEFAULT_SPEC_NAME, SS58_PREFIX,
 };
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
 use std::time::Duration;
