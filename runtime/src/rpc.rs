@@ -73,7 +73,7 @@ cfg_if::cfg_if! {
 }
 
 type RuntimeApi = metadata::RuntimeApi<InterBtcRuntime, PolkadotExtrinsicParams<InterBtcRuntime>>;
-pub(crate) type ShutdownSender = tokio::sync::broadcast::Sender<Option<()>>;
+pub(crate) type ShutdownSender = tokio::sync::broadcast::Sender<()>;
 pub(crate) type FeeRateUpdateSender = tokio::sync::broadcast::Sender<FixedU128>;
 pub type FeeRateUpdateReceiver = tokio::sync::broadcast::Receiver<FixedU128>;
 
@@ -269,7 +269,7 @@ impl InterBtcParachain {
                 {
                     Err(_) => {
                         log::warn!("Timeout on transaction submission - restart required");
-                        let _ = self.shutdown_tx.send(Some(()));
+                        let _ = self.shutdown_tx.send(());
                         Err(Error::Timeout)
                     }
                     Ok(x) => Ok(x?),

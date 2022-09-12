@@ -2,6 +2,7 @@ use bitcoin::Error as BitcoinError;
 use hyper::{http::Error as HyperHttpError, Error as HyperError};
 use runtime::Error as RuntimeError;
 use serde_json::Error as SerdeJsonError;
+use std::io::Error as IoError;
 use thiserror::Error;
 use tokio::task::JoinError as TokioJoinError;
 
@@ -25,6 +26,8 @@ pub enum Error {
     BitcoinError(#[from] BitcoinError),
     #[error("TokioError: {0}")]
     TokioError(#[from] TokioJoinError),
+    #[error("System I/O error: {0}")]
+    IoError(#[from] IoError),
 
     /// Other error
     #[error("Other: {0}")]

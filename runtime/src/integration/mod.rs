@@ -4,7 +4,7 @@ mod bitcoin_simulator;
 
 use crate::{
     rpc::{IssuePallet, OraclePallet, SudoPallet, VaultRegistryPallet},
-    CurrencyId, FixedU128, H256Le, InterBtcParachain, InterBtcSigner, OracleKey, VaultId,
+    CurrencyId, FixedU128, H256Le, InterBtcParachain, InterBtcSigner, OracleKey, PartialAddress, VaultId,
 };
 use bitcoin::{BitcoinCoreApi, BlockHash, SatPerVbyte, Txid};
 use frame_support::assert_ok;
@@ -119,7 +119,7 @@ pub async fn assert_issue(
 
     let metadata = btc_rpc
         .send_to_address(
-            issue.vault_address,
+            issue.vault_address.to_address(btc_rpc.network()).unwrap(),
             (issue.amount + issue.fee) as u64,
             None,
             fee_rate,

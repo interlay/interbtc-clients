@@ -2,6 +2,7 @@
 
 pub mod cli;
 
+mod addr;
 mod assets;
 mod conn;
 mod error;
@@ -23,6 +24,7 @@ use subxt::{
     subxt, Config,
 };
 
+pub use addr::PartialAddress;
 pub use assets::{AssetRegistry, RuntimeCurrencyInfo, TryFromSymbol};
 pub use error::{Error, SubxtError};
 pub use primitives::CurrencyInfo;
