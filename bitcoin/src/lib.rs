@@ -8,6 +8,7 @@ mod iter;
 pub use addr::PartialAddress;
 use async_trait::async_trait;
 use backoff::{backoff::Backoff, future::retry, ExponentialBackoff};
+use bitcoincore_rpc::bitcoincore_rpc_json::ScanningDetails;
 pub use bitcoincore_rpc::{
     bitcoin::{
         blockdata::{opcodes::all as opcodes, script::Builder},
@@ -55,6 +56,9 @@ const NOT_IN_MEMPOOL_ERROR_CODE: i32 = BitcoinRpcError::RpcInvalidAddressOrKey a
 
 // Time to sleep before retry on startup.
 const RETRY_DURATION: Duration = Duration::from_millis(1000);
+
+// Time to sleep before checking if the rescan is done yet.
+const RESCAN_POLL_INTERVAL: Duration = Duration::from_secs(10);
 
 // The default initial interval value (1 second).
 const INITIAL_INTERVAL: Duration = Duration::from_millis(1000);
@@ -453,6 +457,19 @@ impl BitcoinCore {
                     tokio::time::sleep(wait).await;
                 }
                 None => break Err(Error::ConnectionRefused),
+            }
+        }
+    }
+
+    pub async fn wait_for_rescan(&self) -> Result<(), Error> {
+        loop {
+            let wallet_info = self.rpc.get_wallet_info()?;
+            match wallet_info.scanning {
+                Some(ScanningDetails::Scanning { progress, .. }) => {
+                    info!("Scanning progress: {progress}");
+                    tokio::time::sleep(RESCAN_POLL_INTERVAL).await;
+                }
+                _ => return Ok(()),
             }
         }
     }
@@ -889,8 +906,24 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error> {
-        self.rpc.rescan_blockchain(Some(start_height), Some(end_height))?;
-        Ok(())
+        // if there happens to be a rescan going on, we wait for it to finish and then
+        // initiate our own rescan, since the range might be different and keys might just
+        // have been imported
+        self.wait_for_rescan().await?;
+
+        match self
+            .rpc
+            .rescan_blockchain(Some(start_height), Some(end_height))
+            .map(|_| ())
+            .map_err(Into::<Error>::into)
+        {
+            Err(e) if e.is_transport_error() => {
+                // we assume that if we get a transport error, it's because the
+                // rescan timed out. We just wait for it to complete
+                self.wait_for_rescan().await
+            }
+            x => x,
+        }
     }
 
     async fn rescan_electrs_for_addresses<A: PartialAddress + Send + Sync + 'static>(

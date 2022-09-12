@@ -1,7 +1,6 @@
 use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager};
 use bitcoin::{
-    BitcoinCoreApi, PartialAddress, Transaction, TransactionExt, TransactionMetadata,
-    BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
+    BitcoinCoreApi, Transaction, TransactionExt, TransactionMetadata, BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
 use futures::{
     stream::{self, StreamExt},
