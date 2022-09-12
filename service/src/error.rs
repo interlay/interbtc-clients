@@ -15,7 +15,7 @@ pub enum Error {
     #[error("OsString parsing error")]
     OsStringError,
     #[error("There is a service already running on the system, with pid {0}")]
-    ServiceAlreadyRunning(String),
+    ServiceAlreadyRunning(u32),
     #[error("Process with pid {0} not found")]
     ProcessNotFound(String),
 

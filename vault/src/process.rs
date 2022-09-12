@@ -44,7 +44,7 @@ impl PidFile {
             let pid = pid_file.pid()?;
             if sys.refresh_process(pid) {
                 match pid_name_matches_existing_client(sys, pid) {
-                    Ok(true) => return Err(Error::ServiceAlreadyRunning(pid.to_string())),
+                    Ok(true) => return Err(Error::ServiceAlreadyRunning(pid.as_u32())),
                     Ok(false) => (),
                     // There is a very small chance that a `pid` with a running process is killed exactly before
                     // `pid_name_matches_client` is run and `ProcessNotFound` is thrown. This is as if
@@ -195,13 +195,12 @@ mod tests {
             .times(2)
             .returning(|_| Ok("vault".to_string()));
 
-        let own_pid = Pid::from_u32(process::id());
         #[allow(unused_variables)]
-        let own_pid_string = own_pid.to_string();
+        let own_pid = process::id();
         assert_err!(
             PidFile::create(&dummy_spec_name, &dummy_account_id, &mut sys),
             #[allow(unused_variables)]
-            Err(Error::ServiceAlreadyRunning(own_pid_string))
+            Err(Error::ServiceAlreadyRunning(own_pid))
         );
     }
 
