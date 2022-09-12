@@ -1,5 +1,4 @@
 use crate::{execution::*, metrics::publish_expected_bitcoin_balance, system::VaultIdManager};
-use bitcoin::BitcoinCoreApi;
 use runtime::{InterBtcParachain, RedeemPallet, RequestRedeemEvent};
 use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
 use std::time::Duration;
@@ -13,10 +12,10 @@ use std::time::Duration;
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
-pub async fn listen_for_redeem_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn listen_for_redeem_requests(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
-    vault_id_manager: VaultIdManager<B>,
+    vault_id_manager: VaultIdManager,
     num_confirmations: u32,
     payment_margin: Duration,
     auto_rbf: bool,

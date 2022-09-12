@@ -1,6 +1,5 @@
-use bitcoin::light::BitcoinLight as BitcoinCore;
 use runtime::InterBtcParachain;
-use service::Error as ServiceError;
+use service::{DynBitcoinCoreApi, Error as ServiceError};
 use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
 
@@ -182,7 +181,7 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
     }
 }
 
-pub async fn run_relayer(runner: Runner<BitcoinCore, InterBtcParachain>) -> Result<(), ServiceError> {
+pub async fn run_relayer(runner: Runner<DynBitcoinCoreApi, InterBtcParachain>) -> Result<(), ServiceError> {
     loop {
         match runner.submit_next().await {
             Ok(_) => (),

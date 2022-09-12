@@ -1,6 +1,6 @@
 use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager};
 use bitcoin::{
-    BitcoinCoreApi, Error as BitcoinError, SatPerVbyte, Transaction, TransactionExt, TransactionMetadata, Txid,
+    Error as BitcoinError, SatPerVbyte, Transaction, TransactionExt, TransactionMetadata, Txid,
     BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
 use futures::{
@@ -14,7 +14,7 @@ use runtime::{
     PrettyPrint, RedeemPallet, RedeemRequestStatus, RefundPallet, ReplacePallet, ReplaceRequestStatus,
     RequestRefundEvent, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
-use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
+use service::{spawn_cancelable, DynBitcoinCoreApi, Error as ServiceError, ShutdownSender};
 use std::{collections::HashMap, convert::TryInto, time::Duration};
 use tokio::time::sleep;
 use tokio_stream::wrappers::BroadcastStream;
@@ -186,7 +186,6 @@ impl Request {
 
     /// Makes the bitcoin transfer and executes the request
     pub async fn pay_and_execute<
-        B: BitcoinCoreApi + Clone + Send + Sync + 'static,
         P: ReplacePallet
             + RefundPallet
             + BtcRelayPallet
@@ -201,7 +200,7 @@ impl Request {
     >(
         &self,
         parachain_rpc: P,
-        vault: VaultData<B>,
+        vault: VaultData,
         num_confirmations: u32,
         auto_rbf: bool,
     ) -> Result<(), Error> {
@@ -236,13 +235,10 @@ impl Request {
             request_id = ?self.hash,
         )
     )]
-    async fn transfer_btc<
-        B: BitcoinCoreApi + Clone,
-        P: OraclePallet + BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
-    >(
+    async fn transfer_btc<P: OraclePallet + BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync>(
         &self,
         parachain_rpc: &P,
-        btc_rpc: &B,
+        btc_rpc: &DynBitcoinCoreApi,
         num_confirmations: u32,
         vault_id: VaultId,
         auto_rbf: bool,
@@ -275,12 +271,11 @@ impl Request {
         )
     )]
     async fn wait_for_inclusion<
-        B: BitcoinCoreApi + Clone,
         P: OraclePallet + BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
     >(
         &self,
         parachain_rpc: &P,
-        btc_rpc: &B,
+        btc_rpc: &DynBitcoinCoreApi,
         num_confirmations: u32,
         mut txid: Txid,
         auto_rbf: bool,
@@ -459,11 +454,11 @@ impl Request {
 
 /// Queries the parachain for open requests and executes them. It checks the
 /// bitcoin blockchain to see if a payment has already been made.
-pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn execute_open_requests(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
-    vault_id_manager: VaultIdManager<B>,
-    read_only_btc_rpc: B,
+    vault_id_manager: VaultIdManager,
+    read_only_btc_rpc: DynBitcoinCoreApi,
     num_confirmations: u32,
     payment_margin: Duration,
     process_refunds: bool,

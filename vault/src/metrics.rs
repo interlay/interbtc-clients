@@ -5,9 +5,7 @@ use crate::{
     system::{VaultData, VaultIdManager},
 };
 use async_trait::async_trait;
-use bitcoin::{
-    json::ListTransactionResult, BitcoinCoreApi, GetTransactionResultDetailCategory, SignedAmount, TransactionExt,
-};
+use bitcoin::{json::ListTransactionResult, GetTransactionResultDetailCategory, SignedAmount, TransactionExt};
 use futures::{try_join, StreamExt, TryFutureExt};
 use lazy_static::lazy_static;
 use runtime::{
@@ -140,13 +138,13 @@ pub struct PerCurrencyMetrics {
 }
 
 #[async_trait]
-pub trait VaultDataReader<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> {
-    async fn get_entries(&self) -> Vec<VaultData<BCA>>;
+pub trait VaultDataReader {
+    async fn get_entries(&self) -> Vec<VaultData>;
 }
 
 #[async_trait]
-impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultDataReader<BCA> for VaultIdManager<BCA> {
-    async fn get_entries(&self) -> Vec<VaultData<BCA>> {
+impl VaultDataReader for VaultIdManager {
+    async fn get_entries(&self) -> Vec<VaultData> {
         self.get_entries().await
     }
 }
@@ -217,11 +215,8 @@ impl PerCurrencyMetrics {
         }
     }
 
-    async fn initialize_fee_budget_surplus<
-        B: BitcoinCoreApi + Clone + Send + Sync,
-        P: VaultRegistryPallet + RedeemPallet + ReplacePallet + RefundPallet,
-    >(
-        vault: &VaultData<B>,
+    async fn initialize_fee_budget_surplus<P: VaultRegistryPallet + RedeemPallet + ReplacePallet + RefundPallet>(
+        vault: &VaultData,
         parachain_rpc: P,
         bitcoin_transactions: Vec<ListTransactionResult>,
     ) -> Result<(), ServiceError> {
@@ -263,10 +258,7 @@ impl PerCurrencyMetrics {
         Ok(())
     }
 
-    pub async fn initialize_values<B: BitcoinCoreApi + Clone + Send + Sync>(
-        parachain_rpc: InterBtcParachain,
-        vault: &VaultData<B>,
-    ) {
+    pub async fn initialize_values(parachain_rpc: InterBtcParachain, vault: &VaultData) {
         let bitcoin_transactions = match vault.btc_rpc.list_transactions(None) {
             Ok(x) => x
                 .into_iter()
@@ -345,8 +337,8 @@ fn raw_value_as_currency(value: u128, currency: CurrencyId) -> Result<f64, Servi
     Ok(value as f64 / scaling_factor)
 }
 
-pub async fn publish_locked_collateral<B: BitcoinCoreApi + Clone + Send + Sync, P: VaultRegistryPallet>(
-    vault: &VaultData<B>,
+pub async fn publish_locked_collateral<P: VaultRegistryPallet>(
+    vault: &VaultData,
     parachain_rpc: P,
 ) -> Result<(), ServiceError> {
     if let Ok(actual_collateral) = parachain_rpc.get_vault_total_collateral(vault.vault_id.clone()).await {
@@ -356,8 +348,8 @@ pub async fn publish_locked_collateral<B: BitcoinCoreApi + Clone + Send + Sync, 
     Ok(())
 }
 
-pub async fn publish_required_collateral<B: BitcoinCoreApi + Clone + Send + Sync, P: VaultRegistryPallet>(
-    vault: &VaultData<B>,
+pub async fn publish_required_collateral<P: VaultRegistryPallet>(
+    vault: &VaultData,
     parachain_rpc: P,
 ) -> Result<(), ServiceError> {
     if let Ok(required_collateral) = parachain_rpc
@@ -370,10 +362,7 @@ pub async fn publish_required_collateral<B: BitcoinCoreApi + Clone + Send + Sync
     Ok(())
 }
 
-pub async fn publish_collateralization<B: BitcoinCoreApi + Clone + Send + Sync, P: VaultRegistryPallet>(
-    vault: &VaultData<B>,
-    parachain_rpc: P,
-) {
+pub async fn publish_collateralization<P: VaultRegistryPallet>(vault: &VaultData, parachain_rpc: P) {
     // if the collateralization is infinite, return 0 rather than logging an error, so
     // the metrics do change in case of a replacement
     let collateralization = parachain_rpc
@@ -384,8 +373,8 @@ pub async fn publish_collateralization<B: BitcoinCoreApi + Clone + Send + Sync, 
     vault.metrics.collateralization.set(float_collateralization_percentage);
 }
 
-pub async fn update_bitcoin_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
-    vault: &VaultData<B>,
+pub async fn update_bitcoin_metrics(
+    vault: &VaultData,
     new_fee_entry: Option<SignedAmount>,
     fee_budget: Option<u128>,
 ) -> Result<(), ServiceError> {
@@ -412,9 +401,7 @@ pub async fn update_bitcoin_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
     Ok(())
 }
 
-async fn publish_fee_budget_surplus<B: BitcoinCoreApi + Clone + Send + Sync>(
-    vault: &VaultData<B>,
-) -> Result<(), ServiceError> {
+async fn publish_fee_budget_surplus(vault: &VaultData) -> Result<(), ServiceError> {
     let surplus = *vault.metrics.fee_budget_surplus.data.read().await;
     vault
         .metrics
@@ -424,7 +411,7 @@ async fn publish_fee_budget_surplus<B: BitcoinCoreApi + Clone + Send + Sync>(
     Ok(())
 }
 
-async fn publish_average_bitcoin_fee<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
+async fn publish_average_bitcoin_fee(vault: &VaultData) {
     let average = match vault.metrics.average_btc_fee.data.read().await {
         x if x.count > 0 => x.total as f64 / x.count as f64,
         _ => Default::default(),
@@ -432,7 +419,7 @@ async fn publish_average_bitcoin_fee<B: BitcoinCoreApi + Clone + Send + Sync>(va
     vault.metrics.average_btc_fee.gauge.set(average);
 }
 
-fn publish_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
+fn publish_bitcoin_balance(vault: &VaultData) {
     match vault.btc_rpc.get_balance(None) {
         Ok(bitcoin_balance) => vault.metrics.btc_balance.actual.set(bitcoin_balance.as_btc() as f64),
         Err(e) => {
@@ -453,7 +440,7 @@ async fn publish_native_currency_balance<P: CollateralBalancesPallet + UtilFuncs
     Ok(())
 }
 
-fn publish_utxo_count<B: BitcoinCoreApi + Clone + Send + Sync>(vault: &VaultData<B>) {
+fn publish_utxo_count(vault: &VaultData) {
     if let Ok(count) = vault.btc_rpc.get_utxo_count() {
         if let Ok(count_i64) = count.try_into() {
             vault.metrics.utxo_count.set(count_i64);
@@ -465,14 +452,7 @@ pub fn increment_restart_counter() {
     RESTART_COUNT.inc();
 }
 
-async fn publish_issue_count<
-    B: BitcoinCoreApi + Clone + Send + Sync + 'static,
-    V: VaultDataReader<B>,
-    P: IssuePallet + UtilFuncs,
->(
-    parachain_rpc: &P,
-    vault_id_manager: &V,
-) {
+async fn publish_issue_count<V: VaultDataReader, P: IssuePallet + UtilFuncs>(parachain_rpc: &P, vault_id_manager: &V) {
     if let Ok(issues) = parachain_rpc
         .get_vault_issue_requests(parachain_rpc.get_account_id().clone())
         .await
@@ -506,11 +486,7 @@ async fn publish_issue_count<
     }
 }
 
-async fn publish_time_to_first_deadline<
-    B: BitcoinCoreApi + Clone + Send + Sync + 'static,
-    V: VaultDataReader<B>,
-    P: RedeemPallet + SecurityPallet,
->(
+async fn publish_time_to_first_deadline<V: VaultDataReader, P: RedeemPallet + SecurityPallet>(
     parachain_rpc: &P,
     vault_id_manager: &V,
     redeems: &[(H256, InterBtcRedeemRequest)],
@@ -560,10 +536,7 @@ fn calculate_remaining_time(
     Some(time_to_parachain_deadline.max(time_to_bitcoin_deadline))
 }
 
-async fn publish_redeem_count<B: BitcoinCoreApi + Clone + Send + Sync + 'static, V: VaultDataReader<B>>(
-    vault_id_manager: &V,
-    redeems: &[(H256, InterBtcRedeemRequest)],
-) {
+async fn publish_redeem_count<V: VaultDataReader>(vault_id_manager: &V, redeems: &[(H256, InterBtcRedeemRequest)]) {
     for vault in vault_id_manager.get_entries().await {
         let relevant_redeems: Vec<_> = redeems
             .iter()
@@ -597,9 +570,9 @@ async fn publish_redeem_count<B: BitcoinCoreApi + Clone + Send + Sync + 'static,
     }
 }
 
-pub async fn monitor_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
+pub async fn monitor_bridge_metrics(
     parachain_rpc: InterBtcParachain,
-    vault_id_manager: VaultIdManager<B>,
+    vault_id_manager: VaultIdManager,
 ) -> Result<(), ServiceError> {
     let parachain_rpc = &parachain_rpc;
     let vault_id_manager = &vault_id_manager;
@@ -628,12 +601,9 @@ pub async fn monitor_bridge_metrics<B: BitcoinCoreApi + Clone + Send + Sync>(
     Ok(())
 }
 
-pub async fn poll_metrics<
-    B: BitcoinCoreApi + Clone + Send + Sync,
-    P: CollateralBalancesPallet + RedeemPallet + IssuePallet + SecurityPallet + UtilFuncs,
->(
+pub async fn poll_metrics<P: CollateralBalancesPallet + RedeemPallet + IssuePallet + SecurityPallet + UtilFuncs>(
     parachain_rpc: P,
-    vault_id_manager: VaultIdManager<B>,
+    vault_id_manager: VaultIdManager,
 ) -> Result<(), ServiceError> {
     let parachain_rpc = &parachain_rpc;
     let vault_id_manager = &vault_id_manager;
@@ -657,8 +627,8 @@ pub async fn poll_metrics<
     }
 }
 
-pub async fn publish_expected_bitcoin_balance<B: BitcoinCoreApi + Clone + Send + Sync, P: VaultRegistryPallet>(
-    vault: &VaultData<B>,
+pub async fn publish_expected_bitcoin_balance<P: VaultRegistryPallet>(
+    vault: &VaultData,
     parachain_rpc: P,
 ) -> Result<(), ServiceError> {
     if let Ok(v) = parachain_rpc.get_vault(&vault.vault_id).await {
@@ -862,11 +832,11 @@ mod tests {
     }
 
     mockall::mock! {
-        VaultIdManager<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> {}
+        VaultIdManager {}
 
         #[async_trait]
-        trait VaultDataReader<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> {
-            async fn get_entries(&self) -> Vec<VaultData<BCA>>;
+        trait VaultDataReader {
+            async fn get_entries(&self) -> Vec<VaultData>;
         }
     }
 

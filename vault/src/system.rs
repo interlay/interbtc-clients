@@ -8,7 +8,7 @@ use crate::{
     Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
-use bitcoin::{light::BitcoinLight as BitcoinCore, BitcoinCoreApi, Error as BitcoinError, PublicKey};
+use bitcoin::{Error as BitcoinError, PublicKey};
 use clap::Parser;
 use futures::{
     channel::{mpsc, mpsc::Sender},
@@ -22,7 +22,7 @@ use runtime::{
     RegisterVaultEvent, StoreMainChainHeaderEvent, UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair, VaultId,
     VaultRegistryPallet,
 };
-use service::{wait_or_shutdown, Error as ServiceError, MonitoringConfig, Service, ShutdownSender};
+use service::{wait_or_shutdown, DynBitcoinCoreApi, Error as ServiceError, MonitoringConfig, Service, ShutdownSender};
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 use tokio::{sync::RwLock, time::sleep};
 
@@ -160,27 +160,27 @@ async fn relay_block_listener(
 }
 
 #[derive(Clone)]
-pub struct VaultData<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> {
+pub struct VaultData {
     pub vault_id: VaultId,
-    pub btc_rpc: BCA,
+    pub btc_rpc: DynBitcoinCoreApi,
     pub metrics: PerCurrencyMetrics,
 }
 
 #[derive(Clone)]
-pub struct VaultIdManager<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> {
-    vault_data: Arc<RwLock<HashMap<VaultId, VaultData<BCA>>>>,
+pub struct VaultIdManager {
+    vault_data: Arc<RwLock<HashMap<VaultId, VaultData>>>,
     btc_parachain: InterBtcParachain,
-    btc_rpc_master_wallet: BCA,
+    btc_rpc_master_wallet: DynBitcoinCoreApi,
     // TODO: refactor this
     #[allow(clippy::type_complexity)]
-    constructor: Arc<Box<dyn Fn(VaultId) -> Result<BCA, BitcoinError> + Send + Sync>>,
+    constructor: Arc<Box<dyn Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync>>,
 }
 
-impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
+impl VaultIdManager {
     pub fn new(
         btc_parachain: InterBtcParachain,
-        btc_rpc_master_wallet: BCA,
-        constructor: impl Fn(VaultId) -> Result<BCA, BitcoinError> + Send + Sync + 'static,
+        btc_rpc_master_wallet: DynBitcoinCoreApi,
+        constructor: impl Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync + 'static,
     ) -> Self {
         Self {
             vault_data: Arc::new(RwLock::new(HashMap::new())),
@@ -191,7 +191,11 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
     }
 
     // used for testing only
-    pub fn from_map(btc_parachain: InterBtcParachain, btc_rpc_master_wallet: BCA, map: HashMap<VaultId, BCA>) -> Self {
+    pub fn from_map(
+        btc_parachain: InterBtcParachain,
+        btc_rpc_master_wallet: DynBitcoinCoreApi,
+        map: HashMap<VaultId, DynBitcoinCoreApi>,
+    ) -> Self {
         let vault_data = map
             .into_iter()
             .map(|(key, value)| {
@@ -305,15 +309,15 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
             .await?)
     }
 
-    pub async fn get_bitcoin_rpc(&self, vault_id: &VaultId) -> Option<BCA> {
+    pub async fn get_bitcoin_rpc(&self, vault_id: &VaultId) -> Option<DynBitcoinCoreApi> {
         self.vault_data.read().await.get(vault_id).map(|x| x.btc_rpc.clone())
     }
 
-    pub async fn get_vault(&self, vault_id: &VaultId) -> Option<VaultData<BCA>> {
+    pub async fn get_vault(&self, vault_id: &VaultId) -> Option<VaultData> {
         self.vault_data.read().await.get(vault_id).cloned()
     }
 
-    pub async fn get_entries(&self) -> Vec<VaultData<BCA>> {
+    pub async fn get_entries(&self) -> Vec<VaultData> {
         self.vault_data
             .read()
             .await
@@ -331,7 +335,7 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
             .collect()
     }
 
-    pub async fn get_vault_btc_rpcs(&self) -> Vec<(VaultId, BCA)> {
+    pub async fn get_vault_btc_rpcs(&self) -> Vec<(VaultId, DynBitcoinCoreApi)> {
         self.vault_data
             .read()
             .await
@@ -343,11 +347,11 @@ impl<BCA: BitcoinCoreApi + Clone + Send + Sync + 'static> VaultIdManager<BCA> {
 
 pub struct VaultService {
     btc_parachain: InterBtcParachain,
-    btc_rpc_master_wallet: BitcoinCore,
+    btc_rpc_master_wallet: DynBitcoinCoreApi,
     config: VaultServiceConfig,
     monitoring_config: MonitoringConfig,
     shutdown: ShutdownSender,
-    vault_id_manager: VaultIdManager<BitcoinCore>,
+    vault_id_manager: VaultIdManager,
 }
 
 #[async_trait]
@@ -357,11 +361,11 @@ impl Service<VaultServiceConfig> for VaultService {
 
     fn new_service(
         btc_parachain: InterBtcParachain,
-        btc_rpc_master_wallet: BitcoinCore,
+        btc_rpc_master_wallet: DynBitcoinCoreApi,
         config: VaultServiceConfig,
         monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
-        constructor: Box<dyn Fn(VaultId) -> Result<BitcoinCore, BitcoinError> + Send + Sync>,
+        constructor: Box<dyn Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync>,
     ) -> Self {
         VaultService::new(
             btc_parachain,
@@ -445,11 +449,11 @@ where
 impl VaultService {
     fn new(
         btc_parachain: InterBtcParachain,
-        btc_rpc_master_wallet: BitcoinCore,
+        btc_rpc_master_wallet: DynBitcoinCoreApi,
         config: VaultServiceConfig,
         monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
-        constructor: impl Fn(VaultId) -> Result<BitcoinCore, BitcoinError> + Send + Sync + 'static,
+        constructor: impl Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync + 'static,
     ) -> Self {
         Self {
             btc_parachain: btc_parachain.clone(),

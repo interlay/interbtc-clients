@@ -1,13 +1,11 @@
 use async_trait::async_trait;
-use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCoreApi, Error as BitcoinError, Network};
+use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCoreApi, Error as BitcoinError};
 use futures::{future::Either, Future, FutureExt};
 use runtime::{
     cli::ConnectionOpts as ParachainConfig, CurrencyId, CurrencyIdExt, CurrencyInfo, InterBtcParachain as BtcParachain,
     InterBtcSigner, PrettyPrint, VaultId,
 };
-use std::marker::PhantomData;
-
-use bitcoin::light::BitcoinLight as BitcoinCore;
+use std::{marker::PhantomData, sync::Arc};
 
 mod cli;
 mod error;
@@ -21,6 +19,8 @@ pub use warp;
 pub type ShutdownSender = tokio::sync::broadcast::Sender<()>;
 pub type ShutdownReceiver = tokio::sync::broadcast::Receiver<()>;
 
+pub type DynBitcoinCoreApi = Arc<dyn BitcoinCoreApi + Send + Sync>;
+
 #[async_trait]
 pub trait Service<Config> {
     const NAME: &'static str;
@@ -28,11 +28,11 @@ pub trait Service<Config> {
 
     fn new_service(
         btc_parachain: BtcParachain,
-        bitcoin_core: BitcoinCore,
+        bitcoin_core: DynBitcoinCoreApi,
         config: Config,
         monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
-        constructor: Box<dyn Fn(VaultId) -> Result<BitcoinCore, BitcoinError> + Send + Sync>,
+        constructor: Box<dyn Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync>,
     ) -> Self;
     async fn start(&self) -> Result<(), Error>;
 }
@@ -85,10 +85,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
             let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
 
             let prefix = self.wallet_name.clone().unwrap_or_else(|| "vault".to_string());
-            // let bitcoin_core = self.bitcoin_config.new_client(Some(format!("{prefix}-master"))).await?;
-            // bitcoin_core.sync().await?;
-            // bitcoin_core.create_or_load_wallet().await?;
-            let bitcoin_core = self.bitcoin_config.new_light_client();
+            let bitcoin_core = self.bitcoin_config.new_client(Some(format!("{prefix}-master"))).await?;
 
             // only open connection to parachain after bitcoind sync to prevent timeout
             let signer = self.signer.clone();
@@ -103,7 +100,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
             .await?;
 
             let config_copy = self.bitcoin_config.clone();
-            // let network_copy = bitcoin_core.network();
+            let network_copy = bitcoin_core.network();
             let constructor = move |vault_id: VaultId| {
                 let collateral_currency: CurrencyId = vault_id.collateral_currency();
                 let wrapped_currency: CurrencyId = vault_id.wrapped_currency();
@@ -120,7 +117,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
                         .map(|i| i.symbol().to_string())
                         .unwrap_or_default(),
                 );
-                Ok(config_copy.new_light_client())
+                Ok(config_copy.new_client_with_network(Some(wallet_name), network_copy)?)
             };
 
             let service = S::new_service(

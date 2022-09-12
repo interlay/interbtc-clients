@@ -6,7 +6,9 @@ use bitcoincore_rpc::{
 };
 use futures::{prelude::*, stream::StreamExt};
 use log::trace;
-use std::iter;
+use std::{iter, sync::Arc};
+
+type DynBitcoinCoreApi = Arc<dyn BitcoinCoreApi + Send + Sync>;
 
 /// Stream over transactions, starting with this in the mempool and continuing with
 /// transactions from previous in-chain block. The stream ends after the block at
@@ -16,8 +18,8 @@ use std::iter;
 ///
 /// * `rpc` - bitcoin rpc
 /// * `stop_height` - height of the last block the iterator will return transactions from
-pub async fn reverse_stream_transactions<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    rpc: &B,
+pub async fn reverse_stream_transactions(
+    rpc: &DynBitcoinCoreApi,
     stop_height: u32,
 ) -> Result<impl Stream<Item = Result<Transaction, Error>> + Unpin + '_, Error> {
     let mempool_transactions = stream::iter(rpc.get_mempool_transactions().await?);
@@ -33,8 +35,8 @@ pub async fn reverse_stream_transactions<B: BitcoinCoreApi + Clone + Send + Sync
 /// * `stop_height` - height of the last block the iterator will return transactions from
 /// * `stop_at_pruned` - whether to gracefully stop if a pruned blockchain is encountered;
 /// otherwise, will throw an error
-pub async fn reverse_stream_in_chain_transactions<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    rpc: &B,
+pub async fn reverse_stream_in_chain_transactions(
+    rpc: &DynBitcoinCoreApi,
     stop_height: u32,
 ) -> impl Stream<Item = Result<Transaction, Error>> + Send + Unpin + '_ {
     reverse_stream_blocks(rpc, stop_height).await.flat_map(|block| {
@@ -60,8 +62,8 @@ pub async fn reverse_stream_in_chain_transactions<B: BitcoinCoreApi + Clone + Se
 /// * `stop_height` - height of the last block the stream will return
 /// * `stop_at_pruned` - whether to gracefully stop if a pruned blockchain is encountered;
 /// otherwise, will throw an error
-pub async fn reverse_stream_blocks<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    rpc: &B,
+pub async fn reverse_stream_blocks(
+    rpc: &DynBitcoinCoreApi,
     stop_height: u32,
 ) -> impl Stream<Item = Result<Block, Error>> + Unpin + '_ {
     struct StreamState<B> {
@@ -119,8 +121,8 @@ pub async fn reverse_stream_blocks<B: BitcoinCoreApi + Clone + Send + Sync + 'st
 /// * `rpc` - bitcoin rpc
 /// * `from_height` - height of the first block of the stream
 /// * `num_confirmations` - minimum for a block to be accepted
-pub async fn stream_in_chain_transactions<B: BitcoinCoreApi + Clone>(
-    rpc: B,
+pub async fn stream_in_chain_transactions(
+    rpc: DynBitcoinCoreApi,
     from_height: u32,
     num_confirmations: u32,
 ) -> impl Stream<Item = Result<(BlockHash, Transaction), Error>> + Unpin {
@@ -147,8 +149,8 @@ pub async fn stream_in_chain_transactions<B: BitcoinCoreApi + Clone>(
 /// * `rpc` - bitcoin rpc
 /// * `from_height` - height of the first block of the stream
 /// * `num_confirmations` - minimum for a block to be accepted
-pub async fn stream_blocks<B: BitcoinCoreApi + Clone>(
-    rpc: B,
+pub async fn stream_blocks(
+    rpc: DynBitcoinCoreApi,
     from_height: u32,
     num_confirmations: u32,
 ) -> impl Stream<Item = Result<Block, Error>> + Unpin {
@@ -181,7 +183,7 @@ pub async fn stream_blocks<B: BitcoinCoreApi + Clone>(
 
 /// small helper function for getting the block info of the best block. This simplifies
 /// error handling a little bit
-async fn get_best_block_info<B: BitcoinCoreApi + Clone>(rpc: &B) -> Result<(u32, BlockHash), Error> {
+async fn get_best_block_info(rpc: &DynBitcoinCoreApi) -> Result<(u32, BlockHash), Error> {
     let height = rpc.get_block_count().await? as u32;
     let hash = rpc.get_block_hash(height).await?;
     Ok((height, hash))

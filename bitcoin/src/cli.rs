@@ -1,22 +1,22 @@
 #![cfg(feature = "cli")]
 
-use crate::{BitcoinCore, BitcoinCoreBuilder, BitcoinLight, Error};
+use crate::{BitcoinCoreApi, BitcoinCoreBuilder, BitcoinLight, Error};
 use bitcoincore_rpc::{
     bitcoin::{Network, PrivateKey},
     Auth,
 };
 use clap::Parser;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 #[derive(Parser, Debug, Clone)]
 pub struct BitcoinOpts {
-    #[clap(long, env = "BITCOIN_RPC_URL")]
+    #[clap(long, required_unless_present("light"), env = "BITCOIN_RPC_URL")]
     pub bitcoin_rpc_url: Option<String>,
 
-    #[clap(long, env = "BITCOIN_RPC_USER")]
+    #[clap(long, required_unless_present("light"), env = "BITCOIN_RPC_USER")]
     pub bitcoin_rpc_user: Option<String>,
 
-    #[clap(long, env = "BITCOIN_RPC_PASS")]
+    #[clap(long, required_unless_present("light"), env = "BITCOIN_RPC_PASS")]
     pub bitcoin_rpc_pass: Option<String>,
 
     /// Timeout in milliseconds to wait for connection to bitcoin-core.
@@ -28,15 +28,19 @@ pub struct BitcoinOpts {
     #[clap(long)]
     pub electrs_url: Option<String>,
 
+    /// Experimental: Run in light client mode
+    #[clap(long)]
+    pub light: bool,
+
     /// Wif encoded Bitcoin private key
     /// If set, we are to use the light client
     // TODO: load key from file
-    #[clap(long, conflicts_with = "bitcoin-rpc-url")]
+    #[clap(long, requires("light"), required_if_eq("light", "true"))]
     pub private_key: Option<PrivateKey>,
 
     /// Bitcoin network, only needed for
     /// configuring the light client
-    #[clap(long, requires = "private-key")]
+    #[clap(long, requires("light"), required_if_eq("light", "true"))]
     pub network: Option<Network>,
 }
 
@@ -55,21 +59,40 @@ impl BitcoinOpts {
             .set_electrs_url(self.electrs_url.clone())
     }
 
-    pub async fn new_client(&self, wallet_name: Option<String>) -> Result<BitcoinCore, Error> {
-        self.new_client_builder(wallet_name)
-            .build_and_connect(Duration::from_millis(self.bitcoin_connection_timeout_ms))
-            .await
+    pub async fn new_client(
+        &self,
+        wallet_name: Option<String>,
+    ) -> Result<Arc<dyn BitcoinCoreApi + Send + Sync>, Error> {
+        Ok(if self.light {
+            Arc::new(BitcoinLight::new(
+                self.electrs_url.clone(),
+                self.network.unwrap(),
+                self.private_key.unwrap(),
+            ))
+        } else {
+            let bitcoin_core = self
+                .new_client_builder(wallet_name)
+                .build_and_connect(Duration::from_millis(self.bitcoin_connection_timeout_ms))
+                .await?;
+            bitcoin_core.sync().await?;
+            bitcoin_core.create_or_load_wallet().await?;
+            Arc::new(bitcoin_core)
+        })
     }
 
-    pub fn new_client_with_network(&self, wallet_name: Option<String>, network: Network) -> Result<BitcoinCore, Error> {
-        self.new_client_builder(wallet_name).build_with_network(network)
-    }
-
-    pub fn new_light_client(&self) -> BitcoinLight {
-        BitcoinLight::new(
-            self.electrs_url.clone(),
-            self.network.unwrap(),
-            self.private_key.unwrap(),
-        )
+    pub fn new_client_with_network(
+        &self,
+        wallet_name: Option<String>,
+        network: Network,
+    ) -> Result<Arc<dyn BitcoinCoreApi + Send + Sync>, Error> {
+        Ok(if self.light {
+            Arc::new(BitcoinLight::new(
+                self.electrs_url.clone(),
+                network,
+                self.private_key.unwrap(),
+            ))
+        } else {
+            Arc::new(self.new_client_builder(wallet_name).build_with_network(network)?)
+        })
     }
 }

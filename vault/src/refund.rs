@@ -1,5 +1,4 @@
 use crate::{execution::*, system::VaultIdManager};
-use bitcoin::BitcoinCoreApi;
 use runtime::{InterBtcParachain, RequestRefundEvent};
 use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
 
@@ -13,10 +12,10 @@ use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
 /// * `network` - network the bitcoin network used (i.e. regtest/testnet/mainnet)
 /// * `num_confirmations` - the number of bitcoin confirmation to await
 /// * `process_refunds` - if true, we will process refund requests
-pub async fn listen_for_refund_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn listen_for_refund_requests(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
-    vault_id_manager: VaultIdManager<B>,
+    vault_id_manager: VaultIdManager,
     num_confirmations: u32,
     process_refunds: bool,
     auto_rbf: bool,
