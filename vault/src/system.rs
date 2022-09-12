@@ -378,12 +378,16 @@ impl Service<VaultServiceConfig> for VaultService {
             Ok(_) => Ok(()),
             Err(Error::RuntimeError(err)) => Err(ServiceError::RuntimeError(err)),
             Err(Error::BitcoinError(err)) => Err(ServiceError::BitcoinError(err)),
+            Err(Error::ServiceError(err)) => Err(err),
             Err(err) => Err(ServiceError::Other(err.to_string())),
         }
     }
 }
 
-async fn run_and_monitor_tasks(shutdown_tx: ShutdownSender, items: Vec<(&str, ServiceTask)>) {
+async fn run_and_monitor_tasks(
+    shutdown_tx: ShutdownSender,
+    items: Vec<(&str, ServiceTask)>,
+) -> Result<(), ServiceError> {
     let (metrics_iterators, tasks): (HashMap<String, _>, Vec<_>) = items
         .into_iter()
         .filter_map(|(name, task)| {
@@ -406,7 +410,14 @@ async fn run_and_monitor_tasks(shutdown_tx: ShutdownSender, items: Vec<(&str, Se
         publish_tokio_metrics(metrics_iterators),
     ));
 
-    let _ = join(tokio_metrics, join_all(tasks)).await;
+    match join(tokio_metrics, join_all(tasks)).await {
+        (Ok(Err(err)), _) => Err(err),
+        (_, results) => results
+            .into_iter()
+            .find(|res| matches!(res, Ok(Err(_))))
+            .and_then(|res| res.ok())
+            .unwrap_or(Ok(())),
+    }
 }
 
 type Task = Pin<Box<dyn Future<Output = Result<(), service::Error>> + Send + 'static>>;
@@ -743,9 +754,9 @@ impl VaultService {
             ),
         ];
 
-        run_and_monitor_tasks(self.shutdown.clone(), tasks).await;
-
-        Ok(())
+        run_and_monitor_tasks(self.shutdown.clone(), tasks)
+            .await
+            .map_err(Error::ServiceError)
     }
 
     async fn maybe_register_public_key(&self) -> Result<(), Error> {
