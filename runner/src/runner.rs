@@ -3,18 +3,12 @@ use backoff::{retry, Error as BackoffError, ExponentialBackoff};
 use bytes::Bytes;
 use codec::Decode;
 use futures::{future::BoxFuture, FutureExt, StreamExt, TryFutureExt};
-use jsonrpsee::{
-    core::client::{Client as WsClient, ClientT},
-    rpc_params,
-    ws_client::WsClientBuilder,
-};
-use mockall_double::double;
 use nix::{
     sys::signal::{self, Signal},
     unistd::Pid,
 };
 use signal_hook_tokio::SignalsInfo;
-use sp_core::{hashing::twox_128, hexdisplay::AsBytesRef, Bytes as SpCoreBytes, H256};
+use sp_core::{hexdisplay::AsBytesRef, H256};
 use std::{
     convert::TryInto,
     fmt::{Debug, Display},
@@ -27,19 +21,20 @@ use std::{
     time::Duration,
 };
 
+use subxt::{dynamic::Value, OnlineClient, PolkadotConfig};
+
 use async_trait::async_trait;
 
-/// Name of the downloaded client executable.
-pub const EXECUTABLE_NAME: &str = "vault";
+// TODO: Add client-type CLI argument.
+/// Type of the client to run. One of `oracle`, `vault`, `faucet`.
+/// Also used as the name of the downloaded executable.
+pub const CLIENT_TYPE: &str = "vault";
 
 /// Pallet in the parachain where the client release is assumed to be stored
-pub const PARACHAIN_MODULE: &str = "VaultRegistry";
+pub const PARACHAIN_MODULE: &str = "ClientsInfo";
 
 /// Storage item in the Pallet where the client release is assumed to be stored
-pub const CURRENT_RELEASE_STORAGE_ITEM: &str = "CurrentClientRelease";
-
-/// (Currently unused) Storage item in the Pallet where the upcoming client release is assumed to be stored
-pub const PENDING_RELEASE_STORAGE_ITEM: &str = "PendingClientRelease";
+pub const CURRENT_RELEASES_STORAGE_ITEM: &str = "CurrentClientReleases";
 
 /// Parachain block time
 pub const BLOCK_TIME: Duration = Duration::from_secs(6);
@@ -52,31 +47,6 @@ pub const RETRY_INTERVAL: Duration = Duration::from_millis(1_000);
 
 /// Multiplier for the interval in retry utilities: Constant interval retry
 pub const RETRY_MULTIPLIER: f64 = 1.0;
-
-///  Module used for wrapping `WsClient` in a New Type pattern to be able to mock it.
-mod ws_client_newtype {
-    use crate::runner::WsClient;
-
-    /// Wrapper around `WsClient` (to simplify mocking)
-    #[allow(dead_code)]
-    pub struct WebsocketClient(WsClient);
-
-    #[cfg_attr(test, mockall::automock)]
-    impl WebsocketClient {
-        #[allow(dead_code)]
-        pub fn new(ws_client: WsClient) -> Self {
-            Self(ws_client)
-        }
-
-        #[allow(dead_code)]
-        pub fn inner(&self) -> &WsClient {
-            &self.0
-        }
-    }
-}
-
-#[double]
-use ws_client_newtype::WebsocketClient;
 
 /// Data type assumed to be used by the parachain to store the client release.
 /// If this type is different from the on-chain one, decoding will fail.
@@ -102,8 +72,8 @@ pub struct DownloadedRelease {
 
 /// Per-network manager of the vault executable
 pub struct Runner {
-    /// WS connection to the parachain
-    parachain_rpc: WebsocketClient,
+    /// `subxt` api to the parachain
+    subxt_api: OnlineClient<PolkadotConfig>,
     /// The child process (vault) spawned by this runner
     child_proc: Option<Child>,
     /// Details about the currently run release
@@ -113,9 +83,9 @@ pub struct Runner {
 }
 
 impl Runner {
-    pub fn new(parachain_rpc: WebsocketClient, opts: Opts) -> Self {
+    pub fn new(subxt_api: OnlineClient<PolkadotConfig>, opts: Opts) -> Self {
         Self {
-            parachain_rpc,
+            subxt_api,
             child_proc: None,
             downloaded_release: None,
             opts,
@@ -153,7 +123,7 @@ impl Runner {
     }
 
     fn get_bin_path(runner: &impl RunnerExt) -> Result<(String, PathBuf), Error> {
-        let bin_name = EXECUTABLE_NAME;
+        let bin_name = CLIENT_TYPE;
         let bin_path = runner.download_path().join(bin_name);
         Ok((bin_name.to_string(), bin_path))
     }
@@ -205,23 +175,11 @@ impl Runner {
         Ok(pid)
     }
 
-    async fn try_get_release<T: RunnerExt + StorageReader>(
-        runner: &T,
-        pending: bool,
-    ) -> Result<Option<ClientRelease>, Error> {
-        let storage_item = if pending {
-            PENDING_RELEASE_STORAGE_ITEM
-        } else {
-            CURRENT_RELEASE_STORAGE_ITEM
-        };
-
-        let storage_key = runner.compute_storage_key(PARACHAIN_MODULE.to_string(), storage_item.to_string());
-
+    async fn try_get_release<T: RunnerExt + StorageReader>(runner: &T) -> Result<Option<ClientRelease>, Error> {
         retry_with_log_async(
             || {
-                let key = &storage_key;
                 runner
-                    .read_chain_storage::<ClientRelease>(runner.parachain_rpc(), Some(key.to_string()))
+                    .read_chain_storage::<ClientRelease>(runner.subxt_api())
                     .into_future()
                     .boxed()
             },
@@ -231,14 +189,23 @@ impl Runner {
     }
 
     /// Read parachain storage via an RPC call, and decode the result
-    async fn read_chain_storage<T: 'static + Decode + Debug, V: RunnerExt + StorageReader>(
-        runner: &V,
-        parachain_rpc: &WebsocketClient,
-        maybe_storage_key: Option<String>,
+    async fn read_chain_storage<T: 'static + Decode + Debug>(
+        subxt_api: &OnlineClient<PolkadotConfig>,
     ) -> Result<Option<T>, Error> {
-        let enc_res = runner
-            .query_storage(parachain_rpc, maybe_storage_key, "state_getStorage".to_string())
-            .await;
+        // Based on the implementation of `subxt_api.storage().fetch(...)`, but with decoding for a custom type. Source:
+        // https://github.com/paritytech/subxt/blob/99cea97f817ee0a6fee642ff22f867822d9557f6/subxt/src/storage/storage_client.rs#L142
+        let storage_address = subxt::dynamic::storage(
+            PARACHAIN_MODULE,
+            CURRENT_RELEASES_STORAGE_ITEM,
+            vec![Value::from_bytes(CLIENT_TYPE.as_bytes())],
+        );
+        let lookup_bytes =
+            subxt::storage::utils::storage_address_bytes(&storage_address, &subxt_api.metadata()).unwrap();
+        let enc_res = subxt_api
+            .storage()
+            .fetch_raw(&lookup_bytes, None)
+            .await?
+            .map(Bytes::from);
         enc_res
             .map(|r| T::decode(&mut r.as_bytes_ref()))
             .transpose()
@@ -266,7 +233,7 @@ impl Runner {
         // Create all directories for the `download_path` if they don't already exist.
         fs::create_dir_all(&runner.download_path())?;
         let release = runner
-            .try_get_release(false)
+            .try_get_release()
             .await?
             .expect("No current client release set on-chain.");
         // WARNING: This will overwrite any pre-existing binary with the same name
@@ -277,7 +244,7 @@ impl Runner {
 
         loop {
             runner.maybe_restart_client()?;
-            if let Some(new_release) = runner.try_get_release(false).await? {
+            if let Some(new_release) = runner.try_get_release().await? {
                 let maybe_downloaded_release = runner.downloaded_release();
                 let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
                 if new_release.uri != downloaded_release.release.uri {
@@ -355,7 +322,7 @@ impl Drop for Runner {
 
 #[async_trait]
 pub trait RunnerExt {
-    fn parachain_rpc(&self) -> &WebsocketClient;
+    fn subxt_api(&self) -> &OnlineClient<PolkadotConfig>;
     fn vault_args(&self) -> &Vec<String>;
     fn child_proc(&mut self) -> &mut Option<Child>;
     fn set_child_proc(&mut self, child_proc: Option<Child>);
@@ -364,7 +331,7 @@ pub trait RunnerExt {
     fn download_path(&self) -> &PathBuf;
     fn parachain_url(&self) -> String;
     /// Read the current client release from the parachain, retrying for `RETRY_TIMEOUT` if there is a network error.
-    async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
+    async fn try_get_release(&self) -> Result<Option<ClientRelease>, Error>;
     /// Download the vault binary and make it executable, retrying for `RETRY_TIMEOUT` if there is a network error.
     async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
     /// Convert a release URI (e.g. a GitHub link) to an executable name and OS path (after download)
@@ -390,8 +357,8 @@ pub trait RunnerExt {
 
 #[async_trait]
 impl RunnerExt for Runner {
-    fn parachain_rpc(&self) -> &WebsocketClient {
-        &self.parachain_rpc
+    fn subxt_api(&self) -> &OnlineClient<PolkadotConfig> {
+        &self.subxt_api
     }
 
     fn vault_args(&self) -> &Vec<String> {
@@ -422,8 +389,8 @@ impl RunnerExt for Runner {
         self.opts.parachain_ws.clone()
     }
 
-    async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error> {
-        Runner::try_get_release(self, pending).await
+    async fn try_get_release(&self) -> Result<Option<ClientRelease>, Error> {
+        Runner::try_get_release(self).await
     }
 
     fn run_binary(&mut self) -> Result<(), Error> {
@@ -473,51 +440,24 @@ impl RunnerExt for Runner {
 
 #[async_trait]
 pub trait StorageReader {
-    fn compute_storage_key(&self, module: String, key: String) -> String;
-    async fn query_storage(
-        &self,
-        parachain_rpc: &WebsocketClient,
-        maybe_storage_key: Option<String>,
-        method: String,
-    ) -> Option<SpCoreBytes>;
     async fn read_chain_storage<T: 'static + Decode + Debug>(
         &self,
-        parachain_rpc: &WebsocketClient,
-        maybe_storage_key: Option<String>,
+        subxt_api: &OnlineClient<PolkadotConfig>,
     ) -> Result<Option<T>, Error>;
 }
 
 #[async_trait]
 impl StorageReader for Runner {
-    fn compute_storage_key(&self, module: String, key: String) -> String {
-        let module = twox_128(module.as_bytes());
-        let item = twox_128(key.as_bytes());
-        let key = hex::encode([module, item].concat());
-        format!("0x{}", key)
-    }
-
-    async fn query_storage(
-        &self,
-        parachain_rpc: &WebsocketClient,
-        maybe_storage_key: Option<String>,
-        method: String,
-    ) -> Option<SpCoreBytes> {
-        let params = maybe_storage_key.map_or(rpc_params![], |key| rpc_params![key]);
-        parachain_rpc.inner().request(method.as_str(), params).await.ok()
-    }
-
     async fn read_chain_storage<T: 'static + Decode + Debug>(
         &self,
-        parachain_rpc: &WebsocketClient,
-        maybe_storage_key: Option<String>,
+        subxt_api: &OnlineClient<PolkadotConfig>,
     ) -> Result<Option<T>, Error> {
-        Runner::read_chain_storage(self, parachain_rpc, maybe_storage_key).await
+        Runner::read_chain_storage(subxt_api).await
     }
 }
 
-pub async fn ws_client(url: &str) -> Result<WebsocketClient, Error> {
-    let ws_client = WsClientBuilder::default().build(url).await?;
-    Ok(WebsocketClient::new(ws_client))
+pub async fn subxt_api(url: &str) -> Result<OnlineClient<PolkadotConfig>, Error> {
+    Ok(OnlineClient::from_url(url).await?)
 }
 
 pub fn custom_retry_config() -> ExponentialBackoff {
@@ -564,7 +504,7 @@ mod tests {
     use codec::Decode;
 
     use futures::future::BoxFuture;
-    use sp_core::{Bytes as SpCoreBytes, H256};
+    use sp_core::H256;
     use tempdir::TempDir;
 
     use std::{
@@ -593,7 +533,7 @@ mod tests {
 
         #[async_trait]
         pub trait RunnerExt {
-            fn parachain_rpc(&self) -> &WebsocketClient;
+            fn subxt_api(&self) -> &OnlineClient<PolkadotConfig>;
             fn vault_args(&self) -> &Vec<String>;
             fn child_proc(&mut self) -> &mut Option<Child>;
             fn set_child_proc(&mut self, child_proc: Option<Child>);
@@ -601,7 +541,7 @@ mod tests {
             fn set_downloaded_release(&mut self, downloaded_release: Option<DownloadedRelease>);
             fn download_path(&self) -> &PathBuf;
             fn parachain_url(&self) -> String;
-            async fn try_get_release(&self, pending: bool) -> Result<Option<ClientRelease>, Error>;
+            async fn try_get_release(&self) -> Result<Option<ClientRelease>, Error>;
             async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
             fn get_bin_path(&self) -> Result<(String, PathBuf), Error>;
             fn delete_downloaded_release(&mut self) -> Result<(), Error>;
@@ -615,17 +555,9 @@ mod tests {
 
         #[async_trait]
         pub trait StorageReader {
-            fn compute_storage_key(&self, module: String, key: String) -> String;
-            async fn query_storage(
-                &self,
-                parachain_rpc: &WebsocketClient,
-                maybe_storage_key: Option<String>,
-                method: String,
-            ) -> Option<SpCoreBytes>;
             async fn read_chain_storage<T: 'static + Decode + Debug>(
                 &self,
-                parachain_rpc: &WebsocketClient,
-                maybe_storage_key: Option<String>,
+                subxt_api: &OnlineClient<PolkadotConfig>,
             ) -> Result<Option<T>, Error>;
         }
     }
@@ -735,44 +667,6 @@ mod tests {
         let child_process = processes.get(&Pid::from(pid_i32));
 
         assert_eq!(child_process.is_none(), true);
-    }
-
-    #[tokio::test]
-    async fn test_runner_try_get_release() {
-        let mut runner = MockRunner::default();
-        let expected_storage_key = "0x8402aaa79721798ff725d48776181a4428c2fc0938165431e2fa3fc50f072550".to_string();
-        let mock_storage_value = vec![
-            125, 1, 104, 116, 116, 112, 115, 58, 47, 47, 103, 105, 116, 104, 117, 98, 46, 99, 111, 109, 47, 105, 110,
-            116, 101, 114, 108, 97, 121, 47, 105, 110, 116, 101, 114, 98, 116, 99, 45, 99, 108, 105, 101, 110, 116,
-            115, 47, 114, 101, 108, 101, 97, 115, 101, 115, 47, 100, 111, 119, 110, 108, 111, 97, 100, 47, 49, 46, 49,
-            53, 46, 48, 47, 118, 97, 117, 108, 116, 45, 115, 116, 97, 110, 100, 97, 108, 111, 110, 101, 45, 109, 101,
-            116, 97, 100, 97, 116, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18, 48, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0,
-        ];
-        let mock_ws_client = WebsocketClient::default();
-        runner
-            .expect_query_storage()
-            .return_const(Some(SpCoreBytes::from(mock_storage_value)));
-
-        let release = Runner::read_chain_storage::<ClientRelease, MockRunner>(
-            &runner,
-            &mock_ws_client,
-            Some(expected_storage_key),
-        )
-        .await
-        .unwrap()
-        .unwrap();
-        let expected_uri =
-            "https://github.com/interlay/interbtc-clients/releases/download/1.15.0/vault-standalone-metadata"
-                .to_string();
-        assert_eq!(
-            release,
-            ClientRelease {
-                uri: expected_uri,
-                code_hash: H256::from_str("0x0000000000000000000000000000000000000000123000000000000000000000")
-                    .unwrap()
-            }
-        );
     }
 
     #[tokio::test]
