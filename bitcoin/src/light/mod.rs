@@ -1,9 +1,8 @@
-mod electrs;
 mod error;
 mod wallet;
 
-pub use crate::*;
-pub use error::Error as LightClientError;
+pub use crate::{Error as BitcoinError, *};
+pub use error::Error;
 
 use async_trait::async_trait;
 use backoff::future::retry;
@@ -17,7 +16,7 @@ pub struct BitcoinLight {
     network: Network,
     private_key: PrivateKey,
     secp_ctx: secp256k1::Secp256k1<secp256k1::All>,
-    electrs: electrs::ElectrsClient,
+    electrs: ElectrsClient,
     transaction_creation_lock: Arc<Mutex<()>>,
     wallet: wallet::Wallet,
 }
@@ -25,7 +24,7 @@ pub struct BitcoinLight {
 impl BitcoinLight {
     // TODO: implement cli config
     pub fn new(electrs_url: Option<String>, network: Network, private_key: PrivateKey) -> Self {
-        let electrs_client = electrs::ElectrsClient::new(electrs_url, network);
+        let electrs_client = ElectrsClient::new(electrs_url, network).unwrap();
         Self {
             network,
             private_key,
@@ -36,13 +35,13 @@ impl BitcoinLight {
         }
     }
 
-    fn get_change_address(&self) -> Result<Address, LightClientError> {
+    fn get_change_address(&self) -> Result<Address, Error> {
         self.wallet
             .key_store
             .read()?
             .first_key_value()
             .map(|(address, _)| address.clone())
-            .ok_or(LightClientError::NoChangeAddress)
+            .ok_or(Error::NoChangeAddress)
     }
 
     async fn create_transaction(
@@ -51,7 +50,7 @@ impl BitcoinLight {
         sat: u64,
         fee_rate: SatPerVbyte,
         request_id: Option<H256>,
-    ) -> Result<LockedTransaction, Error> {
+    ) -> Result<LockedTransaction, BitcoinError> {
         let lock = self.transaction_creation_lock.clone().lock_owned().await;
 
         let unsigned_tx = self.wallet.create_transaction(recipient.clone(), sat, request_id);
@@ -70,7 +69,7 @@ impl BitcoinLight {
 
     // TODO: hold tx lock until inclusion
     // otherwise electrs may report stale utxos
-    async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, Error> {
+    async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError> {
         let txid = self.electrs.send_transaction(transaction.transaction).await?;
         Ok(txid)
     }
@@ -82,7 +81,7 @@ impl BitcoinCoreApi for BitcoinLight {
         self.network
     }
 
-    async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, Error> {
+    async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError> {
         loop {
             match futures::future::try_join(
                 self.electrs.get_block_hash(height),
@@ -107,59 +106,59 @@ impl BitcoinCoreApi for BitcoinLight {
         }
     }
 
-    async fn get_block_count(&self) -> Result<u64, Error> {
+    async fn get_block_count(&self) -> Result<u64, BitcoinError> {
         Ok(self.electrs.get_blocks_tip_height().await?.into())
     }
 
-    fn get_balance(&self, _min_confirmations: Option<u32>) -> Result<Amount, Error> {
+    fn get_balance(&self, _min_confirmations: Option<u32>) -> Result<Amount, BitcoinError> {
         // TODO: implement
         Ok(Default::default())
     }
 
-    fn list_transactions(&self, _max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error> {
+    fn list_transactions(&self, _max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, BitcoinError> {
         // TODO: implement
         Ok(Default::default())
     }
 
-    async fn get_raw_tx(&self, txid: &Txid, _block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
+    async fn get_raw_tx(&self, txid: &Txid, _block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError> {
         Ok(self.electrs.get_raw_tx(txid).await?)
     }
 
-    async fn get_transaction(&self, txid: &Txid, _block_hash: Option<BlockHash>) -> Result<Transaction, Error> {
+    async fn get_transaction(&self, txid: &Txid, _block_hash: Option<BlockHash>) -> Result<Transaction, BitcoinError> {
         let raw_tx = self.electrs.get_raw_tx(txid).await?;
         deserialize(&raw_tx).map_err(Into::into)
     }
 
-    async fn get_proof(&self, txid: Txid, _block_hash: &BlockHash) -> Result<Vec<u8>, Error> {
+    async fn get_proof(&self, txid: Txid, _block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError> {
         Ok(self.electrs.get_raw_merkle_proof(&txid).await?)
     }
 
-    async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error> {
+    async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError> {
         match self.electrs.get_block_hash(height).await {
             Ok(block_hash) => Ok(block_hash),
-            Err(_) => Err(Error::InvalidBitcoinHeight),
+            Err(_) => Err(BitcoinError::InvalidBitcoinHeight),
         }
     }
 
-    async fn get_new_address(&self) -> Result<Address, Error> {
+    async fn get_new_address(&self) -> Result<Address, BitcoinError> {
         Ok(self.get_change_address()?)
     }
 
-    async fn get_new_public_key(&self) -> Result<PublicKey, Error> {
+    async fn get_new_public_key(&self) -> Result<PublicKey, BitcoinError> {
         Ok(self.private_key.public_key(&self.secp_ctx))
     }
 
-    fn dump_derivation_key(&self, _public_key: &PublicKey) -> Result<PrivateKey, Error> {
+    fn dump_derivation_key(&self, _public_key: &PublicKey) -> Result<PrivateKey, BitcoinError> {
         Ok(self.private_key)
     }
 
-    fn import_derivation_key(&self, _private_key: &PrivateKey) -> Result<(), Error> {
+    fn import_derivation_key(&self, _private_key: &PrivateKey) -> Result<(), BitcoinError> {
         // nothing to do
         Ok(())
     }
 
-    async fn add_new_deposit_key(&self, _public_key: PublicKey, secret_key: Vec<u8>) -> Result<(), Error> {
-        fn mul_secret_key(vault_key: SecretKey, issue_key: SecretKey) -> Result<SecretKey, Error> {
+    async fn add_new_deposit_key(&self, _public_key: PublicKey, secret_key: Vec<u8>) -> Result<(), BitcoinError> {
+        fn mul_secret_key(vault_key: SecretKey, issue_key: SecretKey) -> Result<SecretKey, BitcoinError> {
             let mut deposit_key = vault_key;
             deposit_key.mul_assign(&issue_key[..])?;
             Ok(deposit_key)
@@ -173,26 +172,26 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(())
     }
 
-    async fn get_best_block_hash(&self) -> Result<BlockHash, Error> {
+    async fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError> {
         Ok(self.electrs.get_blocks_tip_hash().await?)
     }
 
-    async fn get_pruned_height(&self) -> Result<u64, Error> {
+    async fn get_pruned_height(&self) -> Result<u64, BitcoinError> {
         // nothing to do
         Ok(Default::default())
     }
 
-    async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error> {
+    async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError> {
         Ok(self.electrs.get_block(hash).await?)
     }
 
-    async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error> {
+    async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, BitcoinError> {
         Ok(self.electrs.get_block_header(hash).await?)
     }
 
     async fn get_mempool_transactions<'a>(
         &'a self,
-    ) -> Result<Box<dyn Iterator<Item = Result<Transaction, Error>> + Send + 'a>, Error> {
+    ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError> {
         let txids = self.electrs.get_raw_mempool().await?;
         let txs = futures::future::join_all(txids.iter().map(|txid| self.get_transaction(txid, None))).await;
         Ok(Box::new(txs.into_iter()))
@@ -202,7 +201,7 @@ impl BitcoinCoreApi for BitcoinLight {
         &self,
         txid: Txid,
         num_confirmations: u32,
-    ) -> Result<TransactionMetadata, Error> {
+    ) -> Result<TransactionMetadata, BitcoinError> {
         let (block_height, block_hash, fee) = retry(get_exponential_backoff(), || async {
             Ok(match self.electrs.get_tx_info(&txid).await {
                 Ok(electrs::TxInfo {
@@ -211,8 +210,8 @@ impl BitcoinCoreApi for BitcoinLight {
                     hash,
                     fee,
                 }) if confirmations >= num_confirmations => Ok((height, hash, fee)),
-                Ok(_) => Err(Error::ConfirmationError),
-                Err(_e) => Err(Error::ConnectionRefused),
+                Ok(_) => Err(BitcoinError::ConfirmationError),
+                Err(_e) => Err(BitcoinError::ConnectionRefused),
             }?)
         })
         .await?;
@@ -230,8 +229,8 @@ impl BitcoinCoreApi for BitcoinLight {
         })
     }
 
-    async fn bump_fee(&self, _txid: &Txid, _address: Address, _fee_rate: SatPerVbyte) -> Result<Txid, Error> {
-        Err(Error::NotSupported)
+    async fn bump_fee(&self, _txid: &Txid, _address: Address, _fee_rate: SatPerVbyte) -> Result<Txid, BitcoinError> {
+        unimplemented!()
     }
 
     async fn create_and_send_transaction(
@@ -240,7 +239,7 @@ impl BitcoinCoreApi for BitcoinLight {
         sat: u64,
         fee_rate: SatPerVbyte,
         request_id: Option<H256>,
-    ) -> Result<Txid, Error> {
+    ) -> Result<Txid, BitcoinError> {
         let tx = self.create_transaction(address, sat, fee_rate, request_id).await?;
         let txid = self.send_transaction(tx).await?;
         Ok(txid)
@@ -253,7 +252,7 @@ impl BitcoinCoreApi for BitcoinLight {
         request_id: Option<H256>,
         fee_rate: SatPerVbyte,
         num_confirmations: u32,
-    ) -> Result<TransactionMetadata, Error> {
+    ) -> Result<TransactionMetadata, BitcoinError> {
         let txid = self
             .create_and_send_transaction(address, sat, fee_rate, request_id)
             .await?;
@@ -261,31 +260,31 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(self.wait_for_transaction_metadata(txid, num_confirmations).await?)
     }
 
-    async fn create_or_load_wallet(&self) -> Result<(), Error> {
+    async fn create_or_load_wallet(&self) -> Result<(), BitcoinError> {
         // nothing to do
         Ok(())
     }
 
-    async fn rescan_blockchain(&self, _start_height: usize, _end_height: usize) -> Result<(), Error> {
+    async fn rescan_blockchain(&self, _start_height: usize, _end_height: usize) -> Result<(), BitcoinError> {
         // nothing to do
         Ok(())
     }
 
-    async fn rescan_electrs_for_addresses(&self, _addresses: Vec<Address>) -> Result<(), Error> {
+    async fn rescan_electrs_for_addresses(&self, _addresses: Vec<Address>) -> Result<(), BitcoinError> {
         // nothing to do
         Ok(())
     }
 
-    fn get_utxo_count(&self) -> Result<usize, Error> {
+    fn get_utxo_count(&self) -> Result<usize, BitcoinError> {
         // TODO: implement
         Ok(Default::default())
     }
 
-    fn is_in_mempool(&self, _txid: Txid) -> Result<bool, Error> {
-        Err(Error::WalletNotFound)
+    fn is_in_mempool(&self, _txid: Txid) -> Result<bool, BitcoinError> {
+        Err(BitcoinError::WalletNotFound)
     }
 
-    fn fee_rate(&self, _txid: Txid) -> Result<SatPerVbyte, Error> {
-        Err(Error::WalletNotFound)
+    fn fee_rate(&self, _txid: Txid) -> Result<SatPerVbyte, BitcoinError> {
+        Err(BitcoinError::WalletNotFound)
     }
 }

@@ -1,12 +1,37 @@
-use crate::{Error, Network};
-use esplora_btc_api::models::Transaction;
+use crate::{
+    deserialize, error::ElectrsError as Error, opcodes, serialize, Address, Block, BlockHash, BlockHeader,
+    Builder as ScriptBuilder, FromHex, Network, OutPoint, Script, SignedAmount, ToHex, Transaction, Txid, H256,
+};
+use esplora_btc_api::models::{Transaction as ElectrsTransaction, Utxo as ElectrsUtxo};
 use reqwest::{Client, Url};
+use sha2::{Digest, Sha256};
+use std::str::FromStr;
 
 const ELECTRS_TRANSACTIONS_PER_PAGE: usize = 25;
 
 const ELECTRS_TESTNET_URL: &str = "https://btc-testnet.interlay.io";
 const ELECTRS_MAINNET_URL: &str = "https://btc-mainnet.interlay.io";
 const ELECTRS_LOCALHOST_URL: &str = "http://localhost:3002";
+
+pub struct Utxo {
+    pub outpoint: OutPoint,
+    pub value: u64,
+}
+
+#[allow(dead_code)]
+pub struct TxData {
+    pub txid: Txid,
+    pub raw_merkle_proof: Vec<u8>,
+    pub raw_tx: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct TxInfo {
+    pub confirmations: u32,
+    pub height: u32,
+    pub hash: BlockHash,
+    pub fee: SignedAmount,
+}
 
 #[derive(Clone)]
 pub struct ElectrsClient {
@@ -51,11 +76,11 @@ impl ElectrsClient {
     }
 
     // and it doesn't currently support the paged api call
-    pub async fn get_address_tx_history_full(&self, address: &str) -> Result<Vec<Transaction>, Error> {
+    pub async fn get_address_tx_history_full(&self, address: &str) -> Result<Vec<ElectrsTransaction>, Error> {
         let mut last_seen_txid = Default::default();
-        let mut ret = Vec::<Transaction>::new();
+        let mut ret = Vec::<ElectrsTransaction>::new();
         loop {
-            let mut transactions: Vec<Transaction> = self
+            let mut transactions: Vec<ElectrsTransaction> = self
                 .get_and_decode(&format!("address/{address}/txs/chain/{last_seen_txid}"))
                 .await?;
             let page_size = transactions.len();
@@ -67,6 +92,168 @@ impl ElectrsClient {
             }
         }
         Ok(ret)
+    }
+
+    pub(crate) async fn get_blocks_tip_height(&self) -> Result<u32, Error> {
+        Ok(self.get("/blocks/tip/height").await?.parse()?)
+    }
+
+    pub(crate) async fn get_blocks_tip_hash(&self) -> Result<BlockHash, Error> {
+        let response = self.get("/blocks/tip/hash").await?;
+        Ok(BlockHash::from_str(&response)?)
+    }
+
+    pub(crate) async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error> {
+        let raw_block_header = Vec::<u8>::from_hex(&self.get(&format!("/block/{hash}/header")).await?)?;
+        Ok(deserialize(&raw_block_header)?)
+    }
+
+    pub(crate) async fn get_transactions_in_block(&self, hash: &BlockHash) -> Result<Vec<Transaction>, Error> {
+        let raw_txids: Vec<String> = self.get_and_decode(&format!("/block/{hash}/txids")).await?;
+        let txids: Vec<Txid> = raw_txids
+            .iter()
+            .map(|txid| Txid::from_str(txid))
+            .collect::<Result<Vec<_>, _>>()?;
+        let txs = futures::future::join_all(txids.iter().map(|txid| self.get_raw_tx(txid)))
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|raw_tx| deserialize(&raw_tx))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(txs)
+    }
+
+    pub(crate) async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error> {
+        let header = self.get_block_header(hash).await?;
+        let txdata = self.get_transactions_in_block(hash).await?;
+        Ok(Block { header, txdata })
+    }
+
+    pub(crate) async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error> {
+        let response = self.get(&format!("/block-height/{height}")).await?;
+        Ok(BlockHash::from_str(&response)?)
+    }
+
+    pub(crate) async fn get_raw_mempool(&self) -> Result<Vec<Txid>, Error> {
+        let txs: Vec<String> = self.get_and_decode("/mempool/txids").await?;
+        Ok(txs
+            .iter()
+            .map(|txid| Txid::from_str(txid))
+            .collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub(crate) async fn get_raw_merkle_proof(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
+        Ok(Vec::<u8>::from_hex(
+            &self.get(&format!("/tx/{txid}/merkleblock-proof")).await?,
+        )?)
+    }
+
+    pub(crate) async fn get_raw_tx(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
+        Ok(Vec::<u8>::from_hex(&self.get(&format!("/tx/{txid}/hex")).await?)?)
+    }
+
+    pub(crate) async fn get_tx_info(&self, txid: &Txid) -> Result<TxInfo, Error> {
+        let tx: ElectrsTransaction = self.get_and_decode(&format!("/tx/{txid}")).await?;
+        let tip = self.get_blocks_tip_height().await?;
+        let (height, hash) = match tx.status.map(|status| (status.block_height, status.block_hash)) {
+            Some((Some(height), Some(hash))) => (height as u32, hash),
+            _ => return Err(Error::InvalidAddress),
+        };
+        Ok(TxInfo {
+            confirmations: tip.saturating_sub(height),
+            height,
+            hash: BlockHash::from_str(&hash)?,
+            fee: SignedAmount::from_sat(tx.fee.unwrap_or_default() as i64),
+        })
+    }
+
+    pub(crate) async fn get_utxos_for_address(&self, address: Address) -> Result<Vec<Utxo>, Error> {
+        let utxos: Vec<ElectrsUtxo> = self.get_and_decode(&format!("/address/{address}/utxo")).await?;
+
+        utxos
+            .into_iter()
+            .map(|utxo| {
+                Ok(Utxo {
+                    outpoint: OutPoint {
+                        txid: Txid::from_hex(&utxo.txid)?,
+                        vout: utxo.vout as u32,
+                    },
+                    value: utxo.value as u64,
+                })
+            })
+            .collect::<Result<Vec<_>, Error>>()
+    }
+
+    pub(crate) async fn get_script_pubkey(&self, outpoint: OutPoint) -> Result<Script, Error> {
+        let tx: ElectrsTransaction = self
+            .get_and_decode(&format!("/tx/{txid}", txid = outpoint.txid))
+            .await?;
+        Ok(Script::from_str(
+            &tx.vout
+                .ok_or(Error::NoPrevOut)?
+                .get(outpoint.vout as usize)
+                .ok_or(Error::NoPrevOut)?
+                .clone()
+                .scriptpubkey
+                .ok_or(Error::NoPrevOut)?,
+        )?)
+    }
+
+    pub(crate) async fn send_transaction(&self, tx: Transaction) -> Result<Txid, Error> {
+        let url = self.url.join("/tx")?;
+        let txid = self
+            .cli
+            .post(url)
+            .body(serialize(&tx).to_hex())
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+        Ok(Txid::from_str(&txid)?)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) async fn get_tx_by_op_return(&self, data: H256) -> Result<Option<TxData>, Error> {
+        let script = ScriptBuilder::new()
+            .push_opcode(opcodes::OP_RETURN)
+            .push_slice(data.as_bytes())
+            .into_script();
+
+        let script_hash = {
+            let mut hasher = Sha256::default();
+            hasher.input(script.as_bytes());
+            hasher.result().as_slice().to_vec()
+        };
+
+        let txs: Vec<ElectrsTransaction> = self
+            .get_and_decode(&format!(
+                "/scripthash/{scripthash}/txs",
+                scripthash = script_hash.to_hex()
+            ))
+            .await?;
+        log::info!("Found {} transactions", txs.len());
+
+        // for now, use the first tx - should probably return
+        // an error if there are more that one
+        if let Some(tx) = txs.first().cloned() {
+            let txid = Txid::from_str(&tx.txid)?;
+            log::info!("Fetching merkle proof");
+            // TODO: return error if not confirmed
+            let raw_merkle_proof = self.get_raw_merkle_proof(&txid).await?;
+
+            log::info!("Fetching transaction");
+            let raw_tx = self.get_raw_tx(&txid).await?;
+
+            Ok(Some(TxData {
+                txid,
+                raw_merkle_proof,
+                raw_tx,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 }
 

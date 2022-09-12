@@ -4,7 +4,7 @@
 pub mod cli;
 pub mod light;
 
-pub use light::BitcoinLight;
+pub use light::{BitcoinLight, Error as BitcoinLightError};
 
 mod addr;
 mod electrs;
@@ -43,7 +43,7 @@ pub use bitcoincore_rpc::{
     Auth, Client, Error as BitcoinError, RpcApi,
 };
 use electrs::ElectrsClient;
-pub use error::{BitcoinRpcError, ConversionError, Error};
+pub use error::{BitcoinRpcError, ConversionError, ElectrsError, Error};
 pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
 use log::{info, trace};
 use serde_json::error::Category as SerdeJsonCategory;

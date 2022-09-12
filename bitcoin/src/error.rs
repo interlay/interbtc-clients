@@ -1,4 +1,4 @@
-use crate::BitcoinError;
+use crate::{BitcoinError, BitcoinLightError};
 use bitcoincore_rpc::{
     bitcoin::{
         consensus::encode::Error as BitcoinEncodeError,
@@ -14,6 +14,38 @@ use serde_json::Error as SerdeJsonError;
 use thiserror::Error;
 use tokio::time::error::Elapsed;
 use url::ParseError;
+
+use crate::{hashes::hex::Error as HexError, util::address::Error as BitcoinAddressError};
+use std::num::{ParseIntError, TryFromIntError};
+
+#[derive(Error, Debug)]
+pub enum ElectrsError {
+    #[error("No previous output for input")]
+    NoPrevOut,
+    #[error("Cannot construct address")]
+    InvalidAddress,
+
+    #[error("BitcoinAddressError: {0}")]
+    BitcoinAddressError(#[from] BitcoinAddressError),
+    #[error("BitcoinEncodeError: {0}")]
+    BitcoinEncodeError(#[from] BitcoinEncodeError),
+
+    #[error("ReqwestError: {0}")]
+    ReqwestError(#[from] ReqwestError),
+    #[error("ParseError: {0}")]
+    ParseError(#[from] ParseError),
+
+    #[error("SerdeJsonError: {0}")]
+    SerdeJsonError(#[from] SerdeJsonError),
+
+    #[error("HexError: {0}")]
+    HexError(#[from] HexError),
+
+    #[error("TryFromIntError: {0}")]
+    TryFromIntError(#[from] TryFromIntError),
+    #[error("ParseIntError: {0}")]
+    ParseIntError(#[from] ParseIntError),
+}
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -37,7 +69,7 @@ pub enum Error {
     ReqwestError(#[from] ReqwestError),
     #[error("ParseError: {0}")]
     ParseError(#[from] ParseError),
-    #[error("Connected to incompatable bitcoin core version: {0}")]
+    #[error("Connected to incompatible bitcoin core version: {0}")]
     IncompatibleVersion(usize),
 
     #[error("Could not confirm transaction")]
@@ -46,8 +78,6 @@ pub enum Error {
     InvalidBitcoinHeight,
     #[error("Failed to sign transaction")]
     TransactionSigningError,
-    #[error("Failed to parse transaction")]
-    ParsingError,
     #[error("Failed to obtain public key")]
     MissingPublicKey,
     #[error("Failed to connect")]
@@ -56,8 +86,6 @@ pub enum Error {
     WalletNotFound,
     #[error("Invalid Bitcoin network")]
     InvalidBitcoinNetwork,
-    #[error("Unable to query Electrs for transaction data")]
-    ElectrsQueryFailed,
     #[error("Transaction contains more than one return-to-self utxo")]
     TooManyReturnToSelfAddresses,
     #[error("ArithmeticError")]
@@ -67,10 +95,10 @@ pub enum Error {
     #[error("MissingBitcoinFeeInfo")]
     MissingBitcoinFeeInfo,
 
-    #[error("Operation not supported")]
-    NotSupported,
     #[error("LightClientError: {0}")]
-    LightClientError(#[from] crate::light::LightClientError),
+    LightClientError(#[from] BitcoinLightError),
+    #[error("ElectrsError: {0}")]
+    ElectrsError(#[from] ElectrsError),
 }
 
 impl Error {
