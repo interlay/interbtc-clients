@@ -84,8 +84,8 @@ pub struct ClientRelease {
     /// A link to the Releases page of the `interbtc-clients` repo.
     /// Example: https://github.com/interlay/interbtc-clients/releases/download/1.16.0/vault-parachain-metadata-interlay
     pub uri: String,
-    /// Code hash of the parachain runtime compatible with this release
-    pub code_hash: H256,
+    /// The SHA256 checksum of the client binary.
+    pub checksum: H256,
 }
 
 /// Wrapper around `ClientRelease`, which includes details for running the executable.
@@ -122,6 +122,13 @@ impl Runner {
     }
 
     async fn download_binary(runner: &mut impl RunnerExt, release: ClientRelease) -> Result<DownloadedRelease, Error> {
+        if let Some(downloaded_release) = runner.downloaded_release() {
+            if downloaded_release.release.checksum.eq(&release.checksum) {
+                log::info!("The on-chain release is already downloaded, skipping re-download");
+                return Ok(downloaded_release.clone());
+            }
+        }
+
         let (bin_name, bin_path) = runner.get_bin_path()?;
         log::info!("Downloading {} at: {:?}", bin_name, bin_path);
         let mut file = OpenOptions::new()
@@ -276,7 +283,7 @@ impl Runner {
             if let Some(new_release) = runner.try_get_release().await? {
                 let maybe_downloaded_release = runner.downloaded_release();
                 let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
-                if new_release.uri != downloaded_release.release.uri {
+                if new_release.checksum != downloaded_release.release.checksum {
                     log::info!("Found new client release, updating...");
 
                     // Wait for child process to finish completely.
@@ -611,7 +618,7 @@ mod tests {
         let client_release = ClientRelease {
             uri: "https://github.com/interlay/interbtc-clients/releases/download/1.15.0/vault-standalone-metadata"
                 .to_string(),
-            code_hash: H256::default(),
+            checksum: H256::default(),
         };
 
         runner
@@ -620,6 +627,7 @@ mod tests {
         runner
             .expect_get_request_bytes()
             .returning(|_| Ok(Bytes::from_static(&[1, 2, 3, 4])));
+        runner.expect_downloaded_release().return_const(None);
         runner.expect_set_downloaded_release().return_const(());
 
         let downloaded_release = Runner::download_binary(&mut runner, client_release.clone())
@@ -653,6 +661,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_runner_binary_is_not_redownloaded() {
+        let mut runner = MockRunner::default();
+        let downloaded_release = DownloadedRelease::default();
+
+        runner
+            .expect_downloaded_release()
+            .return_const(Some(downloaded_release.clone()));
+
+        // No release should be set in the runner
+        runner
+            .expect_set_downloaded_release()
+            .times(0)
+            .returning(|_| panic!("Unexpected call"));
+
+        // The latest on-chain release matches the currently downloaded one
+        let new_downloaded_release = Runner::download_binary(&mut runner, downloaded_release.release.clone())
+            .await
+            .unwrap();
+
+        assert_eq!(downloaded_release, new_downloaded_release);
+    }
+
+    #[tokio::test]
     async fn test_runner_get_bin_path() {
         let clients = [ClientType::Vault, ClientType::Oracle, ClientType::Faucet];
         let mock_path = PathBuf::from_str("./mock_download_dir").unwrap();
@@ -677,7 +708,7 @@ mod tests {
         let downloaded_release = DownloadedRelease {
             release: ClientRelease {
                 uri: String::default(),
-                code_hash: H256::default(),
+                checksum: H256::default(),
             },
             path: mock_path.clone(),
             bin_name: String::default(),
