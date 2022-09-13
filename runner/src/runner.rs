@@ -17,7 +17,7 @@ use std::{
     os::unix::prelude::OpenOptionsExt,
     path::PathBuf,
     process::{Child, Command, Stdio},
-    str,
+    str::{self, FromStr},
     time::Duration,
 };
 
@@ -25,10 +25,39 @@ use subxt::{dynamic::Value, OnlineClient, PolkadotConfig};
 
 use async_trait::async_trait;
 
-// TODO: Add client-type CLI argument.
-/// Type of the client to run. One of `oracle`, `vault`, `faucet`.
+/// Type of the client to run.
 /// Also used as the name of the downloaded executable.
-pub const CLIENT_TYPE: &str = "vault";
+#[derive(Debug, Clone)]
+pub enum ClientType {
+    Vault,
+    Oracle,
+    Faucet,
+}
+
+impl FromStr for ClientType {
+    type Err = crate::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let client_type = match s {
+            "vault" => ClientType::Vault,
+            "oracle" => ClientType::Oracle,
+            "faucet" => ClientType::Faucet,
+            _ => return Err(Error::ClientTypeParsingError),
+        };
+        Ok(client_type)
+    }
+}
+
+impl Display for ClientType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            ClientType::Vault => "vault",
+            ClientType::Oracle => "oracle",
+            ClientType::Faucet => "faucet",
+        };
+        write!(f, "{}", s)
+    }
+}
 
 /// Pallet in the parachain where the client release is assumed to be stored
 pub const PARACHAIN_MODULE: &str = "ClientsInfo";
@@ -70,11 +99,11 @@ pub struct DownloadedRelease {
     pub bin_name: String,
 }
 
-/// Per-network manager of the vault executable
+/// Per-network manager of the client executable
 pub struct Runner {
     /// `subxt` api to the parachain
     subxt_api: OnlineClient<PolkadotConfig>,
-    /// The child process (vault) spawned by this runner
+    /// The child process (interbtc client) spawned by this runner
     child_proc: Option<Child>,
     /// Details about the currently run release
     downloaded_release: Option<DownloadedRelease>,
@@ -123,8 +152,8 @@ impl Runner {
     }
 
     fn get_bin_path(runner: &impl RunnerExt) -> Result<(String, PathBuf), Error> {
-        let bin_name = CLIENT_TYPE;
-        let bin_path = runner.download_path().join(bin_name);
+        let bin_name = runner.client_type();
+        let bin_path = runner.download_path().join(bin_name.to_string());
         Ok((bin_name.to_string(), bin_path))
     }
 
@@ -164,11 +193,11 @@ impl Runner {
 
         match child_proc.wait() {
             Ok(exit_status) => log::info!(
-                "Terminated vault process (pid: {}) with exit status {}",
+                "Terminated client process (pid: {}) with exit status {}",
                 child_proc.id(),
                 exit_status
             ),
-            Err(error) => log::warn!("Vault process termination error: {}", error),
+            Err(error) => log::warn!("Client process termination error: {}", error),
         };
         let pid = child_proc.id();
         runner.set_child_proc(None);
@@ -190,6 +219,7 @@ impl Runner {
 
     /// Read parachain storage via an RPC call, and decode the result
     async fn read_chain_storage<T: 'static + Decode + Debug>(
+        client_type: &ClientType,
         subxt_api: &OnlineClient<PolkadotConfig>,
     ) -> Result<Option<T>, Error> {
         // Based on the implementation of `subxt_api.storage().fetch(...)`, but with decoding for a custom type. Source:
@@ -197,7 +227,7 @@ impl Runner {
         let storage_address = subxt::dynamic::storage(
             PARACHAIN_MODULE,
             CURRENT_RELEASES_STORAGE_ITEM,
-            vec![Value::from_bytes(CLIENT_TYPE.as_bytes())],
+            vec![Value::from_bytes(client_type.to_string().as_bytes())],
         );
         let lookup_bytes = subxt::storage::utils::storage_address_bytes(&storage_address, &subxt_api.metadata())?;
         let enc_res = subxt_api
@@ -247,8 +277,11 @@ impl Runner {
                 let maybe_downloaded_release = runner.downloaded_release();
                 let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
                 if new_release.uri != downloaded_release.release.uri {
+                    log::info!("Found new client release, updating...");
+
                     // Wait for child process to finish completely.
-                    // To ensure there can't be two vault processes using the same Bitcoin wallet.
+                    // To ensure there can't be two client processes using the same resources (such as the Bitcoin
+                    // wallet for vaults).
                     runner.terminate_proc_and_wait()?;
 
                     // Delete old release
@@ -296,7 +329,7 @@ impl Runner {
         }
         let downloaded_release = runner.downloaded_release().as_ref().ok_or(Error::NoDownloadedRelease)?;
         let mut command = Command::new(downloaded_release.path.as_os_str());
-        command.args(runner.vault_args().clone()).stdout(stdout_mode);
+        command.args(runner.client_args().clone()).stdout(stdout_mode);
         let child = retry_with_log(
             || command.spawn().map_err(Into::into),
             "Failed to spawn child process".to_string(),
@@ -322,20 +355,21 @@ impl Drop for Runner {
 #[async_trait]
 pub trait RunnerExt {
     fn subxt_api(&self) -> &OnlineClient<PolkadotConfig>;
-    fn vault_args(&self) -> &Vec<String>;
+    fn client_args(&self) -> &Vec<String>;
     fn child_proc(&mut self) -> &mut Option<Child>;
     fn set_child_proc(&mut self, child_proc: Option<Child>);
     fn downloaded_release(&self) -> &Option<DownloadedRelease>;
     fn set_downloaded_release(&mut self, downloaded_release: Option<DownloadedRelease>);
     fn download_path(&self) -> &PathBuf;
     fn parachain_url(&self) -> String;
+    fn client_type(&self) -> ClientType;
     /// Read the current client release from the parachain, retrying for `RETRY_TIMEOUT` if there is a network error.
     async fn try_get_release(&self) -> Result<Option<ClientRelease>, Error>;
-    /// Download the vault binary and make it executable, retrying for `RETRY_TIMEOUT` if there is a network error.
+    /// Download the client binary and make it executable, retrying for `RETRY_TIMEOUT` if there is a network error.
     async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
     /// Convert a release URI (e.g. a GitHub link) to an executable name and OS path (after download)
     fn get_bin_path(&self) -> Result<(String, PathBuf), Error>;
-    /// Remove downloaded release from the file system. This is only supposed to occur _after_ the vault process
+    /// Remove downloaded release from the file system. This is only supposed to occur _after_ the client process
     /// has been killed. In case of failure, removing is retried for `RETRY_TIMEOUT`.
     fn delete_downloaded_release(&mut self) -> Result<(), Error>;
     /// Spawn a the client as a child process with the CLI arguments set in the `Runner`, retrying for
@@ -360,8 +394,8 @@ impl RunnerExt for Runner {
         &self.subxt_api
     }
 
-    fn vault_args(&self) -> &Vec<String> {
-        &self.opts.vault_args
+    fn client_args(&self) -> &Vec<String> {
+        &self.opts.client_args
     }
 
     fn child_proc(&mut self) -> &mut Option<Child> {
@@ -386,6 +420,10 @@ impl RunnerExt for Runner {
 
     fn parachain_url(&self) -> String {
         self.opts.parachain_ws.clone()
+    }
+
+    fn client_type(&self) -> ClientType {
+        self.opts.client_type.clone()
     }
 
     async fn try_get_release(&self) -> Result<Option<ClientRelease>, Error> {
@@ -451,7 +489,7 @@ impl StorageReader for Runner {
         &self,
         subxt_api: &OnlineClient<PolkadotConfig>,
     ) -> Result<Option<T>, Error> {
-        Runner::read_chain_storage(subxt_api).await
+        Runner::read_chain_storage(&self.client_type(), subxt_api).await
     }
 }
 
@@ -533,13 +571,14 @@ mod tests {
         #[async_trait]
         pub trait RunnerExt {
             fn subxt_api(&self) -> &OnlineClient<PolkadotConfig>;
-            fn vault_args(&self) -> &Vec<String>;
+            fn client_args(&self) -> &Vec<String>;
             fn child_proc(&mut self) -> &mut Option<Child>;
             fn set_child_proc(&mut self, child_proc: Option<Child>);
             fn downloaded_release(&self) -> &Option<DownloadedRelease>;
             fn set_downloaded_release(&mut self, downloaded_release: Option<DownloadedRelease>);
             fn download_path(&self) -> &PathBuf;
             fn parachain_url(&self) -> String;
+            fn client_type(&self) -> ClientType;
             async fn try_get_release(&self) -> Result<Option<ClientRelease>, Error>;
             async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
             fn get_bin_path(&self) -> Result<(String, PathBuf), Error>;
@@ -615,13 +654,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_runner_get_bin_path() {
-        let mut runner = MockRunner::default();
-        runner
-            .expect_download_path()
-            .return_const(PathBuf::from_str("./mock_download_dir").unwrap());
-        let (bin_name, bin_path) = Runner::get_bin_path(&runner).unwrap();
-        assert_eq!(bin_name, "vault".to_string());
-        assert_eq!(bin_path, PathBuf::from_str("./mock_download_dir/vault").unwrap());
+        let clients = [ClientType::Vault, ClientType::Oracle, ClientType::Faucet];
+        let mock_path = PathBuf::from_str("./mock_download_dir").unwrap();
+        for client in clients {
+            let mut runner = MockRunner::default();
+            runner.expect_download_path().return_const(mock_path.clone());
+            runner.expect_client_type().return_const(client.clone());
+            let (bin_name, bin_path) = Runner::get_bin_path(&runner).unwrap();
+            assert_eq!(bin_name, client.to_string());
+            assert_eq!(bin_path, mock_path.join(client.to_string()));
+        }
     }
 
     #[tokio::test]
@@ -720,7 +762,7 @@ mod tests {
         runner
             .expect_downloaded_release()
             .return_const(Some(mock_downloaded_release));
-        runner.expect_vault_args().return_const(mock_vault_args.clone());
+        runner.expect_client_args().return_const(mock_vault_args.clone());
         runner.expect_set_child_proc().return_const(());
         let child = Runner::run_binary(&mut runner, Stdio::piped()).unwrap();
 
