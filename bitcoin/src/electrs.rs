@@ -3,12 +3,14 @@ use crate::{
     Builder as ScriptBuilder, FromHex, Network, OutPoint, Script, SignedAmount, ToHex, Transaction, Txid, H256,
 };
 use esplora_btc_api::models::{Transaction as ElectrsTransaction, Utxo as ElectrsUtxo};
+use futures::future::{join_all, try_join};
 use reqwest::{Client, Url};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
 
 const ELECTRS_TRANSACTIONS_PER_PAGE: usize = 25;
 
+// https://github.com/Blockstream/esplora/blob/master/API.md
 const ELECTRS_TESTNET_URL: &str = "https://btc-testnet.interlay.io";
 const ELECTRS_MAINNET_URL: &str = "https://btc-mainnet.interlay.io";
 const ELECTRS_LOCALHOST_URL: &str = "http://localhost:3002";
@@ -33,6 +35,8 @@ pub struct TxInfo {
     pub fee: SignedAmount,
 }
 
+// NOTE: the `esplora_btc_api` OpenAPI lib build cannot decode plain strings
+// (using `serde_json::from_str`) and it doesn't support paged api calls
 #[derive(Clone)]
 pub struct ElectrsClient {
     url: Url,
@@ -66,22 +70,30 @@ impl ElectrsClient {
         Ok(serde_json::from_str(&body)?)
     }
 
-    // the esplora_btc_api lib breaks on these two because it tries to serde_json::from_str on a plain string value
-    pub async fn get_tx_hex(&self, txid: &str) -> Result<String, Error> {
-        self.get(&format!("tx/{txid}/hex")).await
+    pub(crate) async fn get_tx_hex(&self, txid: &str) -> Result<String, Error> {
+        self.get(&format!("/tx/{txid}/hex")).await
     }
 
-    pub async fn get_tx_merkle_block_proof(&self, txid: &str) -> Result<String, Error> {
-        self.get(&format!("tx/{txid}/merkleblock-proof")).await
+    pub(crate) async fn get_tx_merkle_block_proof(&self, txid: &str) -> Result<String, Error> {
+        self.get(&format!("/tx/{txid}/merkleblock-proof")).await
     }
 
-    // and it doesn't currently support the paged api call
-    pub async fn get_address_tx_history_full(&self, address: &str) -> Result<Vec<ElectrsTransaction>, Error> {
+    pub(crate) async fn get_raw_tx(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
+        Ok(Vec::<u8>::from_hex(&self.get_tx_hex(&txid.to_string()).await?)?)
+    }
+
+    pub(crate) async fn get_raw_tx_merkle_proof(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
+        Ok(Vec::<u8>::from_hex(
+            &self.get_tx_merkle_block_proof(&txid.to_string()).await?,
+        )?)
+    }
+
+    pub(crate) async fn get_address_tx_history_full(&self, address: &str) -> Result<Vec<ElectrsTransaction>, Error> {
         let mut last_seen_txid = Default::default();
         let mut ret = Vec::<ElectrsTransaction>::new();
         loop {
             let mut transactions: Vec<ElectrsTransaction> = self
-                .get_and_decode(&format!("address/{address}/txs/chain/{last_seen_txid}"))
+                .get_and_decode(&format!("/address/{address}/txs/chain/{last_seen_txid}"))
                 .await?;
             let page_size = transactions.len();
             last_seen_txid = transactions.last().map_or(Default::default(), |tx| tx.txid.clone());
@@ -114,7 +126,7 @@ impl ElectrsClient {
             .iter()
             .map(|txid| Txid::from_str(txid))
             .collect::<Result<Vec<_>, _>>()?;
-        let txs = futures::future::join_all(txids.iter().map(|txid| self.get_raw_tx(txid)))
+        let txs = join_all(txids.iter().map(|txid| self.get_raw_tx(txid)))
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?
@@ -125,8 +137,7 @@ impl ElectrsClient {
     }
 
     pub(crate) async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error> {
-        let header = self.get_block_header(hash).await?;
-        let txdata = self.get_transactions_in_block(hash).await?;
+        let (header, txdata) = try_join(self.get_block_header(hash), self.get_transactions_in_block(hash)).await?;
         Ok(Block { header, txdata })
     }
 
@@ -141,16 +152,6 @@ impl ElectrsClient {
             .iter()
             .map(|txid| Txid::from_str(txid))
             .collect::<Result<Vec<_>, _>>()?)
-    }
-
-    pub(crate) async fn get_raw_merkle_proof(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
-        Ok(Vec::<u8>::from_hex(
-            &self.get(&format!("/tx/{txid}/merkleblock-proof")).await?,
-        )?)
-    }
-
-    pub(crate) async fn get_raw_tx(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
-        Ok(Vec::<u8>::from_hex(&self.get(&format!("/tx/{txid}/hex")).await?)?)
     }
 
     pub(crate) async fn get_tx_info(&self, txid: &Txid) -> Result<TxInfo, Error> {
@@ -227,6 +228,7 @@ impl ElectrsClient {
             hasher.result().as_slice().to_vec()
         };
 
+        // TODO: page this using last_seen_txid
         let txs: Vec<ElectrsTransaction> = self
             .get_and_decode(&format!(
                 "/scripthash/{scripthash}/txs",
@@ -241,7 +243,7 @@ impl ElectrsClient {
             let txid = Txid::from_str(&tx.txid)?;
             log::info!("Fetching merkle proof");
             // TODO: return error if not confirmed
-            let raw_merkle_proof = self.get_raw_merkle_proof(&txid).await?;
+            let raw_merkle_proof = self.get_raw_tx_merkle_proof(&txid).await?;
 
             log::info!("Fetching transaction");
             let raw_tx = self.get_raw_tx(&txid).await?;

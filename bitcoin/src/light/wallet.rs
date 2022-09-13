@@ -241,7 +241,7 @@ impl Wallet {
         let selection_target = recipients_sum + not_input_fees;
         let mut value_to_select = selection_target;
 
-        let mut psbt = PartiallySignedTransaction::from_unsigned_tx(tx).unwrap();
+        let mut psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
         let mut select_coins = SelectCoins::new(selection_target);
 
         // get available coins
@@ -250,7 +250,7 @@ impl Wallet {
             log::info!("Found address: {}", address);
             // get utxos for address
             let utxos = self.electrs.get_utxos_for_address(address).await?;
-            // TODO: stream this
+            // TODO: stream this, no need to fetch
             for utxo in utxos {
                 log::info!("Found utxo: {}", utxo.outpoint.txid);
 
@@ -349,11 +349,14 @@ impl Wallet {
         for inp in 0..psbt.inputs.len() {
             let psbt_input = &psbt.inputs[inp];
 
-            // TODO: use expect instead
-            let prev_out = psbt_input.witness_utxo.clone().unwrap();
+            let prev_out = psbt_input
+                .witness_utxo
+                .clone()
+                .expect("utxo is always set in fund_transaction; qed");
 
             let sighash_ty = psbt_input.sighash_type.unwrap_or(SigHashType::All);
 
+            // TODO: support signing p2sh, p2pkh, p2wsh
             let script_code = if prev_out.script_pubkey.is_v0_p2wpkh() {
                 Ok(p2wpkh_script_code(&prev_out.script_pubkey))
             } else {
@@ -365,10 +368,9 @@ impl Wallet {
 
             let private_key = self.get_priv_key(&prev_out.script_pubkey)?;
 
-            let sig = self.secp.sign(
-                &Message::from_slice(&sig_hash.into_inner()[..]).unwrap(),
-                &private_key.key,
-            );
+            let sig = self
+                .secp
+                .sign(&Message::from_slice(&sig_hash.into_inner()[..])?, &private_key.key);
 
             pub struct EcdsaSig {
                 pub sig: Signature,
@@ -376,8 +378,8 @@ impl Wallet {
             }
 
             impl EcdsaSig {
+                // https://github.com/rust-bitcoin/rust-bitcoin/blob/deb867e33d30873c44c1d0c9917630ed52388d59/src/util/ecdsa.rs#L50
                 pub fn to_vec(&self) -> Vec<u8> {
-                    // TODO: add support to serialize to a writer to SerializedSig
                     self.sig
                         .serialize_der()
                         .iter()
@@ -392,18 +394,14 @@ impl Wallet {
                 hash_ty: sighash_ty,
             };
 
+            // TODO: can we write directly to final_script_witness here?
             psbt.inputs[inp]
                 .partial_sigs
                 .insert(private_key.public_key(&self.secp), final_signature.to_vec());
-
-            // psbt_input.final_script_witness = Some(Witness::from_vec(vec![
-            //     final_signature.to_vec(),
-            //     private_key.public_key(&self.secp).to_bytes(),
-            // ]));
         }
 
         for psbt_input in psbt.inputs.iter_mut() {
-            let (key, sig) = psbt_input.partial_sigs.iter().next().unwrap();
+            let (key, sig) = psbt_input.partial_sigs.iter().next().expect("signature set above; qed");
             // https://github.com/bitcoin/bitcoin/blob/607d5a46aa0f5053d8643a3e2c31a69bfdeb6e9f/src/script/sign.cpp#L125
             psbt_input.final_script_witness = Some(vec![sig.clone().to_vec(), key.to_bytes()]);
         }

@@ -22,17 +22,16 @@ pub struct BitcoinLight {
 }
 
 impl BitcoinLight {
-    // TODO: implement cli config
-    pub fn new(electrs_url: Option<String>, network: Network, private_key: PrivateKey) -> Self {
-        let electrs_client = ElectrsClient::new(electrs_url, network).unwrap();
-        Self {
+    pub fn new(electrs_url: Option<String>, network: Network, private_key: PrivateKey) -> Result<Self, Error> {
+        let electrs_client = ElectrsClient::new(electrs_url, network)?;
+        Ok(Self {
             network,
             private_key,
             secp_ctx: secp256k1::Secp256k1::new(),
             electrs: electrs_client.clone(),
             transaction_creation_lock: Arc::new(Mutex::new(())),
             wallet: wallet::Wallet::new(network, electrs_client),
-        }
+        })
     }
 
     fn get_change_address(&self) -> Result<Address, Error> {
@@ -130,7 +129,7 @@ impl BitcoinCoreApi for BitcoinLight {
     }
 
     async fn get_proof(&self, txid: Txid, _block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError> {
-        Ok(self.electrs.get_raw_merkle_proof(&txid).await?)
+        Ok(self.electrs.get_raw_tx_merkle_proof(&txid).await?)
     }
 
     async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError> {

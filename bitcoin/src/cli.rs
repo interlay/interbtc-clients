@@ -47,13 +47,13 @@ pub struct BitcoinOpts {
 impl BitcoinOpts {
     fn new_auth(&self) -> Auth {
         Auth::UserPass(
-            self.bitcoin_rpc_user.clone().unwrap(),
-            self.bitcoin_rpc_pass.clone().unwrap(),
+            self.bitcoin_rpc_user.clone().expect("User not set"),
+            self.bitcoin_rpc_pass.clone().expect("Pass not set"),
         )
     }
 
     fn new_client_builder(&self, wallet_name: Option<String>) -> BitcoinCoreBuilder {
-        BitcoinCoreBuilder::new(self.bitcoin_rpc_url.clone().unwrap())
+        BitcoinCoreBuilder::new(self.bitcoin_rpc_url.clone().expect("Url not set"))
             .set_auth(self.new_auth())
             .set_wallet_name(wallet_name)
             .set_electrs_url(self.electrs_url.clone())
@@ -66,9 +66,9 @@ impl BitcoinOpts {
         Ok(if self.light {
             Arc::new(BitcoinLight::new(
                 self.electrs_url.clone(),
-                self.network.unwrap(),
-                self.private_key.unwrap(),
-            ))
+                self.network.expect("Network not set"),
+                self.private_key.expect("Private key not set"),
+            )?)
         } else {
             let bitcoin_core = self
                 .new_client_builder(wallet_name)
@@ -89,8 +89,8 @@ impl BitcoinOpts {
             Arc::new(BitcoinLight::new(
                 self.electrs_url.clone(),
                 network,
-                self.private_key.unwrap(),
-            ))
+                self.private_key.expect("Private key not set"),
+            )?)
         } else {
             Arc::new(self.new_client_builder(wallet_name).build_with_network(network)?)
         })

@@ -1,4 +1,7 @@
-use crate::{error::ElectrsError, secp256k1::Error as Secp256k1Error, util::address::Error as BitcoinAddressError};
+use crate::{
+    error::ElectrsError, psbt::Error as PsbtError, secp256k1::Error as Secp256k1Error,
+    util::address::Error as AddressError,
+};
 use std::sync::PoisonError;
 use thiserror::Error;
 
@@ -19,8 +22,10 @@ pub enum Error {
 
     #[error("Secp256k1Error: {0}")]
     Secp256k1Error(#[from] Secp256k1Error),
-    #[error("BitcoinAddressError: {0}")]
-    BitcoinAddressError(#[from] BitcoinAddressError),
+    #[error("AddressError: {0}")]
+    AddressError(#[from] AddressError),
+    #[error("PsbtError: {0}")]
+    PsbtError(#[from] PsbtError),
 
     #[error("ElectrsError: {0}")]
     ElectrsError(#[from] ElectrsError),
