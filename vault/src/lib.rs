@@ -10,7 +10,6 @@ mod issue;
 pub mod metrics;
 pub mod process;
 mod redeem;
-mod refund;
 pub mod relay;
 mod replace;
 mod system;
@@ -25,7 +24,6 @@ pub mod service {
         },
         metrics::monitor_bridge_metrics,
         redeem::listen_for_redeem_requests,
-        refund::listen_for_refund_requests,
         relay::{Config, Runner},
         replace::{listen_for_accept_replace, listen_for_execute_replace, listen_for_replace_requests},
     };

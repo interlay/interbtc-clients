@@ -76,17 +76,17 @@ struct Opts {
 
     /// Estimated fee rate to include a Bitcoin transaction
     /// in the next block (~10 min).
-    #[clap(long, parse(try_from_str = parse_fixed_point), default_value = "1")]
+    #[clap(long, value_parser = parse_fixed_point, default_value = "1")]
     bitcoin_fee: FixedU128,
 
     /// Collateral type for exchange rates, e.g. "DOT" or "KSM". The exchange rate
     /// will be fetched from coingecko unless explicitly set as e.g. "KSM=123", in which
     /// case the given exchange rate will be used. The rate will be in while units e.g. KSM/BTC.
-    #[clap(long, parse(try_from_str = parse_collateral_and_optional_rate))]
+    #[clap(long, value_parser = parse_collateral_and_optional_rate)]
     currency_id: Vec<(String, Option<FixedU128>)>,
 
     /// Interval for exchange rate setter, default 25 minutes.
-    #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "1500000")]
+    #[clap(long, value_parser = parse_duration_ms, default_value = "1500000")]
     interval_ms: Duration,
 
     /// Keyring / keyfile options.
@@ -106,7 +106,7 @@ struct Opts {
     coingecko_api_key: Option<String>,
 
     /// Timeout in milliseconds to wait for connection to btc-parachain.
-    #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "60000")]
+    #[clap(long, value_parser = parse_duration_ms, default_value = "60000")]
     connection_timeout_ms: Duration,
 }
 

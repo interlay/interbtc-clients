@@ -55,8 +55,6 @@ mod metadata_aliases {
         WithdrawReplace as WithdrawReplaceEvent,
     };
 
-    pub use metadata::refund::events::{ExecuteRefund as ExecuteRefundEvent, RequestRefund as RequestRefundEvent};
-
     pub use metadata::redeem::events::{ExecuteRedeem as ExecuteRedeemEvent, RequestRedeem as RequestRedeemEvent};
 
     pub use metadata::security::events::UpdateActiveBlock as UpdateActiveBlockEvent;
@@ -84,6 +82,8 @@ mod metadata_aliases {
 
     pub use metadata::runtime_types::bitcoin::types::H256Le;
 
+    pub use metadata::runtime_types::clients_info::ClientRelease;
+
     pub type InterBtcHeader = <InterBtcRuntime as Config>::Header;
 
     pub type InterBtcIssueRequest =
@@ -98,8 +98,7 @@ mod metadata_aliases {
     pub use metadata::runtime_types::interbtc_primitives::{
         redeem::RedeemRequestStatus, replace::ReplaceRequestStatus,
     };
-    pub type InterBtcRefundRequest =
-        metadata::runtime_types::interbtc_primitives::refund::RefundRequest<AccountId, Balance, CurrencyId>;
+
     pub type InterBtcReplaceRequest = metadata::runtime_types::interbtc_primitives::replace::ReplaceRequest<
         AccountId,
         BlockNumber,

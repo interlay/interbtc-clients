@@ -12,8 +12,6 @@
   - Send BTC transaction to user
   - Get BTC transaction inclusion proof and raw tx
   - Execute redeem with corresponding redeem id, tx inclusion proof and raw tx
-- Refund
-  - Reimburse users who overpay on issue
 - Collateral balance
   - Observe collateralization rate in Vault Registry
   - Withdraw / deposit collateral to keep rate consistent
@@ -65,7 +63,6 @@ USAGE:
 FLAGS:
     -h, --help                      Print help information
         --no-api                    Don't run the RPC API
-        --no-auto-refund            Don't refund overpayments
         --no-auto-replace           Opt out of participation in replace requests
         --no-bitcoin-block-relay    Don't relay bitcoin block headers
         --no-issue-execution        Don't try to execute issues

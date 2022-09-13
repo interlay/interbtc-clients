@@ -11,7 +11,7 @@ use subxt::sp_core::{sr25519::Pair, Pair as _};
 #[derive(Parser, Debug, Clone)]
 pub struct ProviderUserOpts {
     /// Keyring to use, mutually exclusive with keyfile.
-    #[clap(long, required_unless_present = "keyfile", parse(try_from_str = parse_account_keyring))]
+    #[clap(long, required_unless_present = "keyfile", value_parser = parse_account_keyring)]
     pub keyring: Option<AccountKeyring>,
 
     /// Path to the json file containing key pairs in a map.
@@ -92,7 +92,7 @@ pub struct ConnectionOpts {
     pub btc_parachain_url: String,
 
     /// Timeout in milliseconds to wait for connection to btc-parachain.
-    #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "60000")]
+    #[clap(long, value_parser = parse_duration_ms, default_value = "60000")]
     pub btc_parachain_connection_timeout_ms: Duration,
 
     /// Maximum number of concurrent requests

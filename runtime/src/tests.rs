@@ -113,7 +113,7 @@ async fn test_register_vault() {
     let vault_id = VaultId::new(AccountKeyring::Alice.into(), Token(KSM), Token(KBTC));
 
     parachain_rpc.register_public_key(dummy_public_key()).await.unwrap();
-    parachain_rpc.register_vault(&vault_id, 100).await.unwrap();
+    parachain_rpc.register_vault(&vault_id, 3 * KSM.one()).await.unwrap();
     parachain_rpc.get_vault(&vault_id).await.unwrap();
     assert_eq!(parachain_rpc.get_public_key().await.unwrap(), Some(dummy_public_key()));
 }

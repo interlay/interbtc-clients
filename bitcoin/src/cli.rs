@@ -51,7 +51,7 @@ pub struct BitcoinOpts {
         long,
         requires = "light",
         conflicts_with_all(&["bitcoin-rpc-url", "bitcoin-rpc-user", "bitcoin-rpc-pass"]),
-        parse(from_os_str)
+        value_parser
     )]
     #[cfg(feature = "light-client")]
     pub bitcoin_wif: Option<PathBuf>,
