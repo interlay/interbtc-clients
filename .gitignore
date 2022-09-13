@@ -10,3 +10,4 @@ keyfile.json
 args.txt
 vault-*-metadata
 kv
+*.wif

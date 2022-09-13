@@ -10,9 +10,19 @@ use bitcoincore_rpc::{
 };
 use hex::FromHexError;
 use serde_json::Error as SerdeJsonError;
-use std::num::TryFromIntError;
+use std::{io::Error as IoError, num::TryFromIntError, string::FromUtf8Error};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
+
+#[derive(Error, Debug)]
+pub enum KeyLoadingError {
+    #[error("IoError: {0}")]
+    IoError(#[from] IoError),
+    #[error("FromUtf8Error: {0}")]
+    FromUtf8Error(#[from] FromUtf8Error),
+    #[error("KeyError: {0}")]
+    KeyError(#[from] KeyError),
+}
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -36,6 +46,8 @@ pub enum Error {
     LightClientError(#[from] BitcoinLightError),
     #[error("ElectrsError: {0}")]
     ElectrsError(#[from] ElectrsError),
+    #[error("KeyLoadingError: {0}")]
+    KeyLoadingError(#[from] KeyLoadingError),
 
     #[error("Connected to incompatible bitcoin core version: {0}")]
     IncompatibleVersion(usize),
