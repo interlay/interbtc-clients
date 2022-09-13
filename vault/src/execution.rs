@@ -316,7 +316,7 @@ impl Request {
                     }
                 })
                 .filter_map(|x| async {
-                    match btc_rpc.is_in_mempool(txid_copy) {
+                    match btc_rpc.is_in_mempool(txid_copy).await {
                         Ok(false) => {
                             //   if not in mempool anymore, don't propagate the event (even if it is an error)
                             tracing::debug!("Txid not in mempool anymore...");
@@ -816,7 +816,7 @@ mod tests {
                 address: Address,
                 fee_rate: SatPerVbyte,
             ) -> Result<Txid, BitcoinError>;
-            fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
+            async fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
             async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
         }
     }

@@ -190,7 +190,7 @@ pub trait BitcoinCoreApi {
 
     fn get_utxo_count(&self) -> Result<usize, Error>;
 
-    fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error>;
+    async fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error>;
 
     async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error>;
 }
@@ -983,7 +983,7 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(self.rpc.list_unspent(None, None, None, None, None)?.len())
     }
 
-    fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error> {
+    async fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error> {
         let get_tx_result = self.rpc.get_transaction(&txid, None)?;
         Ok(get_tx_result.info.confirmations == 0)
     }

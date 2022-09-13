@@ -276,9 +276,9 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(Default::default())
     }
 
-    fn is_in_mempool(&self, _txid: Txid) -> Result<bool, BitcoinError> {
-        // TODO: implement
-        Err(BitcoinError::WalletNotFound)
+    async fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError> {
+        let txids = self.electrs.get_raw_mempool().await?;
+        Ok(txids.into_iter().any(|mempool_txid| mempool_txid == txid))
     }
 
     async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError> {

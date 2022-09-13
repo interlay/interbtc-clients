@@ -498,7 +498,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         unimplemented!()
     }
 
-    fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError> {
+    async fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError> {
         unimplemented!()
     }
 
