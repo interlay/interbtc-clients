@@ -1,4 +1,4 @@
-use crate::{BitcoinError, BitcoinLightError};
+use crate::{BitcoinError, BitcoinLightError, ElectrsError};
 use bitcoincore_rpc::{
     bitcoin::{
         consensus::encode::Error as BitcoinEncodeError,
@@ -9,43 +9,10 @@ use bitcoincore_rpc::{
     jsonrpc::{error::RpcError, Error as JsonRpcError},
 };
 use hex::FromHexError;
-use reqwest::Error as ReqwestError;
 use serde_json::Error as SerdeJsonError;
+use std::num::TryFromIntError;
 use thiserror::Error;
 use tokio::time::error::Elapsed;
-use url::ParseError;
-
-use crate::{hashes::hex::Error as HexError, util::address::Error as BitcoinAddressError};
-use std::num::{ParseIntError, TryFromIntError};
-
-#[derive(Error, Debug)]
-pub enum ElectrsError {
-    #[error("No previous output for input")]
-    NoPrevOut,
-    #[error("Cannot construct address")]
-    InvalidAddress,
-
-    #[error("BitcoinAddressError: {0}")]
-    BitcoinAddressError(#[from] BitcoinAddressError),
-    #[error("BitcoinEncodeError: {0}")]
-    BitcoinEncodeError(#[from] BitcoinEncodeError),
-
-    #[error("ReqwestError: {0}")]
-    ReqwestError(#[from] ReqwestError),
-    #[error("ParseError: {0}")]
-    ParseError(#[from] ParseError),
-
-    #[error("SerdeJsonError: {0}")]
-    SerdeJsonError(#[from] SerdeJsonError),
-
-    #[error("HexError: {0}")]
-    HexError(#[from] HexError),
-
-    #[error("TryFromIntError: {0}")]
-    TryFromIntError(#[from] TryFromIntError),
-    #[error("ParseIntError: {0}")]
-    ParseIntError(#[from] ParseIntError),
-}
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -55,8 +22,6 @@ pub enum Error {
     BitcoinError(#[from] BitcoinError),
     #[error("ConversionError: {0}")]
     ConversionError(#[from] ConversionError),
-    #[error("Error occurred in callback: {0}")]
-    CallbackError(Box<dyn std::error::Error + Send + Sync>),
     #[error("Json error: {0}")]
     SerdeJsonError(#[from] SerdeJsonError),
     #[error("Secp256k1Error: {0}")]
@@ -65,13 +30,15 @@ pub enum Error {
     KeyError(#[from] KeyError),
     #[error("Timeout: {0}")]
     TimeElapsed(#[from] Elapsed),
-    #[error("ReqwestError: {0}")]
-    ReqwestError(#[from] ReqwestError),
-    #[error("ParseError: {0}")]
-    ParseError(#[from] ParseError),
+    #[error(transparent)]
+    TryFromIntError(#[from] TryFromIntError),
+    #[error("LightClientError: {0}")]
+    LightClientError(#[from] BitcoinLightError),
+    #[error("ElectrsError: {0}")]
+    ElectrsError(#[from] ElectrsError),
+
     #[error("Connected to incompatible bitcoin core version: {0}")]
     IncompatibleVersion(usize),
-
     #[error("Could not confirm transaction")]
     ConfirmationError,
     #[error("Could not find block at height")]
@@ -90,15 +57,8 @@ pub enum Error {
     TooManyReturnToSelfAddresses,
     #[error("ArithmeticError")]
     ArithmeticError,
-    #[error(transparent)]
-    TryFromIntError(#[from] std::num::TryFromIntError),
     #[error("MissingBitcoinFeeInfo")]
     MissingBitcoinFeeInfo,
-
-    #[error("LightClientError: {0}")]
-    LightClientError(#[from] BitcoinLightError),
-    #[error("ElectrsError: {0}")]
-    ElectrsError(#[from] ElectrsError),
 }
 
 impl Error {

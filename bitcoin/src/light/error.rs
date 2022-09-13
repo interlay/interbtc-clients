@@ -1,6 +1,5 @@
 use crate::{
-    error::ElectrsError, psbt::Error as PsbtError, secp256k1::Error as Secp256k1Error,
-    util::address::Error as AddressError,
+    psbt::Error as PsbtError, secp256k1::Error as Secp256k1Error, util::address::Error as AddressError, ElectrsError,
 };
 use std::sync::PoisonError;
 use thiserror::Error;

@@ -42,8 +42,8 @@ pub use bitcoincore_rpc::{
     jsonrpc::{error::RpcError, Error as JsonRpcError},
     Auth, Client, Error as BitcoinError, RpcApi,
 };
-use electrs::ElectrsClient;
-pub use error::{BitcoinRpcError, ConversionError, ElectrsError, Error};
+pub use electrs::{ElectrsClient, Error as ElectrsError};
+pub use error::{BitcoinRpcError, ConversionError, Error};
 pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
 use log::{info, trace};
 use serde_json::error::Category as SerdeJsonCategory;

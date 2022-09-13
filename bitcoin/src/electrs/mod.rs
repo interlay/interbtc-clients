@@ -1,6 +1,10 @@
+mod error;
+
+pub use error::Error;
+
 use crate::{
-    deserialize, error::ElectrsError as Error, opcodes, serialize, Address, Block, BlockHash, BlockHeader,
-    Builder as ScriptBuilder, FromHex, Network, OutPoint, Script, SignedAmount, ToHex, Transaction, Txid, H256,
+    deserialize, opcodes, serialize, Address, Block, BlockHash, BlockHeader, Builder as ScriptBuilder, FromHex,
+    Network, OutPoint, Script, SignedAmount, ToHex, Transaction, Txid, H256,
 };
 use esplora_btc_api::models::{Transaction as ElectrsTransaction, Utxo as ElectrsUtxo};
 use futures::future::{join_all, try_join};
