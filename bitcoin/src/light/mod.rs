@@ -2,6 +2,7 @@ mod error;
 mod wallet;
 
 pub use crate::{Error as BitcoinError, *};
+use bitcoincore_rpc::bitcoin::blockdata::constants::WITNESS_SCALE_FACTOR;
 pub use error::Error;
 
 use async_trait::async_trait;
@@ -283,7 +284,7 @@ impl BitcoinCoreApi for BitcoinLight {
 
     async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError> {
         let tx = self.get_transaction(&txid, None).await?;
-        let vsize = tx.get_weight().div_ceil(4) as u64;
+        let vsize = tx.get_weight().div_ceil(WITNESS_SCALE_FACTOR) as u64;
         let recipients_sum = tx.output.iter().map(|tx_out| tx_out.value).sum::<u64>();
 
         let inputs = try_join_all(tx.input.iter().map(|input| async move {
@@ -296,7 +297,7 @@ impl BitcoinCoreApi for BitcoinLight {
         }))
         .await?;
         let input_sum = inputs.iter().sum::<u64>();
-        let fee = input_sum - recipients_sum;
+        let fee = input_sum.saturating_sub(recipients_sum);
 
         let fee_rate = fee.checked_div(vsize).ok_or(BitcoinError::ArithmeticError)?;
         Ok(SatPerVbyte(fee_rate))

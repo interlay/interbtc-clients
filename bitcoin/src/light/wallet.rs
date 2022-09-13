@@ -15,26 +15,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-fn p2wpkh_script_code(script: &Script) -> Script {
-    ScriptBuilder::new()
-        .push_opcode(opcodes::OP_DUP)
-        .push_opcode(opcodes::OP_HASH160)
-        .push_slice(&script[2..])
-        .push_opcode(opcodes::OP_EQUALVERIFY)
-        .push_opcode(opcodes::OP_CHECKSIG)
-        .into_script()
-}
-
-pub type KeyStore = Arc<RwLock<BTreeMap<Address, PrivateKey>>>;
-
-#[derive(Clone)]
-pub struct Wallet {
-    secp: Secp256k1<All>,
-    network: Network,
-    electrs: ElectrsClient,
-    pub(crate) key_store: KeyStore,
-}
-
 trait GetSerializeSize {
     fn get_serialize_size(&self) -> u64;
 }
@@ -66,12 +46,11 @@ impl GetSerializeSize for Vec<Vec<u8>> {
 
 // https://github.com/bitcoin/bitcoin/blob/607d5a46aa0f5053d8643a3e2c31a69bfdeb6e9f/src/script/sign.cpp#L611
 fn dummy_sign_input(txin: &mut TxIn, public_key: PublicKey) {
-    // Create a dummy signature that is a valid DER-encoding
+    // create a dummy signature that is a valid DER-encoding
     let dummy_signature = {
         let m_r_len = 32;
         let m_s_len = 32;
 
-        // vch_sig.assign(m_r_len + m_s_len + 7, '\000');
         let mut vch_sig = vec![0; m_r_len + m_s_len + 7];
         vch_sig[0] = 0x30;
         vch_sig[1] = (m_r_len + m_s_len + 4) as u8;
@@ -182,7 +161,10 @@ impl SelectCoins {
     // https://github.com/bitcoin/bitcoin/blob/2bd9aa5a44b88c866c4d98f8a7bf7154049cba31/src/wallet/coinselection.cpp#L495
     fn get_change(&self, min_viable_change: u64, change_fee: u64) -> u64 {
         // change = SUM(inputs) - SUM(outputs) - fees
-        let change = self.get_selected_effective_value() - self.target_value - change_fee;
+        let change = self
+            .get_selected_effective_value()
+            .saturating_sub(self.target_value)
+            .saturating_sub(change_fee);
 
         if change < min_viable_change {
             0
@@ -190,6 +172,27 @@ impl SelectCoins {
             change
         }
     }
+}
+
+// https://github.com/bitcoindevkit/bdk/blob/061f15af004ce16ea107cfcbe86e0120be22eaa8/src/wallet/signer.rs#L818
+fn p2wpkh_script_code(script: &Script) -> Script {
+    ScriptBuilder::new()
+        .push_opcode(opcodes::OP_DUP)
+        .push_opcode(opcodes::OP_HASH160)
+        .push_slice(&script[2..])
+        .push_opcode(opcodes::OP_EQUALVERIFY)
+        .push_opcode(opcodes::OP_CHECKSIG)
+        .into_script()
+}
+
+pub type KeyStore = Arc<RwLock<BTreeMap<Address, PrivateKey>>>;
+
+#[derive(Clone)]
+pub struct Wallet {
+    secp: Secp256k1<All>,
+    network: Network,
+    electrs: ElectrsClient,
+    pub(crate) key_store: KeyStore,
 }
 
 impl Wallet {
@@ -412,11 +415,65 @@ impl Wallet {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::{deserialize, serialize};
+    use bitcoincore_rpc::bitcoin::{
+        consensus::Encodable,
+        hashes::hex::{FromHex, ToHex},
+        Txid,
+    };
     use std::str::FromStr;
 
-    use bitcoincore_rpc::bitcoin::{hashes::hex::ToHex, Txid};
+    #[test]
+    fn should_select_coins() -> Result<(), Box<dyn std::error::Error>> {
+        let mut select_coins = SelectCoins::new(50);
+        let coin_output = CoinOutput { value: 100, fee: 10 };
+        assert_eq!(coin_output.get_effective_value(), 90);
 
-    use super::*;
+        select_coins.add(coin_output);
+        assert_eq!(select_coins.get_selected_value(), 100);
+        assert_eq!(select_coins.get_selected_effective_value(), 90);
+        assert_eq!(select_coins.get_change(0, 5), 35);
+
+        select_coins.add(CoinOutput { value: 10, fee: 1 });
+        assert_eq!(select_coins.get_selected_value(), 110);
+        assert_eq!(select_coins.get_selected_effective_value(), 99);
+        assert_eq!(select_coins.get_change(0, 5), 44);
+
+        Ok(())
+    }
+
+    #[test]
+    fn should_get_serialize_size_segwit() -> Result<(), Box<dyn std::error::Error>> {
+        // 8bbe885f5e49d31b0a3b17fb5f8677aa6a8e94fb45b572a2e21903c6376df204
+        let tx_bytes = Vec::from_hex(
+            "02000000000101fade6bd2ce8ab9c73f5d571e7c4b8cc0a5fa0952ada94be35748542a53d1435902000000\
+            00ffffffff032085010000000000160014ff9da567e62f30ea8654fa1d5fbd47bef8e3be130000000000000\
+            000226a2058c36f0b41bf0e50461bb4986c89e3ab1cddbae663a1d6560348bc82b698109762081600000000\
+            001600149878a28b9c7418b0b4970054f176cb828ba87ddd02483045022100f68d61e62f522f825cc15a66d\
+            231e4079b32c0e20ada460466254c998d5bffe6022017f8c4bc15aa0c632f14d7f5201dc26c80682cddb2e8\
+            540a9208597416bbe005012103def3a3e3049f78321f577324c8e9d89f59745d9840c563ff73bf737822804\
+            04f00000000",
+        )
+        .unwrap();
+        let tx: Transaction = deserialize(&tx_bytes)?;
+
+        fn assert_serialize_size<T>(data: &T)
+        where
+            T: GetSerializeSize + Encodable + ?Sized,
+        {
+            assert_eq!(data.get_serialize_size(), serialize(data).len() as u64);
+        }
+
+        assert_serialize_size(&tx.input[0]);
+        assert_serialize_size(&tx.output[0]); // recipient
+        assert_serialize_size(&tx.output[1]); // OP_RETURN
+        assert_serialize_size(&tx.output[2]); // change
+
+        assert_eq!(get_virtual_transaction_size(tx.get_weight() as u64), 184);
+
+        Ok(())
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_calculate_fees() -> Result<(), Box<dyn std::error::Error>> {
@@ -455,11 +512,14 @@ mod tests {
         assert_eq!(tx.get_size(), 265);
         assert_eq!(tx.get_weight(), 733);
         // vsize [vB] = weight [wu] / 4
-        assert_eq!(tx.get_weight().div_ceil(4), 184);
+        assert_eq!(tx.get_weight().div_ceil(WITNESS_SCALE_FACTOR), 184);
         assert_eq!(get_virtual_transaction_size(tx.get_weight() as u64), 184);
 
         let fee_rate = FeeRate { n_satoshis_per_k: 1000 };
-        assert_eq!(fee_rate.get_fee(tx.get_weight().div_ceil(4) as u64), 184);
+        assert_eq!(
+            fee_rate.get_fee(tx.get_weight().div_ceil(WITNESS_SCALE_FACTOR) as u64),
+            184
+        );
 
         let actual_fee = 100000 - tx.output.iter().map(|tx_out| tx_out.value).sum::<u64>();
         assert_eq!(actual_fee, 184);
