@@ -31,6 +31,8 @@ pub enum Error {
     ChildProcessExists,
     #[error("Failed to terminate child process")]
     ProcessTerminationFailure,
+    #[error("Failed to parse the client-type CLI argument")]
+    ClientTypeParsingError,
 }
 
 impl<E: Into<Error> + Sized> From<BackoffError<E>> for Error {

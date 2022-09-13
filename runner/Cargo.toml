@@ -3,7 +3,7 @@ name = "runner"
 version = "0.0.1"
 authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
-description = "The Runner runs and auto-updates Vault clients across multiple networks (Interlay, Kintsugi, testnets)."
+description = "The Runner runs and auto-updates interbtc clients (vault, oracle, faucet) across multiple networks (Interlay, Kintsugi, testnets)."
 
 [dependencies]
 clap = { version = "3.1", features = ["derive"]}
