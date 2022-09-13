@@ -8,7 +8,7 @@ use bitcoincore_rpc::{
 use clap::Parser;
 use std::{sync::Arc, time::Duration};
 
-#[derive(Parser, Debug, Clone)]
+#[derive(Parser, Debug, Clone, Default)]
 pub struct BitcoinOpts {
     #[clap(long, required_unless_present("light"), env = "BITCOIN_RPC_URL")]
     pub bitcoin_rpc_url: Option<String>,
@@ -52,7 +52,7 @@ impl BitcoinOpts {
         )
     }
 
-    fn new_client_builder(&self, wallet_name: Option<String>) -> BitcoinCoreBuilder {
+    pub fn new_client_builder(&self, wallet_name: Option<String>) -> BitcoinCoreBuilder {
         BitcoinCoreBuilder::new(self.bitcoin_rpc_url.clone().expect("Url not set"))
             .set_auth(self.new_auth())
             .set_wallet_name(wallet_name)

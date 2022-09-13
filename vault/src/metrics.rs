@@ -677,8 +677,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        json, Address, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, Network, PrivateKey, PublicKey,
-        SatPerVbyte, Transaction, TransactionMetadata, Txid,
+        json, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, Network,
+        PrivateKey, PublicKey, SatPerVbyte, Transaction, TransactionMetadata, Txid,
     };
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
@@ -686,6 +686,7 @@ mod tests {
         ErrorCode, InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcRefundRequest, InterBtcReplaceRequest,
         InterBtcVault, RequestIssueEvent, StatusCode, Token, VaultId, VaultStatus, DOT, H256, IBTC, INTR,
     };
+    use service::DynBitcoinCoreApi;
     use std::collections::BTreeSet;
 
     mockall::mock! {
@@ -996,7 +997,9 @@ mod tests {
             .set_to_be_issued_tokens(100000000)
             .set_to_be_redeemed_tokens(300000000)
             .build();
-        let btc_rpc = MockBitcoin::default();
+        let mock_bitcoin = MockBitcoin::default();
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
+
         let vault_data = VaultData {
             vault_id: dummy_vault_id(),
             btc_rpc,
@@ -1022,10 +1025,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_bitcoin_metrics() {
-        let mut btc_rpc = MockBitcoin::default();
-        btc_rpc
+        let mut mock_bitcoin = MockBitcoin::default();
+        mock_bitcoin
             .expect_get_balance()
             .returning(move |_| Ok(Amount::from_btc(3.0).unwrap()));
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
+
         let vault_data = VaultData {
             vault_id: dummy_vault_id(),
             btc_rpc,
@@ -1046,8 +1051,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_utxo_count() {
-        let mut btc_rpc = MockBitcoin::default();
-        btc_rpc.expect_get_utxo_count().returning(move || Ok(102));
+        let mut mock_bitcoin = MockBitcoin::default();
+        mock_bitcoin.expect_get_utxo_count().returning(move || Ok(102));
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
+
         let vault_data = VaultData {
             vault_id: dummy_vault_id(),
             btc_rpc,
@@ -1069,7 +1076,9 @@ mod tests {
             .set_to_be_issued_tokens(100000000)
             .set_to_be_redeemed_tokens(300000000)
             .build();
-        let btc_rpc = MockBitcoin::default();
+        let mock_bitcoin = MockBitcoin::default();
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
+
         let vault_data = VaultData {
             vault_id: dummy_vault_id(),
             btc_rpc,
@@ -1089,7 +1098,9 @@ mod tests {
         parachain_rpc
             .expect_get_collateralization_from_vault()
             .returning(move |_, _| Ok(collateralization));
-        let btc_rpc = MockBitcoin::default();
+        let mock_bitcoin = MockBitcoin::default();
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
+
         let vault_data = VaultData {
             vault_id: dummy_vault_id(),
             btc_rpc,
@@ -1116,7 +1127,9 @@ mod tests {
             .set_to_be_redeemed_tokens(300000000)
             .build();
 
-        let btc_rpc = MockBitcoin::default();
+        let mock_bitcoin = MockBitcoin::default();
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
+
         let vault_data = VaultData {
             vault_id: dummy_vault_id(),
             btc_rpc,
@@ -1181,7 +1194,9 @@ mod tests {
             .expect_get_account_id()
             .return_const(AccountId::new([1u8; 32]));
 
-        let btc_rpc = MockBitcoin::default();
+        let mock_bitcoin = MockBitcoin::default();
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
+
         let vault_data = VaultData {
             vault_id: dummy_vault_id(),
             btc_rpc,
@@ -1235,7 +1250,9 @@ mod tests {
             .expect_get_account_id()
             .return_const(AccountId::new([1u8; 32]));
 
-        let btc_rpc = MockBitcoin::default();
+        let mock_bitcoin = MockBitcoin::default();
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
+
         let vault_data = VaultData {
             vault_id: dummy_vault_id(),
             btc_rpc,

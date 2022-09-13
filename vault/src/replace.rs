@@ -209,14 +209,14 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        json, Address, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, Network, PrivateKey, PublicKey,
-        SatPerVbyte, Transaction, TransactionMetadata, Txid,
+        json, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, Network,
+        PrivateKey, PublicKey, SatPerVbyte, Transaction, TransactionMetadata, Txid,
     };
     use runtime::{
         AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcReplaceRequest,
         InterBtcVault, Token, DOT, H256, IBTC,
     };
-    use std::str::FromStr;
+    use std::{str::FromStr, sync::Arc};
 
     macro_rules! assert_err {
         ($result:expr, $err:pat) => {{
@@ -358,10 +358,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_replace_request_with_insufficient_balance() {
-        let mut bitcoin = MockBitcoin::default();
-        bitcoin
+        let mut mock_bitcoin = MockBitcoin::default();
+        mock_bitcoin
             .expect_get_new_address()
             .returning(|| Ok(Address::from_str("bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f").unwrap()));
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
 
         let mut parachain_rpc = MockProvider::default();
         parachain_rpc
@@ -378,17 +379,18 @@ mod tests {
             griefing_collateral: Default::default(),
         };
         assert_err!(
-            handle_replace_request(parachain_rpc, bitcoin, &event, &dummy_vault_id()).await,
+            handle_replace_request(parachain_rpc, btc_rpc, &event, &dummy_vault_id()).await,
             Error::InsufficientFunds
         );
     }
 
     #[tokio::test]
     async fn test_handle_replace_request_with_sufficient_balance() {
-        let mut bitcoin = MockBitcoin::default();
-        bitcoin
+        let mut mock_bitcoin = MockBitcoin::default();
+        mock_bitcoin
             .expect_get_new_address()
             .returning(|| Ok(Address::from_str("bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f").unwrap()));
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
 
         let mut parachain_rpc = MockProvider::default();
         parachain_rpc
@@ -405,7 +407,7 @@ mod tests {
             amount: Default::default(),
             griefing_collateral: Default::default(),
         };
-        handle_replace_request(parachain_rpc, bitcoin, &event, &dummy_vault_id())
+        handle_replace_request(parachain_rpc, btc_rpc, &event, &dummy_vault_id())
             .await
             .unwrap();
     }

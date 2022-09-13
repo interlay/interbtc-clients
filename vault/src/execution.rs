@@ -644,13 +644,12 @@ fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -
 
 #[cfg(all(test, feature = "parachain-metadata-kintsugi-testnet"))]
 mod tests {
-    use crate::metrics::PerCurrencyMetrics;
-
     use super::*;
+    use crate::metrics::PerCurrencyMetrics;
     use async_trait::async_trait;
     use bitcoin::{
-        json, Address, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, Network, PrivateKey, PublicKey,
-        Transaction, TransactionMetadata, Txid,
+        json, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, Network,
+        PrivateKey, PublicKey, Transaction, TransactionMetadata, Txid,
     };
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
@@ -659,7 +658,7 @@ mod tests {
         StatusCode, Token, DOT, IBTC,
     };
     use sp_core::H160;
-    use std::collections::BTreeSet;
+    use std::{collections::BTreeSet, sync::Arc};
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {
@@ -888,7 +887,7 @@ mod tests {
             current_parachain_height: u32,
             bitcoin_deadline: u32,
             current_bitcoin_height: u32,
-        ) -> (Request, MockProvider, VaultData<MockBitcoin>) {
+        ) -> (Request, MockProvider, VaultData) {
             let mut parachain_rpc = MockProvider::default();
             parachain_rpc
                 .expect_get_bitcoin_fees()
@@ -904,19 +903,15 @@ mod tests {
                 .expect_on_fee_rate_change()
                 .returning(|| tokio::sync::broadcast::channel(2).1);
 
-            let mut btc_rpc = MockBitcoin::default();
-
-            btc_rpc.expect_network().returning(|| Network::Regtest);
-
-            btc_rpc
+            let mut mock_bitcoin = MockBitcoin::default();
+            mock_bitcoin.expect_network().returning(|| Network::Regtest);
+            mock_bitcoin
                 .expect_get_block_count()
                 .returning(move || Ok(current_bitcoin_height as u64));
-
-            btc_rpc
+            mock_bitcoin
                 .expect_create_and_send_transaction()
                 .returning(|_, _, _, _| Ok(Txid::default()));
-
-            btc_rpc.expect_wait_for_transaction_metadata().returning(|_, _| {
+            mock_bitcoin.expect_wait_for_transaction_metadata().returning(|_, _| {
                 Ok(TransactionMetadata {
                     txid: Txid::default(),
                     proof: vec![],
@@ -926,9 +921,9 @@ mod tests {
                     fee: None,
                 })
             });
-
-            btc_rpc.expect_list_transactions().returning(|_| Ok(vec![]));
-            btc_rpc.expect_get_balance().returning(|_| Ok(Amount::ZERO));
+            mock_bitcoin.expect_list_transactions().returning(|_| Ok(vec![]));
+            mock_bitcoin.expect_get_balance().returning(|_| Ok(Amount::ZERO));
+            let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
 
             let request = Request {
                 amount: 100,
@@ -992,8 +987,9 @@ mod tests {
             .expect_get_current_active_block_number()
             .times(1)
             .returning(|| Ok(110));
-        let mut btc_rpc = MockBitcoin::default();
-        btc_rpc.expect_get_block_count().times(1).returning(|| Ok(110));
+        let mut mock_bitcoin = MockBitcoin::default();
+        mock_bitcoin.expect_get_block_count().times(1).returning(|| Ok(110));
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
         // omitting other mocks to test that they do not get called
 
         let request = Request {
@@ -1044,15 +1040,12 @@ mod tests {
             .expect_on_fee_rate_change()
             .returning(|| tokio::sync::broadcast::channel(2).1);
 
-        let mut btc_rpc = MockBitcoin::default();
-
-        btc_rpc.expect_network().returning(|| Network::Regtest);
-
-        btc_rpc
+        let mut mock_bitcoin = MockBitcoin::default();
+        mock_bitcoin.expect_network().returning(|| Network::Regtest);
+        mock_bitcoin
             .expect_create_and_send_transaction()
             .returning(|_, _, _, _| Ok(Txid::default()));
-
-        btc_rpc.expect_wait_for_transaction_metadata().returning(|_, _| {
+        mock_bitcoin.expect_wait_for_transaction_metadata().returning(|_, _| {
             Ok(TransactionMetadata {
                 txid: Txid::default(),
                 proof: vec![],
@@ -1062,8 +1055,8 @@ mod tests {
                 fee: None,
             })
         });
-
-        btc_rpc.expect_get_balance().returning(|_| Ok(Amount::ZERO));
+        mock_bitcoin.expect_get_balance().returning(|_| Ok(Amount::ZERO));
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
 
         let request = Request {
             amount: 100,

@@ -324,7 +324,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(dummy_hash(1)));
 
-        let btc_rpc = bitcoin;
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(bitcoin);
         let mut iter = reverse_stream_transactions(&btc_rpc, 20).await.unwrap();
 
         assert_eq!(iter.next().await.unwrap().unwrap().version, 0);
@@ -371,8 +371,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(dummy_hash(1)));
 
-        let btc_rpc = bitcoin;
-
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(bitcoin);
         let mut iter = reverse_stream_transactions(&btc_rpc, 20).await.unwrap();
 
         assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
@@ -396,8 +395,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(dummy_hash(1)));
 
-        let btc_rpc = bitcoin;
-
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(bitcoin);
         let mut iter = reverse_stream_transactions(&btc_rpc, 21).await.unwrap();
 
         assert!(iter.next().await.is_none());
@@ -417,8 +415,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(dummy_hash(1)));
 
-        let btc_rpc = bitcoin;
-
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(bitcoin);
         let mut iter = reverse_stream_transactions(&btc_rpc, 21).await.unwrap();
 
         assert_eq!(iter.next().await.unwrap().unwrap().version, 1);
@@ -445,8 +442,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(dummy_hash(1)));
 
-        let btc_rpc = bitcoin;
-
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(bitcoin);
         let mut iter = reverse_stream_transactions(&btc_rpc, 20).await.unwrap();
 
         assert_eq!(iter.next().await.unwrap().unwrap().version, 1);

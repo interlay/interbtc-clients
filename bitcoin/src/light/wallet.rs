@@ -519,7 +519,7 @@ mod tests {
         let wallet = Wallet {
             secp,
             network: Network::Regtest,
-            electrs: ElectrsClient::new(None, Network::Regtest),
+            electrs: ElectrsClient::new(None, Network::Regtest).unwrap(),
             key_store: Arc::new(RwLock::new(key_store)),
         };
 
