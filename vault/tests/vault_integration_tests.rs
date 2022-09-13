@@ -1243,7 +1243,7 @@ mod test_with_bitcoind {
         tracing::trace!("Step 4: check fee rate");
         // don't check for strict equality - sometimes bitcoin core decides to use
         // a higher fee
-        assert!(btc_rpc.fee_rate(new_tx.txid()).unwrap().0 >= 10);
+        assert!(btc_rpc.fee_rate(new_tx.txid()).await.unwrap().0 >= 10);
 
         tracing::trace!("Step 5: mine bitcoin block");
         let block_hash = btc_rpc.mine_block().unwrap();

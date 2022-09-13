@@ -289,7 +289,7 @@ mod tests {
                 fee_rate: SatPerVbyte,
             ) -> Result<Txid, BitcoinError>;
             fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
-            fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
+            async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
         }
     }
 

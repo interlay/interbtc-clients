@@ -6,6 +6,7 @@ pub use error::Error;
 
 use async_trait::async_trait;
 use backoff::future::retry;
+use futures::future::{join_all, try_join, try_join_all};
 use std::{sync::Arc, time::Duration};
 use tokio::{sync::Mutex, time::sleep};
 
@@ -51,9 +52,7 @@ impl BitcoinLight {
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, BitcoinError> {
         let lock = self.transaction_creation_lock.clone().lock_owned().await;
-
         let unsigned_tx = self.wallet.create_transaction(recipient.clone(), sat, request_id);
-
         let change_address = self.get_change_address()?;
 
         let mut psbt = self
@@ -66,8 +65,7 @@ impl BitcoinLight {
         Ok(LockedTransaction::new(signed_tx, recipient.to_string(), Some(lock)))
     }
 
-    // TODO: hold tx lock until inclusion
-    // otherwise electrs may report stale utxos
+    // TODO: hold tx lock until inclusion otherwise electrs may report stale utxos
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError> {
         let txid = self.electrs.send_transaction(transaction.transaction).await?;
         Ok(txid)
@@ -82,7 +80,7 @@ impl BitcoinCoreApi for BitcoinLight {
 
     async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError> {
         loop {
-            match futures::future::try_join(
+            match try_join(
                 self.electrs.get_block_hash(height),
                 self.electrs.get_blocks_tip_height(),
             )
@@ -192,7 +190,7 @@ impl BitcoinCoreApi for BitcoinLight {
         &'a self,
     ) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError> {
         let txids = self.electrs.get_raw_mempool().await?;
-        let txs = futures::future::join_all(txids.iter().map(|txid| self.get_transaction(txid, None))).await;
+        let txs = join_all(txids.iter().map(|txid| self.get_transaction(txid, None))).await;
         Ok(Box::new(txs.into_iter()))
     }
 
@@ -215,8 +213,7 @@ impl BitcoinCoreApi for BitcoinLight {
         })
         .await?;
 
-        let proof = self.get_proof(txid, &block_hash).await?;
-        let raw_tx = self.get_raw_tx(&txid, &block_hash).await?;
+        let (proof, raw_tx) = try_join(self.get_proof(txid, &block_hash), self.get_raw_tx(&txid, &block_hash)).await?;
 
         Ok(TransactionMetadata {
             txid,
@@ -280,10 +277,28 @@ impl BitcoinCoreApi for BitcoinLight {
     }
 
     fn is_in_mempool(&self, _txid: Txid) -> Result<bool, BitcoinError> {
+        // TODO: implement
         Err(BitcoinError::WalletNotFound)
     }
 
-    fn fee_rate(&self, _txid: Txid) -> Result<SatPerVbyte, BitcoinError> {
-        Err(BitcoinError::WalletNotFound)
+    async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError> {
+        let tx = self.get_transaction(&txid, None).await?;
+        let vsize = tx.get_weight().div_ceil(4) as u64;
+        let recipients_sum = tx.output.iter().map(|tx_out| tx_out.value).sum::<u64>();
+
+        let inputs = try_join_all(tx.input.iter().map(|input| async move {
+            let prev_tx = self.get_transaction(&input.previous_output.txid, None).await?;
+            let prev_out = prev_tx
+                .output
+                .get(input.previous_output.vout as usize)
+                .ok_or(Error::NoPrevOut)?;
+            Ok::<u64, BitcoinError>(prev_out.value)
+        }))
+        .await?;
+        let input_sum = inputs.iter().sum::<u64>();
+        let fee = input_sum - recipients_sum;
+
+        let fee_rate = fee.checked_div(vsize).ok_or(BitcoinError::ArithmeticError)?;
+        Ok(SatPerVbyte(fee_rate))
     }
 }

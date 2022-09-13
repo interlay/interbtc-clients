@@ -502,7 +502,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
         unimplemented!()
     }
 
-    fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError> {
+    async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError> {
         unimplemented!()
     }
 }

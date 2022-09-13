@@ -301,7 +301,7 @@ impl Request {
                 })
                 .filter(|_| futures::future::ready(auto_rbf)) // if auto-rbf is disabled, don't propagate the events
                 .try_filter_map(|x| async move {
-                    match btc_rpc.fee_rate(txid) {
+                    match btc_rpc.fee_rate(txid).await {
                         Ok(current_fee) => {
                             if x > current_fee {
                                 Ok(Some((current_fee, x)))
@@ -817,7 +817,7 @@ mod tests {
                 fee_rate: SatPerVbyte,
             ) -> Result<Txid, BitcoinError>;
             fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
-            fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
+            async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
         }
     }
 

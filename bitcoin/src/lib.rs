@@ -192,7 +192,7 @@ pub trait BitcoinCoreApi {
 
     fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error>;
 
-    fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error>;
+    async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error>;
 }
 
 struct LockedTransaction {
@@ -988,7 +988,7 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(get_tx_result.info.confirmations == 0)
     }
 
-    fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error> {
+    async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error> {
         // unfortunately we need both of these rpc results. The result of the second call
         // is not a parsed tx, but rather a GetTransactionResult.
         let tx = self.rpc.get_raw_transaction(&txid, None)?;

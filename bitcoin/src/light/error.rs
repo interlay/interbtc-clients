@@ -6,6 +6,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("No previous output for input")]
+    NoPrevOut,
     #[error("Cannot use invalid prevout")]
     InvalidPrevOut,
     #[error("Cannot construct address")]
