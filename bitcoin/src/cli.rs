@@ -1,13 +1,17 @@
 #![cfg(feature = "cli")]
 
-use crate::{error::KeyLoadingError, BitcoinCoreApi, BitcoinCoreBuilder, BitcoinLight, Error};
-use bitcoincore_rpc::{
-    bitcoin::{Network, PrivateKey},
-    Auth,
-};
+use crate::{BitcoinCoreApi, BitcoinCoreBuilder, Error};
+use bitcoincore_rpc::{bitcoin::Network, Auth};
 use clap::Parser;
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
+#[cfg(feature = "light-client")]
+use {
+    crate::{error::KeyLoadingError, BitcoinLight, PrivateKey},
+    std::path::PathBuf,
+};
+
+#[cfg(feature = "light-client")]
 fn get_wif_from_file(file_path: &PathBuf) -> Result<PrivateKey, KeyLoadingError> {
     let data = std::fs::read(file_path)?;
     let wif = String::from_utf8(data)?;
@@ -16,25 +20,16 @@ fn get_wif_from_file(file_path: &PathBuf) -> Result<PrivateKey, KeyLoadingError>
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct BitcoinOpts {
-    #[clap(
-        long,
-        conflicts_with_all(&["light", "bitcoin-wif", "network"]),
-        env = "BITCOIN_RPC_URL"
-    )]
+    #[clap(long, env = "BITCOIN_RPC_URL")]
+    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(&["light", "bitcoin-wif", "network"])))]
     pub bitcoin_rpc_url: Option<String>,
 
-    #[clap(
-        long,
-        conflicts_with_all(&["light", "bitcoin-wif", "network"]),
-        env = "BITCOIN_RPC_USER"
-    )]
+    #[clap(long, env = "BITCOIN_RPC_USER")]
+    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(&["light", "bitcoin-wif", "network"])))]
     pub bitcoin_rpc_user: Option<String>,
 
-    #[clap(
-        long,
-        conflicts_with_all(&["light", "bitcoin-wif", "network"]),
-        env = "BITCOIN_RPC_PASS"
-    )]
+    #[clap(long, env = "BITCOIN_RPC_PASS")]
+    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(&["light", "bitcoin-wif", "network"])))]
     pub bitcoin_rpc_pass: Option<String>,
 
     /// Timeout in milliseconds to wait for connection to bitcoin-core.
@@ -48,6 +43,7 @@ pub struct BitcoinOpts {
 
     /// Experimental: Run in light client mode
     #[clap(long, requires_all(&["bitcoin-wif", "network"]))]
+    #[cfg(feature = "light-client")]
     pub light: bool,
 
     /// File containing the WIF encoded Bitcoin private key
@@ -57,6 +53,7 @@ pub struct BitcoinOpts {
         conflicts_with_all(&["bitcoin-rpc-url", "bitcoin-rpc-user", "bitcoin-rpc-pass"]),
         parse(from_os_str)
     )]
+    #[cfg(feature = "light-client")]
     pub bitcoin_wif: Option<PathBuf>,
 
     /// Bitcoin network, only needed for
@@ -66,6 +63,7 @@ pub struct BitcoinOpts {
         requires = "light",
         conflicts_with_all(&["bitcoin-rpc-url", "bitcoin-rpc-user", "bitcoin-rpc-pass"]),
     )]
+    #[cfg(feature = "light-client")]
     pub network: Option<Network>,
 }
 
@@ -84,25 +82,42 @@ impl BitcoinOpts {
             .set_electrs_url(self.electrs_url.clone())
     }
 
+    #[cfg(feature = "light-client")]
+    fn new_light_client(&self) -> Result<BitcoinLight, Error> {
+        Ok(BitcoinLight::new(
+            self.electrs_url.clone(),
+            self.network.expect("Network not set"),
+            get_wif_from_file(self.bitcoin_wif.as_ref().expect("Private key not set"))?,
+        )?)
+    }
+
     pub async fn new_client(
         &self,
         wallet_name: Option<String>,
     ) -> Result<Arc<dyn BitcoinCoreApi + Send + Sync>, Error> {
-        Ok(if self.light {
-            Arc::new(BitcoinLight::new(
-                self.electrs_url.clone(),
-                self.network.expect("Network not set"),
-                get_wif_from_file(self.bitcoin_wif.as_ref().expect("Private key not set"))?,
-            )?)
-        } else {
-            let bitcoin_core = self
-                .new_client_builder(wallet_name)
-                .build_and_connect(Duration::from_millis(self.bitcoin_connection_timeout_ms))
-                .await?;
-            bitcoin_core.sync().await?;
-            bitcoin_core.create_or_load_wallet().await?;
-            Arc::new(bitcoin_core)
-        })
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "light-client")] {
+                Ok(if self.light {
+                    Arc::new(self.new_light_client()?)
+                } else {
+                    let bitcoin_core = self
+                        .new_client_builder(wallet_name)
+                        .build_and_connect(Duration::from_millis(self.bitcoin_connection_timeout_ms))
+                        .await?;
+                    bitcoin_core.sync().await?;
+                    bitcoin_core.create_or_load_wallet().await?;
+                    Arc::new(bitcoin_core)
+                })
+            } else {
+                let bitcoin_core = self
+                    .new_client_builder(wallet_name)
+                    .build_and_connect(Duration::from_millis(self.bitcoin_connection_timeout_ms))
+                    .await?;
+                bitcoin_core.sync().await?;
+                bitcoin_core.create_or_load_wallet().await?;
+                Ok(Arc::new(bitcoin_core))
+            }
+        }
     }
 
     pub fn new_client_with_network(
@@ -110,14 +125,16 @@ impl BitcoinOpts {
         wallet_name: Option<String>,
         network: Network,
     ) -> Result<Arc<dyn BitcoinCoreApi + Send + Sync>, Error> {
-        Ok(if self.light {
-            Arc::new(BitcoinLight::new(
-                self.electrs_url.clone(),
-                network,
-                get_wif_from_file(self.bitcoin_wif.as_ref().expect("Private key not set"))?,
-            )?)
-        } else {
-            Arc::new(self.new_client_builder(wallet_name).build_with_network(network)?)
-        })
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "light-client")] {
+                Ok(if self.light {
+                    Arc::new(self.new_light_client()?)
+                } else {
+                    Arc::new(self.new_client_builder(wallet_name).build_with_network(network)?)
+                })
+            } else {
+                Ok(Arc::new(self.new_client_builder(wallet_name).build_with_network(network)?))
+            }
+        }
     }
 }

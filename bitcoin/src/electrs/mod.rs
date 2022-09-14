@@ -69,6 +69,7 @@ impl ElectrsClient {
         Ok(self.cli.get(url).send().await?.error_for_status()?.text().await?)
     }
 
+    // only use this for parsing valid json, it will fail on strings
     async fn get_and_decode<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, Error> {
         let body = self.get(path).await?;
         Ok(serde_json::from_str(&body)?)

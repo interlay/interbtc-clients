@@ -67,6 +67,7 @@ impl BitcoinLight {
     }
 
     // TODO: hold tx lock until inclusion otherwise electrs may report stale utxos
+    // need to check when electrs knows that a utxo has been spent
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError> {
         let txid = self.electrs.send_transaction(transaction.transaction).await?;
         Ok(txid)
@@ -227,7 +228,7 @@ impl BitcoinCoreApi for BitcoinLight {
     }
 
     async fn bump_fee(&self, _txid: &Txid, _address: Address, _fee_rate: SatPerVbyte) -> Result<Txid, BitcoinError> {
-        unimplemented!()
+        todo!()
     }
 
     async fn create_and_send_transaction(

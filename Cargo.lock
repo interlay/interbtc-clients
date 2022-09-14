@@ -589,6 +589,7 @@ dependencies = [
  "async-trait",
  "backoff 0.3.0",
  "bitcoincore-rpc",
+ "cfg-if 1.0.0",
  "clap",
  "esplora-btc-api",
  "futures 0.3.21",
