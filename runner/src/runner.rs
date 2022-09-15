@@ -7,6 +7,7 @@ use nix::{
     sys::signal::{self, Signal},
     unistd::Pid,
 };
+use sha2::{Digest, Sha256};
 use signal_hook_tokio::SignalsInfo;
 use sp_core::{hexdisplay::AsBytesRef, H256};
 use std::{
@@ -91,12 +92,19 @@ pub struct ClientRelease {
 /// Wrapper around `ClientRelease`, which includes details for running the executable.
 #[derive(Default, Eq, PartialEq, Debug, Clone)]
 pub struct DownloadedRelease {
-    /// Release data read from the parachain
-    pub release: ClientRelease,
+    /// The SHA256 checksum of the client binary.
+    pub checksum: H256,
     /// OS path where this release is stored
     pub path: PathBuf,
     /// Name of the executable
     pub bin_name: String,
+}
+
+fn sha256sum(bytes: &[u8]) -> Vec<u8> {
+    let mut hasher = Sha256::default();
+    // input compressed public key
+    hasher.input(bytes);
+    hasher.result().as_slice().to_vec()
 }
 
 /// Per-network manager of the client executable
@@ -121,9 +129,21 @@ impl Runner {
         }
     }
 
+    fn try_load_downloaded_binary(runner: &mut impl RunnerExt) -> Result<(), Error> {
+        let (bin_name, bin_path) = runner.get_bin_path()?;
+        let file_content = fs::read(bin_path.clone()).map_err(|_| Error::NoDownloadedRelease)?;
+        let downloaded_release = DownloadedRelease {
+            checksum: H256::from_slice(&sha256sum(&file_content)),
+            path: bin_path,
+            bin_name,
+        };
+        runner.set_downloaded_release(Some(downloaded_release));
+        Ok(())
+    }
+
     async fn download_binary(runner: &mut impl RunnerExt, release: ClientRelease) -> Result<DownloadedRelease, Error> {
         if let Some(downloaded_release) = runner.downloaded_release() {
-            if downloaded_release.release.checksum.eq(&release.checksum) {
+            if downloaded_release.checksum.eq(&release.checksum) {
                 log::info!("The on-chain release is already downloaded, skipping re-download");
                 return Ok(downloaded_release.clone());
             }
@@ -150,9 +170,9 @@ impl Runner {
         file.sync_all()?;
 
         let downloaded_release = DownloadedRelease {
-            release,
+            checksum: release.checksum,
             path: bin_path,
-            bin_name: bin_name.to_string(),
+            bin_name,
         };
         runner.set_downloaded_release(Some(downloaded_release.clone()));
         Ok(downloaded_release)
@@ -268,13 +288,15 @@ impl Runner {
     async fn auto_update(runner: &mut impl RunnerExt) -> Result<(), Error> {
         // Create all directories for the `download_path` if they don't already exist.
         fs::create_dir_all(&runner.download_path())?;
-        let release = runner
-            .try_get_release()
-            .await?
-            .expect("No current client release set on-chain.");
-        // WARNING: This will overwrite any pre-existing binary with the same name
-        // TODO: Check if a release with the same version is already at the `download_path`
-        runner.download_binary(release).await?;
+
+        // If there is no binary on disk, download one
+        if runner.try_load_downloaded_binary().is_err() {
+            let release = runner
+                .try_get_release()
+                .await?
+                .expect("No current client release set on-chain.");
+            runner.download_binary(release).await?;
+        }
 
         runner.run_binary()?;
 
@@ -283,7 +305,7 @@ impl Runner {
             if let Some(new_release) = runner.try_get_release().await? {
                 let maybe_downloaded_release = runner.downloaded_release();
                 let downloaded_release = maybe_downloaded_release.as_ref().ok_or(Error::NoDownloadedRelease)?;
-                if new_release.checksum != downloaded_release.release.checksum {
+                if new_release.checksum != downloaded_release.checksum {
                     log::info!("Found new client release, updating...");
 
                     // Wait for child process to finish completely.
@@ -393,6 +415,8 @@ pub trait RunnerExt {
     fn check_child_proc_alive(&mut self) -> Result<bool, Error>;
     /// If the child process crashed, start it again
     fn maybe_restart_client(&mut self) -> Result<(), Error>;
+    /// If a client binary exists on disk, load it.
+    fn try_load_downloaded_binary(&mut self) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -479,6 +503,10 @@ impl RunnerExt for Runner {
 
     fn maybe_restart_client(&mut self) -> Result<(), Error> {
         Runner::maybe_restart_client(self)
+    }
+
+    fn try_load_downloaded_binary(&mut self) -> Result<(), Error> {
+        Runner::try_load_downloaded_binary(self)
     }
 }
 
@@ -572,6 +600,16 @@ mod tests {
 
     use sysinfo::{Pid, System, SystemExt};
 
+    macro_rules! assert_err {
+        ($result:expr, $err:pat) => {{
+            match $result {
+                Err($err) => (),
+                Ok(v) => panic!("assertion failed: Ok({:?})", v),
+                _ => panic!("expected: Err($err)"),
+            }
+        }};
+    }
+
     mockall::mock! {
         Runner {}
 
@@ -596,6 +634,7 @@ mod tests {
             fn auto_update(&mut self) ->  BoxFuture<'static, Result<(), Error>>;
             fn check_child_proc_alive(&mut self) -> Result<bool, Error>;
             fn maybe_restart_client(&mut self) -> Result<(), Error>;
+            fn try_load_downloaded_binary(&mut self) -> Result<(), Error>;
         }
 
         #[async_trait]
@@ -636,7 +675,7 @@ mod tests {
         assert_eq!(
             downloaded_release,
             DownloadedRelease {
-                release: client_release,
+                checksum: client_release.checksum,
                 path: mock_path.clone(),
                 bin_name: mock_bin_name
             }
@@ -676,7 +715,7 @@ mod tests {
             .returning(|_| panic!("Unexpected call"));
 
         // The latest on-chain release matches the currently downloaded one
-        let new_downloaded_release = Runner::download_binary(&mut runner, downloaded_release.release.clone())
+        let new_downloaded_release = Runner::download_binary(&mut runner, ClientRelease::default())
             .await
             .unwrap();
 
@@ -706,10 +745,7 @@ mod tests {
 
         let mut runner = MockRunner::default();
         let downloaded_release = DownloadedRelease {
-            release: ClientRelease {
-                uri: String::default(),
-                checksum: H256::default(),
-            },
+            checksum: H256::default(),
             path: mock_path.clone(),
             bin_name: String::default(),
         };
@@ -785,7 +821,7 @@ mod tests {
         .collect();
 
         let mock_downloaded_release = DownloadedRelease {
-            release: ClientRelease::default(),
+            checksum: H256::default(),
             path: mock_executable_path.clone(),
             bin_name: String::default(),
         };
@@ -855,5 +891,116 @@ mod tests {
         let mut runner = MockRunner::default();
         runner.expect_child_proc().return_var(None);
         assert_eq!(Runner::terminate_proc_and_wait(&mut runner).unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_runner_loading_binary_fails() {
+        let mut runner = MockRunner::default();
+
+        runner.expect_get_bin_path().returning(move || {
+            Ok((
+                "client".to_string(),
+                TempDir::new("runner-tests").unwrap().into_path().join("client"),
+            ))
+        });
+        assert_err!(
+            Runner::try_load_downloaded_binary(&mut runner),
+            Error::NoDownloadedRelease
+        );
+    }
+
+    #[tokio::test]
+    async fn test_runner_loading_existing_binary_works() {
+        let tmp = TempDir::new("runner-tests").expect("failed to create tempdir");
+        let mock_path = tmp.path().clone().join("client");
+        let moved_mock_path = tmp.path().clone().join("client");
+        let mut runner = MockRunner::default();
+
+        {
+            let mut file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(mock_path.clone())
+                .unwrap();
+            file.write_all(b"dummy file").unwrap();
+            file.sync_all().unwrap();
+        }
+
+        runner
+            .expect_get_bin_path()
+            .returning(move || Ok(("client".to_string(), moved_mock_path.clone())));
+        runner.expect_set_downloaded_release().returning(|release_option| {
+            let checksum = release_option.unwrap().checksum;
+            let expected_checksum = H256::from_slice(&[
+                81, 216, 24, 152, 19, 116, 164, 71, 240, 135, 102, 16, 253, 43, 174, 235, 145, 29, 213, 173, 96, 198,
+                230, 180, 210, 182, 182, 121, 139, 165, 192, 113,
+            ]);
+            assert_eq!(checksum, expected_checksum);
+        });
+        Runner::try_load_downloaded_binary(&mut runner).unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_runner_nonexistent_binary_prompts_download() {
+        let tmp = TempDir::new("runner-tests").expect("failed to create tempdir");
+        let mock_path = tmp.path().clone().join("client");
+        let mut runner = MockRunner::default();
+
+        runner.expect_download_path().return_const(mock_path.clone());
+        runner
+            .expect_try_load_downloaded_binary()
+            .returning(|| Err(Error::NoDownloadedRelease));
+
+        runner
+            .expect_try_get_release()
+            .once()
+            .returning(|| Ok(Some(ClientRelease::default())));
+        runner.expect_download_binary().once().returning(|release| {
+            assert_eq!(release, ClientRelease::default());
+            Ok(())
+        });
+
+        // return arbitrary error to terminate the `auto_update` function
+        runner
+            .expect_run_binary()
+            .once()
+            .returning(|| Err(Error::ProcessTerminationFailure));
+
+        assert_err!(Runner::auto_update(&mut runner).await, Error::ProcessTerminationFailure);
+    }
+
+    #[tokio::test]
+    async fn test_runner_different_checksum_prompts_download() {
+        let tmp = TempDir::new("runner-tests").expect("failed to create tempdir");
+        let mock_path = tmp.path().clone().join("client");
+        let mut runner = MockRunner::default();
+
+        runner.expect_download_path().return_const(mock_path.clone());
+        runner.expect_try_load_downloaded_binary().returning(|| Ok(()));
+        runner.expect_run_binary().once().returning(|| Ok(()));
+        runner.expect_maybe_restart_client().once().returning(|| Ok(()));
+
+        runner.expect_try_get_release().once().returning(|| {
+            Ok(Some(ClientRelease {
+                uri: Default::default(),
+                checksum: H256::from_low_u64_be(10),
+            }))
+        });
+        runner
+            .expect_downloaded_release()
+            .once()
+            .return_const(Some(DownloadedRelease {
+                path: Default::default(),
+                bin_name: Default::default(),
+                checksum: H256::from_low_u64_be(11),
+            }));
+
+        // return arbitrary error to terminate the `auto_update` function
+        runner
+            .expect_terminate_proc_and_wait()
+            .returning(|| Err(Error::ProcessTerminationFailure));
+
+        assert_err!(Runner::auto_update(&mut runner).await, Error::ProcessTerminationFailure);
     }
 }

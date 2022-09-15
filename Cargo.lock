@@ -9745,6 +9745,7 @@ dependencies = [
  "nix",
  "parity-scale-codec",
  "reqwest",
+ "sha2 0.8.2",
  "signal-hook",
  "signal-hook-tokio",
  "sp-core 6.0.0 (git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.24)",
