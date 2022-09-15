@@ -498,11 +498,11 @@ impl BitcoinCoreApi for MockBitcoinCore {
         unimplemented!()
     }
 
-    fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError> {
+    async fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError> {
         unimplemented!()
     }
 
-    fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError> {
+    async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError> {
         unimplemented!()
     }
 }

@@ -2,13 +2,13 @@ use crate::{
     cancellation::Event, error::Error, execution::Request, metrics::publish_expected_bitcoin_balance,
     system::VaultIdManager,
 };
-use bitcoin::{BitcoinCoreApi, Error as BitcoinError};
+use bitcoin::Error as BitcoinError;
 use futures::{channel::mpsc::Sender, future::try_join3, SinkExt};
 use runtime::{
     AcceptReplaceEvent, BtcAddress, CollateralBalancesPallet, ExecuteReplaceEvent, InterBtcParachain, PartialAddress,
     PrettyPrint, ReplacePallet, RequestReplaceEvent, UtilFuncs, VaultId, VaultRegistryPallet,
 };
-use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
+use service::{spawn_cancelable, DynBitcoinCoreApi, Error as ServiceError, ShutdownSender};
 use std::time::Duration;
 
 /// Listen for AcceptReplaceEvent directed at this vault and continue the replacement
@@ -19,10 +19,10 @@ use std::time::Duration;
 /// * `parachain_rpc` - the parachain RPC handle
 /// * `btc_rpc` - the bitcoin RPC handle
 /// * `num_confirmations` - the number of bitcoin confirmation to await
-pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn listen_for_accept_replace(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
-    vault_id_manager: VaultIdManager<B>,
+    vault_id_manager: VaultIdManager,
     num_confirmations: u32,
     payment_margin: Duration,
     auto_rbf: bool,
@@ -88,9 +88,9 @@ pub async fn listen_for_accept_replace<B: BitcoinCoreApi + Clone + Send + Sync +
 /// * `parachain_rpc` - the parachain RPC handle
 /// * `event_channel` - the channel over which to signal events
 /// * `accept_replace_requests` - if true, we attempt to accept replace requests
-pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn listen_for_replace_requests(
     parachain_rpc: InterBtcParachain,
-    btc_rpc: VaultIdManager<B>,
+    btc_rpc: VaultIdManager,
     event_channel: Sender<Event>,
     accept_replace_requests: bool,
 ) -> Result<(), ServiceError> {
@@ -144,14 +144,11 @@ pub async fn listen_for_replace_requests<B: BitcoinCoreApi + Clone + Send + Sync
 
 /// Attempts to accept a replace request. Does not retry RPC calls upon
 /// failure, since nothing is at stake at this point
-pub async fn handle_replace_request<
-    B: BitcoinCoreApi + Clone,
-    P: CollateralBalancesPallet + ReplacePallet + VaultRegistryPallet,
->(
+pub async fn handle_replace_request<'a, P: CollateralBalancesPallet + ReplacePallet + VaultRegistryPallet>(
     parachain_rpc: P,
-    btc_rpc: B,
-    event: &RequestReplaceEvent,
-    vault_id: &VaultId,
+    btc_rpc: DynBitcoinCoreApi,
+    event: &'a RequestReplaceEvent,
+    vault_id: &'a VaultId,
 ) -> Result<(), Error> {
     let collateral_currency = vault_id.collateral_currency();
 
@@ -212,14 +209,14 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use bitcoin::{
-        json, Address, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, Network, PrivateKey, PublicKey,
-        SatPerVbyte, Transaction, TransactionMetadata, Txid,
+        json, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, Network,
+        PrivateKey, PublicKey, SatPerVbyte, Transaction, TransactionMetadata, Txid,
     };
     use runtime::{
         AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcReplaceRequest,
         InterBtcVault, Token, DOT, H256, IBTC,
     };
-    use std::str::FromStr;
+    use std::{str::FromStr, sync::Arc};
 
     macro_rules! assert_err {
         ($result:expr, $err:pat) => {{
@@ -291,8 +288,8 @@ mod tests {
                 address: Address,
                 fee_rate: SatPerVbyte,
             ) -> Result<Txid, BitcoinError>;
-            fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
-            fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
+            async fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
+            async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
         }
     }
 
@@ -361,10 +358,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_replace_request_with_insufficient_balance() {
-        let mut bitcoin = MockBitcoin::default();
-        bitcoin
+        let mut mock_bitcoin = MockBitcoin::default();
+        mock_bitcoin
             .expect_get_new_address()
             .returning(|| Ok(Address::from_str("bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f").unwrap()));
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
 
         let mut parachain_rpc = MockProvider::default();
         parachain_rpc
@@ -381,17 +379,18 @@ mod tests {
             griefing_collateral: Default::default(),
         };
         assert_err!(
-            handle_replace_request(parachain_rpc, bitcoin, &event, &dummy_vault_id()).await,
+            handle_replace_request(parachain_rpc, btc_rpc, &event, &dummy_vault_id()).await,
             Error::InsufficientFunds
         );
     }
 
     #[tokio::test]
     async fn test_handle_replace_request_with_sufficient_balance() {
-        let mut bitcoin = MockBitcoin::default();
-        bitcoin
+        let mut mock_bitcoin = MockBitcoin::default();
+        mock_bitcoin
             .expect_get_new_address()
             .returning(|| Ok(Address::from_str("bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f").unwrap()));
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
 
         let mut parachain_rpc = MockProvider::default();
         parachain_rpc
@@ -408,7 +407,7 @@ mod tests {
             amount: Default::default(),
             griefing_collateral: Default::default(),
         };
-        handle_replace_request(parachain_rpc, bitcoin, &event, &dummy_vault_id())
+        handle_replace_request(parachain_rpc, btc_rpc, &event, &dummy_vault_id())
             .await
             .unwrap();
     }

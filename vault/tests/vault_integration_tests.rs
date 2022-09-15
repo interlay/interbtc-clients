@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use bitcoin::{stream_blocks, BitcoinCoreApi, SatPerVbyte, Transaction, TransactionExt};
+use bitcoin::{stream_blocks, SatPerVbyte, TransactionExt};
 use frame_support::assert_ok;
 use futures::{
     channel::mpsc,
@@ -11,10 +11,12 @@ use runtime::{
     InterBtcRedeemRequest, IssuePallet, PartialAddress, RedeemPallet, ReplacePallet, SudoPallet, UtilFuncs, VaultId,
     VaultRegistryPallet,
 };
+use service::DynBitcoinCoreApi;
 use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
 use std::{sync::Arc, time::Duration};
 use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager, ZeroDelay};
+
 const TIMEOUT: Duration = Duration::from_secs(90);
 
 const DEFAULT_NATIVE_CURRENCY: CurrencyId = Token(KINT);
@@ -86,7 +88,9 @@ async fn test_redeem_succeeds() {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-        let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
+
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
@@ -145,7 +149,9 @@ async fn test_replace_succeeds() {
         );
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-        let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
+
         let btc_rpcs = vec![(new_vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let new_btc_rpc_master_wallet = btc_rpc.clone();
         let _vault_id_manager =
@@ -245,7 +251,8 @@ async fn test_withdraw_replace_succeeds() {
         );
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-        let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
 
         let issue_amount = 100000;
         let vault_collateral = get_required_vault_collateral_for_issue(
@@ -319,7 +326,9 @@ async fn test_cancellation_succeeds() {
         );
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-        let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
+
         let btc_rpcs = vec![(new_vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let new_btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager =
@@ -516,7 +525,9 @@ async fn test_refund_succeeds() {
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
         set_bitcoin_fees(&relayer_provider, FixedU128::from(0)).await;
 
-        let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core.clone());
+
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
@@ -576,7 +587,7 @@ async fn test_refund_succeeds() {
             assert_eq!(refund_execution.amount, (over_payment as f64 / 1.005) as u128);
 
             // fetch the tx that was used to execute the redeem
-            btc_rpc
+            mock_bitcoin_core
                 .find_transaction(|tx| tx.get_op_return() == Some(refund_request.refund_id))
                 .await
                 .expect("transaction not found");
@@ -593,7 +604,9 @@ async fn test_issue_overpayment_succeeds() {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-        let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
+
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
@@ -674,7 +687,9 @@ async fn test_automatic_issue_execution_succeeds() {
         );
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-        let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
+
         let btc_rpcs = vec![(vault2_id.clone(), btc_rpc.clone())].into_iter().collect();
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(vault2_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
@@ -765,7 +780,9 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
         );
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-        let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core.clone());
+
         let btc_rpcs = vec![(vault2_id.clone(), btc_rpc.clone())].into_iter().collect();
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(vault2_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
@@ -798,7 +815,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
             tracing::warn!("REQUESTED ISSUE: {:?}", issue);
 
             assert_ok!(
-                btc_rpc
+                mock_bitcoin_core
                     .send_to_address_with_many_outputs(
                         issue.vault_address.to_address(btc_rpc.network()).unwrap(),
                         (issue.amount + issue.fee) as u64,
@@ -845,7 +862,9 @@ async fn test_execute_open_requests_succeeds() {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-        let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core.clone());
+
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
@@ -895,7 +914,7 @@ async fn test_execute_open_requests_succeeds() {
                 .await
         );
 
-        let transaction = btc_rpc
+        let transaction = mock_bitcoin_core
             .create_transaction(
                 address.to_address(btc_rpc.network()).unwrap(),
                 redeems[1].amount_btc as u64,
@@ -904,7 +923,7 @@ async fn test_execute_open_requests_succeeds() {
             )
             .await
             .unwrap();
-        btc_rpc.send_to_mempool(transaction).await;
+        mock_bitcoin_core.send_to_mempool(transaction).await;
 
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
         join3(
@@ -925,7 +944,7 @@ async fn test_execute_open_requests_succeeds() {
         .await;
 
         // now move from mempool into chain and await the remaining redeem
-        btc_rpc.flush_mempool().await;
+        mock_bitcoin_core.flush_mempool().await;
         test_service(
             periodically_produce_blocks(user_provider.clone()),
             assert_redeem_event(TIMEOUT, user_provider, redeem_ids[1]),
@@ -941,7 +960,8 @@ async fn test_off_chain_liquidation() {
         let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-        let btc_rpc = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
 
         let issue_amount = 100000;
         let vault_collateral =
@@ -978,7 +998,9 @@ async fn test_shutdown() {
         );
 
         // register a vault..
-        let btc_rpc = MockBitcoinCore::new(sudo_provider.clone()).await;
+        let mock_bitcoin_core = MockBitcoinCore::new(sudo_provider.clone()).await;
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
+
         assert_ok!(
             sudo_provider
                 .register_vault_with_public_key(
@@ -1052,7 +1074,7 @@ impl InterBtcParachainExt for InterBtcParachain {
 
 #[cfg(feature = "uses-bitcoind")]
 mod test_with_bitcoind {
-    use bitcoin::BitcoinCore;
+    use bitcoin::{BitcoinCore, BitcoinCoreApi, Transaction};
     use runtime::BtcRelayPallet;
     use vault::service::Runner;
 
@@ -1066,14 +1088,16 @@ mod test_with_bitcoind {
         use std::env::var;
 
         let opts = BitcoinOpts {
-            bitcoin_rpc_url: var("BITCOIN_RPC_URL").expect("BITCOIN_RPC_URL not set").to_string(),
-            bitcoin_rpc_user: var("BITCOIN_RPC_USER").expect("BITCOIN_RPC_USER not set").to_string(),
-            bitcoin_rpc_pass: var("BITCOIN_RPC_PASS").expect("BITCOIN_RPC_PASS not set").to_string(),
+            bitcoin_rpc_url: Some(var("BITCOIN_RPC_URL").expect("BITCOIN_RPC_URL not set").to_string()),
+            bitcoin_rpc_user: Some(var("BITCOIN_RPC_USER").expect("BITCOIN_RPC_USER not set").to_string()),
+            bitcoin_rpc_pass: Some(var("BITCOIN_RPC_PASS").expect("BITCOIN_RPC_PASS not set").to_string()),
             bitcoin_connection_timeout_ms: 10000,
             electrs_url: None,
+            ..Default::default()
         };
         let ret = opts
-            .new_client_with_network(Some("regtest-wallet".to_string()), Network::Regtest)
+            .new_client_builder(Some("regtest-wallet".to_string()))
+            .build_with_network(Network::Regtest)
             .unwrap();
         ret.create_or_load_wallet().await.unwrap();
 
@@ -1088,7 +1112,7 @@ mod test_with_bitcoind {
     /// request, pay and execute an issue
     pub async fn assert_issue_bitcoind(
         parachain_rpc: &InterBtcParachain,
-        btc_rpc: &BitcoinCore,
+        bitcoin_core: &BitcoinCore,
         vault_id: &VaultId,
         amount: u128,
     ) {
@@ -1096,16 +1120,20 @@ mod test_with_bitcoind {
 
         let fee_rate = SatPerVbyte(1000);
 
-        let metadata = btc_rpc
-            .send_to_address(
-                issue.vault_address.to_address(btc_rpc.network()).unwrap(),
+        // if auto-mining somehow is not enabled
+        // we should timeout this call
+        let metadata = with_timeout(
+            bitcoin_core.send_to_address(
+                issue.vault_address.to_address(bitcoin_core.network()).unwrap(),
                 (issue.amount + issue.fee) as u64,
                 None,
                 fee_rate,
                 0,
-            )
-            .await
-            .unwrap();
+            ),
+            TIMEOUT,
+        )
+        .await
+        .unwrap();
 
         parachain_rpc
             .wait_for_block_in_relay(H256Le::from_bytes_le(&metadata.block_hash), Some(0))
@@ -1243,7 +1271,7 @@ mod test_with_bitcoind {
         tracing::trace!("Step 4: check fee rate");
         // don't check for strict equality - sometimes bitcoin core decides to use
         // a higher fee
-        assert!(btc_rpc.fee_rate(new_tx.txid()).unwrap().0 >= 10);
+        assert!(btc_rpc.fee_rate(new_tx.txid()).await.unwrap().0 >= 10);
 
         tracing::trace!("Step 5: mine bitcoin block");
         let block_hash = btc_rpc.mine_block().unwrap();
@@ -1264,9 +1292,10 @@ mod test_with_bitcoind {
             let relayer_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
             let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
 
-            let mut btc_rpc = get_bitcoin_core().await;
+            let mut bitcoin_core = get_bitcoin_core().await;
+            let btc_rpc: DynBitcoinCoreApi = Arc::new(bitcoin_core.clone());
 
-            let height = btc_rpc.get_block_count().await.unwrap() as u32;
+            let height = bitcoin_core.get_block_count().await.unwrap() as u32;
             let relayer = Runner::new(
                 btc_rpc.clone(),
                 user_provider.clone(),
@@ -1281,6 +1310,7 @@ mod test_with_bitcoind {
                 Arc::new(Box::new(ZeroDelay)),
             );
 
+            tracing::trace!("Initializing relay");
             relayer.submit_next().await.unwrap(); // make sure the relay is initialized
 
             let parachain_miner = join(run_relayer(relayer), periodically_produce_blocks(user_provider.clone()));
@@ -1296,6 +1326,7 @@ mod test_with_bitcoind {
                 get_required_vault_collateral_for_issue(&vault_provider, issue_amount, vault_id.collateral_currency())
                     .await;
 
+            tracing::trace!("Registering public key");
             assert_ok!(
                 vault_provider
                     .register_vault_with_public_key(
@@ -1308,8 +1339,8 @@ mod test_with_bitcoind {
 
             // set automining for the issue below. Note that the btc_rpc inside
             // vault_id_manager is a clone that still has auto mining disabled
-            btc_rpc.set_auto_mining(true);
-            assert_issue_bitcoind(&user_provider, &btc_rpc, &vault_id, issue_amount).await;
+            bitcoin_core.set_auto_mining(true);
+            assert_issue_bitcoind(&user_provider, &bitcoin_core, &vault_id, issue_amount).await;
 
             // setup the service to test including necessary auxiliary services
             let service = join(
@@ -1334,7 +1365,7 @@ mod test_with_bitcoind {
                 test_execute_redeem_succeeds_after_non_increasing_fee_change(
                     user_provider.clone(),
                     relayer_provider.clone(),
-                    btc_rpc.clone(),
+                    bitcoin_core.clone(),
                     vault_id.clone(),
                 )
                 .await;
@@ -1342,7 +1373,7 @@ mod test_with_bitcoind {
                 test_execute_redeem_succeeds_after_fee_bump(
                     user_provider.clone(),
                     relayer_provider.clone(),
-                    btc_rpc.clone(),
+                    bitcoin_core.clone(),
                     vault_id.clone(),
                 )
                 .await;

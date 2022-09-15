@@ -1,20 +1,20 @@
 use crate::{
     delay::RandomDelay, metrics::publish_expected_bitcoin_balance, Error, Event, IssueRequests, VaultIdManager,
 };
-use bitcoin::{BitcoinCoreApi, BlockHash, Error as BitcoinError, PublicKey, Transaction, TransactionExt};
+use bitcoin::{BlockHash, Error as BitcoinError, PublicKey, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt, TryFutureExt};
 use runtime::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, ExecuteIssueEvent, H256Le, InterBtcParachain,
     IssuePallet, IssueRequestStatus, PartialAddress, PrettyPrint, RequestIssueEvent, UtilFuncs, VaultId, H256,
 };
-use service::Error as ServiceError;
+use service::{DynBitcoinCoreApi, Error as ServiceError};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 // initialize `issue_set` with currently open issues, and return the block height
 // from which to start watching the bitcoin chain
-pub(crate) async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    bitcoin_core: &B,
+pub(crate) async fn initialize_issue_set(
+    bitcoin_core: &DynBitcoinCoreApi,
     btc_parachain: &InterBtcParachain,
     issue_set: &Arc<IssueRequests>,
 ) -> Result<u32, Error> {
@@ -36,8 +36,8 @@ pub(crate) async fn initialize_issue_set<B: BitcoinCoreApi + Clone + Send + Sync
 
 /// execute issue requests on best-effort (i.e. don't retry on error),
 /// returns an error if stream ends, otherwise runs forever
-pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    bitcoin_core: B,
+pub async fn process_issue_requests(
+    bitcoin_core: DynBitcoinCoreApi,
     btc_parachain: InterBtcParachain,
     issue_set: Arc<IssueRequests>,
     btc_start_height: u32,
@@ -71,8 +71,8 @@ pub async fn process_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 's
     Err(ServiceError::ClientShutdown)
 }
 
-pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    bitcoin_core: &B,
+pub async fn add_keys_from_past_issue_request(
+    bitcoin_core: &DynBitcoinCoreApi,
     btc_parachain: &InterBtcParachain,
     vault_id: &VaultId,
 ) -> Result<(), Error> {
@@ -137,8 +137,8 @@ pub async fn add_keys_from_past_issue_request<B: BitcoinCoreApi + Clone + Send +
 }
 
 /// execute issue requests with a matching Bitcoin payment
-async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    bitcoin_core: B,
+async fn process_transaction_and_execute_issue(
+    bitcoin_core: DynBitcoinCoreApi,
     btc_parachain: InterBtcParachain,
     issue_set: Arc<IssueRequests>,
     num_confirmations: u32,
@@ -237,8 +237,8 @@ async fn process_transaction_and_execute_issue<B: BitcoinCoreApi + Clone + Send 
 }
 
 /// Import the deposit key using the on-chain key derivation scheme
-async fn add_new_deposit_key<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    bitcoin_core: &B,
+async fn add_new_deposit_key(
+    bitcoin_core: &DynBitcoinCoreApi,
     secure_id: H256,
     public_key: BtcPublicKey,
 ) -> Result<(), Error> {
@@ -266,8 +266,8 @@ async fn add_new_deposit_key<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
 /// * `btc_parachain` - the parachain RPC handle
 /// * `event_channel` - the channel over which to signal events
 /// * `issue_set` - all issue ids observed since vault started
-pub async fn listen_for_issue_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
-    btc_rpc: VaultIdManager<B>,
+pub async fn listen_for_issue_requests(
+    btc_rpc: VaultIdManager,
     btc_parachain: InterBtcParachain,
     event_channel: Sender<Event>,
     issue_set: Arc<IssueRequests>,

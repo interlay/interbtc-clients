@@ -1,4 +1,4 @@
-use crate::BitcoinError;
+use crate::{BitcoinError, BitcoinLightError, ElectrsError};
 use bitcoincore_rpc::{
     bitcoin::{
         consensus::encode::Error as BitcoinEncodeError,
@@ -9,11 +9,20 @@ use bitcoincore_rpc::{
     jsonrpc::{error::RpcError, Error as JsonRpcError},
 };
 use hex::FromHexError;
-use reqwest::Error as ReqwestError;
 use serde_json::Error as SerdeJsonError;
+use std::{io::Error as IoError, num::TryFromIntError, string::FromUtf8Error};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
-use url::ParseError;
+
+#[derive(Error, Debug)]
+pub enum KeyLoadingError {
+    #[error("IoError: {0}")]
+    IoError(#[from] IoError),
+    #[error("FromUtf8Error: {0}")]
+    FromUtf8Error(#[from] FromUtf8Error),
+    #[error("KeyError: {0}")]
+    KeyError(#[from] KeyError),
+}
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -23,8 +32,6 @@ pub enum Error {
     BitcoinError(#[from] BitcoinError),
     #[error("ConversionError: {0}")]
     ConversionError(#[from] ConversionError),
-    #[error("Error occurred in callback: {0}")]
-    CallbackError(Box<dyn std::error::Error + Send + Sync>),
     #[error("Json error: {0}")]
     SerdeJsonError(#[from] SerdeJsonError),
     #[error("Secp256k1Error: {0}")]
@@ -33,21 +40,23 @@ pub enum Error {
     KeyError(#[from] KeyError),
     #[error("Timeout: {0}")]
     TimeElapsed(#[from] Elapsed),
-    #[error("ReqwestError: {0}")]
-    ReqwestError(#[from] ReqwestError),
-    #[error("ParseError: {0}")]
-    ParseError(#[from] ParseError),
-    #[error("Connected to incompatable bitcoin core version: {0}")]
-    IncompatibleVersion(usize),
+    #[error(transparent)]
+    TryFromIntError(#[from] TryFromIntError),
+    #[error("LightClientError: {0}")]
+    LightClientError(#[from] BitcoinLightError),
+    #[error("ElectrsError: {0}")]
+    ElectrsError(#[from] ElectrsError),
+    #[error("KeyLoadingError: {0}")]
+    KeyLoadingError(#[from] KeyLoadingError),
 
+    #[error("Connected to incompatible bitcoin core version: {0}")]
+    IncompatibleVersion(usize),
     #[error("Could not confirm transaction")]
     ConfirmationError,
     #[error("Could not find block at height")]
     InvalidBitcoinHeight,
     #[error("Failed to sign transaction")]
     TransactionSigningError,
-    #[error("Failed to parse transaction")]
-    ParsingError,
     #[error("Failed to obtain public key")]
     MissingPublicKey,
     #[error("Failed to connect")]
@@ -56,14 +65,10 @@ pub enum Error {
     WalletNotFound,
     #[error("Invalid Bitcoin network")]
     InvalidBitcoinNetwork,
-    #[error("Unable to query Electrs for transaction data")]
-    ElectrsQueryFailed,
     #[error("Transaction contains more than one return-to-self utxo")]
     TooManyReturnToSelfAddresses,
     #[error("ArithmeticError")]
     ArithmeticError,
-    #[error(transparent)]
-    TryFromIntError(#[from] std::num::TryFromIntError),
     #[error("MissingBitcoinFeeInfo")]
     MissingBitcoinFeeInfo,
 }

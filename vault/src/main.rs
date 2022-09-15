@@ -48,7 +48,7 @@ where
     let blocking_task = tokio::task::spawn(future);
     tokio::select! {
         res = blocking_task => {
-            let _ = res?;
+            return res?;
         },
         signal_option = shutdown_signals.next() => {
             if let Some(signal) = signal_option {

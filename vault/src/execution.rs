@@ -1,6 +1,6 @@
 use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager};
 use bitcoin::{
-    BitcoinCoreApi, Error as BitcoinError, SatPerVbyte, Transaction, TransactionExt, TransactionMetadata, Txid,
+    Error as BitcoinError, SatPerVbyte, Transaction, TransactionExt, TransactionMetadata, Txid,
     BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
 use futures::{
@@ -14,7 +14,7 @@ use runtime::{
     PrettyPrint, RedeemPallet, RedeemRequestStatus, RefundPallet, ReplacePallet, ReplaceRequestStatus,
     RequestRefundEvent, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
-use service::{spawn_cancelable, ShutdownSender};
+use service::{spawn_cancelable, DynBitcoinCoreApi, Error as ServiceError, ShutdownSender};
 use std::{collections::HashMap, convert::TryInto, time::Duration};
 use tokio::time::sleep;
 use tokio_stream::wrappers::BroadcastStream;
@@ -186,7 +186,6 @@ impl Request {
 
     /// Makes the bitcoin transfer and executes the request
     pub async fn pay_and_execute<
-        B: BitcoinCoreApi + Clone + Send + Sync + 'static,
         P: ReplacePallet
             + RefundPallet
             + BtcRelayPallet
@@ -201,7 +200,7 @@ impl Request {
     >(
         &self,
         parachain_rpc: P,
-        vault: VaultData<B>,
+        vault: VaultData,
         num_confirmations: u32,
         auto_rbf: bool,
     ) -> Result<(), Error> {
@@ -236,13 +235,10 @@ impl Request {
             request_id = ?self.hash,
         )
     )]
-    async fn transfer_btc<
-        B: BitcoinCoreApi + Clone,
-        P: OraclePallet + BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
-    >(
+    async fn transfer_btc<P: OraclePallet + BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync>(
         &self,
         parachain_rpc: &P,
-        btc_rpc: &B,
+        btc_rpc: &DynBitcoinCoreApi,
         num_confirmations: u32,
         vault_id: VaultId,
         auto_rbf: bool,
@@ -275,12 +271,11 @@ impl Request {
         )
     )]
     async fn wait_for_inclusion<
-        B: BitcoinCoreApi + Clone,
         P: OraclePallet + BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,
     >(
         &self,
         parachain_rpc: &P,
-        btc_rpc: &B,
+        btc_rpc: &DynBitcoinCoreApi,
         num_confirmations: u32,
         mut txid: Txid,
         auto_rbf: bool,
@@ -306,7 +301,7 @@ impl Request {
                 })
                 .filter(|_| futures::future::ready(auto_rbf)) // if auto-rbf is disabled, don't propagate the events
                 .try_filter_map(|x| async move {
-                    match btc_rpc.fee_rate(txid) {
+                    match btc_rpc.fee_rate(txid).await {
                         Ok(current_fee) => {
                             if x > current_fee {
                                 Ok(Some((current_fee, x)))
@@ -321,7 +316,7 @@ impl Request {
                     }
                 })
                 .filter_map(|x| async {
-                    match btc_rpc.is_in_mempool(txid_copy) {
+                    match btc_rpc.is_in_mempool(txid_copy).await {
                         Ok(false) => {
                             //   if not in mempool anymore, don't propagate the event (even if it is an error)
                             tracing::debug!("Txid not in mempool anymore...");
@@ -460,16 +455,16 @@ impl Request {
 /// Queries the parachain for open requests and executes them. It checks the
 /// bitcoin blockchain to see if a payment has already been made.
 #[allow(clippy::too_many_arguments)]
-pub async fn execute_open_requests<B: BitcoinCoreApi + Clone + Send + Sync + 'static>(
+pub async fn execute_open_requests(
     shutdown_tx: ShutdownSender,
     parachain_rpc: InterBtcParachain,
-    vault_id_manager: VaultIdManager<B>,
-    read_only_btc_rpc: B,
+    vault_id_manager: VaultIdManager,
+    read_only_btc_rpc: DynBitcoinCoreApi,
     num_confirmations: u32,
     payment_margin: Duration,
     process_refunds: bool,
     auto_rbf: bool,
-) -> Result<(), Error> {
+) -> Result<(), ServiceError> {
     let parachain_rpc = &parachain_rpc;
     let vault_id = parachain_rpc.get_account_id().clone();
 
@@ -649,13 +644,12 @@ fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -
 
 #[cfg(all(test, feature = "parachain-metadata-kintsugi-testnet"))]
 mod tests {
-    use crate::metrics::PerCurrencyMetrics;
-
     use super::*;
+    use crate::metrics::PerCurrencyMetrics;
     use async_trait::async_trait;
     use bitcoin::{
-        json, Address, Amount, Block, BlockHash, BlockHeader, Error as BitcoinError, Network, PrivateKey, PublicKey,
-        Transaction, TransactionMetadata, Txid,
+        json, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, Network,
+        PrivateKey, PublicKey, Transaction, TransactionMetadata, Txid,
     };
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
@@ -664,7 +658,7 @@ mod tests {
         StatusCode, Token, DOT, IBTC,
     };
     use sp_core::H160;
-    use std::collections::BTreeSet;
+    use std::{collections::BTreeSet, sync::Arc};
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {
@@ -821,8 +815,8 @@ mod tests {
                 address: Address,
                 fee_rate: SatPerVbyte,
             ) -> Result<Txid, BitcoinError>;
-            fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
-            fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
+            async fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
+            async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
         }
     }
 
@@ -893,7 +887,7 @@ mod tests {
             current_parachain_height: u32,
             bitcoin_deadline: u32,
             current_bitcoin_height: u32,
-        ) -> (Request, MockProvider, VaultData<MockBitcoin>) {
+        ) -> (Request, MockProvider, VaultData) {
             let mut parachain_rpc = MockProvider::default();
             parachain_rpc
                 .expect_get_bitcoin_fees()
@@ -909,19 +903,15 @@ mod tests {
                 .expect_on_fee_rate_change()
                 .returning(|| tokio::sync::broadcast::channel(2).1);
 
-            let mut btc_rpc = MockBitcoin::default();
-
-            btc_rpc.expect_network().returning(|| Network::Regtest);
-
-            btc_rpc
+            let mut mock_bitcoin = MockBitcoin::default();
+            mock_bitcoin.expect_network().returning(|| Network::Regtest);
+            mock_bitcoin
                 .expect_get_block_count()
                 .returning(move || Ok(current_bitcoin_height as u64));
-
-            btc_rpc
+            mock_bitcoin
                 .expect_create_and_send_transaction()
                 .returning(|_, _, _, _| Ok(Txid::default()));
-
-            btc_rpc.expect_wait_for_transaction_metadata().returning(|_, _| {
+            mock_bitcoin.expect_wait_for_transaction_metadata().returning(|_, _| {
                 Ok(TransactionMetadata {
                     txid: Txid::default(),
                     proof: vec![],
@@ -931,9 +921,9 @@ mod tests {
                     fee: None,
                 })
             });
-
-            btc_rpc.expect_list_transactions().returning(|_| Ok(vec![]));
-            btc_rpc.expect_get_balance().returning(|_| Ok(Amount::ZERO));
+            mock_bitcoin.expect_list_transactions().returning(|_| Ok(vec![]));
+            mock_bitcoin.expect_get_balance().returning(|_| Ok(Amount::ZERO));
+            let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
 
             let request = Request {
                 amount: 100,
@@ -997,8 +987,9 @@ mod tests {
             .expect_get_current_active_block_number()
             .times(1)
             .returning(|| Ok(110));
-        let mut btc_rpc = MockBitcoin::default();
-        btc_rpc.expect_get_block_count().times(1).returning(|| Ok(110));
+        let mut mock_bitcoin = MockBitcoin::default();
+        mock_bitcoin.expect_get_block_count().times(1).returning(|| Ok(110));
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
         // omitting other mocks to test that they do not get called
 
         let request = Request {
@@ -1049,15 +1040,12 @@ mod tests {
             .expect_on_fee_rate_change()
             .returning(|| tokio::sync::broadcast::channel(2).1);
 
-        let mut btc_rpc = MockBitcoin::default();
-
-        btc_rpc.expect_network().returning(|| Network::Regtest);
-
-        btc_rpc
+        let mut mock_bitcoin = MockBitcoin::default();
+        mock_bitcoin.expect_network().returning(|| Network::Regtest);
+        mock_bitcoin
             .expect_create_and_send_transaction()
             .returning(|_, _, _, _| Ok(Txid::default()));
-
-        btc_rpc.expect_wait_for_transaction_metadata().returning(|_, _| {
+        mock_bitcoin.expect_wait_for_transaction_metadata().returning(|_, _| {
             Ok(TransactionMetadata {
                 txid: Txid::default(),
                 proof: vec![],
@@ -1067,8 +1055,8 @@ mod tests {
                 fee: None,
             })
         });
-
-        btc_rpc.expect_get_balance().returning(|_| Ok(Amount::ZERO));
+        mock_bitcoin.expect_get_balance().returning(|_| Ok(Amount::ZERO));
+        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
 
         let request = Request {
             amount: 100,
