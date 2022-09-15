@@ -217,6 +217,10 @@ pub async fn test_service<T: Future, U: Future>(service: T, fut: U) -> U::Output
     }
 }
 
+pub async fn with_timeout<T: Future>(future: T, duration: Duration) -> T::Output {
+    timeout(duration, future).await.expect("timeout")
+}
+
 pub async fn periodically_produce_blocks(parachain_rpc: InterBtcParachain) {
     loop {
         tokio::time::sleep(Duration::from_millis(500)).await;

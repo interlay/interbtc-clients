@@ -1112,7 +1112,7 @@ mod test_with_bitcoind {
     /// request, pay and execute an issue
     pub async fn assert_issue_bitcoind(
         parachain_rpc: &InterBtcParachain,
-        btc_rpc: &DynBitcoinCoreApi,
+        bitcoin_core: &BitcoinCore,
         vault_id: &VaultId,
         amount: u128,
     ) {
@@ -1120,16 +1120,20 @@ mod test_with_bitcoind {
 
         let fee_rate = SatPerVbyte(1000);
 
-        let metadata = btc_rpc
-            .send_to_address(
-                issue.vault_address.to_address(btc_rpc.network()).unwrap(),
+        // if auto-mining somehow is not enabled
+        // we should timeout this call
+        let metadata = with_timeout(
+            bitcoin_core.send_to_address(
+                issue.vault_address.to_address(bitcoin_core.network()).unwrap(),
                 (issue.amount + issue.fee) as u64,
                 None,
                 fee_rate,
                 0,
-            )
-            .await
-            .unwrap();
+            ),
+            TIMEOUT,
+        )
+        .await
+        .unwrap();
 
         parachain_rpc
             .wait_for_block_in_relay(H256Le::from_bytes_le(&metadata.block_hash), Some(0))
@@ -1306,6 +1310,7 @@ mod test_with_bitcoind {
                 Arc::new(Box::new(ZeroDelay)),
             );
 
+            tracing::trace!("Initializing relay");
             relayer.submit_next().await.unwrap(); // make sure the relay is initialized
 
             let parachain_miner = join(run_relayer(relayer), periodically_produce_blocks(user_provider.clone()));
@@ -1321,6 +1326,7 @@ mod test_with_bitcoind {
                 get_required_vault_collateral_for_issue(&vault_provider, issue_amount, vault_id.collateral_currency())
                     .await;
 
+            tracing::trace!("Registering public key");
             assert_ok!(
                 vault_provider
                     .register_vault_with_public_key(
@@ -1334,7 +1340,7 @@ mod test_with_bitcoind {
             // set automining for the issue below. Note that the btc_rpc inside
             // vault_id_manager is a clone that still has auto mining disabled
             bitcoin_core.set_auto_mining(true);
-            assert_issue_bitcoind(&user_provider, &btc_rpc, &vault_id, issue_amount).await;
+            assert_issue_bitcoind(&user_provider, &bitcoin_core, &vault_id, issue_amount).await;
 
             // setup the service to test including necessary auxiliary services
             let service = join(
