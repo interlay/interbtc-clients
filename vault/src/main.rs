@@ -38,6 +38,22 @@ enum Commands {
     RunVault(RunVaultOpts),
 }
 
+// write the file to stdout or disk - fail if it already exists
+fn try_write_file<D: AsRef<[u8]>>(output: &Option<PathBuf>, data: D) -> Result<(), Error> {
+    let data = data.as_ref();
+    if let Some(output) = output {
+        if output.exists() {
+            Err(Error::FileAlreadyExists)
+        } else {
+            std::fs::write(output, data)?;
+            Ok(())
+        }
+    } else {
+        std::io::stdout().write_all(data)?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Parser, Clone)]
 struct GenerateWifOpts {
     /// Output file name or stdout if unspecified.
@@ -55,13 +71,7 @@ impl GenerateWifOpts {
         let wif = private_key.to_wif();
         let data = wif.as_bytes();
 
-        if let Some(output) = &self.output {
-            std::fs::write(output, data)?;
-        } else {
-            std::io::stdout().write_all(data)?;
-        }
-
-        Ok(())
+        try_write_file(&self.output, data)
     }
 }
 
@@ -83,13 +93,7 @@ impl GenerateKeyOpts {
         );
         let data = serde_json::to_vec(&keys)?;
 
-        if let Some(output) = &self.output {
-            std::fs::write(output, data)?;
-        } else {
-            std::io::stdout().write_all(&data)?;
-        }
-
-        Ok(())
+        try_write_file(&self.output, data)
     }
 }
 
@@ -142,6 +146,9 @@ where
 
 async fn start() -> Result<(), Error> {
     let cli: Cli = Cli::parse();
+    let opts = cli.opts;
+    opts.service.logging_format.init_subscriber();
+
     match cli.sub {
         Some(Commands::GenerateKey(opts)) => {
             return opts.generate_and_write();
@@ -151,8 +158,6 @@ async fn start() -> Result<(), Error> {
         }
         _ => (),
     }
-    let opts = cli.opts;
-    opts.service.logging_format.init_subscriber();
 
     let (pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = InterBtcSigner::new(pair);
