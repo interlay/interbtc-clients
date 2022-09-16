@@ -117,7 +117,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
                         .map(|i| i.symbol().to_string())
                         .unwrap_or_default(),
                 );
-                Ok(config_copy.new_client_with_network(Some(wallet_name), network_copy)?)
+                config_copy.new_client_with_network(Some(wallet_name), network_copy)
             };
 
             let service = S::new_service(
