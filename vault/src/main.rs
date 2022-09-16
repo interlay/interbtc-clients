@@ -32,8 +32,11 @@ struct Cli {
 
 #[derive(Parser)]
 enum Commands {
+    /// Generate the WIF encoded Bitcoin private key.
     GenerateWif(GenerateWifOpts),
+    /// Generate the sr25519 parachain key pair.
     GenerateKey(GenerateKeyOpts),
+    /// Run the Vault client (default).
     #[clap(name = "run")]
     RunVault(RunVaultOpts),
 }

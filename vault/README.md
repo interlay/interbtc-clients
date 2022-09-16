@@ -12,9 +12,6 @@
   - Send BTC transaction to user
   - Get BTC transaction inclusion proof and raw tx
   - Execute redeem with corresponding redeem id, tx inclusion proof and raw tx
-- Collateral balance
-  - Observe collateralization rate in Vault Registry
-  - Withdraw / deposit collateral to keep rate consistent
 - Replace
   - Request Replace
   - Execute Replace
@@ -34,7 +31,7 @@ Build and run the [interBTC Parachain](https://github.com/interlay/interbtc):
 
 ```
 git clone git@gitlab.com:interlay/interbtc.git
-cargo run --bin parachain-metadata-kintsugi -- --dev --tmp
+cargo run --bin interbtc-parachain -- --dev --tmp
 ```
 
 ## Getting Started
@@ -44,6 +41,24 @@ The basic command to run the vault client:
 ```
 source ../.env
 cargo run --bin vault --features parachain-metadata-kintsugi
+```
+
+### Examples
+
+```shell
+# parachain sr25519 key
+vault generate-key keyfile.json
+
+# bitcoin private key
+vault generate-wif private-key.wif --network bitcoin
+
+# start the vault client
+vault \
+    --bitcoin-rpc-url http://localhost:18332 \
+    --bitcoin-rpc-user rpcuser \
+    --bitcoin-rpc-pass rpcpassword \
+    --keyfile keyfile.json \
+    --keyname $(cat keyfile.json | jq -r 'keys[0]')
 ```
 
 ### Options
@@ -58,33 +73,31 @@ For convenience, a copy of this output is included below. Note that the bitcoin 
 
 ```
 USAGE:
-    vault [FLAGS] [OPTIONS] --bitcoin-rpc-url <BITCOIN_RPC_URL> --bitcoin-rpc-user <BITCOIN_RPC_USER> --bitcoin-rpc-pass <BITCOIN_RPC_PASS>
-
-FLAGS:
-    -h, --help                      Print help information
-        --no-api                    Don't run the RPC API
-        --no-auto-replace           Opt out of participation in replace requests
-        --no-bitcoin-block-relay    Don't relay bitcoin block headers
-        --no-issue-execution        Don't try to execute issues
-    -V, --version                   Print version information
+    vault [OPTIONS]
+    vault <SUBCOMMAND>
 
 OPTIONS:
-        --auto-register-with-collateral <AUTO_REGISTER_WITH_COLLATERAL>
+        --auto-rbf
+            Bump bitcoin tx fees whenever the oracle reports a new, higher inclusion fee estimate
+
+        --auto-register <AUTO_REGISTER>
             Automatically register the vault with the given amount of collateral and a newly
             generated address
 
-        --auto-register-with-faucet-url <AUTO_REGISTER_WITH_FAUCET_URL>
-            Automatically register the vault with the collateral received from the faucet and a
-            newly generated address. The parameter is the URL of the faucet
-
         --bitcoin-connection-timeout-ms <BITCOIN_CONNECTION_TIMEOUT_MS>
-            Timeout in milliseconds to wait for connection to bitcoin-core [default: 60000]
+            Timeout in milliseconds to wait for connection to bitcoin-core
+            
+            [default: 60000]
 
         --bitcoin-poll-interval-ms <BITCOIN_POLL_INTERVAL_MS>
-            Timeout in milliseconds to poll Bitcoin [default: 6000]
+            Timeout in milliseconds to poll Bitcoin
+            
+            [default: 6000]
 
         --bitcoin-relay-confirmations <BITCOIN_RELAY_CONFIRMATIONS>
-            Number of confirmations a block needs to have before it is submitted [default: 0]
+            Number of confirmations a block needs to have before it is submitted
+            
+            [default: 0]
 
         --bitcoin-relay-start-height <BITCOIN_RELAY_START_HEIGHT>
             Starting height to relay block headers, if not defined use the best height as reported
@@ -99,26 +112,37 @@ OPTIONS:
         --bitcoin-rpc-user <BITCOIN_RPC_USER>
             [env: BITCOIN_RPC_USER=]
 
+        --bitcoin-wif <BITCOIN_WIF>
+            File containing the WIF encoded Bitcoin private key
+
         --btc-confirmations <BTC_CONFIRMATIONS>
             How many bitcoin confirmations to wait for. If not specified, the parachain settings
             will be used (recommended)
 
         --btc-parachain-connection-timeout-ms <BTC_PARACHAIN_CONNECTION_TIMEOUT_MS>
-            Timeout in milliseconds to wait for connection to btc-parachain [default: 60000]
+            Timeout in milliseconds to wait for connection to btc-parachain
+            
+            [default: 60000]
 
         --btc-parachain-url <BTC_PARACHAIN_URL>
-            Parachain websocket URL [default: ws://127.0.0.1:9944]
-
-        --collateral-currency-id <COLLATERAL_CURRENCY_ID>
-            The currency to use for the collateral, e.g. "DOT" or "KSM". Defaults to the relay chain
-            currency if not set
+            Parachain websocket URL
+            
+            [default: wss://api-dev-kintsugi.interlay.io:443/parachain]
 
         --collateral-timeout-ms <COLLATERAL_TIMEOUT_MS>
-            Timeout in milliseconds to repeat collateralization checks [default: 5000]
+            Timeout in milliseconds to repeat collateralization checks
+            
+            [default: 5000]
 
         --electrs-url <ELECTRS_URL>
-            Url of the electrs server. If unset, a default fallback is
-            used depending on the network argument
+            Url of the electrs server. If unset, a default fallback is used depending on the
+            detected network
+
+        --faucet-url <FAUCET_URL>
+            Pass the faucet URL for auto-registration
+
+    -h, --help
+            Print help information
 
         --keyfile <KEYFILE>
             Path to the json file containing key pairs in a map. Valid content of this file is e.g.
@@ -130,11 +154,18 @@ OPTIONS:
         --keyring <KEYRING>
             Keyring to use, mutually exclusive with keyfile
 
+        --light
+            Experimental: Run in light client mode
+
         --logging-format <LOGGING_FORMAT>
-            Logging output format [default: full]
+            Logging output format
+            
+            [default: full]
 
         --max-batch-size <MAX_BATCH_SIZE>
-            Max batch size for combined block header submission [default: 16]
+            Max batch size for combined block header submission
+            
+            [default: 16]
 
         --max-concurrent-requests <MAX_CONCURRENT_REQUESTS>
             Maximum number of concurrent requests
@@ -142,10 +173,58 @@ OPTIONS:
         --max-notifs-per-subscription <MAX_NOTIFS_PER_SUBSCRIPTION>
             Maximum notification capacity for each subscription
 
+        --no-api
+            Don't run the RPC API
+
+        --no-auto-refund
+            Deprecated - kept only to not break clients
+
+        --no-auto-replace
+            Opt out of participation in replace requests
+
+        --no-bitcoin-block-relay
+            Don't relay bitcoin block headers
+
+        --no-issue-execution
+            Don't try to execute issues
+
+        --no-prometheus
+            Do not expose a Prometheus metric endpoint
+
+        --no-random-delay
+            Attempt to execute best-effort transactions immediately, rather than using a random
+            delay
+
         --payment-margin-minutes <PAYMENT_MARGIN_MINUTES>
             Minimum time to the the redeem/replace execution deadline to make the bitcoin payment
+            
             [default: 120]
 
+        --prometheus-external
+            Expose Prometheus exporter on all interfaces.
+            
+            Default is local.
+
+        --prometheus-port <PROMETHEUS_PORT>
+            Specify Prometheus exporter TCP Port
+            
+            [default: 9615]
+
         --restart-policy <RESTART_POLICY>
-            Restart or stop on error [default: always]
+            Restart or stop on error
+            
+            [default: always]
+
+    -V, --version
+            Print version information
+
+SUBCOMMANDS:
+    generate-key
+            Generate the sr25519 parachain key pair
+    generate-wif
+            Generate the WIF encoded Bitcoin private key
+    help
+            Print this message or the help of the given subcommand(s)
+    run
+            Run the Vault client (default)
 ```
