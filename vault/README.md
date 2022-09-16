@@ -46,11 +46,11 @@ cargo run --bin vault --features parachain-metadata-kintsugi
 ### Examples
 
 ```shell
-# parachain sr25519 key
-vault generate-key keyfile.json
+# bitcoin private key (for light client)
+vault generate-bitcoin-key private-key.wif --network bitcoin
 
-# bitcoin private key
-vault generate-wif private-key.wif --network bitcoin
+# parachain sr25519 key
+vault generate-parachain-key keyfile.json
 
 # start the vault client
 vault \
@@ -219,10 +219,10 @@ OPTIONS:
             Print version information
 
 SUBCOMMANDS:
-    generate-key
-            Generate the sr25519 parachain key pair
-    generate-wif
+    generate-bitcoin-key
             Generate the WIF encoded Bitcoin private key
+    generate-parachain-key
+            Generate the sr25519 parachain key pair
     help
             Print this message or the help of the given subcommand(s)
     run

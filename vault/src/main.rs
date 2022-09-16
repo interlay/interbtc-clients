@@ -33,9 +33,9 @@ struct Cli {
 #[derive(Parser)]
 enum Commands {
     /// Generate the WIF encoded Bitcoin private key.
-    GenerateWif(GenerateWifOpts),
+    GenerateBitcoinKey(GenerateBitcoinKeyOpts),
     /// Generate the sr25519 parachain key pair.
-    GenerateKey(GenerateKeyOpts),
+    GenerateParachainKey(GenerateParachainKeyOpts),
     /// Run the Vault client (default).
     #[clap(name = "run")]
     RunVault(RunVaultOpts),
@@ -58,7 +58,7 @@ fn try_write_file<D: AsRef<[u8]>>(output: &Option<PathBuf>, data: D) -> Result<(
 }
 
 #[derive(Debug, Parser, Clone)]
-struct GenerateWifOpts {
+struct GenerateBitcoinKeyOpts {
     /// Output file name or stdout if unspecified.
     #[clap(parse(from_os_str))]
     output: Option<PathBuf>,
@@ -67,7 +67,7 @@ struct GenerateWifOpts {
     network: Network,
 }
 
-impl GenerateWifOpts {
+impl GenerateBitcoinKeyOpts {
     fn generate_and_write(&self) -> Result<(), Error> {
         let secret_key = SecretKey::new(&mut thread_rng());
         let private_key = PrivateKey::new(secret_key, self.network);
@@ -79,13 +79,13 @@ impl GenerateWifOpts {
 }
 
 #[derive(Debug, Parser, Clone)]
-struct GenerateKeyOpts {
+struct GenerateParachainKeyOpts {
     /// Output file name or stdout if unspecified.
     #[clap(parse(from_os_str))]
     output: Option<PathBuf>,
 }
 
-impl GenerateKeyOpts {
+impl GenerateParachainKeyOpts {
     fn generate_and_write(&self) -> Result<(), Error> {
         let (pair, phrase, _) = KeyPair::generate_with_phrase(None);
 
@@ -153,10 +153,10 @@ async fn start() -> Result<(), Error> {
     opts.service.logging_format.init_subscriber();
 
     match cli.sub {
-        Some(Commands::GenerateKey(opts)) => {
+        Some(Commands::GenerateBitcoinKey(opts)) => {
             return opts.generate_and_write();
         }
-        Some(Commands::GenerateWif(opts)) => {
+        Some(Commands::GenerateParachainKey(opts)) => {
             return opts.generate_and_write();
         }
         _ => (),
