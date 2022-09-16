@@ -102,7 +102,6 @@ pub struct DownloadedRelease {
 
 fn sha256sum(bytes: &[u8]) -> Vec<u8> {
     let mut hasher = Sha256::default();
-    // input compressed public key
     hasher.input(bytes);
     hasher.result().as_slice().to_vec()
 }
