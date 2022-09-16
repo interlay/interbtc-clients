@@ -209,7 +209,7 @@ impl Wallet {
         let address = Address::from_script(script_pubkey, self.network).ok_or(Error::InvalidAddress)?;
         let key_store = self.key_store.read()?;
         let private_key = key_store.get(&address).ok_or(Error::NoPrivateKey)?;
-        Ok(private_key.clone())
+        Ok(*private_key)
     }
 
     pub fn get_pub_key(&self, script_pubkey: &Script) -> Result<PublicKey, Error> {
@@ -296,7 +296,7 @@ impl Wallet {
                     }
 
                     // https://github.com/bitcoin/bitcoin/blob/01e1627e25bc5477c40f51da03c3c31b609a85c9/src/wallet/spend.cpp#L945
-                    let n_bytes = calculate_maximum_signed_tx_size(&psbt, &self);
+                    let n_bytes = calculate_maximum_signed_tx_size(&psbt, self);
                     let fee_needed = m_effective_feerate.get_fee(n_bytes);
                     let n_fee_ret = select_coins.get_selected_value() - recipients_sum - change_amount;
 

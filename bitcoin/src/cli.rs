@@ -12,7 +12,7 @@ use {
 };
 
 #[cfg(feature = "light-client")]
-fn get_wif_from_file(file_path: &PathBuf) -> Result<PrivateKey, KeyLoadingError> {
+fn get_private_key_from_file(file_path: &PathBuf) -> Result<PrivateKey, KeyLoadingError> {
     let data = std::fs::read(file_path)?;
     let wif = String::from_utf8(data)?;
     Ok(PrivateKey::from_wif(wif.trim())?)
@@ -21,15 +21,15 @@ fn get_wif_from_file(file_path: &PathBuf) -> Result<PrivateKey, KeyLoadingError>
 #[derive(Parser, Debug, Clone, Default)]
 pub struct BitcoinOpts {
     #[clap(long, env = "BITCOIN_RPC_URL")]
-    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(&["light", "bitcoin-wif", "network"])))]
+    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(&["light", "bitcoin-wif"])))]
     pub bitcoin_rpc_url: Option<String>,
 
     #[clap(long, env = "BITCOIN_RPC_USER")]
-    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(&["light", "bitcoin-wif", "network"])))]
+    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(&["light", "bitcoin-wif"])))]
     pub bitcoin_rpc_user: Option<String>,
 
     #[clap(long, env = "BITCOIN_RPC_PASS")]
-    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(&["light", "bitcoin-wif", "network"])))]
+    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(&["light", "bitcoin-wif"])))]
     pub bitcoin_rpc_pass: Option<String>,
 
     /// Timeout in milliseconds to wait for connection to bitcoin-core.
@@ -42,7 +42,7 @@ pub struct BitcoinOpts {
     pub electrs_url: Option<String>,
 
     /// Experimental: Run in light client mode
-    #[clap(long, requires_all(&["bitcoin-wif", "network"]))]
+    #[clap(long, requires_all(&["bitcoin-wif"]))]
     #[cfg(feature = "light-client")]
     pub light: bool,
 
@@ -55,16 +55,6 @@ pub struct BitcoinOpts {
     )]
     #[cfg(feature = "light-client")]
     pub bitcoin_wif: Option<PathBuf>,
-
-    /// Bitcoin network, only needed for
-    /// configuring the light client
-    #[clap(
-        long,
-        requires = "light",
-        conflicts_with_all(&["bitcoin-rpc-url", "bitcoin-rpc-user", "bitcoin-rpc-pass"]),
-    )]
-    #[cfg(feature = "light-client")]
-    pub network: Option<Network>,
 }
 
 impl BitcoinOpts {
@@ -86,8 +76,7 @@ impl BitcoinOpts {
     fn new_light_client(&self) -> Result<BitcoinLight, Error> {
         Ok(BitcoinLight::new(
             self.electrs_url.clone(),
-            self.network.expect("Network not set"),
-            get_wif_from_file(self.bitcoin_wif.as_ref().expect("Private key not set"))?,
+            get_private_key_from_file(self.bitcoin_wif.as_ref().expect("Private key not set"))?,
         )?)
     }
 

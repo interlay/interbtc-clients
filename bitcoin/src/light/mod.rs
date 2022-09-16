@@ -15,7 +15,6 @@ const RETRY_DURATION: Duration = Duration::from_millis(1000);
 
 #[derive(Clone)]
 pub struct BitcoinLight {
-    network: Network,
     private_key: PrivateKey,
     secp_ctx: secp256k1::Secp256k1<secp256k1::All>,
     electrs: ElectrsClient,
@@ -24,10 +23,10 @@ pub struct BitcoinLight {
 }
 
 impl BitcoinLight {
-    pub fn new(electrs_url: Option<String>, network: Network, private_key: PrivateKey) -> Result<Self, Error> {
+    pub fn new(electrs_url: Option<String>, private_key: PrivateKey) -> Result<Self, Error> {
+        let network = private_key.network;
         let electrs_client = ElectrsClient::new(electrs_url, network)?;
         Ok(Self {
-            network,
             private_key,
             secp_ctx: secp256k1::Secp256k1::new(),
             electrs: electrs_client.clone(),
@@ -77,7 +76,7 @@ impl BitcoinLight {
 #[async_trait]
 impl BitcoinCoreApi for BitcoinLight {
     fn network(&self) -> Network {
-        self.network
+        self.private_key.network
     }
 
     async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError> {

@@ -14,6 +14,7 @@ use std::{io::Error as IoError, num::TryFromIntError, string::FromUtf8Error};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Error, Debug)]
 pub enum KeyLoadingError {
     #[error("IoError: {0}")]
