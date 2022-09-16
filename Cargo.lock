@@ -14020,6 +14020,7 @@ dependencies = [
  "parity-scale-codec",
  "runtime",
  "serde",
+ "serde_json",
  "serial_test",
  "service",
  "sha2 0.8.2",

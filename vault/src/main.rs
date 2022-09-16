@@ -1,10 +1,15 @@
 use clap::Parser;
 use futures::Future;
-use runtime::{InterBtcSigner, DEFAULT_SPEC_NAME};
+use runtime::{InterBtcSigner, KeyPair, Ss58Codec, DEFAULT_SPEC_NAME, SS58_PREFIX};
 use service::{warp, warp::Filter, ConnectionManager, Error, MonitoringConfig, ServiceConfig};
 use signal_hook::consts::*;
 use signal_hook_tokio::Signals;
-use std::net::{Ipv4Addr, SocketAddr};
+use sp_core::crypto::Pair;
+use std::{
+    io::Write,
+    net::{Ipv4Addr, SocketAddr},
+    path::PathBuf,
+};
 use sysinfo::{System, SystemExt};
 use tokio_stream::StreamExt;
 use vault::{
@@ -13,9 +18,54 @@ use vault::{
     VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION,
 };
 
+#[derive(Parser)]
+#[clap(args_conflicts_with_subcommands = true)]
+struct Cli {
+    #[clap(subcommand)]
+    sub: Option<Commands>,
+
+    #[clap(flatten)]
+    opts: RunVaultOpts,
+}
+
+#[derive(Parser)]
+enum Commands {
+    GenerateKeys(GenerateKeysOpts),
+    #[clap(name = "run")]
+    RunVault(RunVaultOpts),
+}
+
+#[derive(Debug, Parser, Clone)]
+struct GenerateKeysOpts {
+    /// Output file name or stdout if unspecified.
+    #[clap(parse(from_os_str))]
+    output: Option<PathBuf>,
+}
+
+impl GenerateKeysOpts {
+    fn generate_and_write(&self) -> Result<(), Error> {
+        let (pair, seed) = KeyPair::generate();
+
+        let mut keys = serde_json::Map::new();
+        keys.insert(
+            pair.public().to_ss58check_with_version(SS58_PREFIX.into()),
+            serde_json::Value::String(format!("0x{}", hex::encode(seed))),
+        );
+        let data = serde_json::to_vec(&keys)?;
+
+        if let Some(output) = &self.output {
+            std::fs::write(output, data)?;
+        } else {
+            std::io::stdout().write_all(&data)?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Parser, Debug, Clone)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
-pub struct Opts {
+pub struct RunVaultOpts {
     /// Keyring / keyfile options.
     #[clap(flatten)]
     pub account_info: runtime::cli::ProviderUserOpts,
@@ -61,7 +111,14 @@ where
 }
 
 async fn start() -> Result<(), Error> {
-    let opts: Opts = Opts::parse();
+    let cli: Cli = Cli::parse();
+    match cli.sub {
+        Some(Commands::GenerateKeys(opts)) => {
+            return opts.generate_and_write();
+        }
+        _ => (),
+    }
+    let opts = cli.opts;
     opts.service.logging_format.init_subscriber();
 
     let (pair, wallet_name) = opts.account_info.get_key_pair()?;
