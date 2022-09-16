@@ -1,6 +1,8 @@
+use bitcoin::{Network, PrivateKey};
 use clap::Parser;
 use futures::Future;
 use runtime::{InterBtcSigner, KeyPair, Ss58Codec, DEFAULT_SPEC_NAME, SS58_PREFIX};
+use secp256k1::{rand::thread_rng, SecretKey};
 use service::{warp, warp::Filter, ConnectionManager, Error, MonitoringConfig, ServiceConfig};
 use signal_hook::consts::*;
 use signal_hook_tokio::Signals;
@@ -30,19 +32,47 @@ struct Cli {
 
 #[derive(Parser)]
 enum Commands {
-    GenerateKeys(GenerateKeysOpts),
+    GenerateWif(GenerateWifOpts),
+    GenerateKey(GenerateKeyOpts),
     #[clap(name = "run")]
     RunVault(RunVaultOpts),
 }
 
 #[derive(Debug, Parser, Clone)]
-struct GenerateKeysOpts {
+struct GenerateWifOpts {
+    /// Output file name or stdout if unspecified.
+    #[clap(parse(from_os_str))]
+    output: Option<PathBuf>,
+
+    #[clap(long)]
+    network: Network,
+}
+
+impl GenerateWifOpts {
+    fn generate_and_write(&self) -> Result<(), Error> {
+        let secret_key = SecretKey::new(&mut thread_rng());
+        let private_key = PrivateKey::new(secret_key, self.network);
+        let wif = private_key.to_wif();
+        let data = wif.as_bytes();
+
+        if let Some(output) = &self.output {
+            std::fs::write(output, data)?;
+        } else {
+            std::io::stdout().write_all(&data)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Parser, Clone)]
+struct GenerateKeyOpts {
     /// Output file name or stdout if unspecified.
     #[clap(parse(from_os_str))]
     output: Option<PathBuf>,
 }
 
-impl GenerateKeysOpts {
+impl GenerateKeyOpts {
     fn generate_and_write(&self) -> Result<(), Error> {
         let (pair, seed) = KeyPair::generate();
 
@@ -113,7 +143,10 @@ where
 async fn start() -> Result<(), Error> {
     let cli: Cli = Cli::parse();
     match cli.sub {
-        Some(Commands::GenerateKeys(opts)) => {
+        Some(Commands::GenerateKey(opts)) => {
+            return opts.generate_and_write();
+        }
+        Some(Commands::GenerateWif(opts)) => {
             return opts.generate_and_write();
         }
         _ => (),

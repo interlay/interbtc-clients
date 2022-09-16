@@ -41,4 +41,4 @@ sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-
 [dev-dependencies]
 mockall = "0.8.1"
 regex = "1.4.3"
-rand = { version = "0.7" }
+rand = "0.7"
