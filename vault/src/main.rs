@@ -58,7 +58,7 @@ impl GenerateWifOpts {
         if let Some(output) = &self.output {
             std::fs::write(output, data)?;
         } else {
-            std::io::stdout().write_all(&data)?;
+            std::io::stdout().write_all(data)?;
         }
 
         Ok(())
@@ -74,12 +74,12 @@ struct GenerateKeyOpts {
 
 impl GenerateKeyOpts {
     fn generate_and_write(&self) -> Result<(), Error> {
-        let (pair, seed) = KeyPair::generate();
+        let (pair, phrase, _) = KeyPair::generate_with_phrase(None);
 
         let mut keys = serde_json::Map::new();
         keys.insert(
             pair.public().to_ss58check_with_version(SS58_PREFIX.into()),
-            serde_json::Value::String(format!("0x{}", hex::encode(seed))),
+            serde_json::Value::String(phrase),
         );
         let data = serde_json::to_vec(&keys)?;
 
