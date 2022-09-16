@@ -132,12 +132,20 @@ impl Runner {
     fn try_load_downloaded_binary(runner: &mut impl RunnerExt) -> Result<(), Error> {
         let (bin_name, bin_path) = runner.get_bin_path()?;
         let file_content = fs::read(bin_path.clone()).map_err(|_| Error::NoDownloadedRelease)?;
+        let checksum = H256::from_slice(&sha256sum(&file_content));
         let downloaded_release = DownloadedRelease {
-            checksum: H256::from_slice(&sha256sum(&file_content)),
-            path: bin_path,
+            checksum,
+            path: bin_path.clone(),
             bin_name,
         };
         runner.set_downloaded_release(Some(downloaded_release));
+        if let Ok(stringified_path) = bin_path.into_os_string().into_string() {
+            log::info!(
+                "Loaded binary from disk, at {}, with checksum {:#x}",
+                stringified_path,
+                checksum
+            );
+        }
         Ok(())
     }
 
