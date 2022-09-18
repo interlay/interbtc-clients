@@ -23,12 +23,12 @@ log = "0.4.13"
 serde_json = "1.0.61"
 thiserror = "1.0.23"
 
-sc-client-db = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
-sc-network = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24", default-features = false }
-sc-service = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24", default-features = false }
+sc-client-db = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26" }
+sc-network = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26", default-features = false }
+sc-service = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26", default-features = false }
 
 [target.'cfg(target_arch="x86_64")'.dependencies]
-sc-service = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24", default-features = false, features = [
+sc-service = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26", default-features = false, features = [
     "wasmtime",
 ] }

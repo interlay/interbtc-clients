@@ -54,7 +54,7 @@ fn parse_collateral_and_amount(
 #[derive(Parser, Clone, Debug)]
 pub struct VaultServiceConfig {
     /// Automatically register the vault with the given amount of collateral and a newly generated address.
-    #[clap(long, parse(try_from_str = parse_collateral_and_amount))]
+    #[clap(long, value_parser = parse_collateral_and_amount)]
     pub auto_register: Vec<(String, Option<u128>)>,
 
     /// Pass the faucet URL for auto-registration.
@@ -78,7 +78,7 @@ pub struct VaultServiceConfig {
     pub no_random_delay: bool,
 
     /// Timeout in milliseconds to repeat collateralization checks.
-    #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "5000")]
+    #[clap(long, value_parser = parse_duration_ms, default_value = "5000")]
     pub collateral_timeout_ms: Duration,
 
     /// How many bitcoin confirmations to wait for. If not specified, the
@@ -87,11 +87,11 @@ pub struct VaultServiceConfig {
     pub btc_confirmations: Option<u32>,
 
     /// Minimum time to the the redeem/replace execution deadline to make the bitcoin payment.
-    #[clap(long, parse(try_from_str = parse_duration_minutes), default_value = "120")]
+    #[clap(long, value_parser = parse_duration_minutes, default_value = "120")]
     pub payment_margin_minutes: Duration,
 
     /// Timeout in milliseconds to poll Bitcoin.
-    #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "6000")]
+    #[clap(long, value_parser = parse_duration_ms, default_value = "6000")]
     pub bitcoin_poll_interval_ms: Duration,
 
     /// Starting height to relay block headers, if not defined
@@ -111,7 +111,7 @@ pub struct VaultServiceConfig {
     #[clap(long)]
     pub no_bitcoin_block_relay: bool,
 
-    /// Don't refund overpayments.
+    /// Deprecated - kept only to not break clients.
     #[clap(long)]
     pub no_auto_refund: bool,
 
@@ -558,7 +558,6 @@ impl VaultService {
             self.btc_rpc_master_wallet.clone(),
             num_confirmations,
             self.config.payment_margin_minutes,
-            !self.config.no_auto_refund,
             self.config.auto_rbf,
         );
         tokio::spawn(async move {
@@ -688,17 +687,6 @@ impl VaultService {
                     self.vault_id_manager.clone(),
                     num_confirmations,
                     self.config.payment_margin_minutes,
-                    self.config.auto_rbf,
-                )),
-            ),
-            (
-                "Refund Request Listener",
-                run(listen_for_refund_requests(
-                    self.shutdown.clone(),
-                    self.btc_parachain.clone(),
-                    self.vault_id_manager.clone(),
-                    num_confirmations,
-                    !self.config.no_auto_refund,
                     self.config.auto_rbf,
                 )),
             ),

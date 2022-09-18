@@ -15,7 +15,7 @@ use runtime::{
     },
     CollateralBalancesPallet, CurrencyId, CurrencyIdExt, CurrencyInfo, Error, FeedValuesEvent, FixedU128,
     InterBtcParachain, InterBtcRedeemRequest, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet,
-    RedeemRequestStatus, RefundPallet, ReplacePallet, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
+    RedeemRequestStatus, ReplacePallet, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
 use service::{
     warp::{Rejection, Reply},
@@ -215,26 +215,22 @@ impl PerCurrencyMetrics {
         }
     }
 
-    async fn initialize_fee_budget_surplus<P: VaultRegistryPallet + RedeemPallet + ReplacePallet + RefundPallet>(
+    async fn initialize_fee_budget_surplus<P: VaultRegistryPallet + RedeemPallet + ReplacePallet>(
         vault: &VaultData,
         parachain_rpc: P,
         bitcoin_transactions: Vec<ListTransactionResult>,
     ) -> Result<(), ServiceError> {
         let vault_id = &vault.vault_id;
         // update fee surplus
-        if let Ok((redeem_requests, replace_requests, refund_requests)) = try_join!(
+        if let Ok((redeem_requests, replace_requests)) = try_join!(
             parachain_rpc.get_vault_redeem_requests(vault_id.account_id.clone()),
-            parachain_rpc.get_old_vault_replace_requests(vault_id.account_id.clone()),
-            parachain_rpc.get_vault_refund_requests(vault_id.account_id.clone()),
+            parachain_rpc.get_old_vault_replace_requests(vault_id.account_id.clone())
         ) {
             let redeems = redeem_requests
                 .iter()
                 .map(|(id, redeem)| (*id, redeem.transfer_fee_btc));
-            let refunds = refund_requests
-                .iter()
-                .map(|(id, refund)| (*id, refund.transfer_fee_btc));
             let replaces = replace_requests.iter().map(|(id, _)| (*id, 0));
-            let fee_budgets = redeems.chain(refunds).chain(replaces).collect::<HashMap<_, _>>();
+            let fee_budgets = redeems.chain(replaces).collect::<HashMap<_, _>>();
             let fee_budgets = &fee_budgets;
 
             let fee_budget_surplus = futures::stream::iter(bitcoin_transactions.iter())
@@ -473,7 +469,7 @@ async fn publish_issue_count<V: VaultDataReader, P: IssuePallet + UtilFuncs>(par
             vault.metrics.issues.completed_count.set(
                 relevant_issues
                     .iter()
-                    .filter(|status| matches!(status, IssueRequestStatus::Completed(_)))
+                    .filter(|status| matches!(status, IssueRequestStatus::Completed))
                     .count() as f64,
             );
             vault.metrics.issues.expired_count.set(
@@ -683,8 +679,8 @@ mod tests {
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
         AccountId, AssetMetadata, Balance, BlockNumber, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError,
-        ErrorCode, InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcRefundRequest, InterBtcReplaceRequest,
-        InterBtcVault, RequestIssueEvent, StatusCode, Token, VaultId, VaultStatus, DOT, H256, IBTC, INTR,
+        ErrorCode, InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcReplaceRequest, InterBtcVault,
+        RequestIssueEvent, StatusCode, Token, VaultId, VaultStatus, DOT, H256, IBTC, INTR,
     };
     use service::DynBitcoinCoreApi;
     use std::collections::BTreeSet;
@@ -763,13 +759,6 @@ mod tests {
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
             async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
             async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;
-        }
-
-        #[async_trait]
-        pub trait RefundPallet {
-            async fn execute_refund(&self, refund_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
-            async fn get_refund_request(&self, refund_id: H256) -> Result<InterBtcRefundRequest, RuntimeError>;
-            async fn get_vault_refund_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcRefundRequest)>, RuntimeError>;
         }
 
         #[async_trait]
@@ -1181,7 +1170,7 @@ mod tests {
                 ),
                 (
                     H256::default(),
-                    dummy_issue_request(IssueRequestStatus::Completed(None), dummy_vault_id()),
+                    dummy_issue_request(IssueRequestStatus::Completed, dummy_vault_id()),
                 ),
                 (
                     H256::default(),

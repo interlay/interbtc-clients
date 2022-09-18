@@ -21,7 +21,7 @@ const KV_STORE_NAME: &str = "store";
 const FAUCET_COOLDOWN_HOURS: i64 = 6;
 
 // If the client has more 50 DOT it won't be funded
-const MAX_FUNDABLE_CLIENT_BALANCE: u128 = 50;
+const MAX_FUNDABLE_CLIENT_BALANCE: u128 = 100;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 struct FaucetRequest {
@@ -441,7 +441,7 @@ mod tests {
             DEFAULT_TESTING_CURRENCY,
             DEFAULT_WRAPPED_CURRENCY,
         );
-        let user_allowance_dot: u128 = 1;
+        let user_allowance_dot: u128 = 3;
         let vault_allowance_dot: u128 = 500;
         let one_dot: u128 = 10u128.pow(10);
         let drain_account_id: AccountId = [3; 32].into();
@@ -487,7 +487,7 @@ mod tests {
         .expect("Funding the account failed");
 
         bob_provider.register_public_key(dummy_public_key()).await.unwrap();
-        bob_provider.register_vault(&bob_vault_id, 100).await.unwrap();
+        bob_provider.register_vault(&bob_vault_id, 3 * KSM.one()).await.unwrap();
 
         let bob_funds_before = alice_provider
             .get_free_balance_for_id(bob_account_id.clone(), DEFAULT_TESTING_CURRENCY)
@@ -567,7 +567,7 @@ mod tests {
         for currency_id in [Token(KINT), Token(KSM)] {
             let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
             let bob_vault_id = VaultId::new(bob_account_id.clone(), currency_id, DEFAULT_WRAPPED_CURRENCY);
-            let user_allowance_dot: u128 = 1;
+            let user_allowance_dot: u128 = 60;
             let vault_allowance_dot: u128 = 500;
             let one_dot: u128 = 10u128.pow(10);
             let drain_account_id: AccountId = [3; 32].into();
@@ -582,7 +582,10 @@ mod tests {
             if bob_provider.get_public_key().await.unwrap().is_none() {
                 bob_provider.register_public_key(dummy_public_key()).await.unwrap();
             }
-            bob_provider.register_vault(&bob_vault_id, 100).await.unwrap();
+            bob_provider
+                .register_vault(&bob_vault_id, 55 * KSM.one())
+                .await
+                .unwrap();
 
             let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
 
@@ -629,7 +632,7 @@ mod tests {
             DEFAULT_TESTING_CURRENCY,
             DEFAULT_WRAPPED_CURRENCY,
         );
-        let user_allowance_dot: u128 = 1;
+        let user_allowance_dot: u128 = 3;
         let vault_allowance_dot: u128 = 500;
         let one_dot: u128 = 10u128.pow(10);
         let drain_account_id: AccountId = [3; 32].into();
@@ -642,7 +645,7 @@ mod tests {
 
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         bob_provider.register_public_key(dummy_public_key()).await.unwrap();
-        bob_provider.register_vault(&bob_vault_id, 100).await.unwrap();
+        bob_provider.register_vault(&bob_vault_id, 3 * KSM.one()).await.unwrap();
 
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding

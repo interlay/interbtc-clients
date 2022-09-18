@@ -3,16 +3,12 @@ use bitcoin::{
     Error as BitcoinError, SatPerVbyte, Transaction, TransactionExt, TransactionMetadata, Txid,
     BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
-use futures::{
-    future::Either,
-    stream::{self, StreamExt},
-    try_join, TryStreamExt,
-};
+use futures::{future::Either, stream::StreamExt, try_join, TryStreamExt};
 use runtime::{
     BtcAddress, BtcRelayPallet, Error as RuntimeError, FixedPointNumber, FixedU128, H256Le, InterBtcParachain,
-    InterBtcRedeemRequest, InterBtcRefundRequest, InterBtcReplaceRequest, IssuePallet, OraclePallet, PartialAddress,
-    PrettyPrint, RedeemPallet, RedeemRequestStatus, RefundPallet, ReplacePallet, ReplaceRequestStatus,
-    RequestRefundEvent, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
+    InterBtcRedeemRequest, InterBtcReplaceRequest, OraclePallet, PartialAddress, PrettyPrint, RedeemPallet,
+    RedeemRequestStatus, ReplacePallet, ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet,
+    H256,
 };
 use service::{spawn_cancelable, DynBitcoinCoreApi, Error as ServiceError, ShutdownSender};
 use std::{collections::HashMap, convert::TryInto, time::Duration};
@@ -63,7 +59,6 @@ pub fn parachain_blocks_to_bitcoin_blocks_rounded_up(parachain_blocks: u32) -> R
 pub enum RequestType {
     Redeem,
     Replace,
-    Refund,
 }
 
 impl Request {
@@ -145,34 +140,6 @@ impl Request {
         })
     }
 
-    /// Constructs a Request for the given InterBtcRefundRequest
-    fn from_refund_request(hash: H256, request: InterBtcRefundRequest, btc_height: u32) -> Request {
-        Request {
-            hash,
-            deadline: None,
-            btc_height: Some(btc_height),
-            amount: request.amount_btc,
-            btc_address: request.btc_address,
-            request_type: RequestType::Refund,
-            vault_id: request.vault,
-            fee_budget: Some(request.transfer_fee_btc),
-        }
-    }
-
-    /// Constructs a Request for the given RequestRefundEvent
-    pub fn from_refund_request_event(request: &RequestRefundEvent) -> Request {
-        Request {
-            btc_address: request.btc_address,
-            amount: request.amount,
-            hash: request.refund_id,
-            btc_height: None,
-            deadline: None,
-            request_type: RequestType::Refund,
-            vault_id: request.vault_id.clone(),
-            fee_budget: None,
-        }
-    }
-
     /// returns the fee rate in sat/vByte
     async fn get_fee_rate<P: OraclePallet + Send + Sync>(&self, parachain_rpc: &P) -> Result<SatPerVbyte, Error> {
         let fee_rate: FixedU128 = parachain_rpc.get_bitcoin_fees().await?;
@@ -187,7 +154,6 @@ impl Request {
     /// Makes the bitcoin transfer and executes the request
     pub async fn pay_and_execute<
         P: ReplacePallet
-            + RefundPallet
             + BtcRelayPallet
             + RedeemPallet
             + SecurityPallet
@@ -408,7 +374,7 @@ impl Request {
     }
 
     /// Executes the request. Upon failure it will retry
-    async fn execute<P: ReplacePallet + RedeemPallet + RefundPallet>(
+    async fn execute<P: ReplacePallet + RedeemPallet>(
         &self,
         parachain_rpc: P,
         tx_metadata: TransactionMetadata,
@@ -417,7 +383,6 @@ impl Request {
         let execute = match self.request_type {
             RequestType::Redeem => RedeemPallet::execute_redeem,
             RequestType::Replace => ReplacePallet::execute_replace,
-            RequestType::Refund => RefundPallet::execute_refund,
         };
 
         match (self.fee_budget, tx_metadata.fee.map(|x| x.abs().as_sat() as u128)) {
@@ -462,34 +427,15 @@ pub async fn execute_open_requests(
     read_only_btc_rpc: DynBitcoinCoreApi,
     num_confirmations: u32,
     payment_margin: Duration,
-    process_refunds: bool,
     auto_rbf: bool,
 ) -> Result<(), ServiceError> {
     let parachain_rpc = &parachain_rpc;
     let vault_id = parachain_rpc.get_account_id().clone();
 
-    // get all redeem, replace and refund requests
-    let (redeem_requests, replace_requests, refund_requests) = try_join!(
+    // get all redeem and replace requests
+    let (redeem_requests, replace_requests) = try_join!(
         parachain_rpc.get_vault_redeem_requests(vault_id.clone()),
         parachain_rpc.get_old_vault_replace_requests(vault_id.clone()),
-        async {
-            if process_refunds {
-                // for refunds, we use the btc_height of the issue
-                let refunds = parachain_rpc.get_vault_refund_requests(vault_id).await?;
-                stream::iter(refunds)
-                    .then(|(refund_id, refund)| async move {
-                        Ok((
-                            refund_id,
-                            refund.clone(),
-                            parachain_rpc.get_issue_request(refund.issue_id).await?.btc_height,
-                        ))
-                    })
-                    .try_collect()
-                    .await
-            } else {
-                Ok(Vec::new())
-            }
-        },
     )?;
 
     let open_redeems = redeem_requests
@@ -502,15 +448,9 @@ pub async fn execute_open_requests(
         .filter(|(_, request)| request.status == ReplaceRequestStatus::Pending)
         .filter_map(|(hash, request)| Request::from_replace_request(hash, request, payment_margin).ok());
 
-    let open_refunds = refund_requests
-        .into_iter()
-        .filter(|(_, request, _)| !request.completed)
-        .map(|(hash, request, btc_height)| Request::from_refund_request(hash, request, btc_height));
-
     // collect all requests into a hashmap, indexed by their id
     let mut open_requests = open_redeems
         .chain(open_replaces)
-        .chain(open_refunds)
         .map(|x| (x.hash, x))
         .collect::<HashMap<_, _>>();
 
@@ -726,14 +666,6 @@ mod tests {
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
             async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
             async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;
-        }
-
-
-        #[async_trait]
-        pub trait RefundPallet {
-            async fn execute_refund(&self, refund_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
-            async fn get_refund_request(&self, refund_id: H256) -> Result<InterBtcRefundRequest, RuntimeError>;
-            async fn get_vault_refund_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcRefundRequest)>, RuntimeError>;
         }
 
         #[async_trait]

@@ -203,7 +203,7 @@ async fn process_transaction_and_execute_issue(
                 // this transaction
                 (*random_delay).delay(&issue_id.to_fixed_bytes()).await?;
                 let issue = btc_parachain.get_issue_request(issue_id).await?;
-                if let IssueRequestStatus::Completed(_) = issue.status {
+                if let IssueRequestStatus::Completed = issue.status {
                     tracing::info!("Issue {} has already been executed - doing nothing.", issue_id);
                     return Ok(());
                 }

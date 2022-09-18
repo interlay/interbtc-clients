@@ -12,7 +12,6 @@ use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt};
 use module_oracle_rpc_runtime_api::BalanceWrapper;
 use primitives::UnsignedFixedPoint;
 use serde_json::Value;
-use sp_runtime::FixedPointNumber;
 use std::{collections::BTreeSet, future::Future, ops::RangeInclusive, sync::Arc, time::Duration};
 use subxt::{
     rpc::{rpc_params, ClientT},
@@ -1323,67 +1322,6 @@ impl RedeemPallet for InterBtcParachain {
 }
 
 #[async_trait]
-pub trait RefundPallet {
-    /// Execute a refund request by providing a Bitcoin transaction inclusion proof
-    async fn execute_refund(&self, refund_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error>;
-
-    /// Fetch a refund request from storage
-    async fn get_refund_request(&self, refund_id: H256) -> Result<InterBtcRefundRequest, Error>;
-
-    /// Get all refund requests requested of the given vault
-    async fn get_vault_refund_requests(
-        &self,
-        account_id: AccountId,
-    ) -> Result<Vec<(H256, InterBtcRefundRequest)>, Error>;
-}
-
-#[async_trait]
-impl RefundPallet for InterBtcParachain {
-    async fn execute_refund(&self, refund_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
-        self.with_unique_signer(|signer| async move {
-            self.api
-                .tx()
-                .refund()
-                .execute_refund(refund_id, merkle_proof.into(), raw_tx.into())
-                .sign_and_submit_then_watch_default(&signer)
-                .await
-        })
-        .await?;
-        Ok(())
-    }
-
-    async fn get_refund_request(&self, refund_id: H256) -> Result<InterBtcRefundRequest, Error> {
-        let head = self.get_latest_block_hash().await?;
-        Ok(self
-            .api
-            .storage()
-            .refund()
-            .refund_requests(&refund_id, head)
-            .await?
-            .ok_or(Error::StorageItemNotFound)?)
-    }
-
-    async fn get_vault_refund_requests(
-        &self,
-        account_id: AccountId,
-    ) -> Result<Vec<(H256, InterBtcRefundRequest)>, Error> {
-        let head = self.get_latest_block_hash().await?;
-        let result: Vec<H256> = self
-            .rpc()
-            .request("refund_getVaultRefundRequests", rpc_params![account_id, head])
-            .await?;
-        join_all(
-            result
-                .into_iter()
-                .map(|key| async move { self.get_refund_request(key).await.map(|value| (key, value)) }),
-        )
-        .await
-        .into_iter()
-        .collect()
-    }
-}
-
-#[async_trait]
 pub trait BtcRelayPallet {
     async fn get_best_block(&self) -> Result<H256Le, Error>;
 
@@ -1797,13 +1735,18 @@ impl VaultRegistryPallet for InterBtcParachain {
     ///
     /// # Arguments
     /// * `uri` - URI to the client release binary
-    /// * `code_hash` - The runtime code hash associated with this client release
-    async fn set_current_client_release(&self, uri: &[u8], code_hash: &H256) -> Result<(), Error> {
+    /// * `checksum` - The SHA256 checksum of the client binary
+    async fn set_current_client_release(&self, uri: &[u8], checksum: &H256) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
+            let release = ClientRelease {
+                uri: uri.to_vec(),
+                checksum: *checksum,
+            };
+
             self.api
                 .tx()
-                .vault_registry()
-                .set_current_client_release(uri.to_vec(), *code_hash)
+                .clients_info()
+                .set_current_client_release(uri.to_vec(), release)
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1815,13 +1758,18 @@ impl VaultRegistryPallet for InterBtcParachain {
     ///
     /// # Arguments
     /// * `uri` - URI to the client release binary
-    /// * `code_hash` - The runtime code hash associated with this client release
-    async fn set_pending_client_release(&self, uri: &[u8], code_hash: &H256) -> Result<(), Error> {
+    /// * `checksum` - The SHA256 checksum of the client binary
+    async fn set_pending_client_release(&self, uri: &[u8], checksum: &H256) -> Result<(), Error> {
         self.with_unique_signer(|signer| async move {
+            let release = ClientRelease {
+                uri: uri.to_vec(),
+                checksum: *checksum,
+            };
+
             self.api
                 .tx()
-                .vault_registry()
-                .set_pending_client_release(uri.to_vec(), *code_hash)
+                .clients_info()
+                .set_pending_client_release(uri.to_vec(), release)
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
