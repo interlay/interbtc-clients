@@ -1,4 +1,4 @@
-use bitcoincore_rpc::bitcoin::{blockdata::constants::WITNESS_SCALE_FACTOR, PublicKey};
+use bitcoincore_rpc::bitcoin::{blockdata::constants::WITNESS_SCALE_FACTOR, PublicKey, Witness};
 
 use super::{electrs::ElectrsClient, error::Error};
 use crate::{
@@ -44,6 +44,12 @@ impl GetSerializeSize for Vec<Vec<u8>> {
     }
 }
 
+impl GetSerializeSize for Witness {
+    fn get_serialize_size(&self) -> u64 {
+        self.to_vec().get_serialize_size()
+    }
+}
+
 // https://github.com/bitcoin/bitcoin/blob/607d5a46aa0f5053d8643a3e2c31a69bfdeb6e9f/src/script/sign.cpp#L611
 fn dummy_sign_input(txin: &mut TxIn, public_key: PublicKey) {
     // create a dummy signature that is a valid DER-encoding
@@ -65,7 +71,7 @@ fn dummy_sign_input(txin: &mut TxIn, public_key: PublicKey) {
     };
 
     // update input (only works with segwit for now)
-    txin.witness = vec![dummy_signature.to_vec(), public_key.to_bytes()];
+    txin.witness = Witness::from_vec(vec![dummy_signature.to_vec(), public_key.to_bytes()]);
 }
 
 // https://github.com/bitcoin/bitcoin/blob/e9035f867a36a430998e3811385958229ac79cf5/src/consensus/validation.h#L156
@@ -406,7 +412,7 @@ impl Wallet {
         for psbt_input in psbt.inputs.iter_mut() {
             let (key, sig) = psbt_input.partial_sigs.iter().next().expect("signature set above; qed");
             // https://github.com/bitcoin/bitcoin/blob/607d5a46aa0f5053d8643a3e2c31a69bfdeb6e9f/src/script/sign.cpp#L125
-            psbt_input.final_script_witness = Some(vec![sig.clone().to_vec(), key.to_bytes()]);
+            psbt_input.final_script_witness = Some(Witness::from_vec(vec![sig.clone().to_vec(), key.to_bytes()]));
         }
 
         Ok(())
