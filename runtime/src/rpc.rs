@@ -38,19 +38,19 @@ compile_error!("Tests are only supported for the kintsugi testnet metadata");
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "parachain-metadata-interlay")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1018000..=1018000;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1019000..=1019000;
         pub const DEFAULT_SPEC_NAME: &str = "interlay-parachain";
         pub const SS58_PREFIX: u16 = 2032;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1018000..=1018000;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1019000..=1019000;
         pub const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
         pub const SS58_PREFIX: u16 = 2092;
     } else if #[cfg(feature = "parachain-metadata-interlay-testnet")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1018000..=1018000;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1019000..=1019000;
         pub const DEFAULT_SPEC_NAME: &str = "testnet-interlay";
         pub const SS58_PREFIX: u16 = 2032;
     }  else if #[cfg(feature = "parachain-metadata-kintsugi-testnet")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1018000..=1018000;
+        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1019000..=1019000;
         // fun workaround to migrate allowed spec name
         pub struct ThisOrThat<'a>(&'a str, &'a str);
         impl<'a> PartialEq<String> for ThisOrThat<'a> {
