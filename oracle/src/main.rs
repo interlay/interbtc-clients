@@ -47,10 +47,6 @@ struct Opts {
     #[clap(long)]
     currency: Vec<Currency>,
 
-    /// Take median of price sources
-    #[clap(long)]
-    median: bool,
-
     /// Connection settings for Blockstream
     #[clap(flatten)]
     blockstream: feeds::BlockstreamCli,
@@ -149,34 +145,17 @@ async fn main() -> Result<(), Error> {
 
     loop {
         // TODO: retry these calls on failure
-        let fee_estimates = if opts.median {
-            vec![bitcoin_feeds.get_median(CONFIRMATION_TARGET).await?]
-        } else {
-            bitcoin_feeds.get_fee_estimates(CONFIRMATION_TARGET).await?
-        };
+        let fee_estimate = bitcoin_feeds.get_median(CONFIRMATION_TARGET).await?;
 
-        let prices = if opts.median {
-            join_all(opts.currency.iter().map(|quote| {
-                price_feeds.get_median(CurrencyPair {
-                    base: BASE_CURRENCY,
-                    quote: *quote,
-                })
-            }))
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?
-        } else {
-            join_all(opts.currency.iter().map(|quote| {
-                price_feeds.get_prices(CurrencyPair {
-                    base: BASE_CURRENCY,
-                    quote: *quote,
-                })
-            }))
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?
-            .concat()
-        };
+        let prices = join_all(opts.currency.iter().map(|quote| {
+            price_feeds.get_median(CurrencyPair {
+                base: BASE_CURRENCY,
+                quote: *quote,
+            })
+        }))
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
 
         // get prices above first to prevent websocket timeout
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
@@ -193,16 +172,9 @@ async fn main() -> Result<(), Error> {
                 retry_notify(
                     get_exponential_backoff(),
                     || async {
-                        join_all(
-                            fee_estimates
-                                .iter()
-                                .map(|fee_estimate| submit_bitcoin_fees(&parachain_rpc, *fee_estimate)),
-                        )
-                        .await
-                        .into_iter() // turn vec<result> into result
-                        .find(|x| x.is_err())
-                        .transpose()
-                        .map_err(Into::into)
+                        submit_bitcoin_fees(&parachain_rpc, fee_estimate)
+                            .await
+                            .map_err(Into::into)
                     },
                     |err, _| log::error!("Error: {}", err),
                 ),
