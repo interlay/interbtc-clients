@@ -1,4 +1,7 @@
-use bitcoincore_rpc::bitcoin::{blockdata::constants::WITNESS_SCALE_FACTOR, PublicKey, Witness, PackedLockTime};
+use bitcoincore_rpc::bitcoin::{
+    blockdata::{constants::WITNESS_SCALE_FACTOR, transaction::NonStandardSighashType},
+    PackedLockTime, PublicKey, Witness,
+};
 
 use super::{electrs::ElectrsClient, error::Error};
 use crate::{
@@ -363,7 +366,13 @@ impl Wallet {
                 .clone()
                 .expect("utxo is always set in fund_transaction; qed");
 
-            let sighash_ty = psbt_input.sighash_type.unwrap_or(SigHashType::All);
+            // Note: we don't support SchnorrSighashType
+            let sighash_ty = match psbt_input.sighash_type {
+                Some(x) => x
+                    .ecdsa_hash_ty()
+                    .map_err(|NonStandardSighashType(ty)| Error::PsbtError(psbt::Error::NonStandardSighashType(ty)))?,
+                _ => SigHashType::All,
+            };
 
             // TODO: support signing p2sh, p2pkh, p2wsh
             let script_code = if prev_out.script_pubkey.is_v0_p2wpkh() {
