@@ -722,12 +722,12 @@ impl BitcoinCoreApi for BitcoinCore {
         let address = Address::p2wpkh(&public_key, self.network).map_err(ConversionError::from)?;
         let private_key = self.rpc.dump_private_key(&address)?;
         let deposit_secret_key =
-            addr::calculate_deposit_secret_key(private_key.key, SecretKey::from_slice(&secret_key)?)?;
+            addr::calculate_deposit_secret_key(private_key.inner, SecretKey::from_slice(&secret_key)?)?;
         self.rpc.import_private_key(
             &PrivateKey {
                 compressed: private_key.compressed,
                 network: self.network,
-                key: deposit_secret_key,
+                inner: deposit_secret_key,
             },
             Some(DEPOSIT_LABEL),
             // rescan true by default

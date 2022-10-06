@@ -388,7 +388,7 @@ impl Wallet {
 
             let sig = self
                 .secp
-                .sign(&Message::from_slice(&sig_hash.into_inner()[..])?, &private_key.key);
+                .sign(&Message::from_slice(&sig_hash.into_inner()[..])?, &private_key.inner);
 
             pub struct EcdsaSig {
                 pub sig: Signature,

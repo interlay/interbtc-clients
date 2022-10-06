@@ -163,7 +163,7 @@ impl BitcoinCoreApi for BitcoinLight {
         }
 
         self.wallet.put_p2wpkh_key(mul_secret_key(
-            self.private_key.key,
+            self.private_key.inner,
             SecretKey::from_slice(&secret_key)?,
         )?)?;
 
