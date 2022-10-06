@@ -1,6 +1,6 @@
 use bitcoincore_rpc::bitcoin::{
     blockdata::{constants::WITNESS_SCALE_FACTOR, transaction::NonStandardSighashType},
-    PackedLockTime, PublicKey, Witness,
+    PackedLockTime, PublicKey, Witness, EcdsaSig,
 };
 
 use super::{electrs::ElectrsClient, error::Error};
@@ -390,23 +390,6 @@ impl Wallet {
                 .secp
                 .sign(&Message::from_slice(&sig_hash.into_inner()[..])?, &private_key.inner);
 
-            pub struct EcdsaSig {
-                pub sig: Signature,
-                pub hash_ty: SigHashType,
-            }
-
-            impl EcdsaSig {
-                // https://github.com/rust-bitcoin/rust-bitcoin/blob/deb867e33d30873c44c1d0c9917630ed52388d59/src/util/ecdsa.rs#L50
-                pub fn to_vec(&self) -> Vec<u8> {
-                    self.sig
-                        .serialize_der()
-                        .iter()
-                        .copied()
-                        .chain(std::iter::once(self.hash_ty as u8))
-                        .collect()
-                }
-            }
-
             let final_signature = EcdsaSig {
                 sig,
                 hash_ty: sighash_ty,
@@ -415,7 +398,7 @@ impl Wallet {
             // TODO: can we write directly to final_script_witness here?
             psbt.inputs[inp]
                 .partial_sigs
-                .insert(private_key.public_key(&self.secp), final_signature.to_vec());
+                .insert(private_key.public_key(&self.secp), final_signature);
         }
 
         for psbt_input in psbt.inputs.iter_mut() {
