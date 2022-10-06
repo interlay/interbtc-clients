@@ -1,6 +1,7 @@
 use bitcoincore_rpc::bitcoin::{
     blockdata::{constants::WITNESS_SCALE_FACTOR, transaction::NonStandardSighashType},
-    PackedLockTime, PublicKey, Witness, EcdsaSig, util::sighash::SighashCache,
+    util::sighash::SighashCache,
+    EcdsaSig, PackedLockTime, PublicKey, Witness,
 };
 
 use super::{electrs::ElectrsClient, error::Error};
@@ -513,10 +514,7 @@ mod tests {
         assert_eq!(get_virtual_transaction_size(tx.weight() as u64), 184);
 
         let fee_rate = FeeRate { n_satoshis_per_k: 1000 };
-        assert_eq!(
-            fee_rate.get_fee(tx.weight().div_ceil(WITNESS_SCALE_FACTOR) as u64),
-            184
-        );
+        assert_eq!(fee_rate.get_fee(tx.weight().div_ceil(WITNESS_SCALE_FACTOR) as u64), 184);
 
         let actual_fee = 100000 - tx.output.iter().map(|tx_out| tx_out.value).sum::<u64>();
         assert_eq!(actual_fee, 184);
