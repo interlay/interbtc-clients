@@ -158,7 +158,7 @@ impl BitcoinCoreApi for BitcoinLight {
     async fn add_new_deposit_key(&self, _public_key: PublicKey, secret_key: Vec<u8>) -> Result<(), BitcoinError> {
         fn mul_secret_key(vault_key: SecretKey, issue_key: SecretKey) -> Result<SecretKey, BitcoinError> {
             let mut deposit_key = vault_key;
-            deposit_key.mul_assign(&Scalar::from(issue_key))?;
+            deposit_key = deposit_key.mul_tweak(&Scalar::from(issue_key))?;
             Ok(deposit_key)
         }
 
@@ -284,7 +284,7 @@ impl BitcoinCoreApi for BitcoinLight {
 
     async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError> {
         let tx = self.get_transaction(&txid, None).await?;
-        let vsize = tx.get_weight().div_ceil(WITNESS_SCALE_FACTOR) as u64;
+        let vsize = tx.weight().div_ceil(WITNESS_SCALE_FACTOR) as u64;
         let recipients_sum = tx.output.iter().map(|tx_out| tx_out.value).sum::<u64>();
 
         let inputs = try_join_all(tx.input.iter().map(|input| async move {

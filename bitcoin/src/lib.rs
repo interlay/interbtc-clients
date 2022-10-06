@@ -387,7 +387,7 @@ impl BitcoinCore {
     ) -> Result<String, Error> {
         let mut outputs = serde_json::Map::<String, serde_json::Value>::new();
         // add the payment output
-        outputs.insert(address, serde_json::Value::from(amount.as_btc()));
+        outputs.insert(address, serde_json::Value::from(amount.to_btc()));
 
         if let Some(request_id) = request_id {
             // add the op_return data - bitcoind will add op_return and the length automatically
@@ -997,7 +997,7 @@ impl BitcoinCoreApi for BitcoinCore {
         // to get from weight to vsize we divide by 4, but round up by first adding 3
         // Note that we can not rely on tx.get_size() since it doesn't 'discount' witness bytes
         let vsize = tx
-            .get_weight()
+            .weight()
             .checked_add(3)
             .ok_or(Error::ArithmeticError)?
             .checked_div(4)
@@ -1007,7 +1007,7 @@ impl BitcoinCoreApi for BitcoinCore {
         let fee = get_tx_result
             .fee
             .ok_or(Error::MissingBitcoinFeeInfo)?
-            .as_sat()
+            .to_sat()
             .checked_abs()
             .ok_or(Error::ArithmeticError)?;
 

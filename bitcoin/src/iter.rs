@@ -193,6 +193,7 @@ async fn get_best_block_info(rpc: &DynBitcoinCoreApi) -> Result<(u32, BlockHash)
 mod tests {
     use super::*;
     use crate::*;
+    use bitcoincore_rpc::bitcoin::PackedLockTime;
     pub use bitcoincore_rpc::bitcoin::{Address, Amount, Network, PublicKey, TxMerkleNode};
     use sp_core::H256;
 
@@ -278,7 +279,7 @@ mod tests {
     fn dummy_tx(value: i32) -> Transaction {
         Transaction {
             version: value,
-            lock_time: 1,
+            lock_time: PackedLockTime(1),
             input: vec![],
             output: vec![],
         }
@@ -293,7 +294,7 @@ mod tests {
                 nonce: 0,
                 time: 0,
                 prev_blockhash: next_hash,
-                merkle_root: TxMerkleNode::default(),
+                merkle_root: TxMerkleNode::all_zeros(),
             },
         }
     }

@@ -385,7 +385,7 @@ impl Request {
             RequestType::Replace => ReplacePallet::execute_replace,
         };
 
-        match (self.fee_budget, tx_metadata.fee.map(|x| x.abs().as_sat() as u128)) {
+        match (self.fee_budget, tx_metadata.fee.map(|x| x.abs().to_sat() as u128)) {
             (Some(budget), Some(actual)) if budget < actual => {
                 tracing::warn!(
                     "Spent more on bitcoin inclusion fee than budgeted: spent {} satoshi; budget was {}",
@@ -588,7 +588,7 @@ mod tests {
     use crate::metrics::PerCurrencyMetrics;
     use async_trait::async_trait;
     use bitcoin::{
-        json, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, Network,
+        json, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, Hash, Network,
         PrivateKey, PublicKey, Transaction, TransactionMetadata, Txid,
     };
     use jsonrpc_core::serde_json::{Map, Value};
@@ -810,6 +810,8 @@ mod tests {
     }
 
     mod pay_and_execute_redeem_tests {
+        use bitcoin::Hash;
+
         use crate::metrics::PerCurrencyMetrics;
 
         use super::*;
@@ -842,14 +844,14 @@ mod tests {
                 .returning(move || Ok(current_bitcoin_height as u64));
             mock_bitcoin
                 .expect_create_and_send_transaction()
-                .returning(|_, _, _, _| Ok(Txid::default()));
+                .returning(|_, _, _, _| Ok(Txid::all_zeros()));
             mock_bitcoin.expect_wait_for_transaction_metadata().returning(|_, _| {
                 Ok(TransactionMetadata {
-                    txid: Txid::default(),
+                    txid: Txid::all_zeros(),
                     proof: vec![],
                     raw_tx: vec![],
                     block_height: 0,
-                    block_hash: BlockHash::default(),
+                    block_hash: BlockHash::all_zeros(),
                     fee: None,
                 })
             });
@@ -976,14 +978,14 @@ mod tests {
         mock_bitcoin.expect_network().returning(|| Network::Regtest);
         mock_bitcoin
             .expect_create_and_send_transaction()
-            .returning(|_, _, _, _| Ok(Txid::default()));
+            .returning(|_, _, _, _| Ok(Txid::all_zeros()));
         mock_bitcoin.expect_wait_for_transaction_metadata().returning(|_, _| {
             Ok(TransactionMetadata {
-                txid: Txid::default(),
+                txid: Txid::all_zeros(),
                 proof: vec![],
                 raw_tx: vec![],
                 block_height: 0,
-                block_hash: BlockHash::default(),
+                block_hash: BlockHash::all_zeros(),
                 fee: None,
             })
         });
