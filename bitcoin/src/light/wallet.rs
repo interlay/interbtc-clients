@@ -1,4 +1,4 @@
-use bitcoincore_rpc::bitcoin::{blockdata::constants::WITNESS_SCALE_FACTOR, PublicKey, Witness};
+use bitcoincore_rpc::bitcoin::{blockdata::constants::WITNESS_SCALE_FACTOR, PublicKey, Witness, PackedLockTime};
 
 use super::{electrs::ElectrsClient, error::Error};
 use crate::{
@@ -348,7 +348,7 @@ impl Wallet {
 
         Transaction {
             version: 2,
-            lock_time: Default::default(),
+            lock_time: PackedLockTime::ZERO,
             input: Default::default(),
             output,
         }
