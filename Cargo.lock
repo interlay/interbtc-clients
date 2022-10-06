@@ -100,7 +100,7 @@ dependencies = [
 [[package]]
 name = "annuity"
 version = "1.0.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -629,7 +629,7 @@ dependencies = [
 [[package]]
 name = "bitcoin"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "bitcoin_hashes 0.7.6",
  "frame-support",
@@ -848,7 +848,7 @@ checksum = "bd769563b4ea2953e2825c9e6b7470a5f55f67e0be00030bf3e390a2a6071f64"
 [[package]]
 name = "btc-relay"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "bitcoin 1.2.0",
  "frame-benchmarking",
@@ -1128,7 +1128,7 @@ dependencies = [
 [[package]]
 name = "clients-info"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "fixed-hash",
  "frame-benchmarking",
@@ -1170,7 +1170,7 @@ dependencies = [
 [[package]]
 name = "collator-selection"
 version = "3.0.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -1972,7 +1972,7 @@ dependencies = [
 [[package]]
 name = "currency"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -2138,7 +2138,7 @@ dependencies = [
 [[package]]
 name = "democracy"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -2509,7 +2509,7 @@ dependencies = [
 [[package]]
 name = "escrow"
 version = "1.0.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -2661,7 +2661,7 @@ dependencies = [
 [[package]]
 name = "fee"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "currency",
  "frame-benchmarking",
@@ -3824,7 +3824,7 @@ dependencies = [
 [[package]]
 name = "interbtc-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "bitcoin 1.2.0",
  "clap",
@@ -3906,7 +3906,7 @@ dependencies = [
 [[package]]
 name = "interbtc-primitives"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "bitcoin 1.2.0",
  "bstringify",
@@ -3922,7 +3922,7 @@ dependencies = [
 [[package]]
 name = "interbtc-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "futures 0.3.24",
  "interbtc-primitives",
@@ -3952,7 +3952,7 @@ dependencies = [
 [[package]]
 name = "interlay-runtime-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "annuity",
  "btc-relay",
@@ -4083,7 +4083,7 @@ checksum = "879d54834c8c76457ef4293a689b2a8c59b076067ad77b15efafbb05f92a592b"
 [[package]]
 name = "issue"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "bitcoin 1.2.0",
  "btc-relay",
@@ -4595,7 +4595,7 @@ checksum = "f9b7d56ba4a8344d6be9729995e6b06f928af29998cdf79fe390cbf6b1fee838"
 [[package]]
 name = "kintsugi-runtime-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "annuity",
  "btc-relay",
@@ -5799,7 +5799,7 @@ dependencies = [
 [[package]]
 name = "module-btc-relay-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "jsonrpsee 0.14.0",
  "module-btc-relay-rpc-runtime-api",
@@ -5812,7 +5812,7 @@ dependencies = [
 [[package]]
 name = "module-btc-relay-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -5823,7 +5823,7 @@ dependencies = [
 [[package]]
 name = "module-escrow-rpc"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "jsonrpsee 0.14.0",
  "module-escrow-rpc-runtime-api",
@@ -5837,7 +5837,7 @@ dependencies = [
 [[package]]
 name = "module-escrow-rpc-runtime-api"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "module-oracle-rpc-runtime-api",
  "parity-scale-codec",
@@ -5847,7 +5847,7 @@ dependencies = [
 [[package]]
 name = "module-issue-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "jsonrpsee 0.14.0",
  "module-issue-rpc-runtime-api",
@@ -5860,7 +5860,7 @@ dependencies = [
 [[package]]
 name = "module-issue-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -5871,7 +5871,7 @@ dependencies = [
 [[package]]
 name = "module-oracle-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "jsonrpsee 0.14.0",
  "module-oracle-rpc-runtime-api",
@@ -5884,7 +5884,7 @@ dependencies = [
 [[package]]
 name = "module-oracle-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -5896,7 +5896,7 @@ dependencies = [
 [[package]]
 name = "module-redeem-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "jsonrpsee 0.14.0",
  "module-redeem-rpc-runtime-api",
@@ -5909,7 +5909,7 @@ dependencies = [
 [[package]]
 name = "module-redeem-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -5920,7 +5920,7 @@ dependencies = [
 [[package]]
 name = "module-replace-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "jsonrpsee 0.14.0",
  "module-replace-rpc-runtime-api",
@@ -5933,7 +5933,7 @@ dependencies = [
 [[package]]
 name = "module-replace-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -5944,7 +5944,7 @@ dependencies = [
 [[package]]
 name = "module-reward-rpc"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "jsonrpsee 0.14.0",
  "module-oracle-rpc-runtime-api",
@@ -5958,7 +5958,7 @@ dependencies = [
 [[package]]
 name = "module-reward-rpc-runtime-api"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-support",
  "module-oracle-rpc-runtime-api",
@@ -5969,7 +5969,7 @@ dependencies = [
 [[package]]
 name = "module-vault-registry-rpc"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "jsonrpsee 0.14.0",
  "module-oracle-rpc-runtime-api",
@@ -5983,7 +5983,7 @@ dependencies = [
 [[package]]
 name = "module-vault-registry-rpc-runtime-api"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-support",
  "module-oracle-rpc-runtime-api",
@@ -6272,7 +6272,7 @@ dependencies = [
 [[package]]
 name = "nomination"
 version = "0.5.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "currency",
  "fee",
@@ -6546,7 +6546,7 @@ dependencies = [
 [[package]]
 name = "oracle"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "currency",
  "frame-benchmarking",
@@ -9391,7 +9391,7 @@ dependencies = [
 [[package]]
 name = "redeem"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "bitcoin 1.2.0",
  "btc-relay",
@@ -9549,7 +9549,7 @@ dependencies = [
 [[package]]
 name = "replace"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "bitcoin 1.2.0",
  "btc-relay",
@@ -9633,7 +9633,7 @@ checksum = "4389f1d5789befaf6029ebd9f7dac4af7f7e3d61b69d4f30e2ac02b57e7712b0"
 [[package]]
 name = "reward"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -11151,7 +11151,7 @@ dependencies = [
 [[package]]
 name = "security"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -12626,7 +12626,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 [[package]]
 name = "staking"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -12989,7 +12989,7 @@ dependencies = [
 [[package]]
 name = "supply"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -13133,7 +13133,7 @@ checksum = "507e9898683b6c43a9aa55b64259b721b52ba226e0f3779137e50ad114a4c90b"
 [[package]]
 name = "testnet-interlay-runtime-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "annuity",
  "btc-relay",
@@ -13229,7 +13229,7 @@ dependencies = [
 [[package]]
 name = "testnet-kintsugi-runtime-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "annuity",
  "btc-relay",
@@ -14041,7 +14041,7 @@ dependencies = [
 [[package]]
 name = "vault-registry"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=1fd3afaf40d8526480a0329600feff057000b52b#1fd3afaf40d8526480a0329600feff057000b52b"
+source = "git+https://github.com/interlay/interbtc?rev=52a19a602a696539921df4065f3c6887121a0494#52a19a602a696539921df4065f3c6887121a0494"
 dependencies = [
  "bitcoin 1.2.0",
  "currency",
