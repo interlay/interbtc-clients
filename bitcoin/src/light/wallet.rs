@@ -269,7 +269,7 @@ impl Wallet {
                 select_coins.add(coin_output);
                 value_to_select = value_to_select.saturating_sub(effective_value);
 
-                psbt.global.unsigned_tx.input.push(TxIn {
+                psbt.unsigned_tx.input.push(TxIn {
                     previous_output: utxo.outpoint,
                     ..Default::default()
                 });
@@ -287,9 +287,9 @@ impl Wallet {
                     let change_amount = select_coins.get_change(min_viable_change, change_fee);
                     let mut n_change_pos_in_out = None;
                     if change_amount > 0 {
-                        n_change_pos_in_out = Some(psbt.global.unsigned_tx.output.len());
+                        n_change_pos_in_out = Some(psbt.unsigned_tx.output.len());
                         // add change output
-                        psbt.global.unsigned_tx.output.push(TxOut {
+                        psbt.unsigned_tx.output.push(TxOut {
                             value: change_amount,
                             script_pubkey: change_address.script_pubkey(),
                         });
@@ -303,7 +303,7 @@ impl Wallet {
                     if let Some(change_pos) = n_change_pos_in_out {
                         if fee_needed < n_fee_ret {
                             log::info!("Fee needed is less than expected");
-                            let mut change_output = &mut psbt.global.unsigned_tx.output[change_pos];
+                            let mut change_output = &mut psbt.unsigned_tx.output[change_pos];
                             change_output.value += n_fee_ret - fee_needed;
                         }
                     }
@@ -366,7 +366,7 @@ impl Wallet {
                 Err(Error::InvalidPrevOut)
             }?;
 
-            let mut sig_hasher = SigHashCache::new(&psbt.global.unsigned_tx);
+            let mut sig_hasher = SigHashCache::new(&psbt.unsigned_tx);
             let sig_hash = sig_hasher.signature_hash(inp, &script_code, prev_out.value, sighash_ty);
 
             let private_key = self.get_priv_key(&prev_out.script_pubkey)?;
@@ -585,32 +585,30 @@ mod tests {
 
         // 020000000001018971609cf35253baa5164e95f79effd9ed466a2a58e6a723b38327b81e5cd2dc0000000000fdffffff02a086010000000000160014998fced992b90c49c2295c5724edf0daf4748dca5c60042a01000000160014709467f945841c6bb638f9e107de2933e214f1c502473044022057aeb22db1f8656513b7f44df3a30d8405ba040cb250d731379307f1799f9cad02201582f355d461fd0c8ced789eb02053995663c66fc63a80341da9354ce3b23e580121028d16c10d62693f938deb171ad0a8323e389e79685da23795bb6e6503cb5db1c000000000
         let mut psbt = PartiallySignedTransaction {
-            global: psbt::Global {
-                unsigned_tx: Transaction {
-                    version: 2,
-                    lock_time: 0,
-                    input: vec![TxIn {
-                        previous_output: OutPoint {
-                            txid: Txid::from_str("dcd25c1eb82783b323a7e6582a6a46edd9ff9ef7954e16a5ba5352f39c607189")?,
-                            vout: 0,
-                        },
-                        script_sig: Default::default(),
-                        sequence: 4294967293,
-                        witness: Default::default(),
-                    }],
-                    output: vec![
-                        TxOut {
-                            value: 100000,
-                            // bcrt1qnx8uakvjhyxyns3ft3tjfm0smt68frw2c9adgx
-                            script_pubkey: Script::from_str("0014998fced992b90c49c2295c5724edf0daf4748dca")?,
-                        },
-                        TxOut {
-                            value: 4999897180,
-                            // bcrt1qwz2x0729sswxhd3cl8ss0h3fx03pfuw9anc7ww
-                            script_pubkey: Script::from_str("0014709467f945841c6bb638f9e107de2933e214f1c5")?,
-                        },
-                    ],
-                },
+            unsigned_tx: Transaction {
+                version: 2,
+                lock_time: 0,
+                input: vec![TxIn {
+                    previous_output: OutPoint {
+                        txid: Txid::from_str("dcd25c1eb82783b323a7e6582a6a46edd9ff9ef7954e16a5ba5352f39c607189")?,
+                        vout: 0,
+                    },
+                    script_sig: Default::default(),
+                    sequence: 4294967293,
+                    witness: Default::default(),
+                }],
+                output: vec![
+                    TxOut {
+                        value: 100000,
+                        // bcrt1qnx8uakvjhyxyns3ft3tjfm0smt68frw2c9adgx
+                        script_pubkey: Script::from_str("0014998fced992b90c49c2295c5724edf0daf4748dca")?,
+                    },
+                    TxOut {
+                        value: 4999897180,
+                        // bcrt1qwz2x0729sswxhd3cl8ss0h3fx03pfuw9anc7ww
+                        script_pubkey: Script::from_str("0014709467f945841c6bb638f9e107de2933e214f1c5")?,
+                    },
+                ],
                 xpub: Default::default(),
                 version: 0,
                 proprietary: Default::default(),
