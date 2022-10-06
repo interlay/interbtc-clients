@@ -1051,7 +1051,7 @@ impl TransactionExt for Transaction {
     /// Get the amount of btc that self sent to `dest`, if any
     fn get_payment_amount_to(&self, dest: Payload) -> Option<u64> {
         self.output.iter().find_map(|uxto| {
-            let payload = Payload::from_script(&uxto.script_pubkey)?;
+            let payload = Payload::from_script(&uxto.script_pubkey).ok()?;
             if payload == dest {
                 Some(uxto.value)
             } else {
@@ -1075,7 +1075,7 @@ impl TransactionExt for Transaction {
             .iter()
             .enumerate()
             .filter(|(_, x)| x.value > 0)
-            .filter_map(|(idx, tx_out)| Some((idx, Payload::from_script(&tx_out.script_pubkey)?)))
+            .filter_map(|(idx, tx_out)| Some((idx, Payload::from_script(&tx_out.script_pubkey).ok()?)))
             .collect()
     }
 

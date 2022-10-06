@@ -212,7 +212,7 @@ impl Wallet {
     }
 
     pub fn get_priv_key(&self, script_pubkey: &Script) -> Result<PrivateKey, Error> {
-        let address = Address::from_script(script_pubkey, self.network).ok_or(Error::InvalidAddress)?;
+        let address = Address::from_script(script_pubkey, self.network)?;
         let key_store = self.key_store.read()?;
         let private_key = key_store.get(&address).ok_or(Error::NoPrivateKey)?;
         Ok(*private_key)

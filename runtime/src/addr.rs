@@ -49,7 +49,7 @@ impl PartialAddress for BtcAddress {
             Self::P2WSHv0(hash) => Script::new_v0_wsh(&WScriptHash::from_slice(hash.as_bytes())?),
         };
 
-        Payload::from_script(&script).ok_or(ConversionError::InvalidPayload)
+        Ok(Payload::from_script(&script)?)
     }
 
     fn from_address(address: Address) -> Result<Self, ConversionError> {
