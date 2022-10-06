@@ -1,8 +1,10 @@
+use bitcoincore_rpc::bitcoin::secp256k1::Scalar;
+
 use crate::{secp256k1::SecretKey, Error};
 
 pub fn calculate_deposit_secret_key(vault_key: SecretKey, issue_key: SecretKey) -> Result<SecretKey, Error> {
     let mut deposit_key = vault_key;
-    deposit_key.mul_assign(&issue_key[..])?;
+    deposit_key.mul_assign(&Scalar::from(issue_key))?;
     Ok(deposit_key)
 }
 

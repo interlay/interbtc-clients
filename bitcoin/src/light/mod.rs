@@ -2,7 +2,7 @@ mod error;
 mod wallet;
 
 pub use crate::{Error as BitcoinError, *};
-use bitcoincore_rpc::bitcoin::blockdata::constants::WITNESS_SCALE_FACTOR;
+use bitcoincore_rpc::bitcoin::{blockdata::constants::WITNESS_SCALE_FACTOR, secp256k1::Scalar};
 pub use error::Error;
 
 use async_trait::async_trait;
@@ -158,7 +158,7 @@ impl BitcoinCoreApi for BitcoinLight {
     async fn add_new_deposit_key(&self, _public_key: PublicKey, secret_key: Vec<u8>) -> Result<(), BitcoinError> {
         fn mul_secret_key(vault_key: SecretKey, issue_key: SecretKey) -> Result<SecretKey, BitcoinError> {
             let mut deposit_key = vault_key;
-            deposit_key.mul_assign(&issue_key[..])?;
+            deposit_key.mul_assign(&Scalar::from(issue_key))?;
             Ok(deposit_key)
         }
 
