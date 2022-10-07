@@ -1,9 +1,9 @@
 name: Continuous integration
 
 permissions:
-  contents: read
+  contents: write
 
-on: [pull_request]
+on: [pull_request, push]
 
 jobs:
   test:
@@ -28,11 +28,11 @@ jobs:
       - run: git fetch --prune --unshallow
       - name: Install System Dependencies
         run: |
-            sudo apt-get update && sudo apt-get install -y \
-            cmake pkg-config libssl-dev git clang curl libc6-dev
+          sudo apt-get update && sudo apt-get install -y \
+          cmake pkg-config libssl-dev git clang curl libc6-dev
       - name: Set variables
         run: |
-            echo "TOOLCHAIN=$(rustup show active-toolchain | cut -d " " -f1)" >> $GITHUB_ENV
+          echo "TOOLCHAIN=$(rustup show active-toolchain | cut -d " " -f1)" >> $GITHUB_ENV
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ env.TOOLCHAIN }}
@@ -65,34 +65,39 @@ jobs:
         with:
           command: test
           args: --release --workspace --features ${{ matrix.metadata }} --features uses-bitcoind
-      - name: upload artifacts - vault
-        uses: actions/upload-artifact@v2
+      - name: build
+        uses: actions-rs/cargo@v1
         with:
-          name: vault-${{ matrix.metadata }}-${{ github.sha }}
+          command: build
+          args: --release --workspace --features ${{ matrix.metadata }}
+      - name: upload artifacts - vault
+        uses: actions/upload-artifact@v3
+        with:
+          name: vault-${{ matrix.metadata }}
           path: target/release/vault
           retention-days: 10
       - name: upload artifacts - oracle
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
-          name: oracle-${{ matrix.metadata }}-${{ github.sha }}
+          name: oracle-${{ matrix.metadata }}
           path: target/release/oracle
           retention-days: 10
       - name: upload artifacts - faucet
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
-          name: faucet-${{ matrix.metadata }}-${{ github.sha }}
+          name: faucet-${{ matrix.metadata }}
           path: target/release/faucet
           retention-days: 10
       - name: upload artifacts - runner
         if: matrix.metadata == 'parachain-metadata-kintsugi-testnet'
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
-          name: runner-${{ github.sha }}
+          name: runner
           path: target/release/runner
           retention-days: 10
 
   build_docker:
-    if: github.ref_type == 'tag' || contains(fromJson('["master", "dev", "gha-release"]'), github.ref_name)
+    if: ${{ github.ref_type == 'tag' || contains(fromJson('["master", "dev", "gha-release"]'), github.ref_name) }}
     needs: [test]
     runs-on: [self-hosted, linux]
     strategy:
@@ -111,7 +116,7 @@ jobs:
           TAG=$(echo $GITHUB_SHA | head -c7)
           TS=$(date +%s)
           echo ::set-output name=branch_name::$(echo ${GITHUB_REF##*/})
-          echo ::set-output name=tag::${{ matrix.client }}-${{ matrix.metadata }}-${TAG}
+          echo ::set-output name=tag::${{ matrix.client }}-${{ matrix.metadata }}-
           echo ::set-output name=ts::${TS}
       - uses: actions/download-artifact@v3
         with:
@@ -119,9 +124,8 @@ jobs:
           path: artifacts/
 
       - run: |
-          find ./artifacts
           mkdir -p ./target/release/
-          mv ./artifacts/${{ matrix.client }} ./target/release/${{ matrix.client }}
+          mv ./artifacts/${{ matrix.client }} ./target/release/${{ matrix.client }}-${{ matrix.metadata }}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
 
@@ -151,8 +155,8 @@ jobs:
           images: docker.io/interlayhq/interbtc-clients
           tags: |
             type=sha,prefix=${{ steps.prep.outputs.branch_name }}-,suffix=-${{ steps.prep.outputs.ts }}
-            type=ref,event=branch
-            type=ref,event=tag
+            type=ref,event=branch,prefix=${{ matrix.client }}-${{ matrix.metadata }}-
+            type=ref,event=tag,prefix=${{ matrix.client }}-${{ matrix.metadata }}-
 
       - name: Build and push
         id: docker_build
@@ -165,21 +169,32 @@ jobs:
           context: .
           file: .deploy/Dockerfile
           build-args: |
-            BINARY=${{ matrix.client }}
+            BINARY=${{ matrix.client }}-${{ matrix.metadata }}
             PROFILE=release
 
   publish-draft-release:
-    if: github.ref_type == 'tag'
+    if: ${{ github.ref_type == 'tag' }}
     runs-on: [self-hosted, linux]
     needs: [test]
     steps:
+      - uses: actions/checkout@v3
       - uses: actions/download-artifact@v3
         with:
           path: artifacts
 
       - run: |
-          find ./artifacts
-          find . -type f -exec sha256sum {} \; > ./artifacts/sha256sums.txt
+          cd ./artifacts
+
+          # flatten folder structure
+          mkdir _out
+          find ./ -type f -exec sh -c 'mv {} _out/$(dirname {})' \;
+          # remove empty folders
+          find ./ -type d -empty -delete
+          # calc checksums
+          cd _out && find . -type f -print0 | xargs -0 sha256sum > ../sha256sums.txt && cd ..
+          mv _out/* ./
+          cd ..
+
           git-chglog --output CHANGELOG.md $GITHUB_REF_NAME
       - name: Release
         uses: softprops/action-gh-release@v1
@@ -187,4 +202,4 @@ jobs:
           body_path: CHANGELOG.md
           draft: true
           files: |
-            artifacts/*/*
+            artifacts/**/*
