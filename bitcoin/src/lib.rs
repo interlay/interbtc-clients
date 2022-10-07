@@ -39,16 +39,21 @@ pub use bitcoincore_rpc::{
         GetTransactionResultDetailCategory, WalletTxInfo,
     },
     json::{self, AddressType, GetBlockResult},
-    jsonrpc::{error::RpcError, Error as JsonRpcError},
+    jsonrpc::{self, error::RpcError, Error as JsonRpcError},
     Auth, Client, Error as BitcoinError, RpcApi,
 };
 pub use electrs::{ElectrsClient, Error as ElectrsError};
 pub use error::{BitcoinRpcError, ConversionError, Error};
 pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
-use log::{info, trace};
+use log::{info, trace, warn};
 use serde_json::error::Category as SerdeJsonCategory;
 pub use sp_core::H256;
-use std::{convert::TryInto, future::Future, sync::Arc, time::Duration};
+use std::{
+    convert::TryInto,
+    future::Future,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::{
     sync::{Mutex, OwnedMutexGuard},
     time::{sleep, timeout},
@@ -56,6 +61,9 @@ use tokio::{
 
 #[macro_use]
 extern crate num_derive;
+
+/// timeout on the jsonrpc transport. jsonrpc default is 15 seconds.
+pub const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Average time to mine a Bitcoin block.
 pub const BLOCK_INTERVAL: Duration = Duration::from_secs(600); // 10 minutes
@@ -315,7 +323,20 @@ impl BitcoinCoreBuilder {
             Some(ref x) => format!("{}/wallet/{}", self.url, x),
             None => self.url.clone(),
         };
-        Ok(Client::new(&url, self.auth.clone())?)
+
+        // construct a client with a known timeout - there is no way to query the default timeout
+        let (user, pass) = self.auth.clone().get_user_pass()?;
+        let mut transport_builder = jsonrpc::simple_http::Builder::new()
+            .url(&url)
+            .map_err(|e| bitcoincore_rpc::Error::JsonRpc(e.into()))?
+            .timeout(TRANSPORT_TIMEOUT);
+
+        if let Some(user) = user {
+            transport_builder = transport_builder.auth(user, pass);
+        }
+
+        let rpc_client = jsonrpc::Client::with_transport(transport_builder.build());
+        Ok(Client::from_jsonrpc(rpc_client))
     }
 
     pub fn build_with_network(self, network: Network) -> Result<BitcoinCore, Error> {
@@ -505,6 +526,23 @@ impl BitcoinCore {
         Ok(self
             .rpc
             .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?[0])
+    }
+
+    async fn with_retry_on_timeout<F, R, T>(&self, call: F) -> Result<T, Error>
+    where
+        F: Fn() -> R,
+        R: Future<Output = Result<T, Error>>,
+    {
+        loop {
+            let time = Instant::now();
+            match call().await.map_err(Error::from) {
+                Err(inner) if inner.is_transport_error() && time.elapsed() >= TRANSPORT_TIMEOUT => {
+                    info!("Call timed out - retrying...");
+                    // timeout - retry again
+                }
+                result => return result,
+            };
+        }
     }
 
     async fn with_wallet<F, R, T>(&self, call: F) -> Result<T, Error>
@@ -913,14 +951,28 @@ impl BitcoinCoreApi for BitcoinCore {
             return Err(Error::WalletNotFound);
         };
 
-        // NOTE: bitcoincore-rpc does not expose listwalletdir
-        if self.rpc.list_wallets()?.contains(wallet_name) || self.rpc.load_wallet(wallet_name).is_ok() {
-            // wallet already loaded
-            return Ok(());
-        }
-        // wallet does not exist, create
-        self.rpc.create_wallet(wallet_name, None, None, None, None)?;
-        Ok(())
+        self.with_retry_on_timeout(|| async {
+            if self.rpc.list_wallets()?.contains(wallet_name) {
+                // already loaded - nothing to do
+                info!("Wallet {wallet_name} already loaded");
+            } else if self.rpc.list_wallet_dir()?.contains(wallet_name) {
+                // wallet exists but is not loaded
+                info!("Loading wallet {wallet_name}...");
+                let result = self.rpc.load_wallet(wallet_name)?;
+                if let Some(warning) = result.warning {
+                    warn!("Received error while loading wallet {wallet_name}: {warning}");
+                }
+            } else {
+                info!("Creating wallet {wallet_name}...");
+                // wallet does not exist, create
+                let result = self.rpc.create_wallet(wallet_name, None, None, None, None)?;
+                if let Some(warning) = result.warning {
+                    warn!("Received error while creating wallet {wallet_name}: {warning}");
+                }
+            }
+            Ok(())
+        })
+        .await
     }
 
     async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error> {
