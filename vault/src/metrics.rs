@@ -243,7 +243,7 @@ impl PerCurrencyMetrics {
                     let op_return = transaction.get_op_return()?;
                     let budget: i64 = (*fee_budgets.get(&op_return)?).try_into().ok()?;
 
-                    budget.checked_sub(tx.detail.fee?.as_sat().abs())
+                    budget.checked_sub(tx.detail.fee?.to_sat().abs())
                 })
                 .fold(0i64, |acc, x| async move { acc.saturating_add(x) })
                 .await;
@@ -266,7 +266,7 @@ impl PerCurrencyMetrics {
         // update average fee
         let (total, count) = bitcoin_transactions
             .iter()
-            .filter_map(|tx| tx.detail.fee.map(|amount| amount.as_sat().abs() as u64))
+            .filter_map(|tx| tx.detail.fee.map(|amount| amount.to_sat().abs() as u64))
             .fold((0, 0), |(total, count), x| (total + x, count + 1));
         *vault.metrics.average_btc_fee.data.write().await = AverageTracker { total, count };
 
@@ -379,14 +379,14 @@ pub async fn update_bitcoin_metrics(
         {
             let mut tmp = vault.metrics.average_btc_fee.data.write().await;
             *tmp = AverageTracker {
-                total: tmp.total.saturating_add(amount.as_sat().abs() as u64),
+                total: tmp.total.saturating_add(amount.to_sat().abs() as u64),
                 count: tmp.count.saturating_add(1),
             };
         }
         publish_average_bitcoin_fee(vault).await;
 
         if let Ok(budget) = TryInto::<i64>::try_into(fee_budget.unwrap_or(0)) {
-            let surplus = budget.saturating_sub(amount.as_sat().abs());
+            let surplus = budget.saturating_sub(amount.to_sat().abs());
             let mut tmp = vault.metrics.fee_budget_surplus.data.write().await;
             *tmp = tmp.saturating_add(surplus);
         }
@@ -417,7 +417,7 @@ async fn publish_average_bitcoin_fee(vault: &VaultData) {
 
 fn publish_bitcoin_balance(vault: &VaultData) {
     match vault.btc_rpc.get_balance(None) {
-        Ok(bitcoin_balance) => vault.metrics.btc_balance.actual.set(bitcoin_balance.as_btc() as f64),
+        Ok(bitcoin_balance) => vault.metrics.btc_balance.actual.set(bitcoin_balance.to_btc() as f64),
         Err(e) => {
             // unexpected error, but not critical so just continue
             tracing::warn!("Failed to get Bitcoin balance: {}", e);

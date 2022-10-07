@@ -1,6 +1,7 @@
 use crate::{
     psbt::Error as PsbtError, secp256k1::Error as Secp256k1Error, util::address::Error as AddressError, ElectrsError,
 };
+use bitcoincore_rpc::bitcoin::util::sighash::Error as SighashError;
 use std::sync::PoisonError;
 use thiserror::Error;
 
@@ -30,6 +31,9 @@ pub enum Error {
 
     #[error("ElectrsError: {0}")]
     ElectrsError(#[from] ElectrsError),
+
+    #[error("SighashError: {0}")]
+    SighashError(#[from] SighashError),
 }
 
 impl<T> From<PoisonError<T>> for Error {

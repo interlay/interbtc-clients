@@ -96,7 +96,7 @@ async fn test_redeem_succeeds() {
                 .register_vault_with_public_key(
                     &vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -170,7 +170,7 @@ async fn test_replace_succeeds() {
                 .register_vault_with_public_key(
                     &old_vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -179,7 +179,7 @@ async fn test_replace_succeeds() {
                 .register_vault_with_public_key(
                     &new_vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -258,7 +258,7 @@ async fn test_withdraw_replace_succeeds() {
                 .register_vault_with_public_key(
                     &old_vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -267,7 +267,7 @@ async fn test_withdraw_replace_succeeds() {
                 .register_vault_with_public_key(
                     &new_vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -338,7 +338,7 @@ async fn test_cancellation_succeeds() {
                 .register_vault_with_public_key(
                     &old_vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -347,7 +347,7 @@ async fn test_cancellation_succeeds() {
                 .register_vault_with_public_key(
                     &new_vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -531,7 +531,7 @@ async fn test_issue_overpayment_succeeds() {
                 .register_vault_with_public_key(
                     &vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -597,7 +597,7 @@ async fn test_automatic_issue_execution_succeeds() {
                 .register_vault_with_public_key(
                     &vault1_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -606,7 +606,7 @@ async fn test_automatic_issue_execution_succeeds() {
                 .register_vault_with_public_key(
                     &vault2_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -689,7 +689,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
                 .register_vault_with_public_key(
                     &vault1_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -698,7 +698,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
                 .register_vault_with_public_key(
                     &vault2_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -771,7 +771,7 @@ async fn test_execute_open_requests_succeeds() {
                 .register_vault_with_public_key(
                     &vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -864,7 +864,7 @@ async fn test_off_chain_liquidation() {
                 .register_vault_with_public_key(
                     &vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -902,7 +902,7 @@ async fn test_shutdown() {
                 .register_vault_with_public_key(
                     &sudo_vault_id,
                     vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                 )
                 .await
         );
@@ -1228,7 +1228,7 @@ mod test_with_bitcoind {
                     .register_vault_with_public_key(
                         &vault_id,
                         vault_collateral,
-                        btc_rpc.get_new_public_key().await.unwrap().key.serialize().into(),
+                        btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
                     )
                     .await
             );

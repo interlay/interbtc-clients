@@ -45,11 +45,11 @@ impl PartialAddress for BtcAddress {
         let script = match self {
             Self::P2PKH(hash) => Script::new_p2pkh(&PubkeyHash::from_slice(hash.as_bytes())?),
             Self::P2SH(hash) => Script::new_p2sh(&ScriptHash::from_slice(hash.as_bytes())?),
-            Self::P2WPKHv0(hash) => Script::new_v0_wpkh(&WPubkeyHash::from_slice(hash.as_bytes())?),
-            Self::P2WSHv0(hash) => Script::new_v0_wsh(&WScriptHash::from_slice(hash.as_bytes())?),
+            Self::P2WPKHv0(hash) => Script::new_v0_p2wpkh(&WPubkeyHash::from_slice(hash.as_bytes())?),
+            Self::P2WSHv0(hash) => Script::new_v0_p2wsh(&WScriptHash::from_slice(hash.as_bytes())?),
         };
 
-        Payload::from_script(&script).ok_or(ConversionError::InvalidPayload)
+        Ok(Payload::from_script(&script)?)
     }
 
     fn from_address(address: Address) -> Result<Self, ConversionError> {

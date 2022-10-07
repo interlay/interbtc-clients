@@ -764,7 +764,7 @@ impl VaultService {
             tracing::info!("Registering bitcoin public key to the parachain...");
             let public_key = self.btc_rpc_master_wallet.get_new_public_key().await?;
             self.btc_parachain
-                .register_public_key(public_key.key.serialize().into())
+                .register_public_key(public_key.inner.serialize().into())
                 .await?;
         }
 

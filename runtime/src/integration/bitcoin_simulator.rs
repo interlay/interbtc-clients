@@ -6,11 +6,14 @@
 use crate::{BtcAddress, BtcRelayPallet, InterBtcParachain, PartialAddress, RawBlockHeader, H160, H256, U256};
 use async_trait::async_trait;
 use bitcoin::{
-    json,
+    json::{
+        self,
+        bitcoin::{PackedLockTime, Sequence, Witness},
+    },
     secp256k1::{self, constants::SECRET_KEY_SIZE, Secp256k1, SecretKey},
     serialize, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult,
     Hash, Network, OutPoint, PartialMerkleTree, PrivateKey, PublicKey, SatPerVbyte, Script, Transaction,
-    TransactionExt, TransactionMetadata, TxIn, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
+    TransactionExt, TransactionMetadata, TxIn, TxMerkleNode, TxOut, Txid, Uint256, PUBLIC_KEY_SIZE,
 };
 use rand::{thread_rng, Rng};
 use std::{convert::TryInto, sync::Arc, time::Duration};
@@ -108,7 +111,7 @@ impl MockBitcoinCore {
         let mut blocks = self.blocks.write().await;
 
         let prev_blockhash = if blocks.is_empty() {
-            Default::default()
+            BlockHash::all_zeros()
         } else {
             blocks[blocks.len() - 1].header.block_hash()
         };
@@ -124,14 +127,14 @@ impl MockBitcoinCore {
             ],
             header: BlockHeader {
                 version: 4,
-                merkle_root: Default::default(),
+                merkle_root: TxMerkleNode::all_zeros(),
                 bits: BlockHeader::compact_target_from_u256(&target),
                 nonce: 0,
                 prev_blockhash,
                 time: 1,
             },
         };
-        block.header.merkle_root = block.merkle_root();
+        block.header.merkle_root = block.compute_merkle_root().unwrap();
 
         loop {
             if block.header.validate_pow(&target).is_ok() {
@@ -160,7 +163,7 @@ impl MockBitcoinCore {
                     txid: Txid::from_slice(&[1; 32]).unwrap(),
                     vout: 0,
                 },
-                witness: vec![],
+                witness: Witness::from_vec(vec![]),
                 // actual contents of don't script_sig don't really matter as long as it contains
                 // a parsable script
                 script_sig: Script::from(vec![
@@ -173,7 +176,7 @@ impl MockBitcoinCore {
                     210, 85, 156, 238, 77, 97, 188, 240, 162, 197, 105, 62, 82, 174,
                 ]),
                 // not checked
-                sequence: 0,
+                sequence: Sequence(0),
             }],
             output: vec![
                 TxOut {
@@ -185,7 +188,7 @@ impl MockBitcoinCore {
                     value: 42,
                 },
             ],
-            lock_time: 0,
+            lock_time: PackedLockTime::ZERO,
             version: 2,
         }
     }
@@ -198,15 +201,15 @@ impl MockBitcoinCore {
         Transaction {
             input: vec![TxIn {
                 previous_output: OutPoint::null(), // coinbase
-                witness: vec![],
+                witness: Witness::from_vec(vec![]),
                 script_sig: Default::default(),
-                sequence: u32::max_value(),
+                sequence: Sequence(u32::max_value()),
             }],
             output: vec![TxOut {
                 script_pubkey: address,
                 value: reward,
             }],
-            lock_time: height,
+            lock_time: PackedLockTime(height),
             version: 2,
         }
     }

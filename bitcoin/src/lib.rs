@@ -387,7 +387,7 @@ impl BitcoinCore {
     ) -> Result<String, Error> {
         let mut outputs = serde_json::Map::<String, serde_json::Value>::new();
         // add the payment output
-        outputs.insert(address, serde_json::Value::from(amount.as_btc()));
+        outputs.insert(address, serde_json::Value::from(amount.to_btc()));
 
         if let Some(request_id) = request_id {
             // add the op_return data - bitcoind will add op_return and the length automatically
@@ -722,12 +722,12 @@ impl BitcoinCoreApi for BitcoinCore {
         let address = Address::p2wpkh(&public_key, self.network).map_err(ConversionError::from)?;
         let private_key = self.rpc.dump_private_key(&address)?;
         let deposit_secret_key =
-            addr::calculate_deposit_secret_key(private_key.key, SecretKey::from_slice(&secret_key)?)?;
+            addr::calculate_deposit_secret_key(private_key.inner, SecretKey::from_slice(&secret_key)?)?;
         self.rpc.import_private_key(
             &PrivateKey {
                 compressed: private_key.compressed,
                 network: self.network,
-                key: deposit_secret_key,
+                inner: deposit_secret_key,
             },
             Some(DEPOSIT_LABEL),
             // rescan true by default
@@ -997,7 +997,7 @@ impl BitcoinCoreApi for BitcoinCore {
         // to get from weight to vsize we divide by 4, but round up by first adding 3
         // Note that we can not rely on tx.get_size() since it doesn't 'discount' witness bytes
         let vsize = tx
-            .get_weight()
+            .weight()
             .checked_add(3)
             .ok_or(Error::ArithmeticError)?
             .checked_div(4)
@@ -1007,7 +1007,7 @@ impl BitcoinCoreApi for BitcoinCore {
         let fee = get_tx_result
             .fee
             .ok_or(Error::MissingBitcoinFeeInfo)?
-            .as_sat()
+            .to_sat()
             .checked_abs()
             .ok_or(Error::ArithmeticError)?;
 
@@ -1051,7 +1051,7 @@ impl TransactionExt for Transaction {
     /// Get the amount of btc that self sent to `dest`, if any
     fn get_payment_amount_to(&self, dest: Payload) -> Option<u64> {
         self.output.iter().find_map(|uxto| {
-            let payload = Payload::from_script(&uxto.script_pubkey)?;
+            let payload = Payload::from_script(&uxto.script_pubkey).ok()?;
             if payload == dest {
                 Some(uxto.value)
             } else {
@@ -1075,7 +1075,7 @@ impl TransactionExt for Transaction {
             .iter()
             .enumerate()
             .filter(|(_, x)| x.value > 0)
-            .filter_map(|(idx, tx_out)| Some((idx, Payload::from_script(&tx_out.script_pubkey)?)))
+            .filter_map(|(idx, tx_out)| Some((idx, Payload::from_script(&tx_out.script_pubkey).ok()?)))
             .collect()
     }
 
