@@ -1,10 +1,17 @@
+use bitcoin::{Network, PrivateKey};
 use clap::Parser;
 use futures::Future;
-use runtime::{InterBtcSigner, DEFAULT_SPEC_NAME};
+use runtime::{InterBtcSigner, KeyPair, Ss58Codec, DEFAULT_SPEC_NAME, SS58_PREFIX};
+use secp256k1::{rand::thread_rng, SecretKey};
 use service::{warp, warp::Filter, ConnectionManager, Error, MonitoringConfig, ServiceConfig};
 use signal_hook::consts::*;
 use signal_hook_tokio::Signals;
-use std::net::{Ipv4Addr, SocketAddr};
+use sp_core::crypto::Pair;
+use std::{
+    io::Write,
+    net::{Ipv4Addr, SocketAddr},
+    path::PathBuf,
+};
 use sysinfo::{System, SystemExt};
 use tokio_stream::StreamExt;
 use vault::{
@@ -13,9 +20,89 @@ use vault::{
     VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION,
 };
 
+#[derive(Parser)]
+#[clap(args_conflicts_with_subcommands = true)]
+struct Cli {
+    #[clap(subcommand)]
+    sub: Option<Commands>,
+
+    #[clap(flatten)]
+    opts: RunVaultOpts,
+}
+
+#[derive(Parser)]
+enum Commands {
+    /// Generate the WIF encoded Bitcoin private key.
+    GenerateBitcoinKey(GenerateBitcoinKeyOpts),
+    /// Generate the sr25519 parachain key pair.
+    GenerateParachainKey(GenerateParachainKeyOpts),
+    /// Run the Vault client (default).
+    #[clap(name = "run")]
+    RunVault(RunVaultOpts),
+}
+
+// write the file to stdout or disk - fail if it already exists
+fn try_write_file<D: AsRef<[u8]>>(output: &Option<PathBuf>, data: D) -> Result<(), Error> {
+    let data = data.as_ref();
+    if let Some(output) = output {
+        if output.exists() {
+            Err(Error::FileAlreadyExists)
+        } else {
+            std::fs::write(output, data)?;
+            Ok(())
+        }
+    } else {
+        std::io::stdout().write_all(data)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Parser, Clone)]
+struct GenerateBitcoinKeyOpts {
+    /// Output file name or stdout if unspecified.
+    #[clap(parse(from_os_str))]
+    output: Option<PathBuf>,
+
+    #[clap(long)]
+    network: Network,
+}
+
+impl GenerateBitcoinKeyOpts {
+    fn generate_and_write(&self) -> Result<(), Error> {
+        let secret_key = SecretKey::new(&mut thread_rng());
+        let private_key = PrivateKey::new(secret_key, self.network);
+        let wif = private_key.to_wif();
+        let data = wif.as_bytes();
+
+        try_write_file(&self.output, data)
+    }
+}
+
+#[derive(Debug, Parser, Clone)]
+struct GenerateParachainKeyOpts {
+    /// Output file name or stdout if unspecified.
+    #[clap(parse(from_os_str))]
+    output: Option<PathBuf>,
+}
+
+impl GenerateParachainKeyOpts {
+    fn generate_and_write(&self) -> Result<(), Error> {
+        let (pair, phrase, _) = KeyPair::generate_with_phrase(None);
+
+        let mut keys = serde_json::Map::new();
+        keys.insert(
+            pair.public().to_ss58check_with_version(SS58_PREFIX.into()),
+            serde_json::Value::String(phrase),
+        );
+        let data = serde_json::to_vec(&keys)?;
+
+        try_write_file(&self.output, data)
+    }
+}
+
 #[derive(Parser, Debug, Clone)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
-pub struct Opts {
+pub struct RunVaultOpts {
     /// Keyring / keyfile options.
     #[clap(flatten)]
     pub account_info: runtime::cli::ProviderUserOpts,
@@ -61,8 +148,19 @@ where
 }
 
 async fn start() -> Result<(), Error> {
-    let opts: Opts = Opts::parse();
+    let cli: Cli = Cli::parse();
+    let opts = cli.opts;
     opts.service.logging_format.init_subscriber();
+
+    match cli.sub {
+        Some(Commands::GenerateBitcoinKey(opts)) => {
+            return opts.generate_and_write();
+        }
+        Some(Commands::GenerateParachainKey(opts)) => {
+            return opts.generate_and_write();
+        }
+        _ => (),
+    }
 
     let (pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = InterBtcSigner::new(pair);

@@ -11,7 +11,7 @@ use subxt::sp_core::{sr25519::Pair, Pair as _};
 #[derive(Parser, Debug, Clone)]
 pub struct ProviderUserOpts {
     /// Keyring to use, mutually exclusive with keyfile.
-    #[clap(long, required_unless_present = "keyfile", value_parser = parse_account_keyring)]
+    #[clap(long, conflicts_with = "keyfile", value_parser = parse_account_keyring)]
     pub keyring: Option<AccountKeyring>,
 
     /// Path to the json file containing key pairs in a map.

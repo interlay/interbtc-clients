@@ -14,6 +14,8 @@ pub enum Error {
     ClientShutdown,
     #[error("OsString parsing error")]
     OsStringError,
+    #[error("File already exists")]
+    FileAlreadyExists,
     #[error("There is a service already running on the system, with pid {0}")]
     ServiceAlreadyRunning(u32),
     #[error("Process with pid {0} not found")]

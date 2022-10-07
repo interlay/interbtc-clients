@@ -45,7 +45,7 @@ To start the Oracle follow the instructions contained in the [Oracle README](./o
 
 #### Vault
 
-The vault client is used to intermediate assets between Bitcoin and the BTC Parachain.
+The Vault client is used to intermediate assets between Bitcoin and the BTC Parachain.
 It is also capable of submitting Bitcoin block headers to the BTC Parachain.
 
 To start the Vault follow the instructions contained in the [Vault README](./vault/README.md).
