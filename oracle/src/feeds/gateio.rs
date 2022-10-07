@@ -3,6 +3,7 @@ use crate::{currency::*, Error};
 use async_trait::async_trait;
 use clap::Parser;
 use reqwest::Url;
+use serde_json::Value;
 
 #[derive(Parser, Debug, Clone)]
 pub struct GateIoCli {
@@ -21,6 +22,10 @@ impl Default for GateIoApi {
             url: Url::parse("https://api.gateio.ws/api/v4").unwrap(),
         }
     }
+}
+
+fn extract_response<'a>(value: &'a Value) -> Option<&'a str> {
+    value.get(0)?.get("last")?.as_str()
 }
 
 impl GateIoApi {
@@ -42,15 +47,8 @@ impl GateIoApi {
             currency_pair.quote.symbol()
         )));
 
-        let exchange_rate = get_http(url)
-            .await?
-            .get(0)
-            .ok_or(Error::InvalidResponse)?
-            .get("last")
-            .ok_or(Error::InvalidResponse)?
-            .as_str()
-            .ok_or(Error::InvalidResponse)?
-            .parse::<f64>()?;
+        let data = get_http(url).await?;
+        let exchange_rate = extract_response(&data).ok_or(Error::InvalidResponse)?.parse::<f64>()?;
 
         Ok(CurrencyPairAndPrice {
             pair: currency_pair,

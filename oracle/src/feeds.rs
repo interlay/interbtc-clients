@@ -78,13 +78,7 @@ impl PriceFeeds {
             price_config
                 .feeds
                 .into_iter()
-                .filter_map(|(name, route)| {
-                    if let Some(feed) = self.0.get(&name) {
-                        Some((name, route, feed))
-                    } else {
-                        None
-                    }
-                })
+                .filter_map(|(name, route)| self.0.get(&name).map(|feed| (name, route, feed)))
                 .map(|(name, route, feed)| async move {
                     let mut currency_pair_and_price = if let Some(currency_pair_and_price) = join_all(
                         route

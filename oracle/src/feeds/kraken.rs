@@ -3,6 +3,7 @@ use crate::{currency::*, Error};
 use async_trait::async_trait;
 use clap::Parser;
 use reqwest::Url;
+use serde_json::Value;
 
 #[derive(Parser, Debug, Clone)]
 pub struct KrakenCli {
@@ -21,6 +22,17 @@ impl Default for KrakenApi {
             url: Url::parse("https://api.kraken.com/0").unwrap(),
         }
     }
+}
+
+fn extract_response<'a>(value: &'a Value) -> Option<&'a str> {
+    value
+        .get("result")?
+        .as_object()?
+        .iter()
+        .last()? // we are only fetching one anyway
+        .1
+        .get("o")?
+        .as_str()
 }
 
 impl KrakenApi {
@@ -42,21 +54,8 @@ impl KrakenApi {
         url.set_query(Some(&format!("pair={}", asset_pair_name)));
 
         // get today's opening price
-        let exchange_rate = get_http(url)
-            .await?
-            .get("result")
-            .ok_or(Error::InvalidResponse)?
-            .as_object()
-            .ok_or(Error::InvalidResponse)?
-            .iter()
-            .last() // we are only fetching one anyway
-            .ok_or(Error::InvalidResponse)?
-            .1
-            .get("o")
-            .ok_or(Error::InvalidResponse)?
-            .as_str()
-            .ok_or(Error::InvalidResponse)?
-            .parse::<f64>()?;
+        let data = get_http(url).await?;
+        let exchange_rate = extract_response(&data).ok_or(Error::InvalidResponse)?.parse::<f64>()?;
 
         Ok(CurrencyPairAndPrice {
             pair: currency_pair,

@@ -36,11 +36,11 @@ struct Opts {
     btc_parachain_url: String,
 
     /// Timeout in milliseconds to wait for connection to btc-parachain
-    #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "60000")]
+    #[clap(long, value_parser = parse_duration_ms, default_value = "60000")]
     connection_timeout_ms: Duration,
 
     /// Interval for exchange rate setter, default 25 minutes
-    #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "1500000")]
+    #[clap(long, value_parser = parse_duration_ms, default_value = "1500000")]
     interval_ms: Duration,
 
     /// Connection settings for Blockstream
@@ -65,7 +65,7 @@ struct Opts {
 
     /// Feed / price config.
     #[clap(long, default_value = "./oracle-config.json")]
-    config: PathBuf,
+    oracle_config: PathBuf,
 }
 
 fn get_exponential_backoff() -> ExponentialBackoff {
@@ -134,7 +134,8 @@ async fn main() -> Result<(), Error> {
     );
     let opts: Opts = Opts::parse();
 
-    let data = std::fs::read_to_string(opts.config)?;
+    // read price configs from file
+    let data = std::fs::read_to_string(opts.oracle_config)?;
     let config = serde_json::from_str::<Config>(&data)?;
 
     let mut price_feeds = feeds::PriceFeeds::new();
