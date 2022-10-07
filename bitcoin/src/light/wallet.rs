@@ -367,12 +367,11 @@ impl Wallet {
                 .expect("utxo is always set in fund_transaction; qed");
 
             // Note: we don't support SchnorrSighashType
-            let sighash_ty = match psbt_input.sighash_type {
-                Some(x) => x
-                    .ecdsa_hash_ty()
-                    .map_err(|NonStandardSighashType(ty)| Error::PsbtError(psbt::Error::NonStandardSighashType(ty)))?,
-                _ => EcdsaSighashType::All,
-            };
+            let sighash_ty = psbt_input
+                .sighash_type
+                .unwrap_or_else(|| EcdsaSighashType::All.into())
+                .ecdsa_hash_ty()
+                .map_err(|NonStandardSighashType(ty)| Error::PsbtError(psbt::Error::NonStandardSighashType(ty)))?;
 
             // TODO: support signing p2sh, p2pkh, p2wsh
             let script_code = if prev_out.script_pubkey.is_v0_p2wpkh() {
@@ -404,7 +403,7 @@ impl Wallet {
         for psbt_input in psbt.inputs.iter_mut() {
             let (key, sig) = psbt_input.partial_sigs.iter().next().expect("signature set above; qed");
             // https://github.com/bitcoin/bitcoin/blob/607d5a46aa0f5053d8643a3e2c31a69bfdeb6e9f/src/script/sign.cpp#L125
-            psbt_input.final_script_witness = Some(Witness::from_vec(vec![sig.clone().to_vec(), key.to_bytes()]));
+            psbt_input.final_script_witness = Some(Witness::from_vec(vec![sig.to_vec(), key.to_bytes()]));
         }
 
         Ok(())
