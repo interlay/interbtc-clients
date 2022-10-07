@@ -1,7 +1,8 @@
 #![allow(clippy::upper_case_acronyms)]
 
 use crate::Error;
-use runtime::{CurrencyId, FixedPointNumber, FixedPointTraits::*, FixedU128, TokenSymbol};
+use runtime::{CurrencyId, FixedPointNumber, FixedPointTraits::*, FixedU128, TryFromSymbol};
+use serde::{de::Error as _, Deserializer};
 use std::{
     convert::TryInto,
     fmt::{self, Debug},
@@ -34,7 +35,10 @@ macro_rules! create_currency {
 			$($(#[$vmeta])* $symbol,)*
 		}
 
-        $(pub const $symbol: Currency = Currency::$symbol;)*
+        $(
+            #[allow(dead_code)]
+            pub const $symbol: Currency = Currency::$symbol;
+        )*
 
 		impl CurrencyInfo for Currency {
 			fn name(&self) -> &str {
@@ -84,16 +88,17 @@ create_currency! {
     }
 }
 
+impl<'de> serde::Deserialize<'de> for Currency {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let symbol = String::deserialize(d)?;
+        Currency::from_str(&symbol).map_err(D::Error::custom)
+    }
+}
+
 impl TryInto<CurrencyId> for Currency {
     type Error = Error;
     fn try_into(self) -> Result<CurrencyId, Self::Error> {
-        match self {
-            DOT => Ok(CurrencyId::Token(TokenSymbol::DOT)),
-            INTR => Ok(CurrencyId::Token(TokenSymbol::INTR)),
-            KSM => Ok(CurrencyId::Token(TokenSymbol::KSM)),
-            KINT => Ok(CurrencyId::Token(TokenSymbol::KINT)),
-            _ => Err(Error::InvalidCurrency),
-        }
+        CurrencyId::try_from_symbol(self.symbol().to_string()).map_err(Error::RuntimeError)
     }
 }
 
@@ -110,10 +115,6 @@ impl From<(Currency, Currency)> for CurrencyPair {
 }
 
 impl CurrencyPair {
-    pub fn contains(&self, currency: Currency) -> bool {
-        self.base == currency || self.quote == currency
-    }
-
     pub fn invert(self) -> Self {
         Self {
             base: self.quote,

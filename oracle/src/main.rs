@@ -1,7 +1,6 @@
 mod currency;
 mod error;
 mod feeds;
-mod routes;
 
 use backoff::{future::retry_notify, ExponentialBackoff};
 use clap::Parser;
@@ -13,8 +12,10 @@ use runtime::{
     cli::{parse_duration_ms, ProviderUserOpts},
     FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, OraclePallet,
 };
-use std::{convert::TryInto, time::Duration};
+use std::{convert::TryInto, path::PathBuf, time::Duration};
 use tokio::{join, time::sleep};
+
+type Config = Vec<feeds::PriceConfig>;
 
 const VERSION: &str = git_version!(args = ["--tags"]);
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -22,7 +23,6 @@ const NAME: &str = env!("CARGO_PKG_NAME");
 const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
 
 const CONFIRMATION_TARGET: u32 = 1;
-const BASE_CURRENCY: Currency = BTC;
 
 #[derive(Parser)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
@@ -43,10 +43,6 @@ struct Opts {
     #[clap(long, parse(try_from_str = parse_duration_ms), default_value = "1500000")]
     interval_ms: Duration,
 
-    /// Quote currency for exchange rates, e.g. "DOT" or "KSM"
-    #[clap(long)]
-    currency: Vec<Currency>,
-
     /// Connection settings for Blockstream
     #[clap(flatten)]
     blockstream: feeds::BlockstreamCli,
@@ -66,6 +62,10 @@ struct Opts {
     /// Connection settings for Kraken
     #[clap(flatten)]
     kraken: feeds::KrakenCli,
+
+    /// Feed / price config.
+    #[clap(long, default_value = "./oracle-config.json")]
+    config: PathBuf,
 }
 
 fn get_exponential_backoff() -> ExponentialBackoff {
@@ -78,6 +78,11 @@ fn get_exponential_backoff() -> ExponentialBackoff {
 }
 
 async fn submit_bitcoin_fees(parachain_rpc: &InterBtcParachain, bitcoin_fee: f64) -> Result<(), Error> {
+    if bitcoin_fee.is_nan() {
+        log::warn!("Not submitting fee estimate");
+        return Ok(());
+    }
+
     log::info!(
         "Attempting to set fee estimate: {} sat/byte ({})",
         bitcoin_fee,
@@ -129,7 +134,8 @@ async fn main() -> Result<(), Error> {
     );
     let opts: Opts = Opts::parse();
 
-    log::info!("Starting oracle with currencies = {:?}", opts.currency);
+    let data = std::fs::read_to_string(opts.config)?;
+    let config = serde_json::from_str::<Config>(&data)?;
 
     let mut price_feeds = feeds::PriceFeeds::new();
     price_feeds.add_coingecko(opts.coingecko);
@@ -146,13 +152,12 @@ async fn main() -> Result<(), Error> {
     loop {
         // TODO: retry these calls on failure
         let fee_estimate = bitcoin_feeds.get_median(CONFIRMATION_TARGET).await?;
-
-        let prices = join_all(opts.currency.iter().map(|quote| {
-            price_feeds.get_median(CurrencyPair {
-                base: BASE_CURRENCY,
-                quote: *quote,
-            })
-        }))
+        let prices = join_all(
+            config
+                .clone()
+                .into_iter()
+                .map(|price_config| price_feeds.get_median(price_config)),
+        )
         .await
         .into_iter()
         .collect::<Result<Vec<_>, _>>()?;

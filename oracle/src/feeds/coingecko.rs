@@ -80,23 +80,6 @@ impl CoinGeckoApi {
 
 #[async_trait]
 impl PriceFeed for CoinGeckoApi {
-    fn known_pairs(&self) -> Vec<CurrencyPair> {
-        vec![
-            (INTR, BTC),
-            (KINT, BTC),
-            (DOT, BTC),
-            (BTC, DOT),
-            (KSM, BTC),
-            (KSM, DOT),
-            (AUSD, USD),
-            (AUSD, BTC),
-            (AUSD, DOT),
-        ]
-        .into_iter()
-        .map(Into::into)
-        .collect()
-    }
-
     async fn get_price(&self, currency_pair: CurrencyPair) -> Result<CurrencyPairAndPrice, Error> {
         let price = self
             .get_exchange_rate(currency_pair.base.name(), currency_pair.quote.symbol())

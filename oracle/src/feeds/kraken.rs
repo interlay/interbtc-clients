@@ -33,13 +33,9 @@ impl KrakenApi {
     }
 
     async fn get_exchange_rate(&self, currency_pair: CurrencyPair) -> Result<CurrencyPairAndPrice, Error> {
-        let mut asset_pair_name = format!("{}{}", currency_pair.base.symbol(), currency_pair.quote.symbol());
-        // TODO: implement better workaround
-        if asset_pair_name == *"BTCUSD" {
-            asset_pair_name = "XXBTZUSD".to_string();
-        } else if asset_pair_name == *"DOTBTC" {
-            asset_pair_name = "DOTXBT".to_string();
-        }
+        // NOTE: Kraken prefixes older cryptocurrencies with "X" and fiat with "Z"
+        let asset_pair_name = format!("{}{}", currency_pair.base.symbol(), currency_pair.quote.symbol());
+
         // https://docs.kraken.com/rest/
         let mut url = self.url.clone();
         url.set_path(&format!("{}/public/Ticker", url.path()));
@@ -50,8 +46,12 @@ impl KrakenApi {
             .await?
             .get("result")
             .ok_or(Error::InvalidResponse)?
-            .get(&asset_pair_name)
+            .as_object()
             .ok_or(Error::InvalidResponse)?
+            .iter()
+            .last() // we are only fetching one anyway
+            .ok_or(Error::InvalidResponse)?
+            .1
             .get("o")
             .ok_or(Error::InvalidResponse)?
             .as_str()
@@ -67,22 +67,6 @@ impl KrakenApi {
 
 #[async_trait]
 impl PriceFeed for KrakenApi {
-    fn known_pairs(&self) -> Vec<CurrencyPair> {
-        vec![
-            (BTC, USD),
-            (INTR, USD),
-            (KINT, USD),
-            (KSM, USD),
-            (KSM, BTC),
-            (KSM, DOT),
-            (DOT, USD),
-            (DOT, BTC),
-        ]
-        .into_iter()
-        .map(Into::into)
-        .collect()
-    }
-
     async fn get_price(&self, currency_pair: CurrencyPair) -> Result<CurrencyPairAndPrice, Error> {
         self.get_exchange_rate(currency_pair).await
     }

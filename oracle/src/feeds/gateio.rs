@@ -61,20 +61,6 @@ impl GateIoApi {
 
 #[async_trait]
 impl PriceFeed for GateIoApi {
-    fn known_pairs(&self) -> Vec<CurrencyPair> {
-        vec![
-            (BTC, USDT),
-            (INTR, USDT),
-            (KINT, USDT),
-            (KSM, USDT),
-            (DOT, USDT),
-            (DOT, BTC),
-        ]
-        .into_iter()
-        .map(Into::into)
-        .collect()
-    }
-
     async fn get_price(&self, currency_pair: CurrencyPair) -> Result<CurrencyPairAndPrice, Error> {
         self.get_exchange_rate(currency_pair).await
     }

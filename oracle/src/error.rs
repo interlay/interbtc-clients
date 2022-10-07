@@ -2,7 +2,11 @@
 
 use reqwest::Error as ReqwestError;
 use runtime::{Error as RuntimeError, SubxtError};
-use std::num::{ParseFloatError, ParseIntError};
+use serde_json::Error as SerdeJsonError;
+use std::{
+    io::Error as IoError,
+    num::{ParseFloatError, ParseIntError},
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -26,4 +30,8 @@ pub enum Error {
     ParseIntError(#[from] ParseIntError),
     #[error("ParseFloatError: {0}")]
     ParseFloatError(#[from] ParseFloatError),
+    #[error("SerdeJsonError: {0}")]
+    SerdeJsonError(#[from] SerdeJsonError),
+    #[error("IoError: {0}")]
+    IoError(#[from] IoError),
 }
