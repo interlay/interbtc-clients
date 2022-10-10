@@ -1,5 +1,6 @@
 #![allow(clippy::enum_variant_names)]
 
+use crate::{currency::CurrencyPair, feeds::FeedName};
 use reqwest::Error as ReqwestError;
 use runtime::{Error as RuntimeError, SubxtError};
 use serde_json::Error as SerdeJsonError;
@@ -8,6 +9,16 @@ use std::{
     num::{ParseFloatError, ParseIntError},
 };
 use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum ConfigError {
+    #[error("No start")]
+    NoStart,
+    #[error("No end")]
+    NoEnd,
+    #[error("No path from {0} to {1}")]
+    NoPath(CurrencyPair, CurrencyPair),
+}
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -19,6 +30,8 @@ pub enum Error {
     InvalidExchangeRate,
     #[error("Invalid currency")]
     InvalidCurrency,
+    #[error("Invalid config for {0} => {1}: {2}")]
+    InvalidConfig(FeedName, CurrencyPair, ConfigError),
 
     #[error("ReqwestError: {0}")]
     ReqwestError(#[from] ReqwestError),

@@ -2,7 +2,7 @@
 
 use crate::Error;
 use runtime::{CurrencyId, FixedPointNumber, FixedPointTraits::*, FixedU128, TryFromSymbol};
-use serde::{de::Error as _, Deserializer};
+use serde::{de::Error as _, Deserialize, Deserializer};
 use std::{
     convert::TryInto,
     fmt::{self, Debug},
@@ -88,7 +88,7 @@ create_currency! {
     }
 }
 
-impl<'de> serde::Deserialize<'de> for Currency {
+impl<'de> Deserialize<'de> for Currency {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let symbol = String::deserialize(d)?;
         Currency::from_str(&symbol).map_err(D::Error::custom)
@@ -102,10 +102,16 @@ impl TryInto<CurrencyId> for Currency {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Copy, PartialEq, Eq)]
 pub struct CurrencyPair {
     pub base: Currency,
     pub quote: Currency,
+}
+
+impl fmt::Display for CurrencyPair {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}, {})", self.base.symbol(), self.quote.symbol())
+    }
 }
 
 impl From<(Currency, Currency)> for CurrencyPair {
@@ -115,6 +121,14 @@ impl From<(Currency, Currency)> for CurrencyPair {
 }
 
 impl CurrencyPair {
+    pub fn contains(&self, currency: &Currency) -> bool {
+        &self.base == currency || &self.quote == currency
+    }
+
+    pub fn has_shared(&self, currency_pair: &CurrencyPair) -> bool {
+        self.contains(&currency_pair.base) || self.contains(&currency_pair.quote)
+    }
+
     pub fn invert(self) -> Self {
         Self {
             base: self.quote,
@@ -131,13 +145,7 @@ pub struct CurrencyPairAndPrice {
 
 impl fmt::Display for CurrencyPairAndPrice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "({}, {}) => {}",
-            self.pair.base.symbol(),
-            self.pair.quote.symbol(),
-            self.price
-        )
+        write!(f, "{} => {}", self.pair.to_string(), self.price)
     }
 }
 
@@ -178,8 +186,8 @@ impl CurrencyPairAndPrice {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn should_invert_currency_pair_and_price() {
+    #[test]
+    fn should_invert_currency_pair_and_price() {
         assert_eq!(
             CurrencyPairAndPrice {
                 pair: CurrencyPair { base: BTC, quote: DOT },
@@ -190,6 +198,54 @@ mod tests {
                 pair: CurrencyPair { base: DOT, quote: BTC },
                 price: 0.0004286326618088298,
             }
+        );
+    }
+
+    #[test]
+    fn should_reduce_currencies() {
+        assert_eq!(
+            CurrencyPairAndPrice {
+                pair: CurrencyPair { base: DOT, quote: USD },
+                price: 6.32,
+            }
+            .reduce(CurrencyPairAndPrice {
+                pair: CurrencyPair { base: BTC, quote: USD },
+                price: 19718.25,
+            }),
+            CurrencyPairAndPrice {
+                pair: CurrencyPair { base: DOT, quote: BTC },
+                price: 0.00032051525870703534,
+            }
+        );
+    }
+
+    #[test]
+    fn should_reduce_currencies_same() {
+        assert_eq!(
+            CurrencyPairAndPrice {
+                pair: CurrencyPair { base: KSM, quote: USD },
+                price: 42.73,
+            }
+            .reduce(CurrencyPairAndPrice {
+                pair: CurrencyPair { base: KSM, quote: USD },
+                price: 42.73,
+            }),
+            CurrencyPairAndPrice {
+                pair: CurrencyPair { base: KSM, quote: KSM },
+                price: 1.0,
+            }
+        );
+    }
+
+    #[test]
+    fn should_calculate_exchange_rate() {
+        assert_eq!(
+            CurrencyPairAndPrice {
+                pair: CurrencyPair { base: BTC, quote: KSM },
+                price: 453.4139805666768,
+            }
+            .exchange_rate(),
+            Some(FixedU128::from_inner(4534139805666767667200000))
         );
     }
 }

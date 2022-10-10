@@ -1,9 +1,11 @@
+mod config;
 mod currency;
 mod error;
 mod feeds;
 
 use backoff::{future::retry_notify, ExponentialBackoff};
 use clap::Parser;
+use config::OracleConfig;
 use currency::*;
 use error::Error;
 use futures::future::join_all;
@@ -14,8 +16,6 @@ use runtime::{
 };
 use std::{convert::TryInto, path::PathBuf, time::Duration};
 use tokio::{join, time::sleep};
-
-type Config = Vec<feeds::PriceConfig>;
 
 const VERSION: &str = git_version!(args = ["--tags"]);
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -136,7 +136,11 @@ async fn main() -> Result<(), Error> {
 
     // read price configs from file
     let data = std::fs::read_to_string(opts.oracle_config)?;
-    let config = serde_json::from_str::<Config>(&data)?;
+    let oracle_config = serde_json::from_str::<OracleConfig>(&data)?;
+    // validate routes
+    for price_config in &oracle_config {
+        price_config.validate()?;
+    }
 
     let mut price_feeds = feeds::PriceFeeds::new();
     price_feeds.add_coingecko(opts.coingecko);
@@ -154,7 +158,7 @@ async fn main() -> Result<(), Error> {
         // TODO: retry these calls on failure
         let fee_estimate = bitcoin_feeds.get_median(CONFIRMATION_TARGET).await?;
         let prices = join_all(
-            config
+            oracle_config
                 .clone()
                 .into_iter()
                 .map(|price_config| price_feeds.get_median(price_config)),

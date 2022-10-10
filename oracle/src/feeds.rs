@@ -4,14 +4,14 @@ mod coingecko;
 mod gateio;
 mod kraken;
 
-use crate::{currency::*, Error};
+use crate::{config::PriceConfig, currency::*, Error};
 use async_trait::async_trait;
 use futures::future::join_all;
 use reqwest::Url;
 use serde::Deserialize;
 use serde_json::Value;
 use statrs::statistics::{Data, OrderStatistics};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt};
 
 pub use blockcypher::{BlockCypherApi, BlockCypherCli};
 pub use blockstream::{BlockstreamApi, BlockstreamCli};
@@ -33,10 +33,10 @@ pub enum FeedName {
     CoinGecko,
 }
 
-#[derive(Deserialize, Debug, Clone)]
-pub struct PriceConfig {
-    pub pair: (Currency, Currency),
-    pub feeds: BTreeMap<FeedName, Vec<(Currency, Currency)>>,
+impl fmt::Display for FeedName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[async_trait]
@@ -73,7 +73,7 @@ impl PriceFeeds {
     }
 
     pub async fn get_prices(&self, price_config: PriceConfig) -> Result<Vec<CurrencyPairAndPrice>, Error> {
-        let currency_pair: CurrencyPair = price_config.pair.into();
+        let currency_pair = price_config.pair;
         Ok(join_all(
             price_config
                 .feeds
@@ -113,9 +113,8 @@ impl PriceFeeds {
     }
 
     pub async fn get_median(&self, price_config: PriceConfig) -> Result<CurrencyPairAndPrice, Error> {
-        let currency_pair = price_config.pair.into();
         Ok(CurrencyPairAndPrice {
-            pair: currency_pair,
+            pair: price_config.pair,
             price: Data::new(
                 self.get_prices(price_config)
                     .await?
