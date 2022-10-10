@@ -72,6 +72,8 @@ pub enum Error {
     ArithmeticError,
     #[error("MissingBitcoinFeeInfo")]
     MissingBitcoinFeeInfo,
+    #[error("FailedToConstructWalletName")]
+    FailedToConstructWalletName,
 }
 
 impl Error {

@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCoreApi, Error as BitcoinError};
 use futures::{future::Either, Future, FutureExt};
 use runtime::{
-    cli::ConnectionOpts as ParachainConfig, CurrencyId, CurrencyIdExt, CurrencyInfo, InterBtcParachain as BtcParachain,
-    InterBtcSigner, PrettyPrint, VaultId,
+    cli::ConnectionOpts as ParachainConfig, CurrencyId, InterBtcParachain as BtcParachain, InterBtcSigner, PrettyPrint,
+    RuntimeCurrencyInfo, VaultId,
 };
 use std::{marker::PhantomData, sync::Arc};
 
@@ -104,18 +104,15 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
             let constructor = move |vault_id: VaultId| {
                 let collateral_currency: CurrencyId = vault_id.collateral_currency();
                 let wrapped_currency: CurrencyId = vault_id.wrapped_currency();
-                // convert to the native type
                 let wallet_name = format!(
                     "{}-{}-{}",
                     prefix,
                     collateral_currency
-                        .inner()
-                        .map(|i| i.symbol().to_string())
-                        .unwrap_or_default(),
+                        .symbol()
+                        .map_err(|_| BitcoinError::FailedToConstructWalletName)?,
                     wrapped_currency
-                        .inner()
-                        .map(|i| i.symbol().to_string())
-                        .unwrap_or_default(),
+                        .symbol()
+                        .map_err(|_| BitcoinError::FailedToConstructWalletName)?,
                 );
                 config_copy.new_client_with_network(Some(wallet_name), network_copy)
             };
