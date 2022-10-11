@@ -15,7 +15,7 @@ impl ExchangeRate for f64 {
     }
 }
 
-pub trait CurrencyInfo {
+pub trait CurrencyInfo<Currency> {
     fn name(&self, id: &Currency) -> Result<String, Error>;
     fn symbol(&self, id: &Currency) -> Result<String, Error>;
     fn decimals(&self, id: &Currency) -> Result<u32, Error>;
@@ -24,29 +24,29 @@ pub trait CurrencyInfo {
 pub type Currency = String;
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct CurrencyPair {
+pub struct CurrencyPair<Currency> {
     pub base: Currency,
     pub quote: Currency,
 }
 
-impl fmt::Display for CurrencyPair {
+impl fmt::Display for CurrencyPair<Currency> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "({}, {})", self.base, self.quote)
     }
 }
 
-impl From<(Currency, Currency)> for CurrencyPair {
+impl<Currency> From<(Currency, Currency)> for CurrencyPair<Currency> {
     fn from((base, quote): (Currency, Currency)) -> Self {
         CurrencyPair { base, quote }
     }
 }
 
-impl CurrencyPair {
+impl<Currency: PartialEq> CurrencyPair<Currency> {
     pub fn contains(&self, currency: &Currency) -> bool {
         &self.base == currency || &self.quote == currency
     }
 
-    pub fn has_shared(&self, currency_pair: &CurrencyPair) -> bool {
+    pub fn has_shared(&self, currency_pair: &Self) -> bool {
         self.contains(&currency_pair.base) || self.contains(&currency_pair.quote)
     }
 
@@ -59,18 +59,18 @@ impl CurrencyPair {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CurrencyPairAndPrice {
-    pub pair: CurrencyPair,
+pub struct CurrencyPairAndPrice<Currency> {
+    pub pair: CurrencyPair<Currency>,
     pub price: f64,
 }
 
-impl fmt::Display for CurrencyPairAndPrice {
+impl fmt::Display for CurrencyPairAndPrice<Currency> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} => {}", self.pair.to_string(), self.price)
     }
 }
 
-impl CurrencyPairAndPrice {
+impl<Currency: PartialEq + Ord + ToString> CurrencyPairAndPrice<Currency> {
     pub fn invert(self) -> Self {
         Self {
             pair: self.pair.invert(),
@@ -78,7 +78,7 @@ impl CurrencyPairAndPrice {
         }
     }
 
-    pub fn exchange_rate(&self, currency_store: &CurrencyStore) -> Result<FixedU128, Error> {
+    pub fn exchange_rate(&self, currency_store: &CurrencyStore<Currency>) -> Result<FixedU128, Error> {
         Ok(FixedU128::from_float(self.price)
             .checked_mul(
                 &FixedU128::checked_from_rational(
@@ -110,18 +110,26 @@ impl CurrencyPairAndPrice {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::CurrencyConfig;
+
     use super::*;
 
     #[test]
     fn should_invert_currency_pair_and_price() {
         assert_eq!(
             CurrencyPairAndPrice {
-                pair: CurrencyPair { base: BTC, quote: DOT },
+                pair: CurrencyPair {
+                    base: "BTC",
+                    quote: "DOT"
+                },
                 price: 2333.0,
             }
             .invert(),
             CurrencyPairAndPrice {
-                pair: CurrencyPair { base: DOT, quote: BTC },
+                pair: CurrencyPair {
+                    base: "DOT",
+                    quote: "BTC"
+                },
                 price: 0.0004286326618088298,
             }
         );
@@ -131,15 +139,24 @@ mod tests {
     fn should_reduce_currencies() {
         assert_eq!(
             CurrencyPairAndPrice {
-                pair: CurrencyPair { base: DOT, quote: USD },
+                pair: CurrencyPair {
+                    base: "DOT",
+                    quote: "USD"
+                },
                 price: 6.32,
             }
             .reduce(CurrencyPairAndPrice {
-                pair: CurrencyPair { base: BTC, quote: USD },
+                pair: CurrencyPair {
+                    base: "BTC",
+                    quote: "USD"
+                },
                 price: 19718.25,
             }),
             CurrencyPairAndPrice {
-                pair: CurrencyPair { base: DOT, quote: BTC },
+                pair: CurrencyPair {
+                    base: "DOT",
+                    quote: "BTC"
+                },
                 price: 0.00032051525870703534,
             }
         );
@@ -149,15 +166,24 @@ mod tests {
     fn should_reduce_currencies_same() {
         assert_eq!(
             CurrencyPairAndPrice {
-                pair: CurrencyPair { base: KSM, quote: USD },
+                pair: CurrencyPair {
+                    base: "KSM",
+                    quote: "USD"
+                },
                 price: 42.73,
             }
             .reduce(CurrencyPairAndPrice {
-                pair: CurrencyPair { base: KSM, quote: USD },
+                pair: CurrencyPair {
+                    base: "KSM",
+                    quote: "USD"
+                },
                 price: 42.73,
             }),
             CurrencyPairAndPrice {
-                pair: CurrencyPair { base: KSM, quote: KSM },
+                pair: CurrencyPair {
+                    base: "KSM",
+                    quote: "KSM"
+                },
                 price: 1.0,
             }
         );
@@ -165,13 +191,33 @@ mod tests {
 
     #[test]
     fn should_calculate_exchange_rate() {
+        let mut currency_store = CurrencyStore::new();
+        currency_store.insert(
+            "BTC",
+            CurrencyConfig {
+                name: format!("Bitcoin"),
+                decimals: 8,
+            },
+        );
+        currency_store.insert(
+            "KSM",
+            CurrencyConfig {
+                name: format!("Kusama"),
+                decimals: 12,
+            },
+        );
+
         assert_eq!(
             CurrencyPairAndPrice {
-                pair: CurrencyPair { base: BTC, quote: KSM },
+                pair: CurrencyPair {
+                    base: "BTC",
+                    quote: "KSM"
+                },
                 price: 453.4139805666768,
             }
-            .exchange_rate(),
-            Some(FixedU128::from_inner(4534139805666767667200000))
+            .exchange_rate(&currency_store)
+            .unwrap(),
+            FixedU128::from_inner(4534139805666767667200000)
         );
     }
 }

@@ -39,9 +39,9 @@ impl GateIoApi {
 
     async fn get_exchange_rate(
         &self,
-        currency_pair: CurrencyPair,
-        currency_store: &CurrencyStore,
-    ) -> Result<CurrencyPairAndPrice, Error> {
+        currency_pair: CurrencyPair<Currency>,
+        currency_store: &CurrencyStore<Currency>,
+    ) -> Result<CurrencyPairAndPrice<Currency>, Error> {
         // https://www.gate.io/docs/developers/apiv4/en/
         let mut url = self.url.clone();
         url.set_path(&format!("{}/spot/tickers", url.path()));
@@ -65,9 +65,9 @@ impl GateIoApi {
 impl PriceFeed for GateIoApi {
     async fn get_price(
         &self,
-        currency_pair: CurrencyPair,
-        currency_store: &CurrencyStore,
-    ) -> Result<CurrencyPairAndPrice, Error> {
+        currency_pair: CurrencyPair<Currency>,
+        currency_store: &CurrencyStore<Currency>,
+    ) -> Result<CurrencyPairAndPrice<Currency>, Error> {
         self.get_exchange_rate(currency_pair, currency_store).await
     }
 }

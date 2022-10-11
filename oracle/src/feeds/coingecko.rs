@@ -59,9 +59,9 @@ impl CoinGeckoApi {
 
     async fn get_exchange_rate(
         &self,
-        currency_pair: CurrencyPair,
-        currency_store: &CurrencyStore,
-    ) -> Result<CurrencyPairAndPrice, Error> {
+        currency_pair: CurrencyPair<Currency>,
+        currency_store: &CurrencyStore<Currency>,
+    ) -> Result<CurrencyPairAndPrice<Currency>, Error> {
         let base = currency_store.name(&currency_pair.base)?.to_lowercase();
         let quote = currency_store.symbol(&currency_pair.quote)?.to_lowercase();
 
@@ -87,9 +87,9 @@ impl CoinGeckoApi {
 impl PriceFeed for CoinGeckoApi {
     async fn get_price(
         &self,
-        currency_pair: CurrencyPair,
-        currency_store: &CurrencyStore,
-    ) -> Result<CurrencyPairAndPrice, Error> {
+        currency_pair: CurrencyPair<Currency>,
+        currency_store: &CurrencyStore<Currency>,
+    ) -> Result<CurrencyPairAndPrice<Currency>, Error> {
         self.get_exchange_rate(currency_pair, currency_store).await
     }
 }

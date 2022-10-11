@@ -1,14 +1,19 @@
-use crate::{currency::*, error::ConfigError, feeds::FeedName, Error};
+use crate::{
+    currency::*,
+    error::{ConfigError, PriceConfigError},
+    feeds::FeedName,
+    Error,
+};
 use serde::Deserialize;
 use std::{collections::BTreeMap, convert::TryFrom};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct OracleConfig {
     pub currencies: BTreeMap<Currency, CurrencyConfig>,
-    pub prices: Vec<PriceConfig>,
+    pub prices: Vec<PriceConfig<Currency>>,
 }
 
-pub type CurrencyStore = BTreeMap<Currency, CurrencyConfig>;
+pub type CurrencyStore<Currency> = BTreeMap<Currency, CurrencyConfig>;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct CurrencyConfig {
@@ -16,7 +21,7 @@ pub struct CurrencyConfig {
     pub decimals: u32,
 }
 
-impl CurrencyInfo for CurrencyStore {
+impl<Currency: Ord + ToString> CurrencyInfo<Currency> for CurrencyStore<Currency> {
     fn name(&self, id: &Currency) -> Result<String, Error> {
         self.get(id)
             .ok_or(Error::InvalidCurrency)
@@ -24,7 +29,7 @@ impl CurrencyInfo for CurrencyStore {
     }
 
     fn symbol(&self, id: &Currency) -> Result<String, Error> {
-        Ok(id.clone())
+        Ok(id.to_string())
     }
 
     fn decimals(&self, id: &Currency) -> Result<u32, Error> {
@@ -35,41 +40,44 @@ impl CurrencyInfo for CurrencyStore {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct PriceConfig {
-    pub pair: CurrencyPair,
-    pub feeds: BTreeMap<FeedName, Vec<CurrencyPair>>,
+pub struct PriceConfig<Currency> {
+    pub pair: CurrencyPair<Currency>,
+    pub feeds: BTreeMap<FeedName, Vec<CurrencyPair<Currency>>>,
 }
 
-impl PriceConfig {
-    pub fn validate(&self) -> Result<(), Error> {
+impl<Currency> PriceConfig<Currency>
+where
+    Currency: Clone + PartialEq,
+{
+    pub fn validate(&self) -> Result<(), PriceConfigError<Currency>> {
         for (name, path) in &self.feeds {
             let end = &match &path.first() {
                 Some(currency_pair) if currency_pair.contains(&self.pair.base) => Ok(self.pair.quote.clone()),
                 Some(currency_pair) if currency_pair.contains(&self.pair.quote) => Ok(self.pair.base.clone()),
-                _ => Err(Error::InvalidConfig(
-                    name.clone(),
-                    self.pair.clone(),
-                    ConfigError::NoStart,
-                )),
+                _ => Err(PriceConfigError {
+                    feed: name.clone(),
+                    pair: self.pair.clone(),
+                    error: ConfigError::NoStart,
+                }),
             }?;
 
             match &path.last() {
                 Some(CurrencyPair { base, .. }) if base == end => Ok(()),
                 Some(CurrencyPair { quote, .. }) if quote == end => Ok(()),
-                _ => Err(Error::InvalidConfig(
-                    name.clone(),
-                    self.pair.clone(),
-                    ConfigError::NoEnd,
-                )),
+                _ => Err(PriceConfigError {
+                    feed: name.clone(),
+                    pair: self.pair.clone(),
+                    error: ConfigError::NoEnd,
+                }),
             }?;
 
-            for [left, right] in path.windows(2).flat_map(<&[CurrencyPair; 2]>::try_from) {
+            for [left, right] in path.windows(2).flat_map(<&[CurrencyPair<Currency>; 2]>::try_from) {
                 if !left.has_shared(right) {
-                    return Err(Error::InvalidConfig(
-                        name.clone(),
-                        self.pair.clone(),
-                        ConfigError::NoPath(left.clone(), right.clone()),
-                    ));
+                    return Err(PriceConfigError {
+                        feed: name.clone(),
+                        pair: self.pair.clone(),
+                        error: ConfigError::NoPath(left.clone(), right.clone()),
+                    });
                 }
             }
         }
@@ -102,7 +110,11 @@ mod tests {
             assert!(
                 matches!(
                     result,
-                    Err(Error::InvalidConfig(FeedName::Kraken, _, $err))
+                    Err(PriceConfigError{
+                        feed: FeedName::Kraken,
+                        pair: _,
+                        error: $err
+                    })
                 ),
                 "Actual result: {:?}", result
             )
@@ -112,15 +124,15 @@ mod tests {
     #[test]
     fn should_accept_valid_paths() {
         assert_valid!(
-            CurrencyPair { base: BTC, quote: KSM } => [
-                CurrencyPair { base: BTC, quote: KSM }
+            CurrencyPair { base: "BTC", quote: "KSM" } => [
+                CurrencyPair { base: "BTC", quote: "KSM" }
             ]
         );
 
         assert_valid!(
-            CurrencyPair { base: DOT, quote: INTR } => [
-                CurrencyPair { base: USD, quote: DOT },
-                CurrencyPair { base: USD, quote: INTR }
+            CurrencyPair { base: "DOT", quote: "INTR" } => [
+                CurrencyPair { base: "USD", quote: "DOT" },
+                CurrencyPair { base: "USD", quote: "INTR" }
             ]
         );
     }
@@ -128,48 +140,48 @@ mod tests {
     #[test]
     fn should_reject_invalid_paths() {
         assert_invalid!(
-            CurrencyPair { base: BTC, quote: KSM } => [],
+            CurrencyPair { base: "BTC", quote: "KSM" } => [],
             ConfigError::NoStart
         );
 
         assert_invalid!(
-            CurrencyPair { base: BTC, quote: KSM } => [
-                CurrencyPair { base: USD, quote: DOT }
+            CurrencyPair { base: "BTC", quote: "KSM" } => [
+                CurrencyPair { base: "USD", quote: "DOT" }
             ],
             ConfigError::NoStart
         );
 
         assert_invalid!(
-            CurrencyPair { base: BTC, quote: KSM } => [
-                CurrencyPair { base: BTC, quote: BTC }
+            CurrencyPair { base: "BTC", quote: "KSM" } => [
+                CurrencyPair { base: "BTC", quote: "BTC" }
             ],
             ConfigError::NoEnd
         );
 
         assert_invalid!(
-            CurrencyPair { base: BTC, quote: KSM } => [
-                CurrencyPair { base: BTC, quote: KINT }
+            CurrencyPair { base: "BTC", quote: "KSM" } => [
+                CurrencyPair { base: "BTC", quote: "KINT" }
             ],
             ConfigError::NoEnd
         );
 
         assert_invalid!(
-            CurrencyPair { base: BTC, quote: KSM } => [
-                CurrencyPair { base: BTC, quote: USDT },
-                CurrencyPair { base: USDT, quote: KINT }
+            CurrencyPair { base: "BTC", quote: "KSM" } => [
+                CurrencyPair { base: "BTC", quote: "USDT" },
+                CurrencyPair { base: "USDT", quote: "KINT" }
             ],
             ConfigError::NoEnd
         );
 
         assert_invalid!(
-            CurrencyPair { base: BTC, quote: KSM } => [
-                CurrencyPair { base: KSM, quote: USD },
-                CurrencyPair { base: KINT, quote: USD },
-                CurrencyPair { base: DOT, quote: BTC }
+            CurrencyPair { base: "BTC", quote: "KSM" } => [
+                CurrencyPair { base: "KSM", quote: "USD" },
+                CurrencyPair { base: "KINT", quote: "USD" },
+                CurrencyPair { base: "DOT", quote: "BTC" }
             ],
             ConfigError::NoPath(
-                CurrencyPair { base: KINT, quote: USD },
-                CurrencyPair { base: DOT, quote: BTC }
+                CurrencyPair { base: "KINT", quote: "USD" },
+                CurrencyPair { base: "DOT", quote: "BTC" }
             )
         );
     }

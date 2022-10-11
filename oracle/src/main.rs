@@ -104,8 +104,8 @@ async fn submit_bitcoin_fees(parachain_rpc: &InterBtcParachain, bitcoin_fee: f64
 
 async fn submit_exchange_rate(
     parachain_rpc: &InterBtcParachain,
-    currency_pair_and_price: &CurrencyPairAndPrice,
-    currency_store: &CurrencyStore,
+    currency_pair_and_price: &CurrencyPairAndPrice<Currency>,
+    currency_store: &CurrencyStore<Currency>,
 ) -> Result<(), Error> {
     log::info!(
         "Attempting to set exchange rate: {} ({})",
@@ -140,7 +140,7 @@ async fn main() -> Result<(), Error> {
     let oracle_config = serde_json::from_str::<OracleConfig>(&data)?;
     // validate routes
     for price_config in &oracle_config.prices {
-        price_config.validate()?;
+        price_config.validate().map_err(Error::InvalidConfig)?
     }
 
     let currency_store = &oracle_config.currencies;

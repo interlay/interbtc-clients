@@ -47,19 +47,19 @@ impl fmt::Display for FeedName {
 trait PriceFeed {
     async fn get_price(
         &self,
-        currency_pair: CurrencyPair,
-        currency_store: &CurrencyStore,
-    ) -> Result<CurrencyPairAndPrice, Error>;
+        currency_pair: CurrencyPair<Currency>,
+        currency_store: &CurrencyStore<Currency>,
+    ) -> Result<CurrencyPairAndPrice<Currency>, Error>;
 }
 
 #[derive(Default)]
 pub struct PriceFeeds {
-    currency_store: CurrencyStore,
+    currency_store: CurrencyStore<Currency>,
     feeds: BTreeMap<FeedName, Box<dyn PriceFeed>>,
 }
 
 impl PriceFeeds {
-    pub fn new(currency_store: CurrencyStore) -> Self {
+    pub fn new(currency_store: CurrencyStore<Currency>) -> Self {
         Self {
             currency_store,
             ..Default::default()
@@ -87,7 +87,10 @@ impl PriceFeeds {
         }
     }
 
-    pub async fn get_prices(&self, price_config: PriceConfig) -> Result<Vec<CurrencyPairAndPrice>, Error> {
+    pub async fn get_prices(
+        &self,
+        price_config: PriceConfig<Currency>,
+    ) -> Result<Vec<CurrencyPairAndPrice<Currency>>, Error> {
         let currency_pair = price_config.pair;
         let currency_store = &self.currency_store;
         Ok(join_all(
@@ -131,7 +134,10 @@ impl PriceFeeds {
         .collect::<Vec<_>>())
     }
 
-    pub async fn get_median(&self, price_config: PriceConfig) -> Result<CurrencyPairAndPrice, Error> {
+    pub async fn get_median(
+        &self,
+        price_config: PriceConfig<Currency>,
+    ) -> Result<CurrencyPairAndPrice<Currency>, Error> {
         Ok(CurrencyPairAndPrice {
             pair: price_config.pair.clone(),
             price: Data::new(
