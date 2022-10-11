@@ -5,16 +5,16 @@ mod feeds;
 
 use backoff::{future::retry_notify, ExponentialBackoff};
 use clap::Parser;
-use config::OracleConfig;
+use config::{CurrencyStore, OracleConfig};
 use currency::*;
 use error::Error;
 use futures::future::join_all;
 use git_version::git_version;
 use runtime::{
     cli::{parse_duration_ms, ProviderUserOpts},
-    FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, OraclePallet,
+    CurrencyId, FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, OraclePallet, TryFromSymbol,
 };
-use std::{convert::TryInto, path::PathBuf, time::Duration};
+use std::{path::PathBuf, time::Duration};
 use tokio::{join, time::sleep};
 
 const VERSION: &str = git_version!(args = ["--tags"]);
@@ -105,6 +105,7 @@ async fn submit_bitcoin_fees(parachain_rpc: &InterBtcParachain, bitcoin_fee: f64
 async fn submit_exchange_rate(
     parachain_rpc: &InterBtcParachain,
     currency_pair_and_price: &CurrencyPairAndPrice,
+    currency_store: &CurrencyStore,
 ) -> Result<(), Error> {
     log::info!(
         "Attempting to set exchange rate: {} ({})",
@@ -112,10 +113,10 @@ async fn submit_exchange_rate(
         chrono::offset::Local::now()
     );
 
-    let key = OracleKey::ExchangeRate(currency_pair_and_price.pair.quote.try_into()?);
-    let exchange_rate = currency_pair_and_price
-        .exchange_rate()
-        .ok_or(Error::InvalidExchangeRate)?;
+    let currency_id = CurrencyId::try_from_symbol(currency_store.symbol(&currency_pair_and_price.pair.quote)?)
+        .map_err(Error::RuntimeError)?;
+    let key = OracleKey::ExchangeRate(currency_id);
+    let exchange_rate = currency_pair_and_price.exchange_rate(currency_store)?;
     parachain_rpc.feed_values(vec![(key, exchange_rate)]).await?;
 
     log::info!(
@@ -138,11 +139,12 @@ async fn main() -> Result<(), Error> {
     let data = std::fs::read_to_string(opts.oracle_config)?;
     let oracle_config = serde_json::from_str::<OracleConfig>(&data)?;
     // validate routes
-    for price_config in &oracle_config {
+    for price_config in &oracle_config.prices {
         price_config.validate()?;
     }
 
-    let mut price_feeds = feeds::PriceFeeds::new();
+    let currency_store = &oracle_config.currencies;
+    let mut price_feeds = feeds::PriceFeeds::new(currency_store.clone());
     price_feeds.add_coingecko(opts.coingecko);
     price_feeds.add_gateio(opts.gateio);
     price_feeds.add_kraken(opts.kraken);
@@ -159,6 +161,7 @@ async fn main() -> Result<(), Error> {
         let fee_estimate = bitcoin_feeds.get_median(CONFIRMATION_TARGET).await?;
         let prices = join_all(
             oracle_config
+                .prices
                 .clone()
                 .into_iter()
                 .map(|price_config| price_feeds.get_median(price_config)),
@@ -177,32 +180,31 @@ async fn main() -> Result<(), Error> {
         )
         .await?;
 
-        let (left, right) =
-            join!(
-                retry_notify(
-                    get_exponential_backoff(),
-                    || async {
-                        submit_bitcoin_fees(&parachain_rpc, fee_estimate)
-                            .await
-                            .map_err(Into::into)
-                    },
-                    |err, _| log::error!("Error: {}", err),
-                ),
-                retry_notify(
-                    get_exponential_backoff(),
-                    || async {
-                        join_all(prices.iter().map(|currency_pair_and_price| {
-                            submit_exchange_rate(&parachain_rpc, currency_pair_and_price)
-                        }))
+        let (left, right) = join!(
+            retry_notify(
+                get_exponential_backoff(),
+                || async {
+                    submit_bitcoin_fees(&parachain_rpc, fee_estimate)
                         .await
-                        .into_iter() // turn vec<result> into result
-                        .find(|x| x.is_err())
-                        .transpose()
                         .map_err(Into::into)
-                    },
-                    |err, _| log::error!("Error: {}", err),
-                )
-            );
+                },
+                |err, _| log::error!("Error: {}", err),
+            ),
+            retry_notify(
+                get_exponential_backoff(),
+                || async {
+                    join_all(prices.iter().map(|currency_pair_and_price| {
+                        submit_exchange_rate(&parachain_rpc, currency_pair_and_price, currency_store)
+                    }))
+                    .await
+                    .into_iter() // turn vec<result> into result
+                    .find(|x| x.is_err())
+                    .transpose()
+                    .map_err(Into::into)
+                },
+                |err, _| log::error!("Error: {}", err),
+            )
+        );
 
         if left.is_err() || right.is_err() {
             // exit if either task failed after backoff

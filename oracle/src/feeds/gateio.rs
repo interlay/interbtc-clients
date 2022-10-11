@@ -1,5 +1,5 @@
 use super::{get_http, PriceFeed};
-use crate::{currency::*, Error};
+use crate::{config::CurrencyStore, currency::*, Error};
 use async_trait::async_trait;
 use clap::Parser;
 use reqwest::Url;
@@ -37,14 +37,18 @@ impl GateIoApi {
         Self { url }
     }
 
-    async fn get_exchange_rate(&self, currency_pair: CurrencyPair) -> Result<CurrencyPairAndPrice, Error> {
+    async fn get_exchange_rate(
+        &self,
+        currency_pair: CurrencyPair,
+        currency_store: &CurrencyStore,
+    ) -> Result<CurrencyPairAndPrice, Error> {
         // https://www.gate.io/docs/developers/apiv4/en/
         let mut url = self.url.clone();
         url.set_path(&format!("{}/spot/tickers", url.path()));
         url.set_query(Some(&format!(
             "currency_pair={}_{}",
-            currency_pair.base.symbol(),
-            currency_pair.quote.symbol()
+            currency_store.symbol(&currency_pair.base)?,
+            currency_store.symbol(&currency_pair.quote)?,
         )));
 
         let data = get_http(url).await?;
@@ -59,7 +63,11 @@ impl GateIoApi {
 
 #[async_trait]
 impl PriceFeed for GateIoApi {
-    async fn get_price(&self, currency_pair: CurrencyPair) -> Result<CurrencyPairAndPrice, Error> {
-        self.get_exchange_rate(currency_pair).await
+    async fn get_price(
+        &self,
+        currency_pair: CurrencyPair,
+        currency_store: &CurrencyStore,
+    ) -> Result<CurrencyPairAndPrice, Error> {
+        self.get_exchange_rate(currency_pair, currency_store).await
     }
 }

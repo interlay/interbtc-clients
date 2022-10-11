@@ -1,13 +1,9 @@
 #![allow(clippy::upper_case_acronyms)]
 
-use crate::Error;
-use runtime::{CurrencyId, FixedPointNumber, FixedPointTraits::*, FixedU128, TryFromSymbol};
-use serde::{de::Error as _, Deserialize, Deserializer};
-use std::{
-    convert::TryInto,
-    fmt::{self, Debug},
-    str::FromStr,
-};
+use crate::{CurrencyStore, Error};
+use runtime::{FixedPointNumber, FixedPointTraits::*, FixedU128};
+use serde::Deserialize;
+use std::fmt::{self, Debug};
 
 pub trait ExchangeRate {
     fn invert(self) -> Self;
@@ -20,89 +16,14 @@ impl ExchangeRate for f64 {
 }
 
 pub trait CurrencyInfo {
-    fn name(&self) -> &str;
-    fn symbol(&self) -> &str;
-    fn decimals(&self) -> u8;
+    fn name(&self, id: &Currency) -> Result<String, Error>;
+    fn symbol(&self, id: &Currency) -> Result<String, Error>;
+    fn decimals(&self, id: &Currency) -> Result<u32, Error>;
 }
 
-macro_rules! create_currency {
-    ($(#[$meta:meta])*
-	$vis:vis enum Currency {
-        $($(#[$vmeta:meta])* $symbol:ident($name:expr, $deci:literal),)*
-    }) => {
-		$(#[$meta])*
-		$vis enum Currency {
-			$($(#[$vmeta])* $symbol,)*
-		}
+pub type Currency = String;
 
-        $(
-            #[allow(dead_code)]
-            pub const $symbol: Currency = Currency::$symbol;
-        )*
-
-		impl CurrencyInfo for Currency {
-			fn name(&self) -> &str {
-				match self {
-					$(Currency::$symbol => $name,)*
-				}
-			}
-			fn symbol(&self) -> &str {
-				match self {
-					$(Currency::$symbol => stringify!($symbol),)*
-				}
-			}
-			fn decimals(&self) -> u8 {
-				match self {
-					$(Currency::$symbol => $deci,)*
-				}
-            }
-		}
-
-        impl FromStr for Currency {
-            type Err = Error;
-            fn from_str(symbol: &str) -> Result<Self, Self::Err> {
-                let uppercase_symbol = symbol.to_uppercase();
-                // try hardcoded currencies first
-                match uppercase_symbol.as_str() {
-                    $(stringify!($symbol) => Ok(Currency::$symbol),)*
-                    _ => Err(Error::InvalidCurrency),
-                }
-            }
-        }
-    }
-}
-
-create_currency! {
-    #[derive(PartialEq, Eq, Copy, Clone, Debug)]
-    #[repr(u8)]
-    pub enum Currency {
-        DOT("Polkadot", 10),
-        INTR("Interlay", 10),
-        KSM("Kusama", 12),
-        KINT("Kintsugi", 12),
-        BTC("Bitcoin", 8),
-        USDT("Tether", 6),
-        USD("United State Dollar", 2),
-        // TODO: add alias for exchange id
-        AUSD("Acala-Dollar", 12),
-    }
-}
-
-impl<'de> Deserialize<'de> for Currency {
-    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let symbol = String::deserialize(d)?;
-        Currency::from_str(&symbol).map_err(D::Error::custom)
-    }
-}
-
-impl TryInto<CurrencyId> for Currency {
-    type Error = Error;
-    fn try_into(self) -> Result<CurrencyId, Self::Error> {
-        CurrencyId::try_from_symbol(self.symbol().to_string()).map_err(Error::RuntimeError)
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct CurrencyPair {
     pub base: Currency,
     pub quote: Currency,
@@ -110,7 +31,7 @@ pub struct CurrencyPair {
 
 impl fmt::Display for CurrencyPair {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({}, {})", self.base.symbol(), self.quote.symbol())
+        write!(f, "({}, {})", self.base, self.quote)
     }
 }
 
@@ -157,11 +78,16 @@ impl CurrencyPairAndPrice {
         }
     }
 
-    pub fn exchange_rate(&self) -> Option<FixedU128> {
-        FixedU128::from_float(self.price).checked_mul(&FixedU128::checked_from_rational(
-            10_u128.pow(self.pair.quote.decimals().into()),
-            10_u128.pow(self.pair.base.decimals().into()),
-        )?)
+    pub fn exchange_rate(&self, currency_store: &CurrencyStore) -> Result<FixedU128, Error> {
+        Ok(FixedU128::from_float(self.price)
+            .checked_mul(
+                &FixedU128::checked_from_rational(
+                    10_u128.pow(currency_store.decimals(&self.pair.quote)?.into()),
+                    10_u128.pow(currency_store.decimals(&self.pair.base)?.into()),
+                )
+                .ok_or(Error::InvalidExchangeRate)?,
+            )
+            .ok_or(Error::InvalidExchangeRate)?)
     }
 
     pub fn reduce(self, other: Self) -> Self {

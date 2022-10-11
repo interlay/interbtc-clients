@@ -1,5 +1,5 @@
 use super::{get_http, PriceFeed};
-use crate::{currency::*, Error};
+use crate::{config::CurrencyStore, currency::*, Error};
 use async_trait::async_trait;
 use clap::Parser;
 use reqwest::Url;
@@ -57,7 +57,14 @@ impl CoinGeckoApi {
         self.api_key = Some(api_key);
     }
 
-    async fn get_exchange_rate(&self, base: &str, quote: &str) -> Result<f64, Error> {
+    async fn get_exchange_rate(
+        &self,
+        currency_pair: CurrencyPair,
+        currency_store: &CurrencyStore,
+    ) -> Result<CurrencyPairAndPrice, Error> {
+        let base = currency_store.name(&currency_pair.base)?.to_lowercase();
+        let quote = currency_store.symbol(&currency_pair.quote)?.to_lowercase();
+
         // https://www.coingecko.com/api/documentations/v3
         let mut url = self.url.clone();
         url.set_path(&format!("{}/simple/price", url.path()));
@@ -67,24 +74,22 @@ impl CoinGeckoApi {
         }
 
         let data = get_http(url).await?;
-        let exchange_rate = extract_response(data, base, quote).ok_or(Error::InvalidResponse)?;
-        Ok(exchange_rate)
+        let exchange_rate = extract_response(data, &base, &quote).ok_or(Error::InvalidResponse)?;
+
+        Ok(CurrencyPairAndPrice {
+            pair: currency_pair,
+            price: exchange_rate,
+        })
     }
 }
 
 #[async_trait]
 impl PriceFeed for CoinGeckoApi {
-    async fn get_price(&self, currency_pair: CurrencyPair) -> Result<CurrencyPairAndPrice, Error> {
-        let price = self
-            .get_exchange_rate(
-                &currency_pair.base.name().to_lowercase(),
-                &currency_pair.quote.symbol().to_lowercase(),
-            )
-            .await?;
-
-        Ok(CurrencyPairAndPrice {
-            pair: currency_pair,
-            price,
-        })
+    async fn get_price(
+        &self,
+        currency_pair: CurrencyPair,
+        currency_store: &CurrencyStore,
+    ) -> Result<CurrencyPairAndPrice, Error> {
+        self.get_exchange_rate(currency_pair, currency_store).await
     }
 }

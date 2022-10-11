@@ -4,7 +4,11 @@ mod coingecko;
 mod gateio;
 mod kraken;
 
-use crate::{config::PriceConfig, currency::*, Error};
+use crate::{
+    config::{CurrencyStore, PriceConfig},
+    currency::*,
+    Error,
+};
 use async_trait::async_trait;
 use futures::future::join_all;
 use reqwest::Url;
@@ -41,67 +45,82 @@ impl fmt::Display for FeedName {
 
 #[async_trait]
 trait PriceFeed {
-    async fn get_price(&self, currency_pair: CurrencyPair) -> Result<CurrencyPairAndPrice, Error>;
+    async fn get_price(
+        &self,
+        currency_pair: CurrencyPair,
+        currency_store: &CurrencyStore,
+    ) -> Result<CurrencyPairAndPrice, Error>;
 }
 
-pub struct PriceFeeds(BTreeMap<FeedName, Box<dyn PriceFeed>>);
+#[derive(Default)]
+pub struct PriceFeeds {
+    currency_store: CurrencyStore,
+    feeds: BTreeMap<FeedName, Box<dyn PriceFeed>>,
+}
 
 impl PriceFeeds {
-    pub fn new() -> Self {
-        Self(BTreeMap::new())
+    pub fn new(currency_store: CurrencyStore) -> Self {
+        Self {
+            currency_store,
+            ..Default::default()
+        }
     }
 
     pub fn add_coingecko(&mut self, opts: CoinGeckoCli) {
         if let Some(api) = CoinGeckoApi::from_opts(opts) {
             log::info!("🔗 CoinGecko");
-            self.0.insert(FeedName::CoinGecko, Box::new(api));
+            self.feeds.insert(FeedName::CoinGecko, Box::new(api));
         }
     }
 
     pub fn add_gateio(&mut self, opts: GateIoCli) {
         if let Some(api) = GateIoApi::from_opts(opts) {
             log::info!("🔗 gate.io");
-            self.0.insert(FeedName::GateIo, Box::new(api));
+            self.feeds.insert(FeedName::GateIo, Box::new(api));
         }
     }
 
     pub fn add_kraken(&mut self, opts: KrakenCli) {
         if let Some(api) = KrakenApi::from_opts(opts) {
             log::info!("🔗 Kraken");
-            self.0.insert(FeedName::Kraken, Box::new(api));
+            self.feeds.insert(FeedName::Kraken, Box::new(api));
         }
     }
 
     pub async fn get_prices(&self, price_config: PriceConfig) -> Result<Vec<CurrencyPairAndPrice>, Error> {
         let currency_pair = price_config.pair;
+        let currency_store = &self.currency_store;
         Ok(join_all(
             price_config
                 .feeds
                 .into_iter()
-                .filter_map(|(name, route)| self.0.get(&name).map(|feed| (name, route, feed)))
-                .map(|(name, route, feed)| async move {
-                    let mut currency_pair_and_price = if let Some(currency_pair_and_price) = join_all(
-                        route
-                            .into_iter()
-                            .map(|currency_pair| feed.get_price(currency_pair.into())),
-                    )
-                    .await
-                    .into_iter()
-                    .collect::<Result<Vec<_>, Error>>()?
-                    .into_iter()
-                    .reduce(|left, right| left.reduce(right))
-                    {
-                        currency_pair_and_price
-                    } else {
-                        return Ok(None);
-                    };
+                .filter_map(|(name, route)| self.feeds.get(&name).map(|feed| (name, route, feed)))
+                .map(|(name, route, feed)| {
+                    let currency_pair = currency_pair.clone();
+                    async move {
+                        let mut currency_pair_and_price = if let Some(currency_pair_and_price) = join_all(
+                            route
+                                .into_iter()
+                                .map(|currency_pair| feed.get_price(currency_pair.into(), currency_store)),
+                        )
+                        .await
+                        .into_iter()
+                        .collect::<Result<Vec<_>, Error>>()?
+                        .into_iter()
+                        .reduce(|left, right| left.reduce(right))
+                        {
+                            currency_pair_and_price
+                        } else {
+                            return Ok(None);
+                        };
 
-                    if currency_pair_and_price.pair.base != currency_pair.base {
-                        currency_pair_and_price = currency_pair_and_price.invert()
+                        if currency_pair_and_price.pair.base != currency_pair.base {
+                            currency_pair_and_price = currency_pair_and_price.invert()
+                        }
+
+                        log::trace!("Using {:?}: {}", name, currency_pair_and_price);
+                        Ok(Some(currency_pair_and_price))
                     }
-
-                    log::trace!("Using {:?}: {}", name, currency_pair_and_price);
-                    Ok(Some(currency_pair_and_price))
                 }),
         )
         .await
@@ -114,7 +133,7 @@ impl PriceFeeds {
 
     pub async fn get_median(&self, price_config: PriceConfig) -> Result<CurrencyPairAndPrice, Error> {
         Ok(CurrencyPairAndPrice {
-            pair: price_config.pair,
+            pair: price_config.pair.clone(),
             price: Data::new(
                 self.get_prices(price_config)
                     .await?

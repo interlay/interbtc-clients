@@ -2,7 +2,37 @@ use crate::{currency::*, error::ConfigError, feeds::FeedName, Error};
 use serde::Deserialize;
 use std::{collections::BTreeMap, convert::TryFrom};
 
-pub type OracleConfig = Vec<PriceConfig>;
+#[derive(Deserialize, Debug, Clone)]
+pub struct OracleConfig {
+    pub currencies: BTreeMap<Currency, CurrencyConfig>,
+    pub prices: Vec<PriceConfig>,
+}
+
+pub type CurrencyStore = BTreeMap<Currency, CurrencyConfig>;
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct CurrencyConfig {
+    pub name: String,
+    pub decimals: u32,
+}
+
+impl CurrencyInfo for CurrencyStore {
+    fn name(&self, id: &Currency) -> Result<String, Error> {
+        self.get(id)
+            .ok_or(Error::InvalidCurrency)
+            .map(|asset_config| asset_config.name.clone())
+    }
+
+    fn symbol(&self, id: &Currency) -> Result<String, Error> {
+        Ok(id.clone())
+    }
+
+    fn decimals(&self, id: &Currency) -> Result<u32, Error> {
+        self.get(id)
+            .ok_or(Error::InvalidCurrency)
+            .map(|asset_config| asset_config.decimals.clone())
+    }
+}
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct PriceConfig {
@@ -14,23 +44,31 @@ impl PriceConfig {
     pub fn validate(&self) -> Result<(), Error> {
         for (name, path) in &self.feeds {
             let end = &match &path.first() {
-                Some(currency_pair) if currency_pair.contains(&self.pair.base) => Ok(self.pair.quote),
-                Some(currency_pair) if currency_pair.contains(&self.pair.quote) => Ok(self.pair.base),
-                _ => Err(Error::InvalidConfig(name.clone(), self.pair, ConfigError::NoStart)),
+                Some(currency_pair) if currency_pair.contains(&self.pair.base) => Ok(self.pair.quote.clone()),
+                Some(currency_pair) if currency_pair.contains(&self.pair.quote) => Ok(self.pair.base.clone()),
+                _ => Err(Error::InvalidConfig(
+                    name.clone(),
+                    self.pair.clone(),
+                    ConfigError::NoStart,
+                )),
             }?;
 
             match &path.last() {
                 Some(CurrencyPair { base, .. }) if base == end => Ok(()),
                 Some(CurrencyPair { quote, .. }) if quote == end => Ok(()),
-                _ => Err(Error::InvalidConfig(name.clone(), self.pair, ConfigError::NoEnd)),
+                _ => Err(Error::InvalidConfig(
+                    name.clone(),
+                    self.pair.clone(),
+                    ConfigError::NoEnd,
+                )),
             }?;
 
             for [left, right] in path.windows(2).flat_map(<&[CurrencyPair; 2]>::try_from) {
                 if !left.has_shared(right) {
                     return Err(Error::InvalidConfig(
                         name.clone(),
-                        self.pair,
-                        ConfigError::NoPath(*left, *right),
+                        self.pair.clone(),
+                        ConfigError::NoPath(left.clone(), right.clone()),
                     ));
                 }
             }

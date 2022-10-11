@@ -1,5 +1,5 @@
 use super::{get_http, PriceFeed};
-use crate::{currency::*, Error};
+use crate::{config::CurrencyStore, currency::*, Error};
 use async_trait::async_trait;
 use clap::Parser;
 use reqwest::Url;
@@ -44,9 +44,17 @@ impl KrakenApi {
         Self { url }
     }
 
-    async fn get_exchange_rate(&self, currency_pair: CurrencyPair) -> Result<CurrencyPairAndPrice, Error> {
+    async fn get_exchange_rate(
+        &self,
+        currency_pair: CurrencyPair,
+        currency_store: &CurrencyStore,
+    ) -> Result<CurrencyPairAndPrice, Error> {
         // NOTE: Kraken prefixes older cryptocurrencies with "X" and fiat with "Z"
-        let asset_pair_name = format!("{}{}", currency_pair.base.symbol(), currency_pair.quote.symbol());
+        let asset_pair_name = format!(
+            "{}{}",
+            currency_store.symbol(&currency_pair.base)?,
+            currency_store.symbol(&currency_pair.quote)?,
+        );
 
         // https://docs.kraken.com/rest/
         let mut url = self.url.clone();
@@ -66,7 +74,11 @@ impl KrakenApi {
 
 #[async_trait]
 impl PriceFeed for KrakenApi {
-    async fn get_price(&self, currency_pair: CurrencyPair) -> Result<CurrencyPairAndPrice, Error> {
-        self.get_exchange_rate(currency_pair).await
+    async fn get_price(
+        &self,
+        currency_pair: CurrencyPair,
+        currency_store: &CurrencyStore,
+    ) -> Result<CurrencyPairAndPrice, Error> {
+        self.get_exchange_rate(currency_pair, currency_store).await
     }
 }

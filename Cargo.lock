@@ -6513,6 +6513,7 @@ dependencies = [
  "log 0.4.17",
  "reqwest",
  "runtime",
+ "serde",
  "serde_json",
  "statrs",
  "thiserror",
