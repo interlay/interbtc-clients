@@ -31,7 +31,9 @@ fn extract_response(value: &Value) -> Option<&'_ str> {
         .iter()
         .last()? // we are only fetching one anyway
         .1
-        .get("o")?
+        .get("p")?
+        .as_array()?
+        .get(0)?
         .as_str()
 }
 
@@ -61,7 +63,7 @@ impl KrakenApi {
         url.set_path(&format!("{}/public/Ticker", url.path()));
         url.set_query(Some(&format!("pair={}", asset_pair_name)));
 
-        // get today's opening price
+        // get today's VWAP
         let data = get_http(url).await?;
         let exchange_rate = extract_response(&data).ok_or(Error::InvalidResponse)?.parse::<f64>()?;
 
@@ -108,7 +110,7 @@ mod tests {
                     }
                 }
             )),
-            Some("19050.00000")
+            Some("19105.89558")
         )
     }
 }
