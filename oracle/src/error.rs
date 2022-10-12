@@ -1,9 +1,35 @@
 #![allow(clippy::enum_variant_names)]
 
+use crate::{
+    currency::{Currency, CurrencyPair},
+    feeds::FeedName,
+};
 use reqwest::Error as ReqwestError;
 use runtime::{Error as RuntimeError, SubxtError};
-use std::num::ParseIntError;
+use serde_json::Error as SerdeJsonError;
+use std::{
+    io::Error as IoError,
+    num::{ParseFloatError, ParseIntError},
+};
 use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum ConfigError<Currency> {
+    #[error("No start")]
+    NoStart,
+    #[error("No end")]
+    NoEnd,
+    #[error("No path from {0} to {1}")]
+    NoPath(CurrencyPair<Currency>, CurrencyPair<Currency>),
+}
+
+#[derive(Error, Debug)]
+#[error("{feed}: {pair} => {error}")]
+pub struct PriceConfigError<Currency> {
+    pub(crate) feed: FeedName,
+    pub(crate) pair: CurrencyPair<Currency>,
+    pub(crate) error: ConfigError<Currency>,
+}
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -13,10 +39,12 @@ pub enum Error {
     InvalidResponse,
     #[error("Invalid exchange rate")]
     InvalidExchangeRate,
-    #[error("Invalid fee estimate")]
-    InvalidFeeEstimate,
-    #[error("Invalid arguments. Either provide explicit exchange rates (e.g. KSM=1) or provide a coingecko url")]
-    InvalidArguments,
+    #[error("Invalid currency")]
+    InvalidCurrency,
+    #[error("Invalid config: {0}")]
+    InvalidConfig(PriceConfigError<Currency>),
+    #[error("{0} not configured")]
+    NotConfigured(FeedName),
 
     #[error("ReqwestError: {0}")]
     ReqwestError(#[from] ReqwestError),
@@ -26,4 +54,10 @@ pub enum Error {
     SubxtError(#[from] SubxtError),
     #[error("ParseIntError: {0}")]
     ParseIntError(#[from] ParseIntError),
+    #[error("ParseFloatError: {0}")]
+    ParseFloatError(#[from] ParseFloatError),
+    #[error("SerdeJsonError: {0}")]
+    SerdeJsonError(#[from] SerdeJsonError),
+    #[error("IoError: {0}")]
+    IoError(#[from] IoError),
 }

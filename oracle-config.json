@@ -1,0 +1,90 @@
+{
+    "currencies": {
+        "BTC": {
+            "name": "Bitcoin",
+            "decimals": 8
+        },
+        "KINT": {
+            "name": "Kintsugi",
+            "decimals": 12
+        },
+        "KSM": {
+            "name": "Kusama",
+            "decimals": 12
+        },
+        "USD": {
+            "name": "United States Dollar",
+            "decimals": 2
+        },
+        "USDT": {
+            "name": "Tether",
+            "decimals": 6
+        }
+    },
+    "prices": [
+        {
+            "pair": [
+                "BTC",
+                "KINT"
+            ],
+            "feeds": {
+                "kraken": [
+                    [
+                        "BTC",
+                        "USD"
+                    ],
+                    [
+                        "KINT",
+                        "USD"
+                    ]
+                ],
+                "coingecko": [
+                    [
+                        "KINT",
+                        "BTC"
+                    ]
+                ],
+                "gateio": [
+                    [
+                        "BTC",
+                        "USDT"
+                    ],
+                    [
+                        "KINT",
+                        "USDT"
+                    ]
+                ]
+            }
+        },
+        {
+            "pair": [
+                "BTC",
+                "KSM"
+            ],
+            "feeds": {
+                "kraken": [
+                    [
+                        "KSM",
+                        "BTC"
+                    ]
+                ],
+                "coingecko": [
+                    [
+                        "KSM",
+                        "BTC"
+                    ]
+                ],
+                "gateio": [
+                    [
+                        "BTC",
+                        "USDT"
+                    ],
+                    [
+                        "KSM",
+                        "USDT"
+                    ]
+                ]
+            }
+        }
+    ]
+}

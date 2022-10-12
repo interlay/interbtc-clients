@@ -1,17 +1,20 @@
+mod config;
+mod currency;
 mod error;
+mod feeds;
 
 use backoff::{future::retry_notify, ExponentialBackoff};
 use clap::Parser;
+use config::{CurrencyStore, OracleConfig};
+use currency::*;
 use error::Error;
+use futures::future::join_all;
 use git_version::git_version;
-use reqwest::Url;
 use runtime::{
     cli::{parse_duration_ms, ProviderUserOpts},
-    CurrencyId, FixedPointNumber,
-    FixedPointTraits::{CheckedDiv, CheckedMul, One},
-    FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, OraclePallet, RuntimeCurrencyInfo, TryFromSymbol,
+    CurrencyId, FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, OraclePallet, TryFromSymbol,
 };
-use std::{collections::HashMap, time::Duration};
+use std::{path::PathBuf, time::Duration};
 use tokio::{join, time::sleep};
 
 const VERSION: &str = git_version!(args = ["--tags"]);
@@ -21,109 +24,48 @@ const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
 
 const CONFIRMATION_TARGET: u32 = 1;
 
-const BTC_DECIMALS: u32 = 8;
-const BTC_CURRENCY: &str = "btc";
-
-const COINGECKO_API_KEY_PARAMETER: &str = "x_cg_pro_api_key";
-
-async fn get_exchange_rate_from_coingecko(coingecko_id: String, url: &Url) -> Result<FixedU128, Error> {
-    // https://www.coingecko.com/api/documentations/v3
-    let resp = reqwest::get(url.clone())
-        .await?
-        .json::<HashMap<String, HashMap<String, f64>>>()
-        .await?;
-
-    let exchange_rate = *resp
-        .get(&coingecko_id)
-        .ok_or(Error::InvalidResponse)?
-        .get(BTC_CURRENCY)
-        .ok_or(Error::InvalidResponse)?;
-
-    FixedU128::one()
-        .checked_div(&FixedU128::from_float(exchange_rate))
-        .ok_or(Error::InvalidExchangeRate)
-}
-
-async fn get_bitcoin_fee_estimate_from_blockstream(url: &Url) -> Result<FixedU128, Error> {
-    // https://github.com/Blockstream/esplora/blob/master/API.md
-    let resp = reqwest::get(url.clone()).await?.json::<HashMap<u32, f64>>().await?;
-
-    let fee_estimate = *resp.get(&CONFIRMATION_TARGET).ok_or(Error::InvalidResponse)?;
-    FixedU128::checked_from_integer(fee_estimate.round() as u128).ok_or(Error::InvalidFeeEstimate)
-}
-
-fn parse_fixed_point(src: &str) -> Result<FixedU128, Error> {
-    FixedU128::checked_from_integer(src.parse::<u128>()?).ok_or(Error::InvalidExchangeRate)
-}
-
-pub fn parse_collateral_and_optional_rate(
-    s: &str,
-) -> Result<(String, Option<FixedU128>), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    let parts: Vec<_> = s.split('=').collect();
-    match parts.as_slice() {
-        [currency, rate] => Ok((currency.to_string(), Some(parse_fixed_point(rate)?))),
-        [currency] => Ok((currency.to_string(), None)),
-        _ => Err(Box::new(Error::InvalidArguments)),
-    }
-}
-
 #[derive(Parser)]
 #[clap(name = NAME, version = VERSION, author = AUTHORS, about = ABOUT)]
 struct Opts {
-    /// Parachain URL, can be over WebSockets or HTTP.
-    #[clap(long, default_value = "ws://127.0.0.1:9944")]
-    btc_parachain_url: String,
-
-    /// Estimated fee rate to include a Bitcoin transaction
-    /// in the next block (~10 min).
-    #[clap(long, value_parser = parse_fixed_point, default_value = "1")]
-    bitcoin_fee: FixedU128,
-
-    /// Collateral type for exchange rates, e.g. "DOT" or "KSM". The exchange rate
-    /// will be fetched from coingecko unless explicitly set as e.g. "KSM=123", in which
-    /// case the given exchange rate will be used. The rate will be in while units e.g. KSM/BTC.
-    #[clap(long, value_parser = parse_collateral_and_optional_rate)]
-    currency_id: Vec<(String, Option<FixedU128>)>,
-
-    /// Interval for exchange rate setter, default 25 minutes.
-    #[clap(long, value_parser = parse_duration_ms, default_value = "1500000")]
-    interval_ms: Duration,
-
-    /// Keyring / keyfile options.
+    /// Keyring / keyfile options
     #[clap(flatten)]
     account_info: ProviderUserOpts,
 
-    /// Fetch the bitcoin fee from Blockstream (https://blockstream.info/api/).
-    #[clap(long, conflicts_with("bitcoin-fee"))]
-    blockstream: Option<Url>,
+    /// Parachain URL, can be over WebSockets or HTTP
+    #[clap(long, default_value = "ws://127.0.0.1:9944")]
+    btc_parachain_url: String,
 
-    /// Fetch the exchange rate from CoinGecko (https://api.coingecko.com/api/v3/).
-    #[clap(long)]
-    coingecko: Option<Url>,
-
-    /// Use a dedicated API key for coingecko pro URL (https://pro-api.coingecko.com/api/v3/)
-    #[clap(long)]
-    coingecko_api_key: Option<String>,
-
-    /// Timeout in milliseconds to wait for connection to btc-parachain.
+    /// Timeout in milliseconds to wait for connection to btc-parachain
     #[clap(long, value_parser = parse_duration_ms, default_value = "60000")]
     connection_timeout_ms: Duration,
-}
 
-#[derive(Clone)]
-enum UrlOrDefault<DEF> {
-    Url(Url),
-    Def(DEF),
-}
+    /// Interval for exchange rate setter, default 25 minutes
+    #[clap(long, value_parser = parse_duration_ms, default_value = "1500000")]
+    interval_ms: Duration,
 
-impl<DEF> UrlOrDefault<DEF> {
-    fn from_args(maybe_url: Option<Url>, def: DEF) -> Self {
-        if let Some(url) = maybe_url {
-            Self::Url(url)
-        } else {
-            Self::Def(def)
-        }
-    }
+    /// Connection settings for Blockstream
+    #[clap(flatten)]
+    blockstream: feeds::BlockstreamCli,
+
+    /// Connection settings for BlockCypher
+    #[clap(flatten)]
+    blockcypher: feeds::BlockCypherCli,
+
+    /// Connection settings for CoinGecko
+    #[clap(flatten)]
+    coingecko: feeds::CoinGeckoCli,
+
+    /// Connection settings for gate.io
+    #[clap(flatten)]
+    gateio: feeds::GateIoCli,
+
+    /// Connection settings for Kraken
+    #[clap(flatten)]
+    kraken: feeds::KrakenCli,
+
+    /// Feed / price config.
+    #[clap(long, default_value = "./oracle-config.json")]
+    oracle_config: PathBuf,
 }
 
 fn get_exponential_backoff() -> ExponentialBackoff {
@@ -135,69 +77,53 @@ fn get_exponential_backoff() -> ExponentialBackoff {
     }
 }
 
-/// Fetches the exchange rate from CoinGecko or uses the provided default.
-/// This is then converted into the expected format and submitted.
-async fn submit_exchange_rate(
-    parachain_rpc: &InterBtcParachain,
-    url_or_def: UrlOrDefault<FixedU128>,
-    currency_id: CurrencyId,
-    conversion_factor: FixedU128,
-) -> Result<(), Error> {
-    let coingecko_id = currency_id.coingecko_id()?;
-    let exchange_rate = match url_or_def {
-        UrlOrDefault::Url(url) => {
-            // exchange_rate given in BTC so convert after
-            get_exchange_rate_from_coingecko(coingecko_id.clone(), &url).await?
-        }
-        UrlOrDefault::Def(def) => def,
+async fn submit_bitcoin_fees(parachain_rpc: &InterBtcParachain, maybe_bitcoin_fee: Option<f64>) -> Result<(), Error> {
+    let bitcoin_fee = if let Some(bitcoin_fee) = maybe_bitcoin_fee {
+        bitcoin_fee
+    } else {
+        log::warn!("No fee estimate to submit");
+        return Ok(());
     };
 
-    let exchange_rate = exchange_rate
-        .checked_mul(&conversion_factor)
-        .ok_or(Error::InvalidExchangeRate)?;
-
     log::info!(
-        "[{}] Attempting to set exchange rate: {} ({})",
-        coingecko_id,
-        exchange_rate,
+        "Attempting to set fee estimate: {} sat/byte ({})",
+        bitcoin_fee,
         chrono::offset::Local::now()
     );
 
-    let key = OracleKey::ExchangeRate(currency_id);
-    parachain_rpc.feed_values(vec![(key, exchange_rate)]).await?;
+    parachain_rpc
+        .set_bitcoin_fees(FixedU128::from_float(bitcoin_fee))
+        .await?;
 
     log::info!(
-        "[{}] Successfully set exchange rate: {} ({})",
-        coingecko_id,
-        exchange_rate,
+        "Successfully set fee estimate: {} sat/byte ({})",
+        bitcoin_fee,
         chrono::offset::Local::now()
     );
 
     Ok(())
 }
 
-/// Fetches the Bitcoin fee estimate from Blockstream or uses the provided default.
-/// This is then converted into the expected format and submitted.
-async fn submit_bitcoin_fees(
+async fn submit_exchange_rate(
     parachain_rpc: &InterBtcParachain,
-    url_or_def: UrlOrDefault<FixedU128>,
+    currency_pair_and_price: &CurrencyPairAndPrice<Currency>,
+    currency_store: &CurrencyStore<Currency>,
 ) -> Result<(), Error> {
-    let bitcoin_fee = match url_or_def {
-        UrlOrDefault::Url(url) => get_bitcoin_fee_estimate_from_blockstream(&url).await?,
-        UrlOrDefault::Def(def) => def,
-    };
-
     log::info!(
-        "Attempting to set fee estimate: {} ({})",
-        bitcoin_fee,
+        "Attempting to set exchange rate: {} ({})",
+        currency_pair_and_price,
         chrono::offset::Local::now()
     );
 
-    parachain_rpc.set_bitcoin_fees(bitcoin_fee).await?;
+    let currency_id = CurrencyId::try_from_symbol(currency_store.symbol(&currency_pair_and_price.pair.quote)?)
+        .map_err(Error::RuntimeError)?;
+    let key = OracleKey::ExchangeRate(currency_id);
+    let exchange_rate = currency_pair_and_price.exchange_rate(currency_store)?;
+    parachain_rpc.feed_values(vec![(key, exchange_rate)]).await?;
 
     log::info!(
-        "Successfully set fee estimate: {} ({})",
-        bitcoin_fee,
+        "Successfully set exchange rate: {} ({})",
+        currency_pair_and_price,
         chrono::offset::Local::now()
     );
 
@@ -211,71 +137,42 @@ async fn main() -> Result<(), Error> {
     );
     let opts: Opts = Opts::parse();
 
-    log::info!("Starting oracle with currencies = {:?}", opts.currency_id);
+    // read price configs from file
+    let data = std::fs::read_to_string(opts.oracle_config)?;
+    let oracle_config = serde_json::from_str::<OracleConfig>(&data)?;
+    // validate routes
+    for price_config in &oracle_config.prices {
+        price_config.validate().map_err(Error::InvalidConfig)?
+    }
+
+    let currency_store = &oracle_config.currencies;
+    let mut price_feeds = feeds::PriceFeeds::new(currency_store.clone());
+    price_feeds.maybe_add_coingecko(opts.coingecko);
+    price_feeds.maybe_add_gateio(opts.gateio);
+    price_feeds.maybe_add_kraken(opts.kraken);
+
+    let mut bitcoin_feeds = feeds::BitcoinFeeds::new();
+    bitcoin_feeds.maybe_add_blockstream(opts.blockstream);
+    bitcoin_feeds.maybe_add_blockcypher(opts.blockcypher);
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = InterBtcSigner::new(key_pair);
 
-    let blockstream_url = if let Some(mut url) = opts.blockstream.clone() {
-        url.set_path(&format!("{}/fee-estimates", url.path()));
-        Some(url)
-    } else {
-        None
-    };
-
-    let parsed_currency_ids = {
-        let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
-        // NOTE: we need to connect to the parachain to get the foreign assets
-        // this will be refactored in a future PR
-        let _parachain_rpc = &InterBtcParachain::from_url_with_retry(
-            &opts.btc_parachain_url,
-            signer.clone(),
-            opts.connection_timeout_ms,
-            shutdown_tx,
+    loop {
+        // TODO: retry these calls on failure
+        let fee_estimate = bitcoin_feeds.maybe_get_median(CONFIRMATION_TARGET).await?;
+        let prices = join_all(
+            oracle_config
+                .prices
+                .clone()
+                .into_iter()
+                .map(|price_config| price_feeds.get_median(price_config)),
         )
-        .await?;
-
-        opts.currency_id
-            .iter()
-            .map(|(symbol, amount)| Ok((CurrencyId::try_from_symbol(symbol.clone())?, amount)))
-            .into_iter()
-            .collect::<Result<Vec<_>, Error>>()?
-    };
-
-    let exchange_rates_to_set = parsed_currency_ids
+        .await
         .into_iter()
-        .map(|(currency_id, explicit_exchange_rate)| match explicit_exchange_rate {
-            Some(rate) => Ok((currency_id, currency_id.decimals()?, UrlOrDefault::Def(*rate))),
-            None => {
-                let mut url = match &opts.coingecko {
-                    Some(x) => x.clone(),
-                    None => {
-                        return Err(Error::InvalidArguments);
-                    }
-                };
-                let coingecko_id = currency_id.coingecko_id()?;
-                url.set_path(&format!("{}/simple/price", url.path()));
-                url.set_query(Some(&format!("ids={}&vs_currencies={}", coingecko_id, BTC_CURRENCY)));
-                if let Some(api_key) = &opts.coingecko_api_key {
-                    url.query_pairs_mut().append_pair(COINGECKO_API_KEY_PARAMETER, api_key);
-                }
-                log::info!("Url: {}", url.to_string());
-                Ok((currency_id, currency_id.decimals()?, UrlOrDefault::Url(url)))
-            }
-        })
         .collect::<Result<Vec<_>, _>>()?;
 
-    // append the conversion_factor
-    let exchange_rates_to_set: Vec<_> = exchange_rates_to_set
-        .into_iter()
-        .map(|(currency_id, decimals, value)| {
-            let conversion_factor =
-                FixedU128::checked_from_rational(10_u128.pow(decimals), 10_u128.pow(BTC_DECIMALS)).unwrap();
-            (currency_id, value, conversion_factor)
-        })
-        .collect();
-
-    loop {
+        // get prices above first to prevent websocket timeout
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
         let parachain_rpc = InterBtcParachain::from_url_with_retry(
             &opts.btc_parachain_url,
@@ -285,36 +182,30 @@ async fn main() -> Result<(), Error> {
         )
         .await?;
 
-        let bitcoin_fee = opts.bitcoin_fee;
-
         let (left, right) = join!(
             retry_notify(
                 get_exponential_backoff(),
                 || async {
-                    Ok(submit_bitcoin_fees(
-                        &parachain_rpc,
-                        UrlOrDefault::from_args(blockstream_url.clone(), bitcoin_fee),
-                    )
-                    .await?)
+                    submit_bitcoin_fees(&parachain_rpc, fee_estimate)
+                        .await
+                        .map_err(Into::into)
                 },
                 |err, _| log::error!("Error: {}", err),
             ),
             retry_notify(
                 get_exponential_backoff(),
                 || async {
-                    let result = futures::future::join_all(exchange_rates_to_set.iter().map(
-                        |(currency_id, value, conversion_factor)| {
-                            submit_exchange_rate(&parachain_rpc, value.clone(), *currency_id, *conversion_factor)
-                        },
-                    ))
+                    join_all(prices.iter().map(|currency_pair_and_price| {
+                        submit_exchange_rate(&parachain_rpc, currency_pair_and_price, currency_store)
+                    }))
                     .await
                     .into_iter() // turn vec<result> into result
                     .find(|x| x.is_err())
-                    .transpose();
-                    Ok(result?)
+                    .transpose()
+                    .map_err(Into::into)
                 },
                 |err, _| log::error!("Error: {}", err),
-            ),
+            )
         );
 
         if left.is_err() || right.is_err() {
