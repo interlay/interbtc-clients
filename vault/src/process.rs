@@ -29,17 +29,19 @@ impl SystemProcess for System {
 #[derive(Debug)]
 pub struct PidFile {
     path: PathBuf,
+    created_pidfile: bool,
 }
 
 impl PidFile {
     pub fn new(spec_name: &String, account_id: &AccountId) -> Self {
         Self {
             path: Self::compute_path(spec_name, account_id),
+            created_pidfile: false,
         }
     }
 
     pub fn create(spec_name: &String, account_id: &AccountId, sys: &mut impl SystemProcess) -> Result<Self, Error> {
-        let pid_file = Self::new(spec_name, account_id);
+        let mut pid_file = Self::new(spec_name, account_id);
         if pid_file.path.exists() {
             let pid = pid_file.pid()?;
             if sys.refresh_process(pid) {
@@ -90,7 +92,8 @@ impl PidFile {
         Ok(Pid::from_str(&pid)?)
     }
 
-    pub fn set_pid(&self, pid: u32) -> Result<File, Error> {
+    pub fn set_pid(&mut self, pid: u32) -> Result<File, Error> {
+        self.created_pidfile = true;
         let mut file = File::create(&self.path)?;
         file.write_all(format!("{}\n", pid).as_bytes())?;
         file.sync_all()?;
@@ -98,16 +101,20 @@ impl PidFile {
     }
 
     pub fn remove(&mut self) -> Result<(), Error> {
-        tracing::info!(
-            "Removing PID file at: {}",
-            self.path
-                .clone()
-                .into_os_string()
-                .into_string()
-                .map_err(|_| Error::OsStringError)?,
-        );
-        fs::remove_file(&self.path)?;
-        self.path = PathBuf::default();
+        if self.created_pidfile {
+            tracing::info!(
+                "Removing PID file at: {}",
+                self.path
+                    .clone()
+                    .into_os_string()
+                    .into_string()
+                    .map_err(|_| Error::OsStringError)?,
+            );
+            fs::remove_file(&self.path)?;
+            self.path = PathBuf::default();
+        } else {
+            tracing::info!("No PID file created - no clean up required");
+        }
         Ok(())
     }
 }
@@ -170,7 +177,7 @@ mod tests {
         let dummy_spec_name = "kintsugi-testnet".to_string();
         let mut sys = MockSystem::default();
         sys.expect_refresh_process().once().return_const(false);
-        let pidfile = PidFile::new(&dummy_spec_name, &dummy_account_id);
+        let mut pidfile = PidFile::new(&dummy_spec_name, &dummy_account_id);
 
         // Some high pid value. PIDs are stored as i32.
         pidfile.set_pid(i32::MAX as u32).unwrap();
@@ -188,7 +195,7 @@ mod tests {
         let dummy_spec_name = "kintsugi-testnet".to_string();
         let mut sys = MockSystem::default();
         sys.expect_refresh_process().once().return_const(true);
-        let pidfile = PidFile::new(&dummy_spec_name, &dummy_account_id);
+        let mut pidfile = PidFile::new(&dummy_spec_name, &dummy_account_id);
         pidfile.set_pid(process::id()).unwrap();
 
         sys.expect_process_name()
@@ -211,7 +218,7 @@ mod tests {
         let dummy_spec_name = "kintsugi-testnet".to_string();
         let mut sys = MockSystem::default();
         sys.expect_refresh_process().once().return_const(true);
-        let pidfile = PidFile::new(&dummy_spec_name, &dummy_account_id);
+        let mut pidfile = PidFile::new(&dummy_spec_name, &dummy_account_id);
 
         // Some high pid value. PIDs are stored as i32.
         pidfile.set_pid(i32::MAX as u32).unwrap();
@@ -225,5 +232,33 @@ mod tests {
             }
         });
         PidFile::create(&dummy_spec_name, &dummy_account_id, &mut sys).unwrap();
+    }
+
+    #[test]
+    #[serial]
+    fn test_pidfile_removal() {
+        let dummy_account_id = AccountId::new(Default::default());
+        let dummy_spec_name = "kintsugi-testnet".to_string();
+        let mut sys = MockSystem::default();
+        sys.expect_refresh_process().return_const(true); // indicate the process still exists
+        sys.expect_process_name().returning(|_| Ok("vault".to_string()));
+
+        let path = {
+            // simulate start vault: create pidfile
+            let pidfile = PidFile::create(&dummy_spec_name, &dummy_account_id, &mut sys).unwrap();
+            assert!(pidfile.path.exists());
+
+            // simulate the start of a second vault: attempt to create pidfile
+            {
+                let _ = PidFile::create(&dummy_spec_name, &dummy_account_id, &mut sys);
+            }
+
+            // The second pidfile going out of scope should not cause the removal of the pidfile
+            assert!(pidfile.path.exists());
+            pidfile.path.clone()
+        };
+
+        // after the first pidfile goes out of scope, the file should be removed
+        assert!(!path.exists());
     }
 }
