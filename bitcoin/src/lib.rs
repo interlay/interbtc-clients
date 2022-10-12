@@ -967,7 +967,9 @@ impl BitcoinCoreApi for BitcoinCore {
                 // wallet does not exist, create
                 let result = self.rpc.create_wallet(wallet_name, None, None, None, None)?;
                 if let Some(warning) = result.warning {
-                    warn!("Received error while creating wallet {wallet_name}: {warning}");
+                    if !warning.is_empty() {
+                        warn!("Received warning while creating wallet {wallet_name}: {warning}");
+                    }
                 }
             }
             Ok(())
