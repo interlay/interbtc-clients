@@ -35,7 +35,7 @@ impl<Currency: Ord + ToString> CurrencyInfo<Currency> for CurrencyStore<Currency
     fn decimals(&self, id: &Currency) -> Result<u32, Error> {
         self.get(id)
             .ok_or(Error::InvalidCurrency)
-            .map(|asset_config| asset_config.decimals.clone())
+            .map(|asset_config| asset_config.decimals)
     }
 }
 

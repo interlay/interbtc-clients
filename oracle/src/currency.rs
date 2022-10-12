@@ -80,7 +80,7 @@ pub struct CurrencyPairAndPrice<Currency> {
 
 impl fmt::Display for CurrencyPairAndPrice<Currency> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} => {}", self.pair.to_string(), self.price)
+        write!(f, "{} => {}", self.pair, self.price)
     }
 }
 
@@ -101,15 +101,15 @@ impl<Currency: PartialEq + Ord + ToString> CurrencyPairAndPrice<Currency> {
     /// 1 Satoshi = 3081 * 10**2 Planck
     /// 308100 = 3081 * (10**10 / 10**8) = 3081 * 10**2
     pub fn exchange_rate(&self, currency_store: &CurrencyStore<Currency>) -> Result<FixedU128, Error> {
-        Ok(FixedU128::from_float(self.price)
+        FixedU128::from_float(self.price)
             .checked_mul(
                 &FixedU128::checked_from_rational(
-                    10_u128.pow(currency_store.decimals(&self.pair.quote)?.into()),
-                    10_u128.pow(currency_store.decimals(&self.pair.base)?.into()),
+                    10_u128.pow(currency_store.decimals(&self.pair.quote)?),
+                    10_u128.pow(currency_store.decimals(&self.pair.base)?),
                 )
                 .ok_or(Error::InvalidExchangeRate)?,
             )
-            .ok_or(Error::InvalidExchangeRate)?)
+            .ok_or(Error::InvalidExchangeRate)
     }
 
     /// Combines two currency pairs with a common element.

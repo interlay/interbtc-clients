@@ -24,7 +24,7 @@ impl Default for KrakenApi {
     }
 }
 
-fn extract_response<'a>(value: &'a Value) -> Option<&'a str> {
+fn extract_response(value: &Value) -> Option<&'_ str> {
     value
         .get("result")?
         .as_object()?

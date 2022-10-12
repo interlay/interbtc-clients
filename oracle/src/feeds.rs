@@ -100,8 +100,8 @@ impl PriceFeeds {
                 .map(|(name, route)| {
                     self.feeds
                         .get(&name)
-                        .ok_or(Error::NotConfigured(name.clone()))
-                        .map(|feed| (name, route, feed))
+                        .map(|feed| (name.clone(), route, feed))
+                        .ok_or(Error::NotConfigured(name))
                 })
                 .collect::<Result<Vec<_>, Error>>()?
                 .into_iter()

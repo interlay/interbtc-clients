@@ -24,7 +24,7 @@ impl Default for GateIoApi {
     }
 }
 
-fn extract_response<'a>(value: &'a Value) -> Option<&'a str> {
+fn extract_response(value: &Value) -> Option<&'_ str> {
     // uses the last trading price
     value.get(0)?.get("last")?.as_str()
 }
