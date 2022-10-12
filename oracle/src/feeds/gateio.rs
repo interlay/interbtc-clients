@@ -25,6 +25,7 @@ impl Default for GateIoApi {
 }
 
 fn extract_response<'a>(value: &'a Value) -> Option<&'a str> {
+    // uses the last trading price
     value.get(0)?.get("last")?.as_str()
 }
 
@@ -69,5 +70,29 @@ impl PriceFeed for GateIoApi {
         currency_store: &CurrencyStore<Currency>,
     ) -> Result<CurrencyPairAndPrice<Currency>, Error> {
         self.get_exchange_rate(currency_pair, currency_store).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn should_extract_response() {
+        assert_eq!(
+            extract_response(&json!([{
+                "currency_pair":"BTC_USD",
+                "last":"19137.68",
+                "lowest_ask":"19138.02",
+                "highest_bid":"19137.54",
+                "change_percentage":"0.21",
+                "base_volume":"2664.70331089",
+                "quote_volume":"50862972.351463",
+                "high_24h":"19265.75",
+                "low_24h":"18857.43"
+            }])),
+            Some("19137.68")
+        )
     }
 }

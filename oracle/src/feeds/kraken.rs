@@ -82,3 +82,33 @@ impl PriceFeed for KrakenApi {
         self.get_exchange_rate(currency_pair, currency_store).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn should_extract_response() {
+        assert_eq!(
+            extract_response(&json!({
+                "error":[],
+                "result": {
+                        "XXBTZUSD": {
+                                "a":["19141.50000","3","3.000"],
+                                "b":["19141.40000","7","7.000"],
+                                "c":["19145.00000","0.01022591"],
+                                "v":["647.22057875","2415.97751491"],
+                                "p":["19105.89558","19068.90458"],
+                                "t":[4359,13327],
+                                "l":["19028.50000","18860.00000"],
+                                "h":["19190.00000","19259.40000"],
+                                "o":"19050.00000"
+                        }
+                    }
+                }
+            )),
+            Some("19050.00000")
+        )
+    }
+}

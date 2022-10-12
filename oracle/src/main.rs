@@ -77,11 +77,13 @@ fn get_exponential_backoff() -> ExponentialBackoff {
     }
 }
 
-async fn submit_bitcoin_fees(parachain_rpc: &InterBtcParachain, bitcoin_fee: f64) -> Result<(), Error> {
-    if bitcoin_fee.is_nan() {
-        log::warn!("Not submitting fee estimate");
+async fn submit_bitcoin_fees(parachain_rpc: &InterBtcParachain, maybe_bitcoin_fee: Option<f64>) -> Result<(), Error> {
+    let bitcoin_fee = if let Some(bitcoin_fee) = maybe_bitcoin_fee {
+        bitcoin_fee
+    } else {
+        log::warn!("No fee estimate to submit");
         return Ok(());
-    }
+    };
 
     log::info!(
         "Attempting to set fee estimate: {} sat/byte ({})",
@@ -145,20 +147,20 @@ async fn main() -> Result<(), Error> {
 
     let currency_store = &oracle_config.currencies;
     let mut price_feeds = feeds::PriceFeeds::new(currency_store.clone());
-    price_feeds.add_coingecko(opts.coingecko);
-    price_feeds.add_gateio(opts.gateio);
-    price_feeds.add_kraken(opts.kraken);
+    price_feeds.maybe_add_coingecko(opts.coingecko);
+    price_feeds.maybe_add_gateio(opts.gateio);
+    price_feeds.maybe_add_kraken(opts.kraken);
 
     let mut bitcoin_feeds = feeds::BitcoinFeeds::new();
-    bitcoin_feeds.add_blockstream(opts.blockstream);
-    bitcoin_feeds.add_blockcypher(opts.blockcypher);
+    bitcoin_feeds.maybe_add_blockstream(opts.blockstream);
+    bitcoin_feeds.maybe_add_blockcypher(opts.blockcypher);
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = InterBtcSigner::new(key_pair);
 
     loop {
         // TODO: retry these calls on failure
-        let fee_estimate = bitcoin_feeds.get_median(CONFIRMATION_TARGET).await?;
+        let fee_estimate = bitcoin_feeds.maybe_get_median(CONFIRMATION_TARGET).await?;
         let prices = join_all(
             oracle_config
                 .prices

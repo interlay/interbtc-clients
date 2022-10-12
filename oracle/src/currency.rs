@@ -25,7 +25,12 @@ pub type Currency = String;
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct CurrencyPair<Currency> {
+    /// This is the currency to **buy** - one unit.
+    /// Also known as the "transaction" currency.
     pub base: Currency,
+    /// This is the currency to **sell**.
+    /// Used to determine the value of the base currency.
+    /// Also known as the "counter" currency.
     pub quote: Currency,
 }
 
@@ -61,6 +66,15 @@ impl<Currency: PartialEq> CurrencyPair<Currency> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CurrencyPairAndPrice<Currency> {
     pub pair: CurrencyPair<Currency>,
+    /// Indicates how much of the quote currency is needed to
+    /// buy one unit of the base currency.
+    ///
+    /// ## Example
+    /// The quotation BTC/USD = 19037.96 means that 1 BTC can
+    /// be exchanged for $19037.96 USD. In this case, BTC is the
+    /// base currency and USD is the quote (counter) currency.
+    ///
+    /// NOTE: this stores the whole unit (i.e. BTC not satoshi)
     pub price: f64,
 }
 
@@ -78,6 +92,14 @@ impl<Currency: PartialEq + Ord + ToString> CurrencyPairAndPrice<Currency> {
         }
     }
 
+    /// Calculate the price for the smallest unit of the base currency.
+    ///
+    /// ## Example
+    /// BTC/DOT = 3081
+    /// 1 BTC = 3081 DOT
+    /// 1 * 10**8 Satoshi = 3081 * 10**10 Planck
+    /// 1 Satoshi = 3081 * 10**2 Planck
+    /// 308100 = 3081 * (10**10 / 10**8) = 3081 * 10**2
     pub fn exchange_rate(&self, currency_store: &CurrencyStore<Currency>) -> Result<FixedU128, Error> {
         Ok(FixedU128::from_float(self.price)
             .checked_mul(
@@ -90,20 +112,33 @@ impl<Currency: PartialEq + Ord + ToString> CurrencyPairAndPrice<Currency> {
             .ok_or(Error::InvalidExchangeRate)?)
     }
 
+    /// Combines two currency pairs with a common element.
+    ///
+    /// ## Example
+    /// BTC/USD * USD/DOT = BTC/DOT
+    /// BTC/USD * DOT/USD = BTC/DOT
+    /// BTC/USD * BTC/DOT = USD/DOT
+    /// BTC/USD * DOT/BTC = USD/DOT
     pub fn reduce(self, other: Self) -> Self {
-        let other = if self.pair.quote == other.pair.quote {
+        let (left, right) = if self.pair.quote == other.pair.quote {
             // quote is same so invert other
-            other.invert()
+            (self, other.invert())
+        } else if self.pair.base == other.pair.base {
+            // base is same so invert self
+            (self.invert(), other)
+        } else if self.pair.base == other.pair.quote {
+            // base is the same as quote so invert both
+            (self.invert(), other.invert())
         } else {
-            other
+            (self, other)
         };
 
         Self {
             pair: CurrencyPair {
-                base: self.pair.base,
-                quote: other.pair.quote,
+                base: left.pair.base,
+                quote: right.pair.quote,
             },
-            price: self.price * other.price,
+            price: left.price * right.price,
         }
     }
 }
@@ -135,31 +170,53 @@ mod tests {
         );
     }
 
+    macro_rules! assert_reduce {
+        (
+            ($left_base:tt / $left_quote:tt @ $left_price:tt)
+            *
+            ($right_base:tt / $right_quote:tt @ $right_price:tt)
+            =
+            ($base:tt / $quote:tt @ $price:tt)
+        ) => {{
+            assert_eq!(
+                CurrencyPairAndPrice {
+                    pair: CurrencyPair {
+                        base: $left_base,
+                        quote: $left_quote
+                    },
+                    price: $left_price,
+                }
+                .reduce(CurrencyPairAndPrice {
+                    pair: CurrencyPair {
+                        base: $right_base,
+                        quote: $right_quote
+                    },
+                    price: $right_price,
+                }),
+                CurrencyPairAndPrice {
+                    pair: CurrencyPair {
+                        base: $base,
+                        quote: $quote
+                    },
+                    price: $price,
+                }
+            );
+        }};
+    }
+
     #[test]
     fn should_reduce_currencies() {
-        assert_eq!(
-            CurrencyPairAndPrice {
-                pair: CurrencyPair {
-                    base: "DOT",
-                    quote: "USD"
-                },
-                price: 6.32,
-            }
-            .reduce(CurrencyPairAndPrice {
-                pair: CurrencyPair {
-                    base: "BTC",
-                    quote: "USD"
-                },
-                price: 19718.25,
-            }),
-            CurrencyPairAndPrice {
-                pair: CurrencyPair {
-                    base: "DOT",
-                    quote: "BTC"
-                },
-                price: 0.00032051525870703534,
-            }
-        );
+        // BTC/USD * USD/DOT = BTC/DOT
+        assert_reduce!(("BTC" / "USD" @ 19184.24) * ("USD" / "DOT" @ 0.16071505) = ("BTC" / "DOT" @ 3083.1960908120004));
+
+        // BTC/USD * DOT/USD = BTC/DOT
+        assert_reduce!(("BTC" / "USD" @ 19184.24) * ("DOT" / "USD" @ 6.23) = ("BTC" / "DOT" @ 3079.332263242376));
+
+        // BTC/USD * BTC/DOT = USD/DOT
+        assert_reduce!(("BTC" / "USD" @ 19184.24) * ("BTC" / "DOT" @ 3081.0) = ("USD" / "DOT" @ 0.1606005763063848));
+
+        // BTC/USD * DOT/BTC = USD/DOT
+        assert_reduce!(("BTC" / "USD" @ 19184.24) * ("DOT" / "BTC" @ 0.00032457) = ("USD" / "DOT" @ 0.16060054900429147));
     }
 
     #[test]

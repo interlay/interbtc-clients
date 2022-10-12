@@ -93,3 +93,23 @@ impl PriceFeed for CoinGeckoApi {
         self.get_exchange_rate(currency_pair, currency_store).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn should_extract_response() {
+        assert_eq!(
+            extract_response(
+                json!({
+                    "bitcoin":{"usd":19148.24}
+                }),
+                "bitcoin",
+                "usd"
+            ),
+            Some(19148.24)
+        )
+    }
+}

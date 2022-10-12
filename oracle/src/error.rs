@@ -43,6 +43,8 @@ pub enum Error {
     InvalidCurrency,
     #[error("Invalid config: {0}")]
     InvalidConfig(PriceConfigError<Currency>),
+    #[error("{0} not configured")]
+    NotConfigured(FeedName),
 
     #[error("ReqwestError: {0}")]
     ReqwestError(#[from] ReqwestError),
