@@ -23,7 +23,7 @@ impl AssetRegistry {
         ASSET_REGISTRY.lock().map_err(|_| Error::CannotOpenAssetRegistry)
     }
 
-    fn insert(&mut self, foreign_asset_id: u32, asset_metadata: AssetMetadata) -> Result<(), Error> {
+    fn inner_insert(&mut self, foreign_asset_id: u32, asset_metadata: AssetMetadata) -> Result<(), Error> {
         let asset_name = String::from_utf8(asset_metadata.symbol.clone())
             .map_err(|_| Error::InvalidCurrency)?
             .to_uppercase();
@@ -33,11 +33,17 @@ impl AssetRegistry {
         Ok(())
     }
 
+    pub(crate) fn insert(foreign_asset_id: u32, asset_metadata: AssetMetadata) -> Result<(), Error> {
+        let mut asset_registry = Self::global()?;
+        asset_registry.inner_insert(foreign_asset_id, asset_metadata)?;
+        Ok(())
+    }
+
     pub(crate) fn extend(assets: Vec<(u32, AssetMetadata)>) -> Result<(), Error> {
         let mut asset_registry = Self::global()?;
         for (foreign_asset_id, asset_metadata) in assets {
             // TODO: check for duplicates?
-            asset_registry.insert(foreign_asset_id, asset_metadata)?;
+            asset_registry.inner_insert(foreign_asset_id, asset_metadata)?;
         }
         Ok(())
     }
@@ -147,7 +153,7 @@ mod tests {
                 coingecko_id: vec![],
             },
         };
-        AssetRegistry::global()?.insert(0, expected_asset_metadata.clone())?;
+        AssetRegistry::global()?.inner_insert(0, expected_asset_metadata.clone())?;
 
         let actual_asset_metadata = AssetRegistry::get_asset_metadata_by_id(0)?;
         assert_eq!(expected_asset_metadata, actual_asset_metadata);
@@ -173,7 +179,7 @@ mod tests {
 
     #[test]
     fn should_convert_foreign_asset() -> Result<(), Error> {
-        AssetRegistry::global()?.insert(
+        AssetRegistry::global()?.inner_insert(
             0,
             AssetMetadata {
                 decimals: 10,
@@ -193,7 +199,7 @@ mod tests {
 
     #[test]
     fn should_get_runtime_info_for_foreign_asset() -> Result<(), Error> {
-        AssetRegistry::global()?.insert(
+        AssetRegistry::global()?.inner_insert(
             0,
             AssetMetadata {
                 decimals: 10,

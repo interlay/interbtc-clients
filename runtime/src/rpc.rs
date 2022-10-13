@@ -557,6 +557,31 @@ impl InterBtcParachain {
         AssetRegistry::extend(self.get_foreign_assets_metadata().await?)
     }
 
+    /// Cache registered assets and updates
+    pub async fn listen_for_registered_assets(&self) -> Result<(), Error> {
+        futures::future::try_join(
+            self.on_event::<RegisteredAssetEvent, _, _, _>(
+                |event| async move {
+                    if let Err(err) = AssetRegistry::insert(event.asset_id, event.metadata) {
+                        log::error!("Failed to register asset {}: {}", event.asset_id, err);
+                    }
+                },
+                |_| {},
+            ),
+            self.on_event::<UpdatedAssetEvent, _, _, _>(
+                |event| async move {
+                    if let Err(err) = AssetRegistry::insert(event.asset_id, event.metadata) {
+                        log::error!("Failed to update asset {}: {}", event.asset_id, err);
+                    }
+                },
+                |_| {},
+            ),
+        )
+        .await?;
+
+        Ok(())
+    }
+
     /// Listen to fee_rate changes and broadcast new values on the fee_rate_update_tx channel
     pub async fn listen_for_fee_rate_changes(&self) -> Result<(), Error> {
         self.on_event::<FeedValuesEvent, _, _, _>(

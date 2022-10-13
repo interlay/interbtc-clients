@@ -43,6 +43,10 @@ mod metadata_aliases {
     pub type InterBtcRichBlockHeader = metadata::runtime_types::btc_relay::types::RichBlockHeader<BlockNumber>;
     pub type BitcoinBlockHeight = u32;
 
+    pub use metadata::asset_registry::events::{
+        RegisteredAsset as RegisteredAssetEvent, UpdatedAsset as UpdatedAssetEvent,
+    };
+
     pub use metadata::oracle::events::FeedValues as FeedValuesEvent;
 
     pub use metadata::issue::events::{
