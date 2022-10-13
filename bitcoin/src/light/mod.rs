@@ -25,6 +25,7 @@ pub struct BitcoinLight {
 impl BitcoinLight {
     pub fn new(electrs_url: Option<String>, private_key: PrivateKey) -> Result<Self, Error> {
         let network = private_key.network;
+        log::info!("Using network: {}", network);
         let electrs_client = ElectrsClient::new(electrs_url, network)?;
         Ok(Self {
             private_key,
