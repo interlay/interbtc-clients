@@ -51,22 +51,7 @@ cfg_if::cfg_if! {
         pub const SS58_PREFIX: u16 = 2032;
     }  else if #[cfg(feature = "parachain-metadata-kintsugi-testnet")] {
         const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1019000..=1019000;
-        // fun workaround to migrate allowed spec name
-        pub struct ThisOrThat<'a>(&'a str, &'a str);
-        impl<'a> PartialEq<String> for ThisOrThat<'a> {
-            fn eq(&self, other: &String) -> bool {
-                self.0 == other || self.1 == other
-            }
-        }
-        impl<'a> From<ThisOrThat<'a>> for String {
-            fn from(tot: ThisOrThat<'a>) -> String {
-                tot.1.into()
-            }
-        }
-        pub const DEFAULT_SPEC_NAME: ThisOrThat = ThisOrThat(
-            "testnet-parachain",
-            "testnet-kintsugi"
-        );
+        pub const DEFAULT_SPEC_NAME: &str = "testnet-kintsugi";
         pub const SS58_PREFIX: u16 = 2092;
     }
 }
