@@ -586,11 +586,18 @@ impl VaultService {
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
         let (replace_event_tx, replace_event_rx) = mpsc::channel::<Event>(16);
 
+        let listen_for_registered_assets =
+            |rpc: InterBtcParachain| async move { rpc.listen_for_registered_assets().await };
+
         let listen_for_fee_rate_estimate_changes =
             |rpc: InterBtcParachain| async move { rpc.listen_for_fee_rate_changes().await };
 
         tracing::info!("Starting all services...");
         let tasks = vec![
+            (
+                "Registered Asset Listener",
+                run(listen_for_registered_assets(self.btc_parachain.clone())),
+            ),
             (
                 "Fee Estimate Listener",
                 run(listen_for_fee_rate_estimate_changes(self.btc_parachain.clone())),
