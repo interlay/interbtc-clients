@@ -6,7 +6,7 @@ use futures::{
 };
 use jsonrpsee_core::{
     async_trait,
-    client::{Client as JsonRpcClient, TransportReceiverT, TransportSenderT},
+    client::{Client as JsonRpcClient, ClientBuilder, ReceivedMessage, TransportReceiverT, TransportSenderT},
 };
 use sc_network::config::TransportConfig;
 pub use sc_service::{
@@ -46,15 +46,19 @@ impl TransportSenderT for Sender {
         self.0.send(msg).await?;
         Ok(())
     }
+
+    async fn send_ping(&mut self) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
 }
 
 #[async_trait]
 impl TransportReceiverT for Receiver {
     type Error = SubxtClientError;
 
-    async fn receive(&mut self) -> Result<String, Self::Error> {
+    async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error> {
         let msg = self.0.next().await.expect("channel should be open");
-        Ok(msg)
+        Ok(ReceivedMessage::Text(msg))
     }
 }
 
@@ -144,7 +148,7 @@ impl Clone for SubxtClient {
 
 impl From<SubxtClient> for JsonRpcClient {
     fn from(client: SubxtClient) -> Self {
-        (client.sender, client.receiver).into()
+        ClientBuilder::default().build_with_tokio(client.sender, client.receiver)
     }
 }
 

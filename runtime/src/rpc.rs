@@ -226,7 +226,7 @@ impl InterBtcParachain {
     async fn with_unique_signer<'client, F, R>(
         &self,
         call: F,
-    ) -> Result<TransactionEvents<'client, InterBtcRuntime, InterBtcEvent>, Error>
+    ) -> Result<TransactionEvents<InterBtcRuntime, InterBtcEvent>, Error>
     where
         F: Fn(InterBtcSigner) -> R,
         R: Future<
@@ -438,7 +438,7 @@ impl InterBtcParachain {
             self.api
                 .tx()
                 .utility()
-                .batch(encoded_calls.clone())
+                .batch(encoded_calls.clone())?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -455,6 +455,7 @@ impl InterBtcParachain {
             .tx()
             .tokens()
             .transfer(recipient.clone(), Token(DOT), 100)
+            .unwrap()
             .sign_and_submit_then_watch_default(&signer.clone())
             .await
             .unwrap();
@@ -466,6 +467,7 @@ impl InterBtcParachain {
             .tx()
             .tokens()
             .transfer(recipient.clone(), Token(DOT), 100)
+            .unwrap()
             .sign_and_submit_then_watch_default(&signer.clone())
             .await
             .unwrap_err()
@@ -482,6 +484,7 @@ impl InterBtcParachain {
             .tx()
             .tokens()
             .transfer(recipient.clone(), Token(DOT), 100)
+            .unwrap()
             .sign_and_submit_default(&signer.clone())
             .await
             .unwrap();
@@ -491,6 +494,7 @@ impl InterBtcParachain {
             .tx()
             .tokens()
             .transfer(recipient, Token(DOT), 100)
+            .unwrap()
             .sign_and_submit_then_watch_default(&signer.clone())
             .await
             .unwrap_err()
@@ -530,7 +534,7 @@ impl InterBtcParachain {
             self.api
                 .tx()
                 .sudo()
-                .sudo(batch)
+                .sudo(batch)?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -710,7 +714,7 @@ impl CollateralBalancesPallet for InterBtcParachain {
             self.api
                 .tx()
                 .tokens()
-                .transfer(recipient.clone(), currency_id, amount)
+                .transfer(recipient.clone(), currency_id, amount)?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -803,7 +807,7 @@ impl ReplacePallet for InterBtcParachain {
             self.api
                 .tx()
                 .replace()
-                .request_replace(vault_id.currencies.clone(), amount)
+                .request_replace(vault_id.currencies.clone(), amount)?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -816,7 +820,7 @@ impl ReplacePallet for InterBtcParachain {
             self.api
                 .tx()
                 .replace()
-                .withdraw_replace(vault_id.currencies.clone(), amount)
+                .withdraw_replace(vault_id.currencies.clone(), amount)?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -842,7 +846,7 @@ impl ReplacePallet for InterBtcParachain {
                     amount_btc,
                     collateral,
                     btc_address,
-                )
+                )?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -855,7 +859,7 @@ impl ReplacePallet for InterBtcParachain {
             self.api
                 .tx()
                 .replace()
-                .execute_replace(replace_id, merkle_proof.into(), raw_tx.into())
+                .execute_replace(replace_id, merkle_proof.into(), raw_tx.into())?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -868,7 +872,7 @@ impl ReplacePallet for InterBtcParachain {
             self.api
                 .tx()
                 .replace()
-                .cancel_replace(replace_id)
+                .cancel_replace(replace_id)?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -996,7 +1000,7 @@ impl OraclePallet for InterBtcParachain {
             self.api
                 .tx()
                 .oracle()
-                .feed_values(values.clone())
+                .feed_values(values.clone())?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1014,7 +1018,7 @@ impl OraclePallet for InterBtcParachain {
             self.api
                 .tx()
                 .oracle()
-                .feed_values(vec![(OracleKey::FeeEstimation, value)])
+                .feed_values(vec![(OracleKey::FeeEstimation, value)])?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1138,7 +1142,7 @@ impl IssuePallet for InterBtcParachain {
             self.api
                 .tx()
                 .issue()
-                .request_issue(amount, vault_id.clone())
+                .request_issue(amount, vault_id.clone())?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1152,7 +1156,7 @@ impl IssuePallet for InterBtcParachain {
             self.api
                 .tx()
                 .issue()
-                .execute_issue(issue_id, merkle_proof.into(), raw_tx.into())
+                .execute_issue(issue_id, merkle_proof.into(), raw_tx.into())?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1165,7 +1169,7 @@ impl IssuePallet for InterBtcParachain {
             self.api
                 .tx()
                 .issue()
-                .cancel_issue(issue_id)
+                .cancel_issue(issue_id)?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1259,7 +1263,7 @@ impl RedeemPallet for InterBtcParachain {
                 self.api
                     .tx()
                     .redeem()
-                    .request_redeem(amount, btc_address, vault_id.clone())
+                    .request_redeem(amount, btc_address, vault_id.clone())?
                     .sign_and_submit_then_watch_default(&signer)
                     .await
             })
@@ -1274,7 +1278,7 @@ impl RedeemPallet for InterBtcParachain {
             self.api
                 .tx()
                 .redeem()
-                .execute_redeem(redeem_id, merkle_proof.into(), raw_tx.into())
+                .execute_redeem(redeem_id, merkle_proof.into(), raw_tx.into())?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1287,7 +1291,7 @@ impl RedeemPallet for InterBtcParachain {
             self.api
                 .tx()
                 .redeem()
-                .cancel_redeem(redeem_id, reimburse)
+                .cancel_redeem(redeem_id, reimburse)?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1466,7 +1470,7 @@ impl BtcRelayPallet for InterBtcParachain {
             self.api
                 .tx()
                 .btc_relay()
-                .initialize(header.clone(), height)
+                .initialize(header.clone(), height)?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1484,7 +1488,7 @@ impl BtcRelayPallet for InterBtcParachain {
             self.api
                 .tx()
                 .btc_relay()
-                .store_block_header(header.clone())
+                .store_block_header(header.clone())?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1606,7 +1610,7 @@ impl VaultRegistryPallet for InterBtcParachain {
             self.api
                 .tx()
                 .vault_registry()
-                .register_vault(vault_id.currencies.clone(), collateral)
+                .register_vault(vault_id.currencies.clone(), collateral)?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1624,7 +1628,7 @@ impl VaultRegistryPallet for InterBtcParachain {
             self.api
                 .tx()
                 .vault_registry()
-                .deposit_collateral(vault_id.currencies.clone(), amount)
+                .deposit_collateral(vault_id.currencies.clone(), amount)?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1646,7 +1650,7 @@ impl VaultRegistryPallet for InterBtcParachain {
             self.api
                 .tx()
                 .vault_registry()
-                .withdraw_collateral(vault_id.currencies.clone(), amount)
+                .withdraw_collateral(vault_id.currencies.clone(), amount)?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1674,7 +1678,7 @@ impl VaultRegistryPallet for InterBtcParachain {
             self.api
                 .tx()
                 .vault_registry()
-                .register_public_key(public_key.clone())
+                .register_public_key(public_key.clone())?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1756,7 +1760,7 @@ impl VaultRegistryPallet for InterBtcParachain {
             self.api
                 .tx()
                 .clients_info()
-                .set_current_client_release(uri.to_vec(), release)
+                .set_current_client_release(uri.to_vec(), release)?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1779,7 +1783,7 @@ impl VaultRegistryPallet for InterBtcParachain {
             self.api
                 .tx()
                 .clients_info()
-                .set_pending_client_release(uri.to_vec(), release)
+                .set_pending_client_release(uri.to_vec(), release)?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })
@@ -1837,7 +1841,7 @@ impl SudoPallet for InterBtcParachain {
             self.api
                 .tx()
                 .sudo()
-                .sudo(call.clone())
+                .sudo(call.clone())?
                 .sign_and_submit_then_watch_default(&signer)
                 .await
         })

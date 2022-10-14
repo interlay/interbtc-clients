@@ -601,11 +601,10 @@ mod tests {
     };
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
-        AccountId, AssetMetadata, BitcoinBlockHeight, BlockNumber, BtcPublicKey, CurrencyId, Error as RuntimeError,
-        ErrorCode, FeeRateUpdateReceiver, InterBtcRichBlockHeader, InterBtcVault, OracleKey, RawBlockHeader,
-        StatusCode, Token, DOT, IBTC,
+        sp_core::H160, AccountId, AssetMetadata, BitcoinBlockHeight, BlockNumber, BtcPublicKey, CurrencyId,
+        Error as RuntimeError, ErrorCode, FeeRateUpdateReceiver, InterBtcRichBlockHeader, InterBtcVault, OracleKey,
+        RawBlockHeader, StatusCode, Token, DOT, IBTC,
     };
-    use sp_core::H160;
     use std::{collections::BTreeSet, sync::Arc};
 
     macro_rules! assert_ok {

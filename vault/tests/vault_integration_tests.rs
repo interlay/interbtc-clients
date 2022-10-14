@@ -7,12 +7,13 @@ use futures::{
     Future, FutureExt, SinkExt, TryStreamExt,
 };
 use runtime::{
-    integration::*, types::*, BtcAddress, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain,
-    InterBtcRedeemRequest, IssuePallet, PartialAddress, RedeemPallet, ReplacePallet, SudoPallet, UtilFuncs, VaultId,
-    VaultRegistryPallet,
+    integration::*,
+    sp_core::{H160, H256},
+    types::*,
+    BtcAddress, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRedeemRequest, IssuePallet,
+    PartialAddress, RedeemPallet, ReplacePallet, SudoPallet, UtilFuncs, VaultId, VaultRegistryPallet,
 };
 use service::DynBitcoinCoreApi;
-use sp_core::{H160, H256};
 use sp_keyring::AccountKeyring;
 use std::{sync::Arc, time::Duration};
 use vault::{self, Event as CancellationEvent, IssueRequests, VaultIdManager, ZeroDelay};

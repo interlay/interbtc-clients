@@ -37,19 +37,15 @@ lazy_static = "1.4.0"
 # Substrate dependencies
 sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26" }
 sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26" }
-sp-std = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26" }
 sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26" }
-sp-version = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26" }
 frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26" }
 
 # Subxt dependencies
-# https://github.com/interlay/subxt/tree/polkadot-v0.9.26
-subxt = { package = "subxt", git = "https://github.com/interlay/subxt", rev = "cad1564b487f59c53840894607debf1aaae7a2f7" }
-subxt-client = { package = "subxt-client", path = "./client", optional = true }
+subxt = "0.22.0"
+subxt-client = { path = "./client", optional = true }
+jsonrpsee = { version = "0.14.0", features = ["async-client", "client-ws-transport", "macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
 
-jsonrpsee = { version = "0.10.1", features = ["macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
-
-bitcoin = { path = "../bitcoin"}
+bitcoin = { path = "../bitcoin" }
 
 # Dependencies for the testing utils for integration tests
 tempdir = { version = "0.3.7", optional = true }

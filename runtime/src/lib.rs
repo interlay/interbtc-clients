@@ -18,7 +18,7 @@ mod tests;
 pub mod integration;
 
 use codec::{Decode, Encode};
-use sp_std::marker::PhantomData;
+use std::marker::PhantomData;
 use subxt::{
     sp_runtime::{generic::Header, traits::BlakeTwo256, MultiSignature, OpaqueExtrinsic},
     subxt, Config,
@@ -41,7 +41,7 @@ pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber,
 use std::time::Duration;
 pub use subxt::{
     extrinsic::Signer,
-    sp_core::{crypto::Ss58Codec, sr25519::Pair},
+    sp_core::{self, crypto::Ss58Codec, sr25519::Pair},
 };
 pub use types::*;
 
@@ -62,33 +62,33 @@ pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
     feature = "parachain-metadata-interlay",
     subxt(
         runtime_metadata_path = "metadata-parachain-interlay.scale",
-        generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
+        derive_for_all_types = "Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]
 #[cfg_attr(
     feature = "parachain-metadata-kintsugi",
     subxt(
         runtime_metadata_path = "metadata-parachain-kintsugi.scale",
-        generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
+        derive_for_all_types = "Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]
 #[cfg_attr(
     feature = "parachain-metadata-interlay-testnet",
     subxt(
         runtime_metadata_path = "metadata-parachain-interlay-testnet.scale",
-        generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
+        derive_for_all_types = "Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]
 #[cfg_attr(
     feature = "parachain-metadata-kintsugi-testnet",
     subxt(
         runtime_metadata_path = "metadata-parachain-kintsugi-testnet.scale",
-        generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
+        derive_for_all_types = "Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]
 pub mod metadata {
     #[subxt(substitute_type = "BTreeSet")]
-    use sp_std::collections::btree_set::BTreeSet;
+    use std::collections::btree_set::BTreeSet;
 
     #[subxt(substitute_type = "primitive_types::H256")]
     use crate::H256;
