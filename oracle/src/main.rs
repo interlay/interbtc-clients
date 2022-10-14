@@ -166,7 +166,7 @@ async fn main() -> Result<(), Error> {
                 .prices
                 .clone()
                 .into_iter()
-                .map(|price_config| price_feeds.get_median(price_config)),
+                .map(|price_config| price_feeds.get_value_or_median(price_config)),
         )
         .await
         .into_iter()

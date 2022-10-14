@@ -42,6 +42,11 @@ impl<Currency: Ord + ToString> CurrencyInfo<Currency> for CurrencyStore<Currency
 #[derive(Deserialize, Debug, Clone)]
 pub struct PriceConfig<Currency> {
     pub pair: CurrencyPair<Currency>,
+    /// If set, use this value instead of reading the feed.
+    #[serde(default)]
+    pub value: Option<f64>,
+    // Feeds to consume to calculate this exchange rate.
+    #[serde(default)]
     pub feeds: BTreeMap<FeedName, Vec<CurrencyPair<Currency>>>,
 }
 
@@ -94,6 +99,7 @@ mod tests {
         ($pair:expr => [$($path:expr),*]) => {{
             PriceConfig {
                 pair: $pair,
+                value: None,
                 feeds: vec![(FeedName::Kraken, vec![$($path),*])].into_iter().collect()
             }
             .validate().expect("Config is valid")
@@ -104,6 +110,7 @@ mod tests {
         ($pair:expr => [$($path:expr),*], $err:pat) => {{
             let result = PriceConfig {
                 pair: $pair,
+                value: None,
                 feeds: vec![(FeedName::Kraken, vec![$($path),*])].into_iter().collect()
             }
             .validate();

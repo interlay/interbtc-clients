@@ -141,21 +141,24 @@ impl PriceFeeds {
         .collect::<Vec<_>>())
     }
 
-    pub async fn get_median(
+    pub async fn get_value_or_median(
         &self,
         price_config: PriceConfig<Currency>,
     ) -> Result<CurrencyPairAndPrice<Currency>, Error> {
-        Ok(CurrencyPairAndPrice {
-            pair: price_config.pair.clone(),
-            price: Data::new(
+        let pair = price_config.pair.clone();
+        let price = if let Some(value) = price_config.value {
+            value
+        } else {
+            Data::new(
                 self.get_prices(price_config)
                     .await?
                     .into_iter()
                     .map(|cup| cup.price)
                     .collect::<Vec<f64>>(),
             )
-            .median(),
-        })
+            .median()
+        };
+        Ok(CurrencyPairAndPrice { pair, price })
     }
 }
 
