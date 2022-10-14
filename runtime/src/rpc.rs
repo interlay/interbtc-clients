@@ -12,7 +12,7 @@ use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt};
 use module_oracle_rpc_runtime_api::BalanceWrapper;
 use primitives::UnsignedFixedPoint;
 use serde_json::Value;
-use std::{collections::BTreeSet, future::Future, ops::RangeInclusive, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, future::Future, ops::Range, sync::Arc, time::Duration};
 use subxt::{
     rpc::{rpc_params, ClientT},
     BasicError, Client as SubxtClient, ClientBuilder as SubxtClientBuilder, Event, PolkadotExtrinsicParams, RpcClient,
@@ -38,19 +38,19 @@ compile_error!("Tests are only supported for the kintsugi testnet metadata");
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "parachain-metadata-interlay")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1019000..=1019000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1019000..1020000;
         pub const DEFAULT_SPEC_NAME: &str = "interlay-parachain";
         pub const SS58_PREFIX: u16 = 2032;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1019000..=1019000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1019000..1020000;
         pub const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
         pub const SS58_PREFIX: u16 = 2092;
     } else if #[cfg(feature = "parachain-metadata-interlay-testnet")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1019000..=1019000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1019000..1020000;
         pub const DEFAULT_SPEC_NAME: &str = "testnet-interlay";
         pub const SS58_PREFIX: u16 = 2032;
     }  else if #[cfg(feature = "parachain-metadata-kintsugi-testnet")] {
-        const DEFAULT_SPEC_VERSION: RangeInclusive<u32> = 1019000..=1019000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1019000..1020000;
         pub const DEFAULT_SPEC_NAME: &str = "testnet-kintsugi";
         pub const SS58_PREFIX: u16 = 2092;
     }
@@ -102,8 +102,8 @@ impl InterBtcParachain {
             log::info!("transaction_version={}", runtime_version.transaction_version);
         } else {
             return Err(Error::InvalidSpecVersion(
-                *DEFAULT_SPEC_VERSION.start(),
-                *DEFAULT_SPEC_VERSION.end(),
+                DEFAULT_SPEC_VERSION.start,
+                DEFAULT_SPEC_VERSION.end,
                 runtime_version.spec_version,
             ));
         }
