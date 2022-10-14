@@ -4,9 +4,52 @@ Automated price feeder for interBTC. Values can be set manually or imported from
 
 ## Examples
 
-To use a fixed price for DOT and the coingecko for INTR, use e.g.: 
+To use a fixed price for BTC/DOT and coingecko for BTC/INTR, use e.g.: 
 ```shell
-cargo run --bin oracle --features parachain-metadata-kintsugi -- --keyring alice --currency-id DOT=2308 --currency-id INTR
+cargo run --bin oracle --features parachain-metadata-kintsugi -- --keyring alice --coingecko-url https://api.coingecko.com/api/v3 --oracle-config config.json
+```
+
+With the `config.json`:
+```json
+{
+    "currencies": {
+        "BTC": {
+            "name": "Bitcoin",
+            "decimals": 8
+        },
+        "DOT": {
+            "name": "Polkadot",
+            "decimals": 10
+        },
+        "INTR": {
+            "name": "Interlay",
+            "decimals": 10
+        }
+    },
+    "prices": [
+        {
+            "pair": [
+                "BTC",
+                "DOT"
+            ],
+            "value": 2308
+        },
+        {
+            "pair": [
+                "BTC",
+                "INTR"
+            ],
+            "feeds": {
+                "coingecko": [
+                    [
+                        "INTR",
+                        "BTC"
+                    ]
+                ]
+            }
+        }
+    ]
+}
 ```
 
 ## Detailed Options
@@ -23,34 +66,28 @@ For convenience, a modified version of this output is included below.
 USAGE:
     oracle [OPTIONS]
 
-FLAGS:
-    -h, --help       Print help information
-    -V, --version    Print version information
-
 OPTIONS:
-        --bitcoin-fee <BITCOIN_FEE>
-            Estimated fee rate to include a Bitcoin transaction in the next block (~10 min)
-            [default: 1]
+        --blockcypher-url <BLOCKCYPHER_URL>
+            Fetch the bitcoin fee estimate from BlockCypher
+            (https://api.blockcypher.com/v1/btc/main)
 
-        --blockstream <BLOCKSTREAM>
-            Fetch the bitcoin fee from Blockstream (https://blockstream.info/api/)
+        --blockstream-url <BLOCKSTREAM_URL>
+            Fetch the bitcoin fee estimate from Blockstream (https://blockstream.info/api/)
 
         --btc-parachain-url <BTC_PARACHAIN_URL>
             Parachain URL, can be over WebSockets or HTTP [default: ws://127.0.0.1:9944]
 
-        --coingecko <COINGECKO>
-            Fetch the exchange rate from CoinGecko (https://api.coingecko.com/api/v3/)
-
         --coingecko-api-key <COINGECKO_API_KEY>
             Use a dedicated API key for coingecko pro URL (https://pro-api.coingecko.com/api/v3/)
+
+        --coingecko-url <COINGECKO_URL>
+            Fetch the exchange rate from CoinGecko (https://api.coingecko.com/api/v3/)
 
         --connection-timeout-ms <CONNECTION_TIMEOUT_MS>
             Timeout in milliseconds to wait for connection to btc-parachain [default: 60000]
 
-        --currency-id <CURRENCY_ID>
-            Collateral type for exchange rates, e.g. "DOT" or "KSM". The exchange rate will be
-            fetched from coingecko unless explicitly set as e.g. "KSM=123", in which case the given
-            exchange rate will be used. The rate will be in while units e.g. KSM/BTC
+        --gateio-url <GATEIO_URL>
+            Fetch the exchange rate from gate.io
 
     -h, --help
             Print help information
@@ -67,6 +104,12 @@ OPTIONS:
 
         --keyring <KEYRING>
             Keyring to use, mutually exclusive with keyfile
+
+        --kraken-url <KRAKEN_URL>
+            Fetch the exchange rate from Kraken
+
+        --oracle-config <ORACLE_CONFIG>
+            Feed / price config [default: ./oracle-config.json]
 
     -V, --version
             Print version information
