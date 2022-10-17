@@ -7,6 +7,7 @@ use nix::{
     sys::signal::{self, Signal},
     unistd::Pid,
 };
+use reqwest::Url;
 use sha2::{Digest, Sha256};
 use signal_hook_tokio::SignalsInfo;
 use sp_core::{hexdisplay::AsBytesRef, H256};
@@ -128,8 +129,8 @@ impl Runner {
         }
     }
 
-    fn try_load_downloaded_binary(runner: &mut impl RunnerExt) -> Result<(), Error> {
-        let (bin_name, bin_path) = runner.get_bin_path()?;
+    fn try_load_downloaded_binary(runner: &mut impl RunnerExt, uri: &str) -> Result<(), Error> {
+        let (bin_name, bin_path) = runner.get_bin_path(uri)?;
         let file_content = fs::read(bin_path.clone()).map_err(|_| Error::NoDownloadedRelease)?;
         let checksum = H256::from_slice(&sha256sum(&file_content));
         let downloaded_release = DownloadedRelease {
@@ -156,7 +157,7 @@ impl Runner {
             }
         }
 
-        let (bin_name, bin_path) = runner.get_bin_path()?;
+        let (bin_name, bin_path) = runner.get_bin_path(&release.uri)?;
         log::info!("Downloading {} at: {:?}", bin_name, bin_path);
         let mut file = OpenOptions::new()
             .read(true)
@@ -185,8 +186,15 @@ impl Runner {
         Ok(downloaded_release)
     }
 
-    fn get_bin_path(runner: &impl RunnerExt) -> Result<(String, PathBuf), Error> {
-        let bin_name = runner.client_type();
+    fn get_bin_path(runner: &impl RunnerExt, uri: &str) -> Result<(String, PathBuf), Error> {
+        // Remove any trailing slashes from the release URI
+        let parsed_uri = Url::parse(uri.trim_end_matches('/'))?;
+        let bin_name = parsed_uri
+            .path_segments()
+            .and_then(|segments| segments.last())
+            .and_then(|name| if name.is_empty() { None } else { Some(name) })
+            .ok_or(Error::ClientNameDerivationError)?;
+
         let bin_path = runner.download_path().join(bin_name.to_string());
         Ok((bin_name.to_string(), bin_path))
     }
@@ -296,12 +304,13 @@ impl Runner {
         // Create all directories for the `download_path` if they don't already exist.
         fs::create_dir_all(&runner.download_path())?;
 
+        let release = runner
+            .try_get_release()
+            .await?
+            .expect("No current client release set on-chain.");
+
         // If there is no binary on disk, download one
-        if runner.try_load_downloaded_binary().is_err() {
-            let release = runner
-                .try_get_release()
-                .await?
-                .expect("No current client release set on-chain.");
+        if runner.try_load_downloaded_binary(&release.uri).is_err() {
             runner.download_binary(release).await?;
         }
 
@@ -404,7 +413,7 @@ pub trait RunnerExt {
     /// Download the client binary and make it executable, retrying for `RETRY_TIMEOUT` if there is a network error.
     async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
     /// Convert a release URI (e.g. a GitHub link) to an executable name and OS path (after download)
-    fn get_bin_path(&self) -> Result<(String, PathBuf), Error>;
+    fn get_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error>;
     /// Remove downloaded release from the file system. This is only supposed to occur _after_ the client process
     /// has been killed. In case of failure, removing is retried for `RETRY_TIMEOUT`.
     fn delete_downloaded_release(&mut self) -> Result<(), Error>;
@@ -423,7 +432,7 @@ pub trait RunnerExt {
     /// If the child process crashed, start it again
     fn maybe_restart_client(&mut self) -> Result<(), Error>;
     /// If a client binary exists on disk, load it.
-    fn try_load_downloaded_binary(&mut self) -> Result<(), Error>;
+    fn try_load_downloaded_binary(&mut self, uri: &str) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -479,8 +488,8 @@ impl RunnerExt for Runner {
         Ok(())
     }
 
-    fn get_bin_path(&self) -> Result<(String, PathBuf), Error> {
-        Runner::get_bin_path(self)
+    fn get_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error> {
+        Runner::get_bin_path(self, uri)
     }
 
     fn delete_downloaded_release(&mut self) -> Result<(), Error> {
@@ -512,8 +521,8 @@ impl RunnerExt for Runner {
         Runner::maybe_restart_client(self)
     }
 
-    fn try_load_downloaded_binary(&mut self) -> Result<(), Error> {
-        Runner::try_load_downloaded_binary(self)
+    fn try_load_downloaded_binary(&mut self, uri: &str) -> Result<(), Error> {
+        Runner::try_load_downloaded_binary(self, uri)
     }
 }
 
@@ -633,7 +642,7 @@ mod tests {
             fn client_type(&self) -> ClientType;
             async fn try_get_release(&self) -> Result<Option<ClientRelease>, Error>;
             async fn download_binary(&mut self, release: ClientRelease) -> Result<(), Error>;
-            fn get_bin_path(&self) -> Result<(String, PathBuf), Error>;
+            fn get_bin_path(&self, uri: &str) -> Result<(String, PathBuf), Error>;
             fn delete_downloaded_release(&mut self) -> Result<(), Error>;
             fn run_binary(&mut self) -> Result<(), Error>;
             fn terminate_proc_and_wait(&mut self) -> Result<(), Error>;
@@ -641,7 +650,7 @@ mod tests {
             fn auto_update(&mut self) ->  BoxFuture<'static, Result<(), Error>>;
             fn check_child_proc_alive(&mut self) -> Result<bool, Error>;
             fn maybe_restart_client(&mut self) -> Result<(), Error>;
-            fn try_load_downloaded_binary(&mut self) -> Result<(), Error>;
+            fn try_load_downloaded_binary(&mut self, uri: &str) -> Result<(), Error>;
         }
 
         #[async_trait]
@@ -669,7 +678,7 @@ mod tests {
 
         runner
             .expect_get_bin_path()
-            .returning(move || Ok(("vault-standalone-metadata".to_string(), moved_mock_path.clone())));
+            .returning(move |_| Ok(("vault-standalone-metadata".to_string(), moved_mock_path.clone())));
         runner
             .expect_get_request_bytes()
             .returning(|_| Ok(Bytes::from_static(&[1, 2, 3, 4])));
@@ -737,9 +746,13 @@ mod tests {
             let mut runner = MockRunner::default();
             runner.expect_download_path().return_const(mock_path.clone());
             runner.expect_client_type().return_const(client.clone());
-            let (bin_name, bin_path) = Runner::get_bin_path(&runner).unwrap();
-            assert_eq!(bin_name, client.to_string());
-            assert_eq!(bin_path, mock_path.join(client.to_string()));
+            let (bin_name, bin_path) = Runner::get_bin_path(
+                &runner,
+                "https://github.com/interlay/interbtc-clients/releases/download/1.17.2/vault-standalone-metadata",
+            )
+            .unwrap();
+            assert_eq!(bin_name, "vault-standalone-metadata");
+            assert_eq!(bin_path, mock_path.join(bin_name));
         }
     }
 
@@ -904,14 +917,14 @@ mod tests {
     async fn test_runner_loading_binary_fails() {
         let mut runner = MockRunner::default();
 
-        runner.expect_get_bin_path().returning(move || {
+        runner.expect_get_bin_path().returning(move |_| {
             Ok((
                 "client".to_string(),
                 TempDir::new("runner-tests").unwrap().into_path().join("client"),
             ))
         });
         assert_err!(
-            Runner::try_load_downloaded_binary(&mut runner),
+            Runner::try_load_downloaded_binary(&mut runner, ""),
             Error::NoDownloadedRelease
         );
     }
@@ -936,7 +949,7 @@ mod tests {
 
         runner
             .expect_get_bin_path()
-            .returning(move || Ok(("client".to_string(), moved_mock_path.clone())));
+            .returning(move |_| Ok(("client".to_string(), moved_mock_path.clone())));
         runner.expect_set_downloaded_release().returning(|release_option| {
             let checksum = release_option.unwrap().checksum;
             let expected_checksum = H256::from_slice(&[
@@ -945,7 +958,7 @@ mod tests {
             ]);
             assert_eq!(checksum, expected_checksum);
         });
-        Runner::try_load_downloaded_binary(&mut runner).unwrap();
+        Runner::try_load_downloaded_binary(&mut runner, "").unwrap();
     }
 
     #[tokio::test]
@@ -957,7 +970,7 @@ mod tests {
         runner.expect_download_path().return_const(mock_path.clone());
         runner
             .expect_try_load_downloaded_binary()
-            .returning(|| Err(Error::NoDownloadedRelease));
+            .returning(|_| Err(Error::NoDownloadedRelease));
 
         runner
             .expect_try_get_release()
@@ -984,11 +997,11 @@ mod tests {
         let mut runner = MockRunner::default();
 
         runner.expect_download_path().return_const(mock_path.clone());
-        runner.expect_try_load_downloaded_binary().returning(|| Ok(()));
+        runner.expect_try_load_downloaded_binary().returning(|_| Ok(()));
         runner.expect_run_binary().once().returning(|| Ok(()));
         runner.expect_maybe_restart_client().once().returning(|| Ok(()));
 
-        runner.expect_try_get_release().once().returning(|| {
+        runner.expect_try_get_release().times(2).returning(|| {
             Ok(Some(ClientRelease {
                 uri: Default::default(),
                 checksum: H256::from_low_u64_be(10),
