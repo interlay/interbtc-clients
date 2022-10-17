@@ -33,6 +33,8 @@ pub enum Error {
     ProcessTerminationFailure,
     #[error("Failed to parse the client-type CLI argument")]
     ClientTypeParsingError,
+    #[error("Failed to derive the release name of the vault")]
+    ClientNameDerivationError,
 }
 
 impl<E: Into<Error> + Sized> From<BackoffError<E>> for Error {
