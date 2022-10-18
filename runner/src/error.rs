@@ -35,6 +35,8 @@ pub enum Error {
     ClientTypeParsingError,
     #[error("Failed to derive the release name of the vault")]
     ClientNameDerivationError,
+    #[error("Incorrect Checksum")]
+    IncorrectChecksum,
 }
 
 impl<E: Into<Error> + Sized> From<BackoffError<E>> for Error {
