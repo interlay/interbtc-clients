@@ -1,7 +1,7 @@
 #![allow(clippy::enum_variant_names)]
 
 use bitcoin::Error as BitcoinError;
-use runtime::Error as InterBtcError;
+use runtime::Error as RuntimeError;
 use thiserror::Error;
 
 #[cfg(test)]
@@ -26,8 +26,8 @@ pub enum Error {
 
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
-    #[error("InterBtcError: {0}")]
-    InterBtcError(#[from] InterBtcError),
+    #[error("RuntimeError: {0}")]
+    RuntimeError(#[from] RuntimeError),
 }
 
 #[cfg(test)]

@@ -19,7 +19,7 @@ pub async fn listen_for_refund_requests(
     num_confirmations: u32,
     process_refunds: bool,
     auto_rbf: bool,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     parachain_rpc
         .on_event::<RequestRefundEvent, _, _, _>(
             |event| async {

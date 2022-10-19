@@ -429,7 +429,7 @@ pub async fn execute_open_requests(
     num_confirmations: u32,
     payment_margin: Duration,
     auto_rbf: bool,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let parachain_rpc = &parachain_rpc;
     let vault_id = parachain_rpc.get_account_id().clone();
 

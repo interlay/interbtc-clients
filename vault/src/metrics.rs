@@ -3,6 +3,7 @@ use std::{collections::HashMap, convert::TryInto, sync::Arc};
 use crate::{
     execution::parachain_blocks_to_bitcoin_blocks_rounded_up,
     system::{VaultData, VaultIdManager},
+    Error,
 };
 use async_trait::async_trait;
 use bitcoin::{json::ListTransactionResult, GetTransactionResultDetailCategory, SignedAmount, TransactionExt};
@@ -13,8 +14,8 @@ use runtime::{
         gather, proto::MetricFamily, Encoder, Gauge, GaugeVec, IntCounter, IntGauge, IntGaugeVec, Opts, Registry,
         TextEncoder,
     },
-    CollateralBalancesPallet, CurrencyId, CurrencyIdExt, CurrencyInfo, Error, FeedValuesEvent, FixedU128,
-    InterBtcParachain, InterBtcRedeemRequest, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet,
+    CollateralBalancesPallet, CurrencyId, CurrencyIdExt, CurrencyInfo, Error as RuntimeError, FeedValuesEvent,
+    FixedU128, InterBtcParachain, InterBtcRedeemRequest, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet,
     RedeemRequestStatus, ReplacePallet, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
 };
 use service::{
@@ -219,7 +220,7 @@ impl PerCurrencyMetrics {
         vault: &VaultData,
         parachain_rpc: P,
         bitcoin_transactions: Vec<ListTransactionResult>,
-    ) -> Result<(), ServiceError> {
+    ) -> Result<(), ServiceError<Error>> {
         let vault_id = &vault.vault_id;
         // update fee surplus
         if let Ok((redeem_requests, replace_requests)) = try_join!(
@@ -287,7 +288,7 @@ impl PerCurrencyMetrics {
     }
 }
 
-pub fn register_custom_metrics() -> Result<(), Error> {
+pub fn register_custom_metrics() -> Result<(), RuntimeError> {
     REGISTRY.register(Box::new(AVERAGE_BTC_FEE.clone()))?;
     REGISTRY.register(Box::new(LOCKED_COLLATERAL.clone()))?;
     REGISTRY.register(Box::new(COLLATERALIZATION.clone()))?;
@@ -331,7 +332,7 @@ pub async fn metrics_handler() -> Result<impl Reply, Rejection> {
     Ok(metrics)
 }
 
-fn raw_value_as_currency(value: u128, currency: CurrencyId) -> Result<f64, ServiceError> {
+fn raw_value_as_currency(value: u128, currency: CurrencyId) -> Result<f64, ServiceError<Error>> {
     let scaling_factor = currency.inner()?.one() as f64;
     Ok(value as f64 / scaling_factor)
 }
@@ -339,7 +340,7 @@ fn raw_value_as_currency(value: u128, currency: CurrencyId) -> Result<f64, Servi
 pub async fn publish_locked_collateral<P: VaultRegistryPallet>(
     vault: &VaultData,
     parachain_rpc: P,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     if let Ok(actual_collateral) = parachain_rpc.get_vault_total_collateral(vault.vault_id.clone()).await {
         let actual_collateral = raw_value_as_currency(actual_collateral, vault.vault_id.collateral_currency())?;
         vault.metrics.locked_collateral.set(actual_collateral);
@@ -350,7 +351,7 @@ pub async fn publish_locked_collateral<P: VaultRegistryPallet>(
 pub async fn publish_required_collateral<P: VaultRegistryPallet>(
     vault: &VaultData,
     parachain_rpc: P,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     if let Ok(required_collateral) = parachain_rpc
         .get_required_collateral_for_vault(vault.vault_id.clone())
         .await
@@ -376,7 +377,7 @@ pub async fn update_bitcoin_metrics(
     vault: &VaultData,
     new_fee_entry: Option<SignedAmount>,
     fee_budget: Option<u128>,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     // update the average fee
     if let Some(amount) = new_fee_entry {
         {
@@ -400,7 +401,7 @@ pub async fn update_bitcoin_metrics(
     Ok(())
 }
 
-async fn publish_fee_budget_surplus(vault: &VaultData) -> Result<(), ServiceError> {
+async fn publish_fee_budget_surplus(vault: &VaultData) -> Result<(), ServiceError<Error>> {
     let surplus = *vault.metrics.fee_budget_surplus.data.read().await;
     vault
         .metrics
@@ -430,7 +431,7 @@ fn publish_bitcoin_balance(vault: &VaultData) {
 
 async fn publish_native_currency_balance<P: CollateralBalancesPallet + UtilFuncs>(
     parachain_rpc: &P,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let native_currency = parachain_rpc.get_native_currency_id();
     if let Ok(balance) = parachain_rpc.get_free_balance(native_currency).await {
         let balance = raw_value_as_currency(balance, native_currency)?;
@@ -491,7 +492,7 @@ async fn publish_time_to_first_deadline<V: VaultDataReader, P: RedeemPallet + Se
     redeems: &[(H256, InterBtcRedeemRequest)],
 ) {
     for vault in vault_id_manager.get_entries().await {
-        let data: Result<_, crate::Error> = tokio::try_join!(
+        let data: Result<_, Error> = tokio::try_join!(
             parachain_rpc.get_redeem_period().map_err(Into::into),
             parachain_rpc.get_current_active_block_number().map_err(Into::into),
             vault.btc_rpc.get_block_count().map_err(Into::into),
@@ -572,7 +573,7 @@ async fn publish_redeem_count<V: VaultDataReader>(vault_id_manager: &V, redeems:
 pub async fn monitor_bridge_metrics(
     parachain_rpc: InterBtcParachain,
     vault_id_manager: VaultIdManager,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let parachain_rpc = &parachain_rpc;
     let vault_id_manager = &vault_id_manager;
     parachain_rpc
@@ -603,7 +604,7 @@ pub async fn monitor_bridge_metrics(
 pub async fn poll_metrics<P: CollateralBalancesPallet + RedeemPallet + IssuePallet + SecurityPallet + UtilFuncs>(
     parachain_rpc: P,
     vault_id_manager: VaultIdManager,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let parachain_rpc = &parachain_rpc;
     let vault_id_manager = &vault_id_manager;
 
@@ -629,7 +630,7 @@ pub async fn poll_metrics<P: CollateralBalancesPallet + RedeemPallet + IssuePall
 pub async fn publish_expected_bitcoin_balance<P: VaultRegistryPallet>(
     vault: &VaultData,
     parachain_rpc: P,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     if let Ok(v) = parachain_rpc.get_vault(&vault.vault_id).await {
         let lowerbound = v.issued_tokens.saturating_sub(v.to_be_redeemed_tokens);
         let upperbound = v.issued_tokens.saturating_add(v.to_be_issued_tokens);
@@ -650,7 +651,7 @@ pub async fn publish_expected_bitcoin_balance<P: VaultRegistryPallet>(
 
 pub async fn publish_tokio_metrics(
     mut metrics_iterators: HashMap<String, impl Iterator<Item = TaskMetrics>>,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let frequency = Duration::from_millis(TOKIO_POLLING_INTERVAL_MS);
     loop {
         for (key, val) in metrics_iterators.iter_mut() {

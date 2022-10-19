@@ -6,13 +6,14 @@ use std::{
     str::FromStr,
 };
 
+use crate::Error;
 use runtime::AccountId;
-use service::Error;
+use service::Error as ServiceError;
 use sysinfo::{Pid, PidExt, ProcessExt, System, SystemExt};
 
 pub trait SystemProcess {
     fn refresh_process(&mut self, pid: Pid) -> bool;
-    fn process_name(&self, pid: Pid) -> Result<String, Error>;
+    fn process_name(&self, pid: Pid) -> Result<String, ServiceError<Error>>;
 }
 
 impl SystemProcess for System {
@@ -20,8 +21,9 @@ impl SystemProcess for System {
         <Self as SystemExt>::refresh_process(self, pid)
     }
 
-    fn process_name(&self, pid: Pid) -> Result<String, Error> {
-        let process = <Self as SystemExt>::process(self, pid).ok_or_else(|| Error::ProcessNotFound(pid.to_string()))?;
+    fn process_name(&self, pid: Pid) -> Result<String, ServiceError<Error>> {
+        let process =
+            <Self as SystemExt>::process(self, pid).ok_or_else(|| ServiceError::ProcessNotFound(pid.to_string()))?;
         Ok(process.name().to_string())
     }
 }
@@ -40,19 +42,23 @@ impl PidFile {
         }
     }
 
-    pub fn create(spec_name: &String, account_id: &AccountId, sys: &mut impl SystemProcess) -> Result<Self, Error> {
+    pub fn create(
+        spec_name: &String,
+        account_id: &AccountId,
+        sys: &mut impl SystemProcess,
+    ) -> Result<Self, ServiceError<Error>> {
         let mut pid_file = Self::new(spec_name, account_id);
         if pid_file.path.exists() {
             let pid = pid_file.pid()?;
             if sys.refresh_process(pid) {
                 match pid_name_matches_existing_client(sys, pid) {
-                    Ok(true) => return Err(Error::ServiceAlreadyRunning(pid.as_u32())),
+                    Ok(true) => return Err(ServiceError::ServiceAlreadyRunning(pid.as_u32())),
                     Ok(false) => (),
                     // There is a very small chance that a `pid` with a running process is killed exactly before
                     // `pid_name_matches_client` is run and `ProcessNotFound` is thrown. This is as if
                     // the `refresh_process` check had returned `false` (the pidfile process not running)
                     // so the error should not be propagated.
-                    Err(Error::ProcessNotFound(_)) => (),
+                    Err(ServiceError::ProcessNotFound(_)) => (),
                     Err(e) => return Err(e),
                 }
             }
@@ -63,7 +69,7 @@ impl PidFile {
                     .clone()
                     .into_os_string()
                     .into_string()
-                    .map_err(|_| Error::OsStringError)?,
+                    .map_err(|_| ServiceError::OsStringError)?,
             );
         }
 
@@ -74,7 +80,7 @@ impl PidFile {
                 .clone()
                 .into_os_string()
                 .into_string()
-                .map_err(|_| Error::OsStringError)?,
+                .map_err(|_| ServiceError::OsStringError)?,
         );
         pid_file.set_pid(process::id())?;
         Ok(pid_file)
@@ -86,13 +92,13 @@ impl PidFile {
         std::env::temp_dir().join(file_name)
     }
 
-    pub fn pid(&self) -> Result<Pid, Error> {
+    pub fn pid(&self) -> Result<Pid, ServiceError<Error>> {
         let mut pid = fs::read_to_string(self.path.clone())?;
         pid = pid.strip_suffix('\n').unwrap_or(&pid).to_string();
         Ok(Pid::from_str(&pid)?)
     }
 
-    pub fn set_pid(&mut self, pid: u32) -> Result<File, Error> {
+    pub fn set_pid(&mut self, pid: u32) -> Result<File, ServiceError<Error>> {
         self.created_pidfile = true;
         let mut file = File::create(&self.path)?;
         file.write_all(format!("{}\n", pid).as_bytes())?;
@@ -100,7 +106,7 @@ impl PidFile {
         Ok(file)
     }
 
-    pub fn remove(&mut self) -> Result<(), Error> {
+    pub fn remove(&mut self) -> Result<(), ServiceError<Error>> {
         if self.created_pidfile {
             tracing::info!(
                 "Removing PID file at: {}",
@@ -108,7 +114,7 @@ impl PidFile {
                     .clone()
                     .into_os_string()
                     .into_string()
-                    .map_err(|_| Error::OsStringError)?,
+                    .map_err(|_| ServiceError::OsStringError)?,
             );
             fs::remove_file(&self.path)?;
             self.path = PathBuf::default();
@@ -127,7 +133,10 @@ impl Drop for PidFile {
     }
 }
 
-pub fn pid_name_matches_existing_client(sys: &mut impl SystemProcess, pidfile_value: Pid) -> Result<bool, Error> {
+pub fn pid_name_matches_existing_client(
+    sys: &mut impl SystemProcess,
+    pidfile_value: Pid,
+) -> Result<bool, ServiceError<Error>> {
     let client_pid = Pid::from_u32(process::id());
     Ok(sys.process_name(client_pid)? == sys.process_name(pidfile_value)?)
 }
@@ -152,7 +161,7 @@ mod tests {
 
         pub trait SystemProcess {
             fn refresh_process(&mut self, pid: Pid) -> bool;
-            fn process_name(&self, pid: Pid) -> Result<String, Error>;
+            fn process_name(&self, pid: Pid) -> Result<String, ServiceError<Error>>;
         }
     }
 
@@ -207,7 +216,7 @@ mod tests {
         assert_err!(
             PidFile::create(&dummy_spec_name, &dummy_account_id, &mut sys),
             #[allow(unused_variables)]
-            Err(Error::ServiceAlreadyRunning(own_pid))
+            Err(ServiceError::ServiceAlreadyRunning(own_pid))
         );
     }
 
@@ -228,7 +237,7 @@ mod tests {
             if pid == Pid::from_u32(own_pid) {
                 Ok("vault".to_string())
             } else {
-                Err(Error::ProcessNotFound(pid.to_string()))
+                Err(ServiceError::ProcessNotFound(pid.to_string()))
             }
         });
         PidFile::create(&dummy_spec_name, &dummy_account_id, &mut sys).unwrap();

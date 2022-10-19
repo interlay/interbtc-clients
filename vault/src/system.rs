@@ -125,7 +125,7 @@ async fn active_block_listener(
     parachain_rpc: InterBtcParachain,
     issue_tx: Sender<Event>,
     replace_tx: Sender<Event>,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let issue_tx = &issue_tx;
     let replace_tx = &replace_tx;
     parachain_rpc
@@ -144,7 +144,7 @@ async fn relay_block_listener(
     parachain_rpc: InterBtcParachain,
     issue_tx: Sender<Event>,
     replace_tx: Sender<Event>,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let issue_tx = &issue_tx;
     let replace_tx = &replace_tx;
     parachain_rpc
@@ -293,7 +293,7 @@ impl VaultIdManager {
         Ok(())
     }
 
-    pub async fn listen_for_vault_id_registrations(self) -> Result<(), ServiceError> {
+    pub async fn listen_for_vault_id_registrations(self) -> Result<(), ServiceError<Error>> {
         Ok(self
             .btc_parachain
             .on_event::<RegisterVaultEvent, _, _, _>(
@@ -355,7 +355,7 @@ pub struct VaultService {
 }
 
 #[async_trait]
-impl Service<VaultServiceConfig> for VaultService {
+impl Service<VaultServiceConfig, Error> for VaultService {
     const NAME: &'static str = NAME;
     const VERSION: &'static str = VERSION;
 
@@ -377,21 +377,15 @@ impl Service<VaultServiceConfig> for VaultService {
         )
     }
 
-    async fn start(&self) -> Result<(), ServiceError> {
-        match self.run_service().await {
-            Ok(_) => Ok(()),
-            Err(Error::RuntimeError(err)) => Err(ServiceError::RuntimeError(err)),
-            Err(Error::BitcoinError(err)) => Err(ServiceError::BitcoinError(err)),
-            Err(Error::ServiceError(err)) => Err(err),
-            Err(err) => Err(ServiceError::Other(err.to_string())),
-        }
+    async fn start(&self) -> Result<(), ServiceError<Error>> {
+        self.run_service().await
     }
 }
 
 async fn run_and_monitor_tasks(
     shutdown_tx: ShutdownSender,
     items: Vec<(&str, ServiceTask)>,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let (metrics_iterators, tasks): (HashMap<String, _>, Vec<_>) = items
         .into_iter()
         .filter_map(|(name, task)| {
@@ -424,7 +418,7 @@ async fn run_and_monitor_tasks(
     }
 }
 
-type Task = Pin<Box<dyn Future<Output = Result<(), service::Error>> + Send + 'static>>;
+type Task = Pin<Box<dyn Future<Output = Result<(), ServiceError<Error>>> + Send + 'static>>;
 
 enum ServiceTask {
     Optional(bool, Task),
@@ -434,14 +428,15 @@ enum ServiceTask {
 fn maybe_run<F, E>(should_run: bool, task: F) -> ServiceTask
 where
     F: Future<Output = Result<(), E>> + Send + 'static,
-    E: Into<service::Error>,
+    E: Into<ServiceError<Error>>,
 {
     ServiceTask::Optional(should_run, Box::pin(task.map_err(|x| x.into())))
 }
+
 fn run<F, E>(task: F) -> ServiceTask
 where
     F: Future<Output = Result<(), E>> + Send + 'static,
-    E: Into<service::Error>,
+    E: Into<ServiceError<Error>>,
 {
     ServiceTask::Essential(Box::pin(task.map_err(|x| x.into())))
 }
@@ -505,8 +500,8 @@ impl VaultService {
         Ok(())
     }
 
-    async fn run_service(&self) -> Result<(), Error> {
-        self.validate_bitcoin_network().await?;
+    async fn run_service(&self) -> Result<(), ServiceError<Error>> {
+        self.validate_bitcoin_network().await.map_err(ServiceError::Abort)?;
 
         let account_id = self.btc_parachain.get_account_id().clone();
 
@@ -517,12 +512,13 @@ impl VaultService {
             .into_iter()
             .map(|(symbol, amount)| Ok((CurrencyId::try_from_symbol(symbol)?, amount)))
             .into_iter()
-            .collect::<Result<Vec<_>, Error>>()?;
+            .collect::<Result<Vec<_>, Error>>()
+            .map_err(ServiceError::Abort)?;
 
         // exit if auto-register uses faucet and faucet url not set
         if parsed_auto_register.iter().any(|(_, o)| o.is_none()) && self.config.faucet_url.is_none() {
             // TODO: validate before bitcoin / parachain connections
-            return Err(Error::FaucetUrlNotSet);
+            return Err(ServiceError::Abort(Error::FaucetUrlNotSet));
         }
 
         let num_confirmations = match self.config.btc_confirmations {
@@ -539,7 +535,7 @@ impl VaultService {
             err_provider
                 .on_event_error(|e| tracing::debug!("Received error event: {}", e))
                 .await?;
-            Ok(())
+            Ok::<_, Error>(())
         });
         tokio::task::spawn(err_listener);
 
@@ -758,14 +754,12 @@ impl VaultService {
                 run(async move {
                     tokio::time::sleep(RESTART_INTERVAL).await;
                     tracing::info!("Initiating periodic restart...");
-                    Err(service::Error::ClientShutdown)
+                    Err(ServiceError::ClientShutdown)
                 }),
             ),
         ];
 
-        run_and_monitor_tasks(self.shutdown.clone(), tasks)
-            .await
-            .map_err(Error::ServiceError)
+        run_and_monitor_tasks(self.shutdown.clone(), tasks).await
     }
 
     async fn maybe_register_public_key(&self) -> Result<(), Error> {
