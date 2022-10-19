@@ -60,7 +60,7 @@ fn try_write_file<D: AsRef<[u8]>>(output: &Option<PathBuf>, data: D) -> Result<(
 #[derive(Debug, Parser, Clone)]
 struct GenerateBitcoinKeyOpts {
     /// Output file name or stdout if unspecified.
-    #[clap(parse(from_os_str))]
+    #[clap(long, value_parser)]
     output: Option<PathBuf>,
 
     #[clap(long)]
@@ -81,7 +81,7 @@ impl GenerateBitcoinKeyOpts {
 #[derive(Debug, Parser, Clone)]
 struct GenerateParachainKeyOpts {
     /// Output file name or stdout if unspecified.
-    #[clap(parse(from_os_str))]
+    #[clap(long, value_parser)]
     output: Option<PathBuf>,
 }
 
