@@ -1,6 +1,6 @@
 pub use jsonrpsee::core::Error as JsonRpseeError;
 
-use crate::{metadata::DispatchError, types::*, BTC_RELAY_MODULE, ISSUE_MODULE, SYSTEM_MODULE};
+use crate::{types::*, BTC_RELAY_MODULE, ISSUE_MODULE, SYSTEM_MODULE};
 use codec::Error as CodecError;
 use jsonrpsee::{
     client_transport::ws::WsHandshakeError,
@@ -10,11 +10,15 @@ use jsonrpsee::{
 use prometheus::Error as PrometheusError;
 use serde_json::Error as SerdeJsonError;
 use std::{array::TryFromSliceError, fmt::Debug, io::Error as IoError, num::TryFromIntError, str::Utf8Error};
-use subxt::{sp_core::crypto::SecretStringError, BasicError, ModuleError, TransactionError};
+use subxt::{
+    error::{DispatchError, ModuleError, TransactionError},
+    ext::sp_core::crypto::SecretStringError,
+};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
 use url::ParseError as UrlParseError;
-pub type SubxtError = subxt::Error<DispatchError>;
+
+pub use subxt::Error as SubxtError;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -90,19 +94,13 @@ pub enum Error {
     Utf8Error(#[from] Utf8Error),
 }
 
-impl From<BasicError> for Error {
-    fn from(err: BasicError) -> Self {
-        Self::SubxtRuntimeError(err.into())
-    }
-}
-
 impl Error {
     fn is_module_err(&self, pallet_name: &str, error_name: &str) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(SubxtError::Module(ModuleError {
+            Error::SubxtRuntimeError(SubxtError::Runtime(DispatchError::Module(ModuleError{
                 pallet, error, ..
-            })) if pallet == pallet_name && error == error_name,
+            }))) if pallet == pallet_name && error == error_name,
         )
     }
 

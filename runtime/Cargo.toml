@@ -41,9 +41,9 @@ sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkad
 frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26" }
 
 # Subxt dependencies
-subxt = "0.22.0"
+subxt = "0.23.0"
 subxt-client = { path = "./client", optional = true }
-jsonrpsee = { version = "0.14.0", features = ["async-client", "client-ws-transport", "macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
+jsonrpsee = { version = "0.15.1", features = ["async-client", "client-ws-transport", "macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
 
 bitcoin = { path = "../bitcoin" }
 
