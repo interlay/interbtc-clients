@@ -30,6 +30,9 @@ const TRANSACTION_TIMEOUT: Duration = Duration::from_secs(300);
 // timeout before re-verifying block header inclusion
 const BLOCK_WAIT_TIMEOUT: Duration = Duration::from_secs(6);
 
+// number of storage entries to fetch at a time
+const DEFAULT_PAGE_SIZE: u32 = 10;
+
 // sanity check to be sure that testing-utils is not accidentally selected
 #[cfg(all(
     any(test, feature = "testing-utils"),
@@ -640,7 +643,7 @@ impl UtilFuncs for InterBtcParachain {
     async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, Error> {
         let head = self.get_finalized_block_hash().await?;
         let key_addr = metadata::storage().asset_registry().metadata_root();
-        let mut iter = self.api.storage().iter(key_addr, 10, head).await?;
+        let mut iter = self.api.storage().iter(key_addr, DEFAULT_PAGE_SIZE, head).await?;
 
         let mut ret = Vec::new();
         while let Some((key, value)) = iter.next().await? {
@@ -1125,7 +1128,7 @@ impl IssuePallet for InterBtcParachain {
 
         let head = self.get_finalized_block_hash().await?;
         let key_addr = metadata::storage().issue().issue_requests_root();
-        let mut iter = self.api.storage().iter(key_addr, 10, head).await?;
+        let mut iter = self.api.storage().iter(key_addr, DEFAULT_PAGE_SIZE, head).await?;
 
         while let Some((issue_id, request)) = iter.next().await? {
             // todo: we also need to check the bitcoin height
@@ -1453,7 +1456,7 @@ impl VaultRegistryPallet for InterBtcParachain {
     async fn get_all_vaults(&self) -> Result<Vec<InterBtcVault>, Error> {
         let head = self.get_finalized_block_hash().await?;
         let key_addr = metadata::storage().vault_registry().vaults_root();
-        let mut iter = self.api.storage().iter(key_addr, 10, head).await?;
+        let mut iter = self.api.storage().iter(key_addr, DEFAULT_PAGE_SIZE, head).await?;
 
         let mut vaults = Vec::new();
         while let Some((_, account)) = iter.next().await? {
@@ -1606,6 +1609,7 @@ impl VaultRegistryPallet for InterBtcParachain {
             uri: uri.to_vec(),
             checksum: *checksum,
         };
+        // TODO: uri should be client name
         self.with_unique_signer(
             metadata::tx()
                 .clients_info()
