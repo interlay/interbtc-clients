@@ -55,6 +55,10 @@ struct Opts {
     #[clap(flatten)]
     coingecko: feeds::CoinGeckoCli,
 
+    /// Connection settings for Dia
+    #[clap(flatten)]
+    dia: feeds::DiaCli,
+
     /// Connection settings for gate.io
     #[clap(flatten)]
     gateio: feeds::GateIoCli,
@@ -132,6 +136,14 @@ async fn submit_exchange_rate(
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    let ret = _main().await;
+    if let Err(ref e) = ret {
+        log::error!("Error: {}", e);
+    }
+    ret
+}
+
+async fn _main() -> Result<(), Error> {
     env_logger::init_from_env(
         env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, log::LevelFilter::Info.as_str()),
     );
@@ -148,6 +160,7 @@ async fn main() -> Result<(), Error> {
     let currency_store = &oracle_config.currencies;
     let mut price_feeds = feeds::PriceFeeds::new(currency_store.clone());
     price_feeds.maybe_add_coingecko(opts.coingecko);
+    price_feeds.maybe_add_dia(opts.dia);
     price_feeds.maybe_add_gateio(opts.gateio);
     price_feeds.maybe_add_kraken(opts.kraken);
 

@@ -83,6 +83,9 @@ OPTIONS:
         --coingecko-url <COINGECKO_URL>
             Fetch the exchange rate from CoinGecko (https://api.coingecko.com/api/v3/)
 
+        --dia-url <DIA_URL>
+            Fetch the exchange rate from Dia
+
         --connection-timeout-ms <CONNECTION_TIMEOUT_MS>
             Timeout in milliseconds to wait for connection to btc-parachain [default: 60000]
 
