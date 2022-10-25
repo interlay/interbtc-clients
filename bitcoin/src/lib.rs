@@ -110,7 +110,7 @@ fn get_exponential_backoff() -> ExponentialBackoff {
     }
 }
 
-#[derive(PartialEq, PartialOrd, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Clone, Copy, Debug)]
 pub struct SatPerVbyte(pub u64);
 
 #[derive(Debug, Clone)]

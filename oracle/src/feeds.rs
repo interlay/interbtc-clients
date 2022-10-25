@@ -121,7 +121,7 @@ impl PriceFeeds {
                         let mut currency_pair_and_price = if let Some(currency_pair_and_price) = join_all(
                             route
                                 .into_iter()
-                                .map(|currency_pair| feed.get_price(currency_pair.into(), currency_store)),
+                                .map(|currency_pair| feed.get_price(currency_pair, currency_store)),
                         )
                         .await
                         .into_iter()

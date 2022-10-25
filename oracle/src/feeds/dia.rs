@@ -19,7 +19,7 @@ pub struct DiaApi {
 impl Default for DiaApi {
     fn default() -> Self {
         Self {
-            url: Url::parse("https://api.diadata.org/v1/assetQuotation/").unwrap(),
+            url: Url::parse("https://api.diadata.org/v1/").unwrap(),
         }
     }
 }
@@ -45,17 +45,11 @@ impl DiaApi {
         if currency_pair.base != "USD" {
             return Err(Error::InvalidDiaSymbol);
         }
-        let token_path = currency_pair
-            .quote
-            .split("=")
-            .skip(1)
-            .next()
-            .ok_or(Error::InvalidDiaSymbol)?;
+        let token_path = currency_pair.quote.split('=').nth(1).ok_or(Error::InvalidDiaSymbol)?;
 
         // https://docs.diadata.org/documentation/api-1/api-endpoints#asset-quotation
-
         let mut url = self.url.clone();
-        url.set_path(&format!("{}/{}", url.path(), token_path));
+        url.set_path(&format!("{}/assetQuotation/{}", url.path(), token_path));
         let data = get_http(url).await?;
         let price = extract_response(data).ok_or(Error::InvalidResponse)?;
 

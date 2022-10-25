@@ -201,7 +201,7 @@ impl Runner {
             .and_then(|name| if name.is_empty() { None } else { Some(name) })
             .ok_or(Error::ClientNameDerivationError)?;
 
-        let bin_path = runner.download_path().join(bin_name.to_string());
+        let bin_path = runner.download_path().join(bin_name);
         Ok((bin_name.to_string(), bin_path))
     }
 
