@@ -46,9 +46,12 @@ impl<Currency> From<(Currency, Currency)> for CurrencyPair<Currency> {
     }
 }
 
-impl<Currency: PartialEq> CurrencyPair<Currency> {
+impl<Currency: PartialEq + ToString> CurrencyPair<Currency> {
     pub fn contains(&self, currency: &Currency) -> bool {
-        &self.base == currency || &self.quote == currency
+        let strip = |x: &Currency| x.to_string().split("=").next().unwrap().to_string();
+        let stripped_currency = strip(currency);
+
+        strip(&self.base) == stripped_currency || strip(&self.quote) == stripped_currency
     }
 
     pub fn has_shared(&self, currency_pair: &Self) -> bool {

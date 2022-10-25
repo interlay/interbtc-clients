@@ -1,6 +1,7 @@
 mod blockcypher;
 mod blockstream;
 mod coingecko;
+mod dia;
 mod gateio;
 mod kraken;
 
@@ -20,6 +21,7 @@ use std::{collections::BTreeMap, fmt};
 pub use blockcypher::{BlockCypherApi, BlockCypherCli};
 pub use blockstream::{BlockstreamApi, BlockstreamCli};
 pub use coingecko::{CoinGeckoApi, CoinGeckoCli};
+pub use dia::{DiaApi, DiaCli};
 pub use gateio::{GateIoApi, GateIoCli};
 pub use kraken::{KrakenApi, KrakenCli};
 
@@ -35,6 +37,7 @@ pub enum FeedName {
     Kraken,
     GateIo,
     CoinGecko,
+    Dia,
 }
 
 impl fmt::Display for FeedName {
@@ -70,6 +73,13 @@ impl PriceFeeds {
         if let Some(api) = CoinGeckoApi::from_opts(opts) {
             log::info!("🔗 CoinGecko");
             self.feeds.insert(FeedName::CoinGecko, Box::new(api));
+        }
+    }
+
+    pub fn maybe_add_dia(&mut self, opts: DiaCli) {
+        if let Some(api) = DiaApi::from_opts(opts) {
+            log::info!("🔗 Dia");
+            self.feeds.insert(FeedName::Dia, Box::new(api));
         }
     }
 

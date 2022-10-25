@@ -52,7 +52,7 @@ pub struct PriceConfig<Currency> {
 
 impl<Currency> PriceConfig<Currency>
 where
-    Currency: Clone + PartialEq,
+    Currency: Clone + PartialEq + ToString,
 {
     pub fn validate(&self) -> Result<(), PriceConfigError<Currency>> {
         for (name, path) in &self.feeds {
@@ -67,8 +67,7 @@ where
             }?;
 
             match &path.last() {
-                Some(CurrencyPair { base, .. }) if base == end => Ok(()),
-                Some(CurrencyPair { quote, .. }) if quote == end => Ok(()),
+                Some(currency_pair) if currency_pair.contains(end) => Ok(()),
                 _ => Err(PriceConfigError {
                     feed: name.clone(),
                     pair: self.pair.clone(),

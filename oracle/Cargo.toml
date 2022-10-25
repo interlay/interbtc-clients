@@ -14,7 +14,7 @@ parachain-metadata-kintsugi-testnet = ["runtime/parachain-metadata-kintsugi-test
 [dependencies]
 log = "0.4.0"
 env_logger = "0.7.1"
-clap = "4.0.8"
+clap = { version = "4.0.17", features = ["derive"]}
 tokio = { version = "1.0", features = ["full"] }
 chrono = "0.4.22"
 thiserror = "1.0"
