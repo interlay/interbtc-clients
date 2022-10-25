@@ -266,7 +266,7 @@ impl PerCurrencyMetrics {
         // update average fee
         let (total, count) = bitcoin_transactions
             .iter()
-            .filter_map(|tx| tx.detail.fee.map(|amount| amount.to_sat().abs() as u64))
+            .filter_map(|tx| tx.detail.fee.map(|amount| amount.to_sat().unsigned_abs()))
             .fold((0, 0), |(total, count), x| (total + x, count + 1));
         *vault.metrics.average_btc_fee.data.write().await = AverageTracker { total, count };
 
@@ -379,7 +379,7 @@ pub async fn update_bitcoin_metrics(
         {
             let mut tmp = vault.metrics.average_btc_fee.data.write().await;
             *tmp = AverageTracker {
-                total: tmp.total.saturating_add(amount.to_sat().abs() as u64),
+                total: tmp.total.saturating_add(amount.to_sat().unsigned_abs()),
                 count: tmp.count.saturating_add(1),
             };
         }

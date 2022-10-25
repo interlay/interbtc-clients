@@ -38,7 +38,7 @@ enum Commands {
     GenerateParachainKey(GenerateParachainKeyOpts),
     /// Run the Vault client (default).
     #[clap(name = "run")]
-    RunVault(RunVaultOpts),
+    RunVault(Box<RunVaultOpts>),
 }
 
 // write the file to stdout or disk - fail if it already exists

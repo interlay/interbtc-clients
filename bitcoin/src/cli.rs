@@ -21,15 +21,15 @@ fn get_private_key_from_file(file_path: &PathBuf) -> Result<PrivateKey, KeyLoadi
 #[derive(Parser, Debug, Clone, Default)]
 pub struct BitcoinOpts {
     #[clap(long, env = "BITCOIN_RPC_URL")]
-    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(&["light", "bitcoin-wif"])))]
+    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(["light", "bitcoin_wif"])))]
     pub bitcoin_rpc_url: Option<String>,
 
     #[clap(long, env = "BITCOIN_RPC_USER")]
-    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(&["light", "bitcoin-wif"])))]
+    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(["light", "bitcoin_wif"])))]
     pub bitcoin_rpc_user: Option<String>,
 
     #[clap(long, env = "BITCOIN_RPC_PASS")]
-    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(&["light", "bitcoin-wif"])))]
+    #[cfg_attr(feature = "light-client", clap(conflicts_with_all(["light", "bitcoin_wif"])))]
     pub bitcoin_rpc_pass: Option<String>,
 
     /// Timeout in milliseconds to wait for connection to bitcoin-core.
@@ -42,17 +42,17 @@ pub struct BitcoinOpts {
     pub electrs_url: Option<String>,
 
     /// Experimental: Run in light client mode
-    #[clap(long, requires_all(&["bitcoin-wif"]))]
+    #[cfg_attr(feature = "light-client", clap(long, requires_all(["bitcoin_wif"])))]
     #[cfg(feature = "light-client")]
     pub light: bool,
 
     /// File containing the WIF encoded Bitcoin private key
-    #[clap(
+    #[cfg_attr(feature = "light-client", clap(
         long,
         requires = "light",
-        conflicts_with_all(&["bitcoin-rpc-url", "bitcoin-rpc-user", "bitcoin-rpc-pass"]),
+        conflicts_with_all(["bitcoin_rpc_url", "bitcoin_rpc_user", "bitcoin_rpc_pass"]),
         value_parser
-    )]
+    ))]
     #[cfg(feature = "light-client")]
     pub bitcoin_wif: Option<PathBuf>,
 }
