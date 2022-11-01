@@ -390,6 +390,7 @@ impl BitcoinCore {
         loop {
             let info = self.rpc.get_blockchain_info()?;
             // NOTE: initial_block_download is always true on regtest
+            // but testnet and mainnet never reach 100% verification
             if !info.initial_block_download || info.verification_progress.eq(&1.0) {
                 info!("Synced!");
                 return Ok(());
