@@ -1,20 +1,27 @@
-# Default alerting rules.
-# - Vault collateralization is below the secure threshold.
-# - A redeem has less than an hour until it expires.
+# Default Kintsugi/Interlay vault alerting rules.
 groups:
 - name: VaultMonitoring
   rules:
   - alert: BelowSecureThreshold
-    expr: collateralization < 2.6
-    for: 1s
+    expr: collateralization < 2.6 and collateralization > 0.01
+    for: 1m
     annotations:
-      description: 'Vault with currency pair {{ $labels.currency }} is below the Secure Threshold.'
+      description: 'Vault {{ $labels.job }} with currency pair {{ $labels.currency }} and {{ $value }} collateralization is below the Secure Threshold.'
     labels:
       severity: 'critical'
-  - alert: RedeemAlmostExpired
-    expr: remaining_time_to_redeem_hours == 1
-    for: 1s
+  - alert: RedeemPending
+    expr: remaining_time_to_redeem_hours <= 46 and remaining_time_to_redeem_hours > 0.01
+    for: 1m
     annotations:
-      description: 'Redeem almost expired for Vault with currency pair {{ $labels.currency }}.'
+      description: 'Redeem almost expired for vault {{ $labels.job }} with currency pair {{ $labels.currency }}. Remaining time: {{ $value }}.'
     labels:
       severity: 'critical'
+  - alert: VaultsTooManyRestarts
+    expr: changes(process_start_time_seconds{job=~"kintsugi-vault|interlay-vault"}[15m]) > 2
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Vault {{ $labels.job }} has restarted too frequently."
+      description: "Vault {{ $labels.job }} has restarted more than twice in the last 15 minutes. It might be crashlooping."
+
