@@ -28,6 +28,8 @@ pub mod service {
         replace::{listen_for_accept_replace, listen_for_execute_replace, listen_for_replace_requests},
     };
 }
+use governor::Quota;
+use nonzero_ext::*;
 use std::time::Duration;
 pub use system::{VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION};
 
@@ -46,3 +48,6 @@ pub(crate) async fn deposit_collateral(api: &InterBtcParachain, vault_id: &Vault
 /// At startup we wait until a new block has arrived before we start event listeners.
 /// This constant defines the rate at which we check whether the chain height has increased.
 pub const CHAIN_HEIGHT_POLLING_INTERVAL: Duration = Duration::from_millis(500);
+
+/// explicitly yield at most once per second
+pub const YIELD_RATE: Quota = Quota::per_second(nonzero!(1u32));

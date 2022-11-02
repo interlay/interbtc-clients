@@ -5,7 +5,7 @@ use runtime::{
     cli::ConnectionOpts as ParachainConfig, CurrencyId, InterBtcParachain as BtcParachain, InterBtcSigner, PrettyPrint,
     RuntimeCurrencyInfo, VaultId,
 };
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 mod cli;
 mod error;
@@ -122,7 +122,7 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
                 bitcoin_core,
                 config,
                 self.monitoring_config.clone(),
-                shutdown_tx,
+                shutdown_tx.clone(),
                 Box::new(constructor),
             );
             if let Err(outer) = service.start().await {
@@ -130,6 +130,17 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
             } else {
                 tracing::warn!("Disconnected");
             }
+
+            loop {
+                match shutdown_tx.receiver_count() {
+                    0 => break,
+                    count => {
+                        tracing::error!("Waiting for {count} tasks to shut down...");
+                        tokio::time::sleep(Duration::from_secs(10)).await;
+                    }
+                }
+            }
+            tracing::info!("All tasks successfully shut down");
 
             match self.service_config.restart_policy {
                 RestartPolicy::Never => return Err(Error::ClientShutdown),

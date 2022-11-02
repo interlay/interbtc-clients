@@ -243,6 +243,9 @@ impl PerCurrencyMetrics {
                     let op_return = transaction.get_op_return()?;
                     let budget: i64 = (*fee_budgets.get(&op_return)?).try_into().ok()?;
 
+                    // give any outer `select` a chance to check the shutdown/termination signal
+                    tokio::task::yield_now().await;
+
                     budget.checked_sub(tx.detail.fee?.to_sat().abs())
                 })
                 .fold(0i64, |acc, x| async move { acc.saturating_add(x) })
