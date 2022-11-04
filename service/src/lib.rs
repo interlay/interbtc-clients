@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCoreApi, Error as BitcoinError};
 use futures::{future::Either, Future, FutureExt};
+use governor::{Quota, RateLimiter};
+use nonzero_ext::*;
 use runtime::{
     cli::ConnectionOpts as ParachainConfig, CurrencyId, InterBtcParachain as BtcParachain, InterBtcSigner, PrettyPrint,
     RuntimeCurrencyInfo, VaultId,
@@ -131,12 +133,16 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
                 tracing::warn!("Disconnected");
             }
 
+            let rate_limiter = RateLimiter::direct(Quota::per_minute(nonzero!(4u32)));
+
             loop {
                 match shutdown_tx.receiver_count() {
                     0 => break,
                     count => {
-                        tracing::error!("Waiting for {count} tasks to shut down...");
-                        tokio::time::sleep(Duration::from_secs(10)).await;
+                        if let Ok(_) = rate_limiter.check() {
+                            tracing::error!("Waiting for {count} tasks to shut down...");
+                        }
+                        tokio::time::sleep(Duration::from_secs(1)).await;
                     }
                 }
             }
