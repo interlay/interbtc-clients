@@ -567,7 +567,7 @@ impl VaultService {
             self.config.payment_margin_minutes,
             self.config.auto_rbf,
         );
-        tokio::spawn(async move {
+        service::spawn_cancelable(self.shutdown.subscribe(), async move {
             tracing::info!("Checking for open requests...");
             // TODO: kill task on shutdown signal to prevent double payment
             match open_request_executor.await {

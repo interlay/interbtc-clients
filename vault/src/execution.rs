@@ -1,9 +1,10 @@
-use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager};
+use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager, YIELD_RATE};
 use bitcoin::{
     Error as BitcoinError, SatPerVbyte, Transaction, TransactionExt, TransactionMetadata, Txid,
     BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
 use futures::{future::Either, stream::StreamExt, try_join, TryStreamExt};
+use governor::RateLimiter;
 use runtime::{
     BtcAddress, BtcRelayPallet, Error as RuntimeError, FixedPointNumber, FixedU128, H256Le, InterBtcParachain,
     InterBtcRedeemRequest, InterBtcReplaceRequest, OraclePallet, PartialAddress, PrettyPrint, RedeemPallet,
@@ -464,10 +465,17 @@ pub async fn execute_open_requests(
         None => return Ok(()), // the iterator is empty so we have nothing to do
     };
 
+    let rate_limiter = RateLimiter::direct(YIELD_RATE);
+
     // iterate through transactions in reverse order, starting from those in the mempool, and
     // gracefully fail on encountering a pruned blockchain
     let mut transaction_stream = bitcoin::reverse_stream_transactions(&read_only_btc_rpc, btc_start_height).await?;
     while let Some(result) = transaction_stream.next().await {
+        if let Ok(_) = rate_limiter.check() {
+            // give the outer `select` a chance to check the shutdown signal
+            tokio::task::yield_now().await;
+        }
+
         let tx = match result {
             Ok(x) => x,
             Err(e) => {
