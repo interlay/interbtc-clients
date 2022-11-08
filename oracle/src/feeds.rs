@@ -51,18 +51,18 @@ trait PriceFeed {
     async fn get_price(
         &self,
         currency_pair: CurrencyPair<Currency>,
-        currency_store: &CurrencyStore<Currency>,
+        currency_store: &CurrencyStore<String>,
     ) -> Result<CurrencyPairAndPrice<Currency>, Error>;
 }
 
 #[derive(Default)]
 pub struct PriceFeeds {
-    currency_store: CurrencyStore<Currency>,
+    currency_store: CurrencyStore<String>,
     feeds: BTreeMap<FeedName, Box<dyn PriceFeed>>,
 }
 
 impl PriceFeeds {
-    pub fn new(currency_store: CurrencyStore<Currency>) -> Self {
+    pub fn new(currency_store: CurrencyStore<String>) -> Self {
         Self {
             currency_store,
             ..Default::default()

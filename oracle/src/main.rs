@@ -111,7 +111,7 @@ async fn submit_bitcoin_fees(parachain_rpc: &InterBtcParachain, maybe_bitcoin_fe
 async fn submit_exchange_rate(
     parachain_rpc: &InterBtcParachain,
     currency_pair_and_price: &CurrencyPairAndPrice<Currency>,
-    currency_store: &CurrencyStore<Currency>,
+    currency_store: &CurrencyStore<String>,
 ) -> Result<(), Error> {
     log::info!(
         "Attempting to set exchange rate: {} ({})",
@@ -119,8 +119,8 @@ async fn submit_exchange_rate(
         chrono::offset::Local::now()
     );
 
-    let currency_id = CurrencyId::try_from_symbol(currency_store.symbol(&currency_pair_and_price.pair.quote)?)
-        .map_err(Error::RuntimeError)?;
+    let currency_id =
+        CurrencyId::try_from_symbol(currency_pair_and_price.pair.quote.symbol()).map_err(Error::RuntimeError)?;
     let key = OracleKey::ExchangeRate(currency_id);
     let exchange_rate = currency_pair_and_price.exchange_rate(currency_store)?;
     parachain_rpc.feed_values(vec![(key, exchange_rate)]).await?;
@@ -154,7 +154,9 @@ async fn _main() -> Result<(), Error> {
     let oracle_config = serde_json::from_str::<OracleConfig>(&data)?;
     // validate routes
     for price_config in &oracle_config.prices {
-        price_config.validate().map_err(Error::InvalidConfig)?
+        price_config
+            .validate()
+            .map_err(|err| Error::InvalidConfig(Box::new(err)))?
     }
 
     let currency_store = &oracle_config.currencies;

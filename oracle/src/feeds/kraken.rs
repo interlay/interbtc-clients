@@ -49,13 +49,16 @@ impl KrakenApi {
     async fn get_exchange_rate(
         &self,
         currency_pair: CurrencyPair<Currency>,
-        currency_store: &CurrencyStore<Currency>,
+        _currency_store: &CurrencyStore<String>,
     ) -> Result<CurrencyPairAndPrice<Currency>, Error> {
         // NOTE: Kraken prefixes older cryptocurrencies with "X" and fiat with "Z"
         let asset_pair_name = format!(
             "{}{}",
-            currency_store.symbol(&currency_pair.base)?,
-            currency_store.symbol(&currency_pair.quote)?,
+            currency_pair.base.path().unwrap_or_else(|| currency_pair.base.symbol()),
+            currency_pair
+                .quote
+                .path()
+                .unwrap_or_else(|| currency_pair.quote.symbol()),
         );
 
         // https://docs.kraken.com/rest/
@@ -79,7 +82,7 @@ impl PriceFeed for KrakenApi {
     async fn get_price(
         &self,
         currency_pair: CurrencyPair<Currency>,
-        currency_store: &CurrencyStore<Currency>,
+        currency_store: &CurrencyStore<String>,
     ) -> Result<CurrencyPairAndPrice<Currency>, Error> {
         self.get_exchange_rate(currency_pair, currency_store).await
     }
