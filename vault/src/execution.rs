@@ -471,7 +471,7 @@ pub async fn execute_open_requests(
     // gracefully fail on encountering a pruned blockchain
     let mut transaction_stream = bitcoin::reverse_stream_transactions(&read_only_btc_rpc, btc_start_height).await?;
     while let Some(result) = transaction_stream.next().await {
-        if let Ok(_) = rate_limiter.check() {
+        if rate_limiter.check().is_ok() {
             // give the outer `select` a chance to check the shutdown signal
             tokio::task::yield_now().await;
         }

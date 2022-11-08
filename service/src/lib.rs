@@ -144,7 +144,7 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
                 match shutdown_tx.receiver_count() {
                     0 => break,
                     count => {
-                        if let Ok(_) = rate_limiter.check() {
+                        if rate_limiter.check().is_ok() {
                             tracing::error!("Waiting for {count} tasks to shut down...");
                         }
                         tokio::time::sleep(Duration::from_secs(1)).await;
