@@ -2,18 +2,17 @@ use crate::{
     currency::*,
     error::{ConfigError, PriceConfigError},
     feeds::FeedName,
-    Error,
 };
 use serde::Deserialize;
 use std::{collections::BTreeMap, convert::TryFrom};
 
+pub type CurrencyStore<Symbol> = BTreeMap<Symbol, CurrencyConfig>;
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct OracleConfig {
-    pub currencies: BTreeMap<Currency, CurrencyConfig>,
+    pub currencies: CurrencyStore<String>,
     pub prices: Vec<PriceConfig<Currency>>,
 }
-
-pub type CurrencyStore<Currency> = BTreeMap<Currency, CurrencyConfig>;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct CurrencyConfig {
@@ -21,21 +20,13 @@ pub struct CurrencyConfig {
     pub decimals: u32,
 }
 
-impl<Currency: Ord + ToString> CurrencyInfo<Currency> for CurrencyStore<Currency> {
-    fn name(&self, id: &Currency) -> Result<String, Error> {
-        self.get(id)
-            .ok_or(Error::InvalidCurrency)
-            .map(|asset_config| asset_config.name.clone())
+impl<Symbol: Ord> CurrencyInfo<Symbol> for CurrencyStore<Symbol> {
+    fn name(&self, id: &Symbol) -> Option<String> {
+        self.get(id).map(|asset_config| asset_config.name.clone())
     }
 
-    fn symbol(&self, id: &Currency) -> Result<String, Error> {
-        Ok(id.to_string())
-    }
-
-    fn decimals(&self, id: &Currency) -> Result<u32, Error> {
-        self.get(id)
-            .ok_or(Error::InvalidCurrency)
-            .map(|asset_config| asset_config.decimals)
+    fn decimals(&self, id: &Symbol) -> Option<u32> {
+        self.get(id).map(|asset_config| asset_config.decimals)
     }
 }
 
@@ -52,8 +43,9 @@ pub struct PriceConfig<Currency> {
 
 impl<Currency> PriceConfig<Currency>
 where
-    Currency: Clone + PartialEq + ToString,
+    Currency: Clone + PartialEq,
 {
+    // TODO: validate currencies exist
     pub fn validate(&self) -> Result<(), PriceConfigError<Currency>> {
         for (name, path) in &self.feeds {
             let end = &match &path.first() {

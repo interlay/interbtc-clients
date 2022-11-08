@@ -12,6 +12,10 @@
             "name": "Kusama",
             "decimals": 12
         },
+        "LKSM": {
+            "name": "Liquid KSM",
+            "decimals": 12
+        },
         "USD": {
             "name": "United States Dollar",
             "decimals": 2
@@ -92,6 +96,20 @@
                     [
                         "USD",
                         "KSM=Kusama/0x0000000000000000000000000000000000000000"
+                    ]
+                ]
+            }
+        },
+        {
+            "pair": [
+                "BTC",
+                "LKSM"
+            ],
+            "feeds": {
+                "coingecko": [
+                    [
+                        "LKSM=liquid-ksm",
+                        "BTC"
                     ]
                 ]
             }

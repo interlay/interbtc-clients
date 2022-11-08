@@ -40,12 +40,12 @@ impl DiaApi {
     async fn get_exchange_rate(
         &self,
         currency_pair: CurrencyPair<Currency>,
-        _currency_store: &CurrencyStore<Currency>,
+        _currency_store: &CurrencyStore<String>,
     ) -> Result<CurrencyPairAndPrice<Currency>, Error> {
-        if currency_pair.base != "USD" {
+        if currency_pair.base.symbol() != "USD" {
             return Err(Error::InvalidDiaSymbol);
         }
-        let token_path = currency_pair.quote.split('=').nth(1).ok_or(Error::InvalidDiaSymbol)?;
+        let token_path = currency_pair.quote.path().ok_or(Error::InvalidDiaSymbol)?;
 
         // https://docs.diadata.org/documentation/api-1/api-endpoints#asset-quotation
         let mut url = self.url.clone();
@@ -65,7 +65,7 @@ impl PriceFeed for DiaApi {
     async fn get_price(
         &self,
         currency_pair: CurrencyPair<Currency>,
-        currency_store: &CurrencyStore<Currency>,
+        currency_store: &CurrencyStore<String>,
     ) -> Result<CurrencyPairAndPrice<Currency>, Error> {
         self.get_exchange_rate(currency_pair, currency_store).await
     }

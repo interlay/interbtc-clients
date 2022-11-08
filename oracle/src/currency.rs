@@ -16,12 +16,59 @@ impl ExchangeRate for f64 {
 }
 
 pub trait CurrencyInfo<Currency> {
-    fn name(&self, id: &Currency) -> Result<String, Error>;
-    fn symbol(&self, id: &Currency) -> Result<String, Error>;
-    fn decimals(&self, id: &Currency) -> Result<u32, Error>;
+    fn name(&self, id: &Currency) -> Option<String>;
+    fn decimals(&self, id: &Currency) -> Option<u32>;
 }
 
-pub type Currency = String;
+#[derive(Default, Debug, Clone, Eq, PartialOrd, Ord)]
+pub struct Currency {
+    symbol: String,
+    path: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for Currency {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+        let value = String::deserialize(deserializer)?;
+        match value.split('=').collect::<Vec<_>>()[..] {
+            [symbol] => Ok(Self {
+                symbol: symbol.to_string(),
+                path: None,
+            }),
+            [symbol, path] => Ok(Self {
+                symbol: symbol.to_string(),
+                path: Some(path.to_string()),
+            }),
+            _ => Err(Error::custom("Invalid currency")),
+        }
+    }
+}
+
+impl Currency {
+    pub fn symbol(&self) -> String {
+        self.symbol.to_owned()
+    }
+
+    pub fn path(&self) -> Option<String> {
+        self.path.to_owned()
+    }
+}
+
+impl PartialEq for Currency {
+    fn eq(&self, other: &Self) -> bool {
+        // only compare symbols, path may differ
+        self.symbol() == other.symbol()
+    }
+}
+
+impl From<Currency> for String {
+    fn from(currency: Currency) -> Self {
+        currency.symbol()
+    }
+}
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct CurrencyPair<Currency> {
@@ -36,7 +83,7 @@ pub struct CurrencyPair<Currency> {
 
 impl fmt::Display for CurrencyPair<Currency> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({}, {})", self.base, self.quote)
+        write!(f, "({}, {})", self.base.symbol(), self.quote.symbol())
     }
 }
 
@@ -46,12 +93,9 @@ impl<Currency> From<(Currency, Currency)> for CurrencyPair<Currency> {
     }
 }
 
-impl<Currency: PartialEq + ToString> CurrencyPair<Currency> {
+impl<Currency: PartialEq> CurrencyPair<Currency> {
     pub fn contains(&self, currency: &Currency) -> bool {
-        let strip = |x: &Currency| x.to_string().split("=").next().unwrap().to_string();
-        let stripped_currency = strip(currency);
-
-        strip(&self.base) == stripped_currency || strip(&self.quote) == stripped_currency
+        &self.base == currency || &self.quote == currency
     }
 
     pub fn has_shared(&self, currency_pair: &Self) -> bool {
@@ -87,7 +131,7 @@ impl fmt::Display for CurrencyPairAndPrice<Currency> {
     }
 }
 
-impl<Currency: PartialEq + Ord + ToString> CurrencyPairAndPrice<Currency> {
+impl<Currency: Clone + PartialEq + Ord> CurrencyPairAndPrice<Currency> {
     pub fn invert(self) -> Self {
         Self {
             pair: self.pair.invert(),
@@ -103,15 +147,21 @@ impl<Currency: PartialEq + Ord + ToString> CurrencyPairAndPrice<Currency> {
     /// 1 * 10**8 Satoshi = 3081 * 10**10 Planck
     /// 1 Satoshi = 3081 * 10**2 Planck
     /// 308100 = 3081 * (10**10 / 10**8) = 3081 * 10**2
-    pub fn exchange_rate(&self, currency_store: &CurrencyStore<Currency>) -> Result<FixedU128, Error> {
+    pub fn exchange_rate<Symbol: Ord + ToString + From<Currency>>(
+        &self,
+        currency_store: &CurrencyStore<Symbol>,
+    ) -> Result<FixedU128, Error> {
+        let quote_decimals = currency_store
+            .decimals(&self.pair.quote.clone().into())
+            .ok_or(Error::InvalidCurrency)?;
+        let base_decimals = currency_store
+            .decimals(&self.pair.base.clone().into())
+            .ok_or(Error::InvalidCurrency)?;
+        let conversion_factor =
+            FixedU128::checked_from_rational(10_u128.pow(quote_decimals), 10_u128.pow(base_decimals))
+                .ok_or(Error::InvalidExchangeRate)?;
         FixedU128::from_float(self.price)
-            .checked_mul(
-                &FixedU128::checked_from_rational(
-                    10_u128.pow(currency_store.decimals(&self.pair.quote)?),
-                    10_u128.pow(currency_store.decimals(&self.pair.base)?),
-                )
-                .ok_or(Error::InvalidExchangeRate)?,
-            )
+            .checked_mul(&conversion_factor)
             .ok_or(Error::InvalidExchangeRate)
     }
 
