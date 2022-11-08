@@ -26,7 +26,7 @@ pub async fn listen_for_accept_replace(
     num_confirmations: u32,
     payment_margin: Duration,
     auto_rbf: bool,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let parachain_rpc = &parachain_rpc;
     let vault_id_manager = &vault_id_manager;
     let shutdown_tx = &shutdown_tx;
@@ -93,7 +93,7 @@ pub async fn listen_for_replace_requests(
     btc_rpc: VaultIdManager,
     event_channel: Sender<Event>,
     accept_replace_requests: bool,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let parachain_rpc = &parachain_rpc;
     let btc_rpc = &btc_rpc;
     let event_channel = &event_channel;
@@ -185,7 +185,7 @@ pub async fn handle_replace_request<'a, P: CollateralBalancesPallet + ReplacePal
 pub async fn listen_for_execute_replace(
     parachain_rpc: InterBtcParachain,
     event_channel: Sender<Event>,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let event_channel = &event_channel;
     let parachain_rpc = &parachain_rpc;
     parachain_rpc

@@ -3,7 +3,7 @@ use clap::Parser;
 use futures::Future;
 use runtime::{InterBtcSigner, KeyPair, Ss58Codec, DEFAULT_SPEC_NAME, SS58_PREFIX};
 use secp256k1::{rand::thread_rng, SecretKey};
-use service::{warp, warp::Filter, ConnectionManager, Error, MonitoringConfig, ServiceConfig};
+use service::{warp, warp::Filter, ConnectionManager, Error as ServiceError, MonitoringConfig, ServiceConfig};
 use signal_hook::consts::*;
 use signal_hook_tokio::Signals;
 use sp_core::crypto::Pair;
@@ -17,7 +17,7 @@ use tokio_stream::StreamExt;
 use vault::{
     metrics::{self, increment_restart_counter},
     process::PidFile,
-    VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION,
+    Error, VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION,
 };
 
 #[derive(Parser)]
@@ -42,11 +42,11 @@ enum Commands {
 }
 
 // write the file to stdout or disk - fail if it already exists
-fn try_write_file<D: AsRef<[u8]>>(output: &Option<PathBuf>, data: D) -> Result<(), Error> {
+fn try_write_file<D: AsRef<[u8]>>(output: &Option<PathBuf>, data: D) -> Result<(), ServiceError<Error>> {
     let data = data.as_ref();
     if let Some(output) = output {
         if output.exists() {
-            Err(Error::FileAlreadyExists)
+            Err(ServiceError::FileAlreadyExists)
         } else {
             std::fs::write(output, data)?;
             Ok(())
@@ -68,7 +68,7 @@ struct GenerateBitcoinKeyOpts {
 }
 
 impl GenerateBitcoinKeyOpts {
-    fn generate_and_write(&self) -> Result<(), Error> {
+    fn generate_and_write(&self) -> Result<(), ServiceError<Error>> {
         let secret_key = SecretKey::new(&mut thread_rng());
         let private_key = PrivateKey::new(secret_key, self.network);
         let wif = private_key.to_wif();
@@ -86,7 +86,7 @@ struct GenerateParachainKeyOpts {
 }
 
 impl GenerateParachainKeyOpts {
-    fn generate_and_write(&self) -> Result<(), Error> {
+    fn generate_and_write(&self) -> Result<(), ServiceError<Error>> {
         let (pair, phrase, _) = KeyPair::generate_with_phrase(None);
 
         let mut keys = serde_json::Map::new();
@@ -128,9 +128,9 @@ pub struct RunVaultOpts {
     pub monitoring: MonitoringConfig,
 }
 
-async fn catch_signals<F>(mut shutdown_signals: Signals, future: F) -> Result<(), Error>
+async fn catch_signals<F>(mut shutdown_signals: Signals, future: F) -> Result<(), ServiceError<Error>>
 where
-    F: Future<Output = Result<(), Error>> + Send + 'static,
+    F: Future<Output = Result<(), ServiceError<Error>>> + Send + 'static,
 {
     let blocking_task = tokio::task::spawn(future);
     tokio::select! {
@@ -147,7 +147,7 @@ where
     Ok(())
 }
 
-async fn start() -> Result<(), Error> {
+async fn start() -> Result<(), ServiceError<Error>> {
     let cli: Cli = Cli::parse();
     let opts = cli.opts;
     opts.service.logging_format.init_subscriber();
@@ -165,7 +165,7 @@ async fn start() -> Result<(), Error> {
     let (pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = InterBtcSigner::new(pair);
 
-    let vault_connection_manager = ConnectionManager::<_, VaultService, _>::new(
+    let vault_connection_manager = ConnectionManager::new(
         signer.clone(),
         Some(wallet_name.to_string()),
         opts.bitcoin,
@@ -207,7 +207,7 @@ async fn start() -> Result<(), Error> {
     let _pidfile = PidFile::create(&String::from(DEFAULT_SPEC_NAME), signer.account_id(), &mut sys)?;
 
     // Unless termination signals are caught, the PID file is not dropped.
-    let main_task = async move { vault_connection_manager.start().await };
+    let main_task = async move { vault_connection_manager.start::<VaultService, Error>().await };
     catch_signals(
         Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT]).expect("Failed to set up signal listener."),
         main_task,

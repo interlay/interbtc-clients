@@ -7,7 +7,7 @@ use runtime::{
     cli::ConnectionOpts as ParachainConfig, CurrencyId, InterBtcParachain as BtcParachain, InterBtcSigner, PrettyPrint,
     RuntimeCurrencyInfo, VaultId,
 };
-use std::{marker::PhantomData, sync::Arc, time::Duration};
+use std::{fmt, sync::Arc, time::Duration};
 
 mod cli;
 mod error;
@@ -24,7 +24,7 @@ pub type ShutdownReceiver = tokio::sync::broadcast::Receiver<()>;
 pub type DynBitcoinCoreApi = Arc<dyn BitcoinCoreApi + Send + Sync>;
 
 #[async_trait]
-pub trait Service<Config> {
+pub trait Service<Config, InnerError> {
     const NAME: &'static str;
     const VERSION: &'static str;
 
@@ -36,10 +36,10 @@ pub trait Service<Config> {
         shutdown: ShutdownSender,
         constructor: Box<dyn Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync>,
     ) -> Self;
-    async fn start(&self) -> Result<(), Error>;
+    async fn start(&self) -> Result<(), Error<InnerError>>;
 }
 
-pub struct ConnectionManager<Config: Clone, S: Service<Config>, F: Fn()> {
+pub struct ConnectionManager<Config: Clone, F: Fn()> {
     signer: InterBtcSigner,
     wallet_name: Option<String>,
     bitcoin_config: BitcoinConfig,
@@ -47,11 +47,10 @@ pub struct ConnectionManager<Config: Clone, S: Service<Config>, F: Fn()> {
     service_config: ServiceConfig,
     monitoring_config: MonitoringConfig,
     config: Config,
-    _marker: PhantomData<S>,
     increment_restart_counter: F,
 }
 
-impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionManager<Config, S, F> {
+impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         signer: InterBtcSigner,
@@ -71,14 +70,13 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
             service_config,
             monitoring_config,
             config,
-            _marker: PhantomData::default(),
             increment_restart_counter,
         }
     }
-}
 
-impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionManager<Config, S, F> {
-    pub async fn start(&self) -> Result<(), Error> {
+    pub async fn start<S: Service<Config, InnerError>, InnerError: fmt::Display>(
+        &self,
+    ) -> Result<(), Error<InnerError>> {
         loop {
             tracing::info!("Version: {}", S::VERSION);
             tracing::info!("AccountId: {}", self.signer.account_id().pretty_print());
@@ -127,10 +125,17 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
                 shutdown_tx.clone(),
                 Box::new(constructor),
             );
-            if let Err(outer) = service.start().await {
-                tracing::warn!("Disconnected: {}", outer);
-            } else {
-                tracing::warn!("Disconnected");
+            match service.start().await {
+                Err(err @ Error::Abort(_)) => {
+                    tracing::warn!("Disconnected: {}", err);
+                    return Err(err);
+                }
+                Err(err) => {
+                    tracing::warn!("Disconnected: {}", err);
+                }
+                _ => {
+                    tracing::warn!("Disconnected");
+                }
             }
 
             let rate_limiter = RateLimiter::direct(Quota::per_minute(nonzero!(4u32)));
@@ -159,9 +164,9 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
     }
 }
 
-pub async fn wait_or_shutdown<F>(shutdown_tx: ShutdownSender, future2: F) -> Result<(), Error>
+pub async fn wait_or_shutdown<F, E>(shutdown_tx: ShutdownSender, future2: F) -> Result<(), E>
 where
-    F: Future<Output = Result<(), Error>>,
+    F: Future<Output = Result<(), E>>,
 {
     match run_cancelable(shutdown_tx.subscribe(), future2).await {
         TerminationStatus::Cancelled => {

@@ -43,7 +43,7 @@ pub async fn process_issue_requests(
     btc_start_height: u32,
     num_confirmations: u32,
     random_delay: Arc<Box<dyn RandomDelay + Send + Sync>>,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let mut stream =
         bitcoin::stream_in_chain_transactions(bitcoin_core.clone(), btc_start_height, num_confirmations).await;
 
@@ -271,7 +271,7 @@ pub async fn listen_for_issue_requests(
     btc_parachain: InterBtcParachain,
     event_channel: Sender<Event>,
     issue_set: Arc<IssueRequests>,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let btc_parachain = &btc_parachain;
     let event_channel = &event_channel;
     let issue_set = &issue_set;
@@ -327,7 +327,7 @@ pub async fn listen_for_issue_executes(
     btc_parachain: InterBtcParachain,
     event_channel: Sender<Event>,
     issue_set: Arc<IssueRequests>,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let btc_parachain = &btc_parachain;
     let event_channel = &event_channel;
     let issue_set = &issue_set;
@@ -359,7 +359,7 @@ pub async fn listen_for_issue_executes(
 pub async fn listen_for_issue_cancels(
     btc_parachain: InterBtcParachain,
     issue_set: Arc<IssueRequests>,
-) -> Result<(), ServiceError> {
+) -> Result<(), ServiceError<Error>> {
     let issue_set = &issue_set;
     btc_parachain
         .on_event::<CancelIssueEvent, _, _, _>(

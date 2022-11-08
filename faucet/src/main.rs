@@ -85,7 +85,7 @@ async fn main() -> Result<(), Error> {
                     Ok(())
                 })
                 .await?;
-            Ok(())
+            Ok::<_, Error>(())
         });
 
         let http_server = on_shutdown(shutdown_tx.clone(), async move {

@@ -181,14 +181,16 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
     }
 }
 
-pub async fn run_relayer(runner: Runner<DynBitcoinCoreApi, InterBtcParachain>) -> Result<(), ServiceError> {
+pub async fn run_relayer(
+    runner: Runner<DynBitcoinCoreApi, InterBtcParachain>,
+) -> Result<(), ServiceError<crate::Error>> {
     loop {
         match runner.submit_next().await {
             Ok(_) => (),
-            Err(Error::InterBtcError(ref err)) if err.is_duplicate_block() => {
+            Err(Error::RuntimeError(ref err)) if err.is_duplicate_block() => {
                 tracing::info!("Attempted to submit block that already exists")
             }
-            Err(Error::InterBtcError(ref err)) if err.is_rpc_disconnect_error() => {
+            Err(Error::RuntimeError(ref err)) if err.is_rpc_disconnect_error() => {
                 return Err(ServiceError::ClientShutdown);
             }
             Err(Error::BitcoinError(err)) if err.is_transport_error() => {
