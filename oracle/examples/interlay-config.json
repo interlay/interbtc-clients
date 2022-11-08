@@ -1,0 +1,76 @@
+{
+    "currencies": {
+        "BTC": {
+            "name": "Bitcoin",
+            "decimals": 8
+        },
+        "INTR": {
+            "name": "Interlay",
+            "decimals": 10
+        },
+        "DOT": {
+            "name": "Polkadot",
+            "decimals": 10
+        },
+        "USD": {
+            "name": "United States Dollar",
+            "decimals": 2
+        }
+    },
+    "prices": [
+        {
+            "pair": [
+                "BTC",
+                "INTR"
+            ],
+            "feeds": {
+                "kraken": [
+                    [
+                        "BTC",
+                        "USD"
+                    ],
+                    [
+                        "INTR",
+                        "USD"
+                    ]
+                ],
+                "coingecko": [
+                    [
+                        "INTR",
+                        "BTC"
+                    ]
+                ],
+                "gateio": [
+                    [
+                        "BTC",
+                        "USDT"
+                    ],
+                    [
+                        "INTR",
+                        "USDT"
+                    ]
+                ]
+            }
+        },
+        {
+            "pair": [
+                "BTC",
+                "DOT"
+            ],
+            "feeds": {
+                "kraken": [
+                    [
+                        "DOT",
+                        "BTC"
+                    ]
+                ],
+                "coingecko": [
+                    [
+                        "DOT",
+                        "BTC"
+                    ]
+                ]
+            }
+        }
+    ]
+}
