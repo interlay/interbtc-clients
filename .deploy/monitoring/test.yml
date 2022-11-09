@@ -17,7 +17,7 @@ tests:
                       severity: critical
                       currency: KSM_KBTC
                   exp_annotations:
-                      description: "Vault with currency pair KSM_KBTC is below the Secure Threshold."
+                      description: "Vault with currency pair KSM_KBTC and 2.5 collateralization is below the Secure Threshold."
     # Test 2.
     - interval: 1m
       input_series:
@@ -27,6 +27,7 @@ tests:
           - eval_time: 1m
             exp_alerts:
             # No alerts.
+              []
     # Test 3.
     - interval: 1m
       input_series:
@@ -34,13 +35,13 @@ tests:
             values: '1'
       alert_rule_test:
           - eval_time: 1m
-            alertname: RedeemAlmostExpired
+            alertname: RedeemPending
             exp_alerts:
                 - exp_labels:
                       severity: critical
                       currency: KSM_KBTC
                   exp_annotations:
-                      description: "Redeem almost expired for Vault with currency pair KSM_KBTC."
+                      description: "Redeem almost expired for Vault with currency pair KSM_KBTC. Remaining time: 1 hour(s)."
     # Test 4.
     - interval: 1m
       input_series:
@@ -50,6 +51,7 @@ tests:
           - eval_time: 1m
             exp_alerts:
             # No alerts.
+              []
     # Test 5.
     - interval: 1m
       input_series:
@@ -57,7 +59,27 @@ tests:
             values: '2'
       alert_rule_test:
           - eval_time: 1m
+            alertname: RedeemPending
             exp_alerts:
-            # No alerts.
-
+                - exp_labels:
+                      severity: critical
+                      currency: KSM_KBTC
+                  exp_annotations:
+                      description: "Redeem almost expired for Vault with currency pair KSM_KBTC. Remaining time: 2 hour(s)."
+    # Test 6.
+    - interval: 1m
+      input_series:
+          - series: 'process_start_time_seconds{job="vault", currency="KSM_KBTC"}'
+            values: '1668014743.01 1668014750.22 1668014766.80 1668014773.1'
+      alert_rule_test:
+          - eval_time: 15m
+            alertname: VaultsTooManyRestarts
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      currency: KSM_KBTC
+                      job: vault
+                  exp_annotations:
+                      description: "Vault KSM_KBTC has restarted more than twice in the last 15 minutes. It might be crashlooping."
+                      summary: "Vault KSM_KBTC has restarted too frequently."
 
