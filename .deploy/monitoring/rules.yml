@@ -6,22 +6,21 @@ groups:
     expr: collateralization < 2.6 and collateralization > 0.01
     for: 1m
     annotations:
-      description: 'Vault {{ $labels.job }} with currency pair {{ $labels.currency }} and {{ $value }} collateralization is below the Secure Threshold.'
+      description: 'Vault with currency pair {{ $labels.currency }} and {{ $value }} collateralization is below the Secure Threshold.'
     labels:
       severity: 'critical'
   - alert: RedeemPending
     expr: remaining_time_to_redeem_hours <= 46 and remaining_time_to_redeem_hours > 0.01
     for: 1m
     annotations:
-      description: 'Redeem almost expired for vault {{ $labels.job }} with currency pair {{ $labels.currency }}. Remaining time: {{ $value }}.'
+      description: 'Redeem almost expired for Vault with currency pair {{ $labels.currency }}. Remaining time: {{ $value }} hour(s).'
     labels:
       severity: 'critical'
   - alert: VaultsTooManyRestarts
-    expr: changes(process_start_time_seconds{job=~"kintsugi-vault|interlay-vault"}[15m]) > 2
+    expr: changes(process_start_time_seconds{job=~"vault"}[15m]) > 2
     for: 5m
     labels:
       severity: warning
     annotations:
-      summary: "Vault {{ $labels.job }} has restarted too frequently."
-      description: "Vault {{ $labels.job }} has restarted more than twice in the last 15 minutes. It might be crashlooping."
-
+      summary: "Vault {{ $labels.currency }} has restarted too frequently."
+      description: "Vault {{ $labels.currency }} has restarted more than twice in the last 15 minutes. It might be crashlooping."
