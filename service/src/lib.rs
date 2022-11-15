@@ -15,11 +15,9 @@ mod trace;
 
 pub use cli::{LoggingFormat, MonitoringConfig, RestartPolicy, ServiceConfig};
 pub use error::Error;
+pub use runtime::{ShutdownReceiver, ShutdownSender};
 pub use trace::init_subscriber;
 pub use warp;
-
-pub type ShutdownSender = tokio::sync::broadcast::Sender<()>;
-pub type ShutdownReceiver = tokio::sync::broadcast::Receiver<()>;
 
 pub type DynBitcoinCoreApi = Arc<dyn BitcoinCoreApi + Send + Sync>;
 
@@ -82,7 +80,7 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
             tracing::info!("AccountId: {}", self.signer.account_id().pretty_print());
 
             let config = self.config.clone();
-            let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
+            let shutdown_tx = ShutdownSender::new();
 
             let prefix = self.wallet_name.clone().unwrap_or_else(|| "vault".to_string());
             let bitcoin_core = self.bitcoin_config.new_client(Some(format!("{prefix}-master"))).await?;

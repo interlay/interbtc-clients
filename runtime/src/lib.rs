@@ -8,6 +8,7 @@ mod conn;
 mod error;
 mod retry;
 mod rpc;
+mod shutdown;
 
 pub mod types;
 
@@ -39,6 +40,7 @@ pub use rpc::{
     OraclePallet, RedeemPallet, ReplacePallet, SecurityPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
     DEFAULT_SPEC_NAME, SS58_PREFIX,
 };
+pub use shutdown::{ShutdownReceiver, ShutdownSender};
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
 pub use std::collections::btree_set::BTreeSet;
 use std::time::Duration;
