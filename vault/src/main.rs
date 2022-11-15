@@ -1,12 +1,11 @@
 use bitcoin::{Network, PrivateKey};
 use clap::Parser;
 use futures::Future;
-use runtime::{InterBtcSigner, KeyPair, Ss58Codec, DEFAULT_SPEC_NAME, SS58_PREFIX};
+use runtime::{sp_core::crypto::Pair, InterBtcSigner, KeyPair, Ss58Codec, DEFAULT_SPEC_NAME, SS58_PREFIX};
 use secp256k1::{rand::thread_rng, SecretKey};
 use service::{warp, warp::Filter, ConnectionManager, Error as ServiceError, MonitoringConfig, ServiceConfig};
 use signal_hook::consts::*;
 use signal_hook_tokio::Signals;
-use sp_core::crypto::Pair;
 use std::{
     io::Write,
     net::{Ipv4Addr, SocketAddr},

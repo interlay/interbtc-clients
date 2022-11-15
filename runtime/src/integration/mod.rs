@@ -13,7 +13,7 @@ use futures::{
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
 use std::{sync::Arc, time::Duration};
-use subxt::Event;
+use subxt::events::StaticEvent as Event;
 use subxt_client::{
     AccountKeyring, DatabaseSource, KeystoreConfig, Role, SubxtClientConfig, WasmExecutionMethod,
     WasmtimeInstantiationStrategy,

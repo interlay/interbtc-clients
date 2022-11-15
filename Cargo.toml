@@ -11,6 +11,11 @@ members = [
   "runner"
 ]
 
+[patch.crates-io]
+sp-core = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.26" }
+sp-state-machine = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.26" }
+sp-io = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.26" }
+
 [patch."https://github.com/paritytech/substrate"]
 frame-benchmarking = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.26" }
 frame-benchmarking-cli = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.26" }

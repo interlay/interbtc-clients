@@ -1,16 +1,24 @@
 pub use jsonrpsee::core::Error as JsonRpseeError;
 
-use crate::{metadata::DispatchError, types::*, BTC_RELAY_MODULE, ISSUE_MODULE, SYSTEM_MODULE};
+use crate::{types::*, BTC_RELAY_MODULE, ISSUE_MODULE, SYSTEM_MODULE};
 use codec::Error as CodecError;
-use jsonrpsee::{client_transport::ws::WsHandshakeError, core::error::Error as RequestError, types::error::CallError};
+use jsonrpsee::{
+    client_transport::ws::WsHandshakeError,
+    core::error::Error as RequestError,
+    types::error::{CallError, ErrorObjectOwned},
+};
 use prometheus::Error as PrometheusError;
 use serde_json::Error as SerdeJsonError;
 use std::{array::TryFromSliceError, fmt::Debug, io::Error as IoError, num::TryFromIntError, str::Utf8Error};
-use subxt::{sp_core::crypto::SecretStringError, BasicError, ModuleError, TransactionError};
+use subxt::{
+    error::{DispatchError, ModuleError, TransactionError},
+    ext::sp_core::crypto::SecretStringError,
+};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
 use url::ParseError as UrlParseError;
-pub type SubxtError = subxt::Error<DispatchError>;
+
+pub use subxt::Error as SubxtError;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -86,19 +94,13 @@ pub enum Error {
     Utf8Error(#[from] Utf8Error),
 }
 
-impl From<BasicError> for Error {
-    fn from(err: BasicError) -> Self {
-        Self::SubxtRuntimeError(err.into())
-    }
-}
-
 impl Error {
     fn is_module_err(&self, pallet_name: &str, error_name: &str) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(SubxtError::Module(ModuleError {
+            Error::SubxtRuntimeError(SubxtError::Runtime(DispatchError::Module(ModuleError{
                 pallet, error, ..
-            })) if pallet == pallet_name && error == error_name,
+            }))) if pallet == pallet_name && error == error_name,
         )
     }
 
@@ -114,22 +116,17 @@ impl Error {
         self.is_module_err(ISSUE_MODULE, &format!("{:?}", IssuePalletError::IssueCompleted))
     }
 
-    fn map_call_error<T>(&self, call: impl Fn(&CallError) -> Option<T>) -> Option<T> {
+    fn map_custom_error<T>(&self, call: impl Fn(&ErrorObjectOwned) -> Option<T>) -> Option<T> {
         match self {
-            Error::SubxtRuntimeError(SubxtError::Rpc(RequestError::Call(err))) => call(err),
+            Error::SubxtRuntimeError(SubxtError::Rpc(RequestError::Call(CallError::Custom(err)))) => call(err),
             _ => None,
         }
     }
 
     pub fn is_invalid_transaction(&self) -> Option<String> {
-        self.map_call_error(|call_error| {
-            if let CallError::Custom {
-                code: POOL_INVALID_TX,
-                data,
-                ..
-            } = call_error
-            {
-                Some(data.clone().map(|raw| raw.to_string()).unwrap_or_default())
+        self.map_custom_error(|custom_error| {
+            if custom_error.code() == POOL_INVALID_TX {
+                Some(custom_error.data().map(ToString::to_string).unwrap_or_default())
             } else {
                 None
             }
@@ -137,12 +134,8 @@ impl Error {
     }
 
     pub fn is_pool_too_low_priority(&self) -> Option<()> {
-        self.map_call_error(|call_error| {
-            if let CallError::Custom {
-                code: POOL_TOO_LOW_PRIORITY,
-                ..
-            } = call_error
-            {
+        self.map_custom_error(|custom_error| {
+            if custom_error.code() == POOL_TOO_LOW_PRIORITY {
                 Some(())
             } else {
                 None

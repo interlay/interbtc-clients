@@ -18,10 +18,12 @@ mod tests;
 pub mod integration;
 
 use codec::{Decode, Encode};
-use sp_std::marker::PhantomData;
+use std::marker::PhantomData;
 use subxt::{
-    sp_runtime::{generic::Header, traits::BlakeTwo256, MultiSignature, OpaqueExtrinsic},
-    subxt, Config,
+    ext::sp_runtime::{generic::Header, traits::BlakeTwo256, MultiSignature, OpaqueExtrinsic},
+    subxt,
+    tx::PolkadotExtrinsicParams,
+    Config,
 };
 
 pub use addr::PartialAddress;
@@ -38,11 +40,9 @@ pub use rpc::{
     DEFAULT_SPEC_NAME, SS58_PREFIX,
 };
 pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
+pub use std::collections::btree_set::BTreeSet;
 use std::time::Duration;
-pub use subxt::{
-    extrinsic::Signer,
-    sp_core::{crypto::Ss58Codec, sr25519::Pair},
-};
+pub use subxt::ext::sp_core::{self, crypto::Ss58Codec, sr25519::Pair};
 pub use types::*;
 
 pub const TX_FEES: u128 = 2000000000;
@@ -62,33 +62,33 @@ pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
     feature = "parachain-metadata-interlay",
     subxt(
         runtime_metadata_path = "metadata-parachain-interlay.scale",
-        generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
+        derive_for_all_types = "Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]
 #[cfg_attr(
     feature = "parachain-metadata-kintsugi",
     subxt(
         runtime_metadata_path = "metadata-parachain-kintsugi.scale",
-        generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
+        derive_for_all_types = "Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]
 #[cfg_attr(
     feature = "parachain-metadata-interlay-testnet",
     subxt(
         runtime_metadata_path = "metadata-parachain-interlay-testnet.scale",
-        generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
+        derive_for_all_types = "Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]
 #[cfg_attr(
     feature = "parachain-metadata-kintsugi-testnet",
     subxt(
         runtime_metadata_path = "metadata-parachain-kintsugi-testnet.scale",
-        generated_type_derives = "Eq, PartialEq, Ord, PartialOrd, Clone"
+        derive_for_all_types = "Eq, PartialEq, Ord, PartialOrd, Clone"
     )
 )]
 pub mod metadata {
     #[subxt(substitute_type = "BTreeSet")]
-    use sp_std::collections::btree_set::BTreeSet;
+    use crate::BTreeSet;
 
     #[subxt(substitute_type = "primitive_types::H256")]
     use crate::H256;
@@ -134,6 +134,7 @@ impl Config for InterBtcRuntime {
     type Header = Header<Self::BlockNumber, BlakeTwo256>;
     type Extrinsic = OpaqueExtrinsic;
     type Signature = MultiSignature;
+    type ExtrinsicParams = PolkadotExtrinsicParams<Self>;
 }
 
 pub fn parse_collateral_currency(src: &str) -> Result<CurrencyId, Error> {

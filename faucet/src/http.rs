@@ -59,7 +59,7 @@ fn handle_resp<T: Encode>(resp: Result<T, Error>) -> Result<Value, JsonRpcError>
 }
 
 async fn _system_health(parachain_rpc: &InterBtcParachain) -> Result<(), Error> {
-    match timeout(HEALTH_DURATION, parachain_rpc.get_latest_block_hash()).await {
+    match timeout(HEALTH_DURATION, parachain_rpc.get_finalized_block_hash()).await {
         Err(err) => Err(Error::RuntimeError(RuntimeError::from(err))),
         _ => Ok(()),
     }
