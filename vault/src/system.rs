@@ -563,12 +563,18 @@ impl VaultService {
             self.config.payment_margin_minutes,
             self.config.auto_rbf,
         );
+
+        let shutdown_clone = self.shutdown.clone();
         service::spawn_cancelable(self.shutdown.subscribe(), async move {
             tracing::info!("Checking for open requests...");
-            // TODO: kill task on shutdown signal to prevent double payment
             match open_request_executor.await {
                 Ok(_) => tracing::info!("Done processing open requests"),
-                Err(e) => tracing::error!("Failed to process open requests: {}", e),
+                Err(e) => {
+                    tracing::error!("Failed to process open requests: {}", e);
+                    if let Err(err) = shutdown_clone.send(()) {
+                        tracing::error!("Failed to send shutdown signal: {}", err);
+                    }
+                }
             }
         });
 

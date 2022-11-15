@@ -476,13 +476,9 @@ pub async fn execute_open_requests(
             tokio::task::yield_now().await;
         }
 
-        let tx = match result {
-            Ok(x) => x,
-            Err(e) => {
-                tracing::warn!("Failed to process transaction: {}", e);
-                continue;
-            }
-        };
+        // Bail on any errors because if we miss any transactions we could end up
+        // double paying
+        let tx = result?;
 
         // get the request this transaction corresponds to, if any
         if let Some(request) = get_request_for_btc_tx(&tx, &open_requests) {
