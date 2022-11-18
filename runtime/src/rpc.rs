@@ -216,8 +216,7 @@ impl InterBtcParachain {
             .fetch(&storage_key, None)
             .await
             .transpose()
-            .map(|x| x.ok())
-            .flatten()
+            .and_then(|x| x.ok())
             .map(|x| x.nonce)
             .unwrap_or_default();
 
@@ -444,7 +443,7 @@ impl InterBtcParachain {
                                 break;
                             }
                         }
-                        Err(err) => on_error(err.into()),
+                        Err(err) => on_error(err),
                     }
                 }
                 Result::<(), _>::Err(Error::ChannelClosed)

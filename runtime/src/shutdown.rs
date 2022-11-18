@@ -47,6 +47,12 @@ impl ShutdownSender {
     }
 }
 
+impl Default for ShutdownSender {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct ShutdownReceiver {
     received_shutdown: bool,
     inner: tokio::sync::broadcast::Receiver<()>,
@@ -55,7 +61,7 @@ pub struct ShutdownReceiver {
 impl ShutdownReceiver {
     pub async fn recv(&mut self) -> Result<(), RecvError> {
         if self.received_shutdown {
-            return Ok(());
+            Ok(())
         } else {
             self.inner.recv().await
         }
