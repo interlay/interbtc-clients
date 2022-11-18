@@ -476,8 +476,18 @@ pub async fn execute_open_requests(
             tokio::task::yield_now().await;
         }
 
+        // When there is an error, we have to make a choice. Either we restart or
+        // continue processing. Both options have their risks: if we restart, it's
+        // possible that the vault will never manage to start up, causing us to
+        // fail to process requests. On the other hand, if we ignore transactions,
+        // we risk double paying. We choose to restart only for network errors,
+        // since these are not expected to be persistent. Other errors could be
+        // persistent, so we keep going.
         let tx = match result {
             Ok(x) => x,
+            Err(e) if e.is_transport_error() => {
+                return Err(e.into());
+            }
             Err(e) => {
                 tracing::warn!("Failed to process transaction: {}", e);
                 continue;

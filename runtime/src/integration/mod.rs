@@ -101,7 +101,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
 /// Create a new parachain_rpc with the given keyring
 pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> InterBtcParachain {
     let signer = InterBtcSigner::new(key.pair());
-    let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
+    let shutdown_tx = crate::ShutdownSender::new();
 
     InterBtcParachain::new(client, signer, shutdown_tx)
         .await

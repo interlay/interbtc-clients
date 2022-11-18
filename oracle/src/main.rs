@@ -12,7 +12,7 @@ use futures::future::join_all;
 use git_version::git_version;
 use runtime::{
     cli::{parse_duration_ms, ProviderUserOpts},
-    CurrencyId, FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, OraclePallet, TryFromSymbol,
+    CurrencyId, FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, OraclePallet, ShutdownSender, TryFromSymbol,
 };
 use std::{path::PathBuf, time::Duration};
 use tokio::{join, time::sleep};
@@ -188,7 +188,7 @@ async fn _main() -> Result<(), Error> {
         .collect::<Result<Vec<_>, _>>()?;
 
         // get prices above first to prevent websocket timeout
-        let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
+        let shutdown_tx = ShutdownSender::new();
         let parachain_rpc = InterBtcParachain::from_url_with_retry(
             &opts.btc_parachain_url,
             signer.clone(),

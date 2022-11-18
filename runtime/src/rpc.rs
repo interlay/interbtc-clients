@@ -4,6 +4,8 @@ use crate::{
     types::*,
     AccountId, AssetRegistry, CurrencyId, Error, InterBtcRuntime, InterBtcSigner, RetryPolicy, RichH256Le, SubxtError,
 };
+
+pub use crate::ShutdownSender;
 use async_trait::async_trait;
 use codec::{Decode, Encode};
 use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt};
@@ -23,7 +25,6 @@ use tokio::{
     sync::RwLock,
     time::{sleep, timeout},
 };
-
 // timeout before retrying parachain calls (5 minutes)
 const TRANSACTION_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -60,7 +61,6 @@ cfg_if::cfg_if! {
     }
 }
 
-pub(crate) type ShutdownSender = tokio::sync::broadcast::Sender<()>;
 pub(crate) type FeeRateUpdateSender = tokio::sync::broadcast::Sender<FixedU128>;
 pub type FeeRateUpdateReceiver = tokio::sync::broadcast::Receiver<FixedU128>;
 
@@ -216,8 +216,7 @@ impl InterBtcParachain {
             .fetch(&storage_key, None)
             .await
             .transpose()
-            .map(|x| x.ok())
-            .flatten()
+            .and_then(|x| x.ok())
             .map(|x| x.nonce)
             .unwrap_or_default();
 
@@ -444,7 +443,7 @@ impl InterBtcParachain {
                                 break;
                             }
                         }
-                        Err(err) => on_error(err.into()),
+                        Err(err) => on_error(err),
                     }
                 }
                 Result::<(), _>::Err(Error::ChannelClosed)

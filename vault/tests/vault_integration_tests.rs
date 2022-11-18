@@ -11,7 +11,7 @@ use runtime::{
     sp_core::{H160, H256},
     types::*,
     BtcAddress, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRedeemRequest, IssuePallet,
-    PartialAddress, RedeemPallet, ReplacePallet, SudoPallet, UtilFuncs, VaultId, VaultRegistryPallet,
+    PartialAddress, RedeemPallet, ReplacePallet, ShutdownSender, SudoPallet, UtilFuncs, VaultId, VaultRegistryPallet,
 };
 use service::DynBitcoinCoreApi;
 use sp_keyring::AccountKeyring;
@@ -104,7 +104,7 @@ async fn test_redeem_succeeds() {
 
         assert_issue(&user_provider, &btc_rpc, &vault_id, issue_amount).await;
 
-        let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
+        let shutdown_tx = ShutdownSender::new();
 
         test_service(
             join(
@@ -187,7 +187,7 @@ async fn test_replace_succeeds() {
 
         assert_issue(&user_provider, &btc_rpc, &old_vault_id, issue_amount).await;
 
-        let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
+        let shutdown_tx = ShutdownSender::new();
         let (replace_event_tx, _) = mpsc::channel::<CancellationEvent>(16);
         test_service(
             join3(
@@ -819,7 +819,7 @@ async fn test_execute_open_requests_succeeds() {
             .unwrap();
         mock_bitcoin_core.send_to_mempool(transaction).await;
 
-        let (shutdown_tx, _) = tokio::sync::broadcast::channel(16);
+        let shutdown_tx = ShutdownSender::new();
         join3(
             vault::service::execute_open_requests(
                 shutdown_tx.clone(),
@@ -1240,9 +1240,10 @@ mod test_with_bitcoind {
             assert_issue_bitcoind(&user_provider, &bitcoin_core, &vault_id, issue_amount).await;
 
             // setup the service to test including necessary auxiliary services
+            let shutdown_tx = ShutdownSender::new();
             let service = join(
                 vault::service::listen_for_redeem_requests(
-                    tokio::sync::broadcast::channel(16).0,
+                    shutdown_tx,
                     vault_provider.clone(),
                     vault_id_manager,
                     0,
