@@ -12,10 +12,11 @@ use futures::{
     future::{try_join, Either},
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
+use sp_keyring::AccountKeyring;
 use std::{sync::Arc, time::Duration};
 use subxt::events::StaticEvent as Event;
 use subxt_client::{
-    AccountKeyring, DatabaseSource, KeystoreConfig, Role, SubxtClientConfig, WasmExecutionMethod,
+    DatabaseSource, JsonRpcClient, KeystoreConfig, Role, SubxtClientConfig, WasmExecutionMethod,
     WasmtimeInstantiationStrategy,
 };
 use tempdir::TempDir;
@@ -103,7 +104,8 @@ pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> InterBt
     let signer = InterBtcSigner::new(key.pair());
     let shutdown_tx = crate::ShutdownSender::new();
 
-    InterBtcParachain::new(client, signer, shutdown_tx)
+    let json_client: JsonRpcClient = client.into();
+    InterBtcParachain::new(json_client, signer, shutdown_tx)
         .await
         .expect("Error creating parachain_rpc")
 }

@@ -4,7 +4,7 @@ pub use subxt::ext::sp_core::{crypto::Ss58Codec, sr25519::Pair as KeyPair};
 
 pub use primitives::{
     CurrencyId,
-    CurrencyId::{ForeignAsset, Token},
+    CurrencyId::{ForeignAsset, LendToken, Token},
     TokenSymbol::{self, DOT, IBTC, INTR, KBTC, KINT, KSM},
 };
 
@@ -113,13 +113,13 @@ mod metadata_aliases {
     pub type VaultCurrencyPair = metadata::runtime_types::interbtc_primitives::VaultCurrencyPair<CurrencyId>;
 
     #[cfg(feature = "parachain-metadata-interlay")]
-    pub type EncodedCall = metadata::runtime_types::interlay_runtime_parachain::Call;
+    pub type EncodedCall = metadata::runtime_types::interlay_runtime_parachain::RuntimeCall;
     #[cfg(feature = "parachain-metadata-kintsugi")]
-    pub type EncodedCall = metadata::runtime_types::kintsugi_runtime_parachain::Call;
+    pub type EncodedCall = metadata::runtime_types::kintsugi_runtime_parachain::RuntimeCall;
     #[cfg(feature = "parachain-metadata-interlay-testnet")]
-    pub type EncodedCall = metadata::runtime_types::testnet_interlay_runtime_parachain::Call;
+    pub type EncodedCall = metadata::runtime_types::testnet_interlay_runtime_parachain::RuntimeCall;
     #[cfg(feature = "parachain-metadata-kintsugi-testnet")]
-    pub type EncodedCall = metadata::runtime_types::testnet_kintsugi_runtime_parachain::Call;
+    pub type EncodedCall = metadata::runtime_types::testnet_kintsugi_runtime_parachain::RuntimeCall;
 
     pub use metadata::runtime_types::security::pallet::Call as SecurityCall;
 }
@@ -149,6 +149,7 @@ mod currency_id {
             match self {
                 Token(x) => Ok(*x),
                 ForeignAsset(_) => Err(Error::CurrencyNotFound),
+                LendToken(_) => Err(Error::CurrencyNotFound),
             }
         }
     }
@@ -354,6 +355,9 @@ mod dispatch_error {
                 RichDispatchError::Transactional(transactional_error) => {
                     DispatchError::Transactional(transactional_error.into())
                 }
+                RichDispatchError::Exhausted => DispatchError::Exhausted,
+                RichDispatchError::Corruption => DispatchError::Corruption,
+                RichDispatchError::Unavailable => DispatchError::Unavailable,
             }
         }
     }

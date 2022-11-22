@@ -10,7 +10,7 @@ clap = { version = "4.0.17", features = ["derive"]}
 hex = "0.4.3"
 tokio = { version = "1.8", features = ["rt-multi-thread", "macros", "time"] }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full", "bit-vec"] }
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.31" }
 thiserror = "1.0.0"
 log = "0.4.0"
 env_logger = "0.7.1"
@@ -24,7 +24,7 @@ signal-hook = "0.3.14"
 signal-hook-tokio = { version = "0.3.1", features = ["futures-v0_3"] }
 futures = "0.3.21"
 backoff = { version = "0.3.0", features = ["tokio"] }
-subxt = "0.23.0"
+subxt = "0.25.0"
 sha2 = "0.8.2"
 
 [dev-dependencies]

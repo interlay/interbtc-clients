@@ -21,7 +21,7 @@ pub mod integration;
 use codec::{Decode, Encode};
 use std::marker::PhantomData;
 use subxt::{
-    ext::sp_runtime::{generic::Header, traits::BlakeTwo256, MultiSignature, OpaqueExtrinsic},
+    ext::sp_runtime::{generic::Header, traits::BlakeTwo256, MultiSignature},
     subxt,
     tx::PolkadotExtrinsicParams,
     Config,
@@ -134,7 +134,6 @@ impl Config for InterBtcRuntime {
     type AccountId = AccountId;
     type Address = Self::AccountId;
     type Header = Header<Self::BlockNumber, BlakeTwo256>;
-    type Extrinsic = OpaqueExtrinsic;
     type Signature = MultiSignature;
     type ExtrinsicParams = PolkadotExtrinsicParams<Self>;
 }
