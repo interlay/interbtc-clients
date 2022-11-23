@@ -4,7 +4,6 @@ use crate::{types::*, BTC_RELAY_MODULE, ISSUE_MODULE, SYSTEM_MODULE};
 use codec::Error as CodecError;
 use jsonrpsee::{
     client_transport::ws::WsHandshakeError,
-    core::error::Error as RequestError,
     types::error::{CallError, ErrorObjectOwned},
 };
 use prometheus::Error as PrometheusError;
@@ -18,7 +17,7 @@ use thiserror::Error;
 use tokio::time::error::Elapsed;
 use url::ParseError as UrlParseError;
 
-pub use subxt::Error as SubxtError;
+pub use subxt::{error::RpcError, Error as SubxtError};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -92,6 +91,8 @@ pub enum Error {
     PrometheusError(#[from] PrometheusError),
     #[error("Utf8Error: {0}")]
     Utf8Error(#[from] Utf8Error),
+    #[error("Operation not supported on lending tokens")]
+    LendingTokenUnsupported,
 }
 
 impl Error {
@@ -117,9 +118,19 @@ impl Error {
     }
 
     fn map_custom_error<T>(&self, call: impl Fn(&ErrorObjectOwned) -> Option<T>) -> Option<T> {
-        match self {
-            Error::SubxtRuntimeError(SubxtError::Rpc(RequestError::Call(CallError::Custom(err)))) => call(err),
-            _ => None,
+        if let Error::SubxtRuntimeError(SubxtError::Rpc(RpcError::ClientError(e))) = self {
+            match e.downcast_ref::<JsonRpseeError>() {
+                Some(e) => match e {
+                    JsonRpseeError::Call(CallError::Custom(err)) => call(&err),
+                    _ => None,
+                },
+                None => {
+                    log::error!("Failed to downcast RPC error; this is a bug please file an issue");
+                    return None;
+                }
+            }
+        } else {
+            None
         }
     }
 
@@ -144,10 +155,19 @@ impl Error {
     }
 
     pub fn is_rpc_disconnect_error(&self) -> bool {
-        matches!(
-            self,
-            Error::SubxtRuntimeError(SubxtError::Rpc(JsonRpseeError::RestartNeeded(_)))
-        )
+        match self {
+            Error::SubxtRuntimeError(SubxtError::Rpc(RpcError::ClientError(e))) => {
+                match e.downcast_ref::<JsonRpseeError>() {
+                    Some(e) => matches!(e, JsonRpseeError::RestartNeeded(_)),
+                    None => {
+                        log::error!("Failed to downcast RPC error; this is a bug please file an issue");
+                        return false;
+                    }
+                }
+            }
+            Error::SubxtRuntimeError(SubxtError::Rpc(RpcError::SubscriptionDropped)) => true,
+            _ => false,
+        }
     }
 
     pub fn is_rpc_error(&self) -> bool {
@@ -162,11 +182,22 @@ impl Error {
     }
 
     pub fn is_ws_invalid_url_error(&self) -> bool {
-        matches!(
-            self,
-            Error::JsonRpseeError(JsonRpseeError::Transport(err))
-            if matches!(err.downcast_ref::<WsHandshakeError>(), Some(WsHandshakeError::Url(_)))
-        )
+        if let Error::SubxtRuntimeError(SubxtError::Rpc(RpcError::ClientError(e))) = self {
+            match e.downcast_ref::<JsonRpseeError>() {
+                Some(e) => {
+                    return matches!(
+                        e,
+                    JsonRpseeError::Transport(err)
+                        if matches!(err.downcast_ref::<WsHandshakeError>(), Some(WsHandshakeError::Url(_)))
+                    )
+                }
+                None => {
+                    log::error!("Failed to downcast RPC error; this is a bug please file an issue");
+                }
+            }
+        }
+
+        false
     }
 
     pub fn is_parachain_shutdown_error(&self) -> bool {

@@ -4,19 +4,22 @@ use futures::{
     sink::SinkExt,
     stream::StreamExt,
 };
+pub use jsonrpsee_core::client::Client as JsonRpcClient;
 use jsonrpsee_core::{
     async_trait,
-    client::{Client as JsonRpcClient, ClientBuilder, ReceivedMessage, TransportReceiverT, TransportSenderT},
+    client::{ClientBuilder, ReceivedMessage, TransportReceiverT, TransportSenderT},
 };
-use sc_network::config::TransportConfig;
+
+use sc_network_common::config::TransportConfig;
 pub use sc_service::{
     config::{DatabaseSource, KeystoreConfig, WasmExecutionMethod, WasmtimeInstantiationStrategy},
     Error as ServiceError,
 };
 use sc_service::{
     config::{NetworkConfiguration, TelemetryEndpoints},
-    ChainSpec, Configuration, KeepBlocks, RpcHandlers, TaskManager,
+    ChainSpec, Configuration, RpcHandlers, TaskManager,
 };
+
 pub use sp_keyring::AccountKeyring;
 use thiserror::Error;
 use tokio::task;
@@ -155,8 +158,8 @@ impl From<SubxtClient> for JsonRpcClient {
 /// Role of the node.
 #[derive(Clone, Copy, Debug)]
 pub enum Role {
-    /// Light client.
-    Light,
+    /// Regular full node.
+    Full,
     /// A full node (mainly used for testing purposes).
     Authority(AccountKeyring),
 }
@@ -164,7 +167,7 @@ pub enum Role {
 impl From<Role> for sc_service::Role {
     fn from(role: Role) -> Self {
         match role {
-            Role::Light => Self::Light,
+            Role::Full => Self::Full,
             Role::Authority(_) => Self::Authority,
         }
     }
@@ -173,7 +176,7 @@ impl From<Role> for sc_service::Role {
 impl From<Role> for Option<String> {
     fn from(role: Role) -> Self {
         match role {
-            Role::Light => None,
+            Role::Full => None,
             Role::Authority(key) => Some(key.to_seed()),
         }
     }
@@ -245,7 +248,6 @@ impl<C: ChainSpec + 'static> SubxtClientConfig<C> {
             disable_grandpa: Default::default(),
             execution_strategies: Default::default(),
             force_authoring: Default::default(),
-            keep_blocks: KeepBlocks::All,
             keystore_remote: Default::default(),
             offchain_worker: Default::default(),
             prometheus_config: Default::default(),
@@ -255,8 +257,6 @@ impl<C: ChainSpec + 'static> SubxtClientConfig<C> {
             rpc_ws: Default::default(),
             rpc_ws_max_connections: Default::default(),
             rpc_methods: Default::default(),
-            state_cache_child_ratio: Default::default(),
-            state_cache_size: Default::default(),
             tracing_receiver: Default::default(),
             tracing_targets: Default::default(),
             transaction_pool: Default::default(),
@@ -273,6 +273,8 @@ impl<C: ChainSpec + 'static> SubxtClientConfig<C> {
             rpc_max_response_size: None,
             rpc_id_provider: None,
             rpc_max_subs_per_conn: None,
+            blocks_pruning: sc_client_db::BlocksPruning::KeepAll,
+            trie_cache_maximum_size: Default::default(),
         };
 
         log::info!("{}", service_config.impl_name);

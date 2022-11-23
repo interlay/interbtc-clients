@@ -48,7 +48,8 @@ runtime = { path = "../runtime" }
 service = { path = "../service" }
 
 # Substrate dependencies
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26" }
+# needs to agree with subxt's version
+sp-keyring = { version = "7.0.0" }
 
 [dev-dependencies]
 mockall = "0.8.1"
@@ -59,4 +60,4 @@ runtime = { path = "../runtime", features = ["testing-utils"] }
 bitcoin = { path = "../bitcoin", features = ["cli", "regtest-manual-mining"] }
 
 # Substrate dependencies
-frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.26" }
+frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.31" }
