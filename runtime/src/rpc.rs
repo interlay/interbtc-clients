@@ -44,19 +44,19 @@ compile_error!("Tests are only supported for the kintsugi testnet metadata");
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "parachain-metadata-interlay")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1019000..1020000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1020000..1021000;
         pub const DEFAULT_SPEC_NAME: &str = "interlay-parachain";
         pub const SS58_PREFIX: u16 = 2032;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1019000..1020000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1020000..1021000;
         pub const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
         pub const SS58_PREFIX: u16 = 2092;
     } else if #[cfg(feature = "parachain-metadata-interlay-testnet")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1019000..1020000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1020000..1021000;
         pub const DEFAULT_SPEC_NAME: &str = "testnet-interlay";
         pub const SS58_PREFIX: u16 = 2032;
     }  else if #[cfg(feature = "parachain-metadata-kintsugi-testnet")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1019000..1020000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1020000..1021000;
         pub const DEFAULT_SPEC_NAME: &str = "testnet-kintsugi";
         pub const SS58_PREFIX: u16 = 2092;
     }
