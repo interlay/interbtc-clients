@@ -281,7 +281,11 @@ impl InterBtcParachain {
                         .submit_and_watch()
                         .await?;
 
-                    tx_progress.wait_for_finalized_success().await
+                    if cfg!(feature = "testing-utils") {
+                        tx_progress.wait_for_in_block().await?.wait_for_success().await
+                    } else {
+                        tx_progress.wait_for_finalized_success().await
+                    }
                 })
                 .await
                 {
@@ -315,7 +319,11 @@ impl InterBtcParachain {
     }
 
     pub async fn get_finalized_block_hash(&self) -> Result<Option<H256>, Error> {
-        Ok(Some(self.api.rpc().finalized_head().await?))
+        if cfg!(feature = "testing-utils") {
+            Ok(None)
+        } else {
+            Ok(Some(self.api.rpc().finalized_head().await?))
+        }
     }
 
     /// Subscribe to new parachain blocks.
@@ -324,7 +332,11 @@ impl InterBtcParachain {
         F: Fn(InterBtcHeader) -> R,
         R: Future<Output = Result<(), Error>>,
     {
-        let mut sub = self.api.blocks().subscribe_finalized().await?;
+        let mut sub = if cfg!(feature = "testing-utils") {
+            self.api.blocks().subscribe_best().await?
+        } else {
+            self.api.blocks().subscribe_finalized().await?
+        };
         loop {
             on_block(
                 sub.next()
@@ -339,7 +351,11 @@ impl InterBtcParachain {
     /// Wait for the block at the given height
     /// Note: will always wait at least one block.
     pub async fn wait_for_block(&self, height: u32) -> Result<(), Error> {
-        let mut sub = self.api.blocks().subscribe_finalized().await?;
+        let mut sub = if cfg!(feature = "testing-utils") {
+            self.api.blocks().subscribe_best().await?
+        } else {
+            self.api.blocks().subscribe_finalized().await?
+        };
         while let Some(block) = sub.next().await {
             if block?.number() >= height {
                 return Ok(());
@@ -360,13 +376,23 @@ impl InterBtcParachain {
     async fn subscribe_events(
         &self,
     ) -> Result<impl Stream<Item = Result<subxt::events::Events<InterBtcRuntime>, SubxtError>> + Unpin, Error> {
-        Ok(self
-            .api
-            .blocks()
-            .subscribe_finalized()
-            .await?
-            .then(|x| async move { x?.events().await })
-            .boxed())
+        if cfg!(feature = "testing-utils") {
+            Ok(self
+                .api
+                .blocks()
+                .subscribe_best()
+                .await?
+                .then(|x| async move { x?.events().await })
+                .boxed())
+        } else {
+            Ok(self
+                .api
+                .blocks()
+                .subscribe_finalized()
+                .await?
+                .then(|x| async move { x?.events().await })
+                .boxed())
+        }
     }
 
     /// Subscription service that should listen forever, only returns if the initial subscription
