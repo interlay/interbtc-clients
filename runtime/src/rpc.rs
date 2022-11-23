@@ -228,7 +228,7 @@ impl InterBtcParachain {
             *next_nonce
         };
 
-        *next_nonce = next_nonce.saturating_add(1);
+        *next_nonce = ret.saturating_add(1);
 
         ret
     }
