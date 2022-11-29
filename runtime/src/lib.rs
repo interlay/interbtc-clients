@@ -55,6 +55,7 @@ pub const BTC_RELAY_MODULE: &str = "BTCRelay";
 pub const ISSUE_MODULE: &str = "Issue";
 pub const SECURITY_MODULE: &str = "Security";
 pub const SYSTEM_MODULE: &str = "System";
+pub const VAULT_REGISTRY_MODULE: &str = "VaultRegistry";
 
 pub const STABLE_BITCOIN_CONFIRMATIONS: &str = "StableBitcoinConfirmations";
 pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";

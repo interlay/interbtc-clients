@@ -541,14 +541,19 @@ impl VaultService {
         tokio::task::spawn(err_listener);
 
         self.maybe_register_public_key().await?;
-        join_all(
+        match join_all(
             parsed_auto_register
                 .iter()
                 .map(|(currency_id, amount)| self.maybe_register_vault(currency_id, amount)),
         )
         .await
         .into_iter()
-        .collect::<Result<_, Error>>()?;
+        .collect::<Result<(), Error>>()
+        {
+            Err(Error::RuntimeError(err)) if err.is_threshold_not_set() => Err(ServiceError::Abort(err.into())),
+            Err(err) => Err(err.into()),
+            Ok(_) => Ok(()),
+        }?;
 
         // purposefully _after_ maybe_register_vault and _before_ other calls
         self.vault_id_manager.fetch_vault_ids().await?;
