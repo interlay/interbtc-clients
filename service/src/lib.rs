@@ -132,6 +132,8 @@ impl<Config: Clone + Send + 'static, S: Service<Config>, F: Fn()> ConnectionMana
             } else {
                 tracing::warn!("Disconnected");
             }
+            // propagate shutdown signal from main tasks
+            let _ = shutdown_tx.send(());
 
             let rate_limiter = RateLimiter::direct(Quota::per_minute(nonzero!(4u32)));
 
