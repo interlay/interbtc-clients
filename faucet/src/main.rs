@@ -4,9 +4,14 @@ mod http;
 use clap::Parser;
 use error::Error;
 use git_version::git_version;
-use runtime::{InterBtcSigner, ShutdownSender};
+use runtime::{
+    CurrencyId::{self},
+    InterBtcSigner, ShutdownSender,
+    TryFromSymbol,
+};
+use serde::Deserialize;
 use service::{on_shutdown, wait_or_shutdown};
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 
 const VERSION: &str = git_version!(args = ["--tags"]);
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -19,14 +24,38 @@ struct Opts {
     /// Keyring / keyfile options.
     #[clap(flatten)]
     account_info: runtime::cli::ProviderUserOpts,
-
+    
     /// Connection settings for the BTC Parachain.
     #[clap(flatten)]
     parachain: runtime::cli::ConnectionOpts,
-
+    
     /// Settings specific to the faucet client.
     #[clap(flatten)]
     faucet: FaucetConfig,
+    
+    /// Allowance config
+    #[clap(long, default_value = "./faucet-allowance-config.json")]
+    allowance_config: PathBuf,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct AllowanceAmount {
+    ticker: String,
+    amount: u128,
+}
+
+type AllowanceTuple = (CurrencyId, u128);
+type Allowance = Vec<AllowanceTuple>;
+impl From<&AllowanceAmount> for AllowanceTuple {
+    fn from(allowance_amount: &AllowanceAmount) -> Self {
+        (CurrencyId::try_from_symbol(allowance_amount.ticker.clone()).expect("Failed to parse input ticker"), allowance_amount.amount)
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct AllowanceConfig {
+    pub user_allowances: Vec<AllowanceAmount>,
+    pub vault_allowances: Vec<AllowanceAmount>,
 }
 
 #[derive(Parser, Clone)]
@@ -38,14 +67,6 @@ pub struct FaucetConfig {
     /// Comma separated list of allowed origins.
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
-
-    /// Allowance per request for regular users.
-    #[clap(long, default_value = "1")]
-    user_allowance: u128,
-
-    /// Allowance per request for vaults.
-    #[clap(long, default_value = "500")]
-    vault_allowance: u128,
 }
 
 #[tokio::main]
@@ -63,6 +84,9 @@ async fn main() -> Result<(), Error> {
     let parachain_config = opts.parachain;
     let faucet_config = opts.faucet;
 
+    let data = std::fs::read_to_string(opts.allowance_config)?;
+    let allowance_config = serde_json::from_str::<AllowanceConfig>(&data)?;
+
     loop {
         let btc_parachain = parachain_config
             .try_connect(signer.clone(), shutdown_tx.clone())
@@ -72,8 +96,8 @@ async fn main() -> Result<(), Error> {
             btc_parachain.clone(),
             faucet_config.http_addr,
             faucet_config.rpc_cors_domain.clone(),
-            faucet_config.user_allowance,
-            faucet_config.vault_allowance,
+            allowance_config.user_allowances.iter().map(|x| x.into()).collect(),
+            allowance_config.vault_allowances.iter().map(|x| x.into()).collect(),
         )
         .await;
 
