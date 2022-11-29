@@ -527,10 +527,11 @@ impl VaultService {
         };
         tracing::info!("Using {} bitcoin confirmations", num_confirmations);
 
-        // Subscribe to an event (any event will do) so that a period of inactivity does not close the jsonrpsee
-        // connection
+        // Subscribe to an event (any event will do) so that a period of inactivity
+        // does not close the jsonrpsee connection
         tracing::info!("Subscribing to error events...");
         let err_provider = self.btc_parachain.clone();
+        // NOTE: this will block if subsequent errors do not trigger shutdown
         let err_listener = wait_or_shutdown(self.shutdown.clone(), async move {
             err_provider
                 .on_event_error(|e| tracing::debug!("Received error event: {}", e))
