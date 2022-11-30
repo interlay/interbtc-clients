@@ -39,7 +39,7 @@ struct Opts {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct AllowanceAmount {
-    ticker: String,
+    symbol: String,
     amount: u128,
 }
 
@@ -48,7 +48,7 @@ type Allowance = Vec<AllowanceTuple>;
 impl From<&AllowanceAmount> for AllowanceTuple {
     fn from(allowance_amount: &AllowanceAmount) -> Self {
         (
-            CurrencyId::try_from_symbol(allowance_amount.ticker.clone()).expect("Failed to parse input ticker"),
+            CurrencyId::try_from_symbol(allowance_amount.symbol.clone()).expect("Failed to parse input symbol"),
             allowance_amount.amount,
         )
     }

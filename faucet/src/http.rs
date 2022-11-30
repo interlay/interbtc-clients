@@ -8,8 +8,8 @@ use jsonrpc_http_server::{
 use kv::*;
 use parity_scale_codec::{Decode, Encode};
 use runtime::{
-    AccountId, CollateralBalancesPallet, CurrencyId, CurrencyIdExt, CurrencyInfo, Error as RuntimeError,
-    InterBtcParachain, VaultRegistryPallet,
+    AccountId, CollateralBalancesPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, RuntimeCurrencyInfo,
+    VaultRegistryPallet,
 };
 use serde::{Deserialize, Deserializer};
 use std::{collections::HashMap, net::SocketAddr, time::Duration};
@@ -158,7 +158,9 @@ async fn ensure_funding_allowed(
         let reserved_balance = parachain_rpc
             .get_reserved_balance_for_id(account_id.clone(), *currency_id)
             .await?;
-        if free_balance + reserved_balance > MAX_FUNDABLE_CLIENT_BALANCE * currency_id.inner()?.one() {
+        let one = |currency: CurrencyId| Ok::<_, Error>(10u128.pow(currency.decimals()? as u32));
+
+        if free_balance + reserved_balance > MAX_FUNDABLE_CLIENT_BALANCE * one(*currency_id)? {
             log::warn!(
                 "User {} has enough {:?} funds: {:?}",
                 account_id,
@@ -220,7 +222,7 @@ async fn atomic_faucet_funding(
         log::info!(
             "AccountId: {}, Currency: {:?} Type: {:?}, Amount: {}",
             account_id,
-            currency_id.inner()?.symbol(),
+            currency_id.symbol(),
             account_type,
             amount
         );

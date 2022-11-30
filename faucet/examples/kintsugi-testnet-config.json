@@ -1,37 +1,37 @@
 {
     "user_allowances": [
         {
-            "ticker": "KSM",
+            "symbol": "KSM",
             "amount": 2000000000000
         },
         {
-            "ticker": "KBTC",
+            "symbol": "KBTC",
             "amount": 10000000
         },
         {
-            "ticker": "KINT",
+            "symbol": "KINT",
             "amount": 10000000000000
         },
         {
-            "ticker": "USDT",
+            "symbol": "USDT",
             "amount": 1000000000
         }
     ],
     "vault_allowances": [
         {
-            "ticker": "KSM",
+            "symbol": "KSM",
             "amount": 200000000000000
         },
         {
-            "ticker": "KBTC",
+            "symbol": "KBTC",
             "amount": 100000000
         },
         {
-            "ticker": "KINT",
+            "symbol": "KINT",
             "amount": 100000000000000
         },
         {
-            "ticker": "USDT",
+            "symbol": "USDT",
             "amount": 10000000000
         }
     ]
