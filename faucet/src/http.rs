@@ -205,7 +205,7 @@ async fn atomic_faucet_funding(
     let last_request_json = kv.get(account_str.clone())?;
     let account_type = get_account_type(parachain_rpc, account_id.clone()).await?;
     let amounts = allowances.get(&account_type).ok_or(Error::NoFaucetAllowance)?;
-    let currency_ids: Vec<CurrencyId> = amounts.iter().map(|(currency, _)| currency.clone()).collect();
+    let currency_ids: Vec<CurrencyId> = amounts.iter().map(|(currency, _)| *currency).collect();
     ensure_funding_allowed(
         parachain_rpc,
         account_id.clone(),
@@ -325,9 +325,7 @@ mod tests {
     use futures::future::join_all;
     use runtime::{
         CurrencyId::{self},
-        CurrencyIdExt, OracleKey, Token,
-
-        VaultId, KBTC, KINT, KSM,
+        CurrencyIdExt, OracleKey, Token, VaultId, KBTC, KINT, KSM,
     };
     use std::{collections::HashMap, sync::Arc};
 

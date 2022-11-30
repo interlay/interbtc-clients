@@ -6,8 +6,7 @@ use error::Error;
 use git_version::git_version;
 use runtime::{
     CurrencyId::{self},
-    InterBtcSigner, ShutdownSender,
-    TryFromSymbol,
+    InterBtcSigner, ShutdownSender, TryFromSymbol,
 };
 use serde::Deserialize;
 use service::{on_shutdown, wait_or_shutdown};
@@ -24,15 +23,15 @@ struct Opts {
     /// Keyring / keyfile options.
     #[clap(flatten)]
     account_info: runtime::cli::ProviderUserOpts,
-    
+
     /// Connection settings for the BTC Parachain.
     #[clap(flatten)]
     parachain: runtime::cli::ConnectionOpts,
-    
+
     /// Settings specific to the faucet client.
     #[clap(flatten)]
     faucet: FaucetConfig,
-    
+
     /// Allowance config
     #[clap(long, default_value = "./faucet-allowance-config.json")]
     allowance_config: PathBuf,
@@ -48,7 +47,10 @@ type AllowanceTuple = (CurrencyId, u128);
 type Allowance = Vec<AllowanceTuple>;
 impl From<&AllowanceAmount> for AllowanceTuple {
     fn from(allowance_amount: &AllowanceAmount) -> Self {
-        (CurrencyId::try_from_symbol(allowance_amount.ticker.clone()).expect("Failed to parse input ticker"), allowance_amount.amount)
+        (
+            CurrencyId::try_from_symbol(allowance_amount.ticker.clone()).expect("Failed to parse input ticker"),
+            allowance_amount.amount,
+        )
     }
 }
 
