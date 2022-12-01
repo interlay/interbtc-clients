@@ -1,4 +1,6 @@
 {
+    "max_fundable_balance": 1000,
+    "faucet_cooldown_hours": 6,
     "user_allowances": [
         {
             "symbol": "KSM",

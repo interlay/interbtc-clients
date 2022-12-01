@@ -4,6 +4,7 @@ mod http;
 use clap::Parser;
 use error::Error;
 use git_version::git_version;
+use parity_scale_codec::Encode;
 use runtime::{
     CurrencyId::{self},
     InterBtcSigner, ShutdownSender, TryFromSymbol,
@@ -37,27 +38,41 @@ struct Opts {
     allowance_config: PathBuf,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Encode)]
 pub struct AllowanceAmount {
     symbol: String,
     amount: u128,
 }
-
-type AllowanceTuple = (CurrencyId, u128);
-type Allowance = Vec<AllowanceTuple>;
-impl From<&AllowanceAmount> for AllowanceTuple {
-    fn from(allowance_amount: &AllowanceAmount) -> Self {
-        (
-            CurrencyId::try_from_symbol(allowance_amount.symbol.clone()).expect("Failed to parse input symbol"),
-            allowance_amount.amount,
-        )
+impl AllowanceAmount {
+    pub fn new(symbol: String, amount: u128) -> Self {
+        Self { symbol, amount }
     }
 }
 
+type Allowance = Vec<AllowanceAmount>;
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct AllowanceConfig {
-    pub user_allowances: Vec<AllowanceAmount>,
-    pub vault_allowances: Vec<AllowanceAmount>,
+    pub max_fundable_client_balance: u128,
+    pub faucet_cooldown_hours: i64,
+    pub user_allowances: Allowance,
+    pub vault_allowances: Allowance,
+}
+
+impl AllowanceConfig {
+    pub fn new(
+        max_fundable_client_balance: u128,
+        faucet_cooldown_hours: i64,
+        user_allowances: Allowance,
+        vault_allowances: Allowance,
+    ) -> Self {
+        Self {
+            max_fundable_client_balance,
+            faucet_cooldown_hours,
+            user_allowances,
+            vault_allowances,
+        }
+    }
 }
 
 #[derive(Parser, Clone)]
@@ -98,8 +113,9 @@ async fn main() -> Result<(), Error> {
             btc_parachain.clone(),
             faucet_config.http_addr,
             faucet_config.rpc_cors_domain.clone(),
-            allowance_config.user_allowances.iter().map(|x| x.into()).collect(),
-            allowance_config.vault_allowances.iter().map(|x| x.into()).collect(),
+            allowance_config.clone(),
+            // allowance_config.user_allowances.iter().map(|x| x.into()).collect(),
+            // allowance_config.vault_allowances.iter().map(|x| x.into()).collect(),
         )
         .await;
 
