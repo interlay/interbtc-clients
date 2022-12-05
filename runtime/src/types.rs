@@ -81,7 +81,7 @@ mod metadata_aliases {
     pub use metadata::runtime_types::{
         btc_relay::pallet::Error as BtcRelayPalletError, frame_system::pallet::Error as SystemPalletError,
         issue::pallet::Error as IssuePalletError, redeem::pallet::Error as RedeemPalletError,
-        security::pallet::Error as SecurityPalletError,
+        security::pallet::Error as SecurityPalletError, vault_registry::pallet::Error as VaultRegistryPalletError,
     };
 
     pub use metadata::runtime_types::bitcoin::types::H256Le;

@@ -1,6 +1,6 @@
 pub use jsonrpsee::core::Error as JsonRpseeError;
 
-use crate::{types::*, BTC_RELAY_MODULE, ISSUE_MODULE, SYSTEM_MODULE};
+use crate::{types::*, BTC_RELAY_MODULE, ISSUE_MODULE, SYSTEM_MODULE, VAULT_REGISTRY_MODULE};
 use codec::Error as CodecError;
 use jsonrpsee::{
     client_transport::ws::WsHandshakeError,
@@ -115,6 +115,13 @@ impl Error {
 
     pub fn is_issue_completed(&self) -> bool {
         self.is_module_err(ISSUE_MODULE, &format!("{:?}", IssuePalletError::IssueCompleted))
+    }
+
+    pub fn is_threshold_not_set(&self) -> bool {
+        self.is_module_err(
+            VAULT_REGISTRY_MODULE,
+            &format!("{:?}", VaultRegistryPalletError::ThresholdNotSet),
+        )
     }
 
     fn map_custom_error<T>(&self, call: impl Fn(&ErrorObjectOwned) -> Option<T>) -> Option<T> {
