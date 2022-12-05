@@ -1,28 +1,10 @@
 {
-    "max_fundable_balance": 1000,
+    "max_fundable_client_balance": 10000,
     "faucet_cooldown_hours": 6,
     "user_allowances": [
         {
             "symbol": "KSM",
-            "amount": 2000000000000
-        },
-        {
-            "symbol": "KBTC",
-            "amount": 10000000
-        },
-        {
-            "symbol": "KINT",
-            "amount": 10000000000000
-        },
-        {
-            "symbol": "USDT",
-            "amount": 1000000000
-        }
-    ],
-    "vault_allowances": [
-        {
-            "symbol": "KSM",
-            "amount": 200000000000000
+            "amount": 20000000000000
         },
         {
             "symbol": "KBTC",
@@ -35,6 +17,24 @@
         {
             "symbol": "USDT",
             "amount": 10000000000
+        }
+    ],
+    "vault_allowances": [
+        {
+            "symbol": "KSM",
+            "amount": 2000000000000000
+        },
+        {
+            "symbol": "KBTC",
+            "amount": 1000000000
+        },
+        {
+            "symbol": "KINT",
+            "amount": 1000000000000000
+        },
+        {
+            "symbol": "USDT",
+            "amount": 100000000000
         }
     ]
 }
