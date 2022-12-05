@@ -5,10 +5,7 @@ use clap::Parser;
 use error::Error;
 use git_version::git_version;
 use parity_scale_codec::Encode;
-use runtime::{
-    CurrencyId::{self},
-    InterBtcSigner, ShutdownSender, TryFromSymbol,
-};
+use runtime::{InterBtcSigner, ShutdownSender};
 use serde::Deserialize;
 use service::{on_shutdown, wait_or_shutdown};
 use std::{net::SocketAddr, path::PathBuf};

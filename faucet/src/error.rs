@@ -29,8 +29,6 @@ pub enum Error {
     AccountAlreadyFunded,
     #[error("Mathematical operation error")]
     MathError,
-    #[error("No faucet allowance set for account type")]
-    NoFaucetAllowance,
     #[error("IoError: {0}")]
     IoError(#[from] IoError),
     #[error("SerdeJsonError: {0}")]
