@@ -111,8 +111,6 @@ async fn main() -> Result<(), Error> {
             faucet_config.http_addr,
             faucet_config.rpc_cors_domain.clone(),
             allowance_config.clone(),
-            // allowance_config.user_allowances.iter().map(|x| x.into()).collect(),
-            // allowance_config.vault_allowances.iter().map(|x| x.into()).collect(),
         )
         .await;
 

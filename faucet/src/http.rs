@@ -142,9 +142,11 @@ async fn ensure_funding_allowed(
     last_request_json: Option<Json<FaucetRequest>>,
     account_type: FundingRequestAccountType,
 ) -> Result<(), Error> {
-    // Could get the currencies from either `user_allowances` or `vault_allowances`, assuming the same ones are used.
-    let currency_ids: Result<Vec<_>, _> = allowance_config
-        .user_allowances
+    let account_allowances = match account_type {
+        FundingRequestAccountType::User => allowance_config.user_allowances,
+        FundingRequestAccountType::Vault => allowance_config.vault_allowances,
+    };
+    let currency_ids: Result<Vec<_>, _> = account_allowances
         .iter()
         .map(|x| CurrencyId::try_from_symbol(x.symbol.clone()))
         .collect();
