@@ -1,0 +1,40 @@
+{
+    "max_fundable_client_balance": 10000,
+    "faucet_cooldown_hours": 6,
+    "user_allowances": [
+        {
+            "symbol": "DOT",
+            "amount": 200000000000
+        },
+        {
+            "symbol": "IBTC",
+            "amount": 100000000
+        },
+        {
+            "symbol": "INTR",
+            "amount": 1000000000000
+        },
+        {
+            "symbol": "USDT",
+            "amount": 10000000000
+        }
+    ],
+    "vault_allowances": [
+        {
+            "symbol": "DOT",
+            "amount": 20000000000000
+        },
+        {
+            "symbol": "IBTC",
+            "amount": 1000000000
+        },
+        {
+            "symbol": "INTR",
+            "amount": 10000000000000
+        },
+        {
+            "symbol": "USDT",
+            "amount": 100000000000
+        }
+    ]
+}

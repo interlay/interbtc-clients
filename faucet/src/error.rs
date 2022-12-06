@@ -5,7 +5,8 @@ use jsonrpc_http_server::jsonrpc_core::Error as JsonRpcError;
 use kv::Error as KvError;
 use parity_scale_codec::Error as CodecError;
 use runtime::Error as RuntimeError;
-use std::net::AddrParseError;
+use serde_json::Error as SerdeJsonError;
+use std::{io::Error as IoError, net::AddrParseError};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -28,6 +29,8 @@ pub enum Error {
     AccountAlreadyFunded,
     #[error("Mathematical operation error")]
     MathError,
-    #[error("No faucet allowance set for account type")]
-    NoFaucetAllowance,
+    #[error("IoError: {0}")]
+    IoError(#[from] IoError),
+    #[error("SerdeJsonError: {0}")]
+    SerdeJsonError(#[from] SerdeJsonError),
 }

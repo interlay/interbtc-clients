@@ -4,9 +4,11 @@ mod http;
 use clap::Parser;
 use error::Error;
 use git_version::git_version;
+use parity_scale_codec::Encode;
 use runtime::{InterBtcSigner, ShutdownSender};
+use serde::Deserialize;
 use service::{on_shutdown, wait_or_shutdown};
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 
 const VERSION: &str = git_version!(args = ["--tags"]);
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -27,6 +29,47 @@ struct Opts {
     /// Settings specific to the faucet client.
     #[clap(flatten)]
     faucet: FaucetConfig,
+
+    /// Allowance config
+    #[clap(long, default_value = "./faucet-allowance-config.json")]
+    allowance_config: PathBuf,
+}
+
+#[derive(Deserialize, Debug, Clone, Encode)]
+pub struct AllowanceAmount {
+    symbol: String,
+    amount: u128,
+}
+impl AllowanceAmount {
+    pub fn new(symbol: String, amount: u128) -> Self {
+        Self { symbol, amount }
+    }
+}
+
+type Allowance = Vec<AllowanceAmount>;
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct AllowanceConfig {
+    pub max_fundable_client_balance: u128,
+    pub faucet_cooldown_hours: i64,
+    pub user_allowances: Allowance,
+    pub vault_allowances: Allowance,
+}
+
+impl AllowanceConfig {
+    pub fn new(
+        max_fundable_client_balance: u128,
+        faucet_cooldown_hours: i64,
+        user_allowances: Allowance,
+        vault_allowances: Allowance,
+    ) -> Self {
+        Self {
+            max_fundable_client_balance,
+            faucet_cooldown_hours,
+            user_allowances,
+            vault_allowances,
+        }
+    }
 }
 
 #[derive(Parser, Clone)]
@@ -38,14 +81,6 @@ pub struct FaucetConfig {
     /// Comma separated list of allowed origins.
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
-
-    /// Allowance per request for regular users.
-    #[clap(long, default_value = "1")]
-    user_allowance: u128,
-
-    /// Allowance per request for vaults.
-    #[clap(long, default_value = "500")]
-    vault_allowance: u128,
 }
 
 #[tokio::main]
@@ -63,6 +98,9 @@ async fn main() -> Result<(), Error> {
     let parachain_config = opts.parachain;
     let faucet_config = opts.faucet;
 
+    let data = std::fs::read_to_string(opts.allowance_config)?;
+    let allowance_config = serde_json::from_str::<AllowanceConfig>(&data)?;
+
     loop {
         let btc_parachain = parachain_config
             .try_connect(signer.clone(), shutdown_tx.clone())
@@ -72,8 +110,7 @@ async fn main() -> Result<(), Error> {
             btc_parachain.clone(),
             faucet_config.http_addr,
             faucet_config.rpc_cors_domain.clone(),
-            faucet_config.user_allowance,
-            faucet_config.vault_allowance,
+            allowance_config.clone(),
         )
         .await;
 
