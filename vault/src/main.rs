@@ -148,8 +148,20 @@ where
 
 async fn start() -> Result<(), ServiceError<Error>> {
     let cli: Cli = Cli::parse();
-    let opts = cli.opts;
+    let mut opts: Opts = Opts::parse();
     opts.service.logging_format.init_subscriber();
+
+    // workaround for setting default faucet url
+    // clap gives `default_value is meaningless for Option`
+    if opts.vault.faucet_url.is_none() {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "parachain-metadata-interlay-testnet")] {
+                let _ = opts.vault.faucet_url.insert("https://api-testnet.interlay.io/faucet".to_string());
+            } else if #[cfg(feature = "parachain-metadata-kintsugi-testnet")] {
+                let _ = opts.vault.faucet_url.insert("https://api-dev-kintsugi.interlay.io/faucet".to_string());
+            }
+        }
+    }
 
     match cli.sub {
         Some(Commands::GenerateBitcoinKey(opts)) => {

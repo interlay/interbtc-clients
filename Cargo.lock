@@ -14340,6 +14340,7 @@ version = "1.1.0"
 dependencies = [
  "async-trait",
  "bitcoin 1.1.0",
+ "cfg-if 1.0.0",
  "clap",
  "frame-support",
  "futures 0.3.25",
