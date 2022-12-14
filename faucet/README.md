@@ -26,45 +26,31 @@ cargo run --bin faucet --features parachain-metadata-kintsugi -- --help
 For convenience, a copy of this output is included below.
 
 ```
-USAGE:
-    faucet [OPTIONS]
+Usage: faucet [OPTIONS]
 
-FLAGS:
-    -h, --help       Print help information
-    -V, --version    Print version information
-
-OPTIONS:
-        --btc-parachain-connection-timeout-ms <BTC_PARACHAIN_CONNECTION_TIMEOUT_MS>
-            Timeout in milliseconds to wait for connection to btc-parachain [default: 60000]
-
-        --btc-parachain-url <BTC_PARACHAIN_URL>
-            Parachain websocket URL [default: ws://127.0.0.1:9944]
-
-        --http-addr <HTTP_ADDR>
-            Address to listen on for JSON-RPC requests [default: [::0]:3033]
-
-        --keyfile <KEYFILE>
-            Path to the json file containing key pairs in a map. Valid content of this file is e.g.
-            `{ "MyUser1": "<Polkadot Account Mnemonic>", "MyUser2": "<Polkadot Account Mnemonic>" }`
-
-        --keyname <KEYNAME>
-            The name of the account from the keyfile to use
-
-        --keyring <KEYRING>
-            Keyring to use, mutually exclusive with keyfile
-
-        --max-concurrent-requests <MAX_CONCURRENT_REQUESTS>
-            Maximum number of concurrent requests
-
-        --max-notifs-per-subscription <MAX_NOTIFS_PER_SUBSCRIPTION>
-            Maximum notification capacity for each subscription
-
-        --rpc-cors-domain <RPC_CORS_DOMAIN>
-            Comma separated list of allowed origins [default: *]
-
-        --user-allowance <USER_ALLOWANCE>
-            Allowance per request for regular users [default: 1]
-
-        --vault-allowance <VAULT_ALLOWANCE>
-            Allowance per request for vaults [default: 500]
+Options:
+      --keyring <KEYRING>
+          Keyring to use, mutually exclusive with keyfile
+      --keyfile <KEYFILE>
+          Path to the json file containing key pairs in a map. Valid content of this file is e.g. `{ "MyUser1": "<Polkadot Account Mnemonic>", "MyUser2": "<Polkadot Account Mnemonic>" }`
+      --keyname <KEYNAME>
+          The name of the account from the keyfile to use
+      --btc-parachain-url <BTC_PARACHAIN_URL>
+          Parachain websocket URL [default: wss://api-dev-kintsugi.interlay.io:443/parachain]
+      --btc-parachain-connection-timeout-ms <BTC_PARACHAIN_CONNECTION_TIMEOUT_MS>
+          Timeout in milliseconds to wait for connection to btc-parachain [default: 60000]
+      --max-concurrent-requests <MAX_CONCURRENT_REQUESTS>
+          Maximum number of concurrent requests
+      --max-notifs-per-subscription <MAX_NOTIFS_PER_SUBSCRIPTION>
+          Maximum notification capacity for each subscription
+      --http-addr <HTTP_ADDR>
+          Address to listen on for JSON-RPC requests [default: [::0]:3033]
+      --rpc-cors-domain <RPC_CORS_DOMAIN>
+          Comma separated list of allowed origins [default: *]
+      --allowance-config <ALLOWANCE_CONFIG>
+          Allowance config [default: ./faucet-allowance-config.json]
+  -h, --help
+          Print help information
+  -V, --version
+          Print version information
 ```
