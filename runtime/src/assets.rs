@@ -102,7 +102,7 @@ impl RuntimeCurrencyInfo for CurrencyId {
             CurrencyId::Token(token_symbol) => Ok(token_symbol.name().to_string()),
             CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::get_asset_metadata_by_id(*foreign_asset_id)
                 .and_then(|asset_metadata| String::from_utf8(asset_metadata.name).map_err(|_| Error::InvalidCurrency)),
-            CurrencyId::LendToken(_) => Err(Error::LendingTokenUnsupported),
+            _ => Err(Error::TokenUnsupported),
         }
     }
 
@@ -113,7 +113,7 @@ impl RuntimeCurrencyInfo for CurrencyId {
                 .and_then(|asset_metadata| {
                     String::from_utf8(asset_metadata.symbol).map_err(|_| Error::InvalidCurrency)
                 }),
-            CurrencyId::LendToken(_) => Err(Error::LendingTokenUnsupported),
+            _ => Err(Error::TokenUnsupported),
         }
     }
 
@@ -123,7 +123,7 @@ impl RuntimeCurrencyInfo for CurrencyId {
             CurrencyId::ForeignAsset(foreign_asset_id) => {
                 AssetRegistry::get_asset_metadata_by_id(*foreign_asset_id).map(|asset_metadata| asset_metadata.decimals)
             }
-            CurrencyId::LendToken(_) => Err(Error::LendingTokenUnsupported),
+            _ => Err(Error::TokenUnsupported),
         }
     }
 
@@ -134,7 +134,7 @@ impl RuntimeCurrencyInfo for CurrencyId {
                 .and_then(|asset_metadata| {
                     String::from_utf8(asset_metadata.additional.coingecko_id).map_err(|_| Error::InvalidCurrency)
                 }),
-            CurrencyId::LendToken(_) => Err(Error::LendingTokenUnsupported),
+            _ => Err(Error::TokenUnsupported),
         }
     }
 }

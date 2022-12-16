@@ -1524,12 +1524,8 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// # Arguments
     /// * `amount` - the amount of extra collateral to lock
     async fn deposit_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
-        self.with_unique_signer(
-            metadata::tx()
-                .vault_registry()
-                .deposit_collateral(vault_id.currencies.clone(), amount),
-        )
-        .await?;
+        self.with_unique_signer(metadata::tx().nomination().deposit_collateral(vault_id.clone(), amount))
+            .await?;
         Ok(())
     }
 
@@ -1545,8 +1541,8 @@ impl VaultRegistryPallet for InterBtcParachain {
     async fn withdraw_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
         self.with_unique_signer(
             metadata::tx()
-                .vault_registry()
-                .withdraw_collateral(vault_id.currencies.clone(), amount),
+                .nomination()
+                .withdraw_collateral(vault_id.clone(), amount, None),
         )
         .await?;
         Ok(())

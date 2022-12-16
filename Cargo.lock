@@ -100,7 +100,7 @@ dependencies = [
 [[package]]
 name = "annuity"
 version = "1.0.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -634,7 +634,7 @@ dependencies = [
 [[package]]
 name = "bitcoin"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "bitcoin_hashes 0.7.6",
  "frame-support",
@@ -846,7 +846,7 @@ checksum = "bd769563b4ea2953e2825c9e6b7470a5f55f67e0be00030bf3e390a2a6071f64"
 [[package]]
 name = "btc-relay"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "bitcoin 1.2.0",
  "frame-benchmarking",
@@ -866,7 +866,7 @@ dependencies = [
 [[package]]
 name = "btc-relay-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "btc-relay-rpc-runtime-api",
  "jsonrpsee 0.15.1",
@@ -879,7 +879,7 @@ dependencies = [
 [[package]]
 name = "btc-relay-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -1145,7 +1145,7 @@ dependencies = [
 [[package]]
 name = "clients-info"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "fixed-hash 0.7.0",
  "frame-benchmarking",
@@ -1188,7 +1188,7 @@ dependencies = [
 [[package]]
 name = "collator-selection"
 version = "3.0.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -2003,13 +2003,13 @@ dependencies = [
 [[package]]
 name = "currency"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-support",
  "frame-system",
  "interbtc-primitives",
- "orml-tokens",
- "orml-traits",
+ "orml-tokens 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "pallet-transaction-payment",
  "parity-scale-codec",
  "scale-info",
@@ -2179,8 +2179,9 @@ dependencies = [
 [[package]]
 name = "democracy"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
+ "chrono",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -2577,7 +2578,7 @@ dependencies = [
 [[package]]
 name = "escrow"
 version = "1.0.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -2597,7 +2598,7 @@ dependencies = [
 [[package]]
 name = "escrow-rpc"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "escrow-rpc-runtime-api",
  "jsonrpsee 0.15.1",
@@ -2611,7 +2612,7 @@ dependencies = [
 [[package]]
 name = "escrow-rpc-runtime-api"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "oracle-rpc-runtime-api",
  "parity-scale-codec",
@@ -2753,7 +2754,7 @@ dependencies = [
 [[package]]
 name = "fee"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "currency",
  "frame-benchmarking",
@@ -4000,7 +4001,7 @@ dependencies = [
 [[package]]
 name = "interbtc-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "bitcoin 1.2.0",
  "btc-relay-rpc-runtime-api",
@@ -4032,6 +4033,7 @@ dependencies = [
  "issue-rpc-runtime-api",
  "jsonrpsee 0.15.1",
  "kintsugi-runtime-parachain",
+ "loans",
  "loans-rpc-runtime-api",
  "log 0.4.17",
  "oracle-rpc-runtime-api",
@@ -4084,7 +4086,7 @@ dependencies = [
 [[package]]
 name = "interbtc-primitives"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "bitcoin 1.2.0",
  "bstringify",
@@ -4095,12 +4097,13 @@ dependencies = [
  "sp-runtime 6.0.0",
  "sp-std 4.0.0",
  "xcm",
+ "zenlink-protocol",
 ]
 
 [[package]]
 name = "interbtc-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "btc-relay-rpc",
  "escrow-rpc",
@@ -4131,7 +4134,7 @@ dependencies = [
 [[package]]
 name = "interlay-runtime-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "annuity",
  "btc-relay",
@@ -4156,6 +4159,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
+ "frame-try-runtime",
  "hex-literal 0.3.4",
  "interbtc-primitives",
  "issue",
@@ -4165,8 +4169,8 @@ dependencies = [
  "oracle 1.2.0",
  "oracle-rpc-runtime-api",
  "orml-asset-registry",
- "orml-tokens",
- "orml-traits",
+ "orml-tokens 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "orml-unknown-tokens",
  "orml-vesting",
  "orml-xcm-support",
@@ -4280,7 +4284,7 @@ dependencies = [
 [[package]]
 name = "issue"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "bitcoin 1.2.0",
  "btc-relay",
@@ -4291,9 +4295,10 @@ dependencies = [
  "frame-system",
  "interbtc-primitives",
  "log 0.4.17",
+ "nomination",
  "oracle 1.2.0",
- "orml-tokens",
- "orml-traits",
+ "orml-tokens 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
@@ -4310,7 +4315,7 @@ dependencies = [
 [[package]]
 name = "issue-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "issue-rpc-runtime-api",
  "jsonrpsee 0.15.1",
@@ -4323,7 +4328,7 @@ dependencies = [
 [[package]]
 name = "issue-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4770,7 +4775,7 @@ dependencies = [
 [[package]]
 name = "kintsugi-runtime-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "annuity",
  "btc-relay",
@@ -4795,6 +4800,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
+ "frame-try-runtime",
  "hex-literal 0.3.4",
  "interbtc-primitives",
  "issue",
@@ -4805,8 +4811,8 @@ dependencies = [
  "oracle 1.2.0",
  "oracle-rpc-runtime-api",
  "orml-asset-registry",
- "orml-tokens",
- "orml-traits",
+ "orml-tokens 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "orml-unknown-tokens",
  "orml-vesting",
  "orml-xcm-support",
@@ -5523,7 +5529,7 @@ checksum = "8f9f08d8963a6c613f4b1a78f4f4a4dbfadf8e6545b2d72861731e4858b8b47f"
 [[package]]
 name = "loans"
 version = "1.9.3"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "currency",
  "frame-benchmarking",
@@ -5532,8 +5538,8 @@ dependencies = [
  "interbtc-primitives",
  "num-traits",
  "orml-oracle",
- "orml-tokens",
- "orml-traits",
+ "orml-tokens 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
@@ -5549,7 +5555,7 @@ dependencies = [
 [[package]]
 name = "loans-rpc"
 version = "1.9.3"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "interbtc-primitives",
  "jsonrpsee 0.15.1",
@@ -5566,7 +5572,7 @@ dependencies = [
 [[package]]
 name = "loans-rpc-runtime-api"
 version = "1.9.3"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "interbtc-primitives",
  "parity-scale-codec",
@@ -6175,7 +6181,7 @@ dependencies = [
 [[package]]
 name = "nomination"
 version = "0.5.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "currency",
  "fee",
@@ -6184,8 +6190,8 @@ dependencies = [
  "frame-system",
  "interbtc-primitives",
  "oracle 1.2.0",
- "orml-tokens",
- "orml-traits",
+ "orml-tokens 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "pallet-timestamp",
  "parity-scale-codec",
  "reward",
@@ -6198,6 +6204,7 @@ dependencies = [
  "sp-runtime 6.0.0",
  "sp-std 4.0.0",
  "staking",
+ "traits",
  "vault-registry",
 ]
 
@@ -6471,7 +6478,7 @@ dependencies = [
 [[package]]
 name = "oracle"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "currency",
  "frame-benchmarking",
@@ -6494,7 +6501,7 @@ dependencies = [
 [[package]]
 name = "oracle-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "jsonrpsee 0.15.1",
  "oracle-rpc-runtime-api",
@@ -6507,7 +6514,7 @@ dependencies = [
 [[package]]
 name = "oracle-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -6564,7 +6571,7 @@ source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev
 dependencies = [
  "frame-support",
  "frame-system",
- "orml-traits",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "pallet-xcm",
  "parity-scale-codec",
  "scale-info",
@@ -6583,8 +6590,8 @@ source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev
 dependencies = [
  "frame-support",
  "frame-system",
- "orml-traits",
- "orml-utilities",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "orml-utilities 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -6601,7 +6608,22 @@ source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev
 dependencies = [
  "frame-support",
  "frame-system",
- "orml-traits",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-runtime 6.0.0",
+ "sp-std 4.0.0",
+]
+
+[[package]]
+name = "orml-tokens"
+version = "0.4.1-dev"
+source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev=f336875e48599b5e9500b301385259354821f01f#f336875e48599b5e9500b301385259354821f01f"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=f336875e48599b5e9500b301385259354821f01f)",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -6617,7 +6639,25 @@ dependencies = [
  "frame-support",
  "impl-trait-for-tuples",
  "num-traits",
- "orml-utilities",
+ "orml-utilities 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-io 6.0.0",
+ "sp-runtime 6.0.0",
+ "sp-std 4.0.0",
+ "xcm",
+]
+
+[[package]]
+name = "orml-traits"
+version = "0.4.1-dev"
+source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev=f336875e48599b5e9500b301385259354821f01f#f336875e48599b5e9500b301385259354821f01f"
+dependencies = [
+ "frame-support",
+ "impl-trait-for-tuples",
+ "num-traits",
+ "orml-utilities 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=f336875e48599b5e9500b301385259354821f01f)",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -6657,6 +6697,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "orml-utilities"
+version = "0.4.1-dev"
+source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev=f336875e48599b5e9500b301385259354821f01f#f336875e48599b5e9500b301385259354821f01f"
+dependencies = [
+ "frame-support",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-io 6.0.0",
+ "sp-runtime 6.0.0",
+ "sp-std 4.0.0",
+]
+
+[[package]]
 name = "orml-vesting"
 version = "0.4.1-dev"
 source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0#3fcd3cf9e63fe80fd9671912833a900ba09d1cc0"
@@ -6677,7 +6731,7 @@ version = "0.4.1-dev"
 source = "git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0#3fcd3cf9e63fe80fd9671912833a900ba09d1cc0"
 dependencies = [
  "frame-support",
- "orml-traits",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "parity-scale-codec",
  "sp-runtime 6.0.0",
  "sp-std 4.0.0",
@@ -6693,7 +6747,7 @@ dependencies = [
  "cumulus-primitives-core",
  "frame-support",
  "frame-system",
- "orml-traits",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "orml-xcm-support",
  "pallet-xcm",
  "parity-scale-codec",
@@ -9557,7 +9611,7 @@ dependencies = [
 [[package]]
 name = "redeem"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "bitcoin 1.2.0",
  "btc-relay",
@@ -9568,8 +9622,8 @@ dependencies = [
  "frame-system",
  "interbtc-primitives",
  "oracle 1.2.0",
- "orml-tokens",
- "orml-traits",
+ "orml-tokens 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
@@ -9586,7 +9640,7 @@ dependencies = [
 [[package]]
 name = "redeem-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "jsonrpsee 0.15.1",
  "parity-scale-codec",
@@ -9599,7 +9653,7 @@ dependencies = [
 [[package]]
 name = "redeem-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -9727,7 +9781,7 @@ dependencies = [
 [[package]]
 name = "replace"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "bitcoin 1.2.0",
  "btc-relay",
@@ -9739,8 +9793,8 @@ dependencies = [
  "interbtc-primitives",
  "nomination",
  "oracle 1.2.0",
- "orml-tokens",
- "orml-traits",
+ "orml-tokens 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
@@ -9757,7 +9811,7 @@ dependencies = [
 [[package]]
 name = "replace-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "jsonrpsee 0.15.1",
  "parity-scale-codec",
@@ -9770,7 +9824,7 @@ dependencies = [
 [[package]]
 name = "replace-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -9829,12 +9883,13 @@ dependencies = [
 [[package]]
 name = "reward"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "interbtc-primitives",
+ "log 0.4.17",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -9848,7 +9903,7 @@ dependencies = [
 [[package]]
 name = "reward-rpc"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "jsonrpsee 0.15.1",
  "oracle-rpc-runtime-api",
@@ -9862,7 +9917,7 @@ dependencies = [
 [[package]]
 name = "reward-rpc-runtime-api"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-support",
  "oracle-rpc-runtime-api",
@@ -11440,7 +11495,7 @@ dependencies = [
 [[package]]
 name = "security"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -12990,14 +13045,14 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 [[package]]
 name = "staking"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "interbtc-primitives",
- "orml-tokens",
- "orml-traits",
+ "orml-tokens 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "parity-scale-codec",
  "reward",
  "scale-info",
@@ -13318,7 +13373,7 @@ dependencies = [
 [[package]]
 name = "supply"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -13462,7 +13517,7 @@ checksum = "95059e91184749cb66be6dc994f67f182b6d897cb3df74a5bf66b5e709295fd8"
 [[package]]
 name = "testnet-interlay-runtime-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "annuity",
  "btc-relay",
@@ -13487,6 +13542,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
+ "frame-try-runtime",
  "hex-literal 0.3.4",
  "interbtc-primitives",
  "issue",
@@ -13498,8 +13554,8 @@ dependencies = [
  "oracle 1.2.0",
  "oracle-rpc-runtime-api",
  "orml-asset-registry",
- "orml-tokens",
- "orml-traits",
+ "orml-tokens 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "orml-unknown-tokens",
  "orml-vesting",
  "orml-xcm-support",
@@ -13561,7 +13617,7 @@ dependencies = [
 [[package]]
 name = "testnet-kintsugi-runtime-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "annuity",
  "btc-relay",
@@ -13586,6 +13642,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
+ "frame-try-runtime",
  "hex-literal 0.3.4",
  "interbtc-primitives",
  "issue",
@@ -13597,8 +13654,8 @@ dependencies = [
  "oracle 1.2.0",
  "oracle-rpc-runtime-api",
  "orml-asset-registry",
- "orml-tokens",
- "orml-traits",
+ "orml-tokens 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "orml-unknown-tokens",
  "orml-vesting",
  "orml-xcm-support",
@@ -13655,6 +13712,11 @@ dependencies = [
  "xcm",
  "xcm-builder",
  "xcm-executor",
+ "zenlink-protocol",
+ "zenlink-protocol-runtime-api",
+ "zenlink-stable-amm",
+ "zenlink-stable-amm-runtime-api",
+ "zenlink-swap-router",
 ]
 
 [[package]]
@@ -14020,10 +14082,11 @@ checksum = "efd1f82c56340fdf16f2a953d7bda4f8fdffba13d93b00844c25572110b26079"
 [[package]]
 name = "traits"
 version = "1.9.3"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-support",
  "frame-system",
+ "impl-trait-for-tuples",
  "interbtc-primitives",
  "log 0.4.17",
  "num-bigint 0.4.3",
@@ -14375,7 +14438,7 @@ dependencies = [
 [[package]]
 name = "vault-registry"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "bitcoin 1.2.0",
  "currency",
@@ -14387,8 +14450,8 @@ dependencies = [
  "interbtc-primitives",
  "log 0.4.17",
  "oracle 1.2.0",
- "orml-tokens",
- "orml-traits",
+ "orml-tokens 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=3fcd3cf9e63fe80fd9671912833a900ba09d1cc0)",
  "pallet-timestamp",
  "parity-scale-codec",
  "reward",
@@ -14401,12 +14464,13 @@ dependencies = [
  "sp-runtime 6.0.0",
  "sp-std 4.0.0",
  "staking",
+ "traits",
 ]
 
 [[package]]
 name = "vault-registry-rpc"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "jsonrpsee 0.15.1",
  "oracle-rpc-runtime-api",
@@ -14420,7 +14484,7 @@ dependencies = [
 [[package]]
 name = "vault-registry-rpc-runtime-api"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=9e8ad8b62aa500b76ce708ac2db41bcbece669d9#9e8ad8b62aa500b76ce708ac2db41bcbece669d9"
+source = "git+https://github.com/interlay/interbtc?rev=9d3f75507c532742dee6ce4e08c837f1c13f4a96#9d3f75507c532742dee6ce4e08c837f1c13f4a96"
 dependencies = [
  "frame-support",
  "oracle-rpc-runtime-api",
@@ -15181,6 +15245,87 @@ name = "yap"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fc77f52dc9e9b10d55d3f4462c3b7fc393c4f17975d641542833ab2d3bc26ef"
+
+[[package]]
+name = "zenlink-protocol"
+version = "0.4.4"
+source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=44b7d5e84276df0eaac70ee89279d2fa4422cf94#44b7d5e84276df0eaac70ee89279d2fa4422cf94"
+dependencies = [
+ "cumulus-primitives-core",
+ "frame-support",
+ "frame-system",
+ "log 0.4.17",
+ "orml-tokens 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=f336875e48599b5e9500b301385259354821f01f)",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=f336875e48599b5e9500b301385259354821f01f)",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-arithmetic 5.0.0",
+ "sp-core 6.0.0",
+ "sp-runtime 6.0.0",
+ "sp-std 4.0.0",
+ "xcm",
+ "xcm-executor",
+]
+
+[[package]]
+name = "zenlink-protocol-runtime-api"
+version = "0.4.4"
+source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=44b7d5e84276df0eaac70ee89279d2fa4422cf94#44b7d5e84276df0eaac70ee89279d2fa4422cf94"
+dependencies = [
+ "parity-scale-codec",
+ "sp-api",
+ "sp-std 4.0.0",
+ "zenlink-protocol",
+]
+
+[[package]]
+name = "zenlink-stable-amm"
+version = "0.1.0"
+source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=44b7d5e84276df0eaac70ee89279d2fa4422cf94#44b7d5e84276df0eaac70ee89279d2fa4422cf94"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=f336875e48599b5e9500b301385259354821f01f)",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-arithmetic 5.0.0",
+ "sp-core 6.0.0",
+ "sp-runtime 6.0.0",
+ "sp-std 4.0.0",
+]
+
+[[package]]
+name = "zenlink-stable-amm-runtime-api"
+version = "0.1.0"
+source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=44b7d5e84276df0eaac70ee89279d2fa4422cf94#44b7d5e84276df0eaac70ee89279d2fa4422cf94"
+dependencies = [
+ "parity-scale-codec",
+ "sp-api",
+ "sp-std 4.0.0",
+ "zenlink-stable-amm",
+]
+
+[[package]]
+name = "zenlink-swap-router"
+version = "0.1.0"
+source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=44b7d5e84276df0eaac70ee89279d2fa4422cf94#44b7d5e84276df0eaac70ee89279d2fa4422cf94"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "orml-traits 0.4.1-dev (git+https://github.com/open-web3-stack/open-runtime-module-library?rev=f336875e48599b5e9500b301385259354821f01f)",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-arithmetic 5.0.0",
+ "sp-core 6.0.0",
+ "sp-runtime 6.0.0",
+ "sp-std 4.0.0",
+ "zenlink-protocol",
+ "zenlink-stable-amm",
+]
 
 [[package]]
 name = "zeroize"
