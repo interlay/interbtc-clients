@@ -360,9 +360,14 @@ mod tests {
         let dot_key = OracleKey::ExchangeRate(DEFAULT_TESTING_CURRENCY);
         let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
         let ksm_key = OracleKey::ExchangeRate(Token(KBTC));
+        let kint_key = OracleKey::ExchangeRate(Token(KINT));
 
         oracle_provider
-            .feed_values(vec![(dot_key, exchange_rate), (ksm_key, exchange_rate)])
+            .feed_values(vec![
+                (dot_key, exchange_rate),
+                (ksm_key, exchange_rate),
+                (kint_key, exchange_rate),
+            ])
             .await
             .expect("Unable to set exchange rate");
     }
