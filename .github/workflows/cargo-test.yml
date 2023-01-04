@@ -3,7 +3,12 @@ name: Continuous integration
 permissions:
   contents: write
 
-on: [pull_request, push]
+on:
+  push:
+    branches:
+      - master
+      - dev
+  pull_request:
 
 jobs:
   test:
@@ -96,8 +101,8 @@ jobs:
         run: |
           TAG=$(echo $GITHUB_SHA | head -c7)
           TS=$(date +%s)
-          echo "branch_name=$(echo ${GITHUB_REF##*/})" >> $GITHUB_ENV
-          echo "ts=$TS" >> $GITHUB_ENV
+          echo "branch_name=$(echo ${GITHUB_REF##*/})" >> $GITHUB_OUTPUT
+          echo "ts=$TS" >> $GITHUB_OUTPUT
       - uses: actions/download-artifact@v3
         with:
           path: artifacts/
