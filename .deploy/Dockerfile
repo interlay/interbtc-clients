@@ -5,5 +5,6 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY ./artifacts/ /usr/local/bin
+RUN find /usr/local/bin/ -type f -exec chmod +x {} \;
 
 ENTRYPOINT ["tini", "--"]

@@ -96,8 +96,8 @@ jobs:
         run: |
           TAG=$(echo $GITHUB_SHA | head -c7)
           TS=$(date +%s)
-          echo ::set-output name=branch_name::$(echo ${GITHUB_REF##*/})
-          echo ::set-output name=ts::${TS}
+          echo "branch_name=$(echo ${GITHUB_REF##*/})" >> $GITHUB_ENV
+          echo "ts=$TS" >> $GITHUB_ENV
       - uses: actions/download-artifact@v3
         with:
           path: artifacts/
