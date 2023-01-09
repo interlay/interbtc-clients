@@ -148,8 +148,7 @@ mod currency_id {
         fn inner(&self) -> Result<primitives::TokenSymbol, Error> {
             match self {
                 Token(x) => Ok(*x),
-                ForeignAsset(_) => Err(Error::CurrencyNotFound),
-                LendToken(_) => Err(Error::CurrencyNotFound),
+                _ => Err(Error::CurrencyNotFound),
             }
         }
     }

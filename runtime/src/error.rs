@@ -91,8 +91,8 @@ pub enum Error {
     PrometheusError(#[from] PrometheusError),
     #[error("Utf8Error: {0}")]
     Utf8Error(#[from] Utf8Error),
-    #[error("Operation not supported on lending tokens")]
-    LendingTokenUnsupported,
+    #[error("Operation not supported on token variant")]
+    TokenUnsupported,
 }
 
 impl Error {
