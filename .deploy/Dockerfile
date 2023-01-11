@@ -1,10 +1,17 @@
 FROM ubuntu:20.04
 
+ARG PROFILE=release
+ARG BINARY=btc-parachain
+
 RUN apt-get update && \
-    apt-get install -y ca-certificates tini && \
+    apt-get install -y ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-COPY ./artifacts/ /usr/local/bin
-RUN find /usr/local/bin/ -type f -exec chmod +x {} \;
+COPY target/${PROFILE}/${BINARY} /usr/local/bin
 
-ENTRYPOINT ["tini", "--"]
+# Checks
+RUN chmod +x /usr/local/bin/${BINARY} && \
+    ldd /usr/local/bin/${BINARY} && \
+    /usr/local/bin/${BINARY} --version
+
+CMD ["/usr/local/bin/${BINARY}"]
