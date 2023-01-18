@@ -60,7 +60,7 @@ impl RandomDelay for OrderedVaultsDelay {
             .iter()
             .filter(|account_id| hash_vault(seed_data, account_id) < self_hash)
             .count();
-        let delay: u32 = (random_ordering + 1).log2();
+        let delay: u32 = (random_ordering + 1).ilog2();
         self.btc_parachain.delay_for_blocks(delay).await
     }
 }
