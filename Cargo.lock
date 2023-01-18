@@ -109,7 +109,7 @@ dependencies = [
 [[package]]
 name = "annuity"
 version = "1.0.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -343,9 +343,9 @@ checksum = "7a40729d2133846d9ed0ea60a8b9541bccddab49cd30f0715a1da672fe9a2524"
 
 [[package]]
 name = "async-trait"
-version = "0.1.60"
+version = "0.1.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "677d1d8ab452a3936018a687b20e6f7cf5363d713b732b8884001317b0e48aa3"
+checksum = "705339e0e4a9690e2908d2b3d049d85682cf19fbd5782494498fbf7003a6a282"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -367,9 +367,9 @@ dependencies = [
 
 [[package]]
 name = "atomic-waker"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "065374052e7df7ee4047b1160cca5e1467a12351a40b3da123c870ba0b8eda2a"
+checksum = "debc29dde2e69f9e47506b525f639ed42300fc014a3e007832592448fa8e4599"
 
 [[package]]
 name = "atty"
@@ -427,7 +427,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "miniz_oxide",
- "object 0.30.0",
+ "object 0.30.2",
  "rustc-demangle",
 ]
 
@@ -464,6 +464,12 @@ name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
+
+[[package]]
+name = "base64"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
 
 [[package]]
 name = "base64ct"
@@ -606,7 +612,7 @@ checksum = "0694ea59225b0c5f3cb405ff3f670e4828358ed26aec49dc352f730f0cb1a8a3"
 dependencies = [
  "bech32",
  "bitcoin_hashes 0.11.0",
- "secp256k1 0.24.2",
+ "secp256k1 0.24.3",
  "serde",
 ]
 
@@ -643,7 +649,7 @@ dependencies = [
 [[package]]
 name = "bitcoin"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "bitcoin_hashes 0.7.6",
  "frame-support",
@@ -839,11 +845,12 @@ checksum = "771fe0050b883fcc3ea2359b1a96bcfbc090b7116eae7c3c512c7a083fdf23d3"
 
 [[package]]
 name = "bstr"
-version = "0.2.17"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba3569f383e8f1598449f1a423e72e99569137b47740b1da11ef19af3d5c3223"
+checksum = "b45ea9b00a7b3f2988e9a65ad3917e62123c38dba709b666506207be96d1790b"
 dependencies = [
  "memchr",
+ "serde",
 ]
 
 [[package]]
@@ -855,7 +862,7 @@ checksum = "bd769563b4ea2953e2825c9e6b7470a5f55f67e0be00030bf3e390a2a6071f64"
 [[package]]
 name = "btc-relay"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "bitcoin 1.2.0",
  "frame-benchmarking",
@@ -875,7 +882,7 @@ dependencies = [
 [[package]]
 name = "btc-relay-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "btc-relay-rpc-runtime-api",
  "jsonrpsee 0.15.1",
@@ -888,7 +895,7 @@ dependencies = [
 [[package]]
 name = "btc-relay-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -917,9 +924,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.11.1"
+version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "572f695136211188308f16ad2ca5c851a712c464060ae6974944458eb83880ba"
+checksum = "0d261e256854913907f67ed06efbc3338dfe6179796deefc1ff763fc1aee5535"
 
 [[package]]
 name = "byte-slice-cast"
@@ -958,9 +965,9 @@ dependencies = [
 
 [[package]]
 name = "camino"
-version = "1.1.1"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88ad0e1e3e88dd237a156ab9f571021b8a158caa0ae44b1968a241efb5144c1e"
+checksum = "c77df041dc383319cc661b428b6961a005db4d6808d5e12536931b1ca9556055"
 dependencies = [
  "serde",
 ]
@@ -1116,9 +1123,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.0.29"
+version = "4.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d63b9e9c07271b9957ad22c173bae2a4d9a81127680962039296abcd2f8251d"
+checksum = "4ec7a4128863c188deefe750ac1d1dfe66c236909f845af04beed823638dc1b2"
 dependencies = [
  "bitflags",
  "clap_derive",
@@ -1131,9 +1138,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.0.21"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0177313f9f02afc995627906bbd8967e2be069f5261954222dac78290c2b9014"
+checksum = "684a277d672e91966334af371f1a7b5833f9aa00b07c84e92fbce95e00208ce8"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -1144,9 +1151,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d4198f73e42b4936b35b5bb248d81d2b595ecb170da0bac7655c54eedfa8da8"
+checksum = "783fe232adfca04f90f56201b26d79682d4cd2625e0bc7290b95123afe558ade"
 dependencies = [
  "os_str_bytes",
 ]
@@ -1154,7 +1161,7 @@ dependencies = [
 [[package]]
 name = "clients-info"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "fixed-hash 0.7.0",
  "frame-benchmarking",
@@ -1197,7 +1204,7 @@ dependencies = [
 [[package]]
 name = "collator-selection"
 version = "3.0.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -1216,9 +1223,9 @@ dependencies = [
 
 [[package]]
 name = "comfy-table"
-version = "6.1.3"
+version = "6.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e621e7e86c46fd8a14c32c6ae3cb95656621b4743a27d0cffedb831d46e7ad21"
+checksum = "6e7b787b0dc42e8111badfdbe4c3059158ccb2db8780352fa1b01e8ccf45cc4d"
 dependencies = [
  "strum",
  "strum_macros",
@@ -1227,9 +1234,9 @@ dependencies = [
 
 [[package]]
 name = "concurrent-queue"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd7bef69dc86e3c610e4e7aed41035e2a7ed12e72dd7530f61327a6579a4390b"
+checksum = "c278839b831783b70278b14df4d45e1beb1aad306c07bb796637de9a0e323e8e"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -2012,7 +2019,7 @@ dependencies = [
 [[package]]
 name = "currency"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -2070,9 +2077,9 @@ dependencies = [
 
 [[package]]
 name = "cxx"
-version = "1.0.85"
+version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5add3fc1717409d029b20c5b6903fc0c0b02fa6741d820054f4a2efa5e5816fd"
+checksum = "51d1075c37807dcf850c379432f0df05ba52cc30f279c5cfc43cc221ce7f8579"
 dependencies = [
  "cc",
  "cxxbridge-flags",
@@ -2082,9 +2089,9 @@ dependencies = [
 
 [[package]]
 name = "cxx-build"
-version = "1.0.85"
+version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4c87959ba14bc6fbc61df77c3fcfe180fc32b93538c4f1031dd802ccb5f2ff0"
+checksum = "5044281f61b27bc598f2f6647d480aed48d2bf52d6eb0b627d84c0361b17aa70"
 dependencies = [
  "cc",
  "codespan-reporting",
@@ -2097,15 +2104,15 @@ dependencies = [
 
 [[package]]
 name = "cxxbridge-flags"
-version = "1.0.85"
+version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69a3e162fde4e594ed2b07d0f83c6c67b745e7f28ce58c6df5e6b6bef99dfb59"
+checksum = "61b50bc93ba22c27b0d31128d2d130a0a6b3d267ae27ef7e4fae2167dfe8781c"
 
 [[package]]
 name = "cxxbridge-macro"
-version = "1.0.85"
+version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e7e2adeb6a0d4a282e581096b06e1791532b7d576dcde5ccd9382acf55db8e6"
+checksum = "39e61fda7e62115119469c7b3591fd913ecca96fb766cfd3f2e2502ab7bc87a5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2157,7 +2164,7 @@ dependencies = [
  "hashbrown",
  "lock_api",
  "once_cell",
- "parking_lot_core 0.9.5",
+ "parking_lot_core 0.9.6",
 ]
 
 [[package]]
@@ -2189,7 +2196,7 @@ dependencies = [
 [[package]]
 name = "democracy"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "chrono",
  "frame-benchmarking",
@@ -2395,9 +2402,9 @@ dependencies = [
 
 [[package]]
 name = "ed25519"
-version = "1.5.2"
+version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e9c280362032ea4203659fc489832d0204ef09f247a0506f170dafcac08c369"
+checksum = "91cff35c70bba8a626e3185d8cd48cc11b5437e1a5bcd15b9b5fa3c64b6dfee7"
 dependencies = [
  "signature",
 ]
@@ -2559,6 +2566,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_logger"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85cdab6a89accf66733ad5a1693a4dcced6aeff64602b634530dd73c1f3ee9f0"
+dependencies = [
+ "humantime 2.1.0",
+ "is-terminal",
+ "log 0.4.17",
+ "regex",
+ "termcolor",
+]
+
+[[package]]
 name = "environmental"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2588,7 +2608,7 @@ dependencies = [
 [[package]]
 name = "escrow"
 version = "1.0.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -2608,7 +2628,7 @@ dependencies = [
 [[package]]
 name = "escrow-rpc"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "escrow-rpc-runtime-api",
  "jsonrpsee 0.15.1",
@@ -2622,7 +2642,7 @@ dependencies = [
 [[package]]
 name = "escrow-rpc-runtime-api"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "oracle-rpc-runtime-api",
  "parity-scale-codec",
@@ -2695,6 +2715,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 
 [[package]]
+name = "farming"
+version = "1.0.0"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "interbtc-primitives",
+ "orml-tokens",
+ "orml-traits",
+ "parity-scale-codec",
+ "reward",
+ "scale-info",
+ "serde",
+ "sp-arithmetic 5.0.0",
+ "sp-core 6.0.0",
+ "sp-io 6.0.0",
+ "sp-runtime 6.0.0",
+ "sp-std 4.0.0",
+]
+
+[[package]]
 name = "fastrand"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2764,7 +2806,7 @@ dependencies = [
 [[package]]
 name = "fee"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "currency",
  "frame-benchmarking",
@@ -2802,11 +2844,11 @@ checksum = "a214f5bb88731d436478f3ae1f8a277b62124089ba9fb67f4f93fb100ef73c90"
 
 [[package]]
 name = "file-per-thread-logger"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21e16290574b39ee41c71aeb90ae960c504ebaf1e2a1c87bd52aa56ed6e1a02f"
+checksum = "84f2e425d9790201ba4af4630191feac6dcc98765b118d4d18e91d23c2353866"
 dependencies = [
- "env_logger 0.9.3",
+ "env_logger 0.10.0",
  "log 0.4.17",
 ]
 
@@ -2824,9 +2866,9 @@ dependencies = [
 
 [[package]]
 name = "finality-grandpa"
-version = "0.16.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b22349c6a11563a202d95772a68e0fcf56119e74ea8a2a19cf2301460fcd0df5"
+checksum = "e24e6c429951433ccb7c87fd528c60084834dcd14763182c1f83291bcde24c34"
 dependencies = [
  "either",
  "futures 0.3.25",
@@ -3466,15 +3508,15 @@ dependencies = [
 
 [[package]]
 name = "glob"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
+checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "globset"
-version = "0.4.9"
+version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a1e17342619edbc21a964c2afbeb6c820c6a2560032872f397bb97ea127bd0a"
+checksum = "029d74589adefde59de1a0c4f4732695c32805624aec7b68d91503d4dba79afc"
 dependencies = [
  "aho-corasick",
  "bstr",
@@ -3578,9 +3620,9 @@ dependencies = [
 
 [[package]]
 name = "handlebars"
-version = "4.3.5"
+version = "4.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "433e4ab33f1213cdc25b5fa45c76881240cfe79284cf2b395e8b9e312a30a2fd"
+checksum = "035ef95d03713f2c347a72547b7cd38cbc9af7cd51e6099fb62d586d4a6dee3a"
 dependencies = [
  "log 0.4.17",
  "pest",
@@ -4023,7 +4065,7 @@ dependencies = [
 [[package]]
 name = "interbtc-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "bitcoin 1.2.0",
  "btc-relay-rpc-runtime-api",
@@ -4108,7 +4150,7 @@ dependencies = [
 [[package]]
 name = "interbtc-primitives"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "bitcoin 1.2.0",
  "bstringify",
@@ -4125,7 +4167,7 @@ dependencies = [
 [[package]]
 name = "interbtc-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "btc-relay-rpc",
  "escrow-rpc",
@@ -4156,7 +4198,7 @@ dependencies = [
 [[package]]
 name = "interlay-runtime-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "annuity",
  "btc-relay",
@@ -4205,6 +4247,7 @@ dependencies = [
  "pallet-membership",
  "pallet-multisig",
  "pallet-preimage",
+ "pallet-proxy",
  "pallet-scheduler",
  "pallet-session",
  "pallet-society",
@@ -4259,9 +4302,9 @@ checksum = "59ce5ef949d49ee85593fc4d3f3f95ad61657076395cbbce23e2121fc5542074"
 
 [[package]]
 name = "io-lifetimes"
-version = "1.0.3"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46112a93252b123d31a119a8d1a1ac19deac4fac6e0e8b0df58f0d4e5870e63c"
+checksum = "e7d6c6f8c91b4b9ed43484ad1a938e393caf35960fce7f82a040497207bd8e9e"
 dependencies = [
  "libc",
  "windows-sys 0.42.0",
@@ -4287,26 +4330,26 @@ dependencies = [
 
 [[package]]
 name = "ipnet"
-version = "2.7.0"
+version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11b0d96e660696543b251e58030cf9787df56da39dab19ad60eae7353040917e"
+checksum = "30e22bd8629359895450b59ea7a776c850561b96a3b1d31321c1949d9e6c9146"
 
 [[package]]
 name = "is-terminal"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "927609f78c2913a6f6ac3c27a4fe87f43e2a35367c0c4b0f8265e8f49a104330"
+checksum = "28dfb6c8100ccc63462345b67d1bbc3679177c75ee4bf59bf29c8b1d110b8189"
 dependencies = [
  "hermit-abi 0.2.6",
- "io-lifetimes 1.0.3",
- "rustix 0.36.5",
+ "io-lifetimes 1.0.4",
+ "rustix 0.36.6",
  "windows-sys 0.42.0",
 ]
 
 [[package]]
 name = "issue"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "bitcoin 1.2.0",
  "btc-relay",
@@ -4337,7 +4380,7 @@ dependencies = [
 [[package]]
 name = "issue-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "issue-rpc-runtime-api",
  "jsonrpsee 0.15.1",
@@ -4350,7 +4393,7 @@ dependencies = [
 [[package]]
 name = "issue-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4797,7 +4840,7 @@ dependencies = [
 [[package]]
 name = "kintsugi-runtime-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "annuity",
  "btc-relay",
@@ -4847,9 +4890,11 @@ dependencies = [
  "pallet-membership",
  "pallet-multisig",
  "pallet-preimage",
+ "pallet-proxy",
  "pallet-scheduler",
  "pallet-session",
  "pallet-society",
+ "pallet-sudo",
  "pallet-timestamp",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc-runtime-api",
@@ -5075,9 +5120,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "libc"
-version = "0.2.138"
+version = "0.2.139"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db6d7e329c562c5dfab7a46a2afabc8b987ab9a4834c9d1ca04dc54c1546cef8"
+checksum = "201de327520df007757c1f0adce6e827fe8562fbc28bfd9c15571c66ca1f5f79"
 
 [[package]]
 name = "libloading"
@@ -5557,7 +5602,7 @@ checksum = "f051f77a7c8e6957c0696eac88f26b0117e54f52d3fc682ab19397a8812846a4"
 [[package]]
 name = "loans"
 version = "1.9.3"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "currency",
  "frame-benchmarking",
@@ -5583,7 +5628,7 @@ dependencies = [
 [[package]]
 name = "loans-rpc"
 version = "1.9.3"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "interbtc-primitives",
  "jsonrpsee 0.15.1",
@@ -5600,7 +5645,7 @@ dependencies = [
 [[package]]
 name = "loans-rpc-runtime-api"
 version = "1.9.3"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "interbtc-primitives",
  "parity-scale-codec",
@@ -5735,7 +5780,7 @@ version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b20a59d985586e4a5aef64564ac77299f8586d8be6cf9106a5a40207e8908efb"
 dependencies = [
- "rustix 0.36.5",
+ "rustix 0.36.6",
 ]
 
 [[package]]
@@ -5892,7 +5937,7 @@ dependencies = [
  "fragile 2.0.0",
  "lazy_static",
  "mockall_derive 0.11.3",
- "predicates 2.1.4",
+ "predicates 2.1.5",
  "predicates-tree",
 ]
 
@@ -6189,9 +6234,9 @@ checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
 
 [[package]]
 name = "nom"
-version = "7.1.1"
+version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8903e5a29a317527874d0402f867152a3d21c908bb0b933e416c65e301d4c36"
+checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
 dependencies = [
  "memchr",
  "minimal-lexical",
@@ -6200,7 +6245,7 @@ dependencies = [
 [[package]]
 name = "nomination"
 version = "0.5.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "currency",
  "fee",
@@ -6390,11 +6435,11 @@ dependencies = [
 
 [[package]]
 name = "num_cpus"
-version = "1.14.0"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6058e64324c71e02bc2b150e4f3bc8286db6c83092132ffa3f6b1eab0f9def5"
+checksum = "0fac9e2da13b5eb447a6ce3d392f23a29d8694bff781bf03a16cd9ac8697593b"
 dependencies = [
- "hermit-abi 0.1.19",
+ "hermit-abi 0.2.6",
  "libc",
 ]
 
@@ -6412,18 +6457,18 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.30.0"
+version = "0.30.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "239da7f290cfa979f43f85a8efeee9a8a76d0827c356d37f9d3d7254d6b537fb"
+checksum = "2b8c786513eb403643f2a88c244c2aaa270ef2153f55094587d0c48a3cf22a83"
 dependencies = [
  "memchr",
 ]
 
 [[package]]
 name = "once_cell"
-version = "1.16.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86f0b0d4bf799edbc74508c1e8bf170ff5f41238e5f8225603ca7caaae2b7860"
+checksum = "6f61fba1741ea2b3d6a1e3178721804bb716a68a6aeba1149b5d52e3d464ea66"
 
 [[package]]
 name = "opaque-debug"
@@ -6439,9 +6484,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openssl"
-version = "0.10.44"
+version = "0.10.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29d971fd5722fec23977260f6e81aa67d2f22cadbdc2aa049f1022d9a3be1566"
+checksum = "b102428fd03bc5edf97f62620f7298614c45cedf287c271e7ed450bbaf83f2e1"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -6471,9 +6516,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.79"
+version = "0.9.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5454462c0eced1e97f2ec09036abc8da362e66802f66fd20f86854d9d8cbcbc4"
+checksum = "23bbbf7854cd45b83958ebe919f0e8e516793727652e27fda10a8384cfc790b7"
 dependencies = [
  "autocfg",
  "cc",
@@ -6506,7 +6551,7 @@ dependencies = [
 [[package]]
 name = "oracle"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "currency",
  "frame-benchmarking",
@@ -6529,7 +6574,7 @@ dependencies = [
 [[package]]
 name = "oracle-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "jsonrpsee 0.15.1",
  "oracle-rpc-runtime-api",
@@ -6542,7 +6587,7 @@ dependencies = [
 [[package]]
 name = "oracle-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -7747,7 +7792,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
 dependencies = [
  "lock_api",
- "parking_lot_core 0.9.5",
+ "parking_lot_core 0.9.6",
 ]
 
 [[package]]
@@ -7766,9 +7811,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot_core"
-version = "0.9.5"
+version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ff9f3fef3968a3ec5945535ed654cb38ff72d7495a25619e2247fb15a2ed9ba"
+checksum = "ba1ef8814b5c993410bb3adfad7a5ed269563e4a2f90c41f5d85be7fb47133bf"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
@@ -7821,9 +7866,9 @@ checksum = "478c572c3d73181ff3c2539045f6eb99e5491218eae919370993b890cdbdd98e"
 
 [[package]]
 name = "pest"
-version = "2.5.1"
+version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc8bed3549e0f9b0a2a78bf7c0018237a2cdf085eecbbc048e52612438e4e9d0"
+checksum = "4257b4a04d91f7e9e6290be5d3da4804dd5784fafde3a497d73eb2b4a158c30a"
 dependencies = [
  "thiserror",
  "ucd-trie",
@@ -7831,9 +7876,9 @@ dependencies = [
 
 [[package]]
 name = "pest_derive"
-version = "2.5.1"
+version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdc078600d06ff90d4ed238f0119d84ab5d43dbaad278b0e33a8820293b32344"
+checksum = "241cda393b0cdd65e62e07e12454f1f25d57017dcc514b1514cd3c4645e3a0a6"
 dependencies = [
  "pest",
  "pest_generator",
@@ -7841,9 +7886,9 @@ dependencies = [
 
 [[package]]
 name = "pest_generator"
-version = "2.5.1"
+version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28a1af60b1c4148bb269006a750cff8e2ea36aff34d2d96cf7be0b14d1bed23c"
+checksum = "46b53634d8c8196302953c74d5352f33d0c512a9499bd2ce468fc9f4128fa27c"
 dependencies = [
  "pest",
  "pest_meta",
@@ -7854,13 +7899,13 @@ dependencies = [
 
 [[package]]
 name = "pest_meta"
-version = "2.5.1"
+version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fec8605d59fc2ae0c6c1aefc0c7c7a9769732017c0ce07f7a9cfffa7b4404f20"
+checksum = "0ef4f1332a8d4678b41966bb4cc1d0676880e84183a1ecc3f4b69f03e99c7a51"
 dependencies = [
  "once_cell",
  "pest",
- "sha1",
+ "sha2 0.10.6",
 ]
 
 [[package]]
@@ -9114,9 +9159,9 @@ dependencies = [
 
 [[package]]
 name = "predicates"
-version = "2.1.4"
+version = "2.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f54fc5dc63ed3bbf19494623db4f3af16842c0d975818e469022d09e53f0aa05"
+checksum = "59230a63c37f3e18569bdb90e4a89cbf5bf8b06fea0b84e65ea10cc4df47addd"
 dependencies = [
  "difflib",
  "float-cmp 0.9.0",
@@ -9144,9 +9189,9 @@ dependencies = [
 
 [[package]]
 name = "prettyplease"
-version = "0.1.22"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c8992a85d8e93a28bdf76137db888d3874e3b230dee5ed8bebac4c9f7617773"
+checksum = "e97e3215779627f01ee256d2fad52f3d95e8e1c11e9fc6fd08f7cd455d5d5c78"
 dependencies = [
  "proc-macro2",
  "syn",
@@ -9218,15 +9263,15 @@ dependencies = [
 
 [[package]]
 name = "proc-macro-hack"
-version = "0.5.19"
+version = "0.5.20+deprecated"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbf0c48bc1d91375ae5c3cd81e3722dff1abcf81a30960240640d223f59fe0e5"
+checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.49"
+version = "1.0.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57a8eca9f9c4ffde41714334dee777596264c7825420f521abc92b5b5deb63a5"
+checksum = "6ef7d57beacfaf2d8aee5937dab7b7f28de3cb8b1828479bb5de2a7106f2bae2"
 dependencies = [
  "unicode-ident",
 ]
@@ -9301,9 +9346,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.11.3"
+version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0b18e655c21ff5ac2084a5ad0611e827b3f92badf79f4910b5a5c58f4d87ff0"
+checksum = "21dc42e00223fc37204bd4aa177e69420c604ca4a183209a8f9de30c6d934698"
 dependencies = [
  "bytes",
  "prost-derive",
@@ -9311,9 +9356,9 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
-version = "0.11.4"
+version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "276470f7f281b0ed53d2ae42dd52b4a8d08853a3c70e7fe95882acbb98a6ae94"
+checksum = "a3f8ad728fb08fe212df3c05169e940fbb6d9d16a877ddde14644a983ba2012e"
 dependencies = [
  "bytes",
  "heck",
@@ -9346,9 +9391,9 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.11.2"
+version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "164ae68b6587001ca506d3bf7f1000bfa248d0e1217b618108fba4ec1d0cc306"
+checksum = "8bda8c0881ea9f722eb9629376db3d0b903b462477c1aafcb0566610ac28ac5d"
 dependencies = [
  "anyhow",
  "itertools",
@@ -9359,9 +9404,9 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.11.2"
+version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "747761bc3dc48f9a34553bf65605cf6cb6288ba219f3450b4275dbd81539551a"
+checksum = "a5e0526209433e96d83d750dd81a99118edbc55739e7e61a46764fd2ad537788"
 dependencies = [
  "bytes",
  "prost",
@@ -9607,7 +9652,7 @@ dependencies = [
 [[package]]
 name = "redeem"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "bitcoin 1.2.0",
  "btc-relay",
@@ -9636,7 +9681,7 @@ dependencies = [
 [[package]]
 name = "redeem-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "jsonrpsee 0.15.1",
  "parity-scale-codec",
@@ -9649,7 +9694,7 @@ dependencies = [
 [[package]]
 name = "redeem-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -9724,9 +9769,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.7.0"
+version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e076559ef8e241f2ae3479e36f97bd5741c0330689e217ad51ce2c76808b868a"
+checksum = "48aaa5748ba571fb95cd2c85c09f629215d3a6ece942baa100950af03a34f733"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -9777,7 +9822,7 @@ dependencies = [
 [[package]]
 name = "replace"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "bitcoin 1.2.0",
  "btc-relay",
@@ -9807,7 +9852,7 @@ dependencies = [
 [[package]]
 name = "replace-rpc"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "jsonrpsee 0.15.1",
  "parity-scale-codec",
@@ -9820,7 +9865,7 @@ dependencies = [
 [[package]]
 name = "replace-rpc-runtime-api"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -9879,7 +9924,7 @@ dependencies = [
 [[package]]
 name = "reward"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -9899,7 +9944,7 @@ dependencies = [
 [[package]]
 name = "reward-rpc"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "jsonrpsee 0.15.1",
  "oracle-rpc-runtime-api",
@@ -9913,7 +9958,7 @@ dependencies = [
 [[package]]
 name = "reward-rpc-runtime-api"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-support",
  "oracle-rpc-runtime-api",
@@ -10102,13 +10147,13 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.36.5"
+version = "0.36.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3807b5d10909833d3e9acd1eb5fb988f79376ff10fce42937de71a449c4c588"
+checksum = "4feacf7db682c6c329c4ede12649cd36ecab0f3be5b7d74e6a20304725db4549"
 dependencies = [
  "bitflags",
  "errno",
- "io-lifetimes 1.0.3",
+ "io-lifetimes 1.0.4",
  "libc",
  "linux-raw-sys 0.1.4",
  "windows-sys 0.42.0",
@@ -10116,9 +10161,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.20.7"
+version = "0.20.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "539a2bfe908f471bfa933876bd1eb6a19cf2176d375f82ef7f99530a40e48c2c"
+checksum = "fff78fc74d175294f4e83b28343315ffcfb114b156f0185e9741cb5570f50e2f"
 dependencies = [
  "log 0.4.17",
  "ring",
@@ -10133,7 +10178,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0167bac7a9f490495f3c33013e7722b53cb087ecbe082fb0c6387c96f634ea50"
 dependencies = [
  "openssl-probe",
- "rustls-pemfile 1.0.1",
+ "rustls-pemfile 1.0.2",
  "schannel",
  "security-framework",
 ]
@@ -10149,11 +10194,11 @@ dependencies = [
 
 [[package]]
 name = "rustls-pemfile"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0864aeff53f8c05aa08d86e5ef839d3dfcf07aeba2db32f12db0ef716e87bd55"
+checksum = "d194b56d58803a43635bdc398cd17e383d6f71f9182b9a192c127ca42494a59b"
 dependencies = [
- "base64 0.13.1",
+ "base64 0.21.0",
 ]
 
 [[package]]
@@ -11375,12 +11420,11 @@ dependencies = [
 
 [[package]]
 name = "schannel"
-version = "0.1.20"
+version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88d6731146462ea25d9244b2ed5fd1d716d25c52e4d54aa4fb0f3c4e9854dbe2"
+checksum = "713cfb06c7059f3588fb8044c0fad1d09e3c01d225e25b9220dbfdcf16dbb1b3"
 dependencies = [
- "lazy_static",
- "windows-sys 0.36.1",
+ "windows-sys 0.42.0",
 ]
 
 [[package]]
@@ -11452,9 +11496,9 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.24.2"
+version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9512ffd81e3a3503ed401f79c33168b9148c75038956039166cd750eaa037c3"
+checksum = "6b1629c9c557ef9b293568b338dddfc8208c98a18c59d722a9d53f859d9c9b62"
 dependencies = [
  "bitcoin_hashes 0.11.0",
  "rand 0.8.5",
@@ -11491,7 +11535,7 @@ dependencies = [
 [[package]]
 name = "security"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -11559,18 +11603,18 @@ checksum = "f638d531eccd6e23b980caf34876660d38e265409d8e99b397ab71eb3612fad0"
 
 [[package]]
 name = "serde"
-version = "1.0.151"
+version = "1.0.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97fed41fc1a24994d044e6db6935e69511a1153b52c15eb42493b26fa87feba0"
+checksum = "bb7d1f0d3021d347a83e556fc4683dea2ea09d87bccdf88ff5c12545d89d5efb"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.151"
+version = "1.0.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "255abe9a125a985c05190d687b320c12f9b1f0b99445e608c21ba0782c719ad8"
+checksum = "af487d118eecd09402d70a5d72551860e788df87b464af30e5ea6a38c75c541e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12173,7 +12217,7 @@ dependencies = [
  "regex",
  "scale-info",
  "schnorrkel",
- "secp256k1 0.24.2",
+ "secp256k1 0.24.3",
  "secrecy",
  "serde",
  "sp-core-hashing 4.0.0",
@@ -12219,7 +12263,7 @@ dependencies = [
  "regex",
  "scale-info",
  "schnorrkel",
- "secp256k1 0.24.2",
+ "secp256k1 0.24.3",
  "secrecy",
  "serde",
  "sp-core-hashing 5.0.0",
@@ -12373,7 +12417,7 @@ dependencies = [
  "log 0.4.17",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "secp256k1 0.24.2",
+ "secp256k1 0.24.3",
  "sp-core 6.0.0",
  "sp-externalities 0.12.0",
  "sp-keystore 0.12.0",
@@ -12400,7 +12444,7 @@ dependencies = [
  "log 0.4.17",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "secp256k1 0.24.2",
+ "secp256k1 0.24.3",
  "sp-core 7.0.0",
  "sp-externalities 0.13.0",
  "sp-keystore 0.13.0",
@@ -13019,9 +13063,9 @@ dependencies = [
 
 [[package]]
 name = "ss58-registry"
-version = "1.36.0"
+version = "1.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23d92659e7d18d82b803824a9ba5a6022cff101c3491d027c1c1d8d30e749284"
+checksum = "d44528162f980c0e03c71e005d334332c8da0aec9f2b0b4bdc557ed4a9f24776"
 dependencies = [
  "Inflector",
  "num-format",
@@ -13041,7 +13085,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 [[package]]
 name = "staking"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -13369,7 +13413,7 @@ dependencies = [
 [[package]]
 name = "supply"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -13425,9 +13469,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.26.8"
+version = "0.26.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29ddf41e393a9133c81d5f0974195366bd57082deac6e0eb02ed39b8341c2bb6"
+checksum = "5c18a6156d1f27a9592ee18c1a846ca8dd5c258b7179fc193ae87c74ebb666f5"
 dependencies = [
  "cfg-if 1.0.0",
  "core-foundation-sys",
@@ -13497,9 +13541,9 @@ dependencies = [
 
 [[package]]
 name = "termcolor"
-version = "1.1.3"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bab24d30b911b2376f3a13cc2cd443142f0c81dda04c118693e35b3835757755"
+checksum = "be55cf8942feac5c765c2c993422806843c9a9a45d4d5c407ad6dd2ea95eb9b6"
 dependencies = [
  "winapi-util",
 ]
@@ -13513,7 +13557,7 @@ checksum = "95059e91184749cb66be6dc994f67f182b6d897cb3df74a5bf66b5e709295fd8"
 [[package]]
 name = "testnet-interlay-runtime-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "annuity",
  "btc-relay",
@@ -13564,6 +13608,7 @@ dependencies = [
  "pallet-membership",
  "pallet-multisig",
  "pallet-preimage",
+ "pallet-proxy",
  "pallet-scheduler",
  "pallet-session",
  "pallet-society",
@@ -13613,7 +13658,7 @@ dependencies = [
 [[package]]
 name = "testnet-kintsugi-runtime-parachain"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "annuity",
  "btc-relay",
@@ -13632,6 +13677,7 @@ dependencies = [
  "democracy",
  "escrow",
  "escrow-rpc-runtime-api",
+ "farming",
  "fee",
  "frame-benchmarking",
  "frame-executive",
@@ -13664,6 +13710,7 @@ dependencies = [
  "pallet-membership",
  "pallet-multisig",
  "pallet-preimage",
+ "pallet-proxy",
  "pallet-scheduler",
  "pallet-session",
  "pallet-society",
@@ -13830,9 +13877,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.23.0"
+version = "1.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eab6d665857cc6ca78d6e80303a02cea7a7851e85dfbd77cbdc09bd129f1ef46"
+checksum = "597a12a59981d9e3c38d216785b0c37399f6e415e8d0712047620f189371b0bb"
 dependencies = [
  "autocfg",
  "bytes",
@@ -14078,7 +14125,7 @@ checksum = "efd1f82c56340fdf16f2a953d7bda4f8fdffba13d93b00844c25572110b26079"
 [[package]]
 name = "traits"
 version = "1.9.3"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -14163,9 +14210,9 @@ dependencies = [
 
 [[package]]
 name = "try-lock"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
+checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
 
 [[package]]
 name = "try-runtime-cli"
@@ -14196,9 +14243,9 @@ dependencies = [
 
 [[package]]
 name = "tt-call"
-version = "1.0.8"
+version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e66dcbec4290c69dd03c57e76c2469ea5c7ce109c6dd4351c13055cf71ea055"
+checksum = "f4f195fd851901624eee5a58c4bb2b4f06399148fcd0ed336e6f1cb60a9881df"
 
 [[package]]
 name = "tungstenite"
@@ -14412,7 +14459,7 @@ dependencies = [
  "nonzero_ext",
  "parity-scale-codec",
  "runtime",
- "secp256k1 0.24.2",
+ "secp256k1 0.24.3",
  "serde",
  "serde_json",
  "serial_test",
@@ -14421,7 +14468,7 @@ dependencies = [
  "signal-hook",
  "signal-hook-tokio",
  "sp-keyring 7.0.0",
- "sysinfo 0.26.8",
+ "sysinfo 0.26.9",
  "thiserror",
  "tokio",
  "tokio-metrics",
@@ -14434,7 +14481,7 @@ dependencies = [
 [[package]]
 name = "vault-registry"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "bitcoin 1.2.0",
  "currency",
@@ -14466,7 +14513,7 @@ dependencies = [
 [[package]]
 name = "vault-registry-rpc"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "jsonrpsee 0.15.1",
  "oracle-rpc-runtime-api",
@@ -14480,7 +14527,7 @@ dependencies = [
 [[package]]
 name = "vault-registry-rpc-runtime-api"
 version = "0.3.0"
-source = "git+https://github.com/interlay/interbtc?rev=2388c994db52afc25601120f6aa852f62f203974#2388c994db52afc25601120f6aa852f62f203974"
+source = "git+https://github.com/interlay/interbtc?rev=2e1f99f19fa6b7c76a8751306921f6fb0590c0e2#2e1f99f19fa6b7c76a8751306921f6fb0590c0e2"
 dependencies = [
  "frame-support",
  "oracle-rpc-runtime-api",
@@ -15021,19 +15068,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a3e1820f08b8513f676f7ab6c1f99ff312fb97b553d30ff4dd86f9f15728aa7"
 dependencies = [
  "windows_aarch64_gnullvm",
- "windows_aarch64_msvc 0.42.0",
- "windows_i686_gnu 0.42.0",
- "windows_i686_msvc 0.42.0",
- "windows_x86_64_gnu 0.42.0",
+ "windows_aarch64_msvc 0.42.1",
+ "windows_i686_gnu 0.42.1",
+ "windows_i686_msvc 0.42.1",
+ "windows_x86_64_gnu 0.42.1",
  "windows_x86_64_gnullvm",
- "windows_x86_64_msvc 0.42.0",
+ "windows_x86_64_msvc 0.42.1",
 ]
 
 [[package]]
 name = "windows_aarch64_gnullvm"
-version = "0.42.0"
+version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41d2aa71f6f0cbe00ae5167d90ef3cfe66527d6f613ca78ac8024c3ccab9a19e"
+checksum = "8c9864e83243fdec7fc9c5444389dcbbfd258f745e7853198f365e3c4968a608"
 
 [[package]]
 name = "windows_aarch64_msvc"
@@ -15049,9 +15096,9 @@ checksum = "9bb8c3fd39ade2d67e9874ac4f3db21f0d710bee00fe7cab16949ec184eeaa47"
 
 [[package]]
 name = "windows_aarch64_msvc"
-version = "0.42.0"
+version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd0f252f5a35cac83d6311b2e795981f5ee6e67eb1f9a7f64eb4500fbc4dcdb4"
+checksum = "4c8b1b673ffc16c47a9ff48570a9d85e25d265735c503681332589af6253c6c7"
 
 [[package]]
 name = "windows_i686_gnu"
@@ -15067,9 +15114,9 @@ checksum = "180e6ccf01daf4c426b846dfc66db1fc518f074baa793aa7d9b9aaeffad6a3b6"
 
 [[package]]
 name = "windows_i686_gnu"
-version = "0.42.0"
+version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbeae19f6716841636c28d695375df17562ca208b2b7d0dc47635a50ae6c5de7"
+checksum = "de3887528ad530ba7bdbb1faa8275ec7a1155a45ffa57c37993960277145d640"
 
 [[package]]
 name = "windows_i686_msvc"
@@ -15085,9 +15132,9 @@ checksum = "e2e7917148b2812d1eeafaeb22a97e4813dfa60a3f8f78ebe204bcc88f12f024"
 
 [[package]]
 name = "windows_i686_msvc"
-version = "0.42.0"
+version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84c12f65daa39dd2babe6e442988fc329d6243fdce47d7d2d155b8d874862246"
+checksum = "bf4d1122317eddd6ff351aa852118a2418ad4214e6613a50e0191f7004372605"
 
 [[package]]
 name = "windows_x86_64_gnu"
@@ -15103,15 +15150,15 @@ checksum = "4dcd171b8776c41b97521e5da127a2d86ad280114807d0b2ab1e462bc764d9e1"
 
 [[package]]
 name = "windows_x86_64_gnu"
-version = "0.42.0"
+version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf7b1b21b5362cbc318f686150e5bcea75ecedc74dd157d874d754a2ca44b0ed"
+checksum = "c1040f221285e17ebccbc2591ffdc2d44ee1f9186324dd3e84e99ac68d699c45"
 
 [[package]]
 name = "windows_x86_64_gnullvm"
-version = "0.42.0"
+version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09d525d2ba30eeb3297665bd434a54297e4170c7f1a44cad4ef58095b4cd2028"
+checksum = "628bfdf232daa22b0d64fdb62b09fcc36bb01f05a3939e20ab73aaf9470d0463"
 
 [[package]]
 name = "windows_x86_64_msvc"
@@ -15127,9 +15174,9 @@ checksum = "c811ca4a8c853ef420abd8592ba53ddbbac90410fab6903b3e79972a631f7680"
 
 [[package]]
 name = "windows_x86_64_msvc"
-version = "0.42.0"
+version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f40009d85759725a34da6d89a94e63d7bdc50a862acf0dbc7c8e488f1edcb6f5"
+checksum = "447660ad36a13288b1db4d4248e857b510e8c3a225c822ba4fb748c0aafecffd"
 
 [[package]]
 name = "winreg"
@@ -15245,7 +15292,7 @@ checksum = "5fc77f52dc9e9b10d55d3f4462c3b7fc393c4f17975d641542833ab2d3bc26ef"
 [[package]]
 name = "zenlink-protocol"
 version = "0.4.4"
-source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=44b7d5e84276df0eaac70ee89279d2fa4422cf94#44b7d5e84276df0eaac70ee89279d2fa4422cf94"
+source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=8d120c4a41e977892b8e4e6067c7832973048341#8d120c4a41e977892b8e4e6067c7832973048341"
 dependencies = [
  "cumulus-primitives-core",
  "frame-support",
@@ -15268,7 +15315,7 @@ dependencies = [
 [[package]]
 name = "zenlink-protocol-runtime-api"
 version = "0.4.4"
-source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=44b7d5e84276df0eaac70ee89279d2fa4422cf94#44b7d5e84276df0eaac70ee89279d2fa4422cf94"
+source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=8d120c4a41e977892b8e4e6067c7832973048341#8d120c4a41e977892b8e4e6067c7832973048341"
 dependencies = [
  "parity-scale-codec",
  "sp-api",
@@ -15279,7 +15326,7 @@ dependencies = [
 [[package]]
 name = "zenlink-stable-amm"
 version = "0.1.0"
-source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=44b7d5e84276df0eaac70ee89279d2fa4422cf94#44b7d5e84276df0eaac70ee89279d2fa4422cf94"
+source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=8d120c4a41e977892b8e4e6067c7832973048341#8d120c4a41e977892b8e4e6067c7832973048341"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -15296,7 +15343,7 @@ dependencies = [
 [[package]]
 name = "zenlink-stable-amm-runtime-api"
 version = "0.1.0"
-source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=44b7d5e84276df0eaac70ee89279d2fa4422cf94#44b7d5e84276df0eaac70ee89279d2fa4422cf94"
+source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=8d120c4a41e977892b8e4e6067c7832973048341#8d120c4a41e977892b8e4e6067c7832973048341"
 dependencies = [
  "parity-scale-codec",
  "sp-api",
@@ -15307,7 +15354,7 @@ dependencies = [
 [[package]]
 name = "zenlink-swap-router"
 version = "0.1.0"
-source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=44b7d5e84276df0eaac70ee89279d2fa4422cf94#44b7d5e84276df0eaac70ee89279d2fa4422cf94"
+source = "git+https://github.com/interlay/Zenlink-DEX-Module?rev=8d120c4a41e977892b8e4e6067c7832973048341#8d120c4a41e977892b8e4e6067c7832973048341"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -15365,12 +15412,13 @@ dependencies = [
 
 [[package]]
 name = "zstd-sys"
-version = "2.0.4+zstd.1.5.2"
+version = "2.0.5+zstd.1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fa202f2ef00074143e219d15b62ffc317d17cc33909feac471c044087cad7b0"
+checksum = "edc50ffce891ad571e9f9afe5039c4837bede781ac4bb13052ed7ae695518596"
 dependencies = [
  "cc",
  "libc",
+ "pkg-config",
 ]
 
 [[patch.unused]]
