@@ -1,5 +1,5 @@
 #![recursion_limit = "256"]
-#![feature(array_zip, int_log)]
+#![feature(array_zip)]
 
 mod cancellation;
 pub mod delay;

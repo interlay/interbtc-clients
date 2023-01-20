@@ -225,8 +225,8 @@ impl<C: ChainSpec + 'static> SubxtClientConfig<C> {
             // wasm_external_transport: None,
         };
         let telemetry_endpoints = if let Some(port) = self.telemetry {
-            let endpoints = TelemetryEndpoints::new(vec![(format!("/ip4/127.0.0.1/tcp/{}/ws", port), 0)])
-                .expect("valid config; qed");
+            let endpoints =
+                TelemetryEndpoints::new(vec![(format!("/ip4/127.0.0.1/tcp/{port}/ws"), 0)]).expect("valid config; qed");
             Some(endpoints)
         } else {
             None

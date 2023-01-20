@@ -57,7 +57,7 @@ impl Display for ClientType {
             ClientType::Oracle => "oracle",
             ClientType::Faucet => "faucet",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -308,7 +308,7 @@ impl Runner {
 
     async fn auto_update(runner: &mut impl RunnerExt) -> Result<(), Error> {
         // Create all directories for the `download_path` if they don't already exist.
-        fs::create_dir_all(&runner.download_path())?;
+        fs::create_dir_all(runner.download_path())?;
 
         let release = runner
             .try_get_release()

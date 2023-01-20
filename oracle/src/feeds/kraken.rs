@@ -64,7 +64,7 @@ impl KrakenApi {
         // https://docs.kraken.com/rest/
         let mut url = self.url.clone();
         url.set_path(&format!("{}/public/Ticker", url.path()));
-        url.set_query(Some(&format!("pair={}", asset_pair_name)));
+        url.set_query(Some(&format!("pair={asset_pair_name}")));
 
         // get today's VWAP
         let data = get_http(url).await?;

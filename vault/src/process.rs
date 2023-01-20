@@ -87,7 +87,7 @@ impl PidFile {
     }
 
     pub fn compute_path(spec_name: &String, account_id: &AccountId) -> PathBuf {
-        let file_name = format!("{}_{}.pid", spec_name, account_id);
+        let file_name = format!("{spec_name}_{account_id}.pid");
         // Use the default temporary directory of the OS
         std::env::temp_dir().join(file_name)
     }
@@ -101,7 +101,7 @@ impl PidFile {
     pub fn set_pid(&mut self, pid: u32) -> Result<File, ServiceError<Error>> {
         self.created_pidfile = true;
         let mut file = File::create(&self.path)?;
-        file.write_all(format!("{}\n", pid).as_bytes())?;
+        file.write_all(format!("{pid}\n").as_bytes())?;
         file.sync_all()?;
         Ok(file)
     }

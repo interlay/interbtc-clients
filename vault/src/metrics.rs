@@ -421,7 +421,7 @@ async fn publish_average_bitcoin_fee(vault: &VaultData) {
 
 fn publish_bitcoin_balance(vault: &VaultData) {
     match vault.btc_rpc.get_balance(None) {
-        Ok(bitcoin_balance) => vault.metrics.btc_balance.actual.set(bitcoin_balance.to_btc() as f64),
+        Ok(bitcoin_balance) => vault.metrics.btc_balance.actual.set(bitcoin_balance.to_btc()),
         Err(e) => {
             // unexpected error, but not critical so just continue
             tracing::warn!("Failed to get Bitcoin balance: {}", e);

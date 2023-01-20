@@ -33,7 +33,7 @@ impl ProviderUserOpts {
             (Some(file_path), Some(keyname), None) => {
                 (get_credentials_from_file(file_path, keyname)?, keyname.to_string())
             }
-            (None, None, Some(keyring)) => (keyring.pair(), format!("{}", keyring)),
+            (None, None, Some(keyring)) => (keyring.pair(), keyring.to_string()),
             _ => {
                 // should never occur, due to clap constraints
                 return Err(Error::KeyringArgumentError);

@@ -46,7 +46,7 @@ impl BlockCypherApi {
 
         let fee_estimate = get_http(url)
             .await?
-            .get(&attribute)
+            .get(attribute)
             .ok_or(Error::InvalidResponse)?
             .as_f64()
             .ok_or(Error::InvalidResponse)?;
