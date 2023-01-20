@@ -20,7 +20,11 @@ const SLEEP_TIME: Duration = Duration::from_secs(600);
 async fn collect_headers(height: u32, batch: u32, cli: &impl Backing) -> Result<Vec<Vec<u8>>, Error> {
     let mut headers = Vec::new();
     for h in height..height + batch {
-        headers.push(cli.get_block_header(h).await.map(|header| header.unwrap())?);
+        headers.push(
+            cli.get_block_header(h)
+                .await
+                .map(|header| header.ok_or(Error::BlockHeaderNotFound))??,
+        );
     }
     Ok(headers)
 }
