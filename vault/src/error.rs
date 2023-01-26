@@ -21,6 +21,8 @@ pub enum Error {
     DeadlineExpired,
     #[error("Faucet url not set")]
     FaucetUrlNotSet,
+    #[error("Faucet allowance for `{0}` not set")]
+    FaucetAllowanceNotSet(String),
 
     #[error("RPC error: {0}")]
     RpcError(#[from] RpcError),

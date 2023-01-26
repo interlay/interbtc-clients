@@ -5,6 +5,10 @@ authors = ["Interlay <contact@interlay.io>"]
 edition = "2018"
 description = "Collateral faucet for the BTC Parachain."
 
+[lib]
+name = "shared"
+path = "src/lib.rs"
+
 [features]
 parachain-metadata-interlay = ["runtime/parachain-metadata-interlay"]
 parachain-metadata-kintsugi = ["runtime/parachain-metadata-kintsugi"]

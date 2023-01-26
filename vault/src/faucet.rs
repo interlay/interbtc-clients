@@ -1,9 +1,10 @@
 use crate::{deposit_collateral, error::Error};
+use faucet_rpc::Allowance;
 use hex::FromHex;
 use jsonrpc_core::Value;
 use jsonrpc_core_client::{transports::http as jsonrpc_http, TypedClient};
 use parity_scale_codec::{Decode, Encode};
-use runtime::{AccountId, CurrencyId, CurrencyIdExt, InterBtcParachain, VaultId, VaultRegistryPallet, TX_FEES};
+use runtime::{AccountId, CurrencyId, InterBtcParachain, RuntimeCurrencyInfo, VaultId, VaultRegistryPallet, TX_FEES};
 use serde::{Deserialize, Deserializer};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -24,11 +25,22 @@ struct FundAccountJsonRpcRequest {
     pub collateral_currency: CurrencyId,
 }
 
-async fn get_faucet_allowance(faucet_connection: TypedClient, allowance_type: &str) -> Result<u128, Error> {
+async fn get_faucet_allowance(
+    faucet_connection: TypedClient,
+    allowance_type: &str,
+    vault_id: &VaultId,
+) -> Result<u128, Error> {
     let raw_allowance = faucet_connection
         .call_method::<(), RawBytes>(allowance_type, "", ())
         .await?;
-    Ok(Decode::decode(&mut &raw_allowance.0[..])?)
+    let allowances: Allowance = Decode::decode(&mut &raw_allowance.0[..])?;
+    let key = vault_id.collateral_currency().symbol()?;
+    let value = allowances
+        .iter()
+        .find(|x| x.symbol == key)
+        .map(|x| x.amount)
+        .ok_or(Error::FaucetAllowanceNotSet(key))?;
+    Ok(value)
 }
 
 async fn get_funding(faucet_connection: TypedClient, vault_id: VaultId) -> Result<(), Error> {
@@ -61,14 +73,10 @@ pub async fn fund_and_register(
     vault_id: &VaultId,
 ) -> Result<(), Error> {
     let connection = fund_account(faucet_url, vault_id).await?;
-    let currency_id: CurrencyId = vault_id.collateral_currency();
 
-    let user_allowance_in_dot: u128 = get_faucet_allowance(connection.clone(), "user_allowance").await?;
-    let registration_collateral = user_allowance_in_dot
-        .checked_mul(currency_id.inner()?.one())
-        .ok_or(Error::ArithmeticOverflow)?
-        .checked_sub(TX_FEES)
-        .ok_or(Error::ArithmeticUnderflow)?;
+    let user_allowance = get_faucet_allowance(connection.clone(), "user_allowance", vault_id).await?;
+    tracing::error!("user_allowance = {user_allowance}");
+    let registration_collateral = user_allowance.checked_sub(TX_FEES).ok_or(Error::ArithmeticUnderflow)?;
 
     tracing::info!("Registering the vault");
     parachain_rpc.register_vault(vault_id, registration_collateral).await?;
@@ -76,11 +84,7 @@ pub async fn fund_and_register(
     // Receive vault allowance from faucet
     get_funding(connection.clone(), vault_id.clone()).await?;
 
-    // TODO: faucet allowance should return planck
-    let vault_allowance_in_dot: u128 = get_faucet_allowance(connection.clone(), "vault_allowance").await?;
-    let vault_allowance_in_planck = vault_allowance_in_dot
-        .checked_mul(currency_id.inner()?.one())
-        .ok_or(Error::ArithmeticOverflow)?;
+    let vault_allowance_in_planck = get_faucet_allowance(connection.clone(), "vault_allowance", vault_id).await?;
     let operational_collateral = vault_allowance_in_planck
         .checked_div(3)
         .unwrap_or_default()

@@ -14447,6 +14447,7 @@ dependencies = [
  "async-trait",
  "bitcoin 1.1.0",
  "clap",
+ "faucet",
  "frame-support",
  "futures 0.3.25",
  "git-version",
