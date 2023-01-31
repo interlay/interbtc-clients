@@ -46,6 +46,7 @@ jsonrpc-core-client = { version = "18.0.0", features = ["http", "tls"] }
 bitcoin = { path = "../bitcoin", features = ["cli"] }
 runtime = { path = "../runtime" }
 service = { path = "../service" }
+faucet-rpc = { package = "faucet", path = "../faucet" }
 
 # Substrate dependencies
 # needs to agree with subxt's version

@@ -4,12 +4,11 @@ mod http;
 use clap::Parser;
 use error::Error;
 use git_version::git_version;
-use parity_scale_codec::Encode;
 use runtime::{InterBtcSigner, ShutdownSender};
 use serde::Deserialize;
 use service::{on_shutdown, wait_or_shutdown};
+use shared::{Allowance, AllowanceAmount};
 use std::{net::SocketAddr, path::PathBuf};
-
 const VERSION: &str = git_version!(args = ["--tags"]);
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 const NAME: &str = env!("CARGO_PKG_NAME");
@@ -34,19 +33,6 @@ struct Opts {
     #[clap(long, default_value = "./faucet-allowance-config.json")]
     allowance_config: PathBuf,
 }
-
-#[derive(Deserialize, Debug, Clone, Encode)]
-pub struct AllowanceAmount {
-    symbol: String,
-    amount: u128,
-}
-impl AllowanceAmount {
-    pub fn new(symbol: String, amount: u128) -> Self {
-        Self { symbol, amount }
-    }
-}
-
-type Allowance = Vec<AllowanceAmount>;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct AllowanceConfig {
