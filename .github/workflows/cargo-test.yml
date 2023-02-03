@@ -92,7 +92,7 @@ jobs:
 
 
   build_docker:
-    if: ${{ github.ref_type == 'tag' || contains(fromJson('["master", "dev", "gha-release"]'), github.ref_name) }}
+    if: ${{ github.ref_type == 'tag' || contains(fromJson('["master", "dev", "gha-release"]'), github.head_ref || github.ref_name) }}
     needs: [test]
     runs-on: [self-hosted, linux]
     strategy:
