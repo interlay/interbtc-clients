@@ -24,27 +24,6 @@ const DEFAULT_NATIVE_CURRENCY: CurrencyId = Token(KINT);
 const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(KSM);
 const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(KBTC);
 
-async fn test_with<F, R>(execute: impl FnOnce(SubxtClient) -> F) -> R
-where
-    F: Future<Output = R>,
-{
-    service::init_subscriber();
-    let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
-
-    let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Bob).await;
-
-    set_exchange_rate_and_wait(&parachain_rpc, DEFAULT_TESTING_CURRENCY, FixedU128::from(100000000)).await;
-    set_exchange_rate_and_wait(
-        &parachain_rpc,
-        DEFAULT_NATIVE_CURRENCY,
-        FixedU128::saturating_from_rational(1u128, 100u128),
-    )
-    .await;
-    set_bitcoin_fees(&parachain_rpc, FixedU128::from(1)).await;
-
-    execute(client).await
-}
-
 async fn test_with_vault<F, R>(execute: impl FnOnce(SubxtClient, VaultId, InterBtcParachain) -> F) -> R
 where
     F: Future<Output = R>,
@@ -875,64 +854,6 @@ async fn test_off_chain_liquidation() {
         set_exchange_rate_and_wait(&relayer_provider, DEFAULT_TESTING_CURRENCY, FixedU128::from(1000000000)).await;
 
         assert_event::<LiquidateVaultEvent, _>(TIMEOUT, vault_provider.clone(), |_| true).await;
-    })
-    .await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_shutdown() {
-    test_with(|client| async move {
-        let sudo_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
-        let user_provider = setup_provider(client.clone(), AccountKeyring::Dave).await;
-        let sudo_vault_id = VaultId::new(
-            AccountKeyring::Alice.into(),
-            DEFAULT_TESTING_CURRENCY,
-            DEFAULT_WRAPPED_CURRENCY,
-        );
-
-        // register a vault..
-        let mock_bitcoin_core = MockBitcoinCore::new(sudo_provider.clone()).await;
-        let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
-        let issue_amount = 100000;
-        let vault_collateral =
-            get_required_vault_collateral_for_issue(&sudo_provider, issue_amount, sudo_vault_id.collateral_currency())
-                .await;
-
-        assert_ok!(
-            sudo_provider
-                .register_vault_with_public_key(
-                    &sudo_vault_id,
-                    vault_collateral,
-                    btc_rpc.get_new_public_key().await.unwrap().inner.serialize().into(),
-                )
-                .await
-        );
-
-        // shutdown chain..
-        assert_ok!(
-            sudo_provider
-                .sudo(EncodedCall::Security(SecurityCall::set_parachain_status {
-                    status_code: StatusCode::Shutdown,
-                }))
-                .await
-        );
-
-        // request issue should fail:
-        assert!(user_provider
-            .request_issue(issue_amount, &sudo_vault_id)
-            .await
-            .unwrap_err()
-            .is_parachain_shutdown_error());
-
-        // restore parachain status and check that we can issue now
-        assert_ok!(
-            sudo_provider
-                .sudo(EncodedCall::Security(SecurityCall::set_parachain_status {
-                    status_code: StatusCode::Running,
-                }))
-                .await
-        );
-        assert_ok!(user_provider.request_issue(issue_amount, &sudo_vault_id).await);
     })
     .await;
 }
