@@ -25,7 +25,16 @@ impl Default for DiaApi {
 }
 
 fn extract_response(value: Value) -> Option<f64> {
-    value.get("Price")?.as_f64()
+    value
+        .get("Price")?
+        .as_f64()
+        .and_then(|x| if x.is_normal() { Some(1.0 / x) } else { None })
+}
+
+fn set_token_path(base: &mut Url, token_path: &str) {
+    let base_path = base.path().trim_end_matches("/");
+    let new_path = format!("{}/assetQuotation/{}", base_path, token_path);
+    base.set_path(&new_path);
 }
 
 impl DiaApi {
@@ -49,7 +58,8 @@ impl DiaApi {
 
         // https://docs.diadata.org/documentation/api-1/api-endpoints#asset-quotation
         let mut url = self.url.clone();
-        url.set_path(&format!("{}/assetQuotation/{}", url.path(), token_path));
+
+        set_token_path(&mut url, &token_path);
         let data = get_http(url).await?;
         let price = extract_response(data).ok_or(Error::InvalidResponse)?;
 
@@ -77,6 +87,20 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn build_url_works() {
+        let expected_url = "https://api.diadata.org/v1/assetQuotation/some_asset";
+
+        let mut with_trailing_slash = Url::parse("https://api.diadata.org/v1/").unwrap();
+        set_token_path(&mut with_trailing_slash, "some_asset");
+
+        assert_eq!(with_trailing_slash.to_string(), expected_url);
+
+        let mut without_trailing_slash = Url::parse("https://api.diadata.org/v1").unwrap();
+        set_token_path(&mut without_trailing_slash, "some_asset");
+        assert_eq!(without_trailing_slash.to_string(), expected_url);
+    }
+
+    #[test]
     fn should_extract_response() {
         assert_eq!(
             extract_response(json!({
@@ -90,7 +114,7 @@ mod tests {
                 "Time": "2022-10-21T07:35:24Z",
                 "Source": "diadata.org"
             })),
-            Some(5.842649511778436)
+            Some(1.0 / 5.842649511778436)
         )
     }
 }
