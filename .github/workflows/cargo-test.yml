@@ -8,6 +8,9 @@ on:
     branches:
       - master
       - dev
+    tags:
+      - '*'
+
   pull_request:
 
 jobs:
