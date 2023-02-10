@@ -27,6 +27,8 @@ pub type BtcAddress = module_btc_relay::BtcAddress;
 pub type FixedU128 = sp_arithmetic::FixedU128;
 
 mod metadata_aliases {
+    use crate::metadata::runtime_types::loans::types::Market;
+
     use super::*;
 
     pub use metadata::runtime_types::bitcoin::address::PublicKey as BtcPublicKey;
@@ -43,11 +45,11 @@ mod metadata_aliases {
     pub type InterBtcRichBlockHeader = metadata::runtime_types::btc_relay::types::RichBlockHeader<BlockNumber>;
     pub type BitcoinBlockHeight = u32;
 
-    pub use metadata::asset_registry::events::{
-        RegisteredAsset as RegisteredAssetEvent, UpdatedAsset as UpdatedAssetEvent,
+    pub use metadata::{
+        asset_registry::events::{RegisteredAsset as RegisteredAssetEvent, UpdatedAsset as UpdatedAssetEvent},
+        loans::events::{NewMarket as NewMarketEvent, UpdatedMarket as UpdatedMarketEvent},
+        oracle::events::FeedValues as FeedValuesEvent,
     };
-
-    pub use metadata::oracle::events::FeedValues as FeedValuesEvent;
 
     pub use metadata::issue::events::{
         CancelIssue as CancelIssueEvent, ExecuteIssue as ExecuteIssueEvent, RequestIssue as RequestIssueEvent,
@@ -77,6 +79,7 @@ mod metadata_aliases {
         orml_traits::asset_registry::AssetMetadata as GenericAssetMetadata,
     };
     pub type AssetMetadata = GenericAssetMetadata<Balance, InterBtcAdditionalMetadata>;
+    pub type LendingMarket = metadata::runtime_types::loans::types::Market<Balance>;
 
     pub use metadata::runtime_types::{
         btc_relay::pallet::Error as BtcRelayPalletError, frame_system::pallet::Error as SystemPalletError,

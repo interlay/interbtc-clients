@@ -35,6 +35,8 @@ pub enum Error {
     AssetNotFound,
     #[error("Could not unlock local asset registry")]
     CannotOpenAssetRegistry,
+    #[error("Cannot acquire lock for lending assets")]
+    CannotAccessLendingAssets,
     #[error("Could not get vault")]
     VaultNotFound,
     #[error("Vault has been liquidated")]

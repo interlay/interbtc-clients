@@ -1,4 +1,5 @@
 use crate::{
+    assets::LendingAssets,
     conn::{new_websocket_client, new_websocket_client_with_retry},
     metadata, notify_retry,
     types::*,
@@ -589,6 +590,38 @@ impl InterBtcParachain {
                 |event| async move {
                     if let Err(err) = AssetRegistry::insert(event.asset_id, event.metadata) {
                         log::error!("Failed to update asset {}: {}", event.asset_id, err);
+                    }
+                },
+                |_| {},
+            ),
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Cache new markets and updates
+    pub async fn listen_for_lending_markets(&self) -> Result<(), Error> {
+        futures::future::try_join(
+            self.on_event::<NewMarketEvent, _, _, _>(
+                |event| async move {
+                    if let Err(err) = LendingAssets::insert(event.underlying_currency_id, event.market) {
+                        log::error!(
+                            "Failed to register lending market {:?}: {}",
+                            event.underlying_currency_id,
+                            err
+                        );
+                    }
+                },
+                |_| {},
+            ),
+            self.on_event::<UpdatedMarketEvent, _, _, _>(
+                |event| async move {
+                    if let Err(err) = LendingAssets::insert(event.underlying_currency_id, event.market) {
+                        log::error!(
+                            "Failed to update lending market {:?}: {}",
+                            event.underlying_currency_id,
+                            err
+                        );
                     }
                 },
                 |_| {},

@@ -604,6 +604,8 @@ impl VaultService {
         let listen_for_registered_assets =
             |rpc: InterBtcParachain| async move { rpc.listen_for_registered_assets().await };
 
+        let listen_for_lending_markets = |rpc: InterBtcParachain| async move { rpc.listen_for_lending_markets().await };
+
         let listen_for_fee_rate_estimate_changes =
             |rpc: InterBtcParachain| async move { rpc.listen_for_fee_rate_changes().await };
 
@@ -612,6 +614,10 @@ impl VaultService {
             (
                 "Registered Asset Listener",
                 run(listen_for_registered_assets(self.btc_parachain.clone())),
+            ),
+            (
+                "Lending Market Listener",
+                run(listen_for_lending_markets(self.btc_parachain.clone())),
             ),
             (
                 "Fee Estimate Listener",

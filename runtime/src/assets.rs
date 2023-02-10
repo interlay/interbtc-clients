@@ -1,4 +1,4 @@
-use crate::{types::*, AssetMetadata, Error};
+use crate::{metadata::runtime_types::loans::types::Market, types::*, AssetMetadata, Error};
 use lazy_static::lazy_static;
 use primitives::{CurrencyId, CurrencyInfo};
 use std::{
@@ -67,6 +67,41 @@ impl AssetRegistry {
     }
 }
 
+lazy_static! {
+    // NOTE: restrict access to the lock to ensure that no async code yields while holding the mutex
+    static ref LENDING_ASSETS: Mutex<LendingAssets> = Mutex::new(LendingAssets::default());
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct LendingAssets {
+    // Mapping from underlying currency to LendToken
+    underlying_to_lend_token: BTreeMap<CurrencyId, CurrencyId>,
+}
+
+impl LendingAssets {
+    /// Fetch the global, mutable singleton
+    fn global() -> Result<MutexGuard<'static, Self>, Error> {
+        LENDING_ASSETS.lock().map_err(|_| Error::CannotOpenAssetRegistry)
+    }
+
+    pub(crate) fn insert(underlying_id: CurrencyId, market: LendingMarket) -> Result<(), Error> {
+        let mut lending_assets = Self::global()?;
+        lending_assets
+            .underlying_to_lend_token
+            .insert(underlying_id, market.lend_token_id);
+        Ok(())
+    }
+
+    /// Fetch the currency for a ticker symbol
+    pub fn get_lend_token_id(underlying_id: CurrencyId) -> Result<CurrencyId, Error> {
+        Self::global()?
+            .underlying_to_lend_token
+            .get(&underlying_id)
+            .cloned()
+            .ok_or(Error::AssetNotFound)
+    }
+}
+
 /// Convert a ticker symbol into a `CurrencyId` at runtime
 pub trait TryFromSymbol: Sized {
     fn try_from_symbol(symbol: String) -> Result<Self, Error>;
@@ -83,6 +118,12 @@ impl TryFromSymbol for CurrencyId {
             id if id == KSM.symbol() => Ok(Token(KSM)),
             id if id == KBTC.symbol() => Ok(Token(KBTC)),
             id if id == KINT.symbol() => Ok(Token(KINT)),
+            // Lend Tokens are prefixed with Q for end users. Example: QDOT is
+            // the DOT lend token.
+            id if id.chars().nth(0) == Some('Q') => {
+                let underlying_id = Self::try_from_symbol(id[1..].to_string())?;
+                LendingAssets::get_lend_token_id(underlying_id)
+            }
             _ => AssetRegistry::get_foreign_asset_by_symbol(uppercase_symbol),
         }
     }
