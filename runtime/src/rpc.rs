@@ -939,7 +939,7 @@ pub trait ReplacePallet {
     /// Get all replace requests made by the given vault
     async fn get_old_vault_replace_requests(
         &self,
-        account_id: AccountId,
+        maybe_account_id: Option<AccountId>,
     ) -> Result<Vec<(H256, InterBtcReplaceRequest)>, Error>;
 
     /// Get the time difference in number of blocks between when a replace
@@ -1035,22 +1035,35 @@ impl ReplacePallet for InterBtcParachain {
     /// Get all replace requests made by the given vault
     async fn get_old_vault_replace_requests(
         &self,
-        account_id: AccountId,
+        maybe_account_id: Option<AccountId>,
     ) -> Result<Vec<(H256, InterBtcReplaceRequest)>, Error> {
         let head = self.get_finalized_block_hash().await?;
-        let result: Vec<H256> = self
-            .api
-            .rpc()
-            .request("replace_getOldVaultReplaceRequests", rpc_params![account_id, head])
-            .await?;
-        join_all(
-            result
-                .into_iter()
-                .map(|key| async move { self.get_replace_request(key).await.map(|value| (key, value)) }),
-        )
-        .await
-        .into_iter()
-        .collect()
+        if let Some(account_id) = maybe_account_id {
+            let result: Vec<H256> = self
+                .api
+                .rpc()
+                .request("replace_getOldVaultReplaceRequests", rpc_params![account_id, head])
+                .await?;
+            join_all(
+                result
+                    .into_iter()
+                    .map(|key| async move { self.get_replace_request(key).await.map(|value| (key, value)) }),
+            )
+            .await
+            .into_iter()
+            .collect()
+        } else {
+            let key_addr = metadata::storage().replace().replace_requests_root();
+            let mut iter = self.api.storage().iter(key_addr, DEFAULT_PAGE_SIZE, head).await?;
+            let mut replace_requests = Vec::new();
+            while let Some((replace_id, request)) = iter.next().await? {
+                let key_hash = replace_id.0.as_slice();
+                // last bytes are the raw key
+                let key = &key_hash[key_hash.len() - 32..];
+                replace_requests.push((H256::from_slice(key), request));
+            }
+            Ok(replace_requests)
+        }
     }
 
     async fn get_replace_period(&self) -> Result<u32, Error> {
@@ -1340,10 +1353,11 @@ pub trait RedeemPallet {
 
     async fn get_redeem_request(&self, redeem_id: H256) -> Result<InterBtcRedeemRequest, Error>;
 
-    /// Get all redeem requests requested of the given vault
-    async fn get_vault_redeem_requests(
+    /// Get all redeem requests, if the account is specified
+    /// only return those for that Vault
+    async fn get_redeem_requests(
         &self,
-        account_id: AccountId,
+        maybe_account_id: Option<AccountId>,
     ) -> Result<Vec<(H256, InterBtcRedeemRequest)>, Error>;
 
     async fn get_redeem_period(&self) -> Result<BlockNumber, Error>;
@@ -1386,24 +1400,37 @@ impl RedeemPallet for InterBtcParachain {
             .await
     }
 
-    async fn get_vault_redeem_requests(
+    async fn get_redeem_requests(
         &self,
-        account_id: AccountId,
+        maybe_account_id: Option<AccountId>,
     ) -> Result<Vec<(H256, InterBtcRedeemRequest)>, Error> {
         let head = self.get_finalized_block_hash().await?;
-        let result: Vec<H256> = self
-            .api
-            .rpc()
-            .request("redeem_getVaultRedeemRequests", rpc_params![account_id, head])
-            .await?;
-        join_all(
-            result
-                .into_iter()
-                .map(|key| async move { self.get_redeem_request(key).await.map(|value| (key, value)) }),
-        )
-        .await
-        .into_iter()
-        .collect()
+        if let Some(account_id) = maybe_account_id {
+            let result: Vec<H256> = self
+                .api
+                .rpc()
+                .request("redeem_getVaultRedeemRequests", rpc_params![account_id, head])
+                .await?;
+            join_all(
+                result
+                    .into_iter()
+                    .map(|key| async move { self.get_redeem_request(key).await.map(|value| (key, value)) }),
+            )
+            .await
+            .into_iter()
+            .collect()
+        } else {
+            let key_addr = metadata::storage().redeem().redeem_requests_root();
+            let mut iter = self.api.storage().iter(key_addr, DEFAULT_PAGE_SIZE, head).await?;
+            let mut redeem_requests = Vec::new();
+            while let Some((redeem_id, request)) = iter.next().await? {
+                let key_hash = redeem_id.0.as_slice();
+                // last bytes are the raw key
+                let key = &key_hash[key_hash.len() - 32..];
+                redeem_requests.push((H256::from_slice(key), request));
+            }
+            Ok(redeem_requests)
+        }
     }
 
     async fn get_redeem_period(&self) -> Result<BlockNumber, Error> {

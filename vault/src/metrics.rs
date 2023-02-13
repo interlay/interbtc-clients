@@ -220,8 +220,8 @@ impl PerCurrencyMetrics {
         let vault_id = &vault.vault_id;
         // update fee surplus
         if let Ok((redeem_requests, replace_requests)) = try_join!(
-            parachain_rpc.get_vault_redeem_requests(vault_id.account_id.clone()),
-            parachain_rpc.get_old_vault_replace_requests(vault_id.account_id.clone())
+            parachain_rpc.get_redeem_requests(Some(vault_id.account_id.clone())),
+            parachain_rpc.get_old_vault_replace_requests(Some(vault_id.account_id.clone()))
         ) {
             let redeems = redeem_requests
                 .iter()
@@ -608,7 +608,7 @@ pub async fn poll_metrics<P: CollateralBalancesPallet + RedeemPallet + IssuePall
         publish_native_currency_balance(parachain_rpc).await?;
         publish_issue_count(parachain_rpc, vault_id_manager).await;
         if let Ok(redeems) = parachain_rpc
-            .get_vault_redeem_requests(parachain_rpc.get_account_id().clone())
+            .get_redeem_requests(Some(parachain_rpc.get_account_id().clone()))
             .await
         {
             publish_redeem_count(vault_id_manager, &redeems).await;
@@ -720,7 +720,7 @@ mod tests {
             async fn execute_redeem(&self, redeem_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
             async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), RuntimeError>;
             async fn get_redeem_request(&self, redeem_id: H256) -> Result<InterBtcRedeemRequest, RuntimeError>;
-            async fn get_vault_redeem_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcRedeemRequest)>, RuntimeError>;
+            async fn get_redeem_requests(&self, maybe_account_id: Option<AccountId>) -> Result<Vec<(H256, InterBtcRedeemRequest)>, RuntimeError>;
             async fn get_redeem_period(&self) -> Result<BlockNumber, RuntimeError>;
         }
 
@@ -759,7 +759,7 @@ mod tests {
             async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
             async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
-            async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
+            async fn get_old_vault_replace_requests(&self, maybe_account_id: Option<AccountId>) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
             async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
             async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;
