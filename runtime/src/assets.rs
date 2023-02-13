@@ -84,16 +84,25 @@ impl LendingAssets {
         LENDING_ASSETS.lock().map_err(|_| Error::CannotOpenAssetRegistry)
     }
 
-    pub(crate) fn insert(underlying_id: CurrencyId, market: LendingMarket) -> Result<(), Error> {
+    pub(crate) fn insert(underlying_id: CurrencyId, lend_token_id: CurrencyId) -> Result<(), Error> {
         let mut lending_assets = Self::global()?;
         lending_assets
             .underlying_to_lend_token
-            .insert(underlying_id, market.lend_token_id);
+            .insert(underlying_id, lend_token_id);
+        Ok(())
+    }
+
+    pub(crate) fn extend(assets: Vec<(CurrencyId, CurrencyId)>) -> Result<(), Error> {
+        for (underlying_id, lend_token_id) in assets {
+            // TODO: check for duplicates?
+            Self::insert(underlying_id, lend_token_id)?;
+        }
         Ok(())
     }
 
     /// Fetch the currency for a ticker symbol
     pub fn get_lend_token_id(underlying_id: CurrencyId) -> Result<CurrencyId, Error> {
+        log::info!("in get_lend_token {:?}", underlying_id);
         Self::global()?
             .underlying_to_lend_token
             .get(&underlying_id)

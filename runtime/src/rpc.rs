@@ -135,6 +135,7 @@ impl InterBtcParachain {
 
         // TODO: refresh on registration
         parachain_rpc.store_assets_metadata().await?;
+        parachain_rpc.store_lend_tokens().await?;
         Ok(parachain_rpc)
     }
 
@@ -575,6 +576,10 @@ impl InterBtcParachain {
         AssetRegistry::extend(self.get_foreign_assets_metadata().await?)
     }
 
+    pub async fn store_lend_tokens(&self) -> Result<(), Error> {
+        LendingAssets::extend(self.get_lend_tokens().await?)
+    }
+
     /// Cache registered assets and updates
     pub async fn listen_for_registered_assets(&self) -> Result<(), Error> {
         futures::future::try_join(
@@ -604,9 +609,9 @@ impl InterBtcParachain {
         futures::future::try_join(
             self.on_event::<NewMarketEvent, _, _, _>(
                 |event| async move {
-                    if let Err(err) = LendingAssets::insert(event.underlying_currency_id, event.market) {
+                    if let Err(err) = LendingAssets::insert(event.underlying_currency_id, event.market.lend_token_id) {
                         log::error!(
-                            "Failed to register lending market {:?}: {}",
+                            "Failed to register lend token {:?}: {}",
                             event.underlying_currency_id,
                             err
                         );
@@ -616,9 +621,9 @@ impl InterBtcParachain {
             ),
             self.on_event::<UpdatedMarketEvent, _, _, _>(
                 |event| async move {
-                    if let Err(err) = LendingAssets::insert(event.underlying_currency_id, event.market) {
+                    if let Err(err) = LendingAssets::insert(event.underlying_currency_id, event.market.lend_token_id) {
                         log::error!(
-                            "Failed to update lending market {:?}: {}",
+                            "Failed to update lend token {:?}: {}",
                             event.underlying_currency_id,
                             err
                         );
@@ -671,6 +676,8 @@ pub trait UtilFuncs {
     async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, Error>;
 
     async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, Error>;
+
+    async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, Error>;
 }
 
 #[async_trait]
@@ -710,6 +717,24 @@ impl UtilFuncs for InterBtcParachain {
 
             let decoded_key: u32 = Decode::decode(&mut key)?;
             ret.push((decoded_key, value));
+        }
+        Ok(ret)
+    }
+
+    async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, Error> {
+        let head = self.get_finalized_block_hash().await?;
+        let key_addr = metadata::storage().loans().markets_root();
+        let mut iter = self.api.storage().iter(key_addr, DEFAULT_PAGE_SIZE, head).await?;
+
+        let mut ret = Vec::new();
+        while let Some((key, value)) = iter.next().await? {
+            let raw_key = key.0.clone();
+
+            // last bytes are the raw key
+            let mut key = &raw_key[raw_key.len() - 4..];
+
+            let decoded_key: CurrencyId = Decode::decode(&mut key)?;
+            ret.push((decoded_key, value.lend_token_id));
         }
         Ok(ret)
     }
