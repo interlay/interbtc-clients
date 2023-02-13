@@ -85,6 +85,11 @@ impl LendingAssets {
     }
 
     pub(crate) fn insert(underlying_id: CurrencyId, lend_token_id: CurrencyId) -> Result<(), Error> {
+        log::info!(
+            "Found loans market: {:?}, with lend token: {:?}",
+            underlying_id,
+            lend_token_id
+        );
         let mut lending_assets = Self::global()?;
         lending_assets
             .underlying_to_lend_token

@@ -36,6 +36,15 @@ const BLOCK_WAIT_TIMEOUT: Duration = Duration::from_secs(6);
 // number of storage entries to fetch at a time
 const DEFAULT_PAGE_SIZE: u32 = 10;
 
+// TODO: Convert to a utility function
+/// Keys in storage maps are prefixed by two `twox_128` hashes: the pallet name and the
+/// storage item names. Then, assuming the map uses the `Blake2_128Concat` hasher, the layout
+/// looks as follows:
+/// `twox_128("PalletName") ++ twox_128("ItemName") ++ Blake2_128Concat(key) ++ key`
+/// So to get the actual value of the key from a raw key, we need to ignore the first
+/// `3 * 128 / 8` bytes, or `48` bytes.
+const STORAGE_KEY_HASH_PREFIX_LENGTH: usize = 48;
+
 // sanity check to be sure that testing-utils is not accidentally selected
 #[cfg(all(
     any(test, feature = "testing-utils"),
@@ -730,8 +739,7 @@ impl UtilFuncs for InterBtcParachain {
         while let Some((key, value)) = iter.next().await? {
             let raw_key = key.0.clone();
 
-            // last bytes are the raw key
-            let mut key = &raw_key[raw_key.len() - 4..];
+            let mut key = &raw_key[STORAGE_KEY_HASH_PREFIX_LENGTH..];
 
             let decoded_key: CurrencyId = Decode::decode(&mut key)?;
             ret.push((decoded_key, value.lend_token_id));
