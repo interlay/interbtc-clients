@@ -74,8 +74,8 @@ lazy_static! {
 
 #[derive(Debug, Clone, Default)]
 pub struct LendingAssets {
-    // Mapping from underlying currency to LendToken
     underlying_to_lend_token: BTreeMap<CurrencyId, CurrencyId>,
+    lend_token_to_underlying: BTreeMap<CurrencyId, CurrencyId>,
 }
 
 impl LendingAssets {
@@ -94,6 +94,9 @@ impl LendingAssets {
         lending_assets
             .underlying_to_lend_token
             .insert(underlying_id, lend_token_id);
+        lending_assets
+            .lend_token_to_underlying
+            .insert(lend_token_id, underlying_id);
         Ok(())
     }
 
@@ -105,12 +108,20 @@ impl LendingAssets {
         Ok(())
     }
 
-    /// Fetch the currency for a ticker symbol
+    /// Fetch the lend token id associated with an underlying currency
     pub fn get_lend_token_id(underlying_id: CurrencyId) -> Result<CurrencyId, Error> {
-        log::info!("in get_lend_token {:?}", underlying_id);
         Self::global()?
             .underlying_to_lend_token
             .get(&underlying_id)
+            .cloned()
+            .ok_or(Error::AssetNotFound)
+    }
+
+    /// Fetch the lend token id associated with an underlying currency
+    pub fn get_underlying_id(lend_token_id: CurrencyId) -> Result<CurrencyId, Error> {
+        Self::global()?
+            .lend_token_to_underlying
+            .get(&lend_token_id)
             .cloned()
             .ok_or(Error::AssetNotFound)
     }
@@ -157,6 +168,10 @@ impl RuntimeCurrencyInfo for CurrencyId {
             CurrencyId::Token(token_symbol) => Ok(token_symbol.name().to_string()),
             CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::get_asset_metadata_by_id(*foreign_asset_id)
                 .and_then(|asset_metadata| String::from_utf8(asset_metadata.name).map_err(|_| Error::InvalidCurrency)),
+            CurrencyId::LendToken(id) => {
+                let underlying_currency = LendingAssets::get_underlying_id(CurrencyId::LendToken(*id))?;
+                Ok(format!("Lend{}", underlying_currency.name()?))
+            }
             _ => Err(Error::TokenUnsupported),
         }
     }
@@ -168,6 +183,10 @@ impl RuntimeCurrencyInfo for CurrencyId {
                 .and_then(|asset_metadata| {
                     String::from_utf8(asset_metadata.symbol).map_err(|_| Error::InvalidCurrency)
                 }),
+            CurrencyId::LendToken(id) => {
+                let underlying_currency = LendingAssets::get_underlying_id(CurrencyId::LendToken(*id))?;
+                Ok(format!("Q{}", underlying_currency.symbol()?))
+            }
             _ => Err(Error::TokenUnsupported),
         }
     }
@@ -177,6 +196,10 @@ impl RuntimeCurrencyInfo for CurrencyId {
             CurrencyId::Token(token_symbol) => Ok(token_symbol.decimals().into()),
             CurrencyId::ForeignAsset(foreign_asset_id) => {
                 AssetRegistry::get_asset_metadata_by_id(*foreign_asset_id).map(|asset_metadata| asset_metadata.decimals)
+            }
+            CurrencyId::LendToken(id) => {
+                let underlying_currency = LendingAssets::get_underlying_id(CurrencyId::LendToken(*id))?;
+                underlying_currency.decimals()
             }
             _ => Err(Error::TokenUnsupported),
         }
