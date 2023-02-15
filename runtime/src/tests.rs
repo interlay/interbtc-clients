@@ -10,6 +10,7 @@ use super::{
 use crate::{integration::*, FeedValuesEvent, OracleKey, RuntimeCurrencyInfo, VaultId, H160, U256};
 use module_bitcoin::{formatter::TryFormattable, types::BlockBuilder};
 pub use primitives::CurrencyId::ForeignAsset;
+use primitives::CurrencyId::LendToken;
 use sp_keyring::AccountKeyring;
 use std::{convert::TryInto, time::Duration};
 
@@ -170,10 +171,15 @@ async fn test_currency_id_parsing() {
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
     parachain_rpc.register_dummy_assets().await.unwrap();
     parachain_rpc.store_assets_metadata().await.unwrap();
+    parachain_rpc.register_markets().await.unwrap();
+    parachain_rpc.store_lend_tokens().await.unwrap();
 
     // test with different capitalization to make sure the check is not case sensitive
 
     assert_eq!(CurrencyId::try_from_symbol("KiNt".to_string()).unwrap(), Token(KINT));
+    assert_eq!(CurrencyId::try_from_symbol("abc".to_string()).unwrap(), ForeignAsset(1));
+    assert_eq!(CurrencyId::try_from_symbol("qabC".to_string()).unwrap(), LendToken(0));
+    assert_eq!(CurrencyId::try_from_symbol("qkInt".to_string()).unwrap(), LendToken(1));
     assert_eq!(
         CurrencyId::try_from_symbol("TeSt".to_string()).unwrap(),
         ForeignAsset(2)

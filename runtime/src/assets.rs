@@ -1,4 +1,4 @@
-use crate::{metadata::runtime_types::loans::types::Market, types::*, AssetMetadata, Error};
+use crate::{types::*, AssetMetadata, Error};
 use lazy_static::lazy_static;
 use primitives::{CurrencyId, CurrencyInfo};
 use std::{

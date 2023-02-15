@@ -1,0 +1,8 @@
+--parachain-ws=wss://api-dev-kintsugi.interlay.io:443/parachain
+--
+--btc-parachain-url=ws://kintnet-rpc:9944
+--faucet-url=http://kintnet-faucet:3033
+--auto-register=QKSM=1000
+--keyfile=keyfile.json
+--keyname $(cat keyfile.json | jq -r 'keys[0]')
+--bitcoin-rpc-url=kintnet-api.interlay.io/parachain

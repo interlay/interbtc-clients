@@ -581,12 +581,59 @@ impl InterBtcParachain {
         Ok(())
     }
 
+    #[cfg(test)]
+    fn lending_mock_market_from_id(&self, id: u32) -> metadata::runtime_types::loans::types::Market<Balance> {
+        use primitives::{Rate, Ratio};
+        use sp_runtime::FixedPointNumber;
+
+        metadata::runtime_types::loans::types::Market::<Balance> {
+            close_factor: Ratio::from_percent(50),
+            collateral_factor: Ratio::from_percent(50),
+            liquidation_threshold: Ratio::from_percent(55),
+            liquidate_incentive: Rate::from_inner(Rate::DIV / 100 * 110),
+            state: metadata::runtime_types::loans::types::MarketState::Pending,
+            rate_model: metadata::runtime_types::loans::rate_model::InterestRateModel::Jump(
+                metadata::runtime_types::loans::rate_model::JumpModel {
+                    base_rate: Rate::from_inner(Rate::DIV / 100 * 2),
+                    jump_rate: Rate::from_inner(Rate::DIV / 100 * 10),
+                    full_rate: Rate::from_inner(Rate::DIV / 100 * 32),
+                    jump_utilization: Ratio::from_percent(80),
+                },
+            ),
+            reserve_factor: Ratio::from_percent(15),
+            liquidate_incentive_reserved_factor: Ratio::from_percent(3),
+            supply_cap: 1_000_000_000_000_000_000_000u128,
+            borrow_cap: 1_000_000_000_000_000_000_000u128,
+            lend_token_id: CurrencyId::LendToken(id),
+        }
+    }
+
+    #[cfg(test)]
+    pub async fn register_markets(&self) -> Result<(), Error> {
+        let add_market_txs = [ForeignAsset(1), Token(KINT)]
+            .iter()
+            .enumerate()
+            .map(|(i, asset_id)| {
+                EncodedCall::Loans(metadata::runtime_types::loans::pallet::Call::add_market {
+                    asset_id: *asset_id,
+                    market: self.lending_mock_market_from_id(i as u32),
+                })
+            })
+            .collect();
+        let batch = EncodedCall::Utility(metadata::runtime_types::pallet_utility::pallet::Call::batch {
+            calls: add_market_txs,
+        });
+        self.with_unique_signer(metadata::tx().sudo().sudo(batch)).await?;
+        Ok(())
+    }
+
     pub async fn store_assets_metadata(&self) -> Result<(), Error> {
         AssetRegistry::extend(self.get_foreign_assets_metadata().await?)
     }
 
     pub async fn store_lend_tokens(&self) -> Result<(), Error> {
-        LendingAssets::extend(self.get_lend_tokens().await?)
+        let lend_tokens = self.get_lend_tokens().await?;
+        LendingAssets::extend(lend_tokens)
     }
 
     /// Cache registered assets and updates

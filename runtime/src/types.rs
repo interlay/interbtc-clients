@@ -19,6 +19,7 @@ pub type BlockNumber = u32;
 pub type H160 = subxt::ext::sp_core::H160;
 pub type H256 = subxt::ext::sp_core::H256;
 pub type U256 = subxt::ext::sp_core::U256;
+pub type Ratio = primitives::Ratio;
 
 pub type InterBtcSigner = subxt::tx::PairSigner<InterBtcRuntime, KeyPair>;
 
@@ -27,8 +28,6 @@ pub type BtcAddress = module_btc_relay::BtcAddress;
 pub type FixedU128 = sp_arithmetic::FixedU128;
 
 mod metadata_aliases {
-    use crate::metadata::runtime_types::loans::types::Market;
-
     use super::*;
 
     pub use metadata::runtime_types::bitcoin::address::PublicKey as BtcPublicKey;

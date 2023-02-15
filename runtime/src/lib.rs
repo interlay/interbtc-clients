@@ -108,6 +108,9 @@ pub mod metadata {
     #[subxt(substitute_type = "sp_arithmetic::fixed_point::FixedU128")]
     use crate::FixedU128;
 
+    #[subxt(substitute_type = "sp_arithmetic::per_things::Permill")]
+    use crate::Ratio;
+
     #[subxt(substitute_type = "bitcoin::address::Address")]
     use crate::BtcAddress;
 
