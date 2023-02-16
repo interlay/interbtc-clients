@@ -142,7 +142,6 @@ impl InterBtcParachain {
             wrapped_currency_id,
         };
 
-        // TODO: refresh on registration
         parachain_rpc.store_assets_metadata().await?;
         parachain_rpc.store_lend_tokens().await?;
         Ok(parachain_rpc)

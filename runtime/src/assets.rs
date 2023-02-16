@@ -137,6 +137,7 @@ impl LendingAssets {
 /// Convert a ticker symbol into a `CurrencyId` at runtime
 pub trait TryFromSymbol: Sized {
     fn try_from_symbol(symbol: String) -> Result<Self, Error>;
+    fn from_lend_token_symbol(symbol: &str) -> Option<Self>;
 }
 
 impl TryFromSymbol for CurrencyId {
@@ -150,13 +151,21 @@ impl TryFromSymbol for CurrencyId {
             id if id == KSM.symbol() => Ok(Token(KSM)),
             id if id == KBTC.symbol() => Ok(Token(KBTC)),
             id if id == KINT.symbol() => Ok(Token(KINT)),
-            // Does the first character match the lend token prefix?
-            id if id.chars().next() == Some(LEND_TOKEN_SYMBOL_PREFIX) => {
-                let underlying_id = Self::try_from_symbol(id[1..].to_string())?;
-                LendingAssets::get_lend_token_id(underlying_id)
-            }
+            id if let Some(currency_id) = Self::from_lend_token_symbol(id) =>
+                Ok(currency_id),
             _ => AssetRegistry::get_foreign_asset_by_symbol(uppercase_symbol),
         }
+    }
+
+    fn from_lend_token_symbol(symbol: &str) -> Option<Self> {
+        let uppercase_symbol = symbol.to_uppercase();
+        // Does the first character match the lend token prefix?
+        if uppercase_symbol.as_str().chars().next() == Some(LEND_TOKEN_SYMBOL_PREFIX) {
+            return Self::try_from_symbol(uppercase_symbol[1..].to_string())
+                .ok()
+                .and_then(|underlying_id| LendingAssets::get_lend_token_id(underlying_id).ok());
+        }
+        None
     }
 }
 

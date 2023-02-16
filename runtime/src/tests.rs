@@ -180,6 +180,10 @@ async fn test_currency_id_parsing() {
     assert_eq!(CurrencyId::try_from_symbol("abc".to_string()).unwrap(), ForeignAsset(1));
     assert_eq!(CurrencyId::try_from_symbol("qabC".to_string()).unwrap(), LendToken(0));
     assert_eq!(CurrencyId::try_from_symbol("qkInt".to_string()).unwrap(), LendToken(1));
+    // Even if matching as a qToken fails, the foreign asset should still be found.
+    // Matching "QQQ" will recursively call `try_from_symbol` function three more times (including
+    // with an empty string), because `Q` matches the lend token prefix each time.
+    assert_eq!(CurrencyId::try_from_symbol("qQQ".to_string()).unwrap(), ForeignAsset(3));
     assert_eq!(
         CurrencyId::try_from_symbol("TeSt".to_string()).unwrap(),
         ForeignAsset(2)
