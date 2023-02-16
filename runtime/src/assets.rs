@@ -150,7 +150,8 @@ impl TryFromSymbol for CurrencyId {
             id if id == KSM.symbol() => Ok(Token(KSM)),
             id if id == KBTC.symbol() => Ok(Token(KBTC)),
             id if id == KINT.symbol() => Ok(Token(KINT)),
-            id if id.chars().nth(0) == Some(LEND_TOKEN_SYMBOL_PREFIX) => {
+            // Does the first character match the lend token prefix?
+            id if id.chars().next() == Some(LEND_TOKEN_SYMBOL_PREFIX) => {
                 let underlying_id = Self::try_from_symbol(id[1..].to_string())?;
                 LendingAssets::get_lend_token_id(underlying_id)
             }
