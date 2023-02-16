@@ -609,7 +609,7 @@ impl InterBtcParachain {
     }
 
     #[cfg(test)]
-    pub async fn register_markets(&self) -> Result<(), Error> {
+    pub async fn register_lending_markets(&self) -> Result<(), Error> {
         let add_market_txs = [ForeignAsset(1), Token(KINT)]
             .iter()
             .enumerate()

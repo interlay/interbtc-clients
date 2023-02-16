@@ -171,7 +171,7 @@ async fn test_currency_id_parsing() {
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
     parachain_rpc.register_dummy_assets().await.unwrap();
     parachain_rpc.store_assets_metadata().await.unwrap();
-    parachain_rpc.register_markets().await.unwrap();
+    parachain_rpc.register_lending_markets().await.unwrap();
     parachain_rpc.store_lend_tokens().await.unwrap();
 
     // test with different capitalization to make sure the check is not case sensitive

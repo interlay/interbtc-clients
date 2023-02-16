@@ -11,6 +11,13 @@ lazy_static! {
     static ref ASSET_REGISTRY: Mutex<AssetRegistry> = Mutex::new(AssetRegistry::default());
 }
 
+/// The symbol of Lend Tokens is the symbol of their underlying currency,
+/// prefixed by `Q`. Example: `QDOT` is the `DOT` lend token symbol.
+const LEND_TOKEN_SYMBOL_PREFIX: char = 'Q';
+/// The name of Lend Tokens is the name of their underlying currency,
+/// prefixed by `Lend`. Example: `LendPolkadot` is the `Polkadot` lend token name.
+const LEND_TOKEN_NAME_PREFIX: &str = "Lend";
+
 #[derive(Debug, Clone, Default)]
 pub struct AssetRegistry {
     symbol_lookup: BTreeMap<String, u32>,
@@ -117,7 +124,7 @@ impl LendingAssets {
             .ok_or(Error::AssetNotFound)
     }
 
-    /// Fetch the lend token id associated with an underlying currency
+    /// Fetch the underlying id associated with a lend token currency
     pub fn get_underlying_id(lend_token_id: CurrencyId) -> Result<CurrencyId, Error> {
         Self::global()?
             .lend_token_to_underlying
@@ -143,9 +150,7 @@ impl TryFromSymbol for CurrencyId {
             id if id == KSM.symbol() => Ok(Token(KSM)),
             id if id == KBTC.symbol() => Ok(Token(KBTC)),
             id if id == KINT.symbol() => Ok(Token(KINT)),
-            // Lend Tokens are prefixed with Q for end users. Example: QDOT is
-            // the DOT lend token.
-            id if id.chars().nth(0) == Some('Q') => {
+            id if id.chars().nth(0) == Some(LEND_TOKEN_SYMBOL_PREFIX) => {
                 let underlying_id = Self::try_from_symbol(id[1..].to_string())?;
                 LendingAssets::get_lend_token_id(underlying_id)
             }
@@ -170,7 +175,7 @@ impl RuntimeCurrencyInfo for CurrencyId {
                 .and_then(|asset_metadata| String::from_utf8(asset_metadata.name).map_err(|_| Error::InvalidCurrency)),
             CurrencyId::LendToken(id) => {
                 let underlying_currency = LendingAssets::get_underlying_id(CurrencyId::LendToken(*id))?;
-                Ok(format!("Lend{}", underlying_currency.name()?))
+                Ok(format!("{}{}", LEND_TOKEN_NAME_PREFIX, underlying_currency.name()?))
             }
             _ => Err(Error::TokenUnsupported),
         }
@@ -185,7 +190,7 @@ impl RuntimeCurrencyInfo for CurrencyId {
                 }),
             CurrencyId::LendToken(id) => {
                 let underlying_currency = LendingAssets::get_underlying_id(CurrencyId::LendToken(*id))?;
-                Ok(format!("Q{}", underlying_currency.symbol()?))
+                Ok(format!("{}{}", LEND_TOKEN_SYMBOL_PREFIX, underlying_currency.symbol()?))
             }
             _ => Err(Error::TokenUnsupported),
         }
