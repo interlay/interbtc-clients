@@ -539,7 +539,9 @@ impl BitcoinCore {
             match call().await.map_err(Error::from) {
                 Err(inner) if inner.is_transport_error() && time.elapsed() >= TRANSPORT_TIMEOUT => {
                     info!("Call timed out - retrying...");
-                    // timeout - retry again
+                }
+                Err(inner) if inner.is_already_loading_wallet_error() => {
+                    info!("Wallet is already loading - retrying...");
                 }
                 result => return result,
             };
@@ -961,7 +963,9 @@ impl BitcoinCoreApi for BitcoinCore {
                 info!("Loading wallet {wallet_name}...");
                 let result = self.rpc.load_wallet(wallet_name)?;
                 if let Some(warning) = result.warning {
-                    warn!("Received error while loading wallet {wallet_name}: {warning}");
+                    if !warning.is_empty() {
+                        warn!("Received error while loading wallet {wallet_name}: {warning}");
+                    }
                 }
             } else {
                 info!("Creating wallet {wallet_name}...");
