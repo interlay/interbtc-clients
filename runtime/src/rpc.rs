@@ -40,7 +40,7 @@ const DEFAULT_PAGE_SIZE: u32 = 10;
 /// Keys in storage maps are prefixed by two `twox_128` hashes: the pallet name and the
 /// storage item names. Then, assuming the map uses the `Blake2_128Concat` hasher, the layout
 /// looks as follows:
-/// `twox_128("PalletName") ++ twox_128("ItemName") ++ Blake2_128Concat(key) ++ key`
+/// `twox_128("PalletName") ++ twox_128("ItemName") ++ Blake2_128(key) ++ key`
 /// So to get the actual value of the key from a raw key, we need to ignore the first
 /// `3 * 128 / 8` bytes, or `48` bytes.
 const STORAGE_KEY_HASH_PREFIX_LENGTH: usize = 48;

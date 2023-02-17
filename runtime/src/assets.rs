@@ -14,9 +14,6 @@ lazy_static! {
 /// The symbol of Lend Tokens is the symbol of their underlying currency,
 /// prefixed by `Q`. Example: `QDOT` is the `DOT` lend token symbol.
 const LEND_TOKEN_SYMBOL_PREFIX: char = 'Q';
-/// The name of Lend Tokens is the name of their underlying currency,
-/// prefixed by `Lend`. Example: `LendPolkadot` is the `Polkadot` lend token name.
-const LEND_TOKEN_NAME_PREFIX: &str = "Lend";
 
 #[derive(Debug, Clone, Default)]
 pub struct AssetRegistry {
@@ -171,26 +168,12 @@ impl TryFromSymbol for CurrencyId {
 
 /// Fallible operations on currencies
 pub trait RuntimeCurrencyInfo {
-    fn name(&self) -> Result<String, Error>;
     fn symbol(&self) -> Result<String, Error>;
     fn decimals(&self) -> Result<u32, Error>;
     fn coingecko_id(&self) -> Result<String, Error>;
 }
 
 impl RuntimeCurrencyInfo for CurrencyId {
-    fn name(&self) -> Result<String, Error> {
-        match self {
-            CurrencyId::Token(token_symbol) => Ok(token_symbol.name().to_string()),
-            CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::get_asset_metadata_by_id(*foreign_asset_id)
-                .and_then(|asset_metadata| String::from_utf8(asset_metadata.name).map_err(|_| Error::InvalidCurrency)),
-            CurrencyId::LendToken(id) => {
-                let underlying_currency = LendingAssets::get_underlying_id(CurrencyId::LendToken(*id))?;
-                Ok(format!("{}{}", LEND_TOKEN_NAME_PREFIX, underlying_currency.name()?))
-            }
-            _ => Err(Error::TokenUnsupported),
-        }
-    }
-
     fn symbol(&self) -> Result<String, Error> {
         match self {
             CurrencyId::Token(token_symbol) => Ok(token_symbol.symbol().to_string()),
@@ -268,7 +251,6 @@ mod tests {
 
     #[test]
     fn should_get_runtime_info_for_token_symbol() -> Result<(), Error> {
-        assert_eq!(Token(DOT).name()?, "Polkadot");
         assert_eq!(Token(DOT).symbol()?, "DOT");
         assert_eq!(Token(DOT).decimals()?, 10);
         Ok(())
@@ -311,7 +293,6 @@ mod tests {
             },
         )?;
 
-        assert_eq!(ForeignAsset(0).name()?, "Asset 1");
         assert_eq!(ForeignAsset(0).symbol()?, "AST1");
         assert_eq!(ForeignAsset(0).decimals()?, 10);
         Ok(())
