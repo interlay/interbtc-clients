@@ -95,6 +95,18 @@ impl Error {
         )
     }
 
+    pub fn is_already_loading_wallet_error(&self) -> bool {
+        // Catch this error: `JSON-RPC error: RPC error response: RpcError { code: -4, message: "Wallet already
+        // loading.", data: None }`.
+        // In older versions, the message was "Wallet already being loading.". See https://github.com/bitcoin/bitcoin/commit/ae9d26a8f0435e2f4b39ad1181473e6575ac67b5
+        // We catch everything that starts with "Wallet already". As of the time of writing no error error messages
+        // start with that
+        matches!(self,
+            Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
+                if BitcoinRpcError::from(err.clone()) == BitcoinRpcError::RpcWalletError && err.message.starts_with("Wallet already")
+        )
+    }
+
     pub fn rejected_by_network_rules(&self) -> bool {
         matches!(self,
             Error::BitcoinError(BitcoinError::JsonRpc(JsonRpcError::Rpc(err)))
