@@ -36,14 +36,12 @@ const BLOCK_WAIT_TIMEOUT: Duration = Duration::from_secs(6);
 // number of storage entries to fetch at a time
 const DEFAULT_PAGE_SIZE: u32 = 10;
 
-// TODO: Convert to a utility function
 /// Keys in storage maps are prefixed by two `twox_128` hashes: the pallet name and the
-/// storage item names. Then, assuming the map uses the `Blake2_128Concat` hasher, the layout
+/// storage item names. Then, depending on the `hash_fn` hasher the map uses,  the layout
 /// looks as follows:
-/// `twox_128("PalletName") ++ twox_128("ItemName") ++ Blake2_128(key) ++ key`
-/// So to get the actual value of the key from a raw key, we need to ignore the first
-/// `3 * 128 / 8` bytes, or `48` bytes.
-const STORAGE_KEY_HASH_PREFIX_LENGTH: usize = 48;
+/// `twox_128("PalletName") ++ twox_128("ItemName") ++ hash_fn(key) ++ key`
+const BLAKE2_128_HASH_PREFIX_LENGTH: usize = 48;
+const TWOX_64_HASH_PREFIX_LENGTH: usize = 40;
 
 // sanity check to be sure that testing-utils is not accidentally selected
 #[cfg(all(
@@ -711,6 +709,14 @@ impl InterBtcParachain {
         .await?;
         Ok(())
     }
+
+    fn strip_blake2_key_prefix(raw_key: &[u8]) -> &[u8] {
+        &raw_key[BLAKE2_128_HASH_PREFIX_LENGTH..]
+    }
+
+    fn strip_twox64_key_prefix(raw_key: &[u8]) -> &[u8] {
+        &raw_key[TWOX_64_HASH_PREFIX_LENGTH..]
+    }
 }
 
 #[async_trait]
@@ -733,6 +739,16 @@ pub trait UtilFuncs {
     async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, Error>;
 
     async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, Error>;
+
+    async fn get_decoded_storage_keys<T, U, F>(
+        &self,
+        key_addr: KeyStorageAddress<T>,
+        get_raw_key: F,
+    ) -> Result<Vec<(U, T)>, Error>
+    where
+        T: Decode + Send + 'static,
+        U: Decode + Send,
+        F: Fn(&[u8]) -> &[u8] + Send;
 }
 
 #[async_trait]
@@ -758,9 +774,17 @@ impl UtilFuncs for InterBtcParachain {
         &vault_id.account_id == self.get_account_id()
     }
 
-    async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, Error> {
+    async fn get_decoded_storage_keys<T, U, F>(
+        &self,
+        key_addr: KeyStorageAddress<T>,
+        get_raw_key: F,
+    ) -> Result<Vec<(U, T)>, Error>
+    where
+        T: Decode + Send + 'static,
+        U: Decode + Send,
+        F: Fn(&[u8]) -> &[u8] + Send,
+    {
         let head = self.get_finalized_block_hash().await?;
-        let key_addr = metadata::storage().asset_registry().metadata_root();
         let mut iter = self.api.storage().iter(key_addr, DEFAULT_PAGE_SIZE, head).await?;
 
         let mut ret = Vec::new();
@@ -768,28 +792,29 @@ impl UtilFuncs for InterBtcParachain {
             let raw_key = key.0.clone();
 
             // last bytes are the raw key
-            let mut key = &raw_key[raw_key.len() - 4..];
+            let mut key = get_raw_key(raw_key.as_slice());
 
-            let decoded_key: u32 = Decode::decode(&mut key)?;
+            let decoded_key = U::decode(&mut key)?;
             ret.push((decoded_key, value));
         }
         Ok(ret)
     }
 
+    async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, Error> {
+        let key_addr = metadata::storage().asset_registry().metadata_root();
+        self.get_decoded_storage_keys(key_addr, Self::strip_twox64_key_prefix)
+            .await
+    }
+
     async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, Error> {
-        let head = self.get_finalized_block_hash().await?;
         let key_addr = metadata::storage().loans().markets_root();
-        let mut iter = self.api.storage().iter(key_addr, DEFAULT_PAGE_SIZE, head).await?;
-
-        let mut ret = Vec::new();
-        while let Some((key, value)) = iter.next().await? {
-            let raw_key = key.0.clone();
-
-            let mut key = &raw_key[STORAGE_KEY_HASH_PREFIX_LENGTH..];
-
-            let decoded_key: CurrencyId = Decode::decode(&mut key)?;
-            ret.push((decoded_key, value.lend_token_id));
-        }
+        let markets = self
+            .get_decoded_storage_keys::<_, CurrencyId, _>(key_addr, Self::strip_blake2_key_prefix)
+            .await?;
+        let ret = markets
+            .into_iter()
+            .map(|(underlying_currency_id, market)| (underlying_currency_id, market.lend_token_id))
+            .collect();
         Ok(ret)
     }
 
@@ -1275,7 +1300,7 @@ impl IssuePallet for InterBtcParachain {
             if request.status == IssueRequestStatus::Pending && request.opentime + issue_period > current_height {
                 let key_hash = issue_id.0.as_slice();
                 // last bytes are the raw key
-                let key = &key_hash[key_hash.len() - 32..];
+                let key = Self::strip_blake2_key_prefix(key_hash);
                 issue_requests.push((H256::from_slice(key), request));
             }
         }

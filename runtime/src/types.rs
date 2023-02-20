@@ -1,6 +1,10 @@
 use crate::{metadata, Config, InterBtcRuntime, RuntimeCurrencyInfo, SS58_PREFIX};
 pub use metadata_aliases::*;
 pub use subxt::ext::sp_core::{crypto::Ss58Codec, sr25519::Pair as KeyPair};
+use subxt::{
+    metadata::DecodeStaticType,
+    storage::{address::Yes, StaticStorageAddress},
+};
 
 pub use primitives::{
     CurrencyId,
@@ -79,6 +83,7 @@ mod metadata_aliases {
     };
     pub type AssetMetadata = GenericAssetMetadata<Balance, InterBtcAdditionalMetadata>;
     pub type LendingMarket = metadata::runtime_types::loans::types::Market<Balance>;
+    pub type KeyStorageAddress<T> = StaticStorageAddress<DecodeStaticType<T>, (), (), Yes>;
 
     pub use metadata::runtime_types::{
         btc_relay::pallet::Error as BtcRelayPalletError, frame_system::pallet::Error as SystemPalletError,
