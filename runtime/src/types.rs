@@ -50,9 +50,14 @@ mod metadata_aliases {
 
     pub use metadata::{
         asset_registry::events::{RegisteredAsset as RegisteredAssetEvent, UpdatedAsset as UpdatedAssetEvent},
-        loans::events::{NewMarket as NewMarketEvent, UpdatedMarket as UpdatedMarketEvent},
         oracle::events::FeedValues as FeedValuesEvent,
     };
+
+    #[cfg(any(
+        feature = "parachain-metadata-kintsugi-testnet",
+        feature = "parachain-metadata-interlay-testnet"
+    ))]
+    pub use metadata::loans::events::{NewMarket as NewMarketEvent, UpdatedMarket as UpdatedMarketEvent};
 
     pub use metadata::issue::events::{
         CancelIssue as CancelIssueEvent, ExecuteIssue as ExecuteIssueEvent, RequestIssue as RequestIssueEvent,
@@ -82,6 +87,10 @@ mod metadata_aliases {
         orml_traits::asset_registry::AssetMetadata as GenericAssetMetadata,
     };
     pub type AssetMetadata = GenericAssetMetadata<Balance, InterBtcAdditionalMetadata>;
+    #[cfg(any(
+        feature = "parachain-metadata-kintsugi-testnet",
+        feature = "parachain-metadata-interlay-testnet"
+    ))]
     pub type LendingMarket = metadata::runtime_types::loans::types::Market<Balance>;
     pub type KeyStorageAddress<T> = StaticStorageAddress<DecodeStaticType<T>, (), (), Yes>;
 

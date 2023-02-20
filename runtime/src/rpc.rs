@@ -141,6 +141,10 @@ impl InterBtcParachain {
         };
 
         parachain_rpc.store_assets_metadata().await?;
+        #[cfg(any(
+            feature = "parachain-metadata-kintsugi-testnet",
+            feature = "parachain-metadata-interlay-testnet"
+        ))]
         parachain_rpc.store_lend_tokens().await?;
         Ok(parachain_rpc)
     }
@@ -628,6 +632,10 @@ impl InterBtcParachain {
         AssetRegistry::extend(self.get_foreign_assets_metadata().await?)
     }
 
+    #[cfg(any(
+        feature = "parachain-metadata-kintsugi-testnet",
+        feature = "parachain-metadata-interlay-testnet"
+    ))]
     pub async fn store_lend_tokens(&self) -> Result<(), Error> {
         let lend_tokens = self.get_lend_tokens().await?;
         LendingAssets::extend(lend_tokens)
@@ -658,6 +666,10 @@ impl InterBtcParachain {
     }
 
     /// Cache new markets and updates
+    #[cfg(any(
+        feature = "parachain-metadata-kintsugi-testnet",
+        feature = "parachain-metadata-interlay-testnet"
+    ))]
     pub async fn listen_for_lending_markets(&self) -> Result<(), Error> {
         futures::future::try_join(
             self.on_event::<NewMarketEvent, _, _, _>(
@@ -738,6 +750,10 @@ pub trait UtilFuncs {
 
     async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, Error>;
 
+    #[cfg(any(
+        feature = "parachain-metadata-kintsugi-testnet",
+        feature = "parachain-metadata-interlay-testnet"
+    ))]
     async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, Error>;
 
     async fn get_decoded_storage_keys<T, U, F>(
@@ -806,6 +822,10 @@ impl UtilFuncs for InterBtcParachain {
             .await
     }
 
+    #[cfg(any(
+        feature = "parachain-metadata-kintsugi-testnet",
+        feature = "parachain-metadata-interlay-testnet"
+    ))]
     async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, Error> {
         let key_addr = metadata::storage().loans().markets_root();
         let markets = self
