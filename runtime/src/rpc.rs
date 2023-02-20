@@ -763,8 +763,8 @@ pub trait UtilFuncs {
     ) -> Result<Vec<(U, T)>, Error>
     where
         T: Decode + Send + 'static,
-        U: Decode + Send,
-        F: Fn(&[u8]) -> &[u8] + Send;
+        U: Decode + Send + 'static,
+        F: Fn(&[u8]) -> &[u8] + Send + 'static;
 }
 
 #[async_trait]
@@ -797,8 +797,8 @@ impl UtilFuncs for InterBtcParachain {
     ) -> Result<Vec<(U, T)>, Error>
     where
         T: Decode + Send + 'static,
-        U: Decode + Send,
-        F: Fn(&[u8]) -> &[u8] + Send,
+        U: Decode + Send + 'static,
+        F: Fn(&[u8]) -> &[u8] + Send + 'static,
     {
         let head = self.get_finalized_block_hash().await?;
         let mut iter = self.api.storage().iter(key_addr, DEFAULT_PAGE_SIZE, head).await?;
