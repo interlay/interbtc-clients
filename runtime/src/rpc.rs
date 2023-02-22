@@ -722,6 +722,34 @@ impl InterBtcParachain {
         Ok(())
     }
 
+    async fn get_decoded_storage_keys<T, U>(
+        &self,
+        key_addr: KeyStorageAddress<T>,
+        hasher: StorageMapHasher,
+    ) -> Result<Vec<(U, T)>, Error>
+    where
+        T: Decode + Send + 'static,
+        U: Decode + Send + 'static,
+    {
+        let head = self.get_finalized_block_hash().await?;
+        let mut iter = self.api.storage().iter(key_addr, DEFAULT_PAGE_SIZE, head).await?;
+
+        let mut ret = Vec::new();
+        while let Some((key, value)) = iter.next().await? {
+            let raw_key = key.0.clone();
+
+            // last bytes are the raw key
+            let mut key = match hasher {
+                StorageMapHasher::Blake2_128 => Self::strip_blake2_key_prefix(raw_key.as_slice()),
+                StorageMapHasher::Twox_64 => Self::strip_twox64_key_prefix(raw_key.as_slice()),
+            };
+
+            let decoded_key = U::decode(&mut key)?;
+            ret.push((decoded_key, value));
+        }
+        Ok(ret)
+    }
+
     fn strip_blake2_key_prefix(raw_key: &[u8]) -> &[u8] {
         &raw_key[BLAKE2_128_HASH_PREFIX_LENGTH..]
     }
@@ -755,16 +783,6 @@ pub trait UtilFuncs {
         feature = "parachain-metadata-interlay-testnet"
     ))]
     async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, Error>;
-
-    async fn get_decoded_storage_keys<T, U, F>(
-        &self,
-        key_addr: KeyStorageAddress<T>,
-        get_raw_key: F,
-    ) -> Result<Vec<(U, T)>, Error>
-    where
-        T: Decode + Send + 'static,
-        U: Decode + Send + 'static,
-        F: Fn(&[u8]) -> &[u8] + Send + 'static;
 }
 
 #[async_trait]
@@ -790,36 +808,9 @@ impl UtilFuncs for InterBtcParachain {
         &vault_id.account_id == self.get_account_id()
     }
 
-    async fn get_decoded_storage_keys<T, U, F>(
-        &self,
-        key_addr: KeyStorageAddress<T>,
-        get_raw_key: F,
-    ) -> Result<Vec<(U, T)>, Error>
-    where
-        T: Decode + Send + 'static,
-        U: Decode + Send + 'static,
-        F: Fn(&[u8]) -> &[u8] + Send + 'static,
-    {
-        let head = self.get_finalized_block_hash().await?;
-        let mut iter = self.api.storage().iter(key_addr, DEFAULT_PAGE_SIZE, head).await?;
-
-        let mut ret = Vec::new();
-        while let Some((key, value)) = iter.next().await? {
-            let raw_key = key.0.clone();
-
-            // last bytes are the raw key
-            let mut key = get_raw_key(raw_key.as_slice());
-
-            let decoded_key = U::decode(&mut key)?;
-            ret.push((decoded_key, value));
-        }
-        Ok(ret)
-    }
-
     async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, Error> {
         let key_addr = metadata::storage().asset_registry().metadata_root();
-        self.get_decoded_storage_keys(key_addr, Self::strip_twox64_key_prefix)
-            .await
+        self.get_decoded_storage_keys(key_addr, StorageMapHasher::Twox_64).await
     }
 
     #[cfg(any(
@@ -829,7 +820,7 @@ impl UtilFuncs for InterBtcParachain {
     async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, Error> {
         let key_addr = metadata::storage().loans().markets_root();
         let markets = self
-            .get_decoded_storage_keys::<_, CurrencyId, _>(key_addr, Self::strip_blake2_key_prefix)
+            .get_decoded_storage_keys::<_, CurrencyId>(key_addr, StorageMapHasher::Blake2_128)
             .await?;
         let ret = markets
             .into_iter()

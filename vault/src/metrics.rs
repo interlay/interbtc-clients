@@ -703,15 +703,6 @@ mod tests {
             async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, RuntimeError>;
             async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, RuntimeError>;
             async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, RuntimeError>;
-            async fn get_decoded_storage_keys<T, U, F>(
-                &self,
-                key_addr: KeyStorageAddress<T>,
-                get_raw_key: F,
-            ) -> Result<Vec<(U, T)>, RuntimeError>
-            where
-                T: Decode + Send + 'static,
-                U: Decode + Send + 'static,
-                F: Fn(&[u8]) -> &[u8] + Send + 'static;
         }
 
         #[async_trait]

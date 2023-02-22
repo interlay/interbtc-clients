@@ -31,6 +31,11 @@ pub type BtcAddress = module_btc_relay::BtcAddress;
 
 pub type FixedU128 = sp_arithmetic::FixedU128;
 
+pub(crate) enum StorageMapHasher {
+    Blake2_128,
+    Twox_64,
+}
+
 mod metadata_aliases {
     use super::*;
 
