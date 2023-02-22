@@ -610,10 +610,11 @@ mod tests {
         PrivateKey, PublicKey, Transaction, TransactionMetadata, Txid,
     };
     use jsonrpc_core::serde_json::{Map, Value};
+    use parity_scale_codec::Decode;
     use runtime::{
         sp_core::H160, AccountId, AssetMetadata, BitcoinBlockHeight, BlockNumber, BtcPublicKey, CurrencyId,
-        Error as RuntimeError, ErrorCode, FeeRateUpdateReceiver, InterBtcRichBlockHeader, InterBtcVault, OracleKey,
-        RawBlockHeader, StatusCode, Token, DOT, IBTC,
+        Error as RuntimeError, ErrorCode, FeeRateUpdateReceiver, InterBtcRichBlockHeader, InterBtcVault,
+        KeyStorageAddress, OracleKey, RawBlockHeader, StatusCode, Token, DOT, IBTC,
     };
     use std::{collections::BTreeSet, sync::Arc};
 
@@ -642,6 +643,7 @@ mod tests {
             fn is_this_vault(&self, vault_id: &VaultId) -> bool;
             async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, RuntimeError>;
             async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, RuntimeError>;
+            async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, RuntimeError>;
         }
         #[async_trait]
         pub trait VaultRegistryPallet {

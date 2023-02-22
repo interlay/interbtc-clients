@@ -319,9 +319,11 @@ mod tests {
     use async_trait::async_trait;
     use futures::channel::mpsc;
     use jsonrpc_core::serde_json::{Map, Value};
+    use parity_scale_codec::Decode;
     use runtime::{
         AccountId, AssetMetadata, BtcAddress, BtcPublicKey, CurrencyId, ErrorCode, InterBtcIssueRequest,
-        InterBtcReplaceRequest, IssueRequestStatus, RequestIssueEvent, StatusCode, Token, VaultId, DOT, IBTC,
+        InterBtcReplaceRequest, IssueRequestStatus, KeyStorageAddress, RequestIssueEvent, StatusCode, Token, VaultId,
+        DOT, IBTC,
     };
     use std::collections::BTreeSet;
 
@@ -373,6 +375,7 @@ mod tests {
             fn is_this_vault(&self, vault_id: &VaultId) -> bool;
             async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, RuntimeError>;
             async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, RuntimeError>;
+            async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, RuntimeError>;
         }
 
         #[async_trait]

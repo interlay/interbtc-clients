@@ -50,7 +50,7 @@ cargo run --bin vault --features parachain-metadata-kintsugi
 vault generate-bitcoin-key private-key.wif --network bitcoin
 
 # parachain sr25519 key
-vault generate-parachain-key keyfile.json
+vault generate-parachain-key --output keyfile.json
 
 # start the vault client
 vault \

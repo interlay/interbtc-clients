@@ -1,6 +1,10 @@
 use crate::{metadata, Config, InterBtcRuntime, RuntimeCurrencyInfo, SS58_PREFIX};
 pub use metadata_aliases::*;
 pub use subxt::ext::sp_core::{crypto::Ss58Codec, sr25519::Pair as KeyPair};
+use subxt::{
+    metadata::DecodeStaticType,
+    storage::{address::Yes, StaticStorageAddress},
+};
 
 pub use primitives::{
     CurrencyId,
@@ -19,12 +23,18 @@ pub type BlockNumber = u32;
 pub type H160 = subxt::ext::sp_core::H160;
 pub type H256 = subxt::ext::sp_core::H256;
 pub type U256 = subxt::ext::sp_core::U256;
+pub type Ratio = primitives::Ratio;
 
 pub type InterBtcSigner = subxt::tx::PairSigner<InterBtcRuntime, KeyPair>;
 
 pub type BtcAddress = module_btc_relay::BtcAddress;
 
 pub type FixedU128 = sp_arithmetic::FixedU128;
+
+pub(crate) enum StorageMapHasher {
+    Blake2_128,
+    Twox_64,
+}
 
 mod metadata_aliases {
     use super::*;
@@ -43,11 +53,16 @@ mod metadata_aliases {
     pub type InterBtcRichBlockHeader = metadata::runtime_types::btc_relay::types::RichBlockHeader<BlockNumber>;
     pub type BitcoinBlockHeight = u32;
 
-    pub use metadata::asset_registry::events::{
-        RegisteredAsset as RegisteredAssetEvent, UpdatedAsset as UpdatedAssetEvent,
+    pub use metadata::{
+        asset_registry::events::{RegisteredAsset as RegisteredAssetEvent, UpdatedAsset as UpdatedAssetEvent},
+        oracle::events::FeedValues as FeedValuesEvent,
     };
 
-    pub use metadata::oracle::events::FeedValues as FeedValuesEvent;
+    #[cfg(any(
+        feature = "parachain-metadata-kintsugi-testnet",
+        feature = "parachain-metadata-interlay-testnet"
+    ))]
+    pub use metadata::loans::events::{NewMarket as NewMarketEvent, UpdatedMarket as UpdatedMarketEvent};
 
     pub use metadata::issue::events::{
         CancelIssue as CancelIssueEvent, ExecuteIssue as ExecuteIssueEvent, RequestIssue as RequestIssueEvent,
@@ -77,6 +92,12 @@ mod metadata_aliases {
         orml_traits::asset_registry::AssetMetadata as GenericAssetMetadata,
     };
     pub type AssetMetadata = GenericAssetMetadata<Balance, InterBtcAdditionalMetadata>;
+    #[cfg(any(
+        feature = "parachain-metadata-kintsugi-testnet",
+        feature = "parachain-metadata-interlay-testnet"
+    ))]
+    pub type LendingMarket = metadata::runtime_types::loans::types::Market<Balance>;
+    pub type KeyStorageAddress<T> = StaticStorageAddress<DecodeStaticType<T>, (), (), Yes>;
 
     pub use metadata::runtime_types::{
         btc_relay::pallet::Error as BtcRelayPalletError, frame_system::pallet::Error as SystemPalletError,

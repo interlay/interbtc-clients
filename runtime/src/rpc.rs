@@ -1,4 +1,5 @@
 use crate::{
+    assets::LendingAssets,
     conn::{new_websocket_client, new_websocket_client_with_retry},
     metadata, notify_retry,
     types::*,
@@ -34,6 +35,13 @@ const BLOCK_WAIT_TIMEOUT: Duration = Duration::from_secs(6);
 
 // number of storage entries to fetch at a time
 const DEFAULT_PAGE_SIZE: u32 = 10;
+
+/// Keys in storage maps are prefixed by two `twox_128` hashes: the pallet name and the
+/// storage item names. Then, depending on the `hash_fn` hasher the map uses,  the layout
+/// looks as follows:
+/// `twox_128("PalletName") ++ twox_128("ItemName") ++ hash_fn(key) ++ key`
+const BLAKE2_128_HASH_PREFIX_LENGTH: usize = 48;
+const TWOX_64_HASH_PREFIX_LENGTH: usize = 40;
 
 // sanity check to be sure that testing-utils is not accidentally selected
 #[cfg(all(
@@ -132,8 +140,12 @@ impl InterBtcParachain {
             wrapped_currency_id,
         };
 
-        // TODO: refresh on registration
         parachain_rpc.store_assets_metadata().await?;
+        #[cfg(any(
+            feature = "parachain-metadata-kintsugi-testnet",
+            feature = "parachain-metadata-interlay-testnet"
+        ))]
+        parachain_rpc.store_lend_tokens().await?;
         Ok(parachain_rpc)
     }
 
@@ -570,8 +582,63 @@ impl InterBtcParachain {
         Ok(())
     }
 
+    #[cfg(test)]
+    fn lending_mock_market_from_id(&self, id: u32) -> metadata::runtime_types::loans::types::Market<Balance> {
+        use primitives::{Rate, Ratio};
+        use sp_runtime::FixedPointNumber;
+
+        metadata::runtime_types::loans::types::Market::<Balance> {
+            close_factor: Ratio::from_percent(50),
+            collateral_factor: Ratio::from_percent(50),
+            liquidation_threshold: Ratio::from_percent(55),
+            liquidate_incentive: Rate::from_inner(Rate::DIV / 100 * 110),
+            state: metadata::runtime_types::loans::types::MarketState::Pending,
+            rate_model: metadata::runtime_types::loans::rate_model::InterestRateModel::Jump(
+                metadata::runtime_types::loans::rate_model::JumpModel {
+                    base_rate: Rate::from_inner(Rate::DIV / 100 * 2),
+                    jump_rate: Rate::from_inner(Rate::DIV / 100 * 10),
+                    full_rate: Rate::from_inner(Rate::DIV / 100 * 32),
+                    jump_utilization: Ratio::from_percent(80),
+                },
+            ),
+            reserve_factor: Ratio::from_percent(15),
+            liquidate_incentive_reserved_factor: Ratio::from_percent(3),
+            supply_cap: 1_000_000_000_000_000_000_000u128,
+            borrow_cap: 1_000_000_000_000_000_000_000u128,
+            lend_token_id: CurrencyId::LendToken(id),
+        }
+    }
+
+    #[cfg(test)]
+    pub async fn register_lending_markets(&self) -> Result<(), Error> {
+        let add_market_txs = [ForeignAsset(1), Token(KINT)]
+            .iter()
+            .enumerate()
+            .map(|(i, asset_id)| {
+                EncodedCall::Loans(metadata::runtime_types::loans::pallet::Call::add_market {
+                    asset_id: *asset_id,
+                    market: self.lending_mock_market_from_id(i as u32),
+                })
+            })
+            .collect();
+        let batch = EncodedCall::Utility(metadata::runtime_types::pallet_utility::pallet::Call::batch {
+            calls: add_market_txs,
+        });
+        self.with_unique_signer(metadata::tx().sudo().sudo(batch)).await?;
+        Ok(())
+    }
+
     pub async fn store_assets_metadata(&self) -> Result<(), Error> {
         AssetRegistry::extend(self.get_foreign_assets_metadata().await?)
+    }
+
+    #[cfg(any(
+        feature = "parachain-metadata-kintsugi-testnet",
+        feature = "parachain-metadata-interlay-testnet"
+    ))]
+    pub async fn store_lend_tokens(&self) -> Result<(), Error> {
+        let lend_tokens = self.get_lend_tokens().await?;
+        LendingAssets::extend(lend_tokens)
     }
 
     /// Cache registered assets and updates
@@ -589,6 +656,42 @@ impl InterBtcParachain {
                 |event| async move {
                     if let Err(err) = AssetRegistry::insert(event.asset_id, event.metadata) {
                         log::error!("Failed to update asset {}: {}", event.asset_id, err);
+                    }
+                },
+                |_| {},
+            ),
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Cache new markets and updates
+    #[cfg(any(
+        feature = "parachain-metadata-kintsugi-testnet",
+        feature = "parachain-metadata-interlay-testnet"
+    ))]
+    pub async fn listen_for_lending_markets(&self) -> Result<(), Error> {
+        futures::future::try_join(
+            self.on_event::<NewMarketEvent, _, _, _>(
+                |event| async move {
+                    if let Err(err) = LendingAssets::insert(event.underlying_currency_id, event.market.lend_token_id) {
+                        log::error!(
+                            "Failed to register lend token {:?}: {}",
+                            event.underlying_currency_id,
+                            err
+                        );
+                    }
+                },
+                |_| {},
+            ),
+            self.on_event::<UpdatedMarketEvent, _, _, _>(
+                |event| async move {
+                    if let Err(err) = LendingAssets::insert(event.underlying_currency_id, event.market.lend_token_id) {
+                        log::error!(
+                            "Failed to update lend token {:?}: {}",
+                            event.underlying_currency_id,
+                            err
+                        );
                     }
                 },
                 |_| {},
@@ -618,6 +721,42 @@ impl InterBtcParachain {
         .await?;
         Ok(())
     }
+
+    async fn get_decoded_storage_keys<T, U>(
+        &self,
+        key_addr: KeyStorageAddress<T>,
+        hasher: StorageMapHasher,
+    ) -> Result<Vec<(U, T)>, Error>
+    where
+        T: Decode + Send + 'static,
+        U: Decode + Send + 'static,
+    {
+        let head = self.get_finalized_block_hash().await?;
+        let mut iter = self.api.storage().iter(key_addr, DEFAULT_PAGE_SIZE, head).await?;
+
+        let mut ret = Vec::new();
+        while let Some((key, value)) = iter.next().await? {
+            let raw_key = key.0.clone();
+
+            // last bytes are the raw key
+            let mut key = match hasher {
+                StorageMapHasher::Blake2_128 => Self::strip_blake2_key_prefix(raw_key.as_slice()),
+                StorageMapHasher::Twox_64 => Self::strip_twox64_key_prefix(raw_key.as_slice()),
+            };
+
+            let decoded_key = U::decode(&mut key)?;
+            ret.push((decoded_key, value));
+        }
+        Ok(ret)
+    }
+
+    fn strip_blake2_key_prefix(raw_key: &[u8]) -> &[u8] {
+        &raw_key[BLAKE2_128_HASH_PREFIX_LENGTH..]
+    }
+
+    fn strip_twox64_key_prefix(raw_key: &[u8]) -> &[u8] {
+        &raw_key[TWOX_64_HASH_PREFIX_LENGTH..]
+    }
 }
 
 #[async_trait]
@@ -638,6 +777,12 @@ pub trait UtilFuncs {
     async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, Error>;
 
     async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, Error>;
+
+    #[cfg(any(
+        feature = "parachain-metadata-kintsugi-testnet",
+        feature = "parachain-metadata-interlay-testnet"
+    ))]
+    async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, Error>;
 }
 
 #[async_trait]
@@ -664,20 +809,23 @@ impl UtilFuncs for InterBtcParachain {
     }
 
     async fn get_foreign_assets_metadata(&self) -> Result<Vec<(u32, AssetMetadata)>, Error> {
-        let head = self.get_finalized_block_hash().await?;
         let key_addr = metadata::storage().asset_registry().metadata_root();
-        let mut iter = self.api.storage().iter(key_addr, DEFAULT_PAGE_SIZE, head).await?;
+        self.get_decoded_storage_keys(key_addr, StorageMapHasher::Twox_64).await
+    }
 
-        let mut ret = Vec::new();
-        while let Some((key, value)) = iter.next().await? {
-            let raw_key = key.0.clone();
-
-            // last bytes are the raw key
-            let mut key = &raw_key[raw_key.len() - 4..];
-
-            let decoded_key: u32 = Decode::decode(&mut key)?;
-            ret.push((decoded_key, value));
-        }
+    #[cfg(any(
+        feature = "parachain-metadata-kintsugi-testnet",
+        feature = "parachain-metadata-interlay-testnet"
+    ))]
+    async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, Error> {
+        let key_addr = metadata::storage().loans().markets_root();
+        let markets = self
+            .get_decoded_storage_keys::<_, CurrencyId>(key_addr, StorageMapHasher::Blake2_128)
+            .await?;
+        let ret = markets
+            .into_iter()
+            .map(|(underlying_currency_id, market)| (underlying_currency_id, market.lend_token_id))
+            .collect();
         Ok(ret)
     }
 
@@ -1163,7 +1311,7 @@ impl IssuePallet for InterBtcParachain {
             if request.status == IssueRequestStatus::Pending && request.opentime + issue_period > current_height {
                 let key_hash = issue_id.0.as_slice();
                 // last bytes are the raw key
-                let key = &key_hash[key_hash.len() - 32..];
+                let key = Self::strip_blake2_key_prefix(key_hash);
                 issue_requests.push((H256::from_slice(key), request));
             }
         }

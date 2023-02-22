@@ -11,6 +11,10 @@ lazy_static! {
     static ref ASSET_REGISTRY: Mutex<AssetRegistry> = Mutex::new(AssetRegistry::default());
 }
 
+/// The symbol of Lend Tokens is the symbol of their underlying currency,
+/// prefixed by `Q`. Example: `QDOT` is the `DOT` lend token symbol.
+const LEND_TOKEN_SYMBOL_PREFIX: char = 'Q';
+
 #[derive(Debug, Clone, Default)]
 pub struct AssetRegistry {
     symbol_lookup: BTreeMap<String, u32>,
@@ -67,9 +71,70 @@ impl AssetRegistry {
     }
 }
 
+lazy_static! {
+    // NOTE: restrict access to the lock to ensure that no async code yields while holding the mutex
+    static ref LENDING_ASSETS: Mutex<LendingAssets> = Mutex::new(LendingAssets::default());
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct LendingAssets {
+    underlying_to_lend_token: BTreeMap<CurrencyId, CurrencyId>,
+    lend_token_to_underlying: BTreeMap<CurrencyId, CurrencyId>,
+}
+
+impl LendingAssets {
+    /// Fetch the global, mutable singleton
+    fn global() -> Result<MutexGuard<'static, Self>, Error> {
+        LENDING_ASSETS.lock().map_err(|_| Error::CannotOpenAssetRegistry)
+    }
+
+    pub(crate) fn insert(underlying_id: CurrencyId, lend_token_id: CurrencyId) -> Result<(), Error> {
+        log::info!(
+            "Found loans market: {:?}, with lend token: {:?}",
+            underlying_id,
+            lend_token_id
+        );
+        let mut lending_assets = Self::global()?;
+        lending_assets
+            .underlying_to_lend_token
+            .insert(underlying_id, lend_token_id);
+        lending_assets
+            .lend_token_to_underlying
+            .insert(lend_token_id, underlying_id);
+        Ok(())
+    }
+
+    pub(crate) fn extend(assets: Vec<(CurrencyId, CurrencyId)>) -> Result<(), Error> {
+        for (underlying_id, lend_token_id) in assets {
+            // TODO: check for duplicates?
+            Self::insert(underlying_id, lend_token_id)?;
+        }
+        Ok(())
+    }
+
+    /// Fetch the lend token id associated with an underlying currency
+    pub fn get_lend_token_id(underlying_id: CurrencyId) -> Result<CurrencyId, Error> {
+        Self::global()?
+            .underlying_to_lend_token
+            .get(&underlying_id)
+            .cloned()
+            .ok_or(Error::AssetNotFound)
+    }
+
+    /// Fetch the underlying id associated with a lend token currency
+    pub fn get_underlying_id(lend_token_id: CurrencyId) -> Result<CurrencyId, Error> {
+        Self::global()?
+            .lend_token_to_underlying
+            .get(&lend_token_id)
+            .cloned()
+            .ok_or(Error::AssetNotFound)
+    }
+}
+
 /// Convert a ticker symbol into a `CurrencyId` at runtime
 pub trait TryFromSymbol: Sized {
     fn try_from_symbol(symbol: String) -> Result<Self, Error>;
+    fn from_lend_token_symbol(symbol: &str) -> Option<Self>;
 }
 
 impl TryFromSymbol for CurrencyId {
@@ -83,29 +148,32 @@ impl TryFromSymbol for CurrencyId {
             id if id == KSM.symbol() => Ok(Token(KSM)),
             id if id == KBTC.symbol() => Ok(Token(KBTC)),
             id if id == KINT.symbol() => Ok(Token(KINT)),
+            id if let Some(currency_id) = Self::from_lend_token_symbol(id) =>
+                Ok(currency_id),
             _ => AssetRegistry::get_foreign_asset_by_symbol(uppercase_symbol),
         }
+    }
+
+    fn from_lend_token_symbol(symbol: &str) -> Option<Self> {
+        let uppercase_symbol = symbol.to_uppercase();
+        // Does the first character match the lend token prefix?
+        if uppercase_symbol.as_str().chars().next() == Some(LEND_TOKEN_SYMBOL_PREFIX) {
+            return Self::try_from_symbol(uppercase_symbol[1..].to_string())
+                .ok()
+                .and_then(|underlying_id| LendingAssets::get_lend_token_id(underlying_id).ok());
+        }
+        None
     }
 }
 
 /// Fallible operations on currencies
 pub trait RuntimeCurrencyInfo {
-    fn name(&self) -> Result<String, Error>;
     fn symbol(&self) -> Result<String, Error>;
     fn decimals(&self) -> Result<u32, Error>;
     fn coingecko_id(&self) -> Result<String, Error>;
 }
 
 impl RuntimeCurrencyInfo for CurrencyId {
-    fn name(&self) -> Result<String, Error> {
-        match self {
-            CurrencyId::Token(token_symbol) => Ok(token_symbol.name().to_string()),
-            CurrencyId::ForeignAsset(foreign_asset_id) => AssetRegistry::get_asset_metadata_by_id(*foreign_asset_id)
-                .and_then(|asset_metadata| String::from_utf8(asset_metadata.name).map_err(|_| Error::InvalidCurrency)),
-            _ => Err(Error::TokenUnsupported),
-        }
-    }
-
     fn symbol(&self) -> Result<String, Error> {
         match self {
             CurrencyId::Token(token_symbol) => Ok(token_symbol.symbol().to_string()),
@@ -113,6 +181,10 @@ impl RuntimeCurrencyInfo for CurrencyId {
                 .and_then(|asset_metadata| {
                     String::from_utf8(asset_metadata.symbol).map_err(|_| Error::InvalidCurrency)
                 }),
+            CurrencyId::LendToken(id) => {
+                let underlying_currency = LendingAssets::get_underlying_id(CurrencyId::LendToken(*id))?;
+                Ok(format!("{}{}", LEND_TOKEN_SYMBOL_PREFIX, underlying_currency.symbol()?))
+            }
             _ => Err(Error::TokenUnsupported),
         }
     }
@@ -122,6 +194,10 @@ impl RuntimeCurrencyInfo for CurrencyId {
             CurrencyId::Token(token_symbol) => Ok(token_symbol.decimals().into()),
             CurrencyId::ForeignAsset(foreign_asset_id) => {
                 AssetRegistry::get_asset_metadata_by_id(*foreign_asset_id).map(|asset_metadata| asset_metadata.decimals)
+            }
+            CurrencyId::LendToken(id) => {
+                let underlying_currency = LendingAssets::get_underlying_id(CurrencyId::LendToken(*id))?;
+                underlying_currency.decimals()
             }
             _ => Err(Error::TokenUnsupported),
         }
@@ -175,7 +251,6 @@ mod tests {
 
     #[test]
     fn should_get_runtime_info_for_token_symbol() -> Result<(), Error> {
-        assert_eq!(Token(DOT).name()?, "Polkadot");
         assert_eq!(Token(DOT).symbol()?, "DOT");
         assert_eq!(Token(DOT).decimals()?, 10);
         Ok(())
@@ -218,7 +293,6 @@ mod tests {
             },
         )?;
 
-        assert_eq!(ForeignAsset(0).name()?, "Asset 1");
         assert_eq!(ForeignAsset(0).symbol()?, "AST1");
         assert_eq!(ForeignAsset(0).decimals()?, 10);
         Ok(())
