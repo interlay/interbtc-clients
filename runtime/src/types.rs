@@ -316,12 +316,15 @@ mod h256_le {
 
 mod dispatch_error {
     use crate::metadata::{
-        runtime_types::sp_runtime::{ArithmeticError, ModuleError, TokenError, TransactionalError},
+        runtime_types::{
+            sp_arithmetic::ArithmeticError,
+            sp_runtime::{ModuleError, TokenError, TransactionalError},
+        },
         DispatchError,
     };
 
     type RichTokenError = sp_runtime::TokenError;
-    type RichArithmeticError = sp_runtime::ArithmeticError;
+    type RichArithmeticError = sp_arithmetic::ArithmeticError;
     type RichDispatchError = sp_runtime::DispatchError;
     type RichModuleError = sp_runtime::ModuleError;
     type RichTransactionalError = sp_runtime::TransactionalError;

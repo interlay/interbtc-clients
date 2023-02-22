@@ -61,4 +61,4 @@ runtime = { path = "../runtime", features = ["testing-utils"] }
 bitcoin = { path = "../bitcoin", features = ["cli", "regtest-manual-mining"] }
 
 # Substrate dependencies
-frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.36" }
+frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.37" }
