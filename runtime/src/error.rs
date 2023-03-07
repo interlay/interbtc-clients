@@ -130,12 +130,12 @@ impl Error {
         if let Error::SubxtRuntimeError(SubxtError::Rpc(RpcError::ClientError(e))) = self {
             match e.downcast_ref::<JsonRpseeError>() {
                 Some(e) => match e {
-                    JsonRpseeError::Call(CallError::Custom(err)) => call(&err),
+                    JsonRpseeError::Call(CallError::Custom(err)) => call(err),
                     _ => None,
                 },
                 None => {
                     log::error!("Failed to downcast RPC error; this is a bug please file an issue");
-                    return None;
+                    None
                 }
             }
         } else {
@@ -170,7 +170,7 @@ impl Error {
                     Some(e) => matches!(e, JsonRpseeError::RestartNeeded(_)),
                     None => {
                         log::error!("Failed to downcast RPC error; this is a bug please file an issue");
-                        return false;
+                        false
                     }
                 }
             }

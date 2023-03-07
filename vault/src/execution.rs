@@ -457,8 +457,8 @@ pub async fn execute_open_requests(
 
     // find the height of bitcoin chain corresponding to the earliest btc_height
     let btc_start_height = match open_requests
-        .iter()
-        .map(|(_, request)| request.btc_height.unwrap_or(u32::MAX))
+        .values()
+        .map(|request| request.btc_height.unwrap_or(u32::MAX))
         .min()
     {
         Some(x) => x,

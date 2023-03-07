@@ -158,7 +158,7 @@ async fn ensure_funding_allowed(
             .get_reserved_balance_for_id(account_id.clone(), *currency_id)
             .await?;
 
-        let one = |currency: CurrencyId| Ok::<_, Error>(10u128.pow(currency.decimals()? as u32));
+        let one = |currency: CurrencyId| Ok::<_, Error>(10u128.pow(currency.decimals()?));
         if free_balance + reserved_balance > allowance_config.max_fundable_client_balance * one(*currency_id)? {
             log::warn!(
                 "User {} has enough {:?} funds: {:?}",
@@ -202,7 +202,7 @@ async fn atomic_faucet_funding(
     account_id: AccountId,
     allowance_config: AllowanceConfig,
 ) -> Result<(), Error> {
-    let account_str = format!("{}", account_id);
+    let account_str = account_id.to_string();
     let last_request_json = kv.get(account_str.clone())?;
     let account_type = get_account_type(parachain_rpc, account_id.clone()).await?;
     let amounts: Allowance = match account_type {

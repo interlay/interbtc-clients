@@ -131,7 +131,7 @@ impl InterBtcParachain {
         let parachain_rpc = Self {
             api: Arc::new(api),
             nonce: Arc::new(RwLock::new(0)),
-            signer: signer,
+            signer,
             account_id,
             shutdown_tx,
             fee_rate_update_tx,
@@ -830,7 +830,7 @@ impl UtilFuncs for InterBtcParachain {
     }
 
     async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, Error> {
-        self.query_finalized(metadata::storage().asset_registry().metadata(&id))
+        self.query_finalized(metadata::storage().asset_registry().metadata(id))
             .await?
             .ok_or(Error::AssetNotFound)
     }
@@ -856,7 +856,7 @@ impl CollateralBalancesPallet for InterBtcParachain {
     }
 
     async fn get_free_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<Balance, Error> {
-        let storage_key = metadata::storage().tokens().accounts(&id, &currency_id);
+        let storage_key = metadata::storage().tokens().accounts(&id, currency_id);
         Ok(self.query_finalized_or_default(storage_key).await?.free)
     }
 
@@ -865,7 +865,7 @@ impl CollateralBalancesPallet for InterBtcParachain {
     }
 
     async fn get_reserved_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<Balance, Error> {
-        let storage_key = metadata::storage().tokens().accounts(&id, &currency_id);
+        let storage_key = metadata::storage().tokens().accounts(&id, currency_id);
         Ok(self.query_finalized_or_default(storage_key).await?.reserved)
     }
 
@@ -1058,7 +1058,7 @@ impl ReplacePallet for InterBtcParachain {
     }
 
     async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, Error> {
-        self.query_finalized_or_error(metadata::storage().replace().replace_requests(&replace_id))
+        self.query_finalized_or_error(metadata::storage().replace().replace_requests(replace_id))
             .await
     }
 
@@ -1267,7 +1267,7 @@ impl IssuePallet for InterBtcParachain {
     }
 
     async fn get_issue_request(&self, issue_id: H256) -> Result<InterBtcIssueRequest, Error> {
-        self.query_finalized_or_error(metadata::storage().issue().issue_requests(&issue_id))
+        self.query_finalized_or_error(metadata::storage().issue().issue_requests(issue_id))
             .await
     }
 
@@ -1373,7 +1373,7 @@ impl RedeemPallet for InterBtcParachain {
     }
 
     async fn get_redeem_request(&self, redeem_id: H256) -> Result<InterBtcRedeemRequest, Error> {
-        self.query_finalized_or_error(metadata::storage().redeem().redeem_requests(&redeem_id))
+        self.query_finalized_or_error(metadata::storage().redeem().redeem_requests(redeem_id))
             .await
     }
 
@@ -1451,7 +1451,7 @@ impl BtcRelayPallet for InterBtcParachain {
     /// # Arguments
     /// * `height` - chain height
     async fn get_block_hash(&self, height: u32) -> Result<H256Le, Error> {
-        self.query_finalized_or_default(metadata::storage().btc_relay().chains_hashes(&0, &height))
+        self.query_finalized_or_default(metadata::storage().btc_relay().chains_hashes(0, height))
             .await
     }
 

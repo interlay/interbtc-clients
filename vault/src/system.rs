@@ -34,15 +34,15 @@ pub const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
 const RESTART_INTERVAL: Duration = Duration::from_secs(10800); // restart every 3 hours
 
 fn parse_collateral_and_amount(
-    s: &str,
+    input: &str,
 ) -> Result<(String, Option<u128>), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    let pos = s
+    let pos = input
         .find('=')
-        .ok_or_else(|| format!("invalid CurrencyId=amount: no `=` found in `{}`", s))?;
+        .ok_or_else(|| format!("invalid CurrencyId=amount: no `=` found in `{input}`"))?;
 
-    let val = &s[pos + 1..];
+    let val = &input[pos + 1..];
     Ok((
-        s[..pos].to_string(),
+        input[..pos].to_string(),
         if val.contains("faucet") {
             None
         } else {

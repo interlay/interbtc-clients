@@ -42,7 +42,7 @@ pub enum FeedName {
 
 impl fmt::Display for FeedName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

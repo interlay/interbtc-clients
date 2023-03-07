@@ -46,7 +46,7 @@ async fn main() -> Result<(), Error> {
     log::info!("Connected to the parachain");
 
     let runner = Runner::new(rpc_client, opts);
-    let shutdown_signals = Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
+    let shutdown_signals = Signals::new([SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
     Runner::run(Box::new(runner), shutdown_signals).await?;
     Ok(())
 }

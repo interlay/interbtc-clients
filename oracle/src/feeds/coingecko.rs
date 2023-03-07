@@ -75,7 +75,7 @@ impl CoinGeckoApi {
         // https://www.coingecko.com/api/documentations/v3
         let mut url = self.url.clone();
         url.set_path(&format!("{}/simple/price", url.path()));
-        url.set_query(Some(&format!("ids={}&vs_currencies={}", base, quote)));
+        url.set_query(Some(&format!("ids={base}&vs_currencies={quote}")));
         if let Some(api_key) = &self.api_key {
             url.query_pairs_mut().append_pair(COINGECKO_API_KEY_PARAMETER, api_key);
         }

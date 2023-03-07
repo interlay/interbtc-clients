@@ -1,4 +1,3 @@
-#![feature(map_first_last)]
 #![feature(int_roundings)]
 
 pub mod cli;

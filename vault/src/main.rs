@@ -208,7 +208,7 @@ async fn start() -> Result<(), ServiceError<Error>> {
     // Unless termination signals are caught, the PID file is not dropped.
     let main_task = async move { vault_connection_manager.start::<VaultService, Error>().await };
     catch_signals(
-        Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT]).expect("Failed to set up signal listener."),
+        Signals::new([SIGHUP, SIGTERM, SIGINT, SIGQUIT]).expect("Failed to set up signal listener."),
         main_task,
     )
     .await
