@@ -19,6 +19,8 @@ pub enum Error {
     CannotFetchBestHeight,
     #[error("Block hash not found for the given height")]
     BlockHashNotFound,
+    #[error("Block header not found for the given height")]
+    BlockHeaderNotFound,
     #[error("Failed to decode hash")]
     DecodeHash,
     #[error("Failed to serialize block header")]
