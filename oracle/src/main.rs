@@ -8,12 +8,14 @@ use clap::Parser;
 use config::{CurrencyStore, OracleConfig};
 use currency::*;
 use error::Error;
-use futures::future::join_all;
+use futures::{future::join_all, stream::StreamExt};
 use git_version::git_version;
 use runtime::{
     cli::{parse_duration_ms, ProviderUserOpts},
     CurrencyId, FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, OraclePallet, ShutdownSender, TryFromSymbol,
 };
+use signal_hook::consts::*;
+use signal_hook_tokio::Signals;
 use std::{path::PathBuf, time::Duration};
 use tokio::{join, time::sleep};
 
@@ -136,11 +138,23 @@ async fn submit_exchange_rate(
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let ret = _main().await;
-    if let Err(ref e) = ret {
-        log::error!("Error: {}", e);
+    let mut signals = Signals::new([SIGHUP, SIGTERM, SIGINT, SIGQUIT]).expect("Failed to set up signal listener.");
+
+    tokio::select! {
+        res = _main() => {
+            if let Err(ref e) = res {
+                log::error!("Error: {}", e);
+            }
+            res
+        },
+        signal_option = signals.next() => {
+            if let Some(signal) = signal_option {
+                log::info!("Received termination signal: {}", signal);
+            }
+            log::info!("Shutting down...");
+            Ok(())
+        }
     }
-    ret
 }
 
 async fn _main() -> Result<(), Error> {
