@@ -5,13 +5,12 @@ use clap::Parser;
 
 use error::Error;
 
-use futures::{FutureExt, TryFutureExt};
 use runner::ClientType;
 use signal_hook::consts::*;
 use signal_hook_tokio::Signals;
 use std::{fmt::Debug, path::PathBuf};
 
-use crate::runner::{retry_with_log_async, subxt_api, Runner};
+use crate::runner::Runner;
 
 #[derive(Parser, Debug, Clone)]
 #[clap(version, author, about, trailing_var_arg = true)]
@@ -38,15 +37,9 @@ async fn main() -> Result<(), Error> {
         env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, log::LevelFilter::Info.as_str()),
     );
     let opts: Opts = Opts::parse();
-    let rpc_client = retry_with_log_async(
-        || subxt_api(&opts.parachain_ws).into_future().boxed(),
-        "Error fetching executable".to_string(),
-    )
-    .await?;
-    log::info!("Connected to the parachain");
 
-    let runner = Runner::new(rpc_client, opts);
-    let shutdown_signals = Signals::new([SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
+    let runner = Runner::new(opts);
+    let shutdown_signals = Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
     Runner::run(Box::new(runner), shutdown_signals).await?;
     Ok(())
 }
