@@ -285,7 +285,7 @@ impl Request {
                 .filter_map(|x| async {
                     match btc_rpc.is_in_mempool(txid_copy).await {
                         Ok(false) => {
-                            //   if not in mempool anymore, don't propagate the event (even if it is an error)
+                            // if not in mempool anymore, don't propagate the event (even if it is an error)
                             tracing::debug!("Txid not in mempool anymore...");
                             None
                         }
@@ -418,6 +418,48 @@ impl Request {
     }
 }
 
+fn create_payment_worker(
+    shutdown_tx: ShutdownSender,
+    parachain_rpc: InterBtcParachain,
+    vault_id_manager: VaultIdManager,
+    request: Request,
+    txid: Txid,
+    num_confirmations: u32,
+    auto_rbf: bool,
+) {
+    tracing::info!(
+        "{:?} request #{:?} has valid bitcoin payment - processing...",
+        request.request_type,
+        request.hash
+    );
+    spawn_cancelable(shutdown_tx.subscribe(), async move {
+        let btc_rpc = match vault_id_manager.get_bitcoin_rpc(&request.vault_id).await {
+            Some(x) => x,
+            None => {
+                tracing::error!(
+                    "Failed to fetch bitcoin rpc for vault {}",
+                    request.vault_id.pretty_print()
+                );
+                return; // nothing we can do - bail
+            }
+        };
+
+        match request
+            .wait_for_inclusion(&parachain_rpc, &btc_rpc, num_confirmations, txid, auto_rbf)
+            .await
+        {
+            Ok(tx_metadata) => {
+                if let Err(e) = request.execute(parachain_rpc.clone(), tx_metadata).await {
+                    tracing::error!("Failed to execute request #{}: {}", request.hash, e);
+                }
+            }
+            Err(e) => {
+                tracing::error!("Error while waiting for inclusion for request #{}: {}", request.hash, e);
+            }
+        }
+    });
+}
+
 /// Queries the parachain for open requests and executes them. It checks the
 /// bitcoin blockchain to see if a payment has already been made.
 #[allow(clippy::too_many_arguments)]
@@ -465,82 +507,84 @@ pub async fn execute_open_requests(
         None => return Ok(()), // the iterator is empty so we have nothing to do
     };
 
-    let rate_limiter = RateLimiter::direct(YIELD_RATE);
-
-    // iterate through transactions in reverse order, starting from those in the mempool, and
-    // gracefully fail on encountering a pruned blockchain
-    let mut transaction_stream = bitcoin::reverse_stream_transactions(&read_only_btc_rpc, btc_start_height).await?;
-    while let Some(result) = transaction_stream.next().await {
-        if rate_limiter.check().is_ok() {
-            // give the outer `select` a chance to check the shutdown signal
-            tokio::task::yield_now().await;
-        }
-
-        // When there is an error, we have to make a choice. Either we restart or
-        // continue processing. Both options have their risks: if we restart, it's
-        // possible that the vault will never manage to start up, causing us to
-        // fail to process requests. On the other hand, if we ignore transactions,
-        // we risk double paying. We choose to restart only for network errors,
-        // since these are not expected to be persistent. Other errors could be
-        // persistent, so we keep going.
-        let tx = match result {
-            Ok(x) => x,
-            Err(e) if e.is_transport_error() => {
-                return Err(e.into());
+    // NOTE: block iteration is expensive so only use a full node
+    // direct lookup is possible with the light client
+    if read_only_btc_rpc.is_full_node() {
+        let rate_limiter = RateLimiter::direct(YIELD_RATE);
+        // iterate through transactions in reverse order, starting from those in the mempool, and
+        // gracefully fail on encountering a pruned blockchain
+        let mut transaction_stream = bitcoin::reverse_stream_transactions(&read_only_btc_rpc, btc_start_height).await?;
+        while let Some(result) = transaction_stream.next().await {
+            if rate_limiter.check().is_ok() {
+                // give the outer `select` a chance to check the shutdown signal
+                tokio::task::yield_now().await;
             }
-            Err(e) => {
-                tracing::warn!("Failed to process transaction: {}", e);
-                continue;
-            }
-        };
 
-        // get the request this transaction corresponds to, if any
-        if let Some(request) = get_request_for_btc_tx(&tx, &open_requests) {
-            // remove request from the hashmap
-            open_requests.retain(|&key, _| key != request.hash);
-
-            tracing::info!(
-                "{:?} request #{:?} has valid bitcoin payment - processing...",
-                request.request_type,
-                request.hash
-            );
-
-            // start a new task to (potentially) await confirmation and to execute on the parachain
-            // make copies of the variables we move into the task
-            let parachain_rpc = parachain_rpc.clone();
-            let btc_rpc = vault_id_manager.clone();
-            spawn_cancelable(shutdown_tx.subscribe(), async move {
-                let btc_rpc = match btc_rpc.get_bitcoin_rpc(&request.vault_id).await {
-                    Some(x) => x,
-                    None => {
-                        tracing::error!(
-                            "Failed to fetch bitcoin rpc for vault {}",
-                            request.vault_id.pretty_print()
-                        );
-                        return; // nothing we can do - bail
-                    }
-                };
-
-                match request
-                    .wait_for_inclusion(&parachain_rpc, &btc_rpc, num_confirmations, tx.txid(), auto_rbf)
-                    .await
-                {
-                    Ok(tx_metadata) => {
-                        if let Err(e) = request.execute(parachain_rpc.clone(), tx_metadata).await {
-                            tracing::error!("Failed to execute request #{}: {}", request.hash, e);
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("Error while waiting for inclusion for request #{}: {}", request.hash, e);
-                    }
+            // When there is an error, we have to make a choice. Either we restart or
+            // continue processing. Both options have their risks: if we restart, it's
+            // possible that the vault will never manage to start up, causing us to
+            // fail to process requests. On the other hand, if we ignore transactions,
+            // we risk double paying. We choose to restart only for network errors,
+            // since these are not expected to be persistent. Other errors could be
+            // persistent, so we keep going.
+            let tx = match result {
+                Ok(x) => x,
+                Err(e) if e.is_transport_error() => {
+                    return Err(e.into());
                 }
-            });
+                Err(e) => {
+                    tracing::warn!("Failed to process transaction: {}", e);
+                    continue;
+                }
+            };
+
+            // get the request this transaction corresponds to, if any
+            if let Some(request) = get_request_for_btc_tx(&tx, &open_requests) {
+                // remove request from the hashmap
+                open_requests.retain(|&key, _| key != request.hash);
+
+                // start a new task to (potentially) await confirmation and to execute on the parachain
+                // make copies of the variables we move into the task
+                create_payment_worker(
+                    shutdown_tx.clone(),
+                    parachain_rpc.clone(),
+                    vault_id_manager.clone(),
+                    request,
+                    tx.txid(),
+                    num_confirmations,
+                    auto_rbf,
+                );
+            }
         }
     }
 
-    // All requests remaining in the hashmap did not have a bitcoin payment yet, so pay
-    // and execute all of these
-    for (_, request) in open_requests {
+    // All requests remaining in the hashmap did not have a bitcoin payment yet
+    // or were not found in the stream, check if we can fetch by id directly
+    // or just pay and execute all requests individually
+    for (id, request) in open_requests {
+        // try finding transaction directly (if supported)
+        match read_only_btc_rpc.get_tx_for_op_return(id).await {
+            Ok(Some(txid)) => {
+                create_payment_worker(
+                    shutdown_tx.clone(),
+                    parachain_rpc.clone(),
+                    vault_id_manager.clone(),
+                    request,
+                    txid,
+                    num_confirmations,
+                    auto_rbf,
+                );
+                // task will handling execution
+                continue;
+            }
+            Ok(None) => {} // make payment
+            Err(err) => {
+                tracing::error!("Failed to fetch tx for OP_RETURN {}", err);
+                // TODO: can we handle this error and still make the payment?
+                continue;
+            }
+        }
+
         // there are potentially a large number of open requests - pay and execute each
         // in a separate task to ensure that awaiting confirmations does not significantly
         // delay other requests
@@ -734,6 +778,7 @@ mod tests {
 
         #[async_trait]
         trait BitcoinCoreApi {
+            fn is_full_node(&self) -> bool;
             fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
             fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError>;

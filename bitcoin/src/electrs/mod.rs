@@ -24,13 +24,6 @@ pub struct Utxo {
     pub value: u64,
 }
 
-#[allow(dead_code)]
-pub struct TxData {
-    pub txid: Txid,
-    pub raw_merkle_proof: Vec<u8>,
-    pub raw_tx: Vec<u8>,
-}
-
 #[derive(Debug)]
 pub struct TxInfo {
     pub confirmations: u32,
@@ -125,6 +118,7 @@ impl ElectrsClient {
         Ok(deserialize(&raw_block_header)?)
     }
 
+    // TODO: this is expensive and not strictly required by the light-client, deprecate?
     pub(crate) async fn get_transactions_in_block(&self, hash: &BlockHash) -> Result<Vec<Transaction>, Error> {
         let raw_txids: Vec<String> = self.get_and_decode(&format!("/block/{hash}/txids")).await?;
         let txids: Vec<Txid> = raw_txids
@@ -220,8 +214,7 @@ impl ElectrsClient {
         Ok(Txid::from_str(&txid)?)
     }
 
-    #[allow(dead_code)]
-    pub(crate) async fn get_tx_by_op_return(&self, data: H256) -> Result<Option<TxData>, Error> {
+    pub(crate) async fn get_tx_for_op_return(&self, data: H256) -> Result<Option<Txid>, Error> {
         let script = ScriptBuilder::new()
             .push_opcode(opcodes::OP_RETURN)
             .push_slice(data.as_bytes())
@@ -234,6 +227,7 @@ impl ElectrsClient {
         };
 
         // TODO: page this using last_seen_txid
+        // NOTE: includes unconfirmed txs
         let txs: Vec<ElectrsTransaction> = self
             .get_and_decode(&format!(
                 "/scripthash/{scripthash}/txs",
@@ -242,22 +236,11 @@ impl ElectrsClient {
             .await?;
         log::info!("Found {} transactions", txs.len());
 
-        // for now, use the first tx - should probably return
-        // an error if there are more that one
+        // TODO: check payment amount or throw error
+        // if there are multiple transactions
         if let Some(tx) = txs.first().cloned() {
             let txid = Txid::from_str(&tx.txid)?;
-            log::info!("Fetching merkle proof");
-            // TODO: return error if not confirmed
-            let raw_merkle_proof = self.get_raw_tx_merkle_proof(&txid).await?;
-
-            log::info!("Fetching transaction");
-            let raw_tx = self.get_raw_tx(&txid).await?;
-
-            Ok(Some(TxData {
-                txid,
-                raw_merkle_proof,
-                raw_tx,
-            }))
+            Ok(Some(txid))
         } else {
             Ok(None)
         }

@@ -35,7 +35,7 @@ pub async fn reverse_stream_transactions(
 /// * `stop_height` - height of the last block the iterator will return transactions from
 /// * `stop_at_pruned` - whether to gracefully stop if a pruned blockchain is encountered;
 /// otherwise, will throw an error
-pub async fn reverse_stream_in_chain_transactions(
+async fn reverse_stream_in_chain_transactions(
     rpc: &DynBitcoinCoreApi,
     stop_height: u32,
 ) -> impl Stream<Item = Result<Transaction, Error>> + Send + Unpin + '_ {
@@ -62,7 +62,7 @@ pub async fn reverse_stream_in_chain_transactions(
 /// * `stop_height` - height of the last block the stream will return
 /// * `stop_at_pruned` - whether to gracefully stop if a pruned blockchain is encountered;
 /// otherwise, will throw an error
-pub async fn reverse_stream_blocks(
+async fn reverse_stream_blocks(
     rpc: &DynBitcoinCoreApi,
     stop_height: u32,
 ) -> impl Stream<Item = Result<Block, Error>> + Unpin + '_ {
@@ -202,6 +202,7 @@ mod tests {
 
         #[async_trait]
         trait BitcoinCoreApi {
+            fn is_full_node(&self) -> bool;
             fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, Error>;
             fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error>;
@@ -262,6 +263,7 @@ mod tests {
             ) -> Result<Txid, Error>;
             async fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error>;
             async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error>;
+            async fn get_tx_for_op_return(&self, data: H256) -> Result<Option<Txid>, Error>;
         }
     }
 

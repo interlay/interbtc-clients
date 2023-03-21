@@ -76,6 +76,10 @@ impl BitcoinLight {
 
 #[async_trait]
 impl BitcoinCoreApi for BitcoinLight {
+    fn is_full_node(&self) -> bool {
+        false
+    }
+
     fn network(&self) -> Network {
         self.private_key.network
     }
@@ -135,7 +139,10 @@ impl BitcoinCoreApi for BitcoinLight {
     async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError> {
         match self.electrs.get_block_hash(height).await {
             Ok(block_hash) => Ok(block_hash),
-            Err(_) => Err(BitcoinError::InvalidBitcoinHeight),
+            Err(_err) => {
+                // TODO: handle error
+                Err(BitcoinError::InvalidBitcoinHeight)
+            }
         }
     }
 
@@ -215,7 +222,10 @@ impl BitcoinCoreApi for BitcoinLight {
         })
         .await?;
 
-        let (proof, raw_tx) = try_join(self.get_proof(txid, &block_hash), self.get_raw_tx(&txid, &block_hash)).await?;
+        let (proof, raw_tx) = retry(get_exponential_backoff(), || async {
+            Ok(try_join(self.get_proof(txid, &block_hash), self.get_raw_tx(&txid, &block_hash)).await?)
+        })
+        .await?;
 
         Ok(TransactionMetadata {
             txid,
@@ -302,5 +312,9 @@ impl BitcoinCoreApi for BitcoinLight {
 
         let fee_rate = fee.checked_div(vsize).ok_or(BitcoinError::ArithmeticError)?;
         Ok(SatPerVbyte(fee_rate))
+    }
+
+    async fn get_tx_for_op_return(&self, data: H256) -> Result<Option<Txid>, BitcoinError> {
+        Ok(self.electrs.get_tx_for_op_return(data).await?)
     }
 }

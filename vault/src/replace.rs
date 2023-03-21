@@ -233,6 +233,7 @@ mod tests {
 
         #[async_trait]
         trait BitcoinCoreApi {
+            fn is_full_node(&self) -> bool;
             fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
             fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError>;

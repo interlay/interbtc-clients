@@ -750,7 +750,7 @@ impl VaultService {
             (
                 "Issue Executor",
                 maybe_run(
-                    !self.config.no_issue_execution,
+                    !self.config.no_issue_execution && self.btc_rpc_master_wallet.is_full_node(),
                     issue::process_issue_requests(
                         self.btc_rpc_master_wallet.clone(),
                         self.btc_parachain.clone(),
