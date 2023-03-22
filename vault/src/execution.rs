@@ -563,7 +563,7 @@ pub async fn execute_open_requests(
     // or just pay and execute all requests individually
     for (id, request) in open_requests {
         // try finding transaction directly (if supported)
-        match read_only_btc_rpc.get_tx_for_op_return(id).await {
+        match read_only_btc_rpc.get_tx_for_op_return(request.btc_address, request.amount, id).await {
             Ok(Some(txid)) => {
                 create_payment_worker(
                     shutdown_tx.clone(),

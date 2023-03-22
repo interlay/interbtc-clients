@@ -12,6 +12,7 @@ use reqwest::{Client, Url};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
 
+// https://github.com/Blockstream/electrs/blob/adedee15f1fe460398a7045b292604df2161adc0/src/rest.rs#L42
 const ELECTRS_TRANSACTIONS_PER_PAGE: usize = 25;
 
 // https://github.com/Blockstream/esplora/blob/master/API.md
@@ -86,7 +87,7 @@ impl ElectrsClient {
         )?)
     }
 
-    pub(crate) async fn get_address_tx_history_full(&self, address: &str) -> Result<Vec<ElectrsTransaction>, Error> {
+    pub async fn get_address_tx_history_full(&self, address: &str) -> Result<Vec<ElectrsTransaction>, Error> {
         let mut last_seen_txid = Default::default();
         let mut ret = Vec::<ElectrsTransaction>::new();
         loop {
@@ -104,7 +105,7 @@ impl ElectrsClient {
         Ok(ret)
     }
 
-    pub(crate) async fn get_blocks_tip_height(&self) -> Result<u32, Error> {
+    pub async fn get_blocks_tip_height(&self) -> Result<u32, Error> {
         Ok(self.get("/blocks/tip/height").await?.parse()?)
     }
 
@@ -113,7 +114,7 @@ impl ElectrsClient {
         Ok(BlockHash::from_str(&response)?)
     }
 
-    pub(crate) async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error> {
+    pub async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, Error> {
         let raw_block_header = Vec::<u8>::from_hex(&self.get(&format!("/block/{hash}/header")).await?)?;
         Ok(deserialize(&raw_block_header)?)
     }
@@ -140,7 +141,7 @@ impl ElectrsClient {
         Ok(Block { header, txdata })
     }
 
-    pub(crate) async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error> {
+    pub async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error> {
         let response = self.get(&format!("/block-height/{height}")).await?;
         Ok(BlockHash::from_str(&response)?)
     }
@@ -168,7 +169,7 @@ impl ElectrsClient {
         })
     }
 
-    pub(crate) async fn get_utxos_for_address(&self, address: Address) -> Result<Vec<Utxo>, Error> {
+    pub async fn get_utxos_for_address(&self, address: &Address) -> Result<Vec<Utxo>, Error> {
         let utxos: Vec<ElectrsUtxo> = self.get_and_decode(&format!("/address/{address}/utxo")).await?;
 
         utxos
@@ -200,6 +201,8 @@ impl ElectrsClient {
         )?)
     }
 
+    // TODO: modify upstream to return a human-readable error
+    // or maybe add an endpoint for `testmempoolaccept`
     pub(crate) async fn send_transaction(&self, tx: Transaction) -> Result<Txid, Error> {
         let url = self.url.join("/tx")?;
         let txid = self
@@ -214,7 +217,12 @@ impl ElectrsClient {
         Ok(Txid::from_str(&txid)?)
     }
 
-    pub(crate) async fn get_tx_for_op_return(&self, data: H256) -> Result<Option<Txid>, Error> {
+    pub(crate) async fn get_tx_for_op_return(
+        &self,
+        address: Address,
+        amount: u128,
+        data: H256,
+    ) -> Result<Option<Txid>, Error> {
         let script = ScriptBuilder::new()
             .push_opcode(opcodes::OP_RETURN)
             .push_slice(data.as_bytes())
@@ -226,24 +234,48 @@ impl ElectrsClient {
             hasher.result().as_slice().to_vec()
         };
 
-        // TODO: page this using last_seen_txid
-        // NOTE: includes unconfirmed txs
-        let txs: Vec<ElectrsTransaction> = self
-            .get_and_decode(&format!(
-                "/scripthash/{scripthash}/txs",
-                scripthash = script_hash.to_hex()
-            ))
-            .await?;
+        let mut last_seen_txid = Default::default();
+        let mut txs = Vec::<ElectrsTransaction>::new();
+        loop {
+            // NOTE: includes unconfirmed txs
+            let mut transactions: Vec<ElectrsTransaction> = self
+                .get_and_decode(&format!(
+                    "/scripthash/{scripthash}/txs/chain/{last_seen_txid}",
+                    scripthash = script_hash.to_hex()
+                ))
+                .await?;
+            let page_size = transactions.len();
+            last_seen_txid = transactions.last().map_or(Default::default(), |tx| tx.txid.clone());
+            txs.append(&mut transactions);
+            if page_size < ELECTRS_TRANSACTIONS_PER_PAGE {
+                // no further pages
+                break;
+            }
+        }
         log::info!("Found {} transactions", txs.len());
 
-        // TODO: check payment amount or throw error
-        // if there are multiple transactions
-        if let Some(tx) = txs.first().cloned() {
-            let txid = Txid::from_str(&tx.txid)?;
-            Ok(Some(txid))
-        } else {
-            Ok(None)
+        let address = address.to_string();
+        for tx in txs {
+            let largest = tx
+                .vout
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|vout| {
+                    if vout.scriptpubkey_address.contains(&address) {
+                        Some(vout.value.unwrap_or_default() as u64)
+                    } else {
+                        None
+                    }
+                })
+                .max()
+                .unwrap_or_default();
+
+            if largest as u128 >= amount {
+                let txid = Txid::from_str(&tx.txid)?;
+                return Ok(Some(txid));
+            }
         }
+        Ok(None)
     }
 }
 

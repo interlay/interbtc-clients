@@ -1,4 +1,5 @@
 #![feature(int_roundings)]
+#![feature(option_result_contains)]
 
 pub mod cli;
 pub mod light;
@@ -205,11 +206,11 @@ pub trait BitcoinCoreApi {
 
     async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error>;
 
-    async fn get_tx_for_op_return(&self, data: H256) -> Result<Option<Txid>, Error>;
+    async fn get_tx_for_op_return(&self, address: Address, amount: u128, data: H256) -> Result<Option<Txid>, Error>;
 }
 
-struct LockedTransaction {
-    transaction: Transaction,
+pub struct LockedTransaction {
+    pub transaction: Transaction,
     recipient: String,
     _lock: Option<OwnedMutexGuard<()>>,
 }
@@ -1077,7 +1078,7 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(SatPerVbyte(fee_rate.try_into()?))
     }
 
-    async fn get_tx_for_op_return(&self, _data: H256) -> Result<Option<Txid>, Error> {
+    async fn get_tx_for_op_return(&self, _address: Address, _amount: u128, _data: H256) -> Result<Option<Txid>, Error> {
         // direct lookup not supported by bitcoin core
         Ok(None)
     }

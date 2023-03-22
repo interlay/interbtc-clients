@@ -263,7 +263,7 @@ mod tests {
             ) -> Result<Txid, Error>;
             async fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error>;
             async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error>;
-            async fn get_tx_for_op_return(&self, data: H256) -> Result<Option<Txid>, Error>;
+            async fn get_tx_for_op_return(&self, address: Address, amount: u128, data: H256) -> Result<Option<Txid>, Error>;
         }
     }
 

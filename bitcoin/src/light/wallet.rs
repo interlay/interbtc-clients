@@ -292,7 +292,7 @@ impl Wallet {
         for address in addresses {
             log::info!("Found address: {}", address);
             // get utxos for address
-            let utxos = self.electrs.get_utxos_for_address(address).await?;
+            let utxos = self.electrs.get_utxos_for_address(&address).await?;
             // TODO: stream this, no need to fetch
             for utxo in utxos {
                 log::info!("Found utxo: {}", utxo.outpoint.txid);

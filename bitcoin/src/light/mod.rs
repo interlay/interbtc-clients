@@ -25,14 +25,16 @@ pub struct BitcoinLight {
 impl BitcoinLight {
     pub fn new(electrs_url: Option<String>, private_key: PrivateKey) -> Result<Self, Error> {
         let network = private_key.network;
-        log::info!("Using network: {}", network);
         let electrs_client = ElectrsClient::new(electrs_url, network)?;
+        let wallet = wallet::Wallet::new(network, electrs_client.clone());
+        // store the derivation key so it can be used for change
+        wallet.put_p2wpkh_key(private_key.inner.clone())?;
         Ok(Self {
             private_key,
             secp_ctx: secp256k1::Secp256k1::new(),
-            electrs: electrs_client.clone(),
+            electrs: electrs_client,
             transaction_creation_lock: Arc::new(Mutex::new(())),
-            wallet: wallet::Wallet::new(network, electrs_client),
+            wallet,
         })
     }
 
@@ -45,7 +47,7 @@ impl BitcoinLight {
             .ok_or(Error::NoChangeAddress)
     }
 
-    async fn create_transaction(
+    pub async fn create_transaction(
         &self,
         recipient: Address,
         sat: u64,
@@ -314,7 +316,12 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(SatPerVbyte(fee_rate))
     }
 
-    async fn get_tx_for_op_return(&self, data: H256) -> Result<Option<Txid>, BitcoinError> {
-        Ok(self.electrs.get_tx_for_op_return(data).await?)
+    async fn get_tx_for_op_return(
+        &self,
+        address: Address,
+        amount: u128,
+        data: H256,
+    ) -> Result<Option<Txid>, BitcoinError> {
+        Ok(self.electrs.get_tx_for_op_return(address, amount, data).await?)
     }
 }
