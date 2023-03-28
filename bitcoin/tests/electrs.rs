@@ -73,11 +73,7 @@ fn mine_blocks(block_num: u64, maybe_address: Option<Address>) -> BlockHash {
         .clone()
 }
 
-#[tokio::test]
-async fn should_create_transactions() -> Result<(), Error> {
-    let bitcoin_client = new_bitcoin_client();
-    let bitcoin_light = new_bitcoin_light();
-
+async fn fund_wallet(bitcoin_light: &BitcoinLight) -> Result<(), Error> {
     // need at least 100 confirmations otherwise we get
     // this error: bad-txns-premature-spend-of-coinbase
     let public_key = new_random_key_pair().1;
@@ -89,7 +85,7 @@ async fn should_create_transactions() -> Result<(), Error> {
     let master_address = Address::p2wpkh(&master_public_key, DEFAULT_NETWORK).unwrap();
     // electrs may still include unconfirmed coinbase txs so to
     // avoid this we mine and then send it to the master address
-    bitcoin_client.send_to_address(
+    new_bitcoin_client().send_to_address(
         &master_address,
         Amount::from_sat(100000),
         None,
@@ -113,6 +109,13 @@ async fn should_create_transactions() -> Result<(), Error> {
             .ok_or(())
     })
     .await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn should_create_transactions() -> Result<(), Error> {
+    let bitcoin_light = new_bitcoin_light();
+    fund_wallet(&bitcoin_light).await?;
 
     let address1 = Address::p2wpkh(&new_random_key_pair().1, DEFAULT_NETWORK).unwrap();
     let address2 = Address::p2wpkh(&new_random_key_pair().1, DEFAULT_NETWORK).unwrap();
@@ -163,6 +166,35 @@ async fn should_create_transactions() -> Result<(), Error> {
         .get_tx_for_op_return(address2, 1000, H256::from_slice(&[2; 32]))
         .await?
         .is_some());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn should_bump_fee() -> Result<(), Error> {
+    let bitcoin_light = new_bitcoin_light();
+    fund_wallet(&bitcoin_light).await?;
+
+    let address = Address::p2wpkh(&new_random_key_pair().1, DEFAULT_NETWORK).unwrap();
+    let txid1 = bitcoin_light
+        .create_and_send_transaction(address.clone(), 1000, SatPerVbyte(1), Some(H256::from_slice(&[1; 32])))
+        .await?;
+    assert_eq!(SatPerVbyte(1), bitcoin_light.fee_rate(txid1).await?);
+
+    let txid2 = bitcoin_light.bump_fee(&txid1, address, SatPerVbyte(2)).await?;
+    assert_eq!(SatPerVbyte(2), bitcoin_light.fee_rate(txid2).await?);
+
+    let block_hash = mine_blocks(1, None);
+    wait_for_success(|| async { new_electrs().get_block_header(&block_hash).await }).await;
+
+    assert!(
+        bitcoin_light.get_proof(txid1, &BlockHash::all_zeros()).await.is_err(),
+        "Txid1 should not exist"
+    );
+    assert!(
+        bitcoin_light.get_proof(txid2, &BlockHash::all_zeros()).await.is_ok(),
+        "Txid2 should be confirmed"
+    );
 
     Ok(())
 }

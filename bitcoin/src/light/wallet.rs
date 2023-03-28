@@ -1,11 +1,6 @@
-use bitcoincore_rpc::bitcoin::{
-    blockdata::{constants::WITNESS_SCALE_FACTOR, transaction::NonStandardSighashType},
-    util::sighash::SighashCache,
-    EcdsaSig, PackedLockTime, PublicKey, Witness,
-};
-
 use super::{electrs::ElectrsClient, error::Error};
 use crate::{
+    electrs::Utxo,
     hashes::Hash,
     json::bitcoin::EcdsaSighashType,
     opcodes, psbt,
@@ -14,8 +9,14 @@ use crate::{
     Address, Builder as ScriptBuilder, Network, OutPoint, PrivateKey, Script, Transaction, TxIn, TxOut, Txid, VarInt,
     H256,
 };
+use bitcoincore_rpc::bitcoin::{
+    blockdata::{constants::WITNESS_SCALE_FACTOR, transaction::NonStandardSighashType},
+    util::sighash::SighashCache,
+    EcdsaSig, PackedLockTime, PublicKey, Sequence, Witness,
+};
+use futures::{stream, Stream, StreamExt};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     sync::{Arc, RwLock},
 };
 
@@ -215,6 +216,63 @@ fn get_dust_threshold(tx_out: &TxOut, dust_relay_fee_in: &FeeRate) -> u64 {
 
 pub type KeyStore = Arc<RwLock<BTreeMap<Address, PrivateKey>>>;
 
+pub fn available_coins(
+    electrs: ElectrsClient,
+    tx_inputs: Vec<TxIn>,
+    addresses: Vec<Address>,
+) -> impl Stream<Item = Result<Utxo, Error>> + Unpin {
+    struct StreamState<E> {
+        electrs: E,
+        utxos: VecDeque<Utxo>,
+        tx_inputs: VecDeque<TxIn>,
+        addresses: VecDeque<Address>,
+    }
+
+    let state = StreamState {
+        electrs,
+        utxos: VecDeque::new(),
+        tx_inputs: VecDeque::from(tx_inputs),
+        addresses: VecDeque::from(addresses),
+    };
+
+    Box::pin(
+        stream::unfold(state, move |mut state| async move {
+            match state.utxos.pop_front() {
+                Some(utxo) => Some((Ok(utxo), state)),
+                None => {
+                    if let Some(txin) = state.tx_inputs.pop_front() {
+                        match state.electrs.get_prev_value(&txin.previous_output).await {
+                            Ok(value) => Some((
+                                Ok(Utxo {
+                                    outpoint: txin.previous_output,
+                                    value,
+                                }),
+                                state,
+                            )),
+                            Err(e) => Some((Err(Error::ElectrsError(e)), state)),
+                        }
+                    } else if let Some(address) = state.addresses.pop_front() {
+                        match state.electrs.get_utxos_for_address(&address).await {
+                            Ok(utxos) => {
+                                state.utxos = VecDeque::from(utxos);
+                                if let Some(utxo) = state.utxos.pop_front() {
+                                    Some((Ok(utxo), state))
+                                } else {
+                                    None
+                                }
+                            }
+                            Err(e) => Some((Err(Error::ElectrsError(e)), state)),
+                        }
+                    } else {
+                        None
+                    }
+                }
+            }
+        })
+        .fuse(),
+    )
+}
+
 #[derive(Clone)]
 pub struct Wallet {
     secp: Secp256k1<All>,
@@ -249,6 +307,7 @@ impl Wallet {
         tx: Transaction,
         change_address: Address,
         n_satoshis_per_k: u64,
+        prev_txid: Option<Txid>,
     ) -> Result<PartiallySignedTransaction, Error> {
         let recipients_sum = tx.output.iter().map(|tx_out| tx_out.value).sum::<u64>();
 
@@ -283,73 +342,78 @@ impl Wallet {
         // https://github.com/bitcoin/bitcoin/blob/01e1627e25bc5477c40f51da03c3c31b609a85c9/src/wallet/spend.cpp#L896
         let selection_target = recipients_sum + not_input_fees;
         let mut value_to_select = selection_target;
-
-        let mut psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
         let mut select_coins = SelectCoins::new(selection_target);
+
+        // not empty if we are fee bumping, include these inputs first
+        let prev_inputs = tx.input.clone();
+        let mut tx_noinputs = tx.clone();
+        tx_noinputs.input.clear();
+        let mut psbt = PartiallySignedTransaction::from_unsigned_tx(tx_noinputs)?;
 
         // get available coins
         let addresses = self.key_store.read()?.keys().cloned().collect::<Vec<_>>();
-        for address in addresses {
-            log::info!("Found address: {}", address);
-            // get utxos for address
-            let utxos = self.electrs.get_utxos_for_address(&address).await?;
-            // TODO: stream this, no need to fetch
-            for utxo in utxos {
-                log::info!("Found utxo: {}", utxo.outpoint.txid);
+        let mut utxo_stream = available_coins(self.electrs.clone(), prev_inputs, addresses);
+        while let Some(Ok(utxo)) = utxo_stream.next().await {
+            log::info!("Found utxo: {}", utxo.outpoint.txid);
 
-                let script_pubkey = self.electrs.get_script_pubkey(utxo.outpoint).await?;
-                let public_key = self.get_pub_key(&script_pubkey).expect("wallet has key");
-                let input_bytes = calculate_maximum_signed_input_size(utxo.outpoint, public_key);
-                let coin_output = CoinOutput {
+            if prev_txid.contains(&utxo.outpoint.txid) {
+                // skip if trying to spend previous tx (RBF)
+                continue;
+            }
+
+            let script_pubkey = self.electrs.get_script_pubkey(utxo.outpoint).await?;
+            let public_key = self.get_pub_key(&script_pubkey).expect("wallet has key");
+            let input_bytes = calculate_maximum_signed_input_size(utxo.outpoint, public_key);
+            let coin_output = CoinOutput {
+                value: utxo.value,
+                fee: m_effective_feerate.get_fee(input_bytes),
+            };
+
+            let effective_value = coin_output.get_effective_value();
+            select_coins.add(coin_output);
+            value_to_select = value_to_select.saturating_sub(effective_value);
+
+            psbt.unsigned_tx.input.push(TxIn {
+                previous_output: utxo.outpoint,
+                sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
+                ..Default::default()
+            });
+
+            psbt.inputs.push(psbt::Input {
+                witness_utxo: Some(TxOut {
                     value: utxo.value,
-                    fee: m_effective_feerate.get_fee(input_bytes),
-                };
+                    script_pubkey,
+                }),
+                ..Default::default()
+            });
 
-                let effective_value = coin_output.get_effective_value();
-                select_coins.add(coin_output);
-                value_to_select = value_to_select.saturating_sub(effective_value);
-
-                psbt.unsigned_tx.input.push(TxIn {
-                    previous_output: utxo.outpoint,
-                    ..Default::default()
-                });
-
-                psbt.inputs.push(psbt::Input {
-                    witness_utxo: Some(TxOut {
-                        value: utxo.value,
-                        script_pubkey,
-                    }),
-                    ..Default::default()
-                });
-
-                if value_to_select == 0 {
-                    // add change output before computing maximum size
-                    let change_amount = select_coins.get_change(min_viable_change, change_fee);
-                    let mut n_change_pos_in_out = None;
-                    if change_amount > 0 {
-                        n_change_pos_in_out = Some(psbt.unsigned_tx.output.len());
-                        // add change output
-                        psbt.unsigned_tx.output.push(TxOut {
-                            value: change_amount,
-                            script_pubkey: change_address.script_pubkey(),
-                        });
-                    }
-
-                    // https://github.com/bitcoin/bitcoin/blob/01e1627e25bc5477c40f51da03c3c31b609a85c9/src/wallet/spend.cpp#L945
-                    let n_bytes = calculate_maximum_signed_tx_size(&psbt, self);
-                    let fee_needed = m_effective_feerate.get_fee(n_bytes);
-                    let n_fee_ret = select_coins.get_selected_value() - recipients_sum - change_amount;
-
-                    if let Some(change_pos) = n_change_pos_in_out {
-                        if fee_needed < n_fee_ret {
-                            log::info!("Fee needed is less than expected");
-                            let mut change_output = &mut psbt.unsigned_tx.output[change_pos];
-                            change_output.value += n_fee_ret - fee_needed;
-                        }
-                    }
-
-                    return Ok(psbt);
+            if value_to_select == 0 {
+                // add change output before computing maximum size
+                let change_amount = select_coins.get_change(min_viable_change, change_fee);
+                let mut n_change_pos_in_out = None;
+                if change_amount > 0 {
+                    n_change_pos_in_out = Some(psbt.unsigned_tx.output.len());
+                    // add change output
+                    psbt.unsigned_tx.output.push(TxOut {
+                        value: change_amount,
+                        script_pubkey: change_address.script_pubkey(),
+                    });
                 }
+
+                // https://github.com/bitcoin/bitcoin/blob/01e1627e25bc5477c40f51da03c3c31b609a85c9/src/wallet/spend.cpp#L945
+                let n_bytes = calculate_maximum_signed_tx_size(&psbt, self);
+                let fee_needed = m_effective_feerate.get_fee(n_bytes);
+                let n_fee_ret = select_coins.get_selected_value() - recipients_sum - change_amount;
+
+                if let Some(change_pos) = n_change_pos_in_out {
+                    if fee_needed < n_fee_ret {
+                        log::info!("Fee needed is less than expected");
+                        let mut change_output = &mut psbt.unsigned_tx.output[change_pos];
+                        change_output.value += n_fee_ret - fee_needed;
+                    }
+                }
+
+                return Ok(psbt);
             }
         }
 

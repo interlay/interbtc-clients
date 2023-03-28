@@ -47,6 +47,24 @@ impl BitcoinLight {
             .ok_or(Error::NoChangeAddress)
     }
 
+    pub async fn fund_and_sign_transaction(
+        &self,
+        recipient: Address,
+        unsigned_tx: Transaction,
+        change_address: Address,
+        fee_rate: SatPerVbyte,
+        prev_txid: Option<Txid>,
+    ) -> Result<LockedTransaction, BitcoinError> {
+        let lock = self.transaction_creation_lock.clone().lock_owned().await;
+        let mut psbt = self
+            .wallet
+            .fund_transaction(unsigned_tx, change_address, fee_rate.0.saturating_mul(1000), prev_txid)
+            .await?;
+        self.wallet.sign_transaction(&mut psbt)?;
+        let signed_tx = psbt.extract_tx();
+        Ok(LockedTransaction::new(signed_tx, recipient.to_string(), Some(lock)))
+    }
+
     pub async fn create_transaction(
         &self,
         recipient: Address,
@@ -54,18 +72,10 @@ impl BitcoinLight {
         fee_rate: SatPerVbyte,
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, BitcoinError> {
-        let lock = self.transaction_creation_lock.clone().lock_owned().await;
         let unsigned_tx = self.wallet.create_transaction(recipient.clone(), sat, request_id);
         let change_address = self.get_change_address()?;
-
-        let mut psbt = self
-            .wallet
-            .fund_transaction(unsigned_tx, change_address, fee_rate.0.saturating_mul(1000))
-            .await?;
-        self.wallet.sign_transaction(&mut psbt)?;
-        let signed_tx = psbt.extract_tx();
-
-        Ok(LockedTransaction::new(signed_tx, recipient.to_string(), Some(lock)))
+        self.fund_and_sign_transaction(recipient, unsigned_tx, change_address, fee_rate, None)
+            .await
     }
 
     // TODO: hold tx lock until inclusion otherwise electrs may report stale utxos
@@ -239,8 +249,33 @@ impl BitcoinCoreApi for BitcoinLight {
         })
     }
 
-    async fn bump_fee(&self, _txid: &Txid, _address: Address, _fee_rate: SatPerVbyte) -> Result<Txid, BitcoinError> {
-        todo!()
+    async fn bump_fee(&self, txid: &Txid, address: Address, fee_rate: SatPerVbyte) -> Result<Txid, BitcoinError> {
+        let mut existing_transaction = self.get_transaction(txid, None).await?;
+        let return_to_self = existing_transaction
+            .extract_return_to_self_address(&address.payload)?
+            .map(|(idx, payload)| {
+                existing_transaction.output.remove(idx);
+                Address {
+                    payload,
+                    network: self.network(),
+                }
+            });
+
+        existing_transaction
+            .input
+            .iter_mut()
+            .for_each(|txin| txin.witness.clear());
+        let tx = self
+            .fund_and_sign_transaction(
+                address,
+                existing_transaction,
+                return_to_self.unwrap(),
+                fee_rate,
+                Some(txid.clone()),
+            )
+            .await?;
+        let txid = self.send_transaction(tx).await?;
+        Ok(txid)
     }
 
     async fn create_and_send_transaction(

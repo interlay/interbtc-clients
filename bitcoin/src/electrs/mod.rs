@@ -171,7 +171,7 @@ impl ElectrsClient {
 
     pub async fn get_utxos_for_address(&self, address: &Address) -> Result<Vec<Utxo>, Error> {
         let utxos: Vec<ElectrsUtxo> = self.get_and_decode(&format!("/address/{address}/utxo")).await?;
-
+        // NOTE: includes unconfirmed mempool txs
         utxos
             .into_iter()
             .map(|utxo| {
@@ -199,6 +199,21 @@ impl ElectrsClient {
                 .scriptpubkey
                 .ok_or(Error::NoPrevOut)?,
         )?)
+    }
+
+    pub(crate) async fn get_prev_value(&self, outpoint: &OutPoint) -> Result<u64, Error> {
+        let tx: ElectrsTransaction = self
+            .get_and_decode(&format!("/tx/{txid}", txid = outpoint.txid))
+            .await?;
+        Ok(tx
+            .vout
+            .ok_or(Error::NoPrevOut)?
+            .get(outpoint.vout as usize)
+            .ok_or(Error::NoPrevOut)?
+            .clone()
+            .value
+            .map(|v| v as u64)
+            .ok_or(Error::NoPrevOut)?)
     }
 
     // TODO: modify upstream to return a human-readable error
