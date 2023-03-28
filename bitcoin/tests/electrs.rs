@@ -1,4 +1,4 @@
-// #![cfg(feature = "uses-bitcoind")]
+#![cfg(feature = "uses-bitcoind")]
 
 use bitcoin::{
     secp256k1::{constants::SECRET_KEY_SIZE, Secp256k1},

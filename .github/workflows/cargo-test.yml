@@ -17,11 +17,6 @@ jobs:
   test:
     name: Test Suite
     runs-on: [self-hosted, linux]
-    services:
-      bitcoind:
-        image: docker.io/interlayhq/bitcoin-core:22.0
-        ports:
-          - 18443:18443
 
     strategy:
       matrix:
@@ -62,7 +57,9 @@ jobs:
           BITCOIN_RPC_URL: http://127.0.0.1:18443
           BITCOIN_RPC_USER: user
           BITCOIN_RPC_PASS: pass
+          ELECTRS_URL: http://localhost:3002
         run: |
+          docker-compose up --detach
           cargo test --release --workspace --features ${{ matrix.metadata }} --features uses-bitcoind
       - name: build
         run: |
