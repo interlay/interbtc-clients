@@ -211,7 +211,7 @@ fn get_dust_threshold(tx_out: &TxOut, dust_relay_fee_in: &FeeRate) -> u64 {
         n_size += 32 + 4 + 1 + 107 + 4;
     }
 
-    return dust_relay_fee_in.get_fee(n_size);
+    dust_relay_fee_in.get_fee(n_size)
 }
 
 pub type KeyStore = Arc<RwLock<BTreeMap<Address, PrivateKey>>>;
@@ -255,11 +255,7 @@ pub fn available_coins(
                         match state.electrs.get_utxos_for_address(&address).await {
                             Ok(utxos) => {
                                 state.utxos = VecDeque::from(utxos);
-                                if let Some(utxo) = state.utxos.pop_front() {
-                                    Some((Ok(utxo), state))
-                                } else {
-                                    None
-                                }
+                                state.utxos.pop_front().map(|utxo| (Ok(utxo), state))
                             }
                             Err(e) => Some((Err(Error::ElectrsError(e)), state)),
                         }

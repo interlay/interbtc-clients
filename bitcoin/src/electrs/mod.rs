@@ -201,12 +201,7 @@ impl ElectrsClient {
         let tx: TransactionValue = self
             .get_and_decode(&format!("/tx/{txid}", txid = outpoint.txid))
             .await?;
-        Ok(tx
-            .vout
-            .get(outpoint.vout as usize)
-            .ok_or(Error::NoPrevOut)?
-            .clone()
-            .value)
+        Ok(tx.vout.get(outpoint.vout as usize).ok_or(Error::NoPrevOut)?.value)
     }
 
     // TODO: modify upstream to return a human-readable error

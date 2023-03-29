@@ -28,7 +28,7 @@ impl BitcoinLight {
         let electrs_client = ElectrsClient::new(electrs_url, network)?;
         let wallet = wallet::Wallet::new(network, electrs_client.clone());
         // store the derivation key so it can be used for change
-        wallet.put_p2wpkh_key(private_key.inner.clone())?;
+        wallet.put_p2wpkh_key(private_key.inner)?;
         Ok(Self {
             private_key,
             secp_ctx: secp256k1::Secp256k1::new(),
@@ -269,7 +269,7 @@ impl BitcoinCoreApi for BitcoinLight {
                 existing_transaction,
                 return_to_self.unwrap(),
                 fee_rate,
-                Some(txid.clone()),
+                Some(*txid),
             )
             .await?;
         let txid = self.send_transaction(tx).await?;
