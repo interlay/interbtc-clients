@@ -78,8 +78,6 @@ impl BitcoinLight {
             .await
     }
 
-    // TODO: hold tx lock until inclusion otherwise electrs may report stale utxos
-    // need to check when electrs knows that a utxo has been spent
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError> {
         let txid = self.electrs.send_transaction(transaction.transaction).await?;
         Ok(txid)
