@@ -1,12 +1,13 @@
 mod error;
+mod types;
 
 pub use error::Error;
+pub use types::*;
 
 use crate::{
     deserialize, opcodes, serialize, Address, Block, BlockHash, BlockHeader, Builder as ScriptBuilder, FromHex,
     Network, OutPoint, Script, SignedAmount, ToHex, Transaction, Txid, H256,
 };
-use esplora_btc_api::models::{Transaction as ElectrsTransaction, Utxo as ElectrsUtxo};
 use futures::future::{join_all, try_join};
 use reqwest::{Client, Url};
 use sha2::{Digest, Sha256};
@@ -69,33 +70,31 @@ impl ElectrsClient {
         Ok(serde_json::from_str(&body)?)
     }
 
-    pub(crate) async fn get_tx_hex(&self, txid: &str) -> Result<String, Error> {
+    pub(crate) async fn get_tx_hex(&self, txid: &Txid) -> Result<String, Error> {
         self.get(&format!("/tx/{txid}/hex")).await
     }
 
-    pub(crate) async fn get_tx_merkle_block_proof(&self, txid: &str) -> Result<String, Error> {
+    pub(crate) async fn get_tx_merkle_block_proof(&self, txid: &Txid) -> Result<String, Error> {
         self.get(&format!("/tx/{txid}/merkleblock-proof")).await
     }
 
     pub(crate) async fn get_raw_tx(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
-        Ok(Vec::<u8>::from_hex(&self.get_tx_hex(&txid.to_string()).await?)?)
+        Ok(Vec::<u8>::from_hex(&self.get_tx_hex(txid).await?)?)
     }
 
     pub(crate) async fn get_raw_tx_merkle_proof(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
-        Ok(Vec::<u8>::from_hex(
-            &self.get_tx_merkle_block_proof(&txid.to_string()).await?,
-        )?)
+        Ok(Vec::<u8>::from_hex(&self.get_tx_merkle_block_proof(txid).await?)?)
     }
 
-    pub async fn get_address_tx_history_full(&self, address: &str) -> Result<Vec<ElectrsTransaction>, Error> {
+    pub async fn get_address_tx_history_full(&self, address: &str) -> Result<Vec<TransactionValue>, Error> {
         let mut last_seen_txid = Default::default();
-        let mut ret = Vec::<ElectrsTransaction>::new();
+        let mut ret = Vec::<TransactionValue>::new();
         loop {
-            let mut transactions: Vec<ElectrsTransaction> = self
+            let mut transactions: Vec<TransactionValue> = self
                 .get_and_decode(&format!("/address/{address}/txs/chain/{last_seen_txid}"))
                 .await?;
             let page_size = transactions.len();
-            last_seen_txid = transactions.last().map_or(Default::default(), |tx| tx.txid.clone());
+            last_seen_txid = transactions.last().map_or(Default::default(), |tx| tx.txid.to_string());
             ret.append(&mut transactions);
             if page_size < ELECTRS_TRANSACTIONS_PER_PAGE {
                 // no further pages
@@ -155,7 +154,7 @@ impl ElectrsClient {
     }
 
     pub(crate) async fn get_tx_info(&self, txid: &Txid) -> Result<TxInfo, Error> {
-        let tx: ElectrsTransaction = self.get_and_decode(&format!("/tx/{txid}")).await?;
+        let tx: TransactionValue = self.get_and_decode(&format!("/tx/{txid}")).await?;
         let tip = self.get_blocks_tip_height().await?;
         let (height, hash) = match tx.status.map(|status| (status.block_height, status.block_hash)) {
             Some((Some(height), Some(hash))) => (height as u32, hash),
@@ -164,56 +163,50 @@ impl ElectrsClient {
         Ok(TxInfo {
             confirmations: tip.saturating_sub(height),
             height,
-            hash: BlockHash::from_str(&hash)?,
-            fee: SignedAmount::from_sat(tx.fee.unwrap_or_default() as i64),
+            hash,
+            fee: SignedAmount::from_sat(tx.fee as i64),
         })
     }
 
     pub async fn get_utxos_for_address(&self, address: &Address) -> Result<Vec<Utxo>, Error> {
-        let utxos: Vec<ElectrsUtxo> = self.get_and_decode(&format!("/address/{address}/utxo")).await?;
+        let utxos: Vec<UtxoValue> = self.get_and_decode(&format!("/address/{address}/utxo")).await?;
         // NOTE: includes unconfirmed mempool txs
         utxos
             .into_iter()
             .map(|utxo| {
                 Ok(Utxo {
                     outpoint: OutPoint {
-                        txid: Txid::from_hex(&utxo.txid)?,
-                        vout: utxo.vout as u32,
+                        txid: utxo.txid,
+                        vout: utxo.vout,
                     },
-                    value: utxo.value as u64,
+                    value: utxo.value,
                 })
             })
             .collect::<Result<Vec<_>, Error>>()
     }
 
     pub(crate) async fn get_script_pubkey(&self, outpoint: OutPoint) -> Result<Script, Error> {
-        let tx: ElectrsTransaction = self
-            .get_and_decode(&format!("/tx/{txid}", txid = outpoint.txid))
-            .await?;
-        Ok(Script::from_str(
-            &tx.vout
-                .ok_or(Error::NoPrevOut)?
-                .get(outpoint.vout as usize)
-                .ok_or(Error::NoPrevOut)?
-                .clone()
-                .scriptpubkey
-                .ok_or(Error::NoPrevOut)?,
-        )?)
-    }
-
-    pub(crate) async fn get_prev_value(&self, outpoint: &OutPoint) -> Result<u64, Error> {
-        let tx: ElectrsTransaction = self
+        let tx: TransactionValue = self
             .get_and_decode(&format!("/tx/{txid}", txid = outpoint.txid))
             .await?;
         Ok(tx
             .vout
+            .get(outpoint.vout as usize)
             .ok_or(Error::NoPrevOut)?
+            .scriptpubkey
+            .clone())
+    }
+
+    pub(crate) async fn get_prev_value(&self, outpoint: &OutPoint) -> Result<u64, Error> {
+        let tx: TransactionValue = self
+            .get_and_decode(&format!("/tx/{txid}", txid = outpoint.txid))
+            .await?;
+        Ok(tx
+            .vout
             .get(outpoint.vout as usize)
             .ok_or(Error::NoPrevOut)?
             .clone()
-            .value
-            .map(|v| v as u64)
-            .ok_or(Error::NoPrevOut)?)
+            .value)
     }
 
     // TODO: modify upstream to return a human-readable error
@@ -230,6 +223,28 @@ impl ElectrsClient {
             .text()
             .await?;
         Ok(Txid::from_str(&txid)?)
+    }
+
+    pub(crate) async fn get_txs_by_scripthash(&self, script_hash: Vec<u8>) -> Result<Vec<TransactionValue>, Error> {
+        let mut last_seen_txid = Default::default();
+        let mut txs = Vec::<TransactionValue>::new();
+        loop {
+            // NOTE: includes unconfirmed txs
+            let mut transactions: Vec<TransactionValue> = self
+                .get_and_decode(&format!(
+                    "/scripthash/{scripthash}/txs/chain/{last_seen_txid}",
+                    scripthash = script_hash.to_hex()
+                ))
+                .await?;
+            let page_size = transactions.len();
+            last_seen_txid = transactions.last().map_or(Default::default(), |tx| tx.txid.to_string());
+            txs.append(&mut transactions);
+            if page_size < ELECTRS_TRANSACTIONS_PER_PAGE {
+                // no further pages
+                break;
+            }
+        }
+        Ok(txs)
     }
 
     pub(crate) async fn get_tx_for_op_return(
@@ -249,35 +264,17 @@ impl ElectrsClient {
             hasher.result().as_slice().to_vec()
         };
 
-        let mut last_seen_txid = Default::default();
-        let mut txs = Vec::<ElectrsTransaction>::new();
-        loop {
-            // NOTE: includes unconfirmed txs
-            let mut transactions: Vec<ElectrsTransaction> = self
-                .get_and_decode(&format!(
-                    "/scripthash/{scripthash}/txs/chain/{last_seen_txid}",
-                    scripthash = script_hash.to_hex()
-                ))
-                .await?;
-            let page_size = transactions.len();
-            last_seen_txid = transactions.last().map_or(Default::default(), |tx| tx.txid.clone());
-            txs.append(&mut transactions);
-            if page_size < ELECTRS_TRANSACTIONS_PER_PAGE {
-                // no further pages
-                break;
-            }
-        }
+        let txs = self.get_txs_by_scripthash(script_hash).await?;
         log::info!("Found {} transactions", txs.len());
 
         let address = address.to_string();
         for tx in txs {
             let largest = tx
                 .vout
-                .unwrap_or_default()
                 .iter()
                 .filter_map(|vout| {
                     if vout.scriptpubkey_address.contains(&address) {
-                        Some(vout.value.unwrap_or_default() as u64)
+                        Some(vout.value)
                     } else {
                         None
                     }
@@ -286,8 +283,7 @@ impl ElectrsClient {
                 .unwrap_or_default();
 
             if largest as u128 >= amount {
-                let txid = Txid::from_str(&tx.txid)?;
-                return Ok(Some(txid));
+                return Ok(Some(tx.txid));
             }
         }
         Ok(None)
@@ -299,22 +295,19 @@ mod tests {
     use super::*;
 
     use bitcoincore_rpc::bitcoin::hashes::{hex::FromHex, sha256::Hash as Sha256Hash, Hash};
-    use esplora_btc_api::apis::configuration::Configuration as ElectrsConfiguration;
 
     // TODO: mock the electrs endpoint
     async fn test_electrs(url: &str, script_hex: &str, expected_txid: &str) {
-        let config = ElectrsConfiguration {
-            base_path: url.to_owned(),
-            ..Default::default()
-        };
-
         let script_bytes = Vec::from_hex(script_hex).unwrap();
         let script_hash = Sha256Hash::hash(&script_bytes);
+        let expected_txid = Txid::from_hex(expected_txid).unwrap();
 
-        let txs = esplora_btc_api::apis::scripthash_api::get_txs_by_scripthash(&config, &hex::encode(script_hash))
+        let electrs_client = ElectrsClient::new(Some(url.to_owned()), Network::Bitcoin).unwrap();
+        let txs = electrs_client
+            .get_txs_by_scripthash(script_hash.to_vec())
             .await
             .unwrap();
-        assert!(txs.iter().any(|tx| { &tx.txid == expected_txid }));
+        assert!(txs.iter().any(|tx| tx.txid.eq(&expected_txid)));
     }
 
     #[tokio::test(flavor = "multi_thread")]

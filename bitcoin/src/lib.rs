@@ -1019,8 +1019,6 @@ impl BitcoinCoreApi for BitcoinCore {
                     }
                 };
                 tx.vout
-                    .as_ref()
-                    .unwrap_or(&vec![])
                     .iter()
                     .any(|output| matches!(&output.scriptpubkey_address, Some(addr) if addr == &address))
             });
