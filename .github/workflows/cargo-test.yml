@@ -55,8 +55,8 @@ jobs:
         env:
           RUST_LOG: info,regalloc=warn
           BITCOIN_RPC_URL: http://127.0.0.1:18443
-          BITCOIN_RPC_USER: user
-          BITCOIN_RPC_PASS: pass
+          BITCOIN_RPC_USER: rpcuser
+          BITCOIN_RPC_PASS: rpcpassword
           ELECTRS_URL: http://localhost:3002
         run: |
           docker-compose up --detach
