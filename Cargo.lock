@@ -613,6 +613,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "serial_test",
  "sha2 0.8.2",
  "sp-core",
  "thiserror",
@@ -15985,11 +15986,11 @@ dependencies = [
 ]
 
 [[patch.unused]]
-name = "orml-xcm"
-version = "0.4.1-dev"
-source = "git+https://github.com/open-web3-stack//open-runtime-module-library?rev=24f0a8b6e04e1078f70d0437fb816337cdf4f64c#24f0a8b6e04e1078f70d0437fb816337cdf4f64c"
-
-[[patch.unused]]
 name = "sp-serializer"
 version = "4.0.0-dev"
 source = "git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.37#f38bd6671d460293c93062cc1e4fe9e9e490cb29"
+
+[[patch.unused]]
+name = "orml-xcm"
+version = "0.4.1-dev"
+source = "git+https://github.com/open-web3-stack//open-runtime-module-library?rev=24f0a8b6e04e1078f70d0437fb816337cdf4f64c#24f0a8b6e04e1078f70d0437fb816337cdf4f64c"

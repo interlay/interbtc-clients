@@ -151,10 +151,8 @@ impl BitcoinCoreApi for BitcoinLight {
     async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError> {
         match self.electrs.get_block_hash(height).await {
             Ok(block_hash) => Ok(block_hash),
-            Err(_err) => {
-                // TODO: handle error
-                Err(BitcoinError::InvalidBitcoinHeight)
-            }
+            Err(err) if err.is_not_found() => Err(BitcoinError::InvalidBitcoinHeight),
+            Err(err) => Err(BitcoinError::ElectrsError(err)),
         }
     }
 

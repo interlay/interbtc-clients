@@ -2,7 +2,7 @@ use bitcoincore_rpc::bitcoin::{
     consensus::encode::Error as BitcoinEncodeError, hashes::hex::Error as HexError,
     util::address::Error as BitcoinAddressError,
 };
-use reqwest::Error as ReqwestError;
+use reqwest::{Error as ReqwestError, StatusCode};
 use serde_json::Error as SerdeJsonError;
 use std::num::{ParseIntError, TryFromIntError};
 use thiserror::Error;
@@ -35,4 +35,10 @@ pub enum Error {
     TryFromIntError(#[from] TryFromIntError),
     #[error("ParseIntError: {0}")]
     ParseIntError(#[from] ParseIntError),
+}
+
+impl Error {
+    pub fn is_not_found(&self) -> bool {
+        matches!(self, Error::ReqwestError(err) if err.status().contains(&StatusCode::NOT_FOUND))
+    }
 }

@@ -466,7 +466,8 @@ impl Wallet {
                 .ecdsa_hash_ty()
                 .map_err(|NonStandardSighashType(ty)| Error::PsbtError(psbt::Error::NonStandardSighashType(ty)))?;
 
-            // TODO: support signing p2sh, p2pkh, p2wsh
+            // NOTE: we don't support signing p2sh, p2pkh, p2wsh inputs
+            // since the Vault is assumed to only receive p2wpkh payments
             let script_code = if prev_out.script_pubkey.is_v0_p2wpkh() {
                 Ok(p2wpkh_script_code(&prev_out.script_pubkey))
             } else {

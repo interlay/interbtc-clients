@@ -7,6 +7,7 @@ use bitcoin::{
 };
 use futures::{future::join, Future};
 use rand::{thread_rng, Rng};
+use serial_test::serial;
 use std::{env::var, time::Duration};
 use tokio::time::{sleep, timeout};
 
@@ -113,6 +114,7 @@ async fn fund_wallet(bitcoin_light: &BitcoinLight) -> Result<(), Error> {
 }
 
 #[tokio::test]
+#[serial]
 async fn should_create_transactions() -> Result<(), Error> {
     let bitcoin_light = new_bitcoin_light();
     fund_wallet(&bitcoin_light).await?;
@@ -171,6 +173,7 @@ async fn should_create_transactions() -> Result<(), Error> {
 }
 
 #[tokio::test]
+#[serial]
 async fn should_bump_fee() -> Result<(), Error> {
     let bitcoin_light = new_bitcoin_light();
     fund_wallet(&bitcoin_light).await?;
@@ -200,6 +203,7 @@ async fn should_bump_fee() -> Result<(), Error> {
 }
 
 #[tokio::test]
+#[serial]
 async fn should_page_address_history() -> Result<(), Error> {
     let public_key = new_random_key_pair().1;
     let address = Address::p2wpkh(&public_key, DEFAULT_NETWORK).unwrap();
@@ -207,10 +211,7 @@ async fn should_page_address_history() -> Result<(), Error> {
     wait_for_success(|| async { new_electrs().get_block_header(&block_hash).await }).await;
 
     let txs = new_electrs().get_address_tx_history_full(&address.to_string()).await?;
-    // ideally we would check that 100 coinbase txs are
-    // returned but this test may run concurrently so we
-    // may not have cached all txs
-    assert!(txs.len().gt(&25));
+    assert!(txs.len().eq(&100));
 
     Ok(())
 }
