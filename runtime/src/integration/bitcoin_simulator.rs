@@ -509,7 +509,12 @@ impl BitcoinCoreApi for MockBitcoinCore {
         unimplemented!()
     }
 
-    async fn get_tx_for_op_return(&self, address: Address, amount: u128, data: H256) -> Result<Option<Txid>, Error> {
+    async fn get_tx_for_op_return(
+        &self,
+        address: Address,
+        amount: u128,
+        data: H256,
+    ) -> Result<Option<Txid>, BitcoinError> {
         unimplemented!()
     }
 }

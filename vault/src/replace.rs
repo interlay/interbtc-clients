@@ -291,6 +291,7 @@ mod tests {
             ) -> Result<Txid, BitcoinError>;
             async fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
             async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
+            async fn get_tx_for_op_return(&self, address: Address, amount: u128, data: H256) -> Result<Option<Txid>, BitcoinError>;
         }
     }
 
