@@ -16,7 +16,8 @@ use runtime::{
     },
     CollateralBalancesPallet, CurrencyId, CurrencyIdExt, CurrencyInfo, Error as RuntimeError, FeedValuesEvent,
     FixedU128, InterBtcParachain, InterBtcRedeemRequest, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet,
-    RedeemRequestStatus, ReplacePallet, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet, H256,
+    RedeemRequestStatus, ReplacePallet, RuntimeCurrencyInfo, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet,
+    H256,
 };
 use service::{
     warp::{Rejection, Reply},
@@ -152,20 +153,15 @@ impl VaultDataReader for VaultIdManager {
 
 impl PerCurrencyMetrics {
     pub fn new(vault_id: &VaultId) -> Self {
-        let label = format!(
+        Self::new_with_label(Self::label(vault_id).as_ref())
+    }
+
+    pub fn label(vault_id: &VaultId) -> String {
+        format!(
             "{}_{}",
-            vault_id
-                .collateral_currency()
-                .inner()
-                .map(|i| i.symbol().to_string())
-                .unwrap_or_default(),
-            vault_id
-                .wrapped_currency()
-                .inner()
-                .map(|i| i.symbol().to_string())
-                .unwrap_or_default()
-        );
-        Self::new_with_label(label.as_ref())
+            vault_id.collateral_currency().symbol().unwrap_or_default(),
+            vault_id.wrapped_currency().symbol().unwrap_or_default()
+        )
     }
 
     // construct a dummy metrics struct for testing purposes
@@ -683,9 +679,12 @@ mod tests {
     use jsonrpc_core::serde_json::{Map, Value};
     use parity_scale_codec::Decode;
     use runtime::{
-        AccountId, AssetMetadata, Balance, BlockNumber, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError,
-        ErrorCode, InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcReplaceRequest, InterBtcVault,
-        KeyStorageAddress, RequestIssueEvent, StatusCode, Token, VaultId, VaultStatus, DOT, H256, IBTC, INTR,
+        metadata::runtime_types::interbtc_primitives::CustomMetadata,
+        AccountId, AssetMetadata, AssetRegistry, Balance, BlockNumber, BtcAddress, BtcPublicKey,
+        CurrencyId::{self, ForeignAsset, LendToken},
+        Error as RuntimeError, ErrorCode, InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcReplaceRequest,
+        InterBtcVault, KeyStorageAddress, LendingAssets, RequestIssueEvent, StatusCode, Token, VaultId, VaultStatus,
+        DOT, H256, IBTC, INTR,
     };
     use service::DynBitcoinCoreApi;
     use std::collections::BTreeSet;
@@ -1084,6 +1083,38 @@ mod tests {
         let total_collateral = vault_data.metrics.locked_collateral.get();
 
         assert_eq!(total_collateral, 0.0000000075);
+    }
+
+    #[tokio::test]
+    async fn test_foreign_asset_collateral() {
+        let mock_bitcoin = MockBitcoin::default();
+        let dummy_metadata = AssetMetadata {
+            decimals: 10,
+            location: None,
+            name: b"Tether USD".to_vec(),
+            symbol: b"USDT".to_vec(),
+            existential_deposit: 0,
+            additional: CustomMetadata {
+                fee_per_second: 0,
+                coingecko_id: vec![],
+            },
+        };
+        AssetRegistry::insert(1, dummy_metadata).unwrap();
+        let vault_id = VaultId::new(AccountId::new([1u8; 32]), ForeignAsset(1), Token(IBTC));
+        assert_eq!(PerCurrencyMetrics::label(&vault_id).to_string(), "USDT_IBTC");
+    }
+
+    #[tokio::test]
+    async fn test_token_collateral() {
+        let vault_id = VaultId::new(AccountId::new([1u8; 32]), Token(DOT), Token(IBTC));
+        assert_eq!(PerCurrencyMetrics::label(&vault_id).to_string(), "DOT_IBTC");
+    }
+
+    #[tokio::test]
+    async fn test_lend_token_collateral() {
+        LendingAssets::insert(Token(DOT), LendToken(1)).unwrap();
+        let vault_id = VaultId::new(AccountId::new([1u8; 32]), LendToken(1), Token(IBTC));
+        assert_eq!(PerCurrencyMetrics::label(&vault_id).to_string(), "QDOT_IBTC");
     }
 
     #[tokio::test]

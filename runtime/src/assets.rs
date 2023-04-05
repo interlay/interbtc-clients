@@ -37,7 +37,7 @@ impl AssetRegistry {
         Ok(())
     }
 
-    pub(crate) fn insert(foreign_asset_id: u32, asset_metadata: AssetMetadata) -> Result<(), Error> {
+    pub fn insert(foreign_asset_id: u32, asset_metadata: AssetMetadata) -> Result<(), Error> {
         let mut asset_registry = Self::global()?;
         asset_registry.inner_insert(foreign_asset_id, asset_metadata)?;
         Ok(())
@@ -88,7 +88,7 @@ impl LendingAssets {
         LENDING_ASSETS.lock().map_err(|_| Error::CannotOpenAssetRegistry)
     }
 
-    pub(crate) fn insert(underlying_id: CurrencyId, lend_token_id: CurrencyId) -> Result<(), Error> {
+    pub fn insert(underlying_id: CurrencyId, lend_token_id: CurrencyId) -> Result<(), Error> {
         log::info!(
             "Found loans market: {:?}, with lend token: {:?}",
             underlying_id,
