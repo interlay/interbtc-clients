@@ -329,7 +329,7 @@ pub async fn metrics_handler() -> Result<impl Reply, Rejection> {
 }
 
 fn raw_value_as_currency(value: u128, currency: CurrencyId) -> Result<f64, ServiceError<Error>> {
-    let scaling_factor = currency.inner()?.one() as f64;
+    let scaling_factor = currency.one()? as f64;
     Ok(value as f64 / scaling_factor)
 }
 
