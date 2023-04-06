@@ -14,8 +14,8 @@ use runtime::{
         gather, proto::MetricFamily, Encoder, Gauge, GaugeVec, IntCounter, IntGauge, IntGaugeVec, Opts, Registry,
         TextEncoder,
     },
-    CollateralBalancesPallet, CurrencyId, CurrencyIdExt, CurrencyInfo, Error as RuntimeError, FeedValuesEvent,
-    FixedU128, InterBtcParachain, InterBtcRedeemRequest, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet,
+    CollateralBalancesPallet, CurrencyId, CurrencyIdExt, Error as RuntimeError, FeedValuesEvent, FixedU128,
+    InterBtcParachain, InterBtcRedeemRequest, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet,
     RedeemRequestStatus, ReplacePallet, RuntimeCurrencyInfo, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet,
     H256,
 };
@@ -1087,7 +1087,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_foreign_asset_collateral() {
-        let mock_bitcoin = MockBitcoin::default();
         let dummy_metadata = AssetMetadata {
             decimals: 10,
             location: None,
