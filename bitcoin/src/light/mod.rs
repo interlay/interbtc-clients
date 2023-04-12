@@ -257,6 +257,7 @@ impl BitcoinCoreApi for BitcoinLight {
                 }
             });
 
+        // clear the witnesses for fee estimation
         existing_transaction
             .input
             .iter_mut()

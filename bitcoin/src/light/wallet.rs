@@ -353,7 +353,7 @@ impl Wallet {
             log::info!("Found utxo: {}", utxo.outpoint.txid);
 
             if prev_txid.contains(&utxo.outpoint.txid) {
-                // skip if trying to spend previous tx (RBF)
+                // skip if trying to spend from the tx we are replacing
                 continue;
             }
 

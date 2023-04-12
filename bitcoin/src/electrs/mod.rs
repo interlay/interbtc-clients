@@ -246,6 +246,9 @@ impl ElectrsClient {
         Ok(txs)
     }
 
+    /// Returns the *largest* payment to the `address` which is
+    /// greater than or equal to the specified `amount` and contains
+    /// an `OP_RETURN` output with `data`.
     pub(crate) async fn get_tx_for_op_return(
         &self,
         address: Address,
