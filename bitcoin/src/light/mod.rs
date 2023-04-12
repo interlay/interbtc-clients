@@ -8,7 +8,7 @@ pub use error::Error;
 use async_trait::async_trait;
 use backoff::future::retry;
 use futures::future::{join_all, try_join, try_join_all};
-use std::{sync::Arc, time::Duration};
+use std::{convert::TryFrom, sync::Arc, time::Duration};
 use tokio::{sync::Mutex, time::sleep};
 
 const RETRY_DURATION: Duration = Duration::from_millis(1000);
@@ -335,7 +335,7 @@ impl BitcoinCoreApi for BitcoinLight {
             let prev_tx = self.get_transaction(&input.previous_output.txid, None).await?;
             let prev_out = prev_tx
                 .output
-                .get(input.previous_output.vout as usize)
+                .get(usize::try_from(input.previous_output.vout)?)
                 .ok_or(Error::NoPrevOut)?;
             Ok::<u64, BitcoinError>(prev_out.value)
         }))

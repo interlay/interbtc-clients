@@ -11,7 +11,7 @@ use crate::{
 use futures::future::{join_all, try_join};
 use reqwest::{Client, Url};
 use sha2::{Digest, Sha256};
-use std::str::FromStr;
+use std::{convert::TryFrom, str::FromStr};
 
 // https://github.com/Blockstream/electrs/blob/adedee15f1fe460398a7045b292604df2161adc0/src/rest.rs#L42
 const ELECTRS_TRANSACTIONS_PER_PAGE: usize = 25;
@@ -191,7 +191,7 @@ impl ElectrsClient {
             .await?;
         Ok(tx
             .vout
-            .get(outpoint.vout as usize)
+            .get(usize::try_from(outpoint.vout)?)
             .ok_or(Error::NoPrevOut)?
             .scriptpubkey
             .clone())
@@ -201,7 +201,11 @@ impl ElectrsClient {
         let tx: TransactionValue = self
             .get_and_decode(&format!("/tx/{txid}", txid = outpoint.txid))
             .await?;
-        Ok(tx.vout.get(outpoint.vout as usize).ok_or(Error::NoPrevOut)?.value)
+        Ok(tx
+            .vout
+            .get(usize::try_from(outpoint.vout)?)
+            .ok_or(Error::NoPrevOut)?
+            .value)
     }
 
     // TODO: modify upstream to return a human-readable error
