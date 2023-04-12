@@ -8,7 +8,7 @@ pub use error::Error;
 use async_trait::async_trait;
 use backoff::future::retry;
 use futures::future::{join_all, try_join, try_join_all};
-use std::{sync::Arc, time::Duration};
+use std::{convert::TryFrom, sync::Arc, time::Duration};
 use tokio::{sync::Mutex, time::sleep};
 
 const RETRY_DURATION: Duration = Duration::from_millis(1000);
@@ -25,14 +25,16 @@ pub struct BitcoinLight {
 impl BitcoinLight {
     pub fn new(electrs_url: Option<String>, private_key: PrivateKey) -> Result<Self, Error> {
         let network = private_key.network;
-        log::info!("Using network: {}", network);
         let electrs_client = ElectrsClient::new(electrs_url, network)?;
+        let wallet = wallet::Wallet::new(network, electrs_client.clone());
+        // store the derivation key so it can be used for change
+        wallet.put_p2wpkh_key(private_key.inner)?;
         Ok(Self {
             private_key,
             secp_ctx: secp256k1::Secp256k1::new(),
-            electrs: electrs_client.clone(),
+            electrs: electrs_client,
             transaction_creation_lock: Arc::new(Mutex::new(())),
-            wallet: wallet::Wallet::new(network, electrs_client),
+            wallet,
         })
     }
 
@@ -45,29 +47,37 @@ impl BitcoinLight {
             .ok_or(Error::NoChangeAddress)
     }
 
-    async fn create_transaction(
+    pub async fn fund_and_sign_transaction(
+        &self,
+        recipient: Address,
+        unsigned_tx: Transaction,
+        change_address: Address,
+        fee_rate: SatPerVbyte,
+        prev_txid: Option<Txid>,
+    ) -> Result<LockedTransaction, BitcoinError> {
+        let lock = self.transaction_creation_lock.clone().lock_owned().await;
+        let mut psbt = self
+            .wallet
+            .fund_transaction(unsigned_tx, change_address, fee_rate.0.saturating_mul(1000), prev_txid)
+            .await?;
+        self.wallet.sign_transaction(&mut psbt)?;
+        let signed_tx = psbt.extract_tx();
+        Ok(LockedTransaction::new(signed_tx, recipient.to_string(), Some(lock)))
+    }
+
+    pub async fn create_transaction(
         &self,
         recipient: Address,
         sat: u64,
         fee_rate: SatPerVbyte,
         request_id: Option<H256>,
     ) -> Result<LockedTransaction, BitcoinError> {
-        let lock = self.transaction_creation_lock.clone().lock_owned().await;
         let unsigned_tx = self.wallet.create_transaction(recipient.clone(), sat, request_id);
         let change_address = self.get_change_address()?;
-
-        let mut psbt = self
-            .wallet
-            .fund_transaction(unsigned_tx, change_address, fee_rate.0.saturating_mul(1000))
-            .await?;
-        self.wallet.sign_transaction(&mut psbt)?;
-        let signed_tx = psbt.extract_tx();
-
-        Ok(LockedTransaction::new(signed_tx, recipient.to_string(), Some(lock)))
+        self.fund_and_sign_transaction(recipient, unsigned_tx, change_address, fee_rate, None)
+            .await
     }
 
-    // TODO: hold tx lock until inclusion otherwise electrs may report stale utxos
-    // need to check when electrs knows that a utxo has been spent
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError> {
         let txid = self.electrs.send_transaction(transaction.transaction).await?;
         Ok(txid)
@@ -76,6 +86,10 @@ impl BitcoinLight {
 
 #[async_trait]
 impl BitcoinCoreApi for BitcoinLight {
+    fn is_full_node(&self) -> bool {
+        false
+    }
+
     fn network(&self) -> Network {
         self.private_key.network
     }
@@ -135,7 +149,8 @@ impl BitcoinCoreApi for BitcoinLight {
     async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError> {
         match self.electrs.get_block_hash(height).await {
             Ok(block_hash) => Ok(block_hash),
-            Err(_) => Err(BitcoinError::InvalidBitcoinHeight),
+            Err(err) if err.is_not_found() => Err(BitcoinError::InvalidBitcoinHeight),
+            Err(err) => Err(BitcoinError::ElectrsError(err)),
         }
     }
 
@@ -215,7 +230,10 @@ impl BitcoinCoreApi for BitcoinLight {
         })
         .await?;
 
-        let (proof, raw_tx) = try_join(self.get_proof(txid, &block_hash), self.get_raw_tx(&txid, &block_hash)).await?;
+        let (proof, raw_tx) = retry(get_exponential_backoff(), || async {
+            Ok(try_join(self.get_proof(txid, &block_hash), self.get_raw_tx(&txid, &block_hash)).await?)
+        })
+        .await?;
 
         Ok(TransactionMetadata {
             txid,
@@ -227,8 +245,34 @@ impl BitcoinCoreApi for BitcoinLight {
         })
     }
 
-    async fn bump_fee(&self, _txid: &Txid, _address: Address, _fee_rate: SatPerVbyte) -> Result<Txid, BitcoinError> {
-        todo!()
+    async fn bump_fee(&self, txid: &Txid, address: Address, fee_rate: SatPerVbyte) -> Result<Txid, BitcoinError> {
+        let mut existing_transaction = self.get_transaction(txid, None).await?;
+        let return_to_self = existing_transaction
+            .extract_return_to_self_address(&address.payload)?
+            .map(|(idx, payload)| {
+                existing_transaction.output.remove(idx);
+                Address {
+                    payload,
+                    network: self.network(),
+                }
+            });
+
+        // clear the witnesses for fee estimation
+        existing_transaction
+            .input
+            .iter_mut()
+            .for_each(|txin| txin.witness.clear());
+        let tx = self
+            .fund_and_sign_transaction(
+                address,
+                existing_transaction,
+                return_to_self.unwrap(),
+                fee_rate,
+                Some(*txid),
+            )
+            .await?;
+        let txid = self.send_transaction(tx).await?;
+        Ok(txid)
     }
 
     async fn create_and_send_transaction(
@@ -292,7 +336,7 @@ impl BitcoinCoreApi for BitcoinLight {
             let prev_tx = self.get_transaction(&input.previous_output.txid, None).await?;
             let prev_out = prev_tx
                 .output
-                .get(input.previous_output.vout as usize)
+                .get(usize::try_from(input.previous_output.vout)?)
                 .ok_or(Error::NoPrevOut)?;
             Ok::<u64, BitcoinError>(prev_out.value)
         }))
@@ -302,5 +346,14 @@ impl BitcoinCoreApi for BitcoinLight {
 
         let fee_rate = fee.checked_div(vsize).ok_or(BitcoinError::ArithmeticError)?;
         Ok(SatPerVbyte(fee_rate))
+    }
+
+    async fn get_tx_for_op_return(
+        &self,
+        address: Address,
+        amount: u128,
+        data: H256,
+    ) -> Result<Option<Txid>, BitcoinError> {
+        Ok(self.electrs.get_tx_for_op_return(address, amount, data).await?)
     }
 }

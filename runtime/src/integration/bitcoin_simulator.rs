@@ -508,4 +508,13 @@ impl BitcoinCoreApi for MockBitcoinCore {
     async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError> {
         unimplemented!()
     }
+
+    async fn get_tx_for_op_return(
+        &self,
+        _address: Address,
+        _amount: u128,
+        _data: H256,
+    ) -> Result<Option<Txid>, BitcoinError> {
+        Ok(None)
+    }
 }

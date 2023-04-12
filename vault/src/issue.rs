@@ -44,6 +44,8 @@ pub async fn process_issue_requests(
     num_confirmations: u32,
     random_delay: Arc<Box<dyn RandomDelay + Send + Sync>>,
 ) -> Result<(), ServiceError<Error>> {
+    // NOTE: we should not stream transactions if using the light client
+    // since it is quite expensive to fetch all transactions per block
     let mut stream =
         bitcoin::stream_in_chain_transactions(bitcoin_core.clone(), btc_start_height, num_confirmations).await;
 

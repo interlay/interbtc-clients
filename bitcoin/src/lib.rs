@@ -1,4 +1,5 @@
 #![feature(int_roundings)]
+#![feature(option_result_contains)]
 
 pub mod cli;
 pub mod light;
@@ -124,6 +125,10 @@ pub struct TransactionMetadata {
 
 #[async_trait]
 pub trait BitcoinCoreApi {
+    fn is_full_node(&self) -> bool {
+        true
+    }
+
     fn network(&self) -> Network;
 
     async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, Error>;
@@ -200,10 +205,12 @@ pub trait BitcoinCoreApi {
     async fn is_in_mempool(&self, txid: Txid) -> Result<bool, Error>;
 
     async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, Error>;
+
+    async fn get_tx_for_op_return(&self, address: Address, amount: u128, data: H256) -> Result<Option<Txid>, Error>;
 }
 
-struct LockedTransaction {
-    transaction: Transaction,
+pub struct LockedTransaction {
+    pub transaction: Transaction,
     recipient: String,
     _lock: Option<OwnedMutexGuard<()>>,
 }
@@ -1012,8 +1019,6 @@ impl BitcoinCoreApi for BitcoinCore {
                     }
                 };
                 tx.vout
-                    .as_ref()
-                    .unwrap_or(&vec![])
                     .iter()
                     .any(|output| matches!(&output.scriptpubkey_address, Some(addr) if addr == &address))
             });
@@ -1069,6 +1074,11 @@ impl BitcoinCoreApi for BitcoinCore {
 
         let fee_rate = fee.checked_div(vsize).ok_or(Error::ArithmeticError)?;
         Ok(SatPerVbyte(fee_rate.try_into()?))
+    }
+
+    async fn get_tx_for_op_return(&self, _address: Address, _amount: u128, _data: H256) -> Result<Option<Txid>, Error> {
+        // direct lookup not supported by bitcoin core
+        Ok(None)
     }
 }
 

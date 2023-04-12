@@ -790,6 +790,7 @@ mod tests {
 
         #[async_trait]
         trait BitcoinCoreApi {
+            fn is_full_node(&self) -> bool;
             fn network(&self) -> Network;
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
             fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError>;
@@ -824,6 +825,7 @@ mod tests {
             ) -> Result<Txid, BitcoinError>;
             async fn is_in_mempool(&self, txid: Txid) -> Result<bool, BitcoinError>;
             async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError>;
+            async fn get_tx_for_op_return(&self, address: Address, amount: u128, data: H256) -> Result<Option<Txid>, BitcoinError>;
         }
     }
 
