@@ -129,6 +129,7 @@ pallet-beefy-mmr = { git = "https://github.com/paritytech//substrate", branch = 
 pallet-bounties = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.37" }
 pallet-child-bounties = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.37" }
 pallet-conviction-voting = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.37" }
+pallet-contracts = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.37" }
 pallet-democracy = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.37" }
 pallet-election-provider-multi-phase = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.37" }
 pallet-election-provider-support-benchmarking = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.37" }
@@ -171,6 +172,7 @@ mmr-gadget = { git = "https://github.com/paritytech//substrate", branch = "polka
 mmr-rpc = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.37" }
 pallet-nis = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.37" }
 sp-beefy = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.37" }
+pallet-contracts-primitives = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.37" }
 
 [patch."https://github.com/paritytech/polkadot"]
 pallet-xcm = { git = "https://github.com/paritytech//polkadot", branch = "release-v0.9.37" }
