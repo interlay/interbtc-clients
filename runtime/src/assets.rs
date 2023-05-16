@@ -37,7 +37,7 @@ impl AssetRegistry {
         Ok(())
     }
 
-    pub(crate) fn insert(foreign_asset_id: u32, asset_metadata: AssetMetadata) -> Result<(), Error> {
+    pub fn insert(foreign_asset_id: u32, asset_metadata: AssetMetadata) -> Result<(), Error> {
         let mut asset_registry = Self::global()?;
         asset_registry.inner_insert(foreign_asset_id, asset_metadata)?;
         Ok(())
@@ -88,7 +88,7 @@ impl LendingAssets {
         LENDING_ASSETS.lock().map_err(|_| Error::CannotOpenAssetRegistry)
     }
 
-    pub(crate) fn insert(underlying_id: CurrencyId, lend_token_id: CurrencyId) -> Result<(), Error> {
+    pub fn insert(underlying_id: CurrencyId, lend_token_id: CurrencyId) -> Result<(), Error> {
         log::info!(
             "Found loans market: {:?}, with lend token: {:?}",
             underlying_id,
@@ -170,6 +170,7 @@ impl TryFromSymbol for CurrencyId {
 pub trait RuntimeCurrencyInfo {
     fn symbol(&self) -> Result<String, Error>;
     fn decimals(&self) -> Result<u32, Error>;
+    fn one(&self) -> Result<u128, Error>;
     fn coingecko_id(&self) -> Result<String, Error>;
 }
 
@@ -201,6 +202,11 @@ impl RuntimeCurrencyInfo for CurrencyId {
             }
             _ => Err(Error::TokenUnsupported),
         }
+    }
+
+    fn one(&self) -> Result<u128, Error> {
+        let decimals = self.decimals()?;
+        Ok(10u128.pow(decimals))
     }
 
     fn coingecko_id(&self) -> Result<String, Error> {
@@ -253,6 +259,8 @@ mod tests {
     fn should_get_runtime_info_for_token_symbol() -> Result<(), Error> {
         assert_eq!(Token(DOT).symbol()?, "DOT");
         assert_eq!(Token(DOT).decimals()?, 10);
+        assert_eq!(Token(DOT).one()?, 10000000000);
+        assert_eq!(Token(IBTC).one()?, 100000000);
         Ok(())
     }
 
@@ -295,6 +303,7 @@ mod tests {
 
         assert_eq!(ForeignAsset(0).symbol()?, "AST1");
         assert_eq!(ForeignAsset(0).decimals()?, 10);
+        assert_eq!(ForeignAsset(0).one()?, 10000000000);
         Ok(())
     }
 }

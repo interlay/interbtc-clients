@@ -29,7 +29,7 @@ use subxt::{
 };
 
 pub use addr::PartialAddress;
-pub use assets::{AssetRegistry, RuntimeCurrencyInfo, TryFromSymbol};
+pub use assets::{AssetRegistry, LendingAssets, RuntimeCurrencyInfo, TryFromSymbol};
 pub use error::{Error, SubxtError};
 pub use primitives::CurrencyInfo;
 pub use prometheus;

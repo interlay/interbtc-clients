@@ -158,8 +158,7 @@ async fn ensure_funding_allowed(
             .get_reserved_balance_for_id(account_id.clone(), *currency_id)
             .await?;
 
-        let one = |currency: CurrencyId| Ok::<_, Error>(10u128.pow(currency.decimals()?));
-        if free_balance + reserved_balance > allowance_config.max_fundable_client_balance * one(*currency_id)? {
+        if free_balance + reserved_balance > allowance_config.max_fundable_client_balance * currency_id.one()? {
             log::warn!(
                 "User {} has enough {:?} funds: {:?}",
                 account_id,
@@ -614,7 +613,7 @@ mod tests {
             if bob_provider.get_public_key().await.unwrap().is_none() {
                 bob_provider.register_public_key(dummy_public_key()).await.unwrap();
             }
-            let one_unit = 10u128.pow(currency_id.decimals().unwrap());
+            let one_unit = currency_id.one().unwrap();
             bob_provider.register_vault(&bob_vault_id, 55 * one_unit).await.unwrap();
 
             let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
