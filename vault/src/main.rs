@@ -164,6 +164,12 @@ async fn start() -> Result<(), ServiceError<Error>> {
     let (pair, wallet_name) = opts.account_info.get_key_pair()?;
     let signer = InterBtcSigner::new(pair);
 
+    let db_path = opts
+        .vault
+        .db_path
+        .clone()
+        .unwrap_or(format!("{}.db", wallet_name.clone()));
+
     let vault_connection_manager = ConnectionManager::new(
         signer.clone(),
         Some(wallet_name.to_string()),
@@ -173,6 +179,7 @@ async fn start() -> Result<(), ServiceError<Error>> {
         opts.monitoring.clone(),
         opts.vault,
         increment_restart_counter,
+        db_path,
     );
 
     if !opts.monitoring.no_prometheus {

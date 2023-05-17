@@ -1,7 +1,11 @@
+use std::string::FromUtf8Error;
+
 use bitcoin::Error as BitcoinError;
 use jsonrpc_core_client::RpcError;
 use parity_scale_codec::Error as CodecError;
+use rocksdb::Error as RocksDbError;
 use runtime::Error as RuntimeError;
+use serde_json::Error as SerdeJsonError;
 use thiserror::Error;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
@@ -32,6 +36,12 @@ pub enum Error {
     RuntimeError(#[from] RuntimeError),
     #[error("CodecError: {0}")]
     CodecError(#[from] CodecError),
+    #[error("DatabaseError: {0}")]
+    DatabaseError(#[from] RocksDbError),
+    #[error("SerdeJsonError: {0}")]
+    SerdeJsonError(#[from] SerdeJsonError),
+    #[error("FromUtf8Error: {0}")]
+    FromUtf8Error(#[from] FromUtf8Error),
     #[error("BroadcastStreamRecvError: {0}")]
     BroadcastStreamRecvError(#[from] BroadcastStreamRecvError),
 }
