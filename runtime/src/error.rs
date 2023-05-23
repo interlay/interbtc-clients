@@ -65,6 +65,9 @@ pub enum Error {
     InsufficientFunds,
     #[error("Currency not found")]
     CurrencyNotFound,
+    #[error("Operation not supported on token variant")]
+    TokenUnsupported,
+
     #[error("Client does not support spec_version: expected {0}..{1}, got {2}")]
     InvalidSpecVersion(u32, u32, u32),
     #[error("Client metadata is different from parachain metadata: expected {0}, got {1}")]
@@ -93,8 +96,15 @@ pub enum Error {
     PrometheusError(#[from] PrometheusError),
     #[error("Utf8Error: {0}")]
     Utf8Error(#[from] Utf8Error),
-    #[error("Operation not supported on token variant")]
-    TokenUnsupported,
+    // TODO: implement Display
+    #[error("BitcoinError: {0}")]
+    BitcoinError(String),
+}
+
+impl From<module_bitcoin::Error> for Error {
+    fn from(value: module_bitcoin::Error) -> Self {
+        Self::BitcoinError(format!("{:?}", value))
+    }
 }
 
 impl Error {

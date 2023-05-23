@@ -66,28 +66,64 @@ pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
     feature = "parachain-metadata-interlay",
     subxt(
         runtime_metadata_path = "metadata-parachain-interlay.scale",
-        derive_for_all_types = "Eq, PartialEq, Ord, PartialOrd, Clone"
+        derive_for_all_types = "Clone",
+        derive_for_type(type = "security::types::ErrorCode", derive = "Eq, PartialEq, Ord, PartialOrd"),
+        derive_for_type(type = "interbtc_primitives::issue::IssueRequestStatus", derive = "Eq, PartialEq"),
+        derive_for_type(type = "interbtc_primitives::redeem::RedeemRequestStatus", derive = "Eq, PartialEq"),
+        derive_for_type(
+            type = "interbtc_primitives::replace::ReplaceRequestStatus",
+            derive = "Eq, PartialEq"
+        ),
+        derive_for_type(type = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
+        derive_for_type(type = "interbtc_primitives::VaultCurrencyPair", derive = "Eq, PartialEq"),
     )
 )]
 #[cfg_attr(
     feature = "parachain-metadata-kintsugi",
     subxt(
         runtime_metadata_path = "metadata-parachain-kintsugi.scale",
-        derive_for_all_types = "Eq, PartialEq, Ord, PartialOrd, Clone"
+        derive_for_all_types = "Clone",
+        derive_for_type(type = "security::types::ErrorCode", derive = "Eq, PartialEq, Ord, PartialOrd"),
+        derive_for_type(type = "interbtc_primitives::issue::IssueRequestStatus", derive = "Eq, PartialEq"),
+        derive_for_type(type = "interbtc_primitives::redeem::RedeemRequestStatus", derive = "Eq, PartialEq"),
+        derive_for_type(
+            type = "interbtc_primitives::replace::ReplaceRequestStatus",
+            derive = "Eq, PartialEq"
+        ),
+        derive_for_type(type = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
+        derive_for_type(type = "interbtc_primitives::VaultCurrencyPair", derive = "Eq, PartialEq"),
     )
 )]
 #[cfg_attr(
     feature = "parachain-metadata-interlay-testnet",
     subxt(
         runtime_metadata_path = "metadata-parachain-interlay-testnet.scale",
-        derive_for_all_types = "Eq, PartialEq, Ord, PartialOrd, Clone"
+        derive_for_all_types = "Clone",
+        derive_for_type(type = "security::types::ErrorCode", derive = "Eq, PartialEq, Ord, PartialOrd"),
+        derive_for_type(type = "interbtc_primitives::issue::IssueRequestStatus", derive = "Eq, PartialEq"),
+        derive_for_type(type = "interbtc_primitives::redeem::RedeemRequestStatus", derive = "Eq, PartialEq"),
+        derive_for_type(
+            type = "interbtc_primitives::replace::ReplaceRequestStatus",
+            derive = "Eq, PartialEq"
+        ),
+        derive_for_type(type = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
+        derive_for_type(type = "interbtc_primitives::VaultCurrencyPair", derive = "Eq, PartialEq"),
     )
 )]
 #[cfg_attr(
     feature = "parachain-metadata-kintsugi-testnet",
     subxt(
         runtime_metadata_path = "metadata-parachain-kintsugi-testnet.scale",
-        derive_for_all_types = "Eq, PartialEq, Ord, PartialOrd, Clone"
+        derive_for_all_types = "Clone",
+        derive_for_type(type = "security::types::ErrorCode", derive = "Eq, PartialEq, Ord, PartialOrd"),
+        derive_for_type(type = "interbtc_primitives::issue::IssueRequestStatus", derive = "Eq, PartialEq"),
+        derive_for_type(type = "interbtc_primitives::redeem::RedeemRequestStatus", derive = "Eq, PartialEq"),
+        derive_for_type(
+            type = "interbtc_primitives::replace::ReplaceRequestStatus",
+            derive = "Eq, PartialEq"
+        ),
+        derive_for_type(type = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
+        derive_for_type(type = "interbtc_primitives::VaultCurrencyPair", derive = "Eq, PartialEq"),
     )
 )]
 pub mod metadata {
@@ -120,6 +156,15 @@ pub mod metadata {
 
     #[subxt(substitute_type = "frame_support::traits::misc::WrapperKeepOpaque")]
     use crate::WrapperKeepOpaque;
+
+    #[subxt(substitute_type = "bitcoin::types::BlockHeader")]
+    use ::module_bitcoin::types::BlockHeader;
+
+    #[subxt(substitute_type = "bitcoin::merkle::MerkleProof")]
+    use ::module_bitcoin::merkle::MerkleProof;
+
+    #[subxt(substitute_type = "bitcoin::types::Transaction")]
+    use ::module_bitcoin::types::Transaction;
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Default, Clone, Decode, Encode)]
