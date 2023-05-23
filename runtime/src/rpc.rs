@@ -1536,11 +1536,10 @@ impl BtcRelayPallet for InterBtcParachain {
     /// # Arguments
     /// * `header` - raw block header
     async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error> {
-        self.with_unique_signer(
-            metadata::tx()
-                .btc_relay()
-                .store_block_header(parse_block_header(&header.0)?, self.get_chain_counter().await?),
-        )
+        self.with_unique_signer(metadata::tx().btc_relay().store_block_header(
+            parse_block_header(&header.0)?,
+            self.get_chain_counter().await?.saturating_add(1),
+        ))
         .await?;
         Ok(())
     }
@@ -1554,7 +1553,7 @@ impl BtcRelayPallet for InterBtcParachain {
             .iter()
             .map(|header| parse_block_header(&header.0))
             .collect::<Result<Vec<_>, _>>()?;
-        let fork_bound = self.get_chain_counter().await?;
+        let fork_bound = self.get_chain_counter().await?.saturating_add(1);
         self.batch(
             headers
                 .into_iter()
