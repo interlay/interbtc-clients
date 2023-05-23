@@ -87,10 +87,6 @@ mod metadata_aliases {
         orml_traits::asset_registry::AssetMetadata as GenericAssetMetadata,
     };
     pub type AssetMetadata = GenericAssetMetadata<Balance, InterBtcAdditionalMetadata>;
-    #[cfg(any(
-        feature = "parachain-metadata-kintsugi-testnet",
-        feature = "parachain-metadata-interlay-testnet"
-    ))]
     pub type LendingMarket = metadata::runtime_types::loans::types::Market<Balance>;
     pub type KeyStorageAddress<T> = StaticStorageAddress<DecodeStaticType<T>, (), (), Yes>;
 

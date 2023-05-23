@@ -8,11 +8,11 @@ use super::{
     KBTC, KINT, KSM,
 };
 use crate::{integration::*, FeedValuesEvent, OracleKey, RuntimeCurrencyInfo, VaultId, H160, U256};
-use module_bitcoin::{formatter::TryFormattable, types::BlockBuilder};
+use module_bitcoin::{formatter::TryFormat, types::BlockBuilder};
 pub use primitives::CurrencyId::ForeignAsset;
 use primitives::CurrencyId::LendToken;
 use sp_keyring::AccountKeyring;
-use std::{convert::TryInto, time::Duration};
+use std::time::Duration;
 
 fn dummy_public_key() -> BtcPublicKey {
     BtcPublicKey {
@@ -130,7 +130,9 @@ async fn test_btc_relay() {
         .unwrap();
 
     let mut block_hash = block.header.hash;
-    let raw_block_header = RawBlockHeader(block.header.try_format().unwrap());
+    let mut raw_block_header = vec![];
+    block.header.try_format(&mut raw_block_header).unwrap();
+    let raw_block_header = RawBlockHeader(raw_block_header);
 
     parachain_rpc
         .initialize_btc_relay(raw_block_header, height)
@@ -153,7 +155,9 @@ async fn test_btc_relay() {
             .unwrap();
 
         block_hash = block.header.hash;
-        let raw_block_header = RawBlockHeader(block.header.try_format().unwrap());
+        let mut raw_block_header = vec![];
+        block.header.try_format(&mut raw_block_header).unwrap();
+        let raw_block_header = RawBlockHeader(raw_block_header);
 
         parachain_rpc.store_block_header(raw_block_header).await.unwrap();
 
