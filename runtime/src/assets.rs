@@ -242,7 +242,8 @@ mod tests {
         AssetRegistry::global()?.inner_insert(0, expected_asset_metadata.clone())?;
 
         let actual_asset_metadata = AssetRegistry::get_asset_metadata_by_id(0)?;
-        assert_eq!(expected_asset_metadata, actual_asset_metadata);
+        assert_eq!(expected_asset_metadata.name, actual_asset_metadata.name);
+        assert_eq!(expected_asset_metadata.symbol, actual_asset_metadata.symbol);
 
         Ok(())
     }

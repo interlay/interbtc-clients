@@ -1121,7 +1121,7 @@ mod test_with_bitcoind {
                     start_height: Some(max(1, height.saturating_sub(200))), /* important to skip the genesis block
                                                                              * since it has nVersion < 4, so it would
                                                                              * get rejected */
-                    max_batch_size: 256,
+                    max_batch_size: 16,
                     interval: Some(std::time::Duration::from_secs(1)),
                     btc_confirmations: 0,
                 },

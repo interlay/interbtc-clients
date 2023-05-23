@@ -35,7 +35,7 @@ serde = "1.0.139"
 serde_json = "1.0.82"
 
 # Substrate dependencies
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.37" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.38" }
 
 [dev-dependencies]
 mockall = "0.8.1"

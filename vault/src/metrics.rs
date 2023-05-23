@@ -677,14 +677,13 @@ mod tests {
         PrivateKey, PublicKey, SatPerVbyte, Transaction, TransactionMetadata, Txid,
     };
     use jsonrpc_core::serde_json::{Map, Value};
-    use parity_scale_codec::Decode;
     use runtime::{
         metadata::runtime_types::interbtc_primitives::CustomMetadata,
         AccountId, AssetMetadata, AssetRegistry, Balance, BlockNumber, BtcAddress, BtcPublicKey,
         CurrencyId::{self, ForeignAsset, LendToken},
         Error as RuntimeError, ErrorCode, InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcReplaceRequest,
-        InterBtcVault, KeyStorageAddress, LendingAssets, RequestIssueEvent, StatusCode, Token, VaultId, VaultStatus,
-        DOT, H256, IBTC, INTR,
+        InterBtcVault, LendingAssets, RequestIssueEvent, StatusCode, Token, VaultId, VaultStatus, DOT, H256, IBTC,
+        INTR,
     };
     use service::DynBitcoinCoreApi;
     use std::collections::BTreeSet;

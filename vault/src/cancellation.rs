@@ -319,11 +319,9 @@ mod tests {
     use async_trait::async_trait;
     use futures::channel::mpsc;
     use jsonrpc_core::serde_json::{Map, Value};
-    use parity_scale_codec::Decode;
     use runtime::{
         AccountId, AssetMetadata, BtcAddress, BtcPublicKey, CurrencyId, ErrorCode, InterBtcIssueRequest,
-        InterBtcReplaceRequest, IssueRequestStatus, KeyStorageAddress, RequestIssueEvent, StatusCode, Token, VaultId,
-        DOT, IBTC,
+        InterBtcReplaceRequest, IssueRequestStatus, RequestIssueEvent, StatusCode, Token, VaultId, DOT, IBTC,
     };
     use std::collections::BTreeSet;
 

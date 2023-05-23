@@ -35,10 +35,6 @@ pub struct MockBitcoinCore {
     transaction_creation_lock: Arc<Mutex<()>>,
 }
 
-pub fn to_block_header(value: Vec<u8>) -> RawBlockHeader {
-    crate::RawBlockHeader(value.try_into().unwrap())
-}
-
 impl MockBitcoinCore {
     /// Creates a new instance, and initializes parachain's btc-relay
     pub async fn new(parachain_rpc: InterBtcParachain) -> Self {
@@ -56,7 +52,7 @@ impl MockBitcoinCore {
         let block = ret.generate_block_with_transaction(&dummy_tx).await;
         let raw_block_header = serialize(&block.header);
         ret.parachain_rpc
-            .initialize_btc_relay(to_block_header(raw_block_header), 0)
+            .initialize_btc_relay(RawBlockHeader(raw_block_header), 0)
             .await
             .unwrap();
 
@@ -64,7 +60,7 @@ impl MockBitcoinCore {
         let headers = futures::future::join_all((0..7u32).map(|_| ret.generate_block_with_transaction(&dummy_tx)))
             .await
             .into_iter()
-            .map(|x| to_block_header(serialize(&x.header)))
+            .map(|x| RawBlockHeader(serialize(&x.header)))
             .collect::<Vec<_>>();
 
         ret.parachain_rpc.store_block_headers(headers).await.unwrap();
@@ -98,7 +94,7 @@ impl MockBitcoinCore {
     async fn send_block(&self, block: Block) {
         let raw_block_header = serialize(&block.header);
         self.parachain_rpc
-            .store_block_header(to_block_header(raw_block_header))
+            .store_block_header(RawBlockHeader(raw_block_header))
             .await
             .unwrap();
     }

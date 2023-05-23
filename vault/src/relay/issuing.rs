@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use super::Error;
 use crate::delay::RandomDelay;
 use async_trait::async_trait;
@@ -58,11 +56,6 @@ pub trait Issuing {
     async fn is_block_stored(&self, hash_le: Vec<u8>) -> Result<bool, Error>;
 }
 
-fn encode_raw_header(bytes: Vec<u8>) -> Result<RawBlockHeader, Error> {
-    let raw = bytes.try_into().map_err(|_| Error::SerializeHeader)?;
-    Ok(RawBlockHeader(raw))
-}
-
 #[async_trait]
 impl Issuing for InterBtcParachain {
     async fn is_initialized(&self) -> Result<bool, Error> {
@@ -71,7 +64,7 @@ impl Issuing for InterBtcParachain {
     }
 
     async fn initialize(&self, header: Vec<u8>, height: u32) -> Result<(), Error> {
-        BtcRelayPallet::initialize_btc_relay(self, encode_raw_header(header)?, height)
+        BtcRelayPallet::initialize_btc_relay(self, RawBlockHeader(header), height)
             .await
             .map_err(Into::into)
     }
@@ -82,7 +75,7 @@ impl Issuing for InterBtcParachain {
         header: Vec<u8>,
         random_delay: Arc<Box<dyn RandomDelay + Send + Sync>>,
     ) -> Result<(), Error> {
-        let raw_block_header = encode_raw_header(header.clone())?;
+        let raw_block_header = RawBlockHeader(header.clone());
 
         // wait a random amount of blocks, to avoid all vaults flooding the parachain with
         // this transaction
@@ -106,8 +99,8 @@ impl Issuing for InterBtcParachain {
             self,
             headers
                 .iter()
-                .map(|header| encode_raw_header(header.to_vec()))
-                .collect::<Result<Vec<_>, _>>()?,
+                .map(|header| RawBlockHeader(header.to_vec()))
+                .collect::<Vec<_>>(),
         )
         .await
         .map_err(Into::into)

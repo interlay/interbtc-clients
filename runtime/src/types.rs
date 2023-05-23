@@ -44,7 +44,6 @@ mod metadata_aliases {
     pub use metadata::runtime_types::interbtc_primitives::oracle::Key as OracleKey;
 
     pub use metadata::runtime_types::{
-        bitcoin::types::RawBlockHeader,
         security::types::{ErrorCode, StatusCode},
         vault_registry::types::VaultStatus,
     };
@@ -58,10 +57,6 @@ mod metadata_aliases {
         oracle::events::FeedValues as FeedValuesEvent,
     };
 
-    #[cfg(any(
-        feature = "parachain-metadata-kintsugi-testnet",
-        feature = "parachain-metadata-interlay-testnet"
-    ))]
     pub use metadata::loans::events::{NewMarket as NewMarketEvent, UpdatedMarket as UpdatedMarketEvent};
 
     pub use metadata::issue::events::{
@@ -79,8 +74,8 @@ mod metadata_aliases {
     pub use metadata::security::events::UpdateActiveBlock as UpdateActiveBlockEvent;
 
     pub use metadata::vault_registry::events::{
-        DepositCollateral as DepositCollateralEvent, LiquidateVault as LiquidateVaultEvent,
-        RegisterAddress as RegisterAddressEvent, RegisterVault as RegisterVaultEvent,
+        LiquidateVault as LiquidateVaultEvent, RegisterAddress as RegisterAddressEvent,
+        RegisterVault as RegisterVaultEvent,
     };
 
     pub use metadata::btc_relay::events::StoreMainChainHeader as StoreMainChainHeaderEvent;
@@ -92,10 +87,6 @@ mod metadata_aliases {
         orml_traits::asset_registry::AssetMetadata as GenericAssetMetadata,
     };
     pub type AssetMetadata = GenericAssetMetadata<Balance, InterBtcAdditionalMetadata>;
-    #[cfg(any(
-        feature = "parachain-metadata-kintsugi-testnet",
-        feature = "parachain-metadata-interlay-testnet"
-    ))]
     pub type LendingMarket = metadata::runtime_types::loans::types::Market<Balance>;
     pub type KeyStorageAddress<T> = StaticStorageAddress<DecodeStaticType<T>, (), (), Yes>;
 
@@ -143,9 +134,13 @@ mod metadata_aliases {
     pub type EncodedCall = metadata::runtime_types::testnet_kintsugi_runtime_parachain::RuntimeCall;
 
     pub use metadata::runtime_types::security::pallet::Call as SecurityCall;
+
+    pub use metadata::runtime_types::sp_core::bounded::bounded_vec::BoundedVec;
 }
 
-impl crate::RawBlockHeader {
+pub struct RawBlockHeader(pub Vec<u8>);
+
+impl RawBlockHeader {
     pub fn hash(&self) -> crate::H256Le {
         module_bitcoin::utils::sha256d_le(&self.0).into()
     }

@@ -10,6 +10,10 @@ pub use crate::ShutdownSender;
 use async_trait::async_trait;
 use codec::{Decode, Encode};
 use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt, Stream};
+use module_bitcoin::{
+    merkle::MerkleProof,
+    parser::{parse_block_header, parse_transaction},
+};
 use module_oracle_rpc_runtime_api::BalanceWrapper;
 use primitives::UnsignedFixedPoint;
 use serde_json::Value;
@@ -27,6 +31,7 @@ use tokio::{
     sync::RwLock,
     time::{sleep, timeout},
 };
+
 // timeout before retrying parachain calls (5 minutes)
 const TRANSACTION_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -52,19 +57,19 @@ compile_error!("Tests are only supported for the kintsugi testnet metadata");
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "parachain-metadata-interlay")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1023000..1024000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
         pub const DEFAULT_SPEC_NAME: &str = "interlay-parachain";
         pub const SS58_PREFIX: u16 = 2032;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1023000..1024000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
         pub const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
         pub const SS58_PREFIX: u16 = 2092;
     } else if #[cfg(feature = "parachain-metadata-interlay-testnet")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1023000..1024000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
         pub const DEFAULT_SPEC_NAME: &str = "testnet-interlay";
         pub const SS58_PREFIX: u16 = 2032;
     }  else if #[cfg(feature = "parachain-metadata-kintsugi-testnet")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1023000..1024000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
         pub const DEFAULT_SPEC_NAME: &str = "testnet-kintsugi";
         pub const SS58_PREFIX: u16 = 2092;
     }
@@ -141,10 +146,6 @@ impl InterBtcParachain {
         };
 
         parachain_rpc.store_assets_metadata().await?;
-        #[cfg(any(
-            feature = "parachain-metadata-kintsugi-testnet",
-            feature = "parachain-metadata-interlay-testnet"
-        ))]
         parachain_rpc.store_lend_tokens().await?;
         Ok(parachain_rpc)
     }
@@ -632,10 +633,6 @@ impl InterBtcParachain {
         AssetRegistry::extend(self.get_foreign_assets_metadata().await?)
     }
 
-    #[cfg(any(
-        feature = "parachain-metadata-kintsugi-testnet",
-        feature = "parachain-metadata-interlay-testnet"
-    ))]
     pub async fn store_lend_tokens(&self) -> Result<(), Error> {
         let lend_tokens = self.get_lend_tokens().await?;
         LendingAssets::extend(lend_tokens)
@@ -666,10 +663,6 @@ impl InterBtcParachain {
     }
 
     /// Cache new markets and updates
-    #[cfg(any(
-        feature = "parachain-metadata-kintsugi-testnet",
-        feature = "parachain-metadata-interlay-testnet"
-    ))]
     pub async fn listen_for_lending_markets(&self) -> Result<(), Error> {
         futures::future::try_join(
             self.on_event::<NewMarketEvent, _, _, _>(
@@ -757,6 +750,11 @@ impl InterBtcParachain {
     fn strip_twox64_key_prefix(raw_key: &[u8]) -> &[u8] {
         &raw_key[TWOX_64_HASH_PREFIX_LENGTH..]
     }
+
+    async fn get_chain_counter(&self) -> Result<u32, Error> {
+        self.query_finalized_or_default(metadata::storage().btc_relay().chain_counter())
+            .await
+    }
 }
 
 #[async_trait]
@@ -778,10 +776,6 @@ pub trait UtilFuncs {
 
     async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, Error>;
 
-    #[cfg(any(
-        feature = "parachain-metadata-kintsugi-testnet",
-        feature = "parachain-metadata-interlay-testnet"
-    ))]
     async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, Error>;
 }
 
@@ -813,10 +807,6 @@ impl UtilFuncs for InterBtcParachain {
         self.get_decoded_storage_keys(key_addr, StorageMapHasher::Twox_64).await
     }
 
-    #[cfg(any(
-        feature = "parachain-metadata-kintsugi-testnet",
-        feature = "parachain-metadata-interlay-testnet"
-    ))]
     async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, Error> {
         let key_addr = metadata::storage().loans().markets_root();
         let markets = self
@@ -911,7 +901,7 @@ pub trait ReplacePallet {
         collateral: u128,
         btc_address: BtcAddress,
     ) -> Result<(), Error>;
-    //
+
     /// Execute vault replacement
     ///
     /// # Arguments
@@ -997,8 +987,9 @@ impl ReplacePallet for InterBtcParachain {
     async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
         self.with_unique_signer(metadata::tx().replace().execute_replace(
             replace_id,
-            merkle_proof.into(),
-            raw_tx.into(),
+            MerkleProof::parse(merkle_proof)?,
+            parse_transaction(raw_tx)?,
+            raw_tx.len() as u32,
         ))
         .await?;
         Ok(())
@@ -1209,8 +1200,10 @@ impl SecurityPallet for InterBtcParachain {
 
     /// Return any `ErrorCode`s set in the security module.
     async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, Error> {
-        self.query_finalized_or_error(metadata::storage().security().errors())
-            .await
+        Ok(self
+            .query_finalized_or_error(metadata::storage().security().errors())
+            .await?
+            .0)
     }
 
     /// Gets the current active block number of the parachain
@@ -1251,11 +1244,12 @@ impl IssuePallet for InterBtcParachain {
     }
 
     async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
-        self.with_unique_signer(
-            metadata::tx()
-                .issue()
-                .execute_issue(issue_id, merkle_proof.into(), raw_tx.into()),
-        )
+        self.with_unique_signer(metadata::tx().issue().execute_issue(
+            issue_id,
+            MerkleProof::parse(merkle_proof)?,
+            parse_transaction(raw_tx)?,
+            raw_tx.len() as u32,
+        ))
         .await?;
         Ok(())
     }
@@ -1357,11 +1351,12 @@ impl RedeemPallet for InterBtcParachain {
     }
 
     async fn execute_redeem(&self, redeem_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
-        self.with_unique_signer(
-            metadata::tx()
-                .redeem()
-                .execute_redeem(redeem_id, merkle_proof.into(), raw_tx.into()),
-        )
+        self.with_unique_signer(metadata::tx().redeem().execute_redeem(
+            redeem_id,
+            MerkleProof::parse(merkle_proof)?,
+            parse_transaction(raw_tx)?,
+            raw_tx.len() as u32,
+        ))
         .await?;
         Ok(())
     }
@@ -1527,8 +1522,12 @@ impl BtcRelayPallet for InterBtcParachain {
     async fn initialize_btc_relay(&self, header: RawBlockHeader, height: BitcoinBlockHeight) -> Result<(), Error> {
         // TODO: can we initialize the relay through the chain-spec?
         // we would also need to consider re-initialization per governance
-        self.with_unique_signer(metadata::tx().btc_relay().initialize(header.clone(), height))
-            .await?;
+        self.with_unique_signer(
+            metadata::tx()
+                .btc_relay()
+                .initialize(parse_block_header(&header.0)?, height),
+        )
+        .await?;
         Ok(())
     }
 
@@ -1537,8 +1536,11 @@ impl BtcRelayPallet for InterBtcParachain {
     /// # Arguments
     /// * `header` - raw block header
     async fn store_block_header(&self, header: RawBlockHeader) -> Result<(), Error> {
-        self.with_unique_signer(metadata::tx().btc_relay().store_block_header(header))
-            .await?;
+        self.with_unique_signer(metadata::tx().btc_relay().store_block_header(
+            parse_block_header(&header.0)?,
+            self.get_chain_counter().await?.saturating_add(1),
+        ))
+        .await?;
         Ok(())
     }
 
@@ -1547,12 +1549,18 @@ impl BtcRelayPallet for InterBtcParachain {
     /// # Arguments
     /// * `headers` - raw block headers
     async fn store_block_headers(&self, headers: Vec<RawBlockHeader>) -> Result<(), Error> {
+        let headers = headers
+            .iter()
+            .map(|header| parse_block_header(&header.0))
+            .collect::<Result<Vec<_>, _>>()?;
+        let fork_bound = self.get_chain_counter().await?.saturating_add(1);
         self.batch(
             headers
                 .into_iter()
-                .map(|raw_block_header| {
+                .map(|block_header| {
                     EncodedCall::BTCRelay(metadata::runtime_types::btc_relay::pallet::Call::store_block_header {
-                        raw_block_header,
+                        block_header,
+                        fork_bound,
                     })
                 })
                 .collect(),
@@ -1785,14 +1793,14 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// * `checksum` - The SHA256 checksum of the client binary
     async fn set_current_client_release(&self, uri: &[u8], checksum: &H256) -> Result<(), Error> {
         let release = ClientRelease {
-            uri: uri.to_vec(),
+            uri: BoundedVec(uri.to_vec()),
             checksum: *checksum,
         };
         // TODO: uri should be client name
         self.with_unique_signer(
             metadata::tx()
                 .clients_info()
-                .set_current_client_release(uri.to_vec(), release),
+                .set_current_client_release(BoundedVec(uri.to_vec()), release),
         )
         .await?;
         Ok(())
@@ -1805,13 +1813,13 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// * `checksum` - The SHA256 checksum of the client binary
     async fn set_pending_client_release(&self, uri: &[u8], checksum: &H256) -> Result<(), Error> {
         let release = ClientRelease {
-            uri: uri.to_vec(),
+            uri: BoundedVec(uri.to_vec()),
             checksum: *checksum,
         };
         self.with_unique_signer(
             metadata::tx()
                 .clients_info()
-                .set_pending_client_release(uri.to_vec(), release),
+                .set_pending_client_release(BoundedVec(uri.to_vec()), release),
         )
         .await?;
         Ok(())
@@ -1917,7 +1925,7 @@ impl SudoPallet for InterBtcParachain {
             .sudo(EncodedCall::Oracle(
                 metadata::runtime_types::oracle::pallet::Call::insert_authorized_oracle {
                     account_id,
-                    name: name.into_bytes(),
+                    name: BoundedVec(name.into_bytes()),
                 },
             ))
             .await?)

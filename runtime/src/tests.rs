@@ -8,11 +8,11 @@ use super::{
     KBTC, KINT, KSM,
 };
 use crate::{integration::*, FeedValuesEvent, OracleKey, RuntimeCurrencyInfo, VaultId, H160, U256};
-use module_bitcoin::{formatter::TryFormattable, types::BlockBuilder};
+use module_bitcoin::{formatter::TryFormat, types::BlockBuilder};
 pub use primitives::CurrencyId::ForeignAsset;
 use primitives::CurrencyId::LendToken;
 use sp_keyring::AccountKeyring;
-use std::{convert::TryInto, time::Duration};
+use std::time::Duration;
 
 fn dummy_public_key() -> BtcPublicKey {
     BtcPublicKey {
@@ -20,12 +20,6 @@ fn dummy_public_key() -> BtcPublicKey {
             2, 205, 114, 218, 156, 16, 235, 172, 106, 37, 18, 153, 202, 140, 176, 91, 207, 51, 187, 55, 18, 45, 222,
             180, 119, 54, 243, 97, 173, 150, 161, 169, 230,
         ],
-    }
-}
-
-pub fn to_block_header(value: Vec<u8>) -> RawBlockHeader {
-    crate::RawBlockHeader {
-        0: value.try_into().unwrap(),
     }
 }
 
@@ -136,9 +130,14 @@ async fn test_btc_relay() {
         .unwrap();
 
     let mut block_hash = block.header.hash;
-    let block_header = to_block_header(block.header.try_format().unwrap());
+    let mut raw_block_header = vec![];
+    block.header.try_format(&mut raw_block_header).unwrap();
+    let raw_block_header = RawBlockHeader(raw_block_header);
 
-    parachain_rpc.initialize_btc_relay(block_header, height).await.unwrap();
+    parachain_rpc
+        .initialize_btc_relay(raw_block_header, height)
+        .await
+        .unwrap();
 
     assert_eq!(parachain_rpc.get_best_block().await.unwrap(), block_hash.into());
     assert_eq!(parachain_rpc.get_best_block_height().await.unwrap(), height);
@@ -156,9 +155,11 @@ async fn test_btc_relay() {
             .unwrap();
 
         block_hash = block.header.hash;
-        let block_header = to_block_header(block.header.try_format().unwrap());
+        let mut raw_block_header = vec![];
+        block.header.try_format(&mut raw_block_header).unwrap();
+        let raw_block_header = RawBlockHeader(raw_block_header);
 
-        parachain_rpc.store_block_header(block_header).await.unwrap();
+        parachain_rpc.store_block_header(raw_block_header).await.unwrap();
 
         assert_eq!(parachain_rpc.get_best_block().await.unwrap(), block_hash.into());
         assert_eq!(parachain_rpc.get_best_block_height().await.unwrap(), height);
