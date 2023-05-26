@@ -10,13 +10,12 @@ use jsonrpsee_core::{
     client::{ClientBuilder, ReceivedMessage, TransportReceiverT, TransportSenderT},
 };
 
-use sc_network_common::config::TransportConfig;
 pub use sc_service::{
     config::{DatabaseSource, KeystoreConfig, WasmExecutionMethod, WasmtimeInstantiationStrategy},
     Error as ServiceError,
 };
 use sc_service::{
-    config::{NetworkConfiguration, TelemetryEndpoints},
+    config::{NetworkConfiguration, TelemetryEndpoints, TransportConfig},
     ChainSpec, Configuration, RpcHandlers, TaskManager,
 };
 

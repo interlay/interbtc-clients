@@ -31,6 +31,7 @@ pub type BtcAddress = module_btc_relay::BtcAddress;
 
 pub type FixedU128 = sp_arithmetic::FixedU128;
 
+#[allow(non_camel_case_types)]
 pub(crate) enum StorageMapHasher {
     Blake2_128,
     Twox_64,
@@ -135,7 +136,7 @@ mod metadata_aliases {
 
     pub use metadata::runtime_types::security::pallet::Call as SecurityCall;
 
-    pub use metadata::runtime_types::sp_core::bounded::bounded_vec::BoundedVec;
+    pub use metadata::runtime_types::bounded_collections::bounded_vec::BoundedVec;
 }
 
 pub struct RawBlockHeader(pub Vec<u8>);
