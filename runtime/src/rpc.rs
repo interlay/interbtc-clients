@@ -1237,10 +1237,14 @@ pub trait IssuePallet {
 #[async_trait]
 impl IssuePallet for InterBtcParachain {
     async fn request_issue(&self, amount: u128, vault_id: &VaultId) -> Result<RequestIssueEvent, Error> {
-        self.with_unique_signer(metadata::tx().issue().request_issue(amount, vault_id.clone()))
-            .await?
-            .find_first::<RequestIssueEvent>()?
-            .ok_or(Error::RequestIssueIDNotFound)
+        self.with_unique_signer(
+            metadata::tx()
+                .issue()
+                .request_issue(amount, vault_id.clone(), self.native_currency_id),
+        )
+        .await?
+        .find_first::<RequestIssueEvent>()?
+        .ok_or(Error::RequestIssueIDNotFound)
     }
 
     async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {

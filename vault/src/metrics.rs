@@ -957,6 +957,7 @@ mod tests {
             btc_height: Default::default(),
             fee: Default::default(),
             griefing_collateral: Default::default(),
+            griefing_currency: Token(INTR),
             opentime: Default::default(),
             period: Default::default(),
             requester: AccountId::new([1u8; 32]),

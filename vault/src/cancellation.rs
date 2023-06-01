@@ -321,7 +321,7 @@ mod tests {
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
         AccountId, AssetMetadata, BtcAddress, BtcPublicKey, CurrencyId, ErrorCode, InterBtcIssueRequest,
-        InterBtcReplaceRequest, IssueRequestStatus, RequestIssueEvent, StatusCode, Token, VaultId, DOT, IBTC,
+        InterBtcReplaceRequest, IssueRequestStatus, RequestIssueEvent, StatusCode, Token, VaultId, DOT, IBTC, INTR,
     };
     use std::collections::BTreeSet;
 
@@ -398,6 +398,7 @@ mod tests {
             btc_height: Default::default(),
             fee: Default::default(),
             griefing_collateral: Default::default(),
+            griefing_currency: Token(INTR),
             opentime: Default::default(),
             period: Default::default(),
             requester: AccountId::new([1u8; 32]),
