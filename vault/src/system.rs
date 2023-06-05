@@ -19,8 +19,8 @@ use git_version::git_version;
 use runtime::{
     cli::{parse_duration_minutes, parse_duration_ms},
     BtcRelayPallet, CollateralBalancesPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, PrettyPrint,
-    RegisterVaultEvent, StoreMainChainHeaderEvent, TryFromSymbol, UpdateActiveBlockEvent, UtilFuncs, VaultCurrencyPair,
-    VaultId, VaultRegistryPallet,
+    RegisterVaultEvent, RuntimeCurrencyInfo, StoreMainChainHeaderEvent, TryFromSymbol, UpdateActiveBlockEvent,
+    UtilFuncs, VaultCurrencyPair, VaultId, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, DynBitcoinCoreApi, Error as ServiceError, MonitoringConfig, Service, ShutdownSender};
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
@@ -119,6 +119,12 @@ pub struct VaultServiceConfig {
     /// higher inclusion fee estimate.
     #[clap(long)]
     pub auto_rbf: bool,
+
+    /// Path of a caching database. If you want to create a new database, set
+    /// this to an unexisting path, e.g. `${pwd}/myvault.db`. If not set, a
+    /// the path is generated from the --keyname argument
+    #[clap(long)]
+    pub db_path: Option<String>,
 }
 
 async fn active_block_listener(
@@ -167,6 +173,53 @@ pub struct VaultData {
 }
 
 #[derive(Clone)]
+pub struct DatabaseConfig {
+    path: String,
+}
+
+impl DatabaseConfig {
+    fn prefixed_key(vault_id: &VaultId, key: &str) -> Result<String, Error> {
+        Ok(format!(
+            "{}-{}-{}-{}",
+            vault_id.account_id.pretty_print(), /* technically not needed since each client should have their own
+                                                 * db, but doesn't hurt to be safe */
+            vault_id
+                .currencies
+                .collateral
+                .symbol()
+                .map_err(|_| BitcoinError::FailedToConstructWalletName)?,
+            vault_id
+                .currencies
+                .wrapped
+                .symbol()
+                .map_err(|_| BitcoinError::FailedToConstructWalletName)?,
+            key
+        ))
+    }
+
+    pub fn put<V: serde::Serialize>(&self, vault_id: &VaultId, key: &str, value: &V) -> Result<(), Error> {
+        let db = rocksdb::DB::open_default(self.path.clone())?;
+        let key = Self::prefixed_key(vault_id, key)?;
+        db.put(key, serde_json::to_vec(value)?)?;
+        Ok(())
+    }
+
+    pub fn get<T: serde::de::DeserializeOwned>(&self, vault_id: &VaultId, key: &str) -> Result<Option<T>, Error> {
+        let db = rocksdb::DB::open_default(self.path.clone())?;
+        let key = Self::prefixed_key(vault_id, key)?;
+
+        let value = match db.get(key)? {
+            None => return Ok(None),
+            Some(x) => {
+                let value = String::from_utf8(x)?;
+                serde_json::from_str(&value)?
+            }
+        };
+        Ok(value)
+    }
+}
+
+#[derive(Clone)]
 pub struct VaultIdManager {
     vault_data: Arc<RwLock<HashMap<VaultId, VaultData>>>,
     btc_parachain: InterBtcParachain,
@@ -174,6 +227,7 @@ pub struct VaultIdManager {
     // TODO: refactor this
     #[allow(clippy::type_complexity)]
     constructor: Arc<Box<dyn Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync>>,
+    db: DatabaseConfig,
 }
 
 impl VaultIdManager {
@@ -181,12 +235,14 @@ impl VaultIdManager {
         btc_parachain: InterBtcParachain,
         btc_rpc_master_wallet: DynBitcoinCoreApi,
         constructor: impl Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync + 'static,
+        db_path: String,
     ) -> Self {
         Self {
             vault_data: Arc::new(RwLock::new(HashMap::new())),
             constructor: Arc::new(Box::new(constructor)),
             btc_rpc_master_wallet,
             btc_parachain,
+            db: DatabaseConfig { path: db_path },
         }
     }
 
@@ -195,6 +251,7 @@ impl VaultIdManager {
         btc_parachain: InterBtcParachain,
         btc_rpc_master_wallet: DynBitcoinCoreApi,
         map: HashMap<VaultId, DynBitcoinCoreApi>,
+        db_path: &str,
     ) -> Self {
         let vault_data = map
             .into_iter()
@@ -214,6 +271,9 @@ impl VaultIdManager {
             constructor: Arc::new(Box::new(|_| unimplemented!())),
             btc_rpc_master_wallet,
             btc_parachain,
+            db: DatabaseConfig {
+                path: db_path.to_string(),
+            },
         }
     }
 
@@ -253,7 +313,8 @@ impl VaultIdManager {
         }
 
         tracing::info!("Adding keys from past issues...");
-        issue::add_keys_from_past_issue_request(&btc_rpc, &self.btc_parachain, &vault_id).await?;
+
+        issue::add_keys_from_past_issue_request(&btc_rpc, &self.btc_parachain, &vault_id, &self.db).await?;
 
         tracing::info!("Initializing metrics...");
         let metrics = PerCurrencyMetrics::new(&vault_id);
@@ -366,6 +427,7 @@ impl Service<VaultServiceConfig, Error> for VaultService {
         monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
         constructor: Box<dyn Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync>,
+        db_path: String,
     ) -> Self {
         VaultService::new(
             btc_parachain,
@@ -374,6 +436,7 @@ impl Service<VaultServiceConfig, Error> for VaultService {
             monitoring_config,
             shutdown,
             constructor,
+            db_path,
         )
     }
 
@@ -449,6 +512,7 @@ impl VaultService {
         monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
         constructor: impl Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync + 'static,
+        db_path: String,
     ) -> Self {
         Self {
             btc_parachain: btc_parachain.clone(),
@@ -456,7 +520,7 @@ impl VaultService {
             config,
             monitoring_config,
             shutdown,
-            vault_id_manager: VaultIdManager::new(btc_parachain, btc_rpc_master_wallet, constructor),
+            vault_id_manager: VaultIdManager::new(btc_parachain, btc_rpc_master_wallet, constructor, db_path),
         }
     }
 

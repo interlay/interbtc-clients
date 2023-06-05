@@ -33,6 +33,7 @@ pub trait Service<Config, InnerError> {
         monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
         constructor: Box<dyn Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync>,
+        keyname: String,
     ) -> Self;
     async fn start(&self) -> Result<(), Error<InnerError>>;
 }
@@ -46,6 +47,7 @@ pub struct ConnectionManager<Config: Clone, F: Fn()> {
     monitoring_config: MonitoringConfig,
     config: Config,
     increment_restart_counter: F,
+    db_path: String,
 }
 
 impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
@@ -59,6 +61,7 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
         monitoring_config: MonitoringConfig,
         config: Config,
         increment_restart_counter: F,
+        db_path: String,
     ) -> Self {
         Self {
             signer,
@@ -69,6 +72,7 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
             monitoring_config,
             config,
             increment_restart_counter,
+            db_path,
         }
     }
 
@@ -122,6 +126,7 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
                 self.monitoring_config.clone(),
                 shutdown_tx.clone(),
                 Box::new(constructor),
+                self.db_path.clone(),
             );
             match service.start().await {
                 Err(err @ Error::Abort(_)) => {

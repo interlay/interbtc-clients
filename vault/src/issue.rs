@@ -4,12 +4,16 @@ use crate::{
 use bitcoin::{BlockHash, Error as BitcoinError, PublicKey, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt, TryFutureExt};
 use runtime::{
-    BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, ExecuteIssueEvent, H256Le, InterBtcParachain,
-    IssuePallet, IssueRequestStatus, PartialAddress, PrettyPrint, RequestIssueEvent, UtilFuncs, VaultId, H256,
+    BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, ExecuteIssueEvent, H256Le, InterBtcIssueRequest,
+    InterBtcParachain, IssuePallet, IssueRequestStatus, PartialAddress, PrettyPrint, RequestIssueEvent, UtilFuncs,
+    VaultId, H256,
 };
 use service::{DynBitcoinCoreApi, Error as ServiceError};
 use sha2::{Digest, Sha256};
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 // initialize `issue_set` with currently open issues, and return the block height
 // from which to start watching the bitcoin chain
@@ -73,11 +77,72 @@ pub async fn process_issue_requests(
     Err(ServiceError::ClientShutdown)
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default, PartialEq, Debug)]
+struct RescanStatus {
+    newest_issue_height: u32,
+    queued_rescan_range: Option<(usize, usize)>, // start, end(including)
+}
+impl RescanStatus {
+    const KEY: &str = "rescan-status";
+    fn update(&mut self, mut issues: Vec<InterBtcIssueRequest>, current_bitcoin_height: usize) {
+        // Only look at issues that haven't been processed yet
+        issues.retain(|issue| issue.opentime > self.newest_issue_height);
+
+        for issue in issues {
+            self.newest_issue_height = self.newest_issue_height.max(issue.opentime);
+            let begin = match self.queued_rescan_range {
+                Some((begin, _)) => begin.min(issue.btc_height as usize),
+                None => issue.btc_height as usize,
+            };
+            self.queued_rescan_range = Some((begin, current_bitcoin_height));
+        }
+    }
+
+    /// prune the scanning range: bitcoin can't scan before prune_height. This function
+    /// modifies the range in self to be within scannable range, and returns the
+    /// unscannable range
+    fn prune(&mut self, btc_pruned_start_height: usize) -> Option<(usize, usize)> {
+        if let Some((ref mut start, _)) = self.queued_rescan_range {
+            if *start < btc_pruned_start_height {
+                let ret = (*start, btc_pruned_start_height.saturating_sub(1));
+                *start = btc_pruned_start_height;
+                return Some(ret);
+            }
+        }
+        None
+    }
+
+    /// updates self as if max_blocks were processed. Returns the chunk to rescan now.
+    fn process_blocks(&mut self, max_blocks: usize) -> Option<(usize, usize)> {
+        let (start, end) = self.queued_rescan_range?;
+        let chunk_end = end.min(start.saturating_add(max_blocks).saturating_sub(1));
+
+        if chunk_end == end {
+            self.queued_rescan_range = None; // this will be the last chunk to scan
+        } else {
+            self.queued_rescan_range = Some((chunk_end + 1, end));
+        }
+        Some((start, chunk_end))
+    }
+
+    fn get(vault_id: &VaultId, db: &crate::system::DatabaseConfig) -> Result<Self, Error> {
+        Ok(db.get(vault_id, Self::KEY)?.unwrap_or_default())
+    }
+    fn store(&self, vault_id: &VaultId, db: &crate::system::DatabaseConfig) -> Result<(), Error> {
+        db.put(vault_id, Self::KEY, self)?;
+        Ok(())
+    }
+}
+
 pub async fn add_keys_from_past_issue_request(
     bitcoin_core: &DynBitcoinCoreApi,
     btc_parachain: &InterBtcParachain,
     vault_id: &VaultId,
+    db: &crate::system::DatabaseConfig,
 ) -> Result<(), Error> {
+    let mut scanning_status = RescanStatus::get(vault_id, db)?;
+    tracing::info!("initial status: = {scanning_status:?}");
+
     let issue_requests: Vec<_> = btc_parachain
         .get_vault_issue_requests(btc_parachain.get_account_id().clone())
         .await?
@@ -85,39 +150,27 @@ pub async fn add_keys_from_past_issue_request(
         .filter(|(_, issue)| &issue.vault == vault_id)
         .collect();
 
-    let btc_start_height = match issue_requests.iter().map(|(_, request)| request.btc_height).min() {
-        Some(x) => x as usize,
-        None => return Ok(()), // the iterator is empty so we have nothing to do
-    };
-
     for (issue_id, request) in issue_requests.clone().into_iter() {
         if let Err(e) = add_new_deposit_key(bitcoin_core, issue_id, request.btc_public_key).await {
             tracing::error!("Failed to add deposit key #{}: {}", issue_id, e.to_string());
         }
     }
 
-    // read height only _after_ the last add_new_deposit_height.If a new block arrives
+    // read height only _after_ the last add_new_deposit_key.If a new block arrives
     // while we rescan, bitcoin core will correctly recognize addressed associated with the
     // privkey
-    let btc_end_height = bitcoin_core.get_block_count().await? as usize - 1;
-
-    // check if the blockchain was pruned after the point where we would need to scan
-    // if it was, we only rescan from the pruned height
+    let btc_end_height = bitcoin_core.get_block_count().await? as usize;
     let btc_pruned_start_height = bitcoin_core.get_pruned_height().await? as usize;
-    let rescan_start_height = btc_start_height.max(btc_pruned_start_height);
 
-    // in parallel, rescan what blockchain we do have stored locally
-    tracing::info!("Rescanning bitcoin chain from height {}...", rescan_start_height);
-    bitcoin_core
-        .rescan_blockchain(rescan_start_height, btc_end_height)
-        .await?;
+    let issues = issue_requests.clone().into_iter().map(|(_key, issue)| issue).collect();
+    scanning_status.update(issues, btc_end_height);
 
-    // also check in electrs in case there were any requests from before the pruned height
-    if btc_start_height < btc_pruned_start_height {
+    // use electrs to scan the portion that is not scannable by bitcoin core
+    if let Some((start, end)) = scanning_status.prune(btc_pruned_start_height) {
         tracing::info!(
             "Also checking electrs for issue requests between {} and {}...",
-            btc_start_height,
-            btc_pruned_start_height
+            start,
+            end
         );
         bitcoin_core
             .rescan_electrs_for_addresses(
@@ -133,6 +186,30 @@ pub async fn add_keys_from_past_issue_request(
                     .collect(),
             )
             .await?;
+    }
+
+    // save progress s.t. we don't rescan pruned range again if we crash now
+    scanning_status.store(vault_id, db)?;
+
+    let mut chunk_size = 1;
+    // rescan the blockchain in chunks, so that we can save progress. The code below
+    // aims to have each chunk take about 10 seconds (arbitrarily chosen value).
+    while let Some((chunk_start, chunk_end)) = scanning_status.process_blocks(chunk_size) {
+        tracing::info!("Rescanning bitcoin chain from {} to {}...", chunk_start, chunk_end);
+
+        let start_time = Instant::now();
+
+        bitcoin_core.rescan_blockchain(chunk_start, chunk_end).await?;
+
+        // with the code below the rescan time should remain between 5 and 20 seconds
+        // after the first couple of rounds.
+        if start_time.elapsed() < Duration::from_secs(10) {
+            chunk_size = chunk_size.saturating_mul(2);
+        } else {
+            chunk_size = (chunk_size.checked_div(2).ok_or(Error::ArithmeticUnderflow)?).max(1);
+        }
+
+        scanning_status.store(vault_id, db)?;
     }
 
     Ok(())
@@ -373,4 +450,175 @@ pub async fn listen_for_issue_cancels(
         )
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use runtime::{
+        AccountId,
+        CurrencyId::Token,
+        TokenSymbol::{DOT, IBTC, INTR},
+    };
+
+    fn dummy_issues(heights: Vec<(u32, usize)>) -> Vec<InterBtcIssueRequest> {
+        heights
+            .into_iter()
+            .map(|(opentime, btc_height)| InterBtcIssueRequest {
+                opentime,
+                btc_height: btc_height as u32,
+                amount: Default::default(),
+                btc_address: Default::default(),
+                fee: Default::default(),
+                griefing_collateral: Default::default(),
+                griefing_currency: Token(INTR),
+                period: Default::default(),
+                requester: AccountId::new([1u8; 32]),
+                btc_public_key: BtcPublicKey { 0: [0; 33] },
+                status: IssueRequestStatus::Pending,
+                vault: VaultId::new(AccountId::new([1u8; 32]), Token(DOT), runtime::Token(IBTC)),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_rescan_status_update() {
+        let mut status = RescanStatus::default();
+        let current_height = 50;
+        let issues = dummy_issues(vec![(2, 23), (4, 20), (3, 30)]);
+
+        status.update(issues, current_height);
+
+        assert_eq!(
+            status,
+            RescanStatus {
+                newest_issue_height: 4,
+                queued_rescan_range: Some((20, current_height))
+            }
+        );
+
+        // check that status does not change if issues have already been registered
+        let processed_issues = dummy_issues(vec![
+            (2, current_height * 2),
+            (4, current_height * 2),
+            (3, current_height * 2),
+        ]);
+        status.update(processed_issues, current_height);
+        assert_eq!(
+            status,
+            RescanStatus {
+                newest_issue_height: 4,
+                queued_rescan_range: Some((20, current_height))
+            }
+        );
+
+        // check that status does not change if new issue doesn't expand current range
+        let processed_issues = dummy_issues(vec![
+            (2, current_height * 2),
+            (5, 45), // new, but already included in the to-scan range
+            (3, current_height * 2),
+        ]);
+        status.update(processed_issues.clone(), current_height);
+        assert_eq!(
+            status,
+            RescanStatus {
+                newest_issue_height: 5,
+                queued_rescan_range: Some((20, current_height))
+            }
+        );
+
+        // check that status decreases start of range if issue requires it
+        let more_issues = dummy_issues(vec![
+            (2, 41),
+            (6, 15), // new this one has not been processed yet, and expands the range
+            (3, 41),
+        ]);
+        status.update(more_issues, current_height);
+        assert_eq!(
+            status,
+            RescanStatus {
+                newest_issue_height: 6,
+                queued_rescan_range: Some((15, current_height))
+            }
+        );
+
+        // check that status end of range does not expand if there are no new issues
+        status.update(processed_issues, current_height + 1);
+        assert_eq!(
+            status,
+            RescanStatus {
+                newest_issue_height: 6,
+                queued_rescan_range: Some((15, current_height))
+            }
+        );
+
+        // check that status end of range does expand if there are new issues
+        let more_issues = dummy_issues(vec![
+            (2, 41),
+            (7, current_height + 2), // new this one has not been processed yet, and expands the range
+            (3, 41),
+        ]);
+        status.update(more_issues, current_height + 2);
+        assert_eq!(
+            status,
+            RescanStatus {
+                newest_issue_height: 7,
+                queued_rescan_range: Some((15, current_height + 2))
+            }
+        );
+    }
+
+    #[test]
+    fn test_process_blocks() {
+        let mut status = RescanStatus {
+            newest_issue_height: 4,
+            queued_rescan_range: Some((20, 40)),
+        };
+
+        assert_eq!(status.process_blocks(15), Some((20, 34)));
+        assert_eq!(
+            status,
+            RescanStatus {
+                newest_issue_height: 4,
+                queued_rescan_range: Some((35, 40))
+            }
+        );
+
+        assert_eq!(status.process_blocks(15), Some((35, 40)));
+        assert_eq!(
+            status,
+            RescanStatus {
+                newest_issue_height: 4,
+                queued_rescan_range: None
+            }
+        );
+
+        assert_eq!(status.process_blocks(15), None);
+        assert_eq!(
+            status,
+            RescanStatus {
+                newest_issue_height: 4,
+                queued_rescan_range: None
+            }
+        );
+    }
+
+    #[test]
+    fn test_process_blocks_boundary() {
+        let mut status = RescanStatus {
+            newest_issue_height: 4,
+            queued_rescan_range: Some((20, 40)),
+        };
+
+        assert_eq!(status.process_blocks(21), Some((20, 40)));
+        assert_eq!(
+            status,
+            RescanStatus {
+                newest_issue_height: 4,
+                queued_rescan_range: None
+            }
+        );
+
+        assert_eq!(status.process_blocks(15), None);
+    }
 }

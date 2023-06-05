@@ -63,7 +63,12 @@ async fn test_redeem_succeeds() {
 
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let btc_rpc_master_wallet = btc_rpc.clone();
-        let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
+        let vault_id_manager = VaultIdManager::from_map(
+            vault_provider.clone(),
+            btc_rpc_master_wallet,
+            btc_rpcs,
+            "test_redeem_succeeds",
+        );
 
         let issue_amount = 100000;
         let vault_collateral =
@@ -126,8 +131,12 @@ async fn test_replace_succeeds() {
 
         let btc_rpcs = vec![(new_vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let new_btc_rpc_master_wallet = btc_rpc.clone();
-        let _vault_id_manager =
-            VaultIdManager::from_map(new_vault_provider.clone(), new_btc_rpc_master_wallet, btc_rpcs);
+        let _vault_id_manager = VaultIdManager::from_map(
+            new_vault_provider.clone(),
+            new_btc_rpc_master_wallet,
+            btc_rpcs,
+            "test_replace_succeeds1",
+        );
         let btc_rpcs = vec![
             (old_vault_id.clone(), btc_rpc.clone()),
             (new_vault_id.clone(), btc_rpc.clone()),
@@ -135,8 +144,12 @@ async fn test_replace_succeeds() {
         .into_iter()
         .collect();
         let old_btc_rpc_master_wallet = btc_rpc.clone();
-        let vault_id_manager =
-            VaultIdManager::from_map(old_vault_provider.clone(), old_btc_rpc_master_wallet, btc_rpcs);
+        let vault_id_manager = VaultIdManager::from_map(
+            old_vault_provider.clone(),
+            old_btc_rpc_master_wallet,
+            btc_rpcs,
+            "test_replace_succeeds2",
+        );
 
         let issue_amount = 100000;
         let vault_collateral = get_required_vault_collateral_for_issue(
@@ -303,8 +316,12 @@ async fn test_cancellation_succeeds() {
 
         let btc_rpcs = vec![(new_vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let new_btc_rpc_master_wallet = btc_rpc.clone();
-        let vault_id_manager =
-            VaultIdManager::from_map(new_vault_provider.clone(), new_btc_rpc_master_wallet, btc_rpcs);
+        let vault_id_manager = VaultIdManager::from_map(
+            new_vault_provider.clone(),
+            new_btc_rpc_master_wallet,
+            btc_rpcs,
+            "test_cancellation_succeeds",
+        );
 
         let issue_amount = 100000;
         let vault_collateral = get_required_vault_collateral_for_issue(
@@ -565,7 +582,12 @@ async fn test_automatic_issue_execution_succeeds() {
 
         let btc_rpcs = vec![(vault2_id.clone(), btc_rpc.clone())].into_iter().collect();
         let btc_rpc_master_wallet = btc_rpc.clone();
-        let vault_id_manager = VaultIdManager::from_map(vault2_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
+        let vault_id_manager = VaultIdManager::from_map(
+            vault2_provider.clone(),
+            btc_rpc_master_wallet,
+            btc_rpcs,
+            "test_automatic_issue_execution_succeeds",
+        );
 
         let issue_amount = 100000;
         let vault_collateral =
@@ -658,7 +680,12 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
 
         let btc_rpcs = vec![(vault2_id.clone(), btc_rpc.clone())].into_iter().collect();
         let btc_rpc_master_wallet = btc_rpc.clone();
-        let vault_id_manager = VaultIdManager::from_map(vault2_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
+        let vault_id_manager = VaultIdManager::from_map(
+            vault2_provider.clone(),
+            btc_rpc_master_wallet,
+            btc_rpcs,
+            "test_automatic_issue_execution_succeeds_with_big_transaction",
+        );
 
         let issue_amount = 100000;
         let vault_collateral =
@@ -740,7 +767,12 @@ async fn test_execute_open_requests_succeeds() {
 
         let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
         let btc_rpc_master_wallet = btc_rpc.clone();
-        let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
+        let vault_id_manager = VaultIdManager::from_map(
+            vault_provider.clone(),
+            btc_rpc_master_wallet,
+            btc_rpcs,
+            "test_execute_open_requests_succeeds",
+        );
 
         let issue_amount = 100000;
         let vault_collateral =
@@ -1137,7 +1169,12 @@ mod test_with_bitcoind {
             // setup vault id manager
             let btc_rpcs = vec![(vault_id.clone(), btc_rpc.clone())].into_iter().collect();
             let btc_rpc_master_wallet = btc_rpc.clone();
-            let vault_id_manager = VaultIdManager::from_map(vault_provider.clone(), btc_rpc_master_wallet, btc_rpcs);
+            let vault_id_manager = VaultIdManager::from_map(
+                vault_provider.clone(),
+                btc_rpc_master_wallet,
+                btc_rpcs,
+                "test_automatic_rbf_succeeds",
+            );
 
             let issue_amount = 100000;
             let vault_collateral =
