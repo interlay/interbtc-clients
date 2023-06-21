@@ -365,7 +365,7 @@ pub async fn start_http(
     close_handle
 }
 
-#[cfg(all(test, feature = "parachain-metadata-kintsugi-testnet"))]
+#[cfg(all(test, feature = "parachain-metadata-kintsugi"))]
 mod tests {
     use crate::{error::Error, Allowance, AllowanceAmount, AllowanceConfig};
     use futures::{future::join_all, TryFutureExt};

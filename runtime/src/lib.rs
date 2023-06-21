@@ -100,44 +100,6 @@ pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
         derive_for_type(type = "security::types::StatusCode", derive = "Eq, PartialEq"),
     )
 )]
-#[cfg_attr(
-    feature = "parachain-metadata-interlay-testnet",
-    subxt(
-        runtime_metadata_path = "metadata-parachain-interlay-testnet.scale",
-        derive_for_all_types = "Clone",
-        derive_for_type(type = "bitcoin::address::PublicKey", derive = "Eq, PartialEq"),
-        derive_for_type(type = "bitcoin::types::H256Le", derive = "Eq, PartialEq"),
-        derive_for_type(type = "interbtc_primitives::issue::IssueRequestStatus", derive = "Eq, PartialEq"),
-        derive_for_type(type = "interbtc_primitives::redeem::RedeemRequestStatus", derive = "Eq, PartialEq"),
-        derive_for_type(
-            type = "interbtc_primitives::replace::ReplaceRequestStatus",
-            derive = "Eq, PartialEq"
-        ),
-        derive_for_type(type = "interbtc_primitives::VaultCurrencyPair", derive = "Eq, PartialEq"),
-        derive_for_type(type = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
-        derive_for_type(type = "security::types::ErrorCode", derive = "Eq, PartialEq, Ord, PartialOrd"),
-        derive_for_type(type = "security::types::StatusCode", derive = "Eq, PartialEq"),
-    )
-)]
-#[cfg_attr(
-    feature = "parachain-metadata-kintsugi-testnet",
-    subxt(
-        runtime_metadata_path = "metadata-parachain-kintsugi-testnet.scale",
-        derive_for_all_types = "Clone",
-        derive_for_type(type = "bitcoin::address::PublicKey", derive = "Eq, PartialEq"),
-        derive_for_type(type = "bitcoin::types::H256Le", derive = "Eq, PartialEq"),
-        derive_for_type(type = "interbtc_primitives::issue::IssueRequestStatus", derive = "Eq, PartialEq"),
-        derive_for_type(type = "interbtc_primitives::redeem::RedeemRequestStatus", derive = "Eq, PartialEq"),
-        derive_for_type(
-            type = "interbtc_primitives::replace::ReplaceRequestStatus",
-            derive = "Eq, PartialEq"
-        ),
-        derive_for_type(type = "interbtc_primitives::VaultCurrencyPair", derive = "Eq, PartialEq"),
-        derive_for_type(type = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
-        derive_for_type(type = "security::types::ErrorCode", derive = "Eq, PartialEq, Ord, PartialOrd"),
-        derive_for_type(type = "security::types::StatusCode", derive = "Eq, PartialEq"),
-    )
-)]
 pub mod metadata {
     #[subxt(substitute_type = "BTreeSet")]
     use crate::BTreeSet;

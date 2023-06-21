@@ -23,8 +23,6 @@ jobs:
         metadata:
           - parachain-metadata-interlay
           - parachain-metadata-kintsugi
-          - parachain-metadata-interlay-testnet
-          - parachain-metadata-kintsugi-testnet
 
     steps:
       - uses: actions/checkout@v3
@@ -51,7 +49,7 @@ jobs:
         run: |
           cargo check --release --workspace --features ${{ matrix.metadata }}
       - name: test
-        if: matrix.metadata == 'parachain-metadata-kintsugi-testnet'
+        if: matrix.metadata == 'parachain-metadata-kintsugi'
         env:
           RUST_LOG: info,regalloc=warn
           BITCOIN_RPC_URL: http://127.0.0.1:18443
@@ -83,7 +81,7 @@ jobs:
           path: target/release/faucet
           retention-days: 10
       - name: upload artifacts - runner
-        if: matrix.metadata == 'parachain-metadata-kintsugi-testnet'
+        if: matrix.metadata == 'parachain-metadata-kintsugi'
         uses: actions/upload-artifact@v3
         with:
           name: runner
@@ -101,8 +99,6 @@ jobs:
         metadata:
           - parachain-metadata-interlay
           - parachain-metadata-kintsugi
-          - parachain-metadata-interlay-testnet
-          - parachain-metadata-kintsugi-testnet
     steps:
       - uses: actions/checkout@v3
       - name: Prepare

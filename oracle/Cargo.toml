@@ -8,8 +8,6 @@ description = "Liveness service to update the exchange rate periodically."
 [features]
 parachain-metadata-interlay = ["runtime/parachain-metadata-interlay"]
 parachain-metadata-kintsugi = ["runtime/parachain-metadata-kintsugi"]
-parachain-metadata-interlay-testnet = ["runtime/parachain-metadata-interlay-testnet"]
-parachain-metadata-kintsugi-testnet = ["runtime/parachain-metadata-kintsugi-testnet"]
 
 [dependencies]
 log = "0.4.0"

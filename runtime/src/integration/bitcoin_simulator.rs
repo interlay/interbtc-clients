@@ -1,4 +1,4 @@
-#![cfg(all(feature = "testing-utils", feature = "parachain-metadata-kintsugi-testnet"))]
+#![cfg(all(feature = "testing-utils", feature = "parachain-metadata-kintsugi"))]
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]

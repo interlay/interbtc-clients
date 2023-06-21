@@ -259,7 +259,7 @@ mod tests {
     #[tokio::test]
     async fn test_vault_pid_file() {
         let dummy_account_id = AccountId::new(Default::default());
-        let dummy_spec_name = "kintsugi-testnet".to_string();
+        let dummy_spec_name = "kintsugi".to_string();
         let termination_signals = &[SIGHUP, SIGTERM, SIGINT, SIGQUIT];
         let mut sys = System::new_all();
 

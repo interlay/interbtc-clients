@@ -49,11 +49,8 @@ const BLAKE2_128_HASH_PREFIX_LENGTH: usize = 48;
 const TWOX_64_HASH_PREFIX_LENGTH: usize = 40;
 
 // sanity check to be sure that testing-utils is not accidentally selected
-#[cfg(all(
-    any(test, feature = "testing-utils"),
-    not(feature = "parachain-metadata-kintsugi-testnet")
-))]
-compile_error!("Tests are only supported for the kintsugi testnet metadata");
+#[cfg(all(any(test, feature = "testing-utils"), not(feature = "parachain-metadata-kintsugi")))]
+compile_error!("Tests are only supported for the kintsugi runtime");
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "parachain-metadata-interlay")] {
@@ -63,14 +60,6 @@ cfg_if::cfg_if! {
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
         const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
         pub const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
-        pub const SS58_PREFIX: u16 = 2092;
-    } else if #[cfg(feature = "parachain-metadata-interlay-testnet")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
-        pub const DEFAULT_SPEC_NAME: &str = "testnet-interlay";
-        pub const SS58_PREFIX: u16 = 2032;
-    }  else if #[cfg(feature = "parachain-metadata-kintsugi-testnet")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
-        pub const DEFAULT_SPEC_NAME: &str = "testnet-kintsugi";
         pub const SS58_PREFIX: u16 = 2092;
     }
 }
@@ -1877,10 +1866,6 @@ pub trait SudoPallet {
     async fn set_replace_period(&self, period: u32) -> Result<(), Error>;
 }
 
-#[cfg(any(
-    feature = "parachain-metadata-interlay-testnet",
-    feature = "parachain-metadata-kintsugi-testnet"
-))]
 #[async_trait]
 impl SudoPallet for InterBtcParachain {
     async fn sudo(&self, call: EncodedCall) -> Result<(), Error> {
