@@ -1,6 +1,6 @@
 {
     "max_fundable_client_balance": 10000,
-    "faucet_cooldown_hours": 6,
+    "faucet_cooldown_hours": 336,
     "user_allowances": [
         {
             "symbol": "KSM",
@@ -17,6 +17,22 @@
         {
             "symbol": "USDT",
             "amount": 10000000000
+        },
+        {
+            "symbol": "MOVR",
+            "amount": 1000000000000000000000
+        },
+        {
+            "symbol": "VKSM",
+            "amount": 20000000000000
+        },
+        {
+            "symbol": "LKSM",
+            "amount": 20000000000000
+        },
+        {
+            "symbol": "SKSM",
+            "amount": 20000000000000
         }
     ],
     "vault_allowances": [
@@ -35,6 +51,22 @@
         {
             "symbol": "USDT",
             "amount": 100000000000
+        },
+        {
+            "symbol": "MOVR",
+            "amount": 100000000000000000000000
+        },
+        {
+            "symbol": "VKSM",
+            "amount": 2000000000000000
+        },
+        {
+            "symbol": "LKSM",
+            "amount": 2000000000000000
+        },
+        {
+            "symbol": "SKSM",
+            "amount": 2000000000000000
         }
     ]
 }
