@@ -32,6 +32,9 @@ async-trait = "0.1.40"
 futures = "0.3.5"
 git-version = "0.3.4"
 
+reqwest = "0.11.11"
+url = "2.2.2"
+
 # Workspace dependencies
 runtime = { path = "../runtime" }
 service = { path = "../service" }

@@ -748,7 +748,7 @@ mod tests {
             async fn get_free_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<Balance, RuntimeError>;
             async fn get_reserved_balance(&self, currency_id: CurrencyId) -> Result<Balance, RuntimeError>;
             async fn get_reserved_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<Balance, RuntimeError>;
-            async fn transfer_to(&self, recipient: &AccountId, amount: u128, currency_id: CurrencyId) -> Result<(), RuntimeError>;
+            async fn transfer_to(&self, recipient: &AccountId, amounts: Vec<(u128, CurrencyId)>) -> Result<(), RuntimeError>;
         }
 
         #[async_trait]
