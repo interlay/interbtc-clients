@@ -40,6 +40,7 @@ pub struct AllowanceConfig {
     pub faucet_cooldown_hours: i64,
     pub user_allowances: Allowance,
     pub vault_allowances: Allowance,
+    pub auth_url: Option<String>,
 }
 
 impl AllowanceConfig {
@@ -54,6 +55,7 @@ impl AllowanceConfig {
             faucet_cooldown_hours,
             user_allowances,
             vault_allowances,
+            auth_url: None,
         }
     }
 }

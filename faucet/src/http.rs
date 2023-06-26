@@ -6,19 +6,28 @@ use jsonrpc_http_server::{
     DomainsValidation, ServerBuilder,
 };
 use kv::*;
+use lazy_static::lazy_static;
 use parity_scale_codec::{Decode, Encode};
+use reqwest::Url;
 use runtime::{
     AccountId, CollateralBalancesPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, RuntimeCurrencyInfo,
-    TryFromSymbol, VaultRegistryPallet,
+    Ss58Codec, TryFromSymbol, VaultRegistryPallet, SS58_PREFIX,
 };
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::{net::SocketAddr, time::Duration};
-use tokio::time::timeout;
+use tokio::{
+    sync::{Mutex, MutexGuard},
+    time::timeout,
+};
 
 const HEALTH_DURATION: Duration = Duration::from_millis(5000);
 const KV_STORE_NAME: &str = "store";
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+lazy_static! {
+    static ref LOCK: Mutex<()> = Mutex::new(());
+}
+
+#[derive(Serialize, Deserialize, PartialEq)]
 struct FaucetRequest {
     datetime: String,
     account_type: FundingRequestAccountType,
@@ -135,21 +144,26 @@ fn has_request_expired(
         )
 }
 
-async fn ensure_funding_allowed(
+async fn ensure_funding_allowed<'a>(
+    kv: &'a Bucket<'a, String, Json<FaucetRequest>>,
     parachain_rpc: &InterBtcParachain,
-    account_id: AccountId,
+    account_id: &AccountId,
     allowance_config: AllowanceConfig,
-    last_request_json: Option<Json<FaucetRequest>>,
     account_type: FundingRequestAccountType,
-) -> Result<(), Error> {
+) -> Result<MutexGuard<'static, ()>, Error> {
+    if let Some(auth_url) = allowance_config.auth_url {
+        ensure_signature_exists(&auth_url, account_id).await?;
+    }
+
     let account_allowances = match account_type {
-        FundingRequestAccountType::User => allowance_config.user_allowances,
-        FundingRequestAccountType::Vault => allowance_config.vault_allowances,
+        FundingRequestAccountType::User => &allowance_config.user_allowances,
+        FundingRequestAccountType::Vault => &allowance_config.vault_allowances,
     };
     let currency_ids: Result<Vec<_>, _> = account_allowances
         .iter()
         .map(|x| CurrencyId::try_from_symbol(x.symbol.clone()))
         .collect();
+
     for currency_id in currency_ids?.iter() {
         let free_balance = parachain_rpc
             .get_free_balance_for_id(account_id.clone(), *currency_id)
@@ -176,6 +190,11 @@ async fn ensure_funding_allowed(
         .checked_sub_signed(ISO8601::hours(allowance_config.faucet_cooldown_hours))
         .ok_or(Error::MathError)?;
 
+    // aquire lock after auth and balance checks since they may be slow and we only
+    // want to guard writes to the local key store
+    let mutex_guard = LOCK.lock().await;
+
+    let last_request_json = kv.get(account_id.to_string())?;
     match last_request_json {
         Some(last_request_json) => {
             let last_request_expired = has_request_expired(
@@ -188,58 +207,69 @@ async fn ensure_funding_allowed(
                 log::warn!("Already funded {} at {:?}", account_id, last_request_json.0.datetime);
                 Err(Error::AccountAlreadyFunded)
             } else {
-                Ok(())
+                Ok(mutex_guard)
             }
         }
-        None => Ok(()),
+        None => Ok(mutex_guard),
     }
+}
+
+#[derive(Deserialize)]
+struct GetSignatureData {
+    exists: bool,
+}
+
+async fn ensure_signature_exists(auth_url: &str, account_id: &AccountId) -> Result<(), Error> {
+    reqwest::get(Url::parse(auth_url)?.join(&account_id.to_ss58check_with_version(SS58_PREFIX.into()))?)
+        .await?
+        .json::<GetSignatureData>()
+        .await?
+        .exists
+        .then(|| ())
+        .ok_or(Error::SignatureMissing)
 }
 
 async fn atomic_faucet_funding(
     parachain_rpc: &InterBtcParachain,
-    kv: Bucket<'_, String, Json<FaucetRequest>>,
+    kv: &Bucket<'_, String, Json<FaucetRequest>>,
     account_id: AccountId,
     allowance_config: AllowanceConfig,
 ) -> Result<(), Error> {
-    let account_str = account_id.to_string();
-    let last_request_json = kv.get(account_str.clone())?;
     let account_type = get_account_type(parachain_rpc, account_id.clone()).await?;
     let amounts: Allowance = match account_type {
         FundingRequestAccountType::User => allowance_config.user_allowances.clone(),
         FundingRequestAccountType::Vault => allowance_config.vault_allowances.clone(),
     };
 
-    ensure_funding_allowed(
-        parachain_rpc,
-        account_id.clone(),
-        allowance_config,
-        last_request_json,
+    let mutex_guard =
+        ensure_funding_allowed(kv, parachain_rpc, &account_id, allowance_config, account_type.clone()).await?;
+
+    // replace the previous (expired) claim datetime with the datetime of the current claim
+    update_kv_store(
+        kv,
+        account_id.to_string(),
+        Utc::now().to_rfc2822(),
         account_type.clone(),
-    )
-    .await?;
+    )?;
+    // don't block other threads for transfer since we updated the store
+    drop(mutex_guard);
 
-    let mut transfers = vec![];
-    for AllowanceAmount { symbol, amount } in amounts.iter() {
-        let currency_id = CurrencyId::try_from_symbol(symbol.clone())?;
-        log::info!(
-            "AccountId: {}, Currency: {:?} Type: {:?}, Amount: {}",
-            account_id,
-            currency_id.symbol().unwrap_or_default(),
-            account_type,
-            amount
-        );
-        transfers.push(parachain_rpc.transfer_to(&account_id, *amount, currency_id));
-    }
+    let transfers = amounts
+        .into_iter()
+        .map(|AllowanceAmount { symbol, amount }| {
+            let currency_id = CurrencyId::try_from_symbol(symbol.clone())?;
+            log::info!(
+                "AccountId: {}, Currency: {:?} Type: {:?}, Amount: {}",
+                account_id,
+                currency_id.symbol().unwrap_or_default(),
+                account_type,
+                amount
+            );
+            Ok((amount, currency_id))
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
 
-    let result = futures::future::join_all(transfers).await;
-
-    if let Some(err) = result.into_iter().find_map(|x| x.err()) {
-        return Err(err.into());
-    }
-
-    // Replace the previous (expired) claim datetime with the datetime of the current claim, only update
-    // this after successfully transferring funds to ensure that this can be called again on error
-    update_kv_store(&kv, account_str, Utc::now().to_rfc2822(), account_type.clone())?;
+    parachain_rpc.transfer_to(&account_id, transfers).await?;
     Ok(())
 }
 
@@ -251,8 +281,21 @@ async fn fund_account(
 ) -> Result<(), Error> {
     let parachain_rpc = parachain_rpc.clone();
     let kv = open_kv_store(store)?;
-    atomic_faucet_funding(&parachain_rpc, kv, req.account_id.clone(), allowance_config).await?;
-    Ok(())
+    match atomic_faucet_funding(&parachain_rpc, &kv, req.account_id.clone(), allowance_config).await {
+        Err(Error::RuntimeError(err))
+            if err.is_any_module_err()
+                || err.is_invalid_transaction().is_some()
+                || matches!(err, RuntimeError::AssetNotFound) =>
+        {
+            let account_str = req.account_id.to_string();
+            log::error!("Failed to fund {}", account_str);
+            // transfer failed, reset the db so this can be called again
+            kv.remove(account_str)?;
+            Err(Error::RuntimeError(err))
+        }
+        Err(err) => Err(err),
+        Ok(_) => Ok(()),
+    }
 }
 
 pub async fn start_http(
@@ -262,7 +305,7 @@ pub async fn start_http(
     allowance_config: AllowanceConfig,
 ) -> jsonrpc_http_server::CloseHandle {
     let mut io = IoHandler::default();
-    let store = Store::new(Config::new("./kv")).expect("Unable to open kv store");
+    let store = Store::new(Config::new("./kv").flush_every_ms(100)).expect("Unable to open kv store");
     let user_allowances_clone = allowance_config.user_allowances.clone();
     let vault_allowances_clone = allowance_config.vault_allowances.clone();
     io.add_sync_method("user_allowance", move |_| handle_resp(Ok(&user_allowances_clone)));
@@ -397,7 +440,7 @@ mod tests {
         join_all(balance.iter().map(|(amount, currency)| {
             let leftover = leftover_units * 10u128.pow(currency.decimals().unwrap());
             let amount_to_transfer = if *amount > leftover { amount - leftover } else { 0 };
-            provider.transfer_to(&drain_account_id, amount_to_transfer, currency.clone())
+            provider.transfer_to(&drain_account_id, vec![(amount_to_transfer, currency.clone())])
         }))
         .await
         .into_iter()
