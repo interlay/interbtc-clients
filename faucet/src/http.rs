@@ -6,6 +6,7 @@ use jsonrpc_http_server::{
     DomainsValidation, ServerBuilder,
 };
 use kv::*;
+use lazy_static::lazy_static;
 use parity_scale_codec::{Decode, Encode};
 use reqwest::Url;
 use runtime::{
@@ -14,10 +15,17 @@ use runtime::{
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{net::SocketAddr, time::Duration};
-use tokio::time::timeout;
+use tokio::{
+    sync::{Mutex, MutexGuard},
+    time::timeout,
+};
 
 const HEALTH_DURATION: Duration = Duration::from_millis(5000);
 const KV_STORE_NAME: &str = "store";
+
+lazy_static! {
+    static ref LOCK: Mutex<()> = Mutex::new(());
+}
 
 #[derive(Serialize, Deserialize, PartialEq)]
 struct FaucetRequest {
@@ -136,13 +144,17 @@ fn has_request_expired(
         )
 }
 
-async fn ensure_funding_allowed(
+async fn ensure_funding_allowed<'a>(
+    kv: &'a Bucket<'a, String, Json<FaucetRequest>>,
     parachain_rpc: &InterBtcParachain,
     account_id: &AccountId,
-    allowance_config: &AllowanceConfig,
-    last_request_json: Option<Json<FaucetRequest>>,
+    allowance_config: AllowanceConfig,
     account_type: FundingRequestAccountType,
-) -> Result<(), Error> {
+) -> Result<MutexGuard<'static, ()>, Error> {
+    if let Some(auth_url) = allowance_config.auth_url {
+        ensure_signature_exists(&auth_url, account_id).await?;
+    }
+
     let account_allowances = match account_type {
         FundingRequestAccountType::User => &allowance_config.user_allowances,
         FundingRequestAccountType::Vault => &allowance_config.vault_allowances,
@@ -151,6 +163,7 @@ async fn ensure_funding_allowed(
         .iter()
         .map(|x| CurrencyId::try_from_symbol(x.symbol.clone()))
         .collect();
+
     for currency_id in currency_ids?.iter() {
         let free_balance = parachain_rpc
             .get_free_balance_for_id(account_id.clone(), *currency_id)
@@ -177,6 +190,11 @@ async fn ensure_funding_allowed(
         .checked_sub_signed(ISO8601::hours(allowance_config.faucet_cooldown_hours))
         .ok_or(Error::MathError)?;
 
+    // aquire lock after auth and balance checks since they may be slow and we only
+    // want to guard writes to the local key store
+    let mutex_guard = LOCK.lock().await;
+
+    let last_request_json = kv.get(account_id.to_string())?;
     match last_request_json {
         Some(last_request_json) => {
             let last_request_expired = has_request_expired(
@@ -189,10 +207,10 @@ async fn ensure_funding_allowed(
                 log::warn!("Already funded {} at {:?}", account_id, last_request_json.0.datetime);
                 Err(Error::AccountAlreadyFunded)
             } else {
-                Ok(())
+                Ok(mutex_guard)
             }
         }
-        None => Ok(()),
+        None => Ok(mutex_guard),
     }
 }
 
@@ -213,33 +231,28 @@ async fn ensure_signature_exists(auth_url: &str, account_id: &AccountId) -> Resu
 
 async fn atomic_faucet_funding(
     parachain_rpc: &InterBtcParachain,
-    kv: Bucket<'_, String, Json<FaucetRequest>>,
+    kv: &Bucket<'_, String, Json<FaucetRequest>>,
     account_id: AccountId,
     allowance_config: AllowanceConfig,
 ) -> Result<(), Error> {
-    let account_str = account_id.to_string();
-    let last_request_json = kv.get(account_str.clone())?;
     let account_type = get_account_type(parachain_rpc, account_id.clone()).await?;
     let amounts: Allowance = match account_type {
         FundingRequestAccountType::User => allowance_config.user_allowances.clone(),
         FundingRequestAccountType::Vault => allowance_config.vault_allowances.clone(),
     };
 
-    ensure_funding_allowed(
-        parachain_rpc,
-        &account_id,
-        &allowance_config,
-        last_request_json,
-        account_type.clone(),
-    )
-    .await?;
-
-    if let Some(auth_url) = allowance_config.auth_url {
-        ensure_signature_exists(&auth_url, &account_id).await?;
-    }
+    let mutex_guard =
+        ensure_funding_allowed(kv, parachain_rpc, &account_id, allowance_config, account_type.clone()).await?;
 
     // replace the previous (expired) claim datetime with the datetime of the current claim
-    update_kv_store(&kv, account_str.clone(), Utc::now().to_rfc2822(), account_type.clone())?;
+    update_kv_store(
+        kv,
+        account_id.to_string(),
+        Utc::now().to_rfc2822(),
+        account_type.clone(),
+    )?;
+    // don't block other threads for transfer since we updated the store
+    drop(mutex_guard);
 
     let transfers = amounts
         .into_iter()
@@ -256,17 +269,7 @@ async fn atomic_faucet_funding(
         })
         .collect::<Result<Vec<_>, Error>>()?;
 
-    if let Err(err) = parachain_rpc.transfer_to(&account_id, transfers).await {
-        log::error!("Failed to fund {}", account_str);
-        if err.is_any_module_err() || err.is_invalid_transaction().is_some() {
-            log::info!("Removing previous claim");
-            // transfer failed, reset the db so this can be called again
-            kv.remove(account_str)?;
-        }
-
-        return Err(err.into());
-    }
-
+    parachain_rpc.transfer_to(&account_id, transfers).await?;
     Ok(())
 }
 
@@ -278,8 +281,21 @@ async fn fund_account(
 ) -> Result<(), Error> {
     let parachain_rpc = parachain_rpc.clone();
     let kv = open_kv_store(store)?;
-    atomic_faucet_funding(&parachain_rpc, kv, req.account_id.clone(), allowance_config).await?;
-    Ok(())
+    match atomic_faucet_funding(&parachain_rpc, &kv, req.account_id.clone(), allowance_config).await {
+        Err(Error::RuntimeError(err))
+            if err.is_any_module_err()
+                || err.is_invalid_transaction().is_some()
+                || matches!(err, RuntimeError::AssetNotFound) =>
+        {
+            let account_str = req.account_id.to_string();
+            log::error!("Failed to fund {}", account_str);
+            // transfer failed, reset the db so this can be called again
+            kv.remove(account_str)?;
+            Err(Error::RuntimeError(err))
+        }
+        Err(err) => Err(err),
+        Ok(_) => Ok(()),
+    }
 }
 
 pub async fn start_http(

@@ -3050,6 +3050,7 @@ dependencies = [
  "hex",
  "jsonrpc-http-server",
  "kv",
+ "lazy_static",
  "log 0.4.18",
  "parity-scale-codec",
  "reqwest",
