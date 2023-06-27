@@ -34,19 +34,17 @@ impl ProviderUserOpts {
     pub fn get_key_pair(&self) -> Result<(Pair, String), Error> {
         // Load parachain credentials
         let (pair, user_name) = match (
-            self.keyfile.as_ref(),       // Check if keyfile is provided
-            self.keyname.as_ref(),       // Check if keyname is provided
-            &self.keyring,               // Check if keyring is available
-            self.keyuri.as_ref(), // Check if secret phrase is provided
+            self.keyfile.as_ref(), // Check if keyfile is provided
+            self.keyname.as_ref(), // Check if keyname is provided
+            &self.keyring,         // Check if keyring is available
+            self.keyuri.as_ref(),  // Check if secret phrase is provided
         ) {
             // If keyfile and keyname are provided
             (Some(file_path), Some(keyname), None, None) => {
                 (get_credentials_from_file(file_path, keyname)?, keyname.to_string())
             }
             // If keyname and secret phrase are provided
-            (None, Some(keyname), None, Some(keyuri)) => {
-                (get_pair_from_phrase(keyuri)?, keyname.to_string())
-            }
+            (None, Some(keyname), None, Some(keyuri)) => (get_pair_from_phrase(keyuri)?, keyname.to_string()),
             // If keyfile, keyname, and secret phrase are provided
             (Some(_file_path), Some(keyname), None, Some(keyuri)) => {
                 (get_pair_from_phrase(keyuri)?, keyname.to_string())
