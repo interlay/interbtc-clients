@@ -10,37 +10,64 @@ use subxt::ext::sp_core::{sr25519::Pair, Pair as _};
 
 #[derive(Parser, Debug, Clone)]
 pub struct ProviderUserOpts {
-    /// Keyring to use, mutually exclusive with keyfile.
-    #[clap(long, conflicts_with = "keyfile", value_parser = parse_account_keyring)]
+    /// Keyring to use, mutually exclusive with keyname.
+    #[clap(long, conflicts_with_all = ["keyfile","keyuri"], value_parser = parse_account_keyring)]
     pub keyring: Option<AccountKeyring>,
 
     /// Path to the json file containing key pairs in a map.
     /// Valid content of this file is e.g.
     /// `{ "MyUser1": "<Polkadot Account Mnemonic>", "MyUser2": "<Polkadot Account Mnemonic>" }`.
-    #[clap(long, conflicts_with = "keyring", requires = "keyname")]
+    #[clap(long, conflicts_with_all = ["keyring"], requires = "keyname", required_unless_present_any = ["keyring","keyuri"])]
     pub keyfile: Option<String>,
 
     /// The name of the account from the keyfile to use.
-    #[clap(long, conflicts_with = "keyring", requires = "keyfile")]
+    #[clap(long, conflicts_with = "keyring", required_unless_present = "keyring")]
     pub keyname: Option<String>,
+
+    /// The name of the account from the keyfile to use.
+    #[clap(long, conflicts_with_all = ["keyring"], requires = "keyname", required_unless_present_any = ["keyring","keyfile"])]
+    pub keyuri: Option<String>,
 }
 
 impl ProviderUserOpts {
     /// Get the key pair and the username, the latter of which is used for wallet selection.
     pub fn get_key_pair(&self) -> Result<(Pair, String), Error> {
-        // load parachain credentials
-        let (pair, user_name) = match (self.keyfile.as_ref(), self.keyname.as_ref(), &self.keyring) {
-            (Some(file_path), Some(keyname), None) => {
+        // Load parachain credentials
+        let (pair, user_name) = match (
+            self.keyfile.as_ref(), // Check if keyfile is provided
+            self.keyname.as_ref(), // Check if keyname is provided
+            &self.keyring,         // Check if keyring is available
+            self.keyuri.as_ref(),  // Check if secret phrase is provided
+        ) {
+            // If keyfile and keyname are provided
+            (Some(file_path), Some(keyname), None, None) => {
                 (get_credentials_from_file(file_path, keyname)?, keyname.to_string())
             }
-            (None, None, Some(keyring)) => (keyring.pair(), keyring.to_string()),
+            // If keyname and secret phrase are provided
+            (None, Some(keyname), None, Some(keyuri)) => (get_pair_from_phrase(keyuri)?, keyname.to_string()),
+            // If keyfile, keyname, and secret phrase are provided
+            (Some(_file_path), Some(keyname), None, Some(keyuri)) => {
+                (get_pair_from_phrase(keyuri)?, keyname.to_string())
+            }
+            // If insufficient credentials are provided, perform sanity check
+            (None, None, Some(keyring), None) => (keyring.pair(), keyring.to_string()),
             _ => {
-                // should never occur, due to clap constraints
+                // This branch should never occur due to clap constraints
                 return Err(Error::KeyringArgumentError);
             }
         };
+
         Ok((pair, user_name))
     }
+}
+
+/// Creates a key pair from phrase
+///
+/// # Arguments
+///
+/// * `keyuri` - secret phrase to generate pair
+fn get_pair_from_phrase(keyuri: &String) -> Result<Pair, KeyLoadingError> {
+    Pair::from_string(keyuri, None).map_err(KeyLoadingError::SecretStringError)
 }
 
 /// Loads the credentials for the given user from the keyfile
@@ -54,7 +81,7 @@ fn get_credentials_from_file(file_path: &str, keyname: &str) -> Result<Pair, Key
     let reader = std::io::BufReader::new(file);
     let map: HashMap<String, String> = serde_json::from_reader(reader)?;
     let pair_str = map.get(keyname).ok_or(KeyLoadingError::KeyNotFound)?;
-    let pair = Pair::from_string(pair_str, None).map_err(KeyLoadingError::SecretStringError)?;
+    let pair = get_pair_from_phrase(pair_str)?;
     Ok(pair)
 }
 

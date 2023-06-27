@@ -16254,6 +16254,21 @@ dependencies = [
 ]
 
 [[patch.unused]]
+name = "kusama-runtime"
+version = "0.9.40"
+source = "git+https://github.com/paritytech//polkadot?branch=release-v0.9.40#95fe4c8862810bffd68343231a517e62689c05c0"
+
+[[patch.unused]]
+name = "kusama-runtime-constants"
+version = "0.9.40"
+source = "git+https://github.com/paritytech//polkadot?branch=release-v0.9.40#95fe4c8862810bffd68343231a517e62689c05c0"
+
+[[patch.unused]]
+name = "polkadot-performance-test"
+version = "0.9.40"
+source = "git+https://github.com/paritytech//polkadot?branch=release-v0.9.40#95fe4c8862810bffd68343231a517e62689c05c0"
+
+[[patch.unused]]
 name = "pallet-conviction-voting"
 version = "4.0.0-dev"
 source = "git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.40#98f2e3451c9143278ec53c6718940aeabcd3b68a"
@@ -16287,18 +16302,3 @@ source = "git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.40#9
 name = "pallet-whitelist"
 version = "4.0.0-dev"
 source = "git+https://github.com/paritytech//substrate?branch=polkadot-v0.9.40#98f2e3451c9143278ec53c6718940aeabcd3b68a"
-
-[[patch.unused]]
-name = "kusama-runtime"
-version = "0.9.40"
-source = "git+https://github.com/paritytech//polkadot?branch=release-v0.9.40#95fe4c8862810bffd68343231a517e62689c05c0"
-
-[[patch.unused]]
-name = "kusama-runtime-constants"
-version = "0.9.40"
-source = "git+https://github.com/paritytech//polkadot?branch=release-v0.9.40#95fe4c8862810bffd68343231a517e62689c05c0"
-
-[[patch.unused]]
-name = "polkadot-performance-test"
-version = "0.9.40"
-source = "git+https://github.com/paritytech//polkadot?branch=release-v0.9.40#95fe4c8862810bffd68343231a517e62689c05c0"
