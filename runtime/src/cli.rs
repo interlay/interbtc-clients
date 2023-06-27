@@ -11,13 +11,13 @@ use subxt::ext::sp_core::{sr25519::Pair, Pair as _};
 #[derive(Parser, Debug, Clone)]
 pub struct ProviderUserOpts {
     /// Keyring to use, mutually exclusive with keyname.
-    #[clap(long, conflicts_with_all = ["keyfile","secret_phrase"], value_parser = parse_account_keyring)]
+    #[clap(long, conflicts_with_all = ["keyfile","keyuri"], value_parser = parse_account_keyring)]
     pub keyring: Option<AccountKeyring>,
 
     /// Path to the json file containing key pairs in a map.
     /// Valid content of this file is e.g.
     /// `{ "MyUser1": "<Polkadot Account Mnemonic>", "MyUser2": "<Polkadot Account Mnemonic>" }`.
-    #[clap(long, conflicts_with_all = ["keyring"], requires = "keyname", required_unless_present_any = ["keyring","secret_phrase"])]
+    #[clap(long, conflicts_with_all = ["keyring"], requires = "keyname", required_unless_present_any = ["keyring","keyuri"])]
     pub keyfile: Option<String>,
 
     /// The name of the account from the keyfile to use.
@@ -26,7 +26,7 @@ pub struct ProviderUserOpts {
 
     /// The name of the account from the keyfile to use.
     #[clap(long, conflicts_with_all = ["keyring"], requires = "keyname", required_unless_present_any = ["keyring","keyfile"])]
-    pub secret_phrase: Option<String>,
+    pub keyuri: Option<String>,
 }
 
 impl ProviderUserOpts {
@@ -37,19 +37,19 @@ impl ProviderUserOpts {
             self.keyfile.as_ref(),       // Check if keyfile is provided
             self.keyname.as_ref(),       // Check if keyname is provided
             &self.keyring,               // Check if keyring is available
-            self.secret_phrase.as_ref(), // Check if secret phrase is provided
+            self.keyuri.as_ref(), // Check if secret phrase is provided
         ) {
             // If keyfile and keyname are provided
             (Some(file_path), Some(keyname), None, None) => {
                 (get_credentials_from_file(file_path, keyname)?, keyname.to_string())
             }
             // If keyname and secret phrase are provided
-            (None, Some(keyname), None, Some(secret_phrase)) => {
-                (get_pair_from_phrase(secret_phrase)?, keyname.to_string())
+            (None, Some(keyname), None, Some(keyuri)) => {
+                (get_pair_from_phrase(keyuri)?, keyname.to_string())
             }
             // If keyfile, keyname, and secret phrase are provided
-            (Some(_file_path), Some(keyname), None, Some(secret_phrase)) => {
-                (get_pair_from_phrase(secret_phrase)?, keyname.to_string())
+            (Some(_file_path), Some(keyname), None, Some(keyuri)) => {
+                (get_pair_from_phrase(keyuri)?, keyname.to_string())
             }
             // If insufficient credentials are provided, perform sanity check
             (None, None, Some(keyring), None) => (keyring.pair(), keyring.to_string()),
@@ -67,9 +67,9 @@ impl ProviderUserOpts {
 ///
 /// # Arguments
 ///
-/// * `secret_phrase` - secret phrase to generate pair
-fn get_pair_from_phrase(secret_phrase: &String) -> Result<Pair, KeyLoadingError> {
-    Pair::from_string(secret_phrase, None).map_err(KeyLoadingError::SecretStringError)
+/// * `keyuri` - secret phrase to generate pair
+fn get_pair_from_phrase(keyuri: &String) -> Result<Pair, KeyLoadingError> {
+    Pair::from_string(keyuri, None).map_err(KeyLoadingError::SecretStringError)
 }
 
 /// Loads the credentials for the given user from the keyfile
