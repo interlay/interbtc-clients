@@ -840,6 +840,7 @@ async fn test_execute_open_requests_succeeds() {
                 0,
                 Duration::from_secs(0),
                 true,
+                false,
             )
             .map(Result::unwrap),
             assert_redeem_event(TIMEOUT, user_provider.clone(), redeem_ids[0]),

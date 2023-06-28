@@ -69,10 +69,10 @@ pub struct VaultServiceConfig {
     #[clap(long)]
     pub no_issue_execution: bool,
 
-    /// Don't try to execute **all** redeem and replace requests,
+    /// Try to execute **all** redeem and replace requests,
     /// the Vault will still submit proofs for their own
     #[clap(long)]
-    pub no_execute_all: bool,
+    pub execute_all: bool,
 
     /// Don't run the RPC API.
     #[clap(long)]
@@ -637,7 +637,7 @@ impl VaultService {
             num_confirmations,
             self.config.payment_margin_minutes,
             self.config.auto_rbf,
-            self.config.no_execute_all,
+            self.config.execute_all,
         );
 
         let shutdown_clone = self.shutdown.clone();
