@@ -42,4 +42,6 @@ pub enum Error {
     MathError,
     #[error("Terms and conditions not signed")]
     SignatureMissing,
+    #[error("Faucet has reached max number of concurrent requests")]
+    Busy,
 }

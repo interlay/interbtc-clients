@@ -16,7 +16,7 @@ use runtime::{
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{net::SocketAddr, time::Duration};
 use tokio::{
-    sync::{Mutex, MutexGuard},
+    sync::{Mutex, MutexGuard, Semaphore},
     time::timeout,
 };
 
@@ -25,6 +25,11 @@ const KV_STORE_NAME: &str = "store";
 
 lazy_static! {
     static ref LOCK: Mutex<()> = Mutex::new(());
+    static ref CONCURRENCY_LIMITER: Semaphore = Semaphore::new(0);
+}
+
+pub(crate) fn set_concurrency_limit(n: usize) {
+    CONCURRENCY_LIMITER.add_permits(n);
 }
 
 #[derive(Serialize, Deserialize, PartialEq)]
@@ -279,6 +284,10 @@ async fn fund_account(
     store: Store,
     allowance_config: AllowanceConfig,
 ) -> Result<(), Error> {
+    // Acquire a semaphore permit - this is used to track the number of concurrent requests. When this permit
+    // is dropped, the permit is automatically released
+    let _concurrency_limit_permit = CONCURRENCY_LIMITER.try_acquire().map_err(|_| Error::Busy);
+
     let parachain_rpc = parachain_rpc.clone();
     let kv = open_kv_store(store)?;
     match atomic_faucet_funding(&parachain_rpc, &kv, req.account_id.clone(), allowance_config).await {
@@ -461,6 +470,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_fund_user_once_succeeds() {
+        set_concurrency_limit(999);
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
 
@@ -497,6 +507,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_fund_rich_user_fails() {
+        set_concurrency_limit(999);
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
 
@@ -530,6 +541,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_fund_user_immediately_after_registering_as_vault_succeeds() {
+        set_concurrency_limit(999);
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
 
@@ -589,6 +601,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_fund_user_twice_in_a_row_fails() {
+        set_concurrency_limit(999);
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
 
@@ -630,6 +643,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_fund_vault_once_succeeds() {
+        set_concurrency_limit(999);
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
 
@@ -685,6 +699,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_fund_vault_twice_in_a_row_fails() {
+        set_concurrency_limit(999);
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
 
