@@ -380,7 +380,9 @@ mod tests {
     const DEFAULT_GOVERNANCE_CURRENCY: CurrencyId = Token(KINT);
     const DEFAULT_WRAPPED_CURRENCY: CurrencyId = Token(KBTC);
 
-    use super::{fund_account, open_kv_store, CollateralBalancesPallet, FundAccountJsonRpcRequest};
+    use super::{
+        fund_account, open_kv_store, set_concurrency_limit, CollateralBalancesPallet, FundAccountJsonRpcRequest,
+    };
     use kv::{Config, Store};
     use runtime::{
         integration::*, AccountId, BtcPublicKey, FixedPointNumber, FixedU128, OraclePallet, VaultRegistryPallet,
