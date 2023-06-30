@@ -108,6 +108,13 @@ impl From<module_bitcoin::Error> for Error {
 }
 
 impl Error {
+    pub fn is_any_module_err(&self) -> bool {
+        matches!(
+            self,
+            Error::SubxtRuntimeError(SubxtError::Runtime(DispatchError::Module(_))),
+        )
+    }
+
     fn is_module_err(&self, pallet_name: &str, error_name: &str) -> bool {
         if let Error::SubxtRuntimeError(SubxtError::Runtime(DispatchError::Module(module_error))) = self {
             if let Ok(details) = module_error.details() {

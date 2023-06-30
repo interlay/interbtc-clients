@@ -31,6 +31,10 @@ kv = { version = "0.22.0", features = ["json-value"] }
 async-trait = "0.1.40"
 futures = "0.3.5"
 git-version = "0.3.4"
+lazy_static = "1.4.0"
+
+reqwest = { version = "0.11.11", features = ["json"] }
+url = "2.2.2"
 
 # Workspace dependencies
 runtime = { path = "../runtime" }

@@ -838,7 +838,7 @@ pub trait CollateralBalancesPallet {
 
     async fn get_reserved_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<Balance, Error>;
 
-    async fn transfer_to(&self, recipient: &AccountId, amount: u128, currency_id: CurrencyId) -> Result<(), Error>;
+    async fn transfer_to(&self, recipient: &AccountId, amounts: Vec<(u128, CurrencyId)>) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -863,14 +863,20 @@ impl CollateralBalancesPallet for InterBtcParachain {
         todo!()
     }
 
-    async fn transfer_to(&self, recipient: &AccountId, amount: u128, currency_id: CurrencyId) -> Result<(), Error> {
-        self.with_unique_signer(metadata::tx().tokens().transfer(
-            Static::from(recipient.clone()),
-            Static::from(currency_id),
-            amount,
-        ))
-        .await?;
-        Ok(())
+    async fn transfer_to(&self, recipient: &AccountId, amounts: Vec<(u128, CurrencyId)>) -> Result<(), Error> {
+        self.batch(
+            amounts
+                .into_iter()
+                .map(|(amount, currency_id)| {
+                    EncodedCall::Tokens(metadata::runtime_types::orml_tokens::module::Call::transfer {
+                        dest: recipient.clone(),
+                        currency_id,
+                        amount,
+                    })
+                })
+                .collect(),
+        )
+            .await
     }
 }
 

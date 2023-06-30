@@ -40,6 +40,7 @@ pub struct AllowanceConfig {
     pub faucet_cooldown_hours: i64,
     pub user_allowances: Allowance,
     pub vault_allowances: Allowance,
+    pub auth_url: Option<String>,
 }
 
 impl AllowanceConfig {
@@ -54,6 +55,7 @@ impl AllowanceConfig {
             faucet_cooldown_hours,
             user_allowances,
             vault_allowances,
+            auth_url: None,
         }
     }
 }
@@ -67,6 +69,10 @@ pub struct FaucetConfig {
     /// Comma separated list of allowed origins.
     #[clap(long, default_value = "*")]
     rpc_cors_domain: String,
+
+    /// Maximum amount of concurrent transactions. Used as spam protection.
+    #[clap(long, default_value = "999")]
+    max_concurrent_transactions: usize,
 }
 
 #[tokio::main]
@@ -75,6 +81,7 @@ async fn main() -> Result<(), Error> {
         env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, log::LevelFilter::Info.as_str()),
     );
     let opts: Opts = Opts::parse();
+    http::set_concurrency_limit(opts.faucet.max_concurrent_transactions);
 
     let (key_pair, _) = opts.account_info.get_key_pair()?;
     let signer = InterBtcSigner::new(key_pair);
