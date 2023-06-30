@@ -13,6 +13,7 @@ pub use primitives::CurrencyId::ForeignAsset;
 use primitives::CurrencyId::LendToken;
 use sp_keyring::AccountKeyring;
 use std::time::Duration;
+use subxt::utils::Static;
 
 fn dummy_public_key() -> BtcPublicKey {
     BtcPublicKey {
@@ -25,7 +26,7 @@ fn dummy_public_key() -> BtcPublicKey {
 
 async fn set_exchange_rate(client: SubxtClient) {
     let oracle_provider = setup_provider(client, AccountKeyring::Bob).await;
-    let key = OracleKey::ExchangeRate(DEFAULT_TESTING_CURRENCY);
+    let key = OracleKey::ExchangeRate(Static(DEFAULT_TESTING_CURRENCY));
     let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
     oracle_provider
         .feed_values(vec![(key, exchange_rate)])
@@ -85,7 +86,7 @@ async fn test_subxt_processing_events_after_dispatch_error() {
             true
         });
 
-    let key = OracleKey::ExchangeRate(DEFAULT_TESTING_CURRENCY);
+    let key = OracleKey::ExchangeRate(Static(DEFAULT_TESTING_CURRENCY));
     let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
 
     let result = tokio::join!(

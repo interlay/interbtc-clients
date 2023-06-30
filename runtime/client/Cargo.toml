@@ -15,9 +15,9 @@ keywords = ["parity", "substrate", "blockchain"]
 tokio = { version = "1.10", features = ["time", "rt-multi-thread"] }
 futures = { version = "0.3.9", features = ["compat"], package = "futures" }
 futures01 = { package = "futures", version = "0.1.29" }
-jsonrpsee = "0.16.2"
-jsonrpsee-types = "0.16.2"
-jsonrpsee-core = { version = "0.16.2", features = ["async-client"] }
+jsonrpsee = "0.16"
+jsonrpsee-types = "0.16"
+jsonrpsee-core = { version = "0.16", features = ["async-client"] }
 
 log = "0.4.13"
 serde_json = "1.0.61"
@@ -28,6 +28,6 @@ sc-network = { git = "https://github.com/paritytech/substrate", branch = "polkad
 sc-network-common = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.40", default-features = false }
 sc-service = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.40", default-features = false }
 # needs to agree with subxt's version
-sp-keyring = { version = "7.0.0" }
+sp-keyring = { version = "24.0.0" }
 
-subxt = "0.25.0"
+subxt = "0.29.0"

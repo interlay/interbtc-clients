@@ -14,7 +14,7 @@ use futures::{
 };
 use sp_keyring::AccountKeyring;
 use std::{sync::Arc, time::Duration};
-use subxt::events::StaticEvent as Event;
+use subxt::{events::StaticEvent as Event, utils::Static};
 use subxt_client::{
     DatabaseSource, JsonRpcClient, KeystoreConfig, Role, SubxtClientConfig, WasmExecutionMethod,
     WasmtimeInstantiationStrategy,
@@ -133,7 +133,7 @@ pub async fn assert_issue(
         .unwrap();
 
     parachain_rpc
-        .execute_issue(issue.issue_id, &metadata.proof, &metadata.raw_tx)
+        .execute_issue(*issue.issue_id, &metadata.proof, &metadata.raw_tx)
         .await
         .unwrap();
 }
@@ -149,7 +149,7 @@ async fn wait_for_aggregate(parachain_rpc: &InterBtcParachain, key: &OracleKey) 
 }
 
 pub async fn set_exchange_rate_and_wait(parachain_rpc: &InterBtcParachain, currency_id: CurrencyId, value: FixedU128) {
-    let key = OracleKey::ExchangeRate(currency_id);
+    let key = OracleKey::ExchangeRate(Static::from(currency_id));
     assert_ok!(parachain_rpc.feed_values(vec![(key.clone(), value)]).await);
     parachain_rpc.manual_seal().await; // we need a new block to get on_initialize to run
     assert_ok!(timeout(TIMEOUT_DURATION, wait_for_aggregate(parachain_rpc, &key)).await);

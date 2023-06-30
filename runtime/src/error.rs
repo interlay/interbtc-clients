@@ -109,12 +109,12 @@ impl From<module_bitcoin::Error> for Error {
 
 impl Error {
     fn is_module_err(&self, pallet_name: &str, error_name: &str) -> bool {
-        matches!(
-            self,
-            Error::SubxtRuntimeError(SubxtError::Runtime(DispatchError::Module(ModuleError{
-                pallet, error, ..
-            }))) if pallet == pallet_name && error == error_name,
-        )
+        if let Error::SubxtRuntimeError(SubxtError::Runtime(DispatchError::Module(module_error))) = self {
+            if let Ok(details) = module_error.details() {
+                return details.pallet.name() == pallet_name && details.variant.name == error_name;
+            }
+        }
+        false
     }
 
     pub fn is_duplicate_block(&self) -> bool {
@@ -196,7 +196,7 @@ impl Error {
     pub fn is_block_hash_not_found_error(&self) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(SubxtError::Transaction(TransactionError::BlockHashNotFound))
+            Error::SubxtRuntimeError(SubxtError::Transaction(TransactionError::BlockNotFound))
         )
     }
 

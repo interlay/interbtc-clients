@@ -22,9 +22,10 @@ pub mod integration;
 use codec::{Decode, Encode};
 use std::marker::PhantomData;
 use subxt::{
+    config::polkadot::PolkadotExtrinsicParams,
     ext::sp_runtime::{generic::Header, traits::BlakeTwo256, MultiSignature},
     subxt,
-    tx::PolkadotExtrinsicParams,
+    utils::MultiAddress,
     Config,
 };
 
@@ -79,6 +80,25 @@ pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
         derive_for_type(type = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
         derive_for_type(type = "security::types::ErrorCode", derive = "Eq, PartialEq, Ord, PartialOrd"),
         derive_for_type(type = "security::types::StatusCode", derive = "Eq, PartialEq"),
+    // substitute_type(path = "BTreeSet<T>", with = "::subxt::utils::Static<crate::BTreeSet<T>>"),
+    substitute_type(path = "primitive_types::H256", with = "::subxt::utils::Static<crate::H256>"),
+    substitute_type(path = "primitive_types::U256", with = "::subxt::utils::Static<crate::U256>"),
+    substitute_type(path = "primitive_types::H160", with = "::subxt::utils::Static<crate::H160>"),
+    substitute_type(path = "sp_core::crypto::AccountId32", with = "crate::AccountId"),
+    substitute_type(path = "sp_arithmetic::fixed_point::FixedU128", with = "::subxt::utils::Static<crate::FixedU128>"),
+    substitute_type(path = "sp_arithmetic::per_things::Permill", with = "::subxt::utils::Static<crate::Ratio>"),
+    substitute_type(path = "bitcoin::address::Address", with = "::subxt::utils::Static<crate::BtcAddress>"),
+    substitute_type(path = "interbtc_primitives::CurrencyId", with = "::subxt::utils::Static<crate::CurrencyId>"),
+    substitute_type(
+    path = "frame_support::traits::misc::WrapperKeepOpaque",
+    with = "::subxt::utils::Static<crate::WrapperKeepOpaque>"
+    ),
+    substitute_type(path = "bitcoin::types::BlockHeader", with = "::subxt::utils::Static<::module_bitcoin::types::BlockHeader>"),
+    substitute_type(
+    path = "bitcoin::merkle::MerkleProof",
+    with = "::subxt::utils::Static<::module_bitcoin::merkle::MerkleProof>"
+    ),
+    substitute_type(path = "bitcoin::types::Transaction", with = "::subxt::utils::Static<::module_bitcoin::types::Transaction>"),
     )
 )]
 #[cfg_attr(
@@ -98,6 +118,25 @@ pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
         derive_for_type(type = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
         derive_for_type(type = "security::types::ErrorCode", derive = "Eq, PartialEq, Ord, PartialOrd"),
         derive_for_type(type = "security::types::StatusCode", derive = "Eq, PartialEq"),
+    // substitute_type(path = "BTreeSet<T>", with = "::subxt::utils::Static<crate::BTreeSet<T>>"),
+    substitute_type(path = "primitive_types::H256", with = "::subxt::utils::Static<crate::H256>"),
+    substitute_type(path = "primitive_types::U256", with = "::subxt::utils::Static<crate::U256>"),
+    substitute_type(path = "primitive_types::H160", with = "::subxt::utils::Static<crate::H160>"),
+    substitute_type(path = "sp_core::crypto::AccountId32", with = "crate::AccountId"),
+    substitute_type(path = "sp_arithmetic::fixed_point::FixedU128", with = "::subxt::utils::Static<crate::FixedU128>"),
+    substitute_type(path = "sp_arithmetic::per_things::Permill", with = "::subxt::utils::Static<crate::Ratio>"),
+    substitute_type(path = "bitcoin::address::Address", with = "::subxt::utils::Static<crate::BtcAddress>"),
+    substitute_type(path = "interbtc_primitives::CurrencyId", with = "::subxt::utils::Static<crate::CurrencyId>"),
+    substitute_type(
+    path = "frame_support::traits::misc::WrapperKeepOpaque",
+    with = "::subxt::utils::Static<crate::WrapperKeepOpaque>"
+    ),
+    substitute_type(path = "bitcoin::types::BlockHeader", with = "::subxt::utils::Static<::module_bitcoin::types::BlockHeader>"),
+    substitute_type(
+    path = "bitcoin::merkle::MerkleProof",
+    with = "::subxt::utils::Static<::module_bitcoin::merkle::MerkleProof>"
+    ),
+    substitute_type(path = "bitcoin::types::Transaction", with = "::subxt::utils::Static<::module_bitcoin::types::Transaction>"),
     )
 )]
 #[cfg_attr(
@@ -105,18 +144,37 @@ pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
     subxt(
         runtime_metadata_path = "metadata-parachain-interlay-testnet.scale",
         derive_for_all_types = "Clone",
-        derive_for_type(type = "bitcoin::address::PublicKey", derive = "Eq, PartialEq"),
-        derive_for_type(type = "bitcoin::types::H256Le", derive = "Eq, PartialEq"),
-        derive_for_type(type = "interbtc_primitives::issue::IssueRequestStatus", derive = "Eq, PartialEq"),
-        derive_for_type(type = "interbtc_primitives::redeem::RedeemRequestStatus", derive = "Eq, PartialEq"),
+        derive_for_type(path = "bitcoin::address::PublicKey", derive = "Eq, PartialEq"),
+        derive_for_type(path = "bitcoin::types::H256Le", derive = "Eq, PartialEq"),
+        derive_for_type(path = "interbtc_primitives::issue::IssueRequestStatus", derive = "Eq, PartialEq"),
+        derive_for_type(path = "interbtc_primitives::redeem::RedeemRequestStatus", derive = "Eq, PartialEq"),
         derive_for_type(
-            type = "interbtc_primitives::replace::ReplaceRequestStatus",
+            path = "interbtc_primitives::replace::ReplaceRequestStatus",
             derive = "Eq, PartialEq"
         ),
-        derive_for_type(type = "interbtc_primitives::VaultCurrencyPair", derive = "Eq, PartialEq"),
-        derive_for_type(type = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
-        derive_for_type(type = "security::types::ErrorCode", derive = "Eq, PartialEq, Ord, PartialOrd"),
-        derive_for_type(type = "security::types::StatusCode", derive = "Eq, PartialEq"),
+        derive_for_type(path = "interbtc_primitives::VaultCurrencyPair", derive = "Eq, PartialEq"),
+        derive_for_type(path = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
+        derive_for_type(path = "security::types::ErrorCode", derive = "Eq, PartialEq, Ord, PartialOrd"),
+        derive_for_type(path = "security::types::StatusCode", derive = "Eq, PartialEq"),
+    // substitute_type(path = "BTreeSet<T>", with = "::subxt::utils::Static<crate::BTreeSet<T>>"),
+    substitute_type(path = "primitive_types::H256", with = "::subxt::utils::Static<crate::H256>"),
+    substitute_type(path = "primitive_types::U256", with = "::subxt::utils::Static<crate::U256>"),
+    substitute_type(path = "primitive_types::H160", with = "::subxt::utils::Static<crate::H160>"),
+    substitute_type(path = "sp_core::crypto::AccountId32", with = "crate::AccountId"),
+    substitute_type(path = "sp_arithmetic::fixed_point::FixedU128", with = "::subxt::utils::Static<crate::FixedU128>"),
+    substitute_type(path = "sp_arithmetic::per_things::Permill", with = "::subxt::utils::Static<crate::Ratio>"),
+    substitute_type(path = "bitcoin::address::Address", with = "::subxt::utils::Static<crate::BtcAddress>"),
+    substitute_type(path = "interbtc_primitives::CurrencyId", with = "::subxt::utils::Static<crate::CurrencyId>"),
+    substitute_type(
+    path = "frame_support::traits::misc::WrapperKeepOpaque",
+    with = "::subxt::utils::Static<crate::WrapperKeepOpaque>"
+    ),
+    substitute_type(path = "bitcoin::types::BlockHeader", with = "::subxt::utils::Static<::module_bitcoin::types::BlockHeader>"),
+    substitute_type(
+    path = "bitcoin::merkle::MerkleProof",
+    with = "::subxt::utils::Static<::module_bitcoin::merkle::MerkleProof>"
+    ),
+    substitute_type(path = "bitcoin::types::Transaction", with = "::subxt::utils::Static<::module_bitcoin::types::Transaction>"),
     )
 )]
 #[cfg_attr(
@@ -124,60 +182,41 @@ pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
     subxt(
         runtime_metadata_path = "metadata-parachain-kintsugi-testnet.scale",
         derive_for_all_types = "Clone",
-        derive_for_type(type = "bitcoin::address::PublicKey", derive = "Eq, PartialEq"),
-        derive_for_type(type = "bitcoin::types::H256Le", derive = "Eq, PartialEq"),
-        derive_for_type(type = "interbtc_primitives::issue::IssueRequestStatus", derive = "Eq, PartialEq"),
-        derive_for_type(type = "interbtc_primitives::redeem::RedeemRequestStatus", derive = "Eq, PartialEq"),
+        derive_for_type(path = "bitcoin::address::PublicKey", derive = "Eq, PartialEq"),
+        derive_for_type(path = "bitcoin::types::H256Le", derive = "Eq, PartialEq"),
+        derive_for_type(path = "interbtc_primitives::issue::IssueRequestStatus", derive = "Eq, PartialEq"),
+        derive_for_type(path = "interbtc_primitives::redeem::RedeemRequestStatus", derive = "Eq, PartialEq"),
         derive_for_type(
-            type = "interbtc_primitives::replace::ReplaceRequestStatus",
+            path = "interbtc_primitives::replace::ReplaceRequestStatus",
             derive = "Eq, PartialEq"
         ),
-        derive_for_type(type = "interbtc_primitives::VaultCurrencyPair", derive = "Eq, PartialEq"),
-        derive_for_type(type = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
-        derive_for_type(type = "security::types::ErrorCode", derive = "Eq, PartialEq, Ord, PartialOrd"),
-        derive_for_type(type = "security::types::StatusCode", derive = "Eq, PartialEq"),
+        derive_for_type(path = "interbtc_primitives::VaultCurrencyPair", derive = "Eq, PartialEq"),
+        derive_for_type(path = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
+        derive_for_type(path = "security::types::ErrorCode", derive = "Eq, PartialEq, Ord, PartialOrd"),
+        derive_for_type(path = "security::types::StatusCode", derive = "Eq, PartialEq"),
+        // substitute_type(path = "BTreeSet<T>", with = "::subxt::utils::Static<crate::BTreeSet<T>>"),
+        substitute_type(path = "primitive_types::H256", with = "::subxt::utils::Static<crate::H256>"),
+        substitute_type(path = "primitive_types::U256", with = "::subxt::utils::Static<crate::U256>"),
+        substitute_type(path = "primitive_types::H160", with = "::subxt::utils::Static<crate::H160>"),
+        substitute_type(path = "sp_core::crypto::AccountId32", with = "::subxt::utils::Static<crate::AccountId>"),
+        substitute_type(path = "sp_arithmetic::fixed_point::FixedU128", with = "::subxt::utils::Static<crate::FixedU128>"),
+        substitute_type(path = "sp_arithmetic::per_things::Permill", with = "::subxt::utils::Static<crate::Ratio>"),
+        substitute_type(path = "bitcoin::address::Address", with = "::subxt::utils::Static<crate::BtcAddress>"),
+        substitute_type(path = "interbtc_primitives::CurrencyId", with = "::subxt::utils::Static<crate::CurrencyId>"),
+        substitute_type(
+            path = "frame_support::traits::misc::WrapperKeepOpaque",
+            with = "::subxt::utils::Static<crate::WrapperKeepOpaque>"
+        ),
+        substitute_type(path = "bitcoin::types::BlockHeader", with = "::subxt::utils::Static<::module_bitcoin::types::BlockHeader>"),
+        substitute_type(
+            path = "bitcoin::merkle::MerkleProof",
+            with = "::subxt::utils::Static<::module_bitcoin::merkle::MerkleProof>"
+        ),
+        substitute_type(path = "bitcoin::types::Transaction", with = "::subxt::utils::Static<::module_bitcoin::types::Transaction>"),
     )
 )]
-pub mod metadata {
-    #[subxt(substitute_type = "BTreeSet")]
-    use crate::BTreeSet;
 
-    #[subxt(substitute_type = "primitive_types::H256")]
-    use crate::H256;
-
-    #[subxt(substitute_type = "primitive_types::U256")]
-    use crate::U256;
-
-    #[subxt(substitute_type = "primitive_types::H160")]
-    use crate::H160;
-
-    #[subxt(substitute_type = "sp_core::crypto::AccountId32")]
-    use crate::AccountId;
-
-    #[subxt(substitute_type = "sp_arithmetic::fixed_point::FixedU128")]
-    use crate::FixedU128;
-
-    #[subxt(substitute_type = "sp_arithmetic::per_things::Permill")]
-    use crate::Ratio;
-
-    #[subxt(substitute_type = "bitcoin::address::Address")]
-    use crate::BtcAddress;
-
-    #[subxt(substitute_type = "interbtc_primitives::CurrencyId")]
-    use crate::CurrencyId;
-
-    #[subxt(substitute_type = "frame_support::traits::misc::WrapperKeepOpaque")]
-    use crate::WrapperKeepOpaque;
-
-    #[subxt(substitute_type = "bitcoin::types::BlockHeader")]
-    use ::module_bitcoin::types::BlockHeader;
-
-    #[subxt(substitute_type = "bitcoin::merkle::MerkleProof")]
-    use ::module_bitcoin::merkle::MerkleProof;
-
-    #[subxt(substitute_type = "bitcoin::types::Transaction")]
-    use ::module_bitcoin::types::Transaction;
-}
+pub mod metadata {}
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Default, Clone, Decode, Encode)]
 pub struct WrapperKeepOpaque<T> {
@@ -188,15 +227,19 @@ pub struct WrapperKeepOpaque<T> {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct InterBtcRuntime;
 
+use subxt::{
+    config::{substrate::SubstrateExtrinsicParams, SubstrateConfig},
+    OnlineClient,
+};
+
 impl Config for InterBtcRuntime {
-    type Index = Index;
-    type BlockNumber = BlockNumber;
-    type Hash = H256;
-    type Hashing = BlakeTwo256;
+    type Index = <SubstrateConfig as Config>::Index;
+    type Hash = <SubstrateConfig as Config>::Hash;
     type AccountId = AccountId;
-    type Address = Self::AccountId;
-    type Header = Header<Self::BlockNumber, BlakeTwo256>;
-    type Signature = MultiSignature;
+    type Address = MultiAddress<Self::AccountId, ()>;
+    type Signature = <SubstrateConfig as Config>::Signature;
+    type Hasher = <SubstrateConfig as Config>::Hasher;
+    type Header = <SubstrateConfig as Config>::Header;
     type ExtrinsicParams = PolkadotExtrinsicParams<Self>;
 }
 

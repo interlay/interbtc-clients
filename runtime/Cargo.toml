@@ -37,14 +37,14 @@ lazy_static = "1.4.0"
 # Substrate dependencies
 sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.40" }
 # needs to agree with subxt's version
-sp-keyring = { version = "7.0.0", default_features = false }
+sp-keyring = { version = "24.0.0", default_features = false }
 sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.40" }
 frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.40" }
 
 # Subxt dependencies
-subxt = "0.25.0"
+subxt = { version = "0.29.0", features = ["substrate-compat"] }
 subxt-client = { path = "./client", optional = true }
-jsonrpsee = { version = "0.16.2", features = ["async-client", "client-ws-transport", "macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
+jsonrpsee = { version = "0.16", features = ["async-client", "client-ws-transport", "macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
 
 bitcoin = { path = "../bitcoin" }
 

@@ -1,15 +1,14 @@
 use crate::{metadata, Config, InterBtcRuntime, RuntimeCurrencyInfo, SS58_PREFIX};
 pub use metadata_aliases::*;
-pub use subxt::ext::sp_core::{crypto::Ss58Codec, sr25519::Pair as KeyPair};
-use subxt::{
-    metadata::DecodeStaticType,
-    storage::{address::Yes, StaticStorageAddress},
-};
-
 pub use primitives::{
     CurrencyId,
     CurrencyId::{ForeignAsset, LendToken, Token},
     TokenSymbol::{self, DOT, IBTC, INTR, KBTC, KINT, KSM},
+};
+pub use subxt::ext::sp_core::{crypto::Ss58Codec, sr25519::Pair as KeyPair};
+use subxt::{
+    storage::{address::Yes, Address},
+    utils::Static,
 };
 
 pub use currency_id::CurrencyIdExt;
@@ -39,8 +38,9 @@ pub(crate) enum StorageMapHasher {
 
 mod metadata_aliases {
     use super::*;
-
     pub use metadata::runtime_types::bitcoin::address::PublicKey as BtcPublicKey;
+    use std::marker::PhantomData;
+    use subxt::storage::address::StaticStorageMapKey;
 
     pub use metadata::runtime_types::interbtc_primitives::oracle::Key as OracleKey;
 
@@ -89,7 +89,7 @@ mod metadata_aliases {
     };
     pub type AssetMetadata = GenericAssetMetadata<Balance, InterBtcAdditionalMetadata>;
     pub type LendingMarket = metadata::runtime_types::loans::types::Market<Balance>;
-    pub type KeyStorageAddress<T> = StaticStorageAddress<DecodeStaticType<T>, (), (), Yes>;
+    pub type KeyStorageAddress<T> = Address<StaticStorageMapKey, T, (), (), Yes>;
 
     pub use metadata::runtime_types::{
         btc_relay::pallet::Error as BtcRelayPalletError, frame_system::pallet::Error as SystemPalletError,

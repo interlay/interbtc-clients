@@ -277,10 +277,12 @@ impl Runner {
             CURRENT_RELEASES_STORAGE_ITEM,
             vec![Value::from_bytes(client_type.to_string().as_bytes())],
         );
-        let lookup_bytes = subxt::storage::utils::storage_address_bytes(&storage_address, &subxt_api.metadata())?;
+        let lookup_bytes = subxt_api.storage().address_bytes(&storage_address)?;
         let enc_res = subxt_api
             .storage()
-            .fetch_raw(&lookup_bytes, None)
+            .at_latest()
+            .await?
+            .fetch_raw(&lookup_bytes)
             .await?
             .map(Bytes::from);
         enc_res
