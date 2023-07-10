@@ -83,7 +83,9 @@ struct RescanStatus {
     queued_rescan_range: Option<(usize, usize)>, // start, end(including)
 }
 impl RescanStatus {
-    const KEY: &str = "rescan-status";
+    // there was a bug pre-v2 that set rescanning status to an invalid range.
+    // by changing the keyname we effectively force a reset
+    const KEY: &str = "rescan-status-v2";
     fn update(&mut self, mut issues: Vec<InterBtcIssueRequest>, current_bitcoin_height: usize) {
         // Only look at issues that haven't been processed yet
         issues.retain(|issue| issue.opentime > self.newest_issue_height);
@@ -94,7 +96,13 @@ impl RescanStatus {
                 Some((begin, _)) => begin.min(issue.btc_height as usize),
                 None => issue.btc_height as usize,
             };
-            self.queued_rescan_range = Some((begin, current_bitcoin_height));
+            // We used to have a bug with syncing that could result in `current_bitcoin_height`
+            // being less than `begin`. Even though that issue has been fixed, for extra safety
+            // we clip the end range. This way, if there is another syncing bug, we'd handle it
+            // here correctly anyway, assuming that the unprocessed blocks will also scan for the
+            // newly added addresses.
+            let end = begin.max(current_bitcoin_height);
+            self.queued_rescan_range = Some((begin, end));
         }
     }
 
