@@ -322,7 +322,6 @@ mod tests {
         InterBtcIssueRequest, InterBtcReplaceRequest, IssueRequestStatus, RequestIssueEvent, StatusCode, Token,
         VaultId, DOT, IBTC, INTR,
     };
-    use std::collections::BTreeSet;
 
     macro_rules! assert_err {
         ($result:expr, $err:pat) => {{

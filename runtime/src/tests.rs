@@ -8,8 +8,7 @@ use super::{
     VaultRegistryPallet, KBTC, KINT, KSM,
 };
 use crate::{
-    integration::*, utils_accountid::AccountId32, AccountId, FeedValuesEvent, OracleKey, RuntimeCurrencyInfo, VaultId,
-    H160, U256,
+    integration::*, utils_accountid::AccountId32, FeedValuesEvent, OracleKey, RuntimeCurrencyInfo, VaultId, H160, U256,
 };
 use module_bitcoin::{formatter::TryFormat, types::BlockBuilder};
 pub use primitives::CurrencyId::ForeignAsset;

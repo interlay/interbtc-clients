@@ -13,8 +13,7 @@ use runtime::{
     types::*,
     utils::account_id::AccountId32,
     BtcAddress, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRedeemRequest, IssuePallet,
-    OraclePallet, PartialAddress, RedeemPallet, ReplacePallet, ShutdownSender, SudoPallet, UtilFuncs, VaultId,
-    VaultRegistryPallet,
+    PartialAddress, RedeemPallet, ReplacePallet, ShutdownSender, SudoPallet, UtilFuncs, VaultId, VaultRegistryPallet,
 };
 use service::DynBitcoinCoreApi;
 use sp_keyring::AccountKeyring;
@@ -960,12 +959,10 @@ impl InterBtcParachainExt for InterBtcParachain {
 
 #[cfg(feature = "uses-bitcoind")]
 mod test_with_bitcoind {
-    use bitcoin::{BitcoinCore, BitcoinCoreApi, Transaction, TransactionExt};
+    use bitcoin::{BitcoinCore, BitcoinCoreApi, Hash, Transaction, TransactionExt};
     use runtime::BtcRelayPallet;
-    use vault::service::Runner;
-
     use std::cmp::max;
-    use vault::{delay::ZeroDelay, relay::Config};
+    use vault::{delay::ZeroDelay, relay::Config, service::Runner};
 
     use super::*;
 
@@ -1020,7 +1017,7 @@ mod test_with_bitcoind {
         .unwrap();
 
         parachain_rpc
-            .wait_for_block_in_relay(H256Le::from_bytes_le(&metadata.block_hash), Some(0))
+            .wait_for_block_in_relay(H256Le::from_bytes_le(metadata.block_hash.as_byte_array()), Some(0))
             .await
             .unwrap();
 

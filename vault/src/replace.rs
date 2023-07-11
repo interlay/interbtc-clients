@@ -362,9 +362,12 @@ mod tests {
     #[tokio::test]
     async fn test_handle_replace_request_with_insufficient_balance() {
         let mut mock_bitcoin = MockBitcoin::default();
-        mock_bitcoin
-            .expect_get_new_address()
-            .returning(|| Ok(Address::from_str("bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f").unwrap()));
+        mock_bitcoin.expect_get_new_address().returning(|| {
+            Ok(Address::from_str("bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f")
+                .unwrap()
+                .require_network(Network::Regtest)
+                .unwrap())
+        });
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
 
         let mut parachain_rpc = MockProvider::default();
@@ -390,9 +393,12 @@ mod tests {
     #[tokio::test]
     async fn test_handle_replace_request_with_sufficient_balance() {
         let mut mock_bitcoin = MockBitcoin::default();
-        mock_bitcoin
-            .expect_get_new_address()
-            .returning(|| Ok(Address::from_str("bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f").unwrap()));
+        mock_bitcoin.expect_get_new_address().returning(|| {
+            Ok(Address::from_str("bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f")
+                .unwrap()
+                .require_network(Network::Regtest)
+                .unwrap())
+        });
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
 
         let mut parachain_rpc = MockProvider::default();

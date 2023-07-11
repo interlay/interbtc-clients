@@ -557,6 +557,12 @@ impl VaultService {
             Network::Testnet => "testnet",
             Network::Regtest => "regtest",
             Network::Signet => "signet",
+            _ => {
+                // enum marked as non-exhaustive
+                return Err(
+                    runtime::Error::BitcoinNetworkMismatch("".to_string(), "UnknownNetwork".to_string()).into(),
+                );
+            }
         };
         let system_properties = self.btc_parachain.get_rpc_properties().await.unwrap_or_default();
 

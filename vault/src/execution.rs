@@ -1,6 +1,6 @@
 use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager, YIELD_RATE};
 use bitcoin::{
-    Error as BitcoinError, SatPerVbyte, Transaction, TransactionExt, TransactionMetadata, Txid,
+    Error as BitcoinError, Hash, SatPerVbyte, Transaction, TransactionExt, TransactionMetadata, Txid,
     BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
 use futures::{future::Either, stream::StreamExt, try_join, TryStreamExt};
@@ -357,7 +357,10 @@ impl Request {
             tracing::info!("Awaiting parachain confirmations...");
 
             match parachain_rpc
-                .wait_for_block_in_relay(H256Le::from_bytes_le(&tx_metadata.block_hash), Some(num_confirmations))
+                .wait_for_block_in_relay(
+                    H256Le::from_bytes_le(tx_metadata.block_hash.as_byte_array()),
+                    Some(num_confirmations),
+                )
                 .await
             {
                 Ok(_) => {

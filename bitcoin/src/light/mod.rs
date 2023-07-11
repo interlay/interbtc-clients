@@ -2,7 +2,7 @@ mod error;
 mod wallet;
 
 pub use crate::{Error as BitcoinError, *};
-use bitcoincore_rpc::bitcoin::{blockdata::constants::WITNESS_SCALE_FACTOR, secp256k1::Scalar};
+use bitcoincore_rpc::bitcoin::secp256k1::Scalar;
 pub use error::Error;
 
 use async_trait::async_trait;
@@ -257,10 +257,7 @@ impl BitcoinCoreApi for BitcoinLight {
             .extract_return_to_self_address(&address.payload)?
             .map(|(idx, payload)| {
                 existing_transaction.output.remove(idx);
-                Address {
-                    payload,
-                    network: self.network(),
-                }
+                Address::new(self.network(), payload)
             });
 
         // clear the witnesses for fee estimation
@@ -335,7 +332,7 @@ impl BitcoinCoreApi for BitcoinLight {
 
     async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError> {
         let tx = self.get_transaction(&txid, None).await?;
-        let vsize = tx.weight().div_ceil(WITNESS_SCALE_FACTOR) as u64;
+        let vsize = tx.weight().to_vbytes_ceil();
         let recipients_sum = tx.output.iter().map(|tx_out| tx_out.value).sum::<u64>();
 
         let inputs = try_join_all(tx.input.iter().map(|input| async move {

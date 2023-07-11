@@ -193,8 +193,8 @@ async fn get_best_block_info(rpc: &DynBitcoinCoreApi) -> Result<(u32, BlockHash)
 mod tests {
     use super::*;
     use crate::*;
-    use bitcoincore_rpc::bitcoin::PackedLockTime;
-    pub use bitcoincore_rpc::bitcoin::{Address, Amount, Network, PublicKey, TxMerkleNode};
+    use bitcoincore_rpc::bitcoin::{absolute::Height, block::Version, locktime::absolute::LockTime, CompactTarget};
+    pub use bitcoincore_rpc::bitcoin::{Address, Amount, Network, PublicKey};
     use sp_core::H256;
 
     mockall::mock! {
@@ -282,7 +282,7 @@ mod tests {
     fn dummy_tx(value: i32) -> Transaction {
         Transaction {
             version: value,
-            lock_time: PackedLockTime(1),
+            lock_time: LockTime::Blocks(Height::ZERO),
             input: vec![],
             output: vec![],
         }
@@ -292,8 +292,8 @@ mod tests {
         Block {
             txdata: transactions.into_iter().map(dummy_tx).collect(),
             header: BlockHeader {
-                version: 4,
-                bits: 0,
+                version: Version::from_consensus(4),
+                bits: CompactTarget::from_consensus(0),
                 nonce: 0,
                 time: 0,
                 prev_blockhash: next_hash,

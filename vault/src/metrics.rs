@@ -673,7 +673,6 @@ mod tests {
         InterBtcVault, LendingAssets, RequestIssueEvent, StatusCode, Token, VaultId, VaultStatus, DOT, H256, IBTC,
         INTR,
     };
-    use std::collections::BTreeSet;
 
     mockall::mock! {
         Provider {}

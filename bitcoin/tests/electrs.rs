@@ -64,8 +64,13 @@ where
 
 fn mine_blocks(block_num: u64, maybe_address: Option<Address>) -> BlockHash {
     let bitcoin_client = new_bitcoin_client();
-    let address =
-        maybe_address.unwrap_or_else(|| bitcoin_client.get_new_address(None, Some(AddressType::Bech32)).unwrap());
+    let address = maybe_address.unwrap_or_else(|| {
+        bitcoin_client
+            .get_new_address(None, Some(AddressType::Bech32))
+            .unwrap()
+            .require_network(Network::Regtest)
+            .unwrap()
+    });
     bitcoin_client
         .generate_to_address(block_num, &address)
         .unwrap()

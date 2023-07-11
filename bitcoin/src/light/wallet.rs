@@ -2,17 +2,15 @@ use super::{electrs::ElectrsClient, error::Error};
 use crate::{
     electrs::Utxo,
     hashes::Hash,
-    json::bitcoin::EcdsaSighashType,
+    json::bitcoin::sighash::EcdsaSighashType,
     opcodes, psbt,
     psbt::PartiallySignedTransaction,
     secp256k1::{All, Message, Secp256k1, SecretKey},
-    Address, Builder as ScriptBuilder, Network, OutPoint, PrivateKey, Script, Transaction, TxIn, TxOut, Txid, VarInt,
-    H256,
+    Address, Builder as ScriptBuilder, EcdsaSig, LockTime, Network, NonStandardSighashType, OutPoint, PrivateKey,
+    Script, Transaction, TxIn, TxOut, Txid, VarInt, H256,
 };
 use bitcoincore_rpc::bitcoin::{
-    blockdata::{constants::WITNESS_SCALE_FACTOR, transaction::NonStandardSighashType},
-    util::sighash::SighashCache,
-    EcdsaSig, PackedLockTime, PublicKey, Sequence, Witness,
+    blockdata::constants::WITNESS_SCALE_FACTOR, sighash::SighashCache, PublicKey, Sequence, Witness,
 };
 use futures::{stream, Stream, StreamExt};
 use std::{
@@ -79,7 +77,7 @@ fn dummy_sign_input(txin: &mut TxIn, public_key: PublicKey) {
     };
 
     // update input (only works with segwit for now)
-    txin.witness = Witness::from_vec(vec![dummy_signature.to_vec(), public_key.to_bytes()]);
+    txin.witness = Witness::from_slice(&[dummy_signature.to_vec(), public_key.to_bytes()]);
 }
 
 // https://github.com/bitcoin/bitcoin/blob/e9035f867a36a430998e3811385958229ac79cf5/src/consensus/validation.h#L156
@@ -118,7 +116,7 @@ fn calculate_maximum_signed_tx_size(psbt: &PartiallySignedTransaction, wallet: &
     }
 
     // GetVirtualTransactionSize = GetVirtualTransactionSize(GetTransactionWeight(tx))
-    get_virtual_transaction_size(tx.weight() as u64)
+    tx.weight().to_vbytes_ceil()
 }
 
 struct FeeRate {
@@ -189,17 +187,6 @@ impl SelectCoins {
             change
         }
     }
-}
-
-// https://github.com/bitcoindevkit/bdk/blob/061f15af004ce16ea107cfcbe86e0120be22eaa8/src/wallet/signer.rs#L818
-fn p2wpkh_script_code(script: &Script) -> Script {
-    ScriptBuilder::new()
-        .push_opcode(opcodes::OP_DUP)
-        .push_opcode(opcodes::OP_HASH160)
-        .push_slice(&script[2..])
-        .push_opcode(opcodes::OP_EQUALVERIFY)
-        .push_opcode(opcodes::OP_CHECKSIG)
-        .into_script()
 }
 
 // https://github.com/bitcoin/bitcoin/blob/e9262ea32a6e1d364fb7974844fadc36f931f8c6/src/policy/policy.cpp#L26
@@ -435,14 +422,14 @@ impl Wallet {
                 value: 0,
                 script_pubkey: ScriptBuilder::new()
                     .push_opcode(opcodes::OP_RETURN)
-                    .push_slice(op_return.as_bytes())
+                    .push_slice(op_return.as_fixed_bytes())
                     .into_script(),
             })
         }
 
         Transaction {
             version: 2,
-            lock_time: PackedLockTime::ZERO,
+            lock_time: LockTime::ZERO,
             input: Default::default(),
             output,
         }
@@ -464,11 +451,10 @@ impl Wallet {
 
             // NOTE: we don't support signing p2sh, p2pkh, p2wsh inputs
             // since the Vault is assumed to only receive p2wpkh payments
-            let script_code = if prev_out.script_pubkey.is_v0_p2wpkh() {
-                Ok(p2wpkh_script_code(&prev_out.script_pubkey))
-            } else {
-                Err(Error::InvalidPrevOut)
-            }?;
+            let script_code = prev_out
+                .script_pubkey
+                .p2wpkh_script_code()
+                .ok_or(Error::InvalidPrevOut)?;
 
             let mut sig_hasher = SighashCache::new(&psbt.unsigned_tx);
             let sig_hash = sig_hasher.segwit_signature_hash(index, &script_code, prev_out.value, sighash_ty)?;
@@ -476,7 +462,7 @@ impl Wallet {
             let private_key = self.get_priv_key(&prev_out.script_pubkey)?;
             let sig = self
                 .secp
-                .sign_ecdsa(&Message::from_slice(&sig_hash.into_inner()[..])?, &private_key.inner);
+                .sign_ecdsa(&Message::from_slice(&sig_hash.to_byte_array()[..])?, &private_key.inner);
 
             let final_signature = EcdsaSig {
                 sig,
@@ -484,7 +470,7 @@ impl Wallet {
             };
 
             // https://github.com/bitcoin/bitcoin/blob/607d5a46aa0f5053d8643a3e2c31a69bfdeb6e9f/src/script/sign.cpp#L125
-            psbt_input.final_script_witness = Some(Witness::from_vec(vec![
+            psbt_input.final_script_witness = Some(Witness::from_slice(&[
                 final_signature.to_vec(),
                 private_key.public_key(&self.secp).to_bytes(),
             ]));
@@ -498,11 +484,7 @@ impl Wallet {
 mod tests {
     use super::*;
     use crate::{deserialize, serialize};
-    use bitcoincore_rpc::bitcoin::{
-        consensus::Encodable,
-        hashes::hex::{FromHex, ToHex},
-        Sequence, Txid,
-    };
+    use bitcoincore_rpc::bitcoin::{consensus::Encodable, hashes::hex::FromHex, ScriptBuf, Sequence, Txid};
     use std::str::FromStr;
 
     #[test]
@@ -551,7 +533,7 @@ mod tests {
         assert_serialize_size(&tx.output[1]); // OP_RETURN
         assert_serialize_size(&tx.output[2]); // change
 
-        assert_eq!(get_virtual_transaction_size(tx.weight() as u64), 184);
+        assert_eq!(get_virtual_transaction_size(tx.weight().to_wu()), 184);
 
         Ok(())
     }
@@ -572,7 +554,7 @@ mod tests {
         )
         .unwrap();
         let tx: Transaction = deserialize(&signed_tx_bytes)?;
-        assert_eq!(get_virtual_transaction_size(tx.weight() as u64), 252);
+        assert_eq!(get_virtual_transaction_size(tx.weight().to_wu()), 252);
         Ok(())
     }
 
@@ -580,16 +562,16 @@ mod tests {
     async fn test_calculate_fees() -> Result<(), Box<dyn std::error::Error>> {
         let tx = Transaction {
             version: 2,
-            lock_time: PackedLockTime::ZERO,
+            lock_time: LockTime::ZERO,
             input: vec![TxIn {
                 // value: 100000
                 previous_output: OutPoint {
                     txid: Txid::from_str("0243dee566c0bf1b887416caa0e625b447c793786f1e6a5fc9c24f0d583f4c07")?,
                     vout: 0,
                 },
-                script_sig: Script::new(),
+                script_sig: ScriptBuf::new(),
                 sequence: Sequence(4294967293),
-                witness: Witness::from_vec(vec![
+                witness: Witness::from_slice(&[
                     hex::decode("3044022025f214b6b3f1a0b9e1110367e260ca2ff8c614272b284839be77e06607d5f8f9022056404808a029bc0fee409ca4de812e0289b092d32299340fdaa13232f367d0f801")?,
                     hex::decode("0251bc49a18fc5af7662d04faa1929d44b7155ec723cc7f590efbf4e0fe18b14c6")?,
                 ]),
@@ -597,27 +579,30 @@ mod tests {
             output: vec![
                 TxOut {
                    value: 0,
-                   script_pubkey: Script::from_str("6a20f66966cde9d87d08cc58e6378cde0a57b21dd21a9688f2723aad4b184c56005b")?
+                   script_pubkey: ScriptBuf::from_hex("6a20f66966cde9d87d08cc58e6378cde0a57b21dd21a9688f2723aad4b184c56005b")?
                 },
                 TxOut {
                     value: 700,
-                    script_pubkey: Script::from_str("0014810b092d165f424556b1c33fd343871a0cf4d36b")?
+                    script_pubkey: ScriptBuf::from_hex("0014810b092d165f424556b1c33fd343871a0cf4d36b")?
                 },
                 TxOut {
                     value: 99116,
-                    script_pubkey: Script::from_str("00146b980ce352f5389938fae6ecd905d4c8af25b8d6")?
+                    script_pubkey: ScriptBuf::from_hex("00146b980ce352f5389938fae6ecd905d4c8af25b8d6")?
                 }
             ],
         };
 
         assert_eq!(tx.size(), 265);
-        assert_eq!(tx.weight(), 733);
+        assert_eq!(tx.weight().to_wu(), 733);
         // vsize [vB] = weight [wu] / 4
-        assert_eq!(tx.weight().div_ceil(WITNESS_SCALE_FACTOR), 184);
-        assert_eq!(get_virtual_transaction_size(tx.weight() as u64), 184);
+        assert_eq!(tx.weight().to_wu().div_ceil(WITNESS_SCALE_FACTOR as u64), 184);
+        assert_eq!(get_virtual_transaction_size(tx.weight().to_wu()), 184);
 
         let fee_rate = FeeRate { n_satoshis_per_k: 1000 };
-        assert_eq!(fee_rate.get_fee(tx.weight().div_ceil(WITNESS_SCALE_FACTOR) as u64), 184);
+        assert_eq!(
+            fee_rate.get_fee(tx.weight().to_wu().div_ceil(WITNESS_SCALE_FACTOR as u64)),
+            184
+        );
 
         let actual_fee = 100000 - tx.output.iter().map(|tx_out| tx_out.value).sum::<u64>();
         assert_eq!(actual_fee, 184);
@@ -633,13 +618,13 @@ mod tests {
         let outputs_no_change = vec![
             TxOut {
                 value: 0,
-                script_pubkey: Script::from_str(
+                script_pubkey: ScriptBuf::from_hex(
                     "6a20f66966cde9d87d08cc58e6378cde0a57b21dd21a9688f2723aad4b184c56005b",
                 )?,
             },
             TxOut {
                 value: 99116,
-                script_pubkey: Script::from_str("00146b980ce352f5389938fae6ecd905d4c8af25b8d6")?,
+                script_pubkey: ScriptBuf::from_hex("00146b980ce352f5389938fae6ecd905d4c8af25b8d6")?,
             },
         ];
 
@@ -651,7 +636,7 @@ mod tests {
                 .sum::<u64>();
         let change_output_size = TxOut {
             value: 0,
-            script_pubkey: Script::from_str("0014810b092d165f424556b1c33fd343871a0cf4d36b")?,
+            script_pubkey: ScriptBuf::from_hex("0014810b092d165f424556b1c33fd343871a0cf4d36b")?,
         }
         .get_serialize_size();
 
@@ -671,7 +656,7 @@ mod tests {
         let secp = Secp256k1::new();
 
         let key_store: BTreeMap<_, _> = map_btree! {
-            Address::from_str("bcrt1qxu0en0v9dsywqchvpr6g9aa5vh9wyeupys2ka8").unwrap() =>
+            Address::from_str("bcrt1qxu0en0v9dsywqchvpr6g9aa5vh9wyeupys2ka8").unwrap().require_network(Network::Regtest).unwrap() =>
             PrivateKey::from_wif("cNbq2Es45c5E8hYt6MT2Phk84A4tN3KSWxPzi8JpH61eW6Ttpusf").unwrap()
         };
         let wallet = Wallet {
@@ -685,7 +670,7 @@ mod tests {
         let mut psbt = PartiallySignedTransaction {
             unsigned_tx: Transaction {
                 version: 2,
-                lock_time: PackedLockTime::ZERO,
+                lock_time: LockTime::ZERO,
                 input: vec![TxIn {
                     previous_output: OutPoint {
                         txid: Txid::from_str("dcd25c1eb82783b323a7e6582a6a46edd9ff9ef7954e16a5ba5352f39c607189")?,
@@ -699,19 +684,21 @@ mod tests {
                     TxOut {
                         value: 100000,
                         // bcrt1qnx8uakvjhyxyns3ft3tjfm0smt68frw2c9adgx
-                        script_pubkey: Script::from_str("0014998fced992b90c49c2295c5724edf0daf4748dca")?,
+                        script_pubkey: ScriptBuf::from_hex("0014998fced992b90c49c2295c5724edf0daf4748dca")?,
                     },
                     TxOut {
                         value: 4999897180,
                         // bcrt1qwz2x0729sswxhd3cl8ss0h3fx03pfuw9anc7ww
-                        script_pubkey: Script::from_str("0014709467f945841c6bb638f9e107de2933e214f1c5")?,
+                        script_pubkey: ScriptBuf::from_hex("0014709467f945841c6bb638f9e107de2933e214f1c5")?,
                     },
                 ],
             },
             inputs: vec![psbt::Input {
                 witness_utxo: Some(TxOut {
                     value: 5000000000,
-                    script_pubkey: Address::from_str("bcrt1qxu0en0v9dsywqchvpr6g9aa5vh9wyeupys2ka8")?.script_pubkey(),
+                    script_pubkey: Address::from_str("bcrt1qxu0en0v9dsywqchvpr6g9aa5vh9wyeupys2ka8")?
+                        .require_network(Network::Regtest)?
+                        .script_pubkey(),
                 }),
                 ..Default::default()
             }],
@@ -723,11 +710,11 @@ mod tests {
         };
 
         wallet.sign_transaction(&mut psbt)?;
-        let signed_tx = psbt.extract_tx();
+        let witness = psbt.extract_tx().input[0].witness.clone();
 
         assert_eq!(
             "3044022057aeb22db1f8656513b7f44df3a30d8405ba040cb250d731379307f1799f9cad02201582f355d461fd0c8ced789eb02053995663c66fc63a80341da9354ce3b23e5801",
-            signed_tx.input[0].witness.to_vec()[0].to_hex()
+            hex::encode(&witness.to_vec()[0])
         );
 
         Ok(())
