@@ -1864,6 +1864,7 @@ pub trait SudoPallet {
     async fn set_issue_period(&self, period: u32) -> Result<(), Error>;
     async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error>;
     async fn set_replace_period(&self, period: u32) -> Result<(), Error>;
+    async fn set_balances(&self, amounts: Vec<(AccountId, u128, u128, CurrencyId)>) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -1936,5 +1937,24 @@ impl SudoPallet for InterBtcParachain {
                 metadata::runtime_types::replace::pallet::Call::set_replace_period { period },
             ))
             .await?)
+    }
+
+    async fn set_balances(&self, amounts: Vec<(AccountId, u128, u128, CurrencyId)>) -> Result<(), Error> {
+        self.sudo(EncodedCall::Utility(
+            metadata::runtime_types::pallet_utility::pallet::Call::batch {
+                calls: amounts
+                    .into_iter()
+                    .map(|(recipient, free, reserved, currency_id)| {
+                        EncodedCall::Tokens(metadata::runtime_types::orml_tokens::module::Call::set_balance {
+                            who: recipient,
+                            currency_id,
+                            new_free: free,
+                            new_reserved: reserved,
+                        })
+                    })
+                    .collect(),
+            },
+        ))
+        .await
     }
 }
