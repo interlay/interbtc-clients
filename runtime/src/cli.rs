@@ -101,14 +101,6 @@ pub fn parse_duration_minutes(src: &str) -> Result<Duration, ParseIntError> {
 pub struct ConnectionOpts {
     /// Parachain websocket URL.
     #[cfg_attr(
-        feature = "parachain-metadata-interlay-testnet",
-        clap(long, default_value = "wss://staging.interlay-dev.interlay.io:443/parachain")
-    )]
-    #[cfg_attr(
-        feature = "parachain-metadata-kintsugi-testnet",
-        clap(long, default_value = "wss://api-dev-kintsugi.interlay.io:443/parachain")
-    )]
-    #[cfg_attr(
         feature = "parachain-metadata-kintsugi",
         clap(long, default_value = "wss://api-kusama.interlay.io:443/parachain")
     )]

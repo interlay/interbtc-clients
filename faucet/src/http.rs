@@ -365,14 +365,14 @@ pub async fn start_http(
     close_handle
 }
 
-#[cfg(all(test, feature = "parachain-metadata-kintsugi-testnet"))]
+#[cfg(all(test, feature = "parachain-metadata-kintsugi"))]
 mod tests {
     use crate::{error::Error, Allowance, AllowanceAmount, AllowanceConfig};
     use futures::{future::join_all, TryFutureExt};
     use runtime::{
         CurrencyId::{self},
-        Error as RuntimeError, InterBtcParachain, OracleKey, RuntimeCurrencyInfo, Token, TryFromSymbol, VaultId, KBTC,
-        KINT, KSM,
+        Error as RuntimeError, InterBtcParachain, OracleKey, RuntimeCurrencyInfo, SudoPallet, Token, TryFromSymbol,
+        VaultId, KBTC, KINT, KSM,
     };
     use std::sync::Arc;
 
@@ -406,6 +406,24 @@ mod tests {
                 222, 180, 119, 54, 243, 97, 173, 150, 161, 169, 230,
             ],
         }
+    }
+
+    async fn endow_accounts(client: SubxtClient) {
+        let provider = setup_provider(client, AccountKeyring::Alice).await;
+        provider
+            .set_balances(
+                vec![AccountKeyring::Alice, AccountKeyring::Bob]
+                    .into_iter()
+                    .map(|keyring| keyring.to_account_id())
+                    .flat_map(|account_id| {
+                        vec![DEFAULT_TESTING_CURRENCY, DEFAULT_GOVERNANCE_CURRENCY]
+                            .into_iter()
+                            .map(move |currency_id| (account_id.clone(), 1 << 60, 0, currency_id))
+                    })
+                    .collect(),
+            )
+            .await
+            .expect("Should endow accounts")
     }
 
     async fn set_exchange_rate(client: SubxtClient) {
@@ -475,6 +493,7 @@ mod tests {
         set_concurrency_limit(999);
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
+        endow_accounts(client.clone()).await;
 
         let bob_account_id: AccountId = [3; 32].into();
         let user_allowance: Allowance = vec![
@@ -512,6 +531,7 @@ mod tests {
         set_concurrency_limit(999);
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
+        endow_accounts(client.clone()).await;
 
         // Bob's account is prefunded with lots of DOT
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
@@ -546,6 +566,7 @@ mod tests {
         set_concurrency_limit(999);
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
+        endow_accounts(client.clone()).await;
 
         let bob_account_id = AccountKeyring::Bob.to_account_id();
         let bob_vault_id = VaultId::new(
@@ -606,6 +627,7 @@ mod tests {
         set_concurrency_limit(999);
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
+        endow_accounts(client.clone()).await;
 
         let bob_account_id: AccountId = [3; 32].into();
         let user_allowance: Allowance = vec![
@@ -648,6 +670,7 @@ mod tests {
         set_concurrency_limit(999);
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
+        endow_accounts(client.clone()).await;
 
         let store = Store::new(Config::new(tmp_dir.path().join("kv4"))).expect("Unable to open kv store");
         let kv = open_kv_store(store.clone()).unwrap();
@@ -704,6 +727,7 @@ mod tests {
         set_concurrency_limit(999);
         let (client, tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
         set_exchange_rate(client.clone()).await;
+        endow_accounts(client.clone()).await;
 
         let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
         let bob_vault_id = VaultId::new(

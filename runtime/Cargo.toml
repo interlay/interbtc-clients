@@ -15,8 +15,6 @@ testing-utils = [
 ]
 parachain-metadata-interlay = []
 parachain-metadata-kintsugi = []
-parachain-metadata-interlay-testnet = []
-parachain-metadata-kintsugi-testnet = []
 
 [dependencies]
 serde = { version = "1.0.136", features = ["derive"] }
@@ -50,28 +48,28 @@ bitcoin = { path = "../bitcoin" }
 
 # Dependencies for the testing utils for integration tests
 tempdir = { version = "0.3.7", optional = true }
-interbtc = { package = "interbtc-parachain", git = "https://github.com/interlay/interbtc", rev = "7a2f5ee35d93feb0529a308fe87b42674bfca8e9", optional = true }
-interbtc-runtime = { package = "testnet-kintsugi-runtime-parachain", git = "https://github.com/interlay/interbtc", rev = "7a2f5ee35d93feb0529a308fe87b42674bfca8e9", optional = true }
+interbtc = { package = "interbtc-parachain", git = "https://github.com/interlay/interbtc", rev = "dad0db930dce16070e921c1d9f05b5244be6a995", optional = true }
+interbtc-runtime = { package = "kintsugi-runtime-parachain", git = "https://github.com/interlay/interbtc", rev = "dad0db930dce16070e921c1d9f05b5244be6a995", optional = true }
 rand = { version = "0.7", optional = true }
 
 [dependencies.primitives]
 git = "https://github.com/interlay/interbtc"
-rev = "7a2f5ee35d93feb0529a308fe87b42674bfca8e9"
+rev = "dad0db930dce16070e921c1d9f05b5244be6a995"
 package = "interbtc-primitives"
 
 [dependencies.module-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "7a2f5ee35d93feb0529a308fe87b42674bfca8e9"
+rev = "dad0db930dce16070e921c1d9f05b5244be6a995"
 package = "bitcoin"
 
 [dependencies.module-btc-relay]
 git = "https://github.com/interlay/interbtc"
-rev = "7a2f5ee35d93feb0529a308fe87b42674bfca8e9"
+rev = "dad0db930dce16070e921c1d9f05b5244be6a995"
 package = "btc-relay"
 
 [dependencies.module-oracle-rpc-runtime-api]
 git = "https://github.com/interlay/interbtc"
-rev = "7a2f5ee35d93feb0529a308fe87b42674bfca8e9"
+rev = "dad0db930dce16070e921c1d9f05b5244be6a995"
 package = "oracle-rpc-runtime-api"
 
 [dev-dependencies]

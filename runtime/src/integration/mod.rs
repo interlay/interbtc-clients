@@ -81,7 +81,7 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
 
     let (task_manager, rpc_handlers) = interbtc::service::start_instant::<
         interbtc_runtime::RuntimeApi,
-        interbtc::service::TestnetKintsugiRuntimeExecutor,
+        interbtc::service::KintsugiRuntimeExecutor,
     >(service_config)
     .await
     .unwrap();

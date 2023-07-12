@@ -49,11 +49,8 @@ const BLAKE2_128_HASH_PREFIX_LENGTH: usize = 48;
 const TWOX_64_HASH_PREFIX_LENGTH: usize = 40;
 
 // sanity check to be sure that testing-utils is not accidentally selected
-#[cfg(all(
-    any(test, feature = "testing-utils"),
-    not(feature = "parachain-metadata-kintsugi-testnet")
-))]
-compile_error!("Tests are only supported for the kintsugi testnet metadata");
+#[cfg(all(any(test, feature = "testing-utils"), not(feature = "parachain-metadata-kintsugi")))]
+compile_error!("Tests are only supported for the kintsugi runtime");
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "parachain-metadata-interlay")] {
@@ -63,14 +60,6 @@ cfg_if::cfg_if! {
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
         const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
         pub const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
-        pub const SS58_PREFIX: u16 = 2092;
-    } else if #[cfg(feature = "parachain-metadata-interlay-testnet")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
-        pub const DEFAULT_SPEC_NAME: &str = "testnet-interlay";
-        pub const SS58_PREFIX: u16 = 2032;
-    }  else if #[cfg(feature = "parachain-metadata-kintsugi-testnet")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
-        pub const DEFAULT_SPEC_NAME: &str = "testnet-kintsugi";
         pub const SS58_PREFIX: u16 = 2092;
     }
 }
@@ -1872,15 +1861,13 @@ pub trait SudoPallet {
     async fn set_redeem_period(&self, period: BlockNumber) -> Result<(), Error>;
     async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), Error>;
     async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), Error>;
+    async fn disable_difficulty_check(&self) -> Result<(), Error>;
     async fn set_issue_period(&self, period: u32) -> Result<(), Error>;
     async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error>;
     async fn set_replace_period(&self, period: u32) -> Result<(), Error>;
+    async fn set_balances(&self, amounts: Vec<(AccountId, u128, u128, CurrencyId)>) -> Result<(), Error>;
 }
 
-#[cfg(any(
-    feature = "parachain-metadata-interlay-testnet",
-    feature = "parachain-metadata-kintsugi-testnet"
-))]
 #[async_trait]
 impl SudoPallet for InterBtcParachain {
     async fn sudo(&self, call: EncodedCall) -> Result<(), Error> {
@@ -1921,6 +1908,11 @@ impl SudoPallet for InterBtcParachain {
             .await
     }
 
+    async fn disable_difficulty_check(&self) -> Result<(), Error> {
+        self.set_storage(crate::BTC_RELAY_MODULE, crate::DISABLE_DIFFICULTY_CHECK, true)
+            .await
+    }
+
     async fn set_issue_period(&self, period: u32) -> Result<(), Error> {
         Ok(self
             .sudo(EncodedCall::Issue(
@@ -1951,5 +1943,24 @@ impl SudoPallet for InterBtcParachain {
                 metadata::runtime_types::replace::pallet::Call::set_replace_period { period },
             ))
             .await?)
+    }
+
+    async fn set_balances(&self, amounts: Vec<(AccountId, u128, u128, CurrencyId)>) -> Result<(), Error> {
+        self.sudo(EncodedCall::Utility(
+            metadata::runtime_types::pallet_utility::pallet::Call::batch {
+                calls: amounts
+                    .into_iter()
+                    .map(|(recipient, free, reserved, currency_id)| {
+                        EncodedCall::Tokens(metadata::runtime_types::orml_tokens::module::Call::set_balance {
+                            who: recipient,
+                            currency_id,
+                            new_free: free,
+                            new_reserved: reserved,
+                        })
+                    })
+                    .collect(),
+            },
+        ))
+        .await
     }
 }

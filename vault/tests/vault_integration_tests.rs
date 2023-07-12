@@ -31,8 +31,34 @@ where
     service::init_subscriber();
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
 
-    let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Bob).await;
+    let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    parachain_rpc
+        .set_balances(
+            vec![
+                AccountKeyring::Alice,
+                AccountKeyring::Bob,
+                AccountKeyring::Charlie,
+                AccountKeyring::Dave,
+                AccountKeyring::Eve,
+                AccountKeyring::Ferdie,
+            ]
+            .into_iter()
+            .map(|keyring| keyring.to_account_id())
+            .flat_map(|account_id| {
+                vec![DEFAULT_TESTING_CURRENCY, DEFAULT_NATIVE_CURRENCY]
+                    .into_iter()
+                    .map(move |currency_id| (account_id.clone(), 1 << 60, 0, currency_id))
+            })
+            .collect(),
+        )
+        .await
+        .expect("Should endow accounts");
+    parachain_rpc
+        .disable_difficulty_check()
+        .await
+        .expect("Should disable difficulty check");
 
+    let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Bob).await;
     set_exchange_rate_and_wait(&parachain_rpc, DEFAULT_TESTING_CURRENCY, FixedU128::from(100000000)).await;
     set_exchange_rate_and_wait(
         &parachain_rpc,

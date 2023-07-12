@@ -4,8 +4,8 @@ const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(KSM);
 
 use super::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, FixedPointNumber, FixedU128,
-    OraclePallet, RawBlockHeader, ReplacePallet, SecurityPallet, StatusCode, Token, TryFromSymbol, VaultRegistryPallet,
-    KBTC, KINT, KSM,
+    OraclePallet, RawBlockHeader, ReplacePallet, SecurityPallet, StatusCode, SudoPallet, Token, TryFromSymbol,
+    VaultRegistryPallet, KBTC, KINT, KSM,
 };
 use crate::{integration::*, FeedValuesEvent, OracleKey, RuntimeCurrencyInfo, VaultId, H160, U256};
 use module_bitcoin::{formatter::TryFormat, types::BlockBuilder};
@@ -40,7 +40,7 @@ async fn test_getters() {
 
     tokio::join!(
         async {
-            assert_eq!(parachain_rpc.get_free_balance(Token(KSM)).await.unwrap(), 1 << 60);
+            assert_eq!(parachain_rpc.get_free_balance(Token(KINT)).await.unwrap(), 1 << 60);
         },
         async {
             assert_eq!(parachain_rpc.get_parachain_status().await.unwrap(), StatusCode::Error);
@@ -104,6 +104,15 @@ async fn test_register_vault() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
     set_exchange_rate(client.clone()).await;
+    parachain_rpc
+        .set_balances(vec![(
+            AccountKeyring::Alice.to_account_id(),
+            1 << 60,
+            0,
+            DEFAULT_TESTING_CURRENCY,
+        )])
+        .await
+        .expect("Should endow account");
 
     let vault_id = VaultId::new(AccountKeyring::Alice.into(), Token(KSM), Token(KBTC));
 
