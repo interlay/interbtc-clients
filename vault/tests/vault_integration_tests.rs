@@ -53,6 +53,10 @@ where
         )
         .await
         .expect("Should endow accounts");
+    parachain_rpc
+        .disable_difficulty_check()
+        .await
+        .expect("Should disable difficulty check");
 
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Bob).await;
     set_exchange_rate_and_wait(&parachain_rpc, DEFAULT_TESTING_CURRENCY, FixedU128::from(100000000)).await;

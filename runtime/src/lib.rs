@@ -60,6 +60,7 @@ pub const VAULT_REGISTRY_MODULE: &str = "VaultRegistry";
 
 pub const STABLE_BITCOIN_CONFIRMATIONS: &str = "StableBitcoinConfirmations";
 pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
+pub const DISABLE_DIFFICULTY_CHECK: &str = "DisableDifficultyCheck";
 
 // TODO: possibly substitute CurrencyId, VaultId, H256Le
 #[cfg_attr(

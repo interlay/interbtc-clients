@@ -1861,6 +1861,7 @@ pub trait SudoPallet {
     async fn set_redeem_period(&self, period: BlockNumber) -> Result<(), Error>;
     async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), Error>;
     async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), Error>;
+    async fn disable_difficulty_check(&self) -> Result<(), Error>;
     async fn set_issue_period(&self, period: u32) -> Result<(), Error>;
     async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error>;
     async fn set_replace_period(&self, period: u32) -> Result<(), Error>;
@@ -1904,6 +1905,11 @@ impl SudoPallet for InterBtcParachain {
     /// Set the global security parameter k for stable Bitcoin transactions
     async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), Error> {
         self.set_storage(crate::BTC_RELAY_MODULE, crate::STABLE_BITCOIN_CONFIRMATIONS, value)
+            .await
+    }
+
+    async fn disable_difficulty_check(&self) -> Result<(), Error> {
+        self.set_storage(crate::BTC_RELAY_MODULE, crate::DISABLE_DIFFICULTY_CHECK, true)
             .await
     }
 
