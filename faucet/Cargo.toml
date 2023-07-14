@@ -44,5 +44,4 @@ service = { path = "../service" }
 runtime = { path = "../runtime", features = ["testing-utils"] }
 
 # Substrate dependencies
-# needs to agree with subxt's version
-sp-keyring = { version = "7.0.0" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }

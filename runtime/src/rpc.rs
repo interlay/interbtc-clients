@@ -54,11 +54,11 @@ compile_error!("Tests are only supported for the kintsugi runtime");
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "parachain-metadata-interlay")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1025000..1026000;
         pub const DEFAULT_SPEC_NAME: &str = "interlay-parachain";
         pub const SS58_PREFIX: u16 = 2032;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1025000..1026000;
         pub const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
         pub const SS58_PREFIX: u16 = 2092;
     }
