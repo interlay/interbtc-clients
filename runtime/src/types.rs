@@ -334,13 +334,15 @@ mod dispatch_error {
     convert_enum!(
         RichTokenError,
         TokenError,
-        NoFunds,
-        WouldDie,
+        FundsUnavailable,
+        OnlyProvider,
         BelowMinimum,
         CannotCreate,
         UnknownAsset,
         Frozen,
         Unsupported,
+        CannotCreateHold,
+        NotExpendable,
     );
 
     convert_enum!(
