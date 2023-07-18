@@ -224,7 +224,7 @@ pub struct VaultIdManager {
     vault_data: Arc<RwLock<HashMap<VaultId, VaultData>>>,
     btc_parachain: InterBtcParachain,
     btc_rpc_master_wallet: DynBitcoinCoreApi,
-    btc_rpc_shared_wallet: DynBitcoinCoreApi,
+    pub(crate) btc_rpc_shared_wallet: DynBitcoinCoreApi,
     // TODO: remove this
     #[allow(clippy::type_complexity)]
     constructor: Arc<Box<dyn Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync>>,
