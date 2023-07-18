@@ -277,9 +277,9 @@ impl PerCurrencyMetrics {
             Self::initialize_fee_budget_surplus(vault, parachain_rpc.clone(), bitcoin_transactions),
             publish_average_bitcoin_fee(vault),
             publish_expected_bitcoin_balance(vault, parachain_rpc.clone()),
-            publish_locked_collateral(vault, parachain_rpc.clone()),
-            publish_required_collateral(vault, parachain_rpc.clone()),
-            publish_collateralization(vault, parachain_rpc.clone()),
+            publish_locked_collateral(vault, &parachain_rpc),
+            publish_required_collateral(vault, &parachain_rpc),
+            publish_collateralization(vault, &parachain_rpc),
         );
     }
 }
@@ -335,7 +335,7 @@ fn raw_value_as_currency(value: u128, currency: CurrencyId) -> Result<f64, Servi
 
 pub async fn publish_locked_collateral<P: VaultRegistryPallet>(
     vault: &VaultData,
-    parachain_rpc: P,
+    parachain_rpc: &P,
 ) -> Result<(), ServiceError<Error>> {
     if let Ok(actual_collateral) = parachain_rpc.get_vault_total_collateral(vault.vault_id.clone()).await {
         let actual_collateral = raw_value_as_currency(actual_collateral, vault.vault_id.collateral_currency())?;
@@ -346,7 +346,7 @@ pub async fn publish_locked_collateral<P: VaultRegistryPallet>(
 
 pub async fn publish_required_collateral<P: VaultRegistryPallet>(
     vault: &VaultData,
-    parachain_rpc: P,
+    parachain_rpc: &P,
 ) -> Result<(), ServiceError<Error>> {
     if let Ok(required_collateral) = parachain_rpc
         .get_required_collateral_for_vault(vault.vault_id.clone())
@@ -358,8 +358,8 @@ pub async fn publish_required_collateral<P: VaultRegistryPallet>(
     Ok(())
 }
 
-pub async fn publish_collateralization<P: VaultRegistryPallet>(vault: &VaultData, parachain_rpc: P) {
-    // if the collateralization is infinite, return 0 rather than logging an error, so
+pub async fn publish_collateralization<P: VaultRegistryPallet>(vault: &VaultData, parachain_rpc: &P) {
+    // if the collateralization is infinite, return 0 rather than logging an error so
     // the metrics do change in case of a replacement
     let collateralization = parachain_rpc
         .get_collateralization_from_vault(vault.vault_id.clone(), false)
@@ -585,9 +585,11 @@ pub async fn monitor_bridge_metrics(
                         .iter()
                         .filter(|vault| &vault.vault_id.collateral_currency() == currency_id)
                     {
-                        let _ = publish_locked_collateral(vault, parachain_rpc.clone()).await;
-                        let _ = publish_required_collateral(vault, parachain_rpc.clone()).await;
-                        publish_collateralization(vault, parachain_rpc.clone()).await;
+                        let _ = tokio::join!(
+                            publish_locked_collateral(vault, parachain_rpc),
+                            publish_required_collateral(vault, parachain_rpc),
+                            publish_collateralization(vault, parachain_rpc),
+                        );
                     }
                 }
             },
@@ -794,6 +796,7 @@ mod tests {
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
             fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError>;
             fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, BitcoinError>;
+            fn list_addresses(&self) -> Result<Vec<Address>, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, BitcoinError>;
@@ -802,8 +805,8 @@ mod tests {
             async fn get_pruned_height(&self) -> Result<u64, BitcoinError>;
             async fn get_new_address(&self) -> Result<Address, BitcoinError>;
             async fn get_new_public_key(&self) -> Result<PublicKey, BitcoinError>;
-            fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, BitcoinError>;
-            fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), BitcoinError>;
+            fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, BitcoinError>;
+            fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), BitcoinError>;
             async fn add_new_deposit_key(&self, public_key: PublicKey, secret_key: Vec<u8>) -> Result<(), BitcoinError>;
             async fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
             async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
@@ -1082,7 +1085,7 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
-        publish_locked_collateral(&vault_data, parachain_rpc).await.unwrap();
+        publish_locked_collateral(&vault_data, &parachain_rpc).await.unwrap();
         let total_collateral = vault_data.metrics.locked_collateral.get();
 
         assert_eq!(total_collateral, 0.0000000075);
@@ -1135,7 +1138,7 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
-        publish_collateralization(&vault_data, parachain_rpc).await;
+        publish_collateralization(&vault_data, &parachain_rpc).await;
         let collateralization_metrics = vault_data.metrics.collateralization.get();
 
         assert_eq!(
@@ -1164,7 +1167,7 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
-        publish_required_collateral(&vault_data, parachain_rpc).await.unwrap();
+        publish_required_collateral(&vault_data, &parachain_rpc).await.unwrap();
         let required_collateral = vault_data.metrics.required_collateral.get();
 
         assert_eq!(required_collateral, 0.000000005);

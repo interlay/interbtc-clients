@@ -326,6 +326,9 @@ impl BitcoinCoreApi for MockBitcoinCore {
     fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, BitcoinError> {
         Ok(vec![])
     }
+    fn list_addresses(&self) -> Result<Vec<Address>, BitcoinError> {
+        Ok(vec![])
+    }
     async fn get_block_count(&self) -> Result<u64, BitcoinError> {
         Ok((self.blocks.read().await.len() - 1).try_into().unwrap())
     }
@@ -385,10 +388,10 @@ impl BitcoinCoreApi for MockBitcoinCore {
         let public_key = secp256k1::PublicKey::from_secret_key(&secp, &secret_key);
         Ok(PublicKey::new(public_key))
     }
-    fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, BitcoinError> {
+    fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, BitcoinError> {
         todo!()
     }
-    fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), BitcoinError> {
+    fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), BitcoinError> {
         todo!()
     }
     async fn add_new_deposit_key(&self, _public_key: PublicKey, _secret_key: Vec<u8>) -> Result<(), BitcoinError> {
