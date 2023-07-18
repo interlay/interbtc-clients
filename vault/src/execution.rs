@@ -196,12 +196,12 @@ impl Request {
 
     /// Make a bitcoin transfer to fulfil the request
     #[tracing::instrument(
-        name = "transfer_btc",
-        skip(self, parachain_rpc, btc_rpc),
-        fields(
-            request_type = ?self.request_type,
-            request_id = ?self.hash,
-        )
+    name = "transfer_btc",
+    skip(self, parachain_rpc, btc_rpc),
+    fields(
+    request_type = ?self.request_type,
+    request_id = ?self.hash,
+    )
     )]
     async fn transfer_btc<P: OraclePallet + BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync>(
         &self,
@@ -231,12 +231,12 @@ impl Request {
     }
 
     #[tracing::instrument(
-        name = "wait_for_inclusion",
-        skip(self, parachain_rpc, btc_rpc),
-        fields(
-            request_type = ?self.request_type,
-            request_id = ?self.hash,
-        )
+    name = "wait_for_inclusion",
+    skip(self, parachain_rpc, btc_rpc),
+    fields(
+    request_type = ?self.request_type,
+    request_id = ?self.hash,
+    )
     )]
     async fn wait_for_inclusion<
         P: OraclePallet + BtcRelayPallet + VaultRegistryPallet + UtilFuncs + Clone + Send + Sync,

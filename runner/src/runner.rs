@@ -760,7 +760,7 @@ mod tests {
                 &runner,
                 "https://github.com/interlay/interbtc-clients/releases/download/1.17.2/vault-parachain-metadata-kintsugi",
             )
-            .unwrap();
+                .unwrap();
             assert_eq!(bin_name, "vault-parachain-metadata-kintsugi");
             assert_eq!(bin_path, mock_path.join(bin_name));
         }
