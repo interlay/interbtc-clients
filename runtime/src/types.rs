@@ -211,9 +211,13 @@ pub trait PrettyPrint {
 
 mod account_id {
     use super::*;
+    use crate::SS58_PREFIX;
+    use sp_core::crypto::{AccountId32 as SpAccountId, Ss58Codec};
+
     impl PrettyPrint for AccountId {
         fn pretty_print(&self) -> String {
-            self.to_ss58check()
+            let account_id: SpAccountId = self.0.into();
+            account_id.to_ss58check_with_version(SS58_PREFIX.into())
         }
     }
 }

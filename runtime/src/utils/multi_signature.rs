@@ -1,3 +1,5 @@
+//! The "default" Substrate/Polkadot Signature type. This is used in codegen, as well as signing related bits.
+//! This doesn't contain much functionality itself, but is easy to convert to/from an `sp_runtime::MultiSignature`
 use codec::{Decode, Encode};
 
 /// Signature container that can store known signature types. This is a simplified version of

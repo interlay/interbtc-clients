@@ -1,4 +1,5 @@
-use crate::SS58_PREFIX;
+//! The "default" Substrate/Polkadot AccountId. This is used in codegen, as well as signing related bits.
+//! This doesn't contain much functionality itself, but is easy to convert to/from an `sp_core::AccountId32`
 use base58::{FromBase58, ToBase58};
 use blake2::{Blake2b512, Digest};
 use codec::{Decode, Encode};
@@ -45,15 +46,11 @@ impl AccountId32 {
     pub fn new(value: [u8; 32]) -> Self {
         AccountId32(value)
     }
-
     // Return the ss58-check string for this key. Adapted from `sp_core::crypto`. We need this to
     // serialize our account appropriately but otherwise don't care.
     pub fn to_ss58check(&self) -> String {
-        // For serializing to a string to obtain the account nonce, we use the default substrate
-        // prefix (since we have no way to otherwise pick one). It doesn't really matter, since when
-        // it's deserialized back in system_accountNextIndex, we ignore this (so long as it's valid).
-        // prefix <= 63 just take up one byte at the start:
-        let mut v = vec![SS58_PREFIX as u8];
+        const SUBSTRATE_SS58_PREFIX: u8 = 42;
+        let mut v = vec![SUBSTRATE_SS58_PREFIX];
         // then push the account ID bytes.
         v.extend(self.0);
         // then push a 2 byte checksum of what we have so far.

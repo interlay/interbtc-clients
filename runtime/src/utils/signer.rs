@@ -1,3 +1,5 @@
+//! A signer suitable for substrate based chains. This provides compatibility with Substrate
+//! packages like sp_keyring and such, and so relies on sp_core and sp_runtime to be included.
 use crate::Config;
 use sp_core::Pair as PairT;
 use sp_runtime::{
@@ -7,6 +9,7 @@ use sp_runtime::{
 
 use subxt::tx::Signer;
 
+/// A [`Signer`] implementation that can be constructed from an [`sp_core::Pair`].
 #[derive(Clone, Debug)]
 pub struct PairSigner<T: Config, Pair> {
     account_id: T::AccountId,
