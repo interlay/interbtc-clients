@@ -2,7 +2,6 @@ use crate::{execution::*, metrics::publish_expected_bitcoin_balance, system::Vau
 use runtime::{InterBtcParachain, RedeemPallet, RequestRedeemEvent};
 use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
 use std::time::Duration;
-
 /// Listen for RequestRedeemEvent directed at this vault; upon reception, transfer
 /// bitcoin and call execute_redeem
 ///
@@ -41,8 +40,8 @@ pub async fn listen_for_redeem_requests(
                     tracing::info!("Executing redeem #{:?}", event.redeem_id);
                     let result = async {
                         let request = Request::from_redeem_request(
-                            event.redeem_id,
-                            parachain_rpc.get_redeem_request(event.redeem_id).await?,
+                            *event.redeem_id,
+                            parachain_rpc.get_redeem_request(*event.redeem_id).await?,
                             payment_margin,
                         )?;
                         request
@@ -54,12 +53,12 @@ pub async fn listen_for_redeem_requests(
                     match result {
                         Ok(_) => tracing::info!(
                             "Completed redeem request #{} with amount {}",
-                            event.redeem_id,
+                            *event.redeem_id,
                             event.amount
                         ),
                         Err(e) => tracing::error!(
                             "Failed to process redeem request #{}: {}",
-                            event.redeem_id,
+                            *event.redeem_id,
                             e.to_string()
                         ),
                     }

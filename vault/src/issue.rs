@@ -32,7 +32,7 @@ pub(crate) async fn initialize_issue_set(
     };
 
     for (issue_id, request) in requests.into_iter() {
-        issue_set.insert(issue_id, request.btc_address);
+        issue_set.insert(issue_id, *request.btc_address);
     }
 
     Ok(btc_start_height)
@@ -83,7 +83,9 @@ struct RescanStatus {
     queued_rescan_range: Option<(usize, usize)>, // start, end(including)
 }
 impl RescanStatus {
-    const KEY: &str = "rescan-status";
+    // there was a bug pre-v2 that set rescanning status to an invalid range.
+    // by changing the keyname we effectively force a reset
+    const KEY: &str = "rescan-status-v2";
     fn update(&mut self, mut issues: Vec<InterBtcIssueRequest>, current_bitcoin_height: usize) {
         // Only look at issues that haven't been processed yet
         issues.retain(|issue| issue.opentime > self.newest_issue_height);
@@ -94,7 +96,13 @@ impl RescanStatus {
                 Some((begin, _)) => begin.min(issue.btc_height as usize),
                 None => issue.btc_height as usize,
             };
-            self.queued_rescan_range = Some((begin, current_bitcoin_height));
+            // We used to have a bug with syncing that could result in `current_bitcoin_height`
+            // being less than `begin`. Even though that issue has been fixed, for extra safety
+            // we clip the end range. This way, if there is another syncing bug, we'd handle it
+            // here correctly anyway, assuming that the unprocessed blocks will also scan for the
+            // newly added addresses.
+            let end = begin.max(current_bitcoin_height);
+            self.queued_rescan_range = Some((begin, end));
         }
     }
 
@@ -376,17 +384,17 @@ pub async fn listen_for_issue_requests(
 
                     let _ = publish_expected_bitcoin_balance(&vault, btc_parachain.clone()).await;
 
-                    if let Err(e) = add_new_deposit_key(&vault.btc_rpc, event.issue_id, event.vault_public_key).await {
-                        tracing::error!("Failed to add new deposit key #{}: {}", event.issue_id, e.to_string());
+                    if let Err(e) = add_new_deposit_key(&vault.btc_rpc, *event.issue_id, event.vault_public_key).await {
+                        tracing::error!("Failed to add new deposit key #{}: {}", *event.issue_id, e.to_string());
                     }
                 }
 
                 tracing::trace!(
                     "watching issue #{} for payment to {:?}",
-                    event.issue_id,
+                    *event.issue_id,
                     event.vault_address
                 );
-                issue_set.insert(event.issue_id, event.vault_address).await;
+                issue_set.insert(*event.issue_id, *event.vault_address).await;
             },
             |error| tracing::error!("Error reading request issue event: {}", error.to_string()),
         )
@@ -417,10 +425,10 @@ pub async fn listen_for_issue_executes(
                     tracing::info!("Received execute issue event: {:?}", event);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
-                    let _ = event_channel.clone().send(Event::Executed(event.issue_id)).await;
+                    let _ = event_channel.clone().send(Event::Executed(*event.issue_id)).await;
                 }
 
-                tracing::trace!("issue #{} executed, no longer watching", event.issue_id);
+                tracing::trace!("issue #{} executed, no longer watching", *event.issue_id);
                 issue_set.remove(&event.issue_id).await;
             },
             |error| tracing::error!("Error reading execute issue event: {}", error.to_string()),
@@ -443,7 +451,7 @@ pub async fn listen_for_issue_cancels(
     btc_parachain
         .on_event::<CancelIssueEvent, _, _, _>(
             |event| async move {
-                tracing::trace!("issue #{} cancelled, no longer watching", event.issue_id);
+                tracing::trace!("issue #{} cancelled, no longer watching", *event.issue_id);
                 issue_set.remove(&event.issue_id).await;
             },
             |error| tracing::error!("Error reading cancel issue event: {}", error.to_string()),
@@ -456,6 +464,7 @@ pub async fn listen_for_issue_cancels(
 mod tests {
     use super::*;
     use runtime::{
+        subxt::utils::Static,
         AccountId,
         CurrencyId::Token,
         TokenSymbol::{DOT, IBTC, INTR},
@@ -468,7 +477,7 @@ mod tests {
                 opentime,
                 btc_height: btc_height as u32,
                 amount: Default::default(),
-                btc_address: Default::default(),
+                btc_address: Static(Default::default()),
                 fee: Default::default(),
                 griefing_collateral: Default::default(),
                 griefing_currency: Token(INTR),

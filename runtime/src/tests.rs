@@ -4,16 +4,18 @@ const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(KSM);
 
 use super::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, FixedPointNumber, FixedU128,
-    OraclePallet, RawBlockHeader, ReplacePallet, SecurityPallet, StatusCode, Token, TryFromSymbol, VaultRegistryPallet,
-    KBTC, KINT, KSM,
+    OraclePallet, RawBlockHeader, ReplacePallet, SecurityPallet, StatusCode, SudoPallet, Token, TryFromSymbol,
+    VaultRegistryPallet, KBTC, KINT, KSM,
 };
-use crate::{integration::*, FeedValuesEvent, OracleKey, RuntimeCurrencyInfo, VaultId, H160, U256};
+use crate::{
+    integration::*, utils_accountid::AccountId32, AccountId, FeedValuesEvent, OracleKey, RuntimeCurrencyInfo, VaultId,
+    H160, U256,
+};
 use module_bitcoin::{formatter::TryFormat, types::BlockBuilder};
 pub use primitives::CurrencyId::ForeignAsset;
 use primitives::CurrencyId::LendToken;
 use sp_keyring::AccountKeyring;
 use std::time::Duration;
-use subxt::utils::Static;
 
 fn dummy_public_key() -> BtcPublicKey {
     BtcPublicKey {
@@ -26,7 +28,7 @@ fn dummy_public_key() -> BtcPublicKey {
 
 async fn set_exchange_rate(client: SubxtClient) {
     let oracle_provider = setup_provider(client, AccountKeyring::Bob).await;
-    let key = OracleKey::ExchangeRate(Static(DEFAULT_TESTING_CURRENCY));
+    let key = OracleKey::ExchangeRate(DEFAULT_TESTING_CURRENCY);
     let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
     oracle_provider
         .feed_values(vec![(key, exchange_rate)])
@@ -41,7 +43,7 @@ async fn test_getters() {
 
     tokio::join!(
         async {
-            assert_eq!(parachain_rpc.get_free_balance(Token(KSM)).await.unwrap(), 1 << 60);
+            assert_eq!(parachain_rpc.get_free_balance(Token(KINT)).await.unwrap(), 1 << 60);
         },
         async {
             assert_eq!(parachain_rpc.get_parachain_status().await.unwrap(), StatusCode::Error);
@@ -57,19 +59,25 @@ async fn test_getters() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_invalid_tx_matching() {
+    let bob_keyring = AccountKeyring::Bob;
+    let bob_substrate_account = bob_keyring.to_account_id();
+    let bob = AccountId32(bob_substrate_account.clone().into());
+
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
-    let err = parachain_rpc.get_invalid_tx_error(AccountKeyring::Bob.into()).await;
+    let err = parachain_rpc.get_invalid_tx_error(bob.into()).await;
     assert!(err.is_invalid_transaction().is_some())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_too_low_priority_matching() {
+    let bob_keyring = AccountKeyring::Bob;
+    let bob_substrate_account = bob_keyring.to_account_id();
+    let bob = AccountId32(bob_substrate_account.clone().into());
+
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
-    let err = parachain_rpc
-        .get_too_low_priority_error(AccountKeyring::Bob.into())
-        .await;
+    let err = parachain_rpc.get_too_low_priority_error(bob.into()).await;
     assert!(err.is_pool_too_low_priority().is_some())
 }
 
@@ -86,7 +94,7 @@ async fn test_subxt_processing_events_after_dispatch_error() {
             true
         });
 
-    let key = OracleKey::ExchangeRate(Static(DEFAULT_TESTING_CURRENCY));
+    let key = OracleKey::ExchangeRate(DEFAULT_TESTING_CURRENCY);
     let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
 
     let result = tokio::join!(
@@ -105,8 +113,21 @@ async fn test_register_vault() {
     let (client, _tmp_dir) = default_provider_client(AccountKeyring::Alice).await;
     let parachain_rpc = setup_provider(client.clone(), AccountKeyring::Alice).await;
     set_exchange_rate(client.clone()).await;
+    parachain_rpc
+        .set_balances(vec![(
+            AccountKeyring::Alice.to_account_id().into(),
+            1 << 60,
+            0,
+            DEFAULT_TESTING_CURRENCY,
+        )])
+        .await
+        .expect("Should endow account");
 
-    let vault_id = VaultId::new(AccountKeyring::Alice.into(), Token(KSM), Token(KBTC));
+    let alice_keyring = AccountKeyring::Alice;
+    let alice_substrate_account = alice_keyring.to_account_id();
+    let alice = AccountId32(alice_substrate_account.clone().into());
+
+    let vault_id = VaultId::new(alice.into(), Token(KSM), Token(KBTC));
 
     parachain_rpc.register_public_key(dummy_public_key()).await.unwrap();
     parachain_rpc.register_vault(&vault_id, 3 * KSM.one()).await.unwrap();

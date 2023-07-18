@@ -4,11 +4,9 @@ use async_trait::async_trait;
 use futures::{channel::mpsc::Receiver, *};
 use runtime::{
     AccountId, BlockNumber, Error as RuntimeError, IssuePallet, IssueRequestStatus, ReplacePallet,
-    ReplaceRequestStatus, SecurityPallet, UtilFuncs,
+    ReplaceRequestStatus, SecurityPallet, UtilFuncs, H256,
 };
 use std::marker::{Send, Sync};
-
-use runtime::H256;
 
 pub enum Event {
     /// new issue requested / replace accepted
@@ -313,15 +311,16 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
     }
 }
 
-#[cfg(all(test, feature = "parachain-metadata-kintsugi-testnet"))]
+#[cfg(all(test, feature = "parachain-metadata-kintsugi"))]
 mod tests {
     use super::*;
     use async_trait::async_trait;
     use futures::channel::mpsc;
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
-        AccountId, AssetMetadata, BtcAddress, BtcPublicKey, CurrencyId, ErrorCode, InterBtcIssueRequest,
-        InterBtcReplaceRequest, IssueRequestStatus, RequestIssueEvent, StatusCode, Token, VaultId, DOT, IBTC, INTR,
+        subxt::utils::Static, AccountId, AssetMetadata, BtcAddress, BtcPublicKey, CurrencyId, ErrorCode,
+        InterBtcIssueRequest, InterBtcReplaceRequest, IssueRequestStatus, RequestIssueEvent, StatusCode, Token,
+        VaultId, DOT, IBTC, INTR,
     };
     use std::collections::BTreeSet;
 
@@ -379,7 +378,7 @@ mod tests {
         #[async_trait]
         pub trait SecurityPallet {
             async fn get_parachain_status(&self) -> Result<StatusCode, RuntimeError>;
-            async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, RuntimeError>;
+            async fn get_error_codes(&self) -> Result<Vec<ErrorCode>, RuntimeError>;
             async fn get_current_active_block_number(&self) -> Result<u32, RuntimeError>;
         }
     }
@@ -394,7 +393,7 @@ mod tests {
     fn default_issue_request() -> InterBtcIssueRequest {
         InterBtcIssueRequest {
             amount: Default::default(),
-            btc_address: Default::default(),
+            btc_address: Static(Default::default()),
             btc_height: Default::default(),
             fee: Default::default(),
             griefing_collateral: Default::default(),

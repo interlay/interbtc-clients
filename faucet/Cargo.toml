@@ -12,8 +12,6 @@ path = "src/lib.rs"
 [features]
 parachain-metadata-interlay = ["runtime/parachain-metadata-interlay"]
 parachain-metadata-kintsugi = ["runtime/parachain-metadata-kintsugi"]
-parachain-metadata-interlay-testnet = ["runtime/parachain-metadata-interlay-testnet"]
-parachain-metadata-kintsugi-testnet = ["runtime/parachain-metadata-kintsugi-testnet"]
 
 [dependencies]
 log = "0.4.6"
@@ -46,5 +44,4 @@ service = { path = "../service" }
 runtime = { path = "../runtime", features = ["testing-utils"] }
 
 # Substrate dependencies
-# needs to agree with subxt's version
-sp-keyring = { version = "7.0.0" }
+sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }

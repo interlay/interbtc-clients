@@ -157,7 +157,7 @@ impl TryFromSymbol for CurrencyId {
     fn from_lend_token_symbol(symbol: &str) -> Option<Self> {
         let uppercase_symbol = symbol.to_uppercase();
         // Does the first character match the lend token prefix?
-        if uppercase_symbol.as_str().chars().next() == Some(LEND_TOKEN_SYMBOL_PREFIX) {
+        if uppercase_symbol.as_str().starts_with(LEND_TOKEN_SYMBOL_PREFIX) {
             return Self::try_from_symbol(uppercase_symbol[1..].to_string())
                 .ok()
                 .and_then(|underlying_id| LendingAssets::get_lend_token_id(underlying_id).ok());

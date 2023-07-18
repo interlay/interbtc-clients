@@ -1,7 +1,10 @@
 use bitcoin::{Network, PrivateKey};
 use clap::Parser;
 use futures::Future;
-use runtime::{sp_core::crypto::Pair, InterBtcSigner, KeyPair, Ss58Codec, DEFAULT_SPEC_NAME, SS58_PREFIX};
+use runtime::{
+    sp_core::crypto::{Pair, Ss58Codec},
+    InterBtcSigner, KeyPair, DEFAULT_SPEC_NAME, SS58_PREFIX,
+};
 use secp256k1::{rand::thread_rng, SecretKey};
 use service::{warp, warp::Filter, ConnectionManager, Error as ServiceError, MonitoringConfig, ServiceConfig};
 use signal_hook::consts::*;
@@ -258,8 +261,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_vault_pid_file() {
-        let dummy_account_id = AccountId::new(Default::default());
-        let dummy_spec_name = "kintsugi-testnet".to_string();
+        let dummy_account_id = AccountId::default();
+        let dummy_spec_name = "kintsugi".to_string();
         let termination_signals = &[SIGHUP, SIGTERM, SIGINT, SIGQUIT];
         let mut sys = System::new_all();
 

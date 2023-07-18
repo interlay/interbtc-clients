@@ -111,7 +111,7 @@ impl Request {
             )?),
             btc_height: Some(request.btc_height),
             amount: request.amount_btc,
-            btc_address: request.btc_address,
+            btc_address: *request.btc_address,
             request_type: RequestType::Redeem,
             vault_id: request.vault,
             fee_budget: Some(request.transfer_fee_btc),
@@ -134,7 +134,7 @@ impl Request {
             )?),
             btc_height: Some(request.btc_height),
             amount: request.amount,
-            btc_address: request.btc_address,
+            btc_address: *request.btc_address,
             request_type: RequestType::Replace,
             vault_id: request.old_vault,
             fee_budget: None,
@@ -189,6 +189,7 @@ impl Request {
                 auto_rbf,
             )
             .await?;
+
         let _ = update_bitcoin_metrics(&vault, tx_metadata.fee, self.fee_budget).await;
         self.execute(parachain_rpc, tx_metadata).await
     }
@@ -758,7 +759,7 @@ mod tests {
         #[async_trait]
         pub trait SecurityPallet {
             async fn get_parachain_status(&self) -> Result<StatusCode, RuntimeError>;
-            async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, RuntimeError>;
+            async fn get_error_codes(&self) -> Result<Vec<ErrorCode>, RuntimeError>;
             async fn get_current_active_block_number(&self) -> Result<u32, RuntimeError>;
         }
 

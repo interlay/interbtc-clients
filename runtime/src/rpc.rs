@@ -16,15 +16,14 @@ use module_bitcoin::{
 use module_oracle_rpc_runtime_api::BalanceWrapper;
 use primitives::UnsignedFixedPoint;
 use serde_json::Value;
-use std::{collections::BTreeSet, future::Future, marker::PhantomData, ops::Range, sync::Arc, time::Duration};
+use std::{future::Future, ops::Range, sync::Arc, time::Duration};
 use subxt::{
     blocks::ExtrinsicEvents,
     client::OnlineClient,
     events::StaticEvent,
-    ext::scale_decode::IntoVisitor,
     metadata::DecodeWithMetadata,
     rpc::{rpc_params, RpcClientT},
-    storage::{address::Yes, StorageAddress, StorageKey},
+    storage::{address::Yes, StorageAddress},
     tx::TxPayload,
     utils::Static,
 };
@@ -32,7 +31,6 @@ use tokio::{
     sync::RwLock,
     time::{sleep, timeout},
 };
-
 // timeout before retrying parachain calls (5 minutes)
 const TRANSACTION_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -50,28 +48,17 @@ const BLAKE2_128_HASH_PREFIX_LENGTH: usize = 48;
 const TWOX_64_HASH_PREFIX_LENGTH: usize = 40;
 
 // sanity check to be sure that testing-utils is not accidentally selected
-#[cfg(all(
-    any(test, feature = "testing-utils"),
-    not(feature = "parachain-metadata-kintsugi-testnet")
-))]
-compile_error!("Tests are only supported for the kintsugi testnet metadata");
+#[cfg(all(any(test, feature = "testing-utils"), not(feature = "parachain-metadata-kintsugi")))]
+compile_error!("Tests are only supported for the kintsugi runtime");
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "parachain-metadata-interlay")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1025000..1026000;
         pub const DEFAULT_SPEC_NAME: &str = "interlay-parachain";
         pub const SS58_PREFIX: u16 = 2032;
     } else if #[cfg(feature = "parachain-metadata-kintsugi")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
+        const DEFAULT_SPEC_VERSION: Range<u32> = 1025000..1026000;
         pub const DEFAULT_SPEC_NAME: &str = "kintsugi-parachain";
-        pub const SS58_PREFIX: u16 = 2092;
-    } else if #[cfg(feature = "parachain-metadata-interlay-testnet")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
-        pub const DEFAULT_SPEC_NAME: &str = "testnet-interlay";
-        pub const SS58_PREFIX: u16 = 2032;
-    }  else if #[cfg(feature = "parachain-metadata-kintsugi-testnet")] {
-        const DEFAULT_SPEC_VERSION: Range<u32> = 1024000..1025000;
-        pub const DEFAULT_SPEC_NAME: &str = "testnet-kintsugi";
         pub const SS58_PREFIX: u16 = 2092;
     }
 }
@@ -126,9 +113,9 @@ impl InterBtcParachain {
         }
 
         let currency_constants = metadata::constants().currency();
-        let native_currency_id = *api.constants().at(&currency_constants.get_native_currency_id())?;
-        let relay_chain_currency_id = *api.constants().at(&currency_constants.get_relay_chain_currency_id())?;
-        let wrapped_currency_id = *api.constants().at(&currency_constants.get_wrapped_currency_id())?;
+        let native_currency_id = api.constants().at(&currency_constants.get_native_currency_id())?;
+        let relay_chain_currency_id = api.constants().at(&currency_constants.get_relay_chain_currency_id())?;
+        let wrapped_currency_id = api.constants().at(&currency_constants.get_wrapped_currency_id())?;
 
         // low capacity channel since we generally only care about the newest value, so it's ok
         // if we miss an event
@@ -177,11 +164,10 @@ impl InterBtcParachain {
             pub aux: ImportedAux,
         }
 
-        let head = self.get_finalized_block_hash().await.unwrap();
         let _: CreatedBlock<interbtc_runtime::Hash> = self
             .api
             .rpc()
-            .request("engine_createBlock", rpc_params![true, true, head])
+            .request("engine_createBlock", rpc_params![true, true])
             .await
             .expect("failed to create block");
     }
@@ -218,44 +204,42 @@ impl InterBtcParachain {
         Self::new(ws_client, signer, shutdown_tx).await
     }
 
-    async fn get_fresh_nonce(&self) -> u32 {
+    async fn get_fresh_nonce(&self) -> Result<u32, SubxtError> {
         // For getting the nonce, use latest, possibly non-finalized block.
         // TODO: we might want to wait until the latest block is actually finalized
         // query account info in order to get the nonce value used for communication
-        // let storage_key = metadata::storage().system().account(Static::from(&self.account_id));
-        // let on_chain_nonce = self
-        //     .api
-        //     .storage()
-        //     .at_latest()
-        //     .await
-        //     .unwrap()
-        //     .fetch(&storage_key)
-        //     .await
-        //     .transpose()
-        //     .and_then(|x| x.ok())
-        //     .map(|x| x.nonce)
-        //     .unwrap_or_default();
-        //
-        // let mut next_nonce = self.nonce.write().await;
-        //
-        // let ret = if on_chain_nonce > *next_nonce {
-        //     log::info!("Synced to on-chain nonce: {}", on_chain_nonce);
-        //     on_chain_nonce
-        // } else {
-        //     *next_nonce
-        // };
-        //
-        // *next_nonce = ret.saturating_add(1);
-        //
-        // ret
-        todo!()
+        let storage_key = metadata::storage().system().account(self.get_account_id().clone());
+        let on_chain_nonce = self
+            .api
+            .storage()
+            .at_latest()
+            .await?
+            .fetch(&storage_key)
+            .await
+            .transpose()
+            .and_then(|x| x.ok())
+            .map(|x| x.nonce)
+            .unwrap_or_default();
+
+        let mut next_nonce = self.nonce.write().await;
+
+        let ret = if on_chain_nonce > *next_nonce {
+            log::info!("Synced to on-chain nonce: {}", on_chain_nonce);
+            on_chain_nonce
+        } else {
+            *next_nonce
+        };
+
+        *next_nonce = ret.saturating_add(1);
+
+        Ok(ret)
     }
 
     async fn query_finalized<Address>(&self, address: Address) -> Result<Option<Address::Target>, Error>
     where
         Address: StorageAddress<IsFetchable = Yes>,
     {
-        let hash = self.get_finalized_block_hash().await?.ok_or(Error::BlockHashNotFound)?;
+        let hash = self.get_finalized_block_hash().await?;
         Ok(self.api.storage().at(hash).fetch(&address).await?)
     }
 
@@ -263,15 +247,15 @@ impl InterBtcParachain {
     where
         Address: StorageAddress<IsFetchable = Yes>,
     {
-        Ok(self.query_finalized(address).await?.ok_or(Error::BlockNotFound)?)
+        self.query_finalized(address).await?.ok_or(Error::StorageItemNotFound)
     }
 
-    async fn query_finalized_or_default<Address>(&self, address: Address) -> Result<Option<Address::Target>, Error>
+    async fn query_finalized_or_default<Address>(&self, address: Address) -> Result<Address::Target, Error>
     where
         Address: StorageAddress<IsFetchable = Yes, IsDefaultable = Yes>,
     {
-        let hash = self.get_finalized_block_hash().await?.ok_or(Error::BlockHashNotFound)?;
-        Ok(Some(self.api.storage().at(hash).fetch_or_default(&address).await?))
+        let hash = self.get_finalized_block_hash().await?;
+        Ok(self.api.storage().at(hash).fetch_or_default(&address).await?)
     }
 
     /// Gets a copy of the signer with a unique nonce
@@ -281,8 +265,8 @@ impl InterBtcParachain {
     {
         notify_retry::<Error, _, _, _, _, _>(
             || async {
-                let nonce = self.get_fresh_nonce().await;
                 match timeout(TRANSACTION_TIMEOUT, async {
+                    let nonce = self.get_fresh_nonce().await?;
                     let tx_progress = self
                         .api
                         .tx()
@@ -327,12 +311,8 @@ impl InterBtcParachain {
         .await
     }
 
-    pub async fn get_finalized_block_hash(&self) -> Result<Option<H256>, Error> {
-        if cfg!(feature = "testing-utils") {
-            Ok(None)
-        } else {
-            Ok(Some(self.api.rpc().finalized_head().await?))
-        }
+    pub async fn get_finalized_block_hash(&self) -> Result<H256, Error> {
+        Ok(self.api.rpc().finalized_head().await?)
     }
 
     /// Subscribe to new parachain blocks.
@@ -450,11 +430,7 @@ impl InterBtcParachain {
                 while let Some(result) = sub.next().fuse().await {
                     let event_stream = result
                         .iter()
-                        .flat_map(|events| {
-                            events
-                                .iter()
-                                .map(|x| x.and_then(|y| y.as_event::<T>().map_err(|err| err.into())))
-                        })
+                        .flat_map(|events| events.iter().map(|x| x.and_then(|y| y.as_event::<T>())))
                         .filter_map(|x| x.transpose());
                     for result in event_stream {
                         match result {
@@ -496,10 +472,8 @@ impl InterBtcParachain {
     /// Emulate the POOL_INVALID_TX error using token transfer extrinsics.
     #[cfg(test)]
     pub async fn get_invalid_tx_error(&self, recipient: AccountId) -> Error {
-        let call = metadata::tx()
-            .tokens()
-            .transfer(Static(recipient), Static(Token(DOT)), 100);
-        let nonce = self.get_fresh_nonce().await;
+        let call = metadata::tx().tokens().transfer(recipient, Token(DOT), 100);
+        let nonce = self.get_fresh_nonce().await.unwrap();
 
         self.api
             .tx()
@@ -523,11 +497,9 @@ impl InterBtcParachain {
     /// Emulate the POOL_TOO_LOW_PRIORITY error using token transfer extrinsics.
     #[cfg(test)]
     pub async fn get_too_low_priority_error(&self, recipient: AccountId) -> Error {
-        let call = metadata::tx()
-            .tokens()
-            .transfer(Static(recipient), Static(Token(DOT)), 100);
+        let call = metadata::tx().tokens().transfer(recipient, Token(DOT), 100);
 
-        let nonce = self.get_fresh_nonce().await;
+        let nonce = self.get_fresh_nonce().await.unwrap();
 
         // submit tx but don't watch
         self.api
@@ -604,7 +576,7 @@ impl InterBtcParachain {
             liquidate_incentive_reserved_factor: Static(Ratio::from_percent(3)),
             supply_cap: 1_000_000_000_000_000_000_000u128,
             borrow_cap: 1_000_000_000_000_000_000_000u128,
-            lend_token_id: Static(LendToken(id)),
+            lend_token_id: LendToken(id),
         }
     }
 
@@ -615,7 +587,7 @@ impl InterBtcParachain {
             .enumerate()
             .map(|(i, asset_id)| {
                 EncodedCall::Loans(metadata::runtime_types::loans::pallet::Call::add_market {
-                    asset_id: Static(*asset_id),
+                    asset_id: *asset_id,
                     market: self.lending_mock_market_from_id(i as u32),
                 })
             })
@@ -665,8 +637,7 @@ impl InterBtcParachain {
         futures::future::try_join(
             self.on_event::<NewMarketEvent, _, _, _>(
                 |event| async move {
-                    if let Err(err) = LendingAssets::insert(*event.underlying_currency_id, *event.market.lend_token_id)
-                    {
+                    if let Err(err) = LendingAssets::insert(event.underlying_currency_id, event.market.lend_token_id) {
                         log::error!(
                             "Failed to register lend token {:?}: {}",
                             event.underlying_currency_id,
@@ -678,8 +649,7 @@ impl InterBtcParachain {
             ),
             self.on_event::<UpdatedMarketEvent, _, _, _>(
                 |event| async move {
-                    if let Err(err) = LendingAssets::insert(*event.underlying_currency_id, *event.market.lend_token_id)
-                    {
+                    if let Err(err) = LendingAssets::insert(event.underlying_currency_id, event.market.lend_token_id) {
                         log::error!(
                             "Failed to update lend token {:?}: {}",
                             event.underlying_currency_id,
@@ -724,7 +694,7 @@ impl InterBtcParachain {
         T: Decode + Send + 'static + DecodeWithMetadata,
         U: Decode + Send + 'static,
     {
-        let head = self.get_finalized_block_hash().await?.ok_or(Error::BlockHashNotFound)?;
+        let head = self.get_finalized_block_hash().await?;
         let mut iter = self.api.storage().at(head).iter(key_addr, DEFAULT_PAGE_SIZE).await?;
 
         let mut ret = Vec::new();
@@ -753,7 +723,6 @@ impl InterBtcParachain {
     async fn get_chain_counter(&self) -> Result<u32, Error> {
         self.query_finalized_or_default(metadata::storage().btc_relay().chain_counter())
             .await
-            .map(|result| result.unwrap_or_default())
     }
 }
 
@@ -782,9 +751,8 @@ pub trait UtilFuncs {
 #[async_trait]
 impl UtilFuncs for InterBtcParachain {
     async fn get_current_chain_height(&self) -> Result<u32, Error> {
-        self.query_finalized_or_default(metadata::storage().system().number())
+        self.query_finalized_or_error(metadata::storage().system().number())
             .await
-            .map(|result| result.unwrap_or_default())
     }
 
     async fn get_rpc_properties(&self) -> Result<serde_json::Map<String, Value>, Error> {
@@ -813,12 +781,14 @@ impl UtilFuncs for InterBtcParachain {
         let markets = self
             .get_decoded_storage_keys::<_, CurrencyId>(key_addr, StorageMapHasher::Blake2_128)
             .await?;
-        // let ret = markets
-        //     .into_iter()
-        //     .map(|(underlying_currency_id, market)| (underlying_currency_id, market.lend_token_id))
-        //     .collect();
-        // Ok(ret)
-        todo!()
+        let ret = markets
+            .into_iter()
+            .map(|(underlying_currency_id, market)| {
+                let lend_token_id = market.lend_token_id;
+                (underlying_currency_id, lend_token_id)
+            })
+            .collect();
+        Ok(ret)
     }
 
     async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, Error> {
@@ -848,9 +818,8 @@ impl CollateralBalancesPallet for InterBtcParachain {
     }
 
     async fn get_free_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<Balance, Error> {
-        // let storage_key = metadata::storage().tokens().accounts(&id, currency_id);
-        // Ok(self.query_finalized_or_default(storage_key).await?.free)
-        todo!()
+        let storage_key = metadata::storage().tokens().accounts(id.clone(), currency_id);
+        Ok(self.query_finalized_or_default(storage_key).await?.free)
     }
 
     async fn get_reserved_balance(&self, currency_id: CurrencyId) -> Result<Balance, Error> {
@@ -858,9 +827,8 @@ impl CollateralBalancesPallet for InterBtcParachain {
     }
 
     async fn get_reserved_balance_for_id(&self, id: AccountId, currency_id: CurrencyId) -> Result<Balance, Error> {
-        // let storage_key = metadata::storage().tokens().accounts(&id, currency_id);
-        // Ok(self.query_finalized_or_default(storage_key).await?.reserved)
-        todo!()
+        let storage_key = metadata::storage().tokens().accounts(id.clone(), currency_id);
+        Ok(self.query_finalized_or_default(storage_key).await?.reserved)
     }
 
     async fn transfer_to(&self, recipient: &AccountId, amounts: Vec<(u128, CurrencyId)>) -> Result<(), Error> {
@@ -876,7 +844,7 @@ impl CollateralBalancesPallet for InterBtcParachain {
                 })
                 .collect(),
         )
-            .await
+        .await
     }
 }
 
@@ -960,24 +928,22 @@ pub trait ReplacePallet {
 #[async_trait]
 impl ReplacePallet for InterBtcParachain {
     async fn request_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
-        //ToDO: Fix this
-        // self.with_unique_signer(
-        //     metadata::tx()
-        //         .replace()
-        //         .request_replace(vault_id.currencies.clone(), amount),
-        // )
-        // .await?;
+        self.with_unique_signer(
+            metadata::tx()
+                .replace()
+                .request_replace(vault_id.currencies.clone(), amount),
+        )
+        .await?;
         Ok(())
     }
 
     async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
-        //ToDO: Fix this
-        // self.with_unique_signer(
-        //     metadata::tx()
-        //         .replace()
-        //         .withdraw_replace(vault_id.currencies.clone(), amount),
-        // )
-        // .await?;
+        self.with_unique_signer(
+            metadata::tx()
+                .replace()
+                .withdraw_replace(vault_id.currencies.clone(), amount),
+        )
+        .await?;
         Ok(())
     }
 
@@ -989,36 +955,31 @@ impl ReplacePallet for InterBtcParachain {
         collateral: u128,
         btc_address: BtcAddress,
     ) -> Result<(), Error> {
-        //ToDO: Fix this
-
-        // self.with_unique_signer(metadata::tx().replace().accept_replace(
-        //     new_vault.currencies.clone(),
-        //     old_vault.clone(),
-        //     amount_btc,
-        //     collateral,
-        //     btc_address,
-        // ))
-        // .await?;
+        self.with_unique_signer(metadata::tx().replace().accept_replace(
+            new_vault.currencies.clone(),
+            old_vault.clone(),
+            amount_btc,
+            collateral,
+            Static(btc_address),
+        ))
+        .await?;
         Ok(())
     }
 
     async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
-        //ToDO: Fix this
-
-        // self.with_unique_signer(metadata::tx().replace().execute_replace(
-        //     replace_id,
-        //     MerkleProof::parse(merkle_proof)?,
-        //     parse_transaction(raw_tx)?,
-        //     raw_tx.len() as u32,
-        // ))
-        // .await?;
+        self.with_unique_signer(metadata::tx().replace().execute_replace(
+            Static(replace_id),
+            Static(MerkleProof::parse(merkle_proof)?),
+            Static(parse_transaction(raw_tx)?),
+            raw_tx.len() as u32,
+        ))
+        .await?;
         Ok(())
     }
 
     async fn cancel_replace(&self, replace_id: H256) -> Result<(), Error> {
-        //ToDO: Fix this
-        // self.with_unique_signer(metadata::tx().replace().cancel_replace(replace_id))
-        //     .await?;
+        self.with_unique_signer(metadata::tx().replace().cancel_replace(Static(replace_id)))
+            .await?;
         Ok(())
     }
 
@@ -1027,7 +988,7 @@ impl ReplacePallet for InterBtcParachain {
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, InterBtcReplaceRequest)>, Error> {
-        let head = self.get_finalized_block_hash().await?;
+        let head = Some(self.get_finalized_block_hash().await?);
         let result: Vec<H256> = self
             .api
             .rpc()
@@ -1048,7 +1009,7 @@ impl ReplacePallet for InterBtcParachain {
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, InterBtcReplaceRequest)>, Error> {
-        let head = self.get_finalized_block_hash().await?;
+        let head = Some(self.get_finalized_block_hash().await?);
         let result: Vec<H256> = self
             .api
             .rpc()
@@ -1070,15 +1031,13 @@ impl ReplacePallet for InterBtcParachain {
     }
 
     async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, Error> {
-        // self.query_finalized_or_error(metadata::storage().replace().replace_requests(replace_id))
-        //     .await
-        todo!()
+        self.query_finalized_or_error(metadata::storage().replace().replace_requests(Static::from(replace_id)))
+            .await
     }
 
     async fn get_replace_dust_amount(&self) -> Result<u128, Error> {
-        // self.query_finalized_or_error(metadata::storage().replace().replace_btc_dust_value())
-        //     .await
-        todo!()
+        self.query_finalized_or_error(metadata::storage().replace().replace_btc_dust_value())
+            .await
     }
 }
 
@@ -1120,13 +1079,13 @@ impl OraclePallet for InterBtcParachain {
     /// Returns the last exchange rate in planck per satoshis, the time at which it was set
     /// and the configured max delay.
     async fn get_exchange_rate(&self, currency_id: CurrencyId) -> Result<FixedU128, Error> {
-        // self.query_finalized_or_error(
-        //     metadata::storage()
-        //         .oracle()
-        //         .aggregate(&OracleKey::ExchangeRate(currency_id)),
-        // )
-        // .await
-        todo!()
+        Ok(*self
+            .query_finalized_or_error(
+                metadata::storage()
+                    .oracle()
+                    .aggregate(&OracleKey::ExchangeRate(currency_id)),
+            )
+            .await?)
     }
 
     /// Sets the current exchange rate (i.e. DOT/BTC)
@@ -1134,9 +1093,13 @@ impl OraclePallet for InterBtcParachain {
     /// # Arguments
     /// * `value` - the current exchange rate
     async fn feed_values(&self, values: Vec<(OracleKey, FixedU128)>) -> Result<(), Error> {
-        // self.with_unique_signer(metadata::tx().oracle().feed_values(values))
-        //     .await?;
-        todo!()
+        let converted_values: Vec<(OracleKey, Static<FixedU128>)> = values
+            .iter()
+            .map(|(key, value)| (key.clone(), Static::from(*value)))
+            .collect();
+        self.with_unique_signer(metadata::tx().oracle().feed_values(converted_values))
+            .await?;
+        Ok(())
     }
 
     /// Sets the estimated Satoshis per bytes required to get a Bitcoin transaction included in
@@ -1145,42 +1108,40 @@ impl OraclePallet for InterBtcParachain {
     /// # Arguments
     /// * `value` - the estimated fee rate
     async fn set_bitcoin_fees(&self, value: FixedU128) -> Result<(), Error> {
-        // self.with_unique_signer(
-        //     metadata::tx()
-        //         .oracle()
-        //         .feed_values(vec![(OracleKey::FeeEstimation, value)]),
-        // )
-        // .await?;
+        self.with_unique_signer(
+            metadata::tx()
+                .oracle()
+                .feed_values(vec![(OracleKey::FeeEstimation, Static::from(value))]),
+        )
+        .await?;
         Ok(())
     }
 
     /// Gets the estimated Satoshis per bytes required to get a Bitcoin transaction included in
     /// in the next x blocks
     async fn get_bitcoin_fees(&self) -> Result<FixedU128, Error> {
-        // self.query_finalized_or_error(metadata::storage().oracle().aggregate(&OracleKey::FeeEstimation))
-        //     .await
-        todo!()
+        Ok(*self
+            .query_finalized_or_error(metadata::storage().oracle().aggregate(&OracleKey::FeeEstimation))
+            .await?)
     }
 
     /// Converts the amount in btc to dot, based on the current set exchange rate.
     async fn wrapped_to_collateral(&self, amount: u128, currency_id: CurrencyId) -> Result<u128, Error> {
-        // let head = self.get_finalized_block_hash().await?;
-        // let result: BalanceWrapper<_> = self
-        //     .api
-        //     .rpc()
-        //     .request(
-        //         "oracle_wrappedToCollateral",
-        //         rpc_params![BalanceWrapper { amount }, currency_id, head],
-        //     )
-        //     .await?;
-        //
-        // Ok(result.amount)
-        todo!()
+        let head = Some(self.get_finalized_block_hash().await?);
+        let result: BalanceWrapper<_> = self
+            .api
+            .rpc()
+            .request(
+                "oracle_wrappedToCollateral",
+                rpc_params![BalanceWrapper { amount }, currency_id, head],
+            )
+            .await?;
+        Ok(result.amount)
     }
 
     /// Converts the amount in dot to btc, based on the current set exchange rate.
     async fn collateral_to_wrapped(&self, amount: u128, currency_id: CurrencyId) -> Result<u128, Error> {
-        let head = self.get_finalized_block_hash().await?;
+        let head = Some(self.get_finalized_block_hash().await?);
         let result: BalanceWrapper<_> = self
             .api
             .rpc()
@@ -1236,7 +1197,6 @@ impl SecurityPallet for InterBtcParachain {
     async fn get_current_active_block_number(&self) -> Result<u32, Error> {
         self.query_finalized_or_default(metadata::storage().security().active_block_count())
             .await
-            .map(|result| result.unwrap_or_default())
     }
 }
 
@@ -1264,15 +1224,14 @@ pub trait IssuePallet {
 #[async_trait]
 impl IssuePallet for InterBtcParachain {
     async fn request_issue(&self, amount: u128, vault_id: &VaultId) -> Result<RequestIssueEvent, Error> {
-        // self.with_unique_signer(
-        //     metadata::tx()
-        //         .issue()
-        //         .request_issue(amount, vault_id.clone(), self.native_currency_id),
-        // )
-        // .await?
-        // .find_first::<RequestIssueEvent>()?
-        // .ok_or(Error::RequestIssueIDNotFound)
-        todo!()
+        self.with_unique_signer(
+            metadata::tx()
+                .issue()
+                .request_issue(amount, vault_id.clone(), self.native_currency_id),
+        )
+        .await?
+        .find_first::<RequestIssueEvent>()?
+        .ok_or(Error::RequestIssueIDNotFound)
     }
 
     async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
@@ -1293,16 +1252,15 @@ impl IssuePallet for InterBtcParachain {
     }
 
     async fn get_issue_request(&self, issue_id: H256) -> Result<InterBtcIssueRequest, Error> {
-        // self.query_finalized_or_error(metadata::storage().issue().issue_requests(issue_id))
-        //     .await
-        todo!()
+        self.query_finalized_or_error(metadata::storage().issue().issue_requests(Static::from(issue_id)))
+            .await
     }
 
     async fn get_vault_issue_requests(
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, InterBtcIssueRequest)>, Error> {
-        let head = self.get_finalized_block_hash().await?;
+        let head = Some(self.get_finalized_block_hash().await?);
         let result: Vec<H256> = self
             .api
             .rpc()
@@ -1319,32 +1277,30 @@ impl IssuePallet for InterBtcParachain {
     }
 
     async fn get_issue_period(&self) -> Result<u32, Error> {
-        // self.query_finalized_or_error(metadata::storage().issue().issue_period())
-        //     .await
-        todo!()
+        self.query_finalized_or_error(metadata::storage().issue().issue_period())
+            .await
     }
 
     async fn get_all_active_issues(&self) -> Result<Vec<(H256, InterBtcIssueRequest)>, Error> {
-        // let current_height = self.get_current_active_block_number().await?;
-        // let issue_period = self.get_issue_period().await?;
-        //
-        // let mut issue_requests = Vec::new();
-        //
-        // let head = self.get_finalized_block_hash().await?.ok_or(Error::BlockHashNotFound)?;
-        // let key_addr = metadata::storage().issue().issue_requests_root();
-        // let mut iter = self.api.storage().at(head).iter(key_addr, DEFAULT_PAGE_SIZE).await?;
-        //
-        // while let Some((issue_id, request)) = iter.next().await? {
-        //     // todo: we also need to check the bitcoin height
-        //     if request.status == IssueRequestStatus::Pending && request.opentime + issue_period > current_height {
-        //         let key_hash = issue_id.0.as_slice();
-        //         // last bytes are the raw key
-        //         let key = Self::strip_blake2_key_prefix(key_hash);
-        //         issue_requests.push((H256::from_slice(key), request));
-        //     }
-        // }
-        // Ok(issue_requests.into())
-        todo!()
+        let current_height = self.get_current_active_block_number().await?;
+        let issue_period = self.get_issue_period().await?;
+
+        let mut issue_requests = Vec::new();
+
+        let head = self.get_finalized_block_hash().await?;
+        let key_addr = metadata::storage().issue().issue_requests_root();
+        let mut iter = self.api.storage().at(head).iter(key_addr, DEFAULT_PAGE_SIZE).await?;
+
+        while let Some((issue_id, request)) = iter.next().await? {
+            // todo: we also need to check the bitcoin height
+            if request.status == IssueRequestStatus::Pending && request.opentime + issue_period > current_height {
+                let key_hash = issue_id.0.as_slice();
+                // last bytes are the raw key
+                let key = Self::strip_blake2_key_prefix(key_hash);
+                issue_requests.push((H256::from_slice(key), request));
+            }
+        }
+        Ok(issue_requests)
     }
 }
 
@@ -1373,17 +1329,16 @@ pub trait RedeemPallet {
 #[async_trait]
 impl RedeemPallet for InterBtcParachain {
     async fn request_redeem(&self, amount: u128, btc_address: BtcAddress, vault_id: &VaultId) -> Result<H256, Error> {
-        // let redeem_event = self
-        //     .with_unique_signer(
-        //         metadata::tx()
-        //             .redeem()
-        //             .request_redeem(amount, Static(btc_address), vault_id.clone()),
-        //     )
-        //     .await?
-        //     .find_first::<RequestRedeemEvent>()?
-        //     .ok_or(Error::RequestRedeemIDNotFound)?;
-        // Ok(*redeem_event.redeem_id)
-        todo!()
+        let redeem_event = self
+            .with_unique_signer(
+                metadata::tx()
+                    .redeem()
+                    .request_redeem(amount, Static(btc_address), vault_id.clone()),
+            )
+            .await?
+            .find_first::<RequestRedeemEvent>()?
+            .ok_or(Error::RequestRedeemIDNotFound)?;
+        Ok(*redeem_event.redeem_id)
     }
 
     async fn execute_redeem(&self, redeem_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
@@ -1404,16 +1359,15 @@ impl RedeemPallet for InterBtcParachain {
     }
 
     async fn get_redeem_request(&self, redeem_id: H256) -> Result<InterBtcRedeemRequest, Error> {
-        // self.query_finalized_or_error(metadata::storage().redeem().redeem_requests(redeem_id))
-        //     .await
-        todo!()
+        self.query_finalized_or_error(metadata::storage().redeem().redeem_requests(Static::from(redeem_id)))
+            .await
     }
 
     async fn get_vault_redeem_requests(
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, InterBtcRedeemRequest)>, Error> {
-        let head = self.get_finalized_block_hash().await?;
+        let head = Some(self.get_finalized_block_hash().await?);
         let result: Vec<H256> = self
             .api
             .rpc()
@@ -1470,16 +1424,14 @@ impl BtcRelayPallet for InterBtcParachain {
     async fn get_best_block(&self) -> Result<H256Le, Error> {
         Ok(self
             .query_finalized_or_default(metadata::storage().btc_relay().best_block())
-            .await?
-            .ok_or(Error::BlockNotFound)?)
+            .await?)
     }
 
     /// Get the current best known height.
     async fn get_best_block_height(&self) -> Result<u32, Error> {
         Ok(self
             .query_finalized_or_default(metadata::storage().btc_relay().best_block_height())
-            .await?
-            .ok_or(Error::BlockNotFound)?)
+            .await?)
     }
 
     /// Get the block hash for the main chain at the specified height.
@@ -1489,8 +1441,7 @@ impl BtcRelayPallet for InterBtcParachain {
     async fn get_block_hash(&self, height: u32) -> Result<H256Le, Error> {
         Ok(self
             .query_finalized_or_default(metadata::storage().btc_relay().chains_hashes(0, height))
-            .await?
-            .ok_or(Error::BlockNotFound)?)
+            .await?)
     }
 
     /// Get the corresponding block header for the given hash.
@@ -1500,8 +1451,7 @@ impl BtcRelayPallet for InterBtcParachain {
     async fn get_block_header(&self, hash: H256Le) -> Result<InterBtcRichBlockHeader, Error> {
         Ok(self
             .query_finalized_or_default(metadata::storage().btc_relay().block_headers(&hash))
-            .await?
-            .ok_or(Error::BlockNotFound)?)
+            .await?)
     }
 
     /// Get the global security parameter k for stable Bitcoin transactions
@@ -1541,7 +1491,7 @@ impl BtcRelayPallet for InterBtcParachain {
     /// check that the block with the given block is included in the main chain of the relay, with sufficient
     /// confirmations
     async fn verify_block_header_inclusion(&self, block_hash: H256Le) -> Result<(), Error> {
-        let head = self.get_finalized_block_hash().await?;
+        let head = Some(self.get_finalized_block_hash().await?);
         let result: Result<(), metadata::DispatchError> = self
             .api
             .rpc()
@@ -1661,22 +1611,21 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// * `VaultNotFound` - if the rpc returned a default value rather than the vault we want
     /// * `VaultLiquidated` - if the vault is liquidated
     async fn get_vault(&self, vault_id: &VaultId) -> Result<InterBtcVault, Error> {
-        // match self
-        //     .query_finalized(metadata::storage().vault_registry().vaults(vault_id))
-        //     .await?
-        // {
-        //     Some(InterBtcVault {
-        //         status: VaultStatus::Liquidated,
-        //         ..
-        //     }) => Err(Error::VaultLiquidated),
-        //     Some(vault) if &vault.id == vault_id => Ok(vault),
-        //     _ => Err(Error::VaultNotFound),
-        // }
-        todo!()
+        match self
+            .query_finalized(metadata::storage().vault_registry().vaults(vault_id))
+            .await?
+        {
+            Some(InterBtcVaultStatic {
+                status: VaultStatus::Liquidated,
+                ..
+            }) => Err(Error::VaultLiquidated),
+            Some(vault) if &vault.id == vault_id => Ok(vault.into()),
+            _ => Err(Error::VaultNotFound),
+        }
     }
 
     async fn get_vaults_by_account_id(&self, account_id: &AccountId) -> Result<Vec<VaultId>, Error> {
-        let head = self.get_finalized_block_hash().await?;
+        let head = Some(self.get_finalized_block_hash().await?);
         let result = self
             .api
             .rpc()
@@ -1687,18 +1636,18 @@ impl VaultRegistryPallet for InterBtcParachain {
 
     /// Fetch all active vaults.
     async fn get_all_vaults(&self) -> Result<Vec<InterBtcVault>, Error> {
-        // let head = self.get_finalized_block_hash().await?.ok_or(Error::BlockHashNotFound)?;
-        // let key_addr = metadata::storage().vault_registry().vaults_root();
-        // let mut iter = self.api.storage().at(head).iter(key_addr, DEFAULT_PAGE_SIZE).await?;
-        //
-        // let mut vaults = Vec::new();
-        // while let Some((_, account)) = iter.next().await? {
-        //     if let VaultStatus::Active(..) = account.status {
-        //         vaults.push(account);
-        //     }
-        // }
-        // Ok(vaults)
-        todo!()
+        let head = self.get_finalized_block_hash().await?;
+        let key_addr = metadata::storage().vault_registry().vaults_root();
+        let mut iter = self.api.storage().at(head).iter(key_addr, DEFAULT_PAGE_SIZE).await?;
+
+        let mut vaults = Vec::new();
+        while let Some((_, account)) = iter.next().await? {
+            let account: InterBtcVault = account.into();
+            if let VaultStatus::Active(..) = account.status {
+                vaults.push(account);
+            }
+        }
+        Ok(vaults)
     }
 
     /// Submit extrinsic to register a vault.
@@ -1708,16 +1657,16 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// * `public_key` - Bitcoin public key
     async fn register_vault(&self, vault_id: &VaultId, collateral: u128) -> Result<(), Error> {
         // TODO: check MinimumDeposit
-        // if collateral == 0 {
-        //     return Err(Error::InsufficientFunds);
-        // }
-        //
-        // self.with_unique_signer(
-        //     metadata::tx()
-        //         .vault_registry()
-        //         .register_vault(vault_id.currencies.clone(), collateral),
-        // )
-        // .await?;
+        if collateral == 0 {
+            return Err(Error::InsufficientFunds);
+        }
+
+        self.with_unique_signer(
+            metadata::tx()
+                .vault_registry()
+                .register_vault(vault_id.currencies.clone(), collateral),
+        )
+        .await?;
         Ok(())
     }
 
@@ -1727,8 +1676,8 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// # Arguments
     /// * `amount` - the amount of extra collateral to lock
     async fn deposit_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
-        // self.with_unique_signer(metadata::tx().nomination().deposit_collateral(vault_id.clone(), amount))
-        //     .await?;
+        self.with_unique_signer(metadata::tx().nomination().deposit_collateral(vault_id.clone(), amount))
+            .await?;
         Ok(())
     }
 
@@ -1742,24 +1691,22 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// # Arguments
     /// * `amount` - the amount of collateral to withdraw
     async fn withdraw_collateral(&self, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
-        // self.with_unique_signer(
-        //     metadata::tx()
-        //         .nomination()
-        //         .withdraw_collateral(vault_id.clone(), amount, None),
-        // )
-        // .await?;
-        // Ok(())
-        todo!()
+        self.with_unique_signer(
+            metadata::tx()
+                .nomination()
+                .withdraw_collateral(vault_id.clone(), amount, None),
+        )
+        .await?;
+        Ok(())
     }
 
     async fn get_public_key(&self) -> Result<Option<BtcPublicKey>, Error> {
-        // self.query_finalized(
-        //     metadata::storage()
-        //         .vault_registry()
-        //         .vault_bitcoin_public_key(Static::from(self.get_account_id())),
-        // )
-        // .await
-        todo!()
+        self.query_finalized(
+            metadata::storage()
+                .vault_registry()
+                .vault_bitcoin_public_key(self.get_account_id().clone()),
+        )
+        .await
     }
 
     /// Update the default BTC public key for the vault corresponding to the signer.
@@ -1781,7 +1728,7 @@ impl VaultRegistryPallet for InterBtcParachain {
         amount_btc: u128,
         collateral_currency: CurrencyId,
     ) -> Result<u128, Error> {
-        let head = self.get_finalized_block_hash().await?;
+        let head = Some(self.get_finalized_block_hash().await?);
         let result: BalanceWrapper<_> = self
             .api
             .rpc()
@@ -1797,7 +1744,7 @@ impl VaultRegistryPallet for InterBtcParachain {
     /// Get the amount of collateral required for the given vault to be at the
     /// current SecureCollateralThreshold with the current exchange rate
     async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, Error> {
-        let head = self.get_finalized_block_hash().await?;
+        let head = Some(self.get_finalized_block_hash().await?);
         let result: BalanceWrapper<_> = self
             .api
             .rpc()
@@ -1810,7 +1757,7 @@ impl VaultRegistryPallet for InterBtcParachain {
     }
 
     async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, Error> {
-        let head = self.get_finalized_block_hash().await?;
+        let head = Some(self.get_finalized_block_hash().await?);
         let result: BalanceWrapper<_> = self
             .api
             .rpc()
@@ -1821,7 +1768,7 @@ impl VaultRegistryPallet for InterBtcParachain {
     }
 
     async fn get_collateralization_from_vault(&self, vault_id: VaultId, only_issued: bool) -> Result<u128, Error> {
-        let head = self.get_finalized_block_hash().await?;
+        let head = Some(self.get_finalized_block_hash().await?);
         let result: UnsignedFixedPoint = self
             .api
             .rpc()
@@ -1830,7 +1777,7 @@ impl VaultRegistryPallet for InterBtcParachain {
                 rpc_params![vault_id, only_issued, head],
             )
             .await?;
-        Ok(result.into_inner().into())
+        Ok(result.into_inner())
     }
 
     /// For testing purposes only. Sets the current vault client release.
@@ -1883,27 +1830,21 @@ pub trait FeePallet {
 #[async_trait]
 impl FeePallet for InterBtcParachain {
     async fn get_issue_griefing_collateral(&self) -> Result<FixedU128, Error> {
-        Ok(self
+        Ok(*self
             .query_finalized_or_error(metadata::storage().fee().issue_griefing_collateral())
-            .await?
-            .into_inner()
-            .into())
+            .await?)
     }
 
     async fn get_issue_fee(&self) -> Result<FixedU128, Error> {
-        Ok(self
+        Ok(*self
             .query_finalized_or_error(metadata::storage().fee().issue_fee())
-            .await?
-            .into_inner()
-            .into())
+            .await?)
     }
 
     async fn get_replace_griefing_collateral(&self) -> Result<FixedU128, Error> {
-        Ok(self
+        Ok(*self
             .query_finalized_or_error(metadata::storage().fee().replace_griefing_collateral())
-            .await?
-            .into_inner()
-            .into())
+            .await?)
     }
 }
 
@@ -1914,15 +1855,13 @@ pub trait SudoPallet {
     async fn set_redeem_period(&self, period: BlockNumber) -> Result<(), Error>;
     async fn set_parachain_confirmations(&self, value: BlockNumber) -> Result<(), Error>;
     async fn set_bitcoin_confirmations(&self, value: u32) -> Result<(), Error>;
+    async fn disable_difficulty_check(&self) -> Result<(), Error>;
     async fn set_issue_period(&self, period: u32) -> Result<(), Error>;
     async fn insert_authorized_oracle(&self, account_id: AccountId, name: String) -> Result<(), Error>;
     async fn set_replace_period(&self, period: u32) -> Result<(), Error>;
+    async fn set_balances(&self, amounts: Vec<(AccountId, u128, u128, CurrencyId)>) -> Result<(), Error>;
 }
 
-#[cfg(any(
-    feature = "parachain-metadata-interlay-testnet",
-    feature = "parachain-metadata-kintsugi-testnet"
-))]
 #[async_trait]
 impl SudoPallet for InterBtcParachain {
     async fn sudo(&self, call: EncodedCall) -> Result<(), Error> {
@@ -1931,9 +1870,8 @@ impl SudoPallet for InterBtcParachain {
     }
 
     async fn set_storage<V: Encode + Send + Sync>(&self, module: &str, key: &str, value: V) -> Result<(), Error> {
-        let module = subxt::ext::sp_core::twox_128(module.as_bytes());
-        let item = subxt::ext::sp_core::twox_128(key.as_bytes());
-
+        let module = sp_core::twox_128(module.as_bytes());
+        let item = sp_core::twox_128(key.as_bytes());
         Ok(self
             .sudo(EncodedCall::System(
                 metadata::runtime_types::frame_system::pallet::Call::set_storage {
@@ -1963,6 +1901,11 @@ impl SudoPallet for InterBtcParachain {
             .await
     }
 
+    async fn disable_difficulty_check(&self) -> Result<(), Error> {
+        self.set_storage(crate::BTC_RELAY_MODULE, crate::DISABLE_DIFFICULTY_CHECK, true)
+            .await
+    }
+
     async fn set_issue_period(&self, period: u32) -> Result<(), Error> {
         Ok(self
             .sudo(EncodedCall::Issue(
@@ -1980,7 +1923,7 @@ impl SudoPallet for InterBtcParachain {
         Ok(self
             .sudo(EncodedCall::Oracle(
                 metadata::runtime_types::oracle::pallet::Call::insert_authorized_oracle {
-                    account_id: Static(account_id),
+                    account_id,
                     name: BoundedVec(name.into_bytes()),
                 },
             ))
@@ -1993,5 +1936,24 @@ impl SudoPallet for InterBtcParachain {
                 metadata::runtime_types::replace::pallet::Call::set_replace_period { period },
             ))
             .await?)
+    }
+
+    async fn set_balances(&self, amounts: Vec<(AccountId, u128, u128, CurrencyId)>) -> Result<(), Error> {
+        self.sudo(EncodedCall::Utility(
+            metadata::runtime_types::pallet_utility::pallet::Call::batch {
+                calls: amounts
+                    .into_iter()
+                    .map(|(recipient, free, reserved, currency_id)| {
+                        EncodedCall::Tokens(metadata::runtime_types::orml_tokens::module::Call::set_balance {
+                            who: recipient,
+                            currency_id,
+                            new_free: free,
+                            new_reserved: reserved,
+                        })
+                    })
+                    .collect(),
+            },
+        ))
+        .await
     }
 }

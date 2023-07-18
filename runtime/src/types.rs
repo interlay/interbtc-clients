@@ -1,34 +1,33 @@
-use crate::{metadata, Config, InterBtcRuntime, RuntimeCurrencyInfo, SS58_PREFIX};
+pub use crate::utils::{account_id as utils_accountid, multi_signature};
+use crate::{metadata, utils::signer::PairSigner, Config, InterBtcRuntime, RuntimeCurrencyInfo};
+pub use currency_id::CurrencyIdExt;
+pub use h256_le::RichH256Le;
 pub use metadata_aliases::*;
+pub use module_btc_relay::{RichBlockHeader, MAIN_CHAIN_ID};
 pub use primitives::{
     CurrencyId,
     CurrencyId::{ForeignAsset, LendToken, Token},
     TokenSymbol::{self, DOT, IBTC, INTR, KBTC, KINT, KSM},
 };
-pub use subxt::ext::sp_core::{crypto::Ss58Codec, sr25519::Pair as KeyPair};
-use subxt::{
-    storage::{address::Yes, Address},
-    utils::Static,
-};
+pub use sp_core::sr25519::Pair as KeyPair;
+pub use subxt;
+use subxt::storage::{address::Yes, Address};
 
-pub use currency_id::CurrencyIdExt;
-pub use h256_le::RichH256Le;
-pub use module_btc_relay::{RichBlockHeader, MAIN_CHAIN_ID};
-
-pub type AccountId = subxt::ext::sp_runtime::AccountId32;
+pub type AccountId = utils_accountid::AccountId32;
+pub type MultiSignature = multi_signature::MultiSignature;
 pub type Balance = primitives::Balance;
 pub type Index = u32;
 pub type BlockNumber = u32;
-pub type H160 = subxt::ext::sp_core::H160;
-pub type H256 = subxt::ext::sp_core::H256;
-pub type U256 = subxt::ext::sp_core::U256;
+pub type H160 = sp_core::H160;
+pub type H256 = sp_core::H256;
+pub type U256 = sp_core::U256;
 pub type Ratio = primitives::Ratio;
 
-pub type InterBtcSigner = subxt::tx::PairSigner<InterBtcRuntime, KeyPair>;
+pub type InterBtcSigner = PairSigner<InterBtcRuntime, KeyPair>;
 
 pub type BtcAddress = module_btc_relay::BtcAddress;
 
-pub type FixedU128 = sp_arithmetic::FixedU128;
+pub type FixedU128 = crate::FixedU128;
 
 #[allow(non_camel_case_types)]
 pub(crate) enum StorageMapHasher {
@@ -39,8 +38,7 @@ pub(crate) enum StorageMapHasher {
 mod metadata_aliases {
     use super::*;
     pub use metadata::runtime_types::bitcoin::address::PublicKey as BtcPublicKey;
-    use std::marker::PhantomData;
-    use subxt::storage::address::StaticStorageMapKey;
+    use subxt::{storage::address::StaticStorageMapKey, utils::Static};
 
     pub use metadata::runtime_types::interbtc_primitives::oracle::Key as OracleKey;
 
@@ -50,6 +48,46 @@ mod metadata_aliases {
     };
     pub type InterBtcVault =
         metadata::runtime_types::vault_registry::types::Vault<AccountId, BlockNumber, Balance, CurrencyId, FixedU128>;
+    pub type InterBtcVaultStatic = metadata::runtime_types::vault_registry::types::Vault<
+        AccountId,
+        BlockNumber,
+        Balance,
+        CurrencyId,
+        Static<FixedU128>,
+    >;
+
+    impl From<InterBtcVaultStatic> for InterBtcVault {
+        fn from(val: InterBtcVaultStatic) -> Self {
+            let InterBtcVaultStatic {
+                id,
+                status,
+                banned_until,
+                secure_collateral_threshold,
+                to_be_issued_tokens,
+                issued_tokens,
+                to_be_redeemed_tokens,
+                to_be_replaced_tokens,
+                replace_collateral,
+                active_replace_collateral,
+                liquidated_collateral,
+            } = val;
+
+            InterBtcVault {
+                id,
+                status,
+                banned_until,
+                secure_collateral_threshold: secure_collateral_threshold.map(|static_value| *static_value),
+                to_be_issued_tokens,
+                issued_tokens,
+                to_be_redeemed_tokens,
+                to_be_replaced_tokens,
+                replace_collateral,
+                active_replace_collateral,
+                liquidated_collateral,
+            }
+        }
+    }
+
     pub type InterBtcRichBlockHeader = metadata::runtime_types::btc_relay::types::RichBlockHeader<BlockNumber>;
     pub type BitcoinBlockHeight = u32;
 
@@ -129,10 +167,6 @@ mod metadata_aliases {
     pub type EncodedCall = metadata::runtime_types::interlay_runtime_parachain::RuntimeCall;
     #[cfg(feature = "parachain-metadata-kintsugi")]
     pub type EncodedCall = metadata::runtime_types::kintsugi_runtime_parachain::RuntimeCall;
-    #[cfg(feature = "parachain-metadata-interlay-testnet")]
-    pub type EncodedCall = metadata::runtime_types::testnet_interlay_runtime_parachain::RuntimeCall;
-    #[cfg(feature = "parachain-metadata-kintsugi-testnet")]
-    pub type EncodedCall = metadata::runtime_types::testnet_kintsugi_runtime_parachain::RuntimeCall;
 
     pub use metadata::runtime_types::security::pallet::Call as SecurityCall;
 
@@ -177,10 +211,9 @@ pub trait PrettyPrint {
 
 mod account_id {
     use super::*;
-
     impl PrettyPrint for AccountId {
         fn pretty_print(&self) -> String {
-            self.to_ss58check_with_version(SS58_PREFIX.into())
+            self.to_ss58check()
         }
     }
 }
@@ -338,13 +371,15 @@ mod dispatch_error {
     convert_enum!(
         RichTokenError,
         TokenError,
-        NoFunds,
-        WouldDie,
+        FundsUnavailable,
+        OnlyProvider,
         BelowMinimum,
         CannotCreate,
         UnknownAsset,
         Frozen,
         Unsupported,
+        CannotCreateHold,
+        NotExpendable,
     );
 
     convert_enum!(

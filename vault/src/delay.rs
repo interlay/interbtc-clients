@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use bitcoin::{sha256, Hash};
-use runtime::{AccountId, Error as RuntimeError, InterBtcParachain, UtilFuncs, VaultRegistryPallet};
+use runtime::{
+    sp_core::crypto::AccountId32, AccountId, Error as RuntimeError, InterBtcParachain, UtilFuncs, VaultRegistryPallet,
+};
 use std::fmt;
 
 #[async_trait]
@@ -48,7 +50,7 @@ impl RandomDelay for OrderedVaultsDelay {
     /// * `data` - the seed used as a basis for the ordering (for example, an issue_id)
     async fn delay(&self, seed_data: &[u8; 32]) -> Result<(), RuntimeError> {
         fn hash_vault(data: &[u8; 32], account_id: &AccountId) -> sha256::Hash {
-            let account_id: [u8; 32] = account_id.clone().into();
+            let account_id: [u8; 32] = AccountId32::from(account_id.0).into();
             let xor = data.zip(account_id).map(|(a, b)| a ^ b);
             sha256::Hash::hash(&xor)
         }

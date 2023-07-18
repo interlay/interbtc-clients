@@ -8,16 +8,13 @@ use jsonrpsee::{
 };
 use prometheus::Error as PrometheusError;
 use serde_json::Error as SerdeJsonError;
+use sp_core::crypto::SecretStringError;
 use std::{array::TryFromSliceError, fmt::Debug, io::Error as IoError, num::TryFromIntError, str::Utf8Error};
-use subxt::{
-    error::{DispatchError, ModuleError, TransactionError},
-    ext::sp_core::crypto::SecretStringError,
-};
+use subxt::error::{DispatchError, TransactionError};
+pub use subxt::{error::RpcError, Error as SubxtError};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
 use url::ParseError as UrlParseError;
-
-pub use subxt::{error::RpcError, Error as SubxtError};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -103,7 +100,7 @@ pub enum Error {
 
 impl From<module_bitcoin::Error> for Error {
     fn from(value: module_bitcoin::Error) -> Self {
-        Self::BitcoinError(format!("{:?}", value))
+        Self::BitcoinError(format!("{value:?}"))
     }
 }
 

@@ -51,8 +51,8 @@ pub async fn listen_for_accept_replace(
 
                     let result = async {
                         let request = Request::from_replace_request(
-                            event.replace_id,
-                            parachain_rpc.get_replace_request(event.replace_id).await?,
+                            *event.replace_id,
+                            parachain_rpc.get_replace_request(*event.replace_id).await?,
                             payment_margin,
                         )?;
                         request
@@ -64,12 +64,12 @@ pub async fn listen_for_accept_replace(
                     match result {
                         Ok(_) => tracing::info!(
                             "Completed accept replace request #{} with amount {}",
-                            event.replace_id,
+                            *event.replace_id,
                             event.amount
                         ),
                         Err(e) => tracing::error!(
                             "Failed to process accept replace request #{}: {}",
-                            event.replace_id,
+                            *event.replace_id,
                             e.to_string()
                         ),
                     }
@@ -192,10 +192,10 @@ pub async fn listen_for_execute_replace(
         .on_event::<ExecuteReplaceEvent, _, _, _>(
             |event| async move {
                 if &event.new_vault_id.account_id == parachain_rpc.get_account_id() {
-                    tracing::info!("Received event: execute replace #{:?}", event.replace_id);
+                    tracing::info!("Received event: execute replace #{:?}", *event.replace_id);
                     // try to send the event, but ignore the returned result since
                     // the only way it can fail is if the channel is closed
-                    let _ = event_channel.clone().send(Event::Executed(event.replace_id)).await;
+                    let _ = event_channel.clone().send(Event::Executed(*event.replace_id)).await;
                 }
             },
             |error| tracing::error!("Error reading redeem event: {}", error.to_string()),
@@ -204,7 +204,7 @@ pub async fn listen_for_execute_replace(
     Ok(())
 }
 
-#[cfg(all(test, feature = "parachain-metadata-kintsugi-testnet"))]
+#[cfg(all(test, feature = "parachain-metadata-kintsugi"))]
 mod tests {
     use super::*;
     use async_trait::async_trait;

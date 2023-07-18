@@ -668,7 +668,7 @@ pub async fn publish_tokio_metrics(
     }
 }
 
-#[cfg(all(test, feature = "parachain-metadata-kintsugi-testnet"))]
+#[cfg(all(test, feature = "parachain-metadata-kintsugi"))]
 mod tests {
     use super::*;
     use async_trait::async_trait;
@@ -679,6 +679,7 @@ mod tests {
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
         metadata::runtime_types::interbtc_primitives::CustomMetadata,
+        subxt::utils::Static,
         AccountId, AssetMetadata, AssetRegistry, Balance, BlockNumber, BtcAddress, BtcPublicKey,
         CurrencyId::{self, ForeignAsset, LendToken},
         Error as RuntimeError, ErrorCode, InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcReplaceRequest,
@@ -769,7 +770,7 @@ mod tests {
         pub trait SecurityPallet {
             async fn get_parachain_status(&self) -> Result<StatusCode, RuntimeError>;
 
-            async fn get_error_codes(&self) -> Result<BTreeSet<ErrorCode>, RuntimeError>;
+            async fn get_error_codes(&self) -> Result<Vec<ErrorCode>, RuntimeError>;
 
             /// Gets the current active block number of the parachain
             async fn get_current_active_block_number(&self) -> Result<u32, RuntimeError>;
@@ -953,7 +954,7 @@ mod tests {
     fn dummy_issue_request(status: IssueRequestStatus, vault: VaultId) -> InterBtcIssueRequest {
         InterBtcIssueRequest {
             amount: Default::default(),
-            btc_address: Default::default(),
+            btc_address: Static(Default::default()),
             btc_height: Default::default(),
             fee: Default::default(),
             griefing_collateral: Default::default(),
@@ -970,7 +971,7 @@ mod tests {
     fn dummy_redeem_request(status: RedeemRequestStatus, vault: VaultId) -> InterBtcRedeemRequest {
         InterBtcRedeemRequest {
             amount_btc: Default::default(),
-            btc_address: Default::default(),
+            btc_address: Static(Default::default()),
             btc_height: Default::default(),
             fee: Default::default(),
             transfer_fee_btc: Default::default(),

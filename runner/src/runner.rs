@@ -676,19 +676,19 @@ mod tests {
     async fn test_runner_download_binary() {
         let mut runner = MockRunner::default();
         let tmp = TempDir::new("runner-tests").expect("failed to create tempdir");
-        let mock_path = tmp.path().clone().join("vault-standalone-metadata");
-        let moved_mock_path = tmp.path().clone().join("vault-standalone-metadata");
-        let mock_bin_name = "vault-standalone-metadata".to_string();
+        let mock_path = tmp.path().clone().join("vault-parachain-metadata-kintsugi");
+        let moved_mock_path = tmp.path().clone().join("vault-parachain-metadata-kintsugi");
+        let mock_bin_name = "vault-parachain-metadata-kintsugi".to_string();
 
         let client_release = ClientRelease {
-            uri: "https://github.com/interlay/interbtc-clients/releases/download/1.15.0/vault-standalone-metadata"
+            uri: "https://github.com/interlay/interbtc-clients/releases/download/1.15.0/vault-parachain-metadata-kintsugi"
                 .to_string(),
             checksum: H256::default(),
         };
 
         runner
             .expect_get_bin_path()
-            .returning(move |_| Ok(("vault-standalone-metadata".to_string(), moved_mock_path.clone())));
+            .returning(move |_| Ok(("vault-parachain-metadata-kintsugi".to_string(), moved_mock_path.clone())));
         runner
             .expect_get_request_bytes()
             .returning(|_| Ok(Bytes::from_static(&[1, 2, 3, 4])));
@@ -758,10 +758,10 @@ mod tests {
             runner.expect_client_type().return_const(client.clone());
             let (bin_name, bin_path) = Runner::get_bin_path(
                 &runner,
-                "https://github.com/interlay/interbtc-clients/releases/download/1.17.2/vault-standalone-metadata",
+                "https://github.com/interlay/interbtc-clients/releases/download/1.17.2/vault-parachain-metadata-kintsugi",
             )
             .unwrap();
-            assert_eq!(bin_name, "vault-standalone-metadata");
+            assert_eq!(bin_name, "vault-parachain-metadata-kintsugi");
             assert_eq!(bin_path, mock_path.join(bin_name));
         }
     }
