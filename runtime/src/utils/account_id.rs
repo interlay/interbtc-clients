@@ -1,5 +1,7 @@
 //! The "default" Substrate/Polkadot AccountId. This is used in codegen, as well as signing related bits.
-//! This doesn't contain much functionality itself, but is easy to convert to/from an `sp_core::AccountId32`
+//! This doesn't contain much functionality itself, but is easy to convert to/from an `sp_core::AccountId32`.
+//! The `sp_core::AccountId32` doesn't contain EncodeAsType and DecodeAsType traits hence added a
+//! custom implementation.
 use base58::{FromBase58, ToBase58};
 use blake2::{Blake2b512, Digest};
 use codec::{Decode, Encode};
@@ -46,17 +48,25 @@ impl AccountId32 {
     pub fn new(value: [u8; 32]) -> Self {
         AccountId32(value)
     }
-    // Return the ss58-check string for this key. Adapted from `sp_core::crypto`. We need this to
-    // serialize our account appropriately but otherwise don't care.
+    // Return the ss58-check string for this key. Adapted from `sp_core::crypto`.
     pub fn to_ss58check(&self) -> String {
-        const SUBSTRATE_SS58_PREFIX: u8 = 42;
-        let mut v = vec![SUBSTRATE_SS58_PREFIX];
-        // then push the account ID bytes.
-        v.extend(self.0);
-        // then push a 2 byte checksum of what we have so far.
+        // We mask out the upper two bits of the ident - SS58 Prefix currently only supports 14-bits
+        let ident: u16 = crate::SS58_PREFIX & 0b0011_1111_1111_1111;
+        let mut v = match ident {
+            0..=63 => vec![ident as u8],
+            64..=16_383 => {
+                // upper six bits of the lower byte(!)
+                let first = ((ident & 0b0000_0000_1111_1100) as u8) >> 2;
+                // lower two bits of the lower byte in the high pos,
+                // lower bits of the upper byte in the low pos
+                let second = ((ident >> 8) as u8) | ((ident & 0b0000_0000_0000_0011) as u8) << 6;
+                vec![first | 0b01000000, second]
+            }
+            _ => unreachable!("masked out the upper two bits; qed"),
+        };
+        v.extend::<&[u8]>(self.as_ref());
         let r = ss58hash(&v);
         v.extend(&r[0..2]);
-        // then encode to base58.
         v.to_base58()
     }
 
@@ -169,5 +179,24 @@ impl From<sp_keyring::Sr25519Keyring> for AccountId32 {
     fn from(account: sp_keyring::Sr25519Keyring) -> Self {
         let account = account.to_account_id();
         AccountId32(account.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SS58_PREFIX;
+    use sp_core::crypto::Ss58Codec;
+    use sp_keyring::AccountKeyring;
+    use sp_runtime::AccountId32 as SpAccountId;
+
+    #[test]
+    fn test_alice_account_conversion_to_ss58() {
+        let alice_utils_account_id: AccountId32 = AccountKeyring::Alice.to_account_id().into();
+        let alice_sp_account_id: SpAccountId = AccountKeyring::Alice.to_account_id();
+        assert_eq!(
+            alice_sp_account_id.to_ss58check_with_version(SS58_PREFIX.into()),
+            alice_utils_account_id.to_ss58check()
+        );
     }
 }

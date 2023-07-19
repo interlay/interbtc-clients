@@ -1,5 +1,7 @@
 //! A signer suitable for substrate based chains. This provides compatibility with Substrate
 //! packages like sp_keyring and such, and so relies on sp_core and sp_runtime to be included.
+//! Custom implementation needed because as it feature gated by subxt `substrate-compat` feature
+//! flag.
 use crate::Config;
 use sp_core::Pair as PairT;
 use sp_runtime::{

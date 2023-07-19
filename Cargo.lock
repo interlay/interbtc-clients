@@ -10814,7 +10814,6 @@ dependencies = [
  "bitcoin 1.1.0",
  "bitcoin 1.2.0",
  "blake2",
- "bs58",
  "btc-relay",
  "cfg-if 1.0.0",
  "clap",
