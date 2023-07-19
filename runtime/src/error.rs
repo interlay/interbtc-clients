@@ -8,16 +8,13 @@ use jsonrpsee::{
 };
 use prometheus::Error as PrometheusError;
 use serde_json::Error as SerdeJsonError;
+use sp_core::crypto::SecretStringError;
 use std::{array::TryFromSliceError, fmt::Debug, io::Error as IoError, num::TryFromIntError, str::Utf8Error};
-use subxt::{
-    error::{DispatchError, ModuleError, TransactionError},
-    ext::sp_core::crypto::SecretStringError,
-};
+use subxt::error::{DispatchError, TransactionError};
+pub use subxt::{error::RpcError, Error as SubxtError};
 use thiserror::Error;
 use tokio::time::error::Elapsed;
 use url::ParseError as UrlParseError;
-
-pub use subxt::{error::RpcError, Error as SubxtError};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -103,7 +100,7 @@ pub enum Error {
 
 impl From<module_bitcoin::Error> for Error {
     fn from(value: module_bitcoin::Error) -> Self {
-        Self::BitcoinError(format!("{:?}", value))
+        Self::BitcoinError(format!("{value:?}"))
     }
 }
 
@@ -116,12 +113,12 @@ impl Error {
     }
 
     fn is_module_err(&self, pallet_name: &str, error_name: &str) -> bool {
-        matches!(
-            self,
-            Error::SubxtRuntimeError(SubxtError::Runtime(DispatchError::Module(ModuleError{
-                pallet, error, ..
-            }))) if pallet == pallet_name && error == error_name,
-        )
+        if let Error::SubxtRuntimeError(SubxtError::Runtime(DispatchError::Module(module_error))) = self {
+            if let Ok(details) = module_error.details() {
+                return details.pallet.name() == pallet_name && details.variant.name == error_name;
+            }
+        }
+        false
     }
 
     pub fn is_duplicate_block(&self) -> bool {
@@ -203,7 +200,7 @@ impl Error {
     pub fn is_block_hash_not_found_error(&self) -> bool {
         matches!(
             self,
-            Error::SubxtRuntimeError(SubxtError::Transaction(TransactionError::BlockHashNotFound))
+            Error::SubxtRuntimeError(SubxtError::Transaction(TransactionError::BlockNotFound))
         )
     }
 

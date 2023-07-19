@@ -1,3 +1,4 @@
+#![allow(clippy::single_char_pattern)]
 use super::{get_http, PriceFeed};
 use crate::{config::CurrencyStore, currency::*, Error};
 use async_trait::async_trait;
@@ -33,7 +34,7 @@ fn extract_response(value: Value) -> Option<f64> {
 
 fn set_token_path(base: &mut Url, token_path: &str) {
     let base_path = base.path().trim_end_matches("/");
-    let new_path = format!("{}/assetQuotation/{}", base_path, token_path);
+    let new_path = format!("{base_path}/assetQuotation/{token_path}");
     base.set_path(&new_path);
 }
 

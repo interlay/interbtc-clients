@@ -133,7 +133,7 @@ pub async fn assert_issue(
         .unwrap();
 
     parachain_rpc
-        .execute_issue(issue.issue_id, &metadata.proof, &metadata.raw_tx)
+        .execute_issue(*issue.issue_id, &metadata.proof, &metadata.raw_tx)
         .await
         .unwrap();
 }

@@ -10,8 +10,8 @@ use lazy_static::lazy_static;
 use parity_scale_codec::{Decode, Encode};
 use reqwest::Url;
 use runtime::{
-    AccountId, CollateralBalancesPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, RuntimeCurrencyInfo,
-    Ss58Codec, TryFromSymbol, VaultRegistryPallet, SS58_PREFIX,
+    sp_core::crypto::Ss58Codec, AccountId, CollateralBalancesPallet, CurrencyId, Error as RuntimeError,
+    InterBtcParachain, RuntimeCurrencyInfo, TryFromSymbol, VaultRegistryPallet, SS58_PREFIX,
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{net::SocketAddr, time::Duration};
@@ -225,12 +225,13 @@ struct GetSignatureData {
 }
 
 async fn ensure_signature_exists(auth_url: &str, account_id: &AccountId) -> Result<(), Error> {
+    let account_id = runtime::sp_core::crypto::AccountId32::from(account_id.0);
     reqwest::get(Url::parse(auth_url)?.join(&account_id.to_ss58check_with_version(SS58_PREFIX.into()))?)
         .await?
         .json::<GetSignatureData>()
         .await?
         .exists
-        .then(|| ())
+        .then_some(())
         .ok_or(Error::SignatureMissing)
 }
 
@@ -262,7 +263,7 @@ async fn atomic_faucet_funding(
     let transfers = amounts
         .into_iter()
         .map(|AllowanceAmount { symbol, amount }| {
-            let currency_id = CurrencyId::try_from_symbol(symbol.clone())?;
+            let currency_id = CurrencyId::try_from_symbol(symbol)?;
             log::info!(
                 "AccountId: {}, Currency: {:?} Type: {:?}, Amount: {}",
                 account_id,
@@ -418,12 +419,12 @@ mod tests {
                     .flat_map(|account_id| {
                         vec![DEFAULT_TESTING_CURRENCY, DEFAULT_GOVERNANCE_CURRENCY]
                             .into_iter()
-                            .map(move |currency_id| (account_id.clone(), 1 << 60, 0, currency_id))
+                            .map(move |currency_id| (account_id.clone().into(), 1 << 60, 0, currency_id))
                     })
-                    .collect(),
+                    .collect::<Vec<(runtime::utils_accountid::AccountId32, u128, u128, CurrencyId)>>(),
             )
             .await
-            .expect("Should endow accounts")
+            .expect("Should endow accounts");
     }
 
     async fn set_exchange_rate(client: SubxtClient) {
@@ -534,7 +535,7 @@ mod tests {
         endow_accounts(client.clone()).await;
 
         // Bob's account is prefunded with lots of DOT
-        let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
+        let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id().into();
         let user_allowance: Allowance = vec![
             AllowanceAmount::new(DEFAULT_TESTING_CURRENCY.symbol().unwrap(), 100),
             AllowanceAmount::new(DEFAULT_GOVERNANCE_CURRENCY.symbol().unwrap(), 100),
@@ -568,7 +569,7 @@ mod tests {
         set_exchange_rate(client.clone()).await;
         endow_accounts(client.clone()).await;
 
-        let bob_account_id = AccountKeyring::Bob.to_account_id();
+        let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id().into();
         let bob_vault_id = VaultId::new(
             bob_account_id.clone(),
             DEFAULT_TESTING_CURRENCY,
@@ -593,13 +594,14 @@ mod tests {
         let alice_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
         let bob_provider = setup_provider(client.clone(), AccountKeyring::Bob).await;
         // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding
-        let bob_prefunded_amount = get_multi_currency_balance(&bob_account_id, &user_allowance, &bob_provider).await;
+        let bob_prefunded_amount =
+            get_multi_currency_balance(&bob_account_id.clone().into(), &user_allowance, &bob_provider).await;
         drain_multi_currency(&bob_prefunded_amount, &bob_provider, &drain_account_id, 1)
             .await
             .expect("Unable to transfer funds");
 
         let req = FundAccountJsonRpcRequest {
-            account_id: bob_account_id.clone(),
+            account_id: bob_account_id.clone().into(),
             currency_id: DEFAULT_TESTING_CURRENCY,
         };
         fund_account(
@@ -614,11 +616,13 @@ mod tests {
         bob_provider.register_public_key(dummy_public_key()).await.unwrap();
         bob_provider.register_vault(&bob_vault_id, 3 * KSM.one()).await.unwrap();
 
-        let bob_funds_before = get_multi_currency_balance(&bob_account_id, &user_allowance, &alice_provider).await;
+        let bob_funds_before =
+            get_multi_currency_balance(&bob_account_id.clone().into(), &user_allowance, &alice_provider).await;
         fund_account(&Arc::from(alice_provider.clone()), req, store, allowance_config)
             .await
             .expect("Funding the account failed");
-        let bob_funds_after = get_multi_currency_balance(&bob_account_id, &user_allowance, &alice_provider).await;
+        let bob_funds_after =
+            get_multi_currency_balance(&bob_account_id.clone().into(), &user_allowance, &alice_provider).await;
         assert_allowance_emitted(&bob_funds_before, &bob_funds_after, &vault_allowance);
     }
 
@@ -677,7 +681,7 @@ mod tests {
 
         for currency_id in [Token(KINT), Token(KSM)] {
             kv.clear().unwrap();
-            let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
+            let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id().into();
             let bob_vault_id = VaultId::new(bob_account_id.clone(), currency_id, DEFAULT_WRAPPED_CURRENCY);
             let drain_account_id: AccountId = [3; 32].into();
 
@@ -709,7 +713,7 @@ mod tests {
 
             let bob_funds_before = get_multi_currency_balance(&bob_account_id, &user_allowance, &bob_provider).await;
             let req = FundAccountJsonRpcRequest {
-                account_id: bob_account_id.clone(),
+                account_id: bob_account_id.clone().into(),
                 currency_id,
             };
 
@@ -729,7 +733,7 @@ mod tests {
         set_exchange_rate(client.clone()).await;
         endow_accounts(client.clone()).await;
 
-        let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id();
+        let bob_account_id: AccountId = AccountKeyring::Bob.to_account_id().into();
         let bob_vault_id = VaultId::new(
             bob_account_id.clone(),
             DEFAULT_TESTING_CURRENCY,

@@ -9,9 +9,12 @@ use futures::{
 use runtime::{
     integration::*,
     sp_core::{H160, H256},
+    subxt::utils::Static,
     types::*,
+    utils::account_id::AccountId32,
     BtcAddress, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRedeemRequest, IssuePallet,
-    PartialAddress, RedeemPallet, ReplacePallet, ShutdownSender, SudoPallet, UtilFuncs, VaultId, VaultRegistryPallet,
+    OraclePallet, PartialAddress, RedeemPallet, ReplacePallet, ShutdownSender, SudoPallet, UtilFuncs, VaultId,
+    VaultRegistryPallet,
 };
 use service::DynBitcoinCoreApi;
 use sp_keyring::AccountKeyring;
@@ -47,9 +50,9 @@ where
             .flat_map(|account_id| {
                 vec![DEFAULT_TESTING_CURRENCY, DEFAULT_NATIVE_CURRENCY]
                     .into_iter()
-                    .map(move |currency_id| (account_id.clone(), 1 << 60, 0, currency_id))
+                    .map(move |currency_id| (account_id.clone().into(), 1 << 60, 0, currency_id))
             })
-            .collect(),
+            .collect::<Vec<(AccountId32, u128, u128, CurrencyId)>>(),
         )
         .await
         .expect("Should endow accounts");
@@ -582,7 +585,7 @@ async fn test_issue_overpayment_succeeds() {
                 }
             }),
             user_provider
-                .execute_issue(issue.issue_id, &metadata.proof, &metadata.raw_tx)
+                .execute_issue(*issue.issue_id, &metadata.proof, &metadata.raw_tx)
                 .map(Result::unwrap),
         )
         .await;
@@ -921,7 +924,7 @@ async fn assert_redeem_event(
     parachain_rpc: InterBtcParachain,
     redeem_id: H256,
 ) -> ExecuteRedeemEvent {
-    assert_event::<ExecuteRedeemEvent, _>(duration, parachain_rpc, |x| x.redeem_id == redeem_id).await
+    assert_event::<ExecuteRedeemEvent, _>(duration, parachain_rpc, |x| x.redeem_id == Static(redeem_id)).await
 }
 
 #[async_trait]
@@ -1017,7 +1020,7 @@ mod test_with_bitcoind {
             .unwrap();
 
         parachain_rpc
-            .execute_issue(issue.issue_id, &metadata.proof, &metadata.raw_tx)
+            .execute_issue(*issue.issue_id, &metadata.proof, &metadata.raw_tx)
             .await
             .unwrap();
     }
@@ -1082,7 +1085,7 @@ mod test_with_bitcoind {
         tracing::trace!("Step 4: mine bitcoin block");
         let block_hash = btc_rpc.mine_block().unwrap();
 
-        tracing::trace!("Step 5: check that tx got included without changes");
+        tracing::info!("Step 5: check that tx got included without changes");
         btc_rpc
             .get_transaction(&initial_tx.txid(), Some(block_hash))
             .await

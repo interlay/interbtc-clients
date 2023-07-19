@@ -4,9 +4,9 @@ use crate::{
     InterBtcParachain, InterBtcSigner,
 };
 use clap::Parser;
+use sp_core::{sr25519, Pair};
 use sp_keyring::AccountKeyring;
 use std::{collections::HashMap, num::ParseIntError, str::FromStr, time::Duration};
-use subxt::ext::sp_core::{sr25519::Pair, Pair as _};
 
 #[derive(Parser, Debug, Clone)]
 pub struct ProviderUserOpts {
@@ -31,7 +31,7 @@ pub struct ProviderUserOpts {
 
 impl ProviderUserOpts {
     /// Get the key pair and the username, the latter of which is used for wallet selection.
-    pub fn get_key_pair(&self) -> Result<(Pair, String), Error> {
+    pub fn get_key_pair(&self) -> Result<(sr25519::Pair, String), Error> {
         // Load parachain credentials
         let (pair, user_name) = match (
             self.keyfile.as_ref(), // Check if keyfile is provided
@@ -66,8 +66,8 @@ impl ProviderUserOpts {
 /// # Arguments
 ///
 /// * `keyuri` - secret phrase to generate pair
-fn get_pair_from_phrase(keyuri: &String) -> Result<Pair, KeyLoadingError> {
-    Pair::from_string(keyuri, None).map_err(KeyLoadingError::SecretStringError)
+fn get_pair_from_phrase(keyuri: &str) -> Result<sr25519::Pair, KeyLoadingError> {
+    sr25519::Pair::from_string(keyuri, None).map_err(KeyLoadingError::SecretStringError)
 }
 
 /// Loads the credentials for the given user from the keyfile
@@ -76,7 +76,7 @@ fn get_pair_from_phrase(keyuri: &String) -> Result<Pair, KeyLoadingError> {
 ///
 /// * `file_path` - path to the json file containing the credentials
 /// * `keyname` - name of the key to get
-fn get_credentials_from_file(file_path: &str, keyname: &str) -> Result<Pair, KeyLoadingError> {
+fn get_credentials_from_file(file_path: &str, keyname: &str) -> Result<sr25519::Pair, KeyLoadingError> {
     let file = std::fs::File::open(file_path)?;
     let reader = std::io::BufReader::new(file);
     let map: HashMap<String, String> = serde_json::from_reader(reader)?;
