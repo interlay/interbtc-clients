@@ -988,9 +988,7 @@ mod test_with_bitcoind {
         ret.create_or_load_wallet().await.unwrap();
 
         // fund the wallet by mining blocks
-        for _ in 0..102 {
-            ret.mine_block().unwrap();
-        }
+        ret.mine_blocks(102, None);
 
         ret
     }
@@ -1090,7 +1088,7 @@ mod test_with_bitcoind {
             }));
 
         tracing::trace!("Step 4: mine bitcoin block");
-        let block_hash = btc_rpc.mine_block().unwrap();
+        let block_hash = btc_rpc.mine_blocks(1, None);
 
         tracing::info!("Step 5: check that tx got included without changes");
         btc_rpc
@@ -1160,7 +1158,7 @@ mod test_with_bitcoind {
         assert!(btc_rpc.fee_rate(new_tx.txid()).await.unwrap().0 >= 10);
 
         tracing::trace!("Step 5: mine bitcoin block");
-        let block_hash = btc_rpc.mine_block().unwrap();
+        let block_hash = btc_rpc.mine_blocks(1, None);
 
         tracing::trace!("Step 6: check that only new tx got included");
         btc_rpc.get_transaction(&new_tx.txid(), Some(block_hash)).await.unwrap();

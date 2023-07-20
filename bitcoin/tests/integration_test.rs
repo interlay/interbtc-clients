@@ -27,6 +27,22 @@ async fn should_get_new_address() -> Result<(), Error> {
 }
 
 #[tokio::test]
+async fn should_list_addresses() -> Result<(), Error> {
+    let btc_rpc = new_bitcoin_core(Some("Alice".to_string()))?;
+    btc_rpc.create_or_load_wallet().await?;
+
+    let address = btc_rpc.get_new_address().await?;
+    btc_rpc.mine_blocks(101, Some(address.clone()));
+
+    assert!(
+        btc_rpc.list_addresses()?.contains(&address),
+        "Address not found in groupings"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn should_get_new_public_key() -> Result<(), Error> {
     let btc_rpc = new_bitcoin_core(Some("Bob".to_string()))?;
     btc_rpc.create_or_load_wallet().await?;

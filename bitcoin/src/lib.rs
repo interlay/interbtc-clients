@@ -51,6 +51,7 @@ pub use sp_core::H256;
 use std::{
     convert::TryInto,
     future::Future,
+    str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -533,10 +534,15 @@ impl BitcoinCore {
     }
 
     #[cfg(feature = "regtest-manual-mining")]
-    pub fn mine_block(&self) -> Result<BlockHash, Error> {
-        Ok(self
-            .rpc
-            .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?[0])
+    pub fn mine_blocks(&self, block_num: u64, maybe_address: Option<Address>) -> BlockHash {
+        let address =
+            maybe_address.unwrap_or_else(|| self.rpc.get_new_address(None, Some(AddressType::Bech32)).unwrap());
+        self.rpc
+            .generate_to_address(block_num, &address)
+            .unwrap()
+            .last()
+            .unwrap()
+            .clone()
     }
 
     async fn with_retry_on_timeout<F, R, T>(&self, call: F) -> Result<T, Error>
@@ -696,19 +702,16 @@ impl BitcoinCoreApi for BitcoinCore {
 
     // TODO: remove this once the wallet migration has completed
     fn list_addresses(&self) -> Result<Vec<Address>, Error> {
-        #[derive(Clone, PartialEq, Eq, Debug, serde::Deserialize)]
-        pub struct ListAddressGroupingResult {
-            pub address: Address,
-            #[serde(with = "bitcoincore_rpc::bitcoin::util::amount::serde::as_btc")]
-            pub amount: SignedAmount,
-            pub label: Option<String>,
-        }
-
         // Lists groups of addresses which have had their common ownership
         // made public by common use as inputs or as the resulting change
         // in past transactions
-        let groupings: Vec<Vec<ListAddressGroupingResult>> = self.rpc.call("listaddressgroupings", &[])?;
-        Ok(groupings.into_iter().flatten().map(|group| group.address).collect())
+        let groupings: Vec<Vec<Vec<serde_json::Value>>> = self.rpc.call("listaddressgroupings", &[])?;
+        let addresses = groupings
+            .into_iter()
+            .flatten()
+            .filter_map(|group| group.get(0).and_then(|v| v.as_str()).map(Address::from_str)?.ok())
+            .collect::<Vec<_>>();
+        Ok(addresses)
     }
 
     /// Get the raw transaction identified by `Txid` and stored
