@@ -472,15 +472,23 @@ pub async fn execute_open_requests(
     num_confirmations: u32,
     payment_margin: Duration,
     auto_rbf: bool,
+    execute_all: bool,
 ) -> Result<(), ServiceError<Error>> {
     let parachain_rpc = &parachain_rpc;
     let vault_id = parachain_rpc.get_account_id().clone();
 
     // get all redeem and replace requests
-    let (redeem_requests, replace_requests) = try_join!(
-        parachain_rpc.get_vault_redeem_requests(vault_id.clone()),
-        parachain_rpc.get_old_vault_replace_requests(vault_id.clone()),
-    )?;
+    let (redeem_requests, replace_requests) = if execute_all {
+        try_join!(
+            parachain_rpc.get_all_redeem_requests(),
+            parachain_rpc.get_all_replace_requests(),
+        )?
+    } else {
+        try_join!(
+            parachain_rpc.get_vault_redeem_requests(vault_id.clone()),
+            parachain_rpc.get_old_vault_replace_requests(vault_id.clone()),
+        )?
+    };
 
     let open_redeems = redeem_requests
         .into_iter()
@@ -724,6 +732,7 @@ mod tests {
             async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), RuntimeError>;
             async fn get_redeem_request(&self, redeem_id: H256) -> Result<InterBtcRedeemRequest, RuntimeError>;
             async fn get_vault_redeem_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcRedeemRequest)>, RuntimeError>;
+            async fn get_all_redeem_requests(&self) -> Result<Vec<(H256, InterBtcRedeemRequest)>, RuntimeError>;
             async fn get_redeem_period(&self) -> Result<BlockNumber, RuntimeError>;
         }
 
@@ -736,6 +745,7 @@ mod tests {
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
             async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
+            async fn get_all_replace_requests(&self) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
             async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
             async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;

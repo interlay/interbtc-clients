@@ -358,6 +358,7 @@ mod tests {
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
             async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
+            async fn get_all_replace_requests(&self) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_replace_period(&self) -> Result<u32, RuntimeError>;
             async fn get_replace_request(&self, replace_id: H256) -> Result<InterBtcReplaceRequest, RuntimeError>;
             async fn get_replace_dust_amount(&self) -> Result<u128, RuntimeError>;
