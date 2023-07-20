@@ -13,18 +13,16 @@ use futures::{
     pin_mut, Future, FutureExt, SinkExt, StreamExt,
 };
 use sp_keyring::AccountKeyring;
-use std::{sync::Arc, time::Duration};
-use subxt::events::StaticEvent as Event;
-use subxt_client::{
-    DatabaseSource, JsonRpcClient, KeystoreConfig, Role, SubxtClientConfig, WasmExecutionMethod,
-    WasmtimeInstantiationStrategy,
+use std::{
+    process::{Child, Command},
+    sync::Arc,
+    time::Duration,
 };
+use subxt::events::StaticEvent as Event;
 use tempdir::TempDir;
 use tokio::time::{sleep, timeout};
 
 type DynBitcoinCoreApi = Arc<dyn BitcoinCoreApi + Send + Sync>;
-
-pub use subxt_client::SubxtClient;
 
 // export the mocked bitcoin interface
 pub use bitcoin_simulator::MockBitcoinCore;
@@ -52,43 +50,9 @@ impl Translate for BlockHash {
 /// Start a new instance of the parachain. The second item in the returned tuple must remain in
 /// scope as long as the parachain is active, since dropping it will remove the temporary directory
 /// that the parachain uses
-pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempDir) {
+pub async fn default_root_provider_client(key: AccountKeyring) -> (InterBtcParachain, TempDir) {
     let tmp = TempDir::new("btc-parachain-").expect("failed to create tempdir");
-    let config = SubxtClientConfig {
-        impl_name: "btc-parachain-full-client",
-        impl_version: "0.0.1",
-        author: "Interlay Ltd",
-        copyright_start_year: 2020,
-        db: DatabaseSource::ParityDb {
-            path: tmp.path().join("db"),
-        },
-        keystore: KeystoreConfig::Path {
-            path: tmp.path().join("keystore"),
-            password: None,
-        },
-        chain_spec: interbtc::chain_spec::testnet_kintsugi::development_config(2121u32.into()),
-        role: Role::Authority(key),
-        telemetry: None,
-        wasm_method: WasmExecutionMethod::Compiled {
-            instantiation_strategy: WasmtimeInstantiationStrategy::LegacyInstanceReuse,
-        },
-        tokio_handle: tokio::runtime::Handle::current(),
-    };
-
-    // enable off chain workers
-    let mut service_config = config.into_service_config();
-    service_config.offchain_worker.enabled = true;
-
-    let (task_manager, rpc_handlers) = interbtc::service::start_instant::<
-        interbtc_runtime::RuntimeApi,
-        interbtc::service::KintsugiRuntimeExecutor,
-    >(service_config)
-    .await
-    .unwrap();
-
-    let client = SubxtClient::new(task_manager, rpc_handlers);
-
-    let root_provider = setup_provider(client.clone(), AccountKeyring::Alice).await;
+    let root_provider = setup_custom_provider(key).await;
     try_join(
         root_provider.set_bitcoin_confirmations(1),
         root_provider.set_parachain_confirmations(1),
@@ -96,18 +60,22 @@ pub async fn default_provider_client(key: AccountKeyring) -> (SubxtClient, TempD
     .await
     .unwrap();
 
-    (client, tmp)
+    (root_provider, tmp)
 }
 
 /// Create a new parachain_rpc with the given keyring
-pub async fn setup_provider(client: SubxtClient, key: AccountKeyring) -> InterBtcParachain {
+pub async fn setup_custom_provider(key: AccountKeyring) -> InterBtcParachain {
     let signer = InterBtcSigner::new(key.pair());
     let shutdown_tx = crate::ShutdownSender::new();
-
-    let json_client: JsonRpcClient = client.into();
-    InterBtcParachain::new(json_client, signer, shutdown_tx)
-        .await
-        .expect("Error creating parachain_rpc")
+    let parachain_rpc = InterBtcParachain::from_url_with_retry(
+        &"ws://127.0.0.1:9944".to_string(), //Fixme: hardcoded temporary
+        signer.clone(),
+        Duration::from_secs(10),
+        shutdown_tx,
+    )
+    .await
+    .unwrap();
+    parachain_rpc
 }
 
 /// request, pay and execute an issue
@@ -221,6 +189,15 @@ pub async fn test_service<T: Future, U: Future>(service: T, fut: U) -> U::Output
 
 pub async fn with_timeout<T: Future>(future: T, duration: Duration) -> T::Output {
     timeout(duration, future).await.expect("timeout")
+}
+
+pub async fn start_chain() -> std::io::Result<Child> {
+    let _output = Command::new("sh")
+        .arg("../scripts/stop_node.sh")
+        .output()
+        .expect("Failed to execute script");
+
+    Command::new("sh").arg("../scripts/run_node.sh").spawn()
 }
 
 pub async fn periodically_produce_blocks(parachain_rpc: InterBtcParachain) {
