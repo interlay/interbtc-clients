@@ -18,9 +18,9 @@ use futures::{
 use git_version::git_version;
 use runtime::{
     cli::{parse_duration_minutes, parse_duration_ms},
-    BtcRelayPallet, CollateralBalancesPallet, CurrencyId, Error as RuntimeError, InterBtcParachain, PrettyPrint,
-    RegisterVaultEvent, RuntimeCurrencyInfo, StoreMainChainHeaderEvent, TryFromSymbol, UpdateActiveBlockEvent,
-    UtilFuncs, VaultCurrencyPair, VaultId, VaultRegistryPallet,
+    AccountId, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, Error as RuntimeError, InterBtcParachain,
+    PrettyPrint, RegisterVaultEvent, StoreMainChainHeaderEvent, TryFromSymbol, UpdateActiveBlockEvent, UtilFuncs,
+    VaultCurrencyPair, VaultId, VaultRegistryPallet,
 };
 use service::{wait_or_shutdown, DynBitcoinCoreApi, Error as ServiceError, MonitoringConfig, Service, ShutdownSender};
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
@@ -178,35 +178,25 @@ pub struct DatabaseConfig {
 }
 
 impl DatabaseConfig {
-    fn prefixed_key(vault_id: &VaultId, key: &str) -> Result<String, Error> {
+    fn prefixed_key(account_id: &AccountId, key: &str) -> Result<String, Error> {
         Ok(format!(
-            "{}-{}-{}-{}",
-            vault_id.account_id.pretty_print(), /* technically not needed since each client should have their own
-                                                 * db, but doesn't hurt to be safe */
-            vault_id
-                .currencies
-                .collateral
-                .symbol()
-                .map_err(|_| BitcoinError::FailedToConstructWalletName)?,
-            vault_id
-                .currencies
-                .wrapped
-                .symbol()
-                .map_err(|_| BitcoinError::FailedToConstructWalletName)?,
+            "{}-{}",
+            account_id.pretty_print(), /* technically not needed since each client should have their own
+                                        * db, but doesn't hurt to be safe */
             key
         ))
     }
 
-    pub fn put<V: serde::Serialize>(&self, vault_id: &VaultId, key: &str, value: &V) -> Result<(), Error> {
+    pub fn put<V: serde::Serialize>(&self, account_id: &AccountId, key: &str, value: &V) -> Result<(), Error> {
         let db = rocksdb::DB::open_default(self.path.clone())?;
-        let key = Self::prefixed_key(vault_id, key)?;
+        let key = Self::prefixed_key(account_id, key)?;
         db.put(key, serde_json::to_vec(value)?)?;
         Ok(())
     }
 
-    pub fn get<T: serde::de::DeserializeOwned>(&self, vault_id: &VaultId, key: &str) -> Result<Option<T>, Error> {
+    pub fn get<T: serde::de::DeserializeOwned>(&self, account_id: &AccountId, key: &str) -> Result<Option<T>, Error> {
         let db = rocksdb::DB::open_default(self.path.clone())?;
-        let key = Self::prefixed_key(vault_id, key)?;
+        let key = Self::prefixed_key(account_id, key)?;
 
         let value = match db.get(key)? {
             None => return Ok(None),
@@ -317,6 +307,7 @@ impl VaultIdManager {
             }
         }
 
+        tracing::info!("Merging wallet for {:?}", vault_id);
         // issue keys should be imported separately but we need to iterate
         // through currency specific wallets to get change addresses
         for address in btc_rpc.list_addresses()? {
@@ -325,9 +316,6 @@ impl VaultIdManager {
             // import key into main wallet
             btc_rpc_shared.import_private_key(&private_key, false)?;
         }
-
-        tracing::info!("Adding keys from past issues...");
-        issue::add_keys_from_past_issue_request(&btc_rpc_shared, &self.btc_parachain, &vault_id, &self.db).await?;
 
         tracing::info!("Initializing metrics...");
         let metrics = PerCurrencyMetrics::new(&vault_id);
@@ -350,6 +338,7 @@ impl VaultIdManager {
             .await?
         {
             match is_vault_registered(&self.btc_parachain, &vault_id).await {
+                // TODO: import keys for liquidated vaults?
                 Err(Error::RuntimeError(RuntimeError::VaultLiquidated)) => {
                     tracing::error!(
                         "[{}] Vault is liquidated -- not going to process events for this vault.",
@@ -423,6 +412,7 @@ impl VaultIdManager {
 pub struct VaultService {
     btc_parachain: InterBtcParachain,
     btc_rpc_master_wallet: DynBitcoinCoreApi,
+    btc_rpc_shared_wallet: DynBitcoinCoreApi,
     config: VaultServiceConfig,
     monitoring_config: MonitoringConfig,
     shutdown: ShutdownSender,
@@ -534,6 +524,7 @@ impl VaultService {
         Self {
             btc_parachain: btc_parachain.clone(),
             btc_rpc_master_wallet: btc_rpc_master_wallet.clone(),
+            btc_rpc_shared_wallet: btc_rpc_shared_wallet.clone(),
             config,
             monitoring_config,
             shutdown,
@@ -644,6 +635,14 @@ impl VaultService {
 
         // purposefully _after_ maybe_register_vault and _before_ other calls
         self.vault_id_manager.fetch_vault_ids().await?;
+
+        tracing::info!("Adding keys from past issues...");
+        issue::add_keys_from_past_issue_request(
+            &self.btc_rpc_shared_wallet,
+            &self.btc_parachain,
+            &self.vault_id_manager.db,
+        )
+        .await?;
 
         let startup_height = self.await_parachain_block().await?;
 
