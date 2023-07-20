@@ -50,9 +50,9 @@ impl Translate for BlockHash {
 /// Start a new instance of the parachain. The second item in the returned tuple must remain in
 /// scope as long as the parachain is active, since dropping it will remove the temporary directory
 /// that the parachain uses
-pub async fn default_root_provider_client(key: AccountKeyring) -> (InterBtcParachain, TempDir) {
+pub async fn default_root_provider(key: AccountKeyring) -> (InterBtcParachain, TempDir) {
     let tmp = TempDir::new("btc-parachain-").expect("failed to create tempdir");
-    let root_provider = setup_custom_provider(key).await;
+    let root_provider = setup_provider(key).await;
     try_join(
         root_provider.set_bitcoin_confirmations(1),
         root_provider.set_parachain_confirmations(1),
@@ -64,11 +64,11 @@ pub async fn default_root_provider_client(key: AccountKeyring) -> (InterBtcParac
 }
 
 /// Create a new parachain_rpc with the given keyring
-pub async fn setup_custom_provider(key: AccountKeyring) -> InterBtcParachain {
+pub async fn setup_provider(key: AccountKeyring) -> InterBtcParachain {
     let signer = InterBtcSigner::new(key.pair());
     let shutdown_tx = crate::ShutdownSender::new();
     let parachain_rpc = InterBtcParachain::from_url_with_retry(
-        &"ws://127.0.0.1:9944".to_string(), //Fixme: hardcoded temporary
+        &"ws://127.0.0.1:9944".to_string(),
         signer.clone(),
         Duration::from_secs(10),
         shutdown_tx,
@@ -192,12 +192,10 @@ pub async fn with_timeout<T: Future>(future: T, duration: Duration) -> T::Output
 }
 
 pub async fn start_chain() -> std::io::Result<Child> {
-    let _output = Command::new("sh")
-        .arg("../scripts/stop_node.sh")
-        .output()
-        .expect("Failed to execute script");
-
-    Command::new("sh").arg("../scripts/run_node.sh").spawn()
+    let command = Command::new("sh").arg("../scripts/run_parachain_node.sh").spawn();
+    // Time to start the parachain image, so RPC request can be handle
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    command
 }
 
 pub async fn periodically_produce_blocks(parachain_rpc: InterBtcParachain) {

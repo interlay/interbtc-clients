@@ -410,7 +410,7 @@ mod tests {
     }
 
     async fn endow_accounts() {
-        let provider = setup_custom_provider(AccountKeyring::Alice).await;
+        let provider = setup_provider(AccountKeyring::Alice).await;
         provider
             .set_balances(
                 vec![AccountKeyring::Alice, AccountKeyring::Bob]
@@ -428,7 +428,7 @@ mod tests {
     }
 
     async fn set_exchange_rate() {
-        let oracle_provider = setup_custom_provider(AccountKeyring::Bob).await;
+        let oracle_provider = setup_provider(AccountKeyring::Bob).await;
         let dot_key = OracleKey::ExchangeRate(DEFAULT_TESTING_CURRENCY);
         let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
         let ksm_key = OracleKey::ExchangeRate(Token(KBTC));
@@ -492,9 +492,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial]
     async fn test_fund_user_once_succeeds() {
-        let mut child: Child = start_chain().await.unwrap();
+        let mut parachain_runner: Child = start_chain().await.unwrap();
         set_concurrency_limit(999);
-        let (alice_provider, tmp_dir) = default_root_provider_client(AccountKeyring::Alice).await;
+        let (alice_provider, tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
         set_exchange_rate().await;
         endow_accounts().await;
 
@@ -526,15 +526,15 @@ mod tests {
 
         let bob_funds_after = get_multi_currency_balance(&bob_account_id, &user_allowance, &alice_provider).await;
         assert_allowance_emitted(&bob_funds_before, &bob_funds_after, &user_allowance);
-        child.kill().unwrap();
+        parachain_runner.kill().unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
     #[serial]
     async fn test_fund_rich_user_fails() {
-        let mut child: Child = start_chain().await.unwrap();
+        let mut parachain_runner: Child = start_chain().await.unwrap();
         set_concurrency_limit(999);
-        let (alice_provider, tmp_dir) = default_root_provider_client(AccountKeyring::Alice).await;
+        let (alice_provider, tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
         set_exchange_rate().await;
         endow_accounts().await;
 
@@ -563,15 +563,15 @@ mod tests {
             fund_account(&Arc::from(alice_provider.clone()), req, store, allowance_config).await,
             Error::AccountBalanceExceedsMaximum
         );
-        child.kill().unwrap();
+        parachain_runner.kill().unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
     #[serial]
     async fn test_fund_user_immediately_after_registering_as_vault_succeeds() {
-        let mut child: Child = start_chain().await.unwrap();
+        let mut parachain_runner: Child = start_chain().await.unwrap();
         set_concurrency_limit(999);
-        let (alice_provider, tmp_dir) = default_root_provider_client(AccountKeyring::Alice).await;
+        let (alice_provider, tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
         set_exchange_rate().await;
         endow_accounts().await;
 
@@ -597,7 +597,7 @@ mod tests {
         let kv = open_kv_store(store.clone()).unwrap();
         kv.clear().unwrap();
 
-        let bob_provider = setup_custom_provider(AccountKeyring::Bob).await;
+        let bob_provider = setup_provider(AccountKeyring::Bob).await;
         // Drain the amount Bob was prefunded by, so he is eligible to receive Faucet funding
         let bob_prefunded_amount =
             get_multi_currency_balance(&bob_account_id.clone().into(), &user_allowance, &bob_provider).await;
@@ -629,15 +629,15 @@ mod tests {
         let bob_funds_after =
             get_multi_currency_balance(&bob_account_id.clone().into(), &user_allowance, &alice_provider).await;
         assert_allowance_emitted(&bob_funds_before, &bob_funds_after, &vault_allowance);
-        child.kill().unwrap();
+        parachain_runner.kill().unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
     #[serial]
     async fn test_fund_user_twice_in_a_row_fails() {
-        let mut child: Child = start_chain().await.unwrap();
+        let mut parachain_runner: Child = start_chain().await.unwrap();
         set_concurrency_limit(999);
-        let (alice_provider, tmp_dir) = default_root_provider_client(AccountKeyring::Alice).await;
+        let (alice_provider, tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
         set_exchange_rate().await;
         endow_accounts().await;
 
@@ -674,15 +674,15 @@ mod tests {
             fund_account(&Arc::from(alice_provider.clone()), req, store, allowance_config).await,
             Error::AccountAlreadyFunded
         );
-        child.kill().unwrap();
+        parachain_runner.kill().unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
     #[serial]
     async fn test_fund_vault_once_succeeds() {
-        let mut child: Child = start_chain().await.unwrap();
+        let mut parachain_runner: Child = start_chain().await.unwrap();
         set_concurrency_limit(999);
-        let (alice_provider, tmp_dir) = default_root_provider_client(AccountKeyring::Alice).await;
+        let (alice_provider, tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
         set_exchange_rate().await;
         endow_accounts().await;
 
@@ -705,7 +705,7 @@ mod tests {
             ];
             let allowance_config = AllowanceConfig::new(1000, 6, user_allowance.clone(), vault_allowance.clone());
 
-            let bob_provider = setup_custom_provider(AccountKeyring::Bob).await;
+            let bob_provider = setup_provider(AccountKeyring::Bob).await;
             if bob_provider.get_public_key().await.unwrap().is_none() {
                 bob_provider.register_public_key(dummy_public_key()).await.unwrap();
             }
@@ -732,15 +732,15 @@ mod tests {
             let bob_funds_after = get_multi_currency_balance(&bob_account_id, &user_allowance, &bob_provider).await;
             assert_allowance_emitted(&bob_funds_before, &bob_funds_after, &vault_allowance);
         }
-        child.kill().unwrap();
+        parachain_runner.kill().unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
     #[serial]
     async fn test_fund_vault_twice_in_a_row_fails() {
-        let mut child: Child = start_chain().await.unwrap();
+        let mut parachain_runner: Child = start_chain().await.unwrap();
         set_concurrency_limit(999);
-        let (alice_provider, tmp_dir) = default_root_provider_client(AccountKeyring::Alice).await;
+        let (alice_provider, tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
         set_exchange_rate().await;
         endow_accounts().await;
 
@@ -762,7 +762,7 @@ mod tests {
         ];
         let allowance_config = AllowanceConfig::new(1000, 6, user_allowance.clone(), vault_allowance.clone());
 
-        let bob_provider = setup_custom_provider(AccountKeyring::Bob).await;
+        let bob_provider = setup_provider(AccountKeyring::Bob).await;
         bob_provider.register_public_key(dummy_public_key()).await.unwrap();
         bob_provider.register_vault(&bob_vault_id, 3 * KSM.one()).await.unwrap();
 
@@ -793,6 +793,6 @@ mod tests {
             fund_account(&Arc::from(alice_provider.clone()), req, store, allowance_config).await,
             Error::AccountAlreadyFunded
         );
-        child.kill().unwrap();
+        parachain_runner.kill().unwrap();
     }
 }

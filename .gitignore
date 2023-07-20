@@ -12,3 +12,4 @@ args.txt
 vault-*-metadata
 kv
 *.wif
+.idea/*

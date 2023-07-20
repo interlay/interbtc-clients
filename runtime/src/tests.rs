@@ -28,7 +28,7 @@ fn dummy_public_key() -> BtcPublicKey {
 }
 
 async fn set_exchange_rate() {
-    let oracle_provider = setup_custom_provider(AccountKeyring::Bob).await;
+    let oracle_provider = setup_provider(AccountKeyring::Bob).await;
     let key = OracleKey::ExchangeRate(DEFAULT_TESTING_CURRENCY);
     let exchange_rate = FixedU128::saturating_from_rational(1u128, 100u128);
     oracle_provider
@@ -40,8 +40,8 @@ async fn set_exchange_rate() {
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_getters() {
-    let mut child: Child = start_chain().await.unwrap();
-    let (parachain_rpc, _tmp_dir) = default_root_provider_client(AccountKeyring::Alice).await;
+    let mut parachain_runner: Child = start_chain().await.unwrap();
+    let (parachain_rpc, _tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
 
     tokio::join!(
         async {
@@ -57,14 +57,14 @@ async fn test_getters() {
             assert!(parachain_rpc.get_current_active_block_number().await.unwrap() == 0);
         }
     );
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_invalid_tx_matching() {
-    let mut child: Child = start_chain().await.unwrap();
-    let (parachain_rpc, _tmp_dir) = default_root_provider_client(AccountKeyring::Alice).await;
+    let mut parachain_runner: Child = start_chain().await.unwrap();
+    let (parachain_rpc, _tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
 
     let bob_keyring = AccountKeyring::Bob;
     let bob_substrate_account = bob_keyring.to_account_id();
@@ -72,14 +72,14 @@ async fn test_invalid_tx_matching() {
 
     let err = parachain_rpc.get_invalid_tx_error(bob.into()).await;
     assert!(err.is_invalid_transaction().is_some());
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_too_low_priority_matching() {
-    let mut child: Child = start_chain().await.unwrap();
-    let (parachain_rpc, _tmp_dir) = default_root_provider_client(AccountKeyring::Alice).await;
+    let mut parachain_runner: Child = start_chain().await.unwrap();
+    let (parachain_rpc, _tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
 
     let bob_keyring = AccountKeyring::Bob;
     let bob_substrate_account = bob_keyring.to_account_id();
@@ -87,17 +87,17 @@ async fn test_too_low_priority_matching() {
 
     let err = parachain_rpc.get_too_low_priority_error(bob.into()).await;
     assert!(err.is_pool_too_low_priority().is_some());
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_subxt_processing_events_after_dispatch_error() {
-    let mut child: Child = start_chain().await.unwrap();
-    let (parachain_rpc, _tmp_dir) = default_root_provider_client(AccountKeyring::Alice).await;
+    let mut parachain_runner: Child = start_chain().await.unwrap();
+    let (parachain_rpc, _tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
 
-    let oracle_provider = setup_custom_provider(AccountKeyring::Bob).await;
-    let invalid_oracle = setup_custom_provider(AccountKeyring::Dave).await;
+    let oracle_provider = setup_provider(AccountKeyring::Bob).await;
+    let invalid_oracle = setup_provider(AccountKeyring::Dave).await;
 
     let event_listener = assert_event::<FeedValuesEvent, _>(Duration::from_secs(80), parachain_rpc.clone(), |_| true);
 
@@ -113,14 +113,14 @@ async fn test_subxt_processing_events_after_dispatch_error() {
     // ensure first set_exchange_rate failed and second succeeded.
     result.1.unwrap_err();
     result.2.unwrap();
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_register_vault() {
-    let mut child: Child = start_chain().await.unwrap();
-    let (parachain_rpc, _tmp_dir) = default_root_provider_client(AccountKeyring::Alice).await;
+    let mut parachain_runner: Child = start_chain().await.unwrap();
+    let (parachain_rpc, _tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
     set_exchange_rate().await;
     parachain_rpc
         .set_balances(vec![(
@@ -142,14 +142,14 @@ async fn test_register_vault() {
     parachain_rpc.register_vault(&vault_id, 3 * KSM.one()).await.unwrap();
     parachain_rpc.get_vault(&vault_id).await.unwrap();
     assert_eq!(parachain_rpc.get_public_key().await.unwrap(), Some(dummy_public_key()));
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_btc_relay() {
-    let mut child: Child = start_chain().await.unwrap();
-    let (parachain_rpc, _tmp_dir) = default_root_provider_client(AccountKeyring::Alice).await;
+    let mut parachain_runner: Child = start_chain().await.unwrap();
+    let (parachain_rpc, _tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
     set_exchange_rate().await;
 
     let address = BtcAddress::P2PKH(H160::zero());
@@ -197,14 +197,14 @@ async fn test_btc_relay() {
         assert_eq!(parachain_rpc.get_best_block().await.unwrap(), block_hash.into());
         assert_eq!(parachain_rpc.get_best_block_height().await.unwrap(), height);
     }
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_currency_id_parsing() {
-    let mut child: Child = start_chain().await.unwrap();
-    let (parachain_rpc, _tmp_dir) = default_root_provider_client(AccountKeyring::Alice).await;
+    let mut parachain_runner: Child = start_chain().await.unwrap();
+    let (parachain_rpc, _tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
     parachain_rpc.register_dummy_assets().await.unwrap();
     parachain_rpc.store_assets_metadata().await.unwrap();
     parachain_rpc.register_lending_markets().await.unwrap();
@@ -225,5 +225,5 @@ async fn test_currency_id_parsing() {
         ForeignAsset(2)
     );
     assert_eq!(ForeignAsset(2).decimals().unwrap(), 10);
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }

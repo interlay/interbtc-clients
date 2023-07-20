@@ -33,9 +33,8 @@ where
     F: Future<Output = R>,
 {
     service::init_subscriber();
-    let (client, _tmp_dir) = default_root_provider_client(AccountKeyring::Alice).await;
+    let (parachain_rpc, _tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
 
-    let parachain_rpc = setup_custom_provider(AccountKeyring::Alice).await;
     parachain_rpc
         .set_balances(
             vec![
@@ -62,7 +61,7 @@ where
         .await
         .expect("Should disable difficulty check");
 
-    let parachain_rpc = setup_custom_provider(AccountKeyring::Bob).await;
+    let parachain_rpc = setup_provider(AccountKeyring::Bob).await;
     set_exchange_rate_and_wait(&parachain_rpc, DEFAULT_TESTING_CURRENCY, FixedU128::from(100000000)).await;
     set_exchange_rate_and_wait(
         &parachain_rpc,
@@ -72,23 +71,23 @@ where
     .await;
     set_bitcoin_fees(&parachain_rpc, FixedU128::from(1)).await;
 
-    let vault_provider = setup_custom_provider(AccountKeyring::Charlie).await;
+    let vault_provider = setup_provider(AccountKeyring::Charlie).await;
     let vault_id = VaultId::new(
         AccountKeyring::Charlie.into(),
         DEFAULT_TESTING_CURRENCY,
         DEFAULT_WRAPPED_CURRENCY,
     );
 
-    execute(client, vault_id, vault_provider).await
+    execute(parachain_rpc, vault_id, vault_provider).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_redeem_succeeds() {
-    let mut child: Child = start_chain().await.unwrap();
+    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|client, vault_id, vault_provider| async move {
-        let relayer_provider = setup_custom_provider(AccountKeyring::Bob).await;
-        let user_provider = setup_custom_provider(AccountKeyring::Dave).await;
+        let relayer_provider = setup_provider(AccountKeyring::Bob).await;
+        let user_provider = setup_provider(AccountKeyring::Dave).await;
 
         let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
@@ -144,22 +143,22 @@ async fn test_redeem_succeeds() {
         .await;
     })
     .await;
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_replace_succeeds() {
-    let mut child: Child = start_chain().await.unwrap();
+    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|client, old_vault_id, old_vault_provider| async move {
-        let relayer_provider = setup_custom_provider(AccountKeyring::Bob).await;
-        let new_vault_provider = setup_custom_provider(AccountKeyring::Eve).await;
+        let relayer_provider = setup_provider(AccountKeyring::Bob).await;
+        let new_vault_provider = setup_provider(AccountKeyring::Eve).await;
         let new_vault_id = VaultId::new(
             AccountKeyring::Eve.into(),
             DEFAULT_TESTING_CURRENCY,
             DEFAULT_WRAPPED_CURRENCY,
         );
-        let user_provider = setup_custom_provider(AccountKeyring::Dave).await;
+        let user_provider = setup_provider(AccountKeyring::Dave).await;
 
         let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
@@ -257,22 +256,22 @@ async fn test_replace_succeeds() {
         .await;
     })
     .await;
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_withdraw_replace_succeeds() {
-    let mut child: Child = start_chain().await.unwrap();
+    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|client, old_vault_id, old_vault_provider| async move {
-        let relayer_provider = setup_custom_provider(AccountKeyring::Bob).await;
-        let new_vault_provider = setup_custom_provider(AccountKeyring::Eve).await;
+        let relayer_provider = setup_provider(AccountKeyring::Bob).await;
+        let new_vault_provider = setup_provider(AccountKeyring::Eve).await;
         let new_vault_id = VaultId::new(
             AccountKeyring::Eve.into(),
             DEFAULT_TESTING_CURRENCY,
             DEFAULT_WRAPPED_CURRENCY,
         );
-        let user_provider = setup_custom_provider(AccountKeyring::Dave).await;
+        let user_provider = setup_provider(AccountKeyring::Dave).await;
 
         let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
@@ -331,7 +330,7 @@ async fn test_withdraw_replace_succeeds() {
             .is_err());
     })
     .await;
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -340,17 +339,17 @@ async fn test_cancellation_succeeds() {
     // tests cancellation of issue, redeem and replace.
     // issue and replace cancellation is tested through the vault's cancellation service.
     // cancel_redeem is called manually
-    let mut child: Child = start_chain().await.unwrap();
-    test_with_vault(|client, old_vault_id, old_vault_provider| async move {
-        let root_provider = setup_custom_provider(AccountKeyring::Alice).await;
-        let relayer_provider = setup_custom_provider(AccountKeyring::Bob).await;
-        let new_vault_provider = setup_custom_provider(AccountKeyring::Eve).await;
+    let mut parachain_runner: Child = start_chain().await.unwrap();
+    test_with_vault(|_, old_vault_id, old_vault_provider| async move {
+        let root_provider = setup_provider(AccountKeyring::Alice).await;
+        let relayer_provider = setup_provider(AccountKeyring::Bob).await;
+        let new_vault_provider = setup_provider(AccountKeyring::Eve).await;
         let new_vault_id = VaultId::new(
             AccountKeyring::Eve.into(),
             DEFAULT_TESTING_CURRENCY,
             DEFAULT_WRAPPED_CURRENCY,
         );
-        let user_provider = setup_custom_provider(AccountKeyring::Dave).await;
+        let user_provider = setup_provider(AccountKeyring::Dave).await;
 
         let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
@@ -545,16 +544,16 @@ async fn test_cancellation_succeeds() {
         .await;
     })
     .await;
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_issue_overpayment_succeeds() {
-    let mut child: Child = start_chain().await.unwrap();
-    test_with_vault(|client, vault_id, vault_provider| async move {
-        let relayer_provider = setup_custom_provider(AccountKeyring::Bob).await;
-        let user_provider = setup_custom_provider(AccountKeyring::Dave).await;
+    let mut parachain_runner: Child = start_chain().await.unwrap();
+    test_with_vault(|_root_provider, vault_id, vault_provider| async move {
+        let relayer_provider = setup_provider(AccountKeyring::Bob).await;
+        let user_provider = setup_provider(AccountKeyring::Dave).await;
 
         let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
@@ -606,23 +605,23 @@ async fn test_issue_overpayment_succeeds() {
         .await;
     })
     .await;
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_automatic_issue_execution_succeeds() {
-    let mut child: Child = start_chain().await.unwrap();
-    test_with_vault(|client, vault1_id, _vault1_provider| async move {
-        let relayer_provider = setup_custom_provider(AccountKeyring::Bob).await;
-        let vault1_provider = setup_custom_provider(AccountKeyring::Charlie).await;
-        let vault2_provider = setup_custom_provider(AccountKeyring::Eve).await;
+    let mut parachain_runner: Child = start_chain().await.unwrap();
+    test_with_vault(|_root_provider, vault1_id, _vault1_provider| async move {
+        let relayer_provider = setup_provider(AccountKeyring::Bob).await;
+        let vault1_provider = setup_provider(AccountKeyring::Charlie).await;
+        let vault2_provider = setup_provider(AccountKeyring::Eve).await;
         let vault2_id = VaultId::new(
             AccountKeyring::Eve.into(),
             DEFAULT_TESTING_CURRENCY,
             DEFAULT_WRAPPED_CURRENCY,
         );
-        let user_provider = setup_custom_provider(AccountKeyring::Dave).await;
+        let user_provider = setup_provider(AccountKeyring::Dave).await;
 
         let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
@@ -706,24 +705,24 @@ async fn test_automatic_issue_execution_succeeds() {
         test_service(service, fut_user).await;
     })
     .await;
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 // todo: refactor to reuse code from test_automatic_issue_execution_succeeds
 async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
-    let mut child: Child = start_chain().await.unwrap();
-    test_with_vault(|client, vault1_id, _vault1_provider| async move {
-        let relayer_provider = setup_custom_provider(AccountKeyring::Bob).await;
-        let vault1_provider = setup_custom_provider(AccountKeyring::Charlie).await;
-        let vault2_provider = setup_custom_provider(AccountKeyring::Eve).await;
+    let mut parachain_runner: Child = start_chain().await.unwrap();
+    test_with_vault(|_root_provider, vault1_id, _vault1_provider| async move {
+        let relayer_provider = setup_provider(AccountKeyring::Bob).await;
+        let vault1_provider = setup_provider(AccountKeyring::Charlie).await;
+        let vault2_provider = setup_provider(AccountKeyring::Eve).await;
         let vault2_id = VaultId::new(
             AccountKeyring::Eve.into(),
             DEFAULT_TESTING_CURRENCY,
             DEFAULT_WRAPPED_CURRENCY,
         );
-        let user_provider = setup_custom_provider(AccountKeyring::Dave).await;
+        let user_provider = setup_provider(AccountKeyring::Dave).await;
 
         let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core.clone());
@@ -804,16 +803,16 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
         test_service(service, fut_user).await;
     })
     .await;
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_execute_open_requests_succeeds() {
-    let mut child: Child = start_chain().await.unwrap();
-    test_with_vault(|client, vault_id, vault_provider| async move {
-        let relayer_provider = setup_custom_provider(AccountKeyring::Bob).await;
-        let user_provider = setup_custom_provider(AccountKeyring::Dave).await;
+    let mut parachain_runner: Child = start_chain().await.unwrap();
+    test_with_vault(|_root_provider, vault_id, vault_provider| async move {
+        let relayer_provider = setup_provider(AccountKeyring::Bob).await;
+        let user_provider = setup_provider(AccountKeyring::Dave).await;
 
         let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core.clone());
@@ -909,16 +908,16 @@ async fn test_execute_open_requests_succeeds() {
         .await;
     })
     .await;
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_off_chain_liquidation() {
-    let mut child: Child = start_chain().await.unwrap();
-    test_with_vault(|client, vault_id, vault_provider| async move {
-        let relayer_provider = setup_custom_provider(AccountKeyring::Bob).await;
-        let user_provider = setup_custom_provider(AccountKeyring::Dave).await;
+    let mut parachain_runner: Child = start_chain().await.unwrap();
+    test_with_vault(|_root_provider, vault_id, vault_provider| async move {
+        let relayer_provider = setup_provider(AccountKeyring::Bob).await;
+        let user_provider = setup_provider(AccountKeyring::Dave).await;
 
         let mock_bitcoin_core = MockBitcoinCore::new(relayer_provider.clone()).await;
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin_core);
@@ -944,7 +943,7 @@ async fn test_off_chain_liquidation() {
         assert_event::<LiquidateVaultEvent, _>(TIMEOUT, vault_provider.clone(), |_| true).await;
     })
     .await;
-    child.kill().unwrap();
+    parachain_runner.kill().unwrap();
 }
 
 async fn assert_redeem_event(
@@ -1195,11 +1194,11 @@ mod test_with_bitcoind {
     #[serial]
     async fn test_automatic_rbf_succeeds() {
         use vault::relay::run_relayer;
-        let mut child: Child = start_chain().await.unwrap();
+        let mut parachain_runner: Child = start_chain().await.unwrap();
 
-        test_with_vault(|client, vault_id, vault_provider| async move {
-            let relayer_provider = setup_custom_provider(AccountKeyring::Bob).await;
-            let user_provider = setup_custom_provider(AccountKeyring::Dave).await;
+        test_with_vault(|_root_provider, vault_id, vault_provider| async move {
+            let relayer_provider = setup_provider(AccountKeyring::Bob).await;
+            let user_provider = setup_provider(AccountKeyring::Dave).await;
 
             let mut bitcoin_core = get_bitcoin_core().await;
             let btc_rpc: DynBitcoinCoreApi = Arc::new(bitcoin_core.clone());
@@ -1297,6 +1296,6 @@ mod test_with_bitcoind {
             test_service(service, validation).await;
         })
         .await;
-        child.kill().unwrap();
+        parachain_runner.kill().unwrap();
     }
 }
