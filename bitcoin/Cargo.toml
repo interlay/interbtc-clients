@@ -8,7 +8,7 @@ edition = "2018"
 default = []
 regtest-manual-mining = []
 cli = ["clap"]
-uses-bitcoind = []
+uses-bitcoind = ["regtest-manual-mining"]
 light-client = []
 
 [dependencies]

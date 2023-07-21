@@ -51,6 +51,7 @@ pub use sp_core::H256;
 use std::{
     convert::TryInto,
     future::Future,
+    str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -139,6 +140,8 @@ pub trait BitcoinCoreApi {
 
     fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error>;
 
+    fn list_addresses(&self) -> Result<Vec<Address>, Error>;
+
     async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
 
     async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, Error>;
@@ -151,9 +154,9 @@ pub trait BitcoinCoreApi {
 
     async fn get_new_public_key(&self) -> Result<PublicKey, Error>;
 
-    fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, Error>;
+    fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, Error>;
 
-    fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), Error>;
+    fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), Error>;
 
     async fn add_new_deposit_key(&self, public_key: PublicKey, secret_key: Vec<u8>) -> Result<(), Error>;
 
@@ -531,10 +534,15 @@ impl BitcoinCore {
     }
 
     #[cfg(feature = "regtest-manual-mining")]
-    pub fn mine_block(&self) -> Result<BlockHash, Error> {
-        Ok(self
-            .rpc
-            .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?[0])
+    pub fn mine_blocks(&self, block_num: u64, maybe_address: Option<Address>) -> BlockHash {
+        let address =
+            maybe_address.unwrap_or_else(|| self.rpc.get_new_address(None, Some(AddressType::Bech32)).unwrap());
+        self.rpc
+            .generate_to_address(block_num, &address)
+            .unwrap()
+            .last()
+            .unwrap()
+            .clone()
     }
 
     async fn with_retry_on_timeout<F, R, T>(&self, call: F) -> Result<T, Error>
@@ -692,6 +700,20 @@ impl BitcoinCoreApi for BitcoinCore {
             .list_transactions(None, max_count.or(Some(DEFAULT_MAX_TX_COUNT)), None, None)?)
     }
 
+    // TODO: remove this once the wallet migration has completed
+    fn list_addresses(&self) -> Result<Vec<Address>, Error> {
+        // Lists groups of addresses which have had their common ownership
+        // made public by common use as inputs or as the resulting change
+        // in past transactions
+        let groupings: Vec<Vec<Vec<serde_json::Value>>> = self.rpc.call("listaddressgroupings", &[])?;
+        let addresses = groupings
+            .into_iter()
+            .flatten()
+            .filter_map(|group| group.get(0).and_then(|v| v.as_str()).map(Address::from_str)?.ok())
+            .collect::<Vec<_>>();
+        Ok(addresses)
+    }
+
     /// Get the raw transaction identified by `Txid` and stored
     /// in the specified block.
     ///
@@ -753,15 +775,16 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(public_key)
     }
 
-    fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, Error> {
-        let address = Address::p2wpkh(public_key, self.network).map_err(ConversionError::from)?;
-        Ok(self.rpc.dump_private_key(&address)?)
+    fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, Error> {
+        Ok(self.rpc.dump_private_key(address)?)
     }
 
-    fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), Error> {
-        Ok(self
-            .rpc
-            .import_private_key(private_key, Some(DERIVATION_KEY_LABEL), Some(false))?)
+    fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), Error> {
+        Ok(self.rpc.import_private_key(
+            private_key,
+            is_derivation_key.then_some(DERIVATION_KEY_LABEL),
+            Some(false),
+        )?)
     }
 
     /// Derive and import the private key for the master public key and public secret

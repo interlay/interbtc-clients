@@ -21,7 +21,7 @@ use runtime::{
 };
 use service::{
     warp::{Rejection, Reply},
-    Error as ServiceError,
+    DynBitcoinCoreApi, Error as ServiceError,
 };
 use std::time::Duration;
 use tokio::{sync::RwLock, time::sleep};
@@ -31,7 +31,7 @@ const SLEEP_DURATION: Duration = Duration::from_secs(5 * 60);
 const SECONDS_PER_HOUR: f64 = 3600.0;
 
 const CURRENCY_LABEL: &str = "currency";
-const BTC_BALANCE_TYPE_LABEL: &str = "type";
+const EXPECTED_BTC_BALANCE_TYPE_LABEL: &str = "type";
 const REQUEST_STATUS_LABEL: &str = "status";
 const TASK_NAME: &str = "task";
 const TOKIO_POLLING_INTERVAL_MS: u64 = 10000;
@@ -45,9 +45,10 @@ lazy_static! {
         &[CURRENCY_LABEL]
     )
     .expect("Failed to create prometheus metric");
-    pub static ref AVERAGE_BTC_FEE: GaugeVec =
-        GaugeVec::new(Opts::new("avg_btc_fee", "Average Bitcoin Fee"), &[CURRENCY_LABEL])
-            .expect("Failed to create prometheus metric");
+    pub static ref AVERAGE_BTC_FEE: StatefulGauge<AverageTracker> = StatefulGauge {
+        gauge: Gauge::new("avg_btc_fee", "Average Bitcoin Fee").expect("Failed to create prometheus metric"),
+        data: Arc::new(RwLock::new(AverageTracker { total: 0, count: 0 })),
+    };
     pub static ref LOCKED_COLLATERAL: GaugeVec =
         GaugeVec::new(Opts::new("locked_collateral", "Locked Collateral"), &[CURRENCY_LABEL])
             .expect("Failed to create prometheus metric");
@@ -70,14 +71,13 @@ lazy_static! {
         &[TASK_NAME]
     )
     .expect("Failed to create prometheus metric");
-    pub static ref UTXO_COUNT: IntGaugeVec = IntGaugeVec::new(
-        Opts::new("utxo_count", "Number of Unspent Bitcoin Outputs"),
-        &[CURRENCY_LABEL]
-    )
-    .expect("Failed to create prometheus metric");
-    pub static ref BTC_BALANCE: GaugeVec = GaugeVec::new(
-        Opts::new("btc_balance", "Bitcoin Balance"),
-        &[CURRENCY_LABEL, BTC_BALANCE_TYPE_LABEL]
+    pub static ref UTXO_COUNT: IntGauge =
+        IntGauge::new("utxo_count", "Number of Unspent Bitcoin Outputs",).expect("Failed to create prometheus metric");
+    pub static ref ACTUAL_BTC_BALANCE: Gauge =
+        Gauge::new("actual_btc_balance", "Actual Bitcoin Balance",).expect("Failed to create prometheus metric");
+    pub static ref EXPECTED_BTC_BALANCE: GaugeVec = GaugeVec::new(
+        Opts::new("expected_btc_balance", "Expected Bitcoin Balance"),
+        &[CURRENCY_LABEL, EXPECTED_BTC_BALANCE_TYPE_LABEL]
     )
     .expect("Failed to create prometheus metric");
     pub static ref ISSUES: GaugeVec = GaugeVec::new(
@@ -92,21 +92,22 @@ lazy_static! {
     .expect("Failed to create prometheus metric");
     pub static ref NATIVE_CURRENCY_BALANCE: Gauge =
         Gauge::new("native_currency_balance", "Native Currency Balance").expect("Failed to create prometheus metric");
-    pub static ref FEE_BUDGET_SURPLUS: GaugeVec =
-        GaugeVec::new(Opts::new("fee_budget_surplus", "Fee Budget Surplus"), &[CURRENCY_LABEL])
-            .expect("Failed to create prometheus metric");
+    pub static ref FEE_BUDGET_SURPLUS: StatefulGauge<i64> = StatefulGauge {
+        gauge: Gauge::new("fee_budget_surplus", "Fee Budget Surplus").expect("Failed to create prometheus metric"),
+        data: Arc::new(RwLock::new(0)),
+    };
     pub static ref RESTART_COUNT: IntCounter =
         IntCounter::new("restart_count", "Number of service restarts").expect("Failed to create prometheus metric");
 }
 
 #[derive(Clone, Debug)]
-struct AverageTracker {
+pub struct AverageTracker {
     total: u64,
     count: u64,
 }
 
 #[derive(Clone, Debug)]
-struct StatefulGauge<T: Clone> {
+pub struct StatefulGauge<T: Clone> {
     gauge: Gauge,
     data: Arc<RwLock<T>>,
 }
@@ -115,7 +116,6 @@ struct StatefulGauge<T: Clone> {
 struct BtcBalance {
     upperbound: Gauge,
     lowerbound: Gauge,
-    actual: Gauge,
 }
 
 #[derive(Clone, Debug)]
@@ -134,9 +134,6 @@ pub struct PerCurrencyMetrics {
     btc_balance: BtcBalance,
     issues: RequestCounter,
     redeems: RequestCounter,
-    average_btc_fee: StatefulGauge<AverageTracker>,
-    fee_budget_surplus: StatefulGauge<i64>,
-    utxo_count: IntGauge,
 }
 
 #[async_trait]
@@ -172,9 +169,10 @@ impl PerCurrencyMetrics {
     fn new_with_label(label: &str) -> Self {
         let labels = HashMap::from([(CURRENCY_LABEL, label)]);
 
-        let btc_balance_gauge = |balance_type: &'static str| {
-            let labels = HashMap::<&str, &str>::from([(CURRENCY_LABEL, label), (BTC_BALANCE_TYPE_LABEL, balance_type)]);
-            BTC_BALANCE.with(&labels)
+        let expected_btc_balance_gauge = |balance_type: &'static str| {
+            let labels =
+                HashMap::<&str, &str>::from([(CURRENCY_LABEL, label), (EXPECTED_BTC_BALANCE_TYPE_LABEL, balance_type)]);
+            EXPECTED_BTC_BALANCE.with(&labels)
         };
         let request_type_label = |balance_type: &'static str| {
             HashMap::<&str, &str>::from([(CURRENCY_LABEL, label), (REQUEST_STATUS_LABEL, balance_type)])
@@ -185,19 +183,9 @@ impl PerCurrencyMetrics {
             collateralization: COLLATERALIZATION.with(&labels),
             required_collateral: REQUIRED_COLLATERAL.with(&labels),
             remaining_time_to_redeem_hours: REMAINING_TIME_TO_REDEEM_HOURS.with(&labels),
-            utxo_count: UTXO_COUNT.with(&labels),
-            fee_budget_surplus: StatefulGauge {
-                gauge: FEE_BUDGET_SURPLUS.with(&labels),
-                data: Arc::new(RwLock::new(0)),
-            },
-            average_btc_fee: StatefulGauge {
-                gauge: AVERAGE_BTC_FEE.with(&labels),
-                data: Arc::new(RwLock::new(AverageTracker { total: 0, count: 0 })),
-            },
             btc_balance: BtcBalance {
-                upperbound: btc_balance_gauge("required_upperbound"),
-                lowerbound: btc_balance_gauge("required_lowerbound"),
-                actual: btc_balance_gauge("actual"),
+                upperbound: expected_btc_balance_gauge("required_upperbound"),
+                lowerbound: expected_btc_balance_gauge("required_lowerbound"),
             },
             issues: RequestCounter {
                 open_count: ISSUES.with(&request_type_label("open")),
@@ -248,7 +236,7 @@ impl PerCurrencyMetrics {
                 .fold(0i64, |acc, x| async move { acc.saturating_add(x) })
                 .await;
 
-            *vault.metrics.fee_budget_surplus.data.write().await = fee_budget_surplus;
+            *FEE_BUDGET_SURPLUS.data.write().await = fee_budget_surplus;
             publish_fee_budget_surplus(vault).await?;
         }
         Ok(())
@@ -268,29 +256,30 @@ impl PerCurrencyMetrics {
             .iter()
             .filter_map(|tx| tx.detail.fee.map(|amount| amount.to_sat().unsigned_abs()))
             .fold((0, 0), |(total, count), x| (total + x, count + 1));
-        *vault.metrics.average_btc_fee.data.write().await = AverageTracker { total, count };
+        *AVERAGE_BTC_FEE.data.write().await = AverageTracker { total, count };
 
-        publish_utxo_count(vault);
-        publish_bitcoin_balance(vault);
+        publish_utxo_count(&vault.btc_rpc);
+        publish_bitcoin_balance(&vault.btc_rpc);
 
         let _ = tokio::join!(
             Self::initialize_fee_budget_surplus(vault, parachain_rpc.clone(), bitcoin_transactions),
-            publish_average_bitcoin_fee(vault),
+            publish_average_bitcoin_fee(),
             publish_expected_bitcoin_balance(vault, parachain_rpc.clone()),
-            publish_locked_collateral(vault, parachain_rpc.clone()),
-            publish_required_collateral(vault, parachain_rpc.clone()),
-            publish_collateralization(vault, parachain_rpc.clone()),
+            publish_locked_collateral(vault, &parachain_rpc),
+            publish_required_collateral(vault, &parachain_rpc),
+            publish_collateralization(vault, &parachain_rpc),
         );
     }
 }
 
 pub fn register_custom_metrics() -> Result<(), RuntimeError> {
-    REGISTRY.register(Box::new(AVERAGE_BTC_FEE.clone()))?;
+    REGISTRY.register(Box::new(AVERAGE_BTC_FEE.gauge.clone()))?;
     REGISTRY.register(Box::new(LOCKED_COLLATERAL.clone()))?;
     REGISTRY.register(Box::new(COLLATERALIZATION.clone()))?;
     REGISTRY.register(Box::new(REQUIRED_COLLATERAL.clone()))?;
-    REGISTRY.register(Box::new(FEE_BUDGET_SURPLUS.clone()))?;
-    REGISTRY.register(Box::new(BTC_BALANCE.clone()))?;
+    REGISTRY.register(Box::new(FEE_BUDGET_SURPLUS.gauge.clone()))?;
+    REGISTRY.register(Box::new(ACTUAL_BTC_BALANCE.clone()))?;
+    REGISTRY.register(Box::new(EXPECTED_BTC_BALANCE.clone()))?;
     REGISTRY.register(Box::new(NATIVE_CURRENCY_BALANCE.clone()))?;
     REGISTRY.register(Box::new(ISSUES.clone()))?;
     REGISTRY.register(Box::new(REDEEMS.clone()))?;
@@ -335,7 +324,7 @@ fn raw_value_as_currency(value: u128, currency: CurrencyId) -> Result<f64, Servi
 
 pub async fn publish_locked_collateral<P: VaultRegistryPallet>(
     vault: &VaultData,
-    parachain_rpc: P,
+    parachain_rpc: &P,
 ) -> Result<(), ServiceError<Error>> {
     if let Ok(actual_collateral) = parachain_rpc.get_vault_total_collateral(vault.vault_id.clone()).await {
         let actual_collateral = raw_value_as_currency(actual_collateral, vault.vault_id.collateral_currency())?;
@@ -346,7 +335,7 @@ pub async fn publish_locked_collateral<P: VaultRegistryPallet>(
 
 pub async fn publish_required_collateral<P: VaultRegistryPallet>(
     vault: &VaultData,
-    parachain_rpc: P,
+    parachain_rpc: &P,
 ) -> Result<(), ServiceError<Error>> {
     if let Ok(required_collateral) = parachain_rpc
         .get_required_collateral_for_vault(vault.vault_id.clone())
@@ -358,8 +347,8 @@ pub async fn publish_required_collateral<P: VaultRegistryPallet>(
     Ok(())
 }
 
-pub async fn publish_collateralization<P: VaultRegistryPallet>(vault: &VaultData, parachain_rpc: P) {
-    // if the collateralization is infinite, return 0 rather than logging an error, so
+pub async fn publish_collateralization<P: VaultRegistryPallet>(vault: &VaultData, parachain_rpc: &P) {
+    // if the collateralization is infinite, return 0 rather than logging an error so
     // the metrics do change in case of a replacement
     let collateralization = parachain_rpc
         .get_collateralization_from_vault(vault.vault_id.clone(), false)
@@ -377,47 +366,45 @@ pub async fn update_bitcoin_metrics(
     // update the average fee
     if let Some(amount) = new_fee_entry {
         {
-            let mut tmp = vault.metrics.average_btc_fee.data.write().await;
+            let mut tmp = AVERAGE_BTC_FEE.data.write().await;
             *tmp = AverageTracker {
                 total: tmp.total.saturating_add(amount.to_sat().unsigned_abs()),
                 count: tmp.count.saturating_add(1),
             };
         }
-        publish_average_bitcoin_fee(vault).await;
+        publish_average_bitcoin_fee().await;
 
         if let Ok(budget) = TryInto::<i64>::try_into(fee_budget.unwrap_or(0)) {
             let surplus = budget.saturating_sub(amount.to_sat().abs());
-            let mut tmp = vault.metrics.fee_budget_surplus.data.write().await;
+            let mut tmp = FEE_BUDGET_SURPLUS.data.write().await;
             *tmp = tmp.saturating_add(surplus);
         }
         publish_fee_budget_surplus(vault).await?;
     }
 
-    publish_bitcoin_balance(vault);
+    publish_bitcoin_balance(&vault.btc_rpc);
     Ok(())
 }
 
 async fn publish_fee_budget_surplus(vault: &VaultData) -> Result<(), ServiceError<Error>> {
-    let surplus = *vault.metrics.fee_budget_surplus.data.read().await;
-    vault
-        .metrics
-        .fee_budget_surplus
+    let surplus = *FEE_BUDGET_SURPLUS.data.read().await;
+    FEE_BUDGET_SURPLUS
         .gauge
         .set(surplus as f64 / vault.vault_id.wrapped_currency().inner()?.one() as f64);
     Ok(())
 }
 
-async fn publish_average_bitcoin_fee(vault: &VaultData) {
-    let average = match vault.metrics.average_btc_fee.data.read().await {
+async fn publish_average_bitcoin_fee() {
+    let average = match AVERAGE_BTC_FEE.data.read().await {
         x if x.count > 0 => x.total as f64 / x.count as f64,
         _ => Default::default(),
     };
-    vault.metrics.average_btc_fee.gauge.set(average);
+    AVERAGE_BTC_FEE.gauge.set(average);
 }
 
-fn publish_bitcoin_balance(vault: &VaultData) {
-    match vault.btc_rpc.get_balance(None) {
-        Ok(bitcoin_balance) => vault.metrics.btc_balance.actual.set(bitcoin_balance.to_btc()),
+fn publish_bitcoin_balance(btc_rpc: &DynBitcoinCoreApi) {
+    match btc_rpc.get_balance(None) {
+        Ok(bitcoin_balance) => ACTUAL_BTC_BALANCE.set(bitcoin_balance.to_btc()),
         Err(e) => {
             // unexpected error, but not critical so just continue
             tracing::warn!("Failed to get Bitcoin balance: {}", e);
@@ -436,10 +423,10 @@ async fn publish_native_currency_balance<P: CollateralBalancesPallet + UtilFuncs
     Ok(())
 }
 
-fn publish_utxo_count(vault: &VaultData) {
-    if let Ok(count) = vault.btc_rpc.get_utxo_count() {
+fn publish_utxo_count(btc_rpc: &DynBitcoinCoreApi) {
+    if let Ok(count) = btc_rpc.get_utxo_count() {
         if let Ok(count_i64) = count.try_into() {
-            vault.metrics.utxo_count.set(count_i64);
+            UTXO_COUNT.set(count_i64);
         }
     }
 }
@@ -585,9 +572,11 @@ pub async fn monitor_bridge_metrics(
                         .iter()
                         .filter(|vault| &vault.vault_id.collateral_currency() == currency_id)
                     {
-                        let _ = publish_locked_collateral(vault, parachain_rpc.clone()).await;
-                        let _ = publish_required_collateral(vault, parachain_rpc.clone()).await;
-                        publish_collateralization(vault, parachain_rpc.clone()).await;
+                        let _ = tokio::join!(
+                            publish_locked_collateral(vault, parachain_rpc),
+                            publish_required_collateral(vault, parachain_rpc),
+                            publish_collateralization(vault, parachain_rpc),
+                        );
                     }
                 }
             },
@@ -615,9 +604,7 @@ pub async fn poll_metrics<P: CollateralBalancesPallet + RedeemPallet + IssuePall
             publish_time_to_first_deadline(parachain_rpc, vault_id_manager, &redeems).await;
         }
 
-        for vault in vault_id_manager.get_entries().await {
-            publish_utxo_count(&vault);
-        }
+        publish_utxo_count(&vault_id_manager.btc_rpc_shared_wallet);
 
         sleep(SLEEP_DURATION).await;
     }
@@ -686,7 +673,6 @@ mod tests {
         InterBtcVault, LendingAssets, RequestIssueEvent, StatusCode, Token, VaultId, VaultStatus, DOT, H256, IBTC,
         INTR,
     };
-    use service::DynBitcoinCoreApi;
     use std::collections::BTreeSet;
 
     mockall::mock! {
@@ -794,6 +780,7 @@ mod tests {
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
             fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError>;
             fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, BitcoinError>;
+            fn list_addresses(&self) -> Result<Vec<Address>, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, BitcoinError>;
@@ -802,8 +789,8 @@ mod tests {
             async fn get_pruned_height(&self) -> Result<u64, BitcoinError>;
             async fn get_new_address(&self) -> Result<Address, BitcoinError>;
             async fn get_new_public_key(&self) -> Result<PublicKey, BitcoinError>;
-            fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, BitcoinError>;
-            fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), BitcoinError>;
+            fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, BitcoinError>;
+            fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), BitcoinError>;
             async fn add_new_deposit_key(&self, public_key: PublicKey, secret_key: Vec<u8>) -> Result<(), BitcoinError>;
             async fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
             async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
@@ -1037,9 +1024,9 @@ mod tests {
         update_bitcoin_metrics(&vault_data, Some(SignedAmount::from_sat(125)), Some(122))
             .await
             .unwrap();
-        let average_btc_fee = vault_data.metrics.average_btc_fee.gauge.get();
-        let fee_budget_surplus = vault_data.metrics.fee_budget_surplus.gauge.get();
-        let bitcoin_balance = vault_data.metrics.btc_balance.actual.get();
+        let average_btc_fee = AVERAGE_BTC_FEE.gauge.get();
+        let fee_budget_surplus = FEE_BUDGET_SURPLUS.gauge.get();
+        let bitcoin_balance = ACTUAL_BTC_BALANCE.get();
 
         assert_eq!(average_btc_fee, 125.0);
         assert_eq!(fee_budget_surplus, -0.00000003);
@@ -1051,15 +1038,8 @@ mod tests {
         let mut mock_bitcoin = MockBitcoin::default();
         mock_bitcoin.expect_get_utxo_count().returning(move || Ok(102));
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
-
-        let vault_data = VaultData {
-            vault_id: dummy_vault_id(),
-            btc_rpc,
-            metrics: PerCurrencyMetrics::dummy(),
-        };
-        publish_utxo_count(&vault_data);
-
-        let utxo_count = vault_data.metrics.utxo_count.get();
+        publish_utxo_count(&btc_rpc);
+        let utxo_count = UTXO_COUNT.get();
         assert_eq!(utxo_count, 102);
     }
 
@@ -1082,7 +1062,7 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
-        publish_locked_collateral(&vault_data, parachain_rpc).await.unwrap();
+        publish_locked_collateral(&vault_data, &parachain_rpc).await.unwrap();
         let total_collateral = vault_data.metrics.locked_collateral.get();
 
         assert_eq!(total_collateral, 0.0000000075);
@@ -1135,7 +1115,7 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
-        publish_collateralization(&vault_data, parachain_rpc).await;
+        publish_collateralization(&vault_data, &parachain_rpc).await;
         let collateralization_metrics = vault_data.metrics.collateralization.get();
 
         assert_eq!(
@@ -1164,7 +1144,7 @@ mod tests {
             metrics: PerCurrencyMetrics::dummy(),
         };
 
-        publish_required_collateral(&vault_data, parachain_rpc).await.unwrap();
+        publish_required_collateral(&vault_data, &parachain_rpc).await.unwrap();
         let required_collateral = vault_data.metrics.required_collateral.get();
 
         assert_eq!(required_collateral, 0.000000005);

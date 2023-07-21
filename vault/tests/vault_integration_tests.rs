@@ -94,6 +94,7 @@ async fn test_redeem_succeeds() {
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(
             vault_provider.clone(),
+            btc_rpc_master_wallet.clone(),
             btc_rpc_master_wallet,
             btc_rpcs,
             "test_redeem_succeeds",
@@ -162,6 +163,7 @@ async fn test_replace_succeeds() {
         let new_btc_rpc_master_wallet = btc_rpc.clone();
         let _vault_id_manager = VaultIdManager::from_map(
             new_vault_provider.clone(),
+            new_btc_rpc_master_wallet.clone(),
             new_btc_rpc_master_wallet,
             btc_rpcs,
             "test_replace_succeeds1",
@@ -175,6 +177,7 @@ async fn test_replace_succeeds() {
         let old_btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(
             old_vault_provider.clone(),
+            old_btc_rpc_master_wallet.clone(),
             old_btc_rpc_master_wallet,
             btc_rpcs,
             "test_replace_succeeds2",
@@ -347,6 +350,7 @@ async fn test_cancellation_succeeds() {
         let new_btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(
             new_vault_provider.clone(),
+            new_btc_rpc_master_wallet.clone(),
             new_btc_rpc_master_wallet,
             btc_rpcs,
             "test_cancellation_succeeds",
@@ -613,6 +617,7 @@ async fn test_automatic_issue_execution_succeeds() {
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(
             vault2_provider.clone(),
+            btc_rpc_master_wallet.clone(),
             btc_rpc_master_wallet,
             btc_rpcs,
             "test_automatic_issue_execution_succeeds",
@@ -711,6 +716,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(
             vault2_provider.clone(),
+            btc_rpc_master_wallet.clone(),
             btc_rpc_master_wallet,
             btc_rpcs,
             "test_automatic_issue_execution_succeeds_with_big_transaction",
@@ -798,6 +804,7 @@ async fn test_execute_open_requests_succeeds() {
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(
             vault_provider.clone(),
+            btc_rpc_master_wallet.clone(),
             btc_rpc_master_wallet,
             btc_rpcs,
             "test_execute_open_requests_succeeds",
@@ -981,9 +988,7 @@ mod test_with_bitcoind {
         ret.create_or_load_wallet().await.unwrap();
 
         // fund the wallet by mining blocks
-        for _ in 0..102 {
-            ret.mine_block().unwrap();
-        }
+        ret.mine_blocks(102, None);
 
         ret
     }
@@ -1083,7 +1088,7 @@ mod test_with_bitcoind {
             }));
 
         tracing::trace!("Step 4: mine bitcoin block");
-        let block_hash = btc_rpc.mine_block().unwrap();
+        let block_hash = btc_rpc.mine_blocks(1, None);
 
         tracing::info!("Step 5: check that tx got included without changes");
         btc_rpc
@@ -1153,7 +1158,7 @@ mod test_with_bitcoind {
         assert!(btc_rpc.fee_rate(new_tx.txid()).await.unwrap().0 >= 10);
 
         tracing::trace!("Step 5: mine bitcoin block");
-        let block_hash = btc_rpc.mine_block().unwrap();
+        let block_hash = btc_rpc.mine_blocks(1, None);
 
         tracing::trace!("Step 6: check that only new tx got included");
         btc_rpc.get_transaction(&new_tx.txid(), Some(block_hash)).await.unwrap();
@@ -1200,6 +1205,7 @@ mod test_with_bitcoind {
             let btc_rpc_master_wallet = btc_rpc.clone();
             let vault_id_manager = VaultIdManager::from_map(
                 vault_provider.clone(),
+                btc_rpc_master_wallet.clone(),
                 btc_rpc_master_wallet,
                 btc_rpcs,
                 "test_automatic_rbf_succeeds",
