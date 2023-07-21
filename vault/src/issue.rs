@@ -465,6 +465,7 @@ mod tests {
         subxt::utils::Static,
         CurrencyId::Token,
         TokenSymbol::{DOT, IBTC, INTR},
+        VaultId,
     };
 
     fn dummy_issues(heights: Vec<(u32, usize)>) -> Vec<InterBtcIssueRequest> {
