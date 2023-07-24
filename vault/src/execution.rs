@@ -44,7 +44,7 @@ pub fn parachain_blocks_to_bitcoin_blocks_rounded_up(parachain_blocks: u32) -> R
 
     let denominator = BITCOIN_BLOCK_INTERVAL.as_millis();
 
-    // do -num_bitcoin_blocks = ceil(millis / demoninator)
+    // do -num_bitcoin_blocks = ceil(millis / denominator)
     let num_bitcoin_blocks = (millis as u128)
         .checked_add(denominator)
         .ok_or(Error::ArithmeticOverflow)?
@@ -643,7 +643,7 @@ pub async fn execute_open_requests(
 }
 
 /// Get the Request from the hashmap that the given Transaction satisfies, based
-/// on the OP_RETURN and the amount of btc that is transfered to the address
+/// on the OP_RETURN and the amount of btc that is transferred to the address
 fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -> Option<Request> {
     let hash = tx.get_op_return()?;
     let request = hash_map.get(&hash)?;
