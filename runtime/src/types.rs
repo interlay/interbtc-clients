@@ -45,10 +45,7 @@ mod metadata_aliases {
 
     pub use metadata::runtime_types::interbtc_primitives::oracle::Key as OracleKey;
 
-    pub use metadata::runtime_types::{
-        security::types::{ErrorCode, StatusCode},
-        vault_registry::types::VaultStatus,
-    };
+    pub use metadata::runtime_types::vault_registry::types::VaultStatus;
     pub type InterBtcVault =
         metadata::runtime_types::vault_registry::types::Vault<AccountId, BlockNumber, Balance, CurrencyId, FixedU128>;
     pub type InterBtcVaultStatic = metadata::runtime_types::vault_registry::types::Vault<
