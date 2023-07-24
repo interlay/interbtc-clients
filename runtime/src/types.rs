@@ -3,7 +3,6 @@ use crate::{metadata, utils::signer::PairSigner, Config, InterBtcRuntime, Runtim
 pub use currency_id::CurrencyIdExt;
 pub use h256_le::RichH256Le;
 pub use metadata_aliases::*;
-pub use module_btc_relay::{RichBlockHeader, MAIN_CHAIN_ID};
 pub use primitives::{
     CurrencyId,
     CurrencyId::{ForeignAsset, LendToken, Token},
@@ -25,10 +24,8 @@ pub type Ratio = primitives::Ratio;
 
 pub type InterBtcSigner = PairSigner<InterBtcRuntime, KeyPair>;
 
-pub type BtcAddress = module_btc_relay::BtcAddress;
-
+pub type BtcAddress = module_bitcoin::Address;
 pub type FixedU128 = crate::FixedU128;
-
 #[allow(non_camel_case_types)]
 pub(crate) enum StorageMapHasher {
     Blake2_128,
