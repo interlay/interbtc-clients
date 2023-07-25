@@ -13,26 +13,27 @@ mod iter;
 
 use async_trait::async_trait;
 use backoff::{backoff::Backoff, future::retry, ExponentialBackoff};
-use bitcoincore_rpc::{bitcoin::consensus::encode::serialize_hex, bitcoincore_rpc_json::ScanningDetails};
 pub use bitcoincore_rpc::{
+    bitcoin as bitcoin_primitives,
     bitcoin::{
+        absolute::LockTime,
+        address,
+        address::Payload,
+        block::Header as BlockHeader,
         blockdata::{opcodes::all as opcodes, script::Builder},
         consensus,
         consensus::encode::{deserialize, serialize},
-        hash_types::BlockHash,
-        hashes::{
-            self,
-            hex::{FromHex, ToHex},
-            sha256, Hash,
-        },
-        secp256k1,
+        ecdsa::Signature as EcdsaSig,
+        hash_types::{BlockHash, TxMerkleNode, WPubkeyHash},
+        hashes::{self, hex::FromHex, sha256, Hash},
+        key,
+        merkle_tree::PartialMerkleTree,
+        psbt, secp256k1,
         secp256k1::{constants::PUBLIC_KEY_SIZE, SecretKey},
-        util::{
-            self, address::Payload, key, merkleblock::PartialMerkleTree, psbt, psbt::serialize::Serialize,
-            uint::Uint256,
-        },
-        Address, Amount, Block, BlockHeader, Network, OutPoint, PrivateKey, PubkeyHash, PublicKey, Script, ScriptHash,
-        SignedAmount, Transaction, TxIn, TxMerkleNode, TxOut, Txid, VarInt, WPubkeyHash, WScriptHash,
+        sighash::NonStandardSighashType,
+        util::{self},
+        Address, Amount, Block, Network, OutPoint, PrivateKey, PubkeyHash, PublicKey, Script, ScriptHash, SignedAmount,
+        Transaction, TxIn, TxOut, Txid, VarInt, WScriptHash,
     },
     bitcoincore_rpc_json::{
         CreateRawTransactionInput, FundRawTransactionOptions, GetBlockchainInfoResult, GetTransactionResult,
@@ -42,6 +43,7 @@ pub use bitcoincore_rpc::{
     jsonrpc::{self, error::RpcError, Error as JsonRpcError},
     Auth, Client, Error as BitcoinError, RpcApi,
 };
+use bitcoincore_rpc::{bitcoin::consensus::encode::serialize_hex, bitcoincore_rpc_json::ScanningDetails};
 pub use electrs::{ElectrsClient, Error as ElectrsError};
 pub use error::{BitcoinRpcError, ConversionError, Error};
 pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
@@ -228,17 +230,8 @@ impl LockedTransaction {
     }
 }
 
-fn parse_bitcoin_network(src: &str) -> Result<Network, Error> {
-    match src {
-        "main" => Ok(Network::Bitcoin),
-        "test" => Ok(Network::Testnet),
-        "regtest" => Ok(Network::Regtest),
-        _ => Err(Error::InvalidBitcoinNetwork),
-    }
-}
-
 struct ConnectionInfo {
-    chain: String,
+    chain: Network,
     version: usize,
 }
 
@@ -286,7 +279,7 @@ async fn connect(rpc: &Client, connection_timeout: Duration) -> Result<Network, 
                         return Err(Error::IncompatibleVersion(version))
                     }
 
-                    return parse_bitcoin_network(&chain);
+                    return Ok(chain);
                 }
                 Err(err) => return Err(err),
             }
@@ -424,7 +417,7 @@ impl BitcoinCore {
 
         if let Some(request_id) = request_id {
             // add the op_return data - bitcoind will add op_return and the length automatically
-            outputs.insert("data".to_string(), serde_json::Value::from(request_id.to_hex()));
+            outputs.insert("data".to_string(), serde_json::Value::from(hex::encode(request_id)));
         }
 
         let args = [
@@ -526,8 +519,13 @@ impl BitcoinCore {
         if self.auto_mine {
             log::debug!("Auto-mining!");
 
-            self.rpc
-                .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
+            self.rpc.generate_to_address(
+                1,
+                &self
+                    .rpc
+                    .get_new_address(None, Some(AddressType::Bech32))?
+                    .require_network(self.network)?,
+            )?;
         }
 
         Ok(txid)
@@ -535,8 +533,13 @@ impl BitcoinCore {
 
     #[cfg(feature = "regtest-manual-mining")]
     pub fn mine_blocks(&self, block_num: u64, maybe_address: Option<Address>) -> BlockHash {
-        let address =
-            maybe_address.unwrap_or_else(|| self.rpc.get_new_address(None, Some(AddressType::Bech32)).unwrap());
+        let address = maybe_address.unwrap_or_else(|| {
+            self.rpc
+                .get_new_address(None, Some(AddressType::Bech32))
+                .unwrap()
+                .require_network(self.network)
+                .unwrap()
+        });
         self.rpc
             .generate_to_address(block_num, &address)
             .unwrap()
@@ -709,7 +712,14 @@ impl BitcoinCoreApi for BitcoinCore {
         let addresses = groupings
             .into_iter()
             .flatten()
-            .filter_map(|group| group.get(0).and_then(|v| v.as_str()).map(Address::from_str)?.ok())
+            .filter_map(|group| {
+                group
+                    .get(0)
+                    .and_then(|v| v.as_str())
+                    .map(Address::from_str)?
+                    .and_then(|x| x.require_network(self.network))
+                    .ok()
+            })
             .collect::<Vec<_>>();
         Ok(addresses)
     }
@@ -762,14 +772,18 @@ impl BitcoinCoreApi for BitcoinCore {
 
     /// Gets a new address from the wallet
     async fn get_new_address(&self) -> Result<Address, Error> {
-        Ok(self.rpc.get_new_address(None, Some(AddressType::Bech32))?)
+        Ok(self
+            .rpc
+            .get_new_address(None, Some(AddressType::Bech32))?
+            .require_network(self.network)?)
     }
 
     /// Gets a new public key for an address in the wallet
     async fn get_new_public_key(&self) -> Result<PublicKey, Error> {
         let address = self
             .rpc
-            .get_new_address(Some(DERIVATION_KEY_LABEL), Some(AddressType::Bech32))?;
+            .get_new_address(Some(DERIVATION_KEY_LABEL), Some(AddressType::Bech32))?
+            .require_network(self.network)?;
         let address_info = self.rpc.get_address_info(&address)?;
         let public_key = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
         Ok(public_key)
@@ -899,10 +913,7 @@ impl BitcoinCoreApi for BitcoinCore {
                     .extract_return_to_self_address(&address.payload)?
                     .map(|(idx, payload)| {
                         existing_transaction.output.remove(idx);
-                        Address {
-                            payload,
-                            network: self.network(),
-                        }
+                        Address::new(self.network(), payload)
                     });
 
                 let raw_tx = serialize_hex(&existing_transaction);
@@ -923,8 +934,13 @@ impl BitcoinCoreApi for BitcoinCore {
         if self.auto_mine {
             log::debug!("Auto-mining!");
 
-            self.rpc
-                .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
+            self.rpc.generate_to_address(
+                1,
+                &self
+                    .rpc
+                    .get_new_address(None, Some(AddressType::Bech32))?
+                    .require_network(self.network)?,
+            )?;
         }
 
         Ok(txid)
@@ -1080,13 +1096,7 @@ impl BitcoinCoreApi for BitcoinCore {
 
         // to get from weight to vsize we divide by 4, but round up by first adding 3
         // Note that we can not rely on tx.get_size() since it doesn't 'discount' witness bytes
-        let vsize = tx
-            .weight()
-            .checked_add(3)
-            .ok_or(Error::ArithmeticError)?
-            .checked_div(4)
-            .ok_or(Error::ArithmeticError)?
-            .try_into()?;
+        let vsize = tx.weight().to_vbytes_ceil();
 
         let fee = get_tx_result
             .fee
@@ -1097,7 +1107,7 @@ impl BitcoinCoreApi for BitcoinCore {
 
         log::debug!("fee: {fee}, size: {vsize}");
 
-        let fee_rate = fee.checked_div(vsize).ok_or(Error::ArithmeticError)?;
+        let fee_rate = fee.checked_div(vsize.try_into()?).ok_or(Error::ArithmeticError)?;
         Ok(SatPerVbyte(fee_rate.try_into()?))
     }
 
@@ -1195,7 +1205,7 @@ mod tests {
         let script_hash = Sha256Hash::hash(&raw);
 
         let expected = "6ed3928fdcf7375b9622746eb46f8e97a2832a0c43000e3d86774fecb74ee67e";
-        let expected = Sha256Hash::from_hex(expected).unwrap();
+        let expected = Sha256Hash::from_slice(&hex::decode(expected).unwrap()).unwrap();
 
         assert_eq!(expected, script_hash);
     }

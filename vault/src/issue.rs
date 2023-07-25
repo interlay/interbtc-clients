@@ -2,7 +2,7 @@ use crate::{
     delay::RandomDelay, metrics::publish_expected_bitcoin_balance, system::DatabaseConfig, Error, Event, IssueRequests,
     VaultIdManager,
 };
-use bitcoin::{BlockHash, Error as BitcoinError, PublicKey, Transaction, TransactionExt};
+use bitcoin::{BlockHash, Error as BitcoinError, Hash, PublicKey, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt, TryFutureExt};
 use runtime::{
     AccountId, BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, ExecuteIssueEvent, H256Le,
@@ -281,7 +281,10 @@ async fn process_transaction_and_execute_issue(
                 // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
                 // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
                 btc_parachain
-                    .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash), Some(num_confirmations))
+                    .wait_for_block_in_relay(
+                        H256Le::from_bytes_le(block_hash.as_byte_array()),
+                        Some(num_confirmations),
+                    )
                     .await?;
 
                 // wait a random amount of blocks, to avoid all vaults flooding the parachain with

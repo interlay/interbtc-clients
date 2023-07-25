@@ -4,9 +4,9 @@ mod bitcoin_simulator;
 
 use crate::{
     rpc::{IssuePallet, OraclePallet, SudoPallet, VaultRegistryPallet},
-    CurrencyId, FixedU128, H256Le, InterBtcParachain, InterBtcSigner, OracleKey, PartialAddress, VaultId,
+    CurrencyId, FixedU128, InterBtcParachain, InterBtcSigner, OracleKey, PartialAddress, VaultId,
 };
-use bitcoin::{BitcoinCoreApi, BlockHash, SatPerVbyte, Txid};
+use bitcoin::{BitcoinCoreApi, SatPerVbyte};
 use frame_support::assert_ok;
 use futures::{
     future::{try_join, Either},
@@ -28,26 +28,6 @@ pub use subxt_client::SubxtClient;
 
 // export the mocked bitcoin interface
 pub use bitcoin_simulator::MockBitcoinCore;
-
-/// Trait to help between different types used by the two bitcoin libraries
-pub trait Translate {
-    type Associated;
-    fn translate(&self) -> Self::Associated;
-}
-
-impl Translate for Txid {
-    type Associated = H256Le;
-    fn translate(&self) -> Self::Associated {
-        H256Le::from_bytes_le(self)
-    }
-}
-
-impl Translate for BlockHash {
-    type Associated = H256Le;
-    fn translate(&self) -> Self::Associated {
-        H256Le::from_bytes_le(self)
-    }
-}
 
 /// Start a new instance of the parachain. The second item in the returned tuple must remain in
 /// scope as long as the parachain is active, since dropping it will remove the temporary directory

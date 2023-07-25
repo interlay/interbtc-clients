@@ -80,7 +80,7 @@ impl Issuing for InterBtcParachain {
         // wait a random amount of blocks, to avoid all vaults flooding the parachain with
         // this transaction
         (*random_delay)
-            .delay(&sha256::Hash::hash(header.as_slice()).into_inner())
+            .delay(sha256::Hash::hash(header.as_slice()).as_byte_array())
             .await?;
         if self
             .is_block_stored(raw_block_header.hash().to_bytes_le().to_vec())
