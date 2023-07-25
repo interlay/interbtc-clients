@@ -8,10 +8,7 @@ edition = "2018"
 default = []
 testing-utils = [
     "tempdir",
-    "interbtc",
-    "interbtc-runtime",
     "rand",
-    "subxt-client",
 ]
 parachain-metadata-interlay = []
 parachain-metadata-kintsugi = []
@@ -45,15 +42,12 @@ frame-support = { git = "https://github.com/paritytech/substrate", branch = "pol
 
 # Subxt dependencies
 subxt = { version = "0.29.0", default_features = false,  features = ["jsonrpsee-ws"] }
-subxt-client = { path = "./client", optional = true }
 jsonrpsee = { version = "0.16", features = ["async-client", "client-ws-transport", "macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
 
 bitcoin = { path = "../bitcoin" }
 
 # Dependencies for the testing utils for integration tests
 tempdir = { version = "0.3.7", optional = true }
-interbtc = { package = "interbtc-parachain", git = "https://github.com/interlay/interbtc", rev = "2ec5b959a547f28d7bab7799568321c9cff40343", optional = true }
-interbtc-runtime = { package = "kintsugi-runtime-parachain", git = "https://github.com/interlay/interbtc", rev = "2ec5b959a547f28d7bab7799568321c9cff40343", optional = true }
 rand = { version = "0.7", optional = true }
 
 [dependencies.primitives]
@@ -80,3 +74,4 @@ package = "oracle-rpc-runtime-api"
 runtime = { path = ".", features = ["testing-utils"] }
 tempdir = "0.3.7"
 env_logger = "0.8.3"
+serial_test = "0.9.0"

@@ -29,8 +29,3 @@ serde = "1.0"
 
 # Workspace dependencies
 runtime = { path = "../runtime" }
-
-[dev-dependencies]
-
-# Workspace dependencies
-runtime = { path = "../runtime", features = ["testing-utils"] }

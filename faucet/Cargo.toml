@@ -39,6 +39,7 @@ runtime = { path = "../runtime" }
 service = { path = "../service" }
 
 [dev-dependencies]
+serial_test = "0.9.0"
 
 # Workspace dependencies
 runtime = { path = "../runtime", features = ["testing-utils"] }

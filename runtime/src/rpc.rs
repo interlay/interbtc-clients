@@ -164,7 +164,7 @@ impl InterBtcParachain {
             pub aux: ImportedAux,
         }
 
-        let _: CreatedBlock<interbtc_runtime::Hash> = self
+        let _: CreatedBlock<primitives::Hash> = self
             .api
             .rpc()
             .request("engine_createBlock", rpc_params![true, true])

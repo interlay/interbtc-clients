@@ -1,5 +1,16 @@
 version: "3.8"
 services:
+    interbtc:
+        image: "interlayhq/interbtc:1.25.0-rc1"
+        command:
+            - --rpc-external
+            - --ws-external
+            - --rpc-methods=unsafe
+            - --dev
+            - --instant-seal
+        ports:
+            - "9933:9933"
+            - "9944:9944"
     bitcoind:
         image: "ruimarinho/bitcoin-core:22"
         command:
