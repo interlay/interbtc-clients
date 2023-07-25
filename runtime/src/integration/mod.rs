@@ -172,7 +172,8 @@ pub async fn with_timeout<T: Future>(future: T, duration: Duration) -> T::Output
 }
 
 pub async fn start_chain() -> std::io::Result<Child> {
-    let _stop_previous_instance = Command::new("docker-compose")
+    let _stop_previous_instance = Command::new("docker")
+        .arg("compose")
         .arg("rm")
         .arg("-v")
         .arg("-s")
