@@ -32,6 +32,8 @@ async fn test_with_vault<F, R>(execute: impl FnOnce(InterBtcParachain, VaultId, 
 where
     F: Future<Output = R>,
 {
+    let _parachain_runner: Child = start_chain().await.unwrap();
+
     service::init_subscriber();
     let (parachain_rpc, _tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
 
@@ -84,7 +86,6 @@ where
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_redeem_succeeds() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|client, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let user_provider = setup_provider(AccountKeyring::Dave).await;
@@ -143,13 +144,11 @@ async fn test_redeem_succeeds() {
         .await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_replace_succeeds() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|client, old_vault_id, old_vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let new_vault_provider = setup_provider(AccountKeyring::Eve).await;
@@ -256,13 +255,11 @@ async fn test_replace_succeeds() {
         .await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_withdraw_replace_succeeds() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|client, old_vault_id, old_vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let new_vault_provider = setup_provider(AccountKeyring::Eve).await;
@@ -330,7 +327,6 @@ async fn test_withdraw_replace_succeeds() {
             .is_err());
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -339,7 +335,6 @@ async fn test_cancellation_succeeds() {
     // tests cancellation of issue, redeem and replace.
     // issue and replace cancellation is tested through the vault's cancellation service.
     // cancel_redeem is called manually
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|_, old_vault_id, old_vault_provider| async move {
         let root_provider = setup_provider(AccountKeyring::Alice).await;
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
@@ -544,13 +539,11 @@ async fn test_cancellation_succeeds() {
         .await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_issue_overpayment_succeeds() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|_root_provider, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let user_provider = setup_provider(AccountKeyring::Dave).await;
@@ -605,13 +598,11 @@ async fn test_issue_overpayment_succeeds() {
         .await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_automatic_issue_execution_succeeds() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|_root_provider, vault1_id, _vault1_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let vault1_provider = setup_provider(AccountKeyring::Charlie).await;
@@ -705,14 +696,12 @@ async fn test_automatic_issue_execution_succeeds() {
         test_service(service, fut_user).await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 // todo: refactor to reuse code from test_automatic_issue_execution_succeeds
 async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|_root_provider, vault1_id, _vault1_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let vault1_provider = setup_provider(AccountKeyring::Charlie).await;
@@ -803,13 +792,11 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
         test_service(service, fut_user).await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_execute_open_requests_succeeds() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|_root_provider, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let user_provider = setup_provider(AccountKeyring::Dave).await;
@@ -908,13 +895,11 @@ async fn test_execute_open_requests_succeeds() {
         .await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_off_chain_liquidation() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|_root_provider, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let user_provider = setup_provider(AccountKeyring::Dave).await;
@@ -943,7 +928,6 @@ async fn test_off_chain_liquidation() {
         assert_event::<LiquidateVaultEvent, _>(TIMEOUT, vault_provider.clone(), |_| true).await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 async fn assert_redeem_event(
@@ -1194,7 +1178,6 @@ mod test_with_bitcoind {
     #[serial]
     async fn test_automatic_rbf_succeeds() {
         use vault::relay::run_relayer;
-        let mut parachain_runner: Child = start_chain().await.unwrap();
 
         test_with_vault(|_root_provider, vault_id, vault_provider| async move {
             let relayer_provider = setup_provider(AccountKeyring::Bob).await;
@@ -1296,6 +1279,5 @@ mod test_with_bitcoind {
             test_service(service, validation).await;
         })
         .await;
-        parachain_runner.kill().unwrap();
     }
 }

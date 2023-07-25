@@ -192,9 +192,15 @@ pub async fn with_timeout<T: Future>(future: T, duration: Duration) -> T::Output
 }
 
 pub async fn start_chain() -> std::io::Result<Child> {
+    let _stop_previous_instance = Command::new("docker-compose")
+        .arg("rm")
+        .arg("-v")
+        .arg("-s")
+        .arg("-f")
+        .arg("interbtc")
+        .status()
+        .unwrap();
     let command = Command::new("sh").arg("../scripts/run_parachain_node.sh").spawn();
-    // Time to start the parachain image, so RPC request can be handle
-    tokio::time::sleep(Duration::from_secs(2)).await;
     command
 }
 
