@@ -1,7 +1,7 @@
 use crate::{
-    psbt::Error as PsbtError, secp256k1::Error as Secp256k1Error, util::address::Error as AddressError, ElectrsError,
+    address::Error as AddressError, psbt::Error as PsbtError, secp256k1::Error as Secp256k1Error, ElectrsError,
 };
-use bitcoincore_rpc::bitcoin::util::sighash::Error as SighashError;
+use bitcoincore_rpc::bitcoin::sighash::Error as SighashError;
 use std::sync::PoisonError;
 use thiserror::Error;
 

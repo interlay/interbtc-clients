@@ -1,4 +1,5 @@
-use crate::{BlockHash, Script, Txid};
+use crate::{BlockHash, Txid};
+use bitcoincore_rpc::bitcoin::ScriptBuf;
 use serde::Deserialize;
 
 // https://github.com/Blockstream/electrs/blob/adedee15f1fe460398a7045b292604df2161adc0/src/util/transaction.rs#L17-L26
@@ -19,7 +20,7 @@ pub struct TxInValue {
     pub txid: Txid,
     pub vout: u32,
     pub prevout: Option<TxOutValue>,
-    pub scriptsig: Script,
+    pub scriptsig: ScriptBuf,
     pub scriptsig_asm: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub witness: Option<Vec<String>>,
@@ -34,7 +35,7 @@ pub struct TxInValue {
 // https://github.com/Blockstream/electrs/blob/adedee15f1fe460398a7045b292604df2161adc0/src/rest.rs#L239-L270
 #[derive(Deserialize)]
 pub struct TxOutValue {
-    pub scriptpubkey: Script,
+    pub scriptpubkey: ScriptBuf,
     pub scriptpubkey_asm: String,
     pub scriptpubkey_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]

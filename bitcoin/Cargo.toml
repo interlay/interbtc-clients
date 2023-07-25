@@ -8,12 +8,12 @@ edition = "2018"
 default = []
 regtest-manual-mining = []
 cli = ["clap"]
-uses-bitcoind = []
+uses-bitcoind = ["regtest-manual-mining"]
 light-client = []
 
 [dependencies]
 thiserror = "1.0"
-bitcoincore-rpc = { git = "https://github.com/rust-bitcoin/rust-bitcoincore-rpc", rev = "bde02d7fbf031df7d3a49946ec0e7f1abde34e58" }
+bitcoincore-rpc = { git = "https://github.com/rust-bitcoin/rust-bitcoincore-rpc", rev = "7bd815f1e1ae721404719ee8e6867064b7c68494" }
 hex = "0.4.2"
 async-trait = "0.1.40"
 tokio = { version = "1.0", features = ["full"] }
