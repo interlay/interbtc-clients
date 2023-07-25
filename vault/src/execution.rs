@@ -1,6 +1,6 @@
 use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager, YIELD_RATE};
 use bitcoin::{
-    Error as BitcoinError, SatPerVbyte, Transaction, TransactionExt, TransactionMetadata, Txid,
+    Error as BitcoinError, Hash, SatPerVbyte, Transaction, TransactionExt, TransactionMetadata, Txid,
     BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
 };
 use futures::{future::Either, stream::StreamExt, try_join, TryStreamExt};
@@ -44,7 +44,7 @@ pub fn parachain_blocks_to_bitcoin_blocks_rounded_up(parachain_blocks: u32) -> R
 
     let denominator = BITCOIN_BLOCK_INTERVAL.as_millis();
 
-    // do -num_bitcoin_blocks = ceil(millis / demoninator)
+    // do -num_bitcoin_blocks = ceil(millis / denominator)
     let num_bitcoin_blocks = (millis as u128)
         .checked_add(denominator)
         .ok_or(Error::ArithmeticOverflow)?
@@ -357,7 +357,10 @@ impl Request {
             tracing::info!("Awaiting parachain confirmations...");
 
             match parachain_rpc
-                .wait_for_block_in_relay(H256Le::from_bytes_le(&tx_metadata.block_hash), Some(num_confirmations))
+                .wait_for_block_in_relay(
+                    H256Le::from_bytes_le(tx_metadata.block_hash.as_byte_array()),
+                    Some(num_confirmations),
+                )
                 .await
             {
                 Ok(_) => {
@@ -643,7 +646,7 @@ pub async fn execute_open_requests(
 }
 
 /// Get the Request from the hashmap that the given Transaction satisfies, based
-/// on the OP_RETURN and the amount of btc that is transfered to the address
+/// on the OP_RETURN and the amount of btc that is transferred to the address
 fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -> Option<Request> {
     let hash = tx.get_op_return()?;
     let request = hash_map.get(&hash)?;
@@ -655,7 +658,7 @@ fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -
     }
 }
 
-#[cfg(all(test, feature = "parachain-metadata-kintsugi-testnet"))]
+#[cfg(all(test, feature = "parachain-metadata-kintsugi"))]
 mod tests {
     use super::*;
     use crate::metrics::PerCurrencyMetrics;
@@ -699,6 +702,7 @@ mod tests {
             async fn get_foreign_asset_metadata(&self, id: u32) -> Result<AssetMetadata, RuntimeError>;
             async fn get_lend_tokens(&self) -> Result<Vec<(CurrencyId, CurrencyId)>, RuntimeError>;
         }
+
         #[async_trait]
         pub trait VaultRegistryPallet {
             async fn get_vault(&self, vault_id: &VaultId) -> Result<InterBtcVault, RuntimeError>;
@@ -793,6 +797,7 @@ mod tests {
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
             fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError>;
             fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, BitcoinError>;
+            fn list_addresses(&self) -> Result<Vec<Address>, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, BitcoinError>;
@@ -801,8 +806,8 @@ mod tests {
             async fn get_pruned_height(&self) -> Result<u64, BitcoinError>;
             async fn get_new_address(&self) -> Result<Address, BitcoinError>;
             async fn get_new_public_key(&self) -> Result<PublicKey, BitcoinError>;
-            fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, BitcoinError>;
-            fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), BitcoinError>;
+            fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, BitcoinError>;
+            fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), BitcoinError>;
             async fn add_new_deposit_key(&self, public_key: PublicKey, secret_key: Vec<u8>) -> Result<(), BitcoinError>;
             async fn get_best_block_hash(&self) -> Result<BlockHash, BitcoinError>;
             async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;

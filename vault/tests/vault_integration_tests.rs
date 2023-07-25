@@ -13,8 +13,7 @@ use runtime::{
     types::*,
     utils::account_id::AccountId32,
     BtcAddress, CurrencyId, FixedPointNumber, FixedU128, InterBtcParachain, InterBtcRedeemRequest, IssuePallet,
-    OraclePallet, PartialAddress, RedeemPallet, ReplacePallet, ShutdownSender, SudoPallet, UtilFuncs, VaultId,
-    VaultRegistryPallet,
+    PartialAddress, RedeemPallet, ReplacePallet, ShutdownSender, SudoPallet, UtilFuncs, VaultId, VaultRegistryPallet,
 };
 use serial_test::serial;
 use service::DynBitcoinCoreApi;
@@ -32,6 +31,8 @@ async fn test_with_vault<F, R>(execute: impl FnOnce(InterBtcParachain, VaultId, 
 where
     F: Future<Output = R>,
 {
+    let _parachain_runner: Child = start_chain().await.unwrap();
+
     service::init_subscriber();
     let (parachain_rpc, _tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
 
@@ -84,7 +85,6 @@ where
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_redeem_succeeds() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|client, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let user_provider = setup_provider(AccountKeyring::Dave).await;
@@ -96,6 +96,7 @@ async fn test_redeem_succeeds() {
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(
             vault_provider.clone(),
+            btc_rpc_master_wallet.clone(),
             btc_rpc_master_wallet,
             btc_rpcs,
             "test_redeem_succeeds",
@@ -143,13 +144,11 @@ async fn test_redeem_succeeds() {
         .await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_replace_succeeds() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|client, old_vault_id, old_vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let new_vault_provider = setup_provider(AccountKeyring::Eve).await;
@@ -167,6 +166,7 @@ async fn test_replace_succeeds() {
         let new_btc_rpc_master_wallet = btc_rpc.clone();
         let _vault_id_manager = VaultIdManager::from_map(
             new_vault_provider.clone(),
+            new_btc_rpc_master_wallet.clone(),
             new_btc_rpc_master_wallet,
             btc_rpcs,
             "test_replace_succeeds1",
@@ -180,6 +180,7 @@ async fn test_replace_succeeds() {
         let old_btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(
             old_vault_provider.clone(),
+            old_btc_rpc_master_wallet.clone(),
             old_btc_rpc_master_wallet,
             btc_rpcs,
             "test_replace_succeeds2",
@@ -256,13 +257,11 @@ async fn test_replace_succeeds() {
         .await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_withdraw_replace_succeeds() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|client, old_vault_id, old_vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let new_vault_provider = setup_provider(AccountKeyring::Eve).await;
@@ -330,7 +329,6 @@ async fn test_withdraw_replace_succeeds() {
             .is_err());
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -339,7 +337,6 @@ async fn test_cancellation_succeeds() {
     // tests cancellation of issue, redeem and replace.
     // issue and replace cancellation is tested through the vault's cancellation service.
     // cancel_redeem is called manually
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|_, old_vault_id, old_vault_provider| async move {
         let root_provider = setup_provider(AccountKeyring::Alice).await;
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
@@ -358,6 +355,7 @@ async fn test_cancellation_succeeds() {
         let new_btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(
             new_vault_provider.clone(),
+            new_btc_rpc_master_wallet.clone(),
             new_btc_rpc_master_wallet,
             btc_rpcs,
             "test_cancellation_succeeds",
@@ -544,13 +542,11 @@ async fn test_cancellation_succeeds() {
         .await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_issue_overpayment_succeeds() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|_root_provider, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let user_provider = setup_provider(AccountKeyring::Dave).await;
@@ -605,13 +601,11 @@ async fn test_issue_overpayment_succeeds() {
         .await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_automatic_issue_execution_succeeds() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|_root_provider, vault1_id, _vault1_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let vault1_provider = setup_provider(AccountKeyring::Charlie).await;
@@ -630,6 +624,7 @@ async fn test_automatic_issue_execution_succeeds() {
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(
             vault2_provider.clone(),
+            btc_rpc_master_wallet.clone(),
             btc_rpc_master_wallet,
             btc_rpcs,
             "test_automatic_issue_execution_succeeds",
@@ -705,14 +700,12 @@ async fn test_automatic_issue_execution_succeeds() {
         test_service(service, fut_user).await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 // todo: refactor to reuse code from test_automatic_issue_execution_succeeds
 async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|_root_provider, vault1_id, _vault1_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let vault1_provider = setup_provider(AccountKeyring::Charlie).await;
@@ -731,6 +724,7 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(
             vault2_provider.clone(),
+            btc_rpc_master_wallet.clone(),
             btc_rpc_master_wallet,
             btc_rpcs,
             "test_automatic_issue_execution_succeeds_with_big_transaction",
@@ -803,13 +797,11 @@ async fn test_automatic_issue_execution_succeeds_with_big_transaction() {
         test_service(service, fut_user).await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_execute_open_requests_succeeds() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|_root_provider, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let user_provider = setup_provider(AccountKeyring::Dave).await;
@@ -821,6 +813,7 @@ async fn test_execute_open_requests_succeeds() {
         let btc_rpc_master_wallet = btc_rpc.clone();
         let vault_id_manager = VaultIdManager::from_map(
             vault_provider.clone(),
+            btc_rpc_master_wallet.clone(),
             btc_rpc_master_wallet,
             btc_rpcs,
             "test_execute_open_requests_succeeds",
@@ -908,13 +901,11 @@ async fn test_execute_open_requests_succeeds() {
         .await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_off_chain_liquidation() {
-    let mut parachain_runner: Child = start_chain().await.unwrap();
     test_with_vault(|_root_provider, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let user_provider = setup_provider(AccountKeyring::Dave).await;
@@ -943,7 +934,6 @@ async fn test_off_chain_liquidation() {
         assert_event::<LiquidateVaultEvent, _>(TIMEOUT, vault_provider.clone(), |_| true).await;
     })
     .await;
-    parachain_runner.kill().unwrap();
 }
 
 async fn assert_redeem_event(
@@ -980,12 +970,10 @@ impl InterBtcParachainExt for InterBtcParachain {
 
 #[cfg(feature = "uses-bitcoind")]
 mod test_with_bitcoind {
-    use bitcoin::{BitcoinCore, BitcoinCoreApi, Transaction, TransactionExt};
+    use bitcoin::{BitcoinCore, BitcoinCoreApi, Hash, Transaction, TransactionExt};
     use runtime::BtcRelayPallet;
-    use vault::service::Runner;
-
     use std::cmp::max;
-    use vault::{delay::ZeroDelay, relay::Config};
+    use vault::{delay::ZeroDelay, relay::Config, service::Runner};
 
     use super::*;
 
@@ -1008,9 +996,7 @@ mod test_with_bitcoind {
         ret.create_or_load_wallet().await.unwrap();
 
         // fund the wallet by mining blocks
-        for _ in 0..102 {
-            ret.mine_block().unwrap();
-        }
+        ret.mine_blocks(102, None);
 
         ret
     }
@@ -1042,7 +1028,7 @@ mod test_with_bitcoind {
         .unwrap();
 
         parachain_rpc
-            .wait_for_block_in_relay(H256Le::from_bytes_le(&metadata.block_hash), Some(0))
+            .wait_for_block_in_relay(H256Le::from_bytes_le(metadata.block_hash.as_byte_array()), Some(0))
             .await
             .unwrap();
 
@@ -1110,7 +1096,7 @@ mod test_with_bitcoind {
             }));
 
         tracing::trace!("Step 4: mine bitcoin block");
-        let block_hash = btc_rpc.mine_block().unwrap();
+        let block_hash = btc_rpc.mine_blocks(1, None);
 
         tracing::info!("Step 5: check that tx got included without changes");
         btc_rpc
@@ -1180,7 +1166,7 @@ mod test_with_bitcoind {
         assert!(btc_rpc.fee_rate(new_tx.txid()).await.unwrap().0 >= 10);
 
         tracing::trace!("Step 5: mine bitcoin block");
-        let block_hash = btc_rpc.mine_block().unwrap();
+        let block_hash = btc_rpc.mine_blocks(1, None);
 
         tracing::trace!("Step 6: check that only new tx got included");
         btc_rpc.get_transaction(&new_tx.txid(), Some(block_hash)).await.unwrap();
@@ -1194,7 +1180,6 @@ mod test_with_bitcoind {
     #[serial]
     async fn test_automatic_rbf_succeeds() {
         use vault::relay::run_relayer;
-        let mut parachain_runner: Child = start_chain().await.unwrap();
 
         test_with_vault(|_root_provider, vault_id, vault_provider| async move {
             let relayer_provider = setup_provider(AccountKeyring::Bob).await;
@@ -1229,6 +1214,7 @@ mod test_with_bitcoind {
             let btc_rpc_master_wallet = btc_rpc.clone();
             let vault_id_manager = VaultIdManager::from_map(
                 vault_provider.clone(),
+                btc_rpc_master_wallet.clone(),
                 btc_rpc_master_wallet,
                 btc_rpcs,
                 "test_automatic_rbf_succeeds",
@@ -1296,6 +1282,5 @@ mod test_with_bitcoind {
             test_service(service, validation).await;
         })
         .await;
-        parachain_runner.kill().unwrap();
     }
 }

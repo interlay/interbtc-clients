@@ -225,7 +225,7 @@ struct GetSignatureData {
 }
 
 async fn ensure_signature_exists(auth_url: &str, account_id: &AccountId) -> Result<(), Error> {
-    let account_id = runtime::sp_core::crypto::AccountId32::from(account_id.0);
+    let account_id = account_id.to_sp_core_account_id();
     reqwest::get(Url::parse(auth_url)?.join(&account_id.to_ss58check_with_version(SS58_PREFIX.into()))?)
         .await?
         .json::<GetSignatureData>()
@@ -386,7 +386,8 @@ mod tests {
     };
     use kv::{Config, Store};
     use runtime::{
-        integration::*, AccountId, BtcPublicKey, FixedPointNumber, FixedU128, OraclePallet, VaultRegistryPallet,
+        integration::*, utils::account_id::AccountId32, AccountId, BtcPublicKey, FixedPointNumber, FixedU128,
+        OraclePallet, VaultRegistryPallet,
     };
     use sp_keyring::AccountKeyring;
 
@@ -421,7 +422,7 @@ mod tests {
                             .into_iter()
                             .map(move |currency_id| (account_id.clone().into(), 1 << 60, 0, currency_id))
                     })
-                    .collect::<Vec<(runtime::utils_accountid::AccountId32, u128, u128, CurrencyId)>>(),
+                    .collect::<Vec<(AccountId32, u128, u128, CurrencyId)>>(),
             )
             .await
             .expect("Should endow accounts");

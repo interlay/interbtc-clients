@@ -85,7 +85,7 @@ impl InterBtcParachain {
         signer: InterBtcSigner,
         shutdown_tx: ShutdownSender,
     ) -> Result<Self, Error> {
-        let account_id = signer.account_id().clone();
+        let account_id = signer.account_id.clone().0;
         let api = OnlineClient::from_rpc_client(Arc::new(rpc_client)).await?;
 
         let runtime_version = api.rpc().runtime_version(None).await?;
@@ -125,7 +125,7 @@ impl InterBtcParachain {
             api: Arc::new(api),
             nonce: Arc::new(RwLock::new(0)),
             signer,
-            account_id,
+            account_id: (*account_id).clone().into(),
             shutdown_tx,
             fee_rate_update_tx,
             native_currency_id,

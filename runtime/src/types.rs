@@ -1,5 +1,8 @@
-pub use crate::utils::{account_id as utils_accountid, multi_signature};
-use crate::{metadata, utils::signer::PairSigner, Config, InterBtcRuntime, RuntimeCurrencyInfo};
+use crate::{
+    metadata,
+    utils::{account_id::AccountId32, signer::PairSigner},
+    Config, InterBtcRuntime, RuntimeCurrencyInfo,
+};
 pub use currency_id::CurrencyIdExt;
 pub use h256_le::RichH256Le;
 pub use metadata_aliases::*;
@@ -13,8 +16,8 @@ pub use sp_core::sr25519::Pair as KeyPair;
 pub use subxt;
 use subxt::storage::{address::Yes, Address};
 
-pub type AccountId = utils_accountid::AccountId32;
-pub type MultiSignature = multi_signature::MultiSignature;
+pub type AccountId = AccountId32;
+pub type MultiSignature = sp_runtime::MultiSignature;
 pub type Balance = primitives::Balance;
 pub type Index = u32;
 pub type BlockNumber = u32;
@@ -211,9 +214,10 @@ pub trait PrettyPrint {
 
 mod account_id {
     use super::*;
+    use sp_core::crypto::Ss58Codec;
     impl PrettyPrint for AccountId {
         fn pretty_print(&self) -> String {
-            self.to_ss58check()
+            self.0.to_ss58check()
         }
     }
 }

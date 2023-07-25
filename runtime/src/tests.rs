@@ -8,8 +8,8 @@ use super::{
     VaultRegistryPallet, KBTC, KINT, KSM,
 };
 use crate::{
-    integration::*, utils_accountid::AccountId32, AccountId, FeedValuesEvent, OracleKey, RuntimeCurrencyInfo, VaultId,
-    H160, U256,
+    integration::*, utils::account_id::AccountId32, AccountId, FeedValuesEvent, OracleKey, RuntimeCurrencyInfo,
+    VaultId, H160, U256,
 };
 use module_bitcoin::{formatter::TryFormat, types::BlockBuilder};
 pub use primitives::CurrencyId::ForeignAsset;
@@ -17,6 +17,7 @@ use primitives::CurrencyId::LendToken;
 use serial_test::serial;
 use sp_keyring::AccountKeyring;
 use std::{process::Child, time::Duration};
+use subxt::utils::Static;
 
 fn dummy_public_key() -> BtcPublicKey {
     BtcPublicKey {
@@ -68,7 +69,7 @@ async fn test_invalid_tx_matching() {
 
     let bob_keyring = AccountKeyring::Bob;
     let bob_substrate_account = bob_keyring.to_account_id();
-    let bob = AccountId32(bob_substrate_account.clone().into());
+    let bob: AccountId32 = bob_substrate_account.into();
 
     let err = parachain_rpc.get_invalid_tx_error(bob.into()).await;
     assert!(err.is_invalid_transaction().is_some());
@@ -83,7 +84,7 @@ async fn test_too_low_priority_matching() {
 
     let bob_keyring = AccountKeyring::Bob;
     let bob_substrate_account = bob_keyring.to_account_id();
-    let bob = AccountId32(bob_substrate_account.clone().into());
+    let bob: AccountId32 = bob_substrate_account.into();
 
     let err = parachain_rpc.get_too_low_priority_error(bob.into()).await;
     assert!(err.is_pool_too_low_priority().is_some());
@@ -134,9 +135,8 @@ async fn test_register_vault() {
 
     let alice_keyring = AccountKeyring::Alice;
     let alice_substrate_account = alice_keyring.to_account_id();
-    let alice = AccountId32(alice_substrate_account.clone().into());
-
-    let vault_id = VaultId::new(alice.into(), Token(KSM), Token(KBTC));
+    let alice = AccountId32(Static(alice_substrate_account));
+    let vault_id = VaultId::new(alice, Token(KSM), Token(KBTC));
 
     parachain_rpc.register_public_key(dummy_public_key()).await.unwrap();
     parachain_rpc.register_vault(&vault_id, 3 * KSM.one()).await.unwrap();

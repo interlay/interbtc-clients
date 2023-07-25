@@ -193,8 +193,8 @@ async fn get_best_block_info(rpc: &DynBitcoinCoreApi) -> Result<(u32, BlockHash)
 mod tests {
     use super::*;
     use crate::*;
-    use bitcoincore_rpc::bitcoin::PackedLockTime;
-    pub use bitcoincore_rpc::bitcoin::{Address, Amount, Network, PublicKey, TxMerkleNode};
+    use bitcoincore_rpc::bitcoin::{absolute::Height, block::Version, locktime::absolute::LockTime, CompactTarget};
+    pub use bitcoincore_rpc::bitcoin::{Address, Amount, Network, PublicKey};
     use sp_core::H256;
 
     mockall::mock! {
@@ -207,6 +207,7 @@ mod tests {
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, Error>;
             fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error>;
             fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error>;
+            fn list_addresses(&self) -> Result<Vec<Address>, Error>;
             async fn get_block_count(&self) -> Result<u64, Error>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
             async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, Error>;
@@ -214,8 +215,8 @@ mod tests {
             async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
             async fn get_new_address(&self) -> Result<Address, Error>;
             async fn get_new_public_key(&self) -> Result<PublicKey, Error>;
-            fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, Error>;
-            fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), Error>;
+            fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, Error>;
+            fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), Error>;
             async fn add_new_deposit_key(
                 &self,
                 public_key: PublicKey,
@@ -281,7 +282,7 @@ mod tests {
     fn dummy_tx(value: i32) -> Transaction {
         Transaction {
             version: value,
-            lock_time: PackedLockTime(1),
+            lock_time: LockTime::Blocks(Height::ZERO),
             input: vec![],
             output: vec![],
         }
@@ -291,8 +292,8 @@ mod tests {
         Block {
             txdata: transactions.into_iter().map(dummy_tx).collect(),
             header: BlockHeader {
-                version: 4,
-                bits: 0,
+                version: Version::from_consensus(4),
+                bits: CompactTarget::from_consensus(0),
                 nonce: 0,
                 time: 0,
                 prev_blockhash: next_hash,
