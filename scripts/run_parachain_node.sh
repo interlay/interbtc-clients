@@ -4,4 +4,4 @@
 cd ..
 
 # Start parachain instance
-docker-compose up -d interbtc
+docker compose up -d interbtc
