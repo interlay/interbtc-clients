@@ -14,7 +14,7 @@ use subxt::tx::Signer;
 /// A [`Signer`] implementation that can be constructed from an [`sp_core::Pair`].
 #[derive(Clone, Debug)]
 pub struct PairSigner<T: Config, Pair> {
-    account_id: T::AccountId,
+    pub account_id: T::AccountId,
     pub signer: Pair,
 }
 
