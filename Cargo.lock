@@ -1329,6 +1329,7 @@ dependencies = [
  "sp-keyring",
  "thiserror",
  "tokio",
+ "tracing",
  "url 2.4.0",
 ]
 
