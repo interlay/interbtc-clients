@@ -7,16 +7,18 @@ use crate::{
     AccountId, AssetRegistry, CurrencyId, Error, InterBtcRuntime, InterBtcSigner, RetryPolicy, RichH256Le, SubxtError,
 };
 use async_trait::async_trait;
+use bitcoin::RawTransactionProof;
 use codec::{Decode, Encode};
 use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt, Stream};
 use module_bitcoin::{
-    merkle::MerkleProof,
+    merkle::{MerkleProof, PartialTransactionProof},
     parser::{parse_block_header, parse_transaction},
+    types::FullTransactionProof,
 };
 use module_oracle_rpc_runtime_api::BalanceWrapper;
 use primitives::UnsignedFixedPoint;
 use serde_json::Value;
-use std::{future::Future, ops::Range, sync::Arc, time::Duration};
+use std::{convert::TryInto, future::Future, ops::Range, sync::Arc, time::Duration};
 use subxt::{
     blocks::ExtrinsicEvents,
     client::OnlineClient,
@@ -31,6 +33,7 @@ use tokio::{
     sync::RwLock,
     time::{sleep, timeout},
 };
+
 // timeout before retrying parachain calls (5 minutes)
 const TRANSACTION_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -890,9 +893,8 @@ pub trait ReplacePallet {
     ///
     /// * `&self` - sender of the transaction: the old vault
     /// * `replace_id` - the ID of the replacement request
-    /// * 'merkle_proof' - the merkle root of the block
-    /// * `raw_tx` - the transaction id in bytes
-    async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error>;
+    /// * `raw_proof` - raw tx and proofs of coinbase and user tx
+    async fn execute_replace(&self, replace_id: H256, raw_proof: &RawTransactionProof) -> Result<(), Error>;
 
     /// Cancel vault replacement
     ///
@@ -966,13 +968,12 @@ impl ReplacePallet for InterBtcParachain {
         Ok(())
     }
 
-    async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
-        self.with_unique_signer(metadata::tx().replace().execute_replace(
-            Static(replace_id),
-            Static(MerkleProof::parse(merkle_proof)?),
-            Static(parse_transaction(raw_tx)?),
-            raw_tx.len() as u32,
-        ))
+    async fn execute_replace(&self, replace_id: H256, raw_proof: &RawTransactionProof) -> Result<(), Error> {
+        self.with_unique_signer(
+            metadata::tx()
+                .replace()
+                .execute_replace(Static(replace_id), build_full_tx_proof(raw_proof)?),
+        )
         .await?;
         Ok(())
     }
@@ -1168,31 +1169,12 @@ impl OraclePallet for InterBtcParachain {
 
 #[async_trait]
 pub trait SecurityPallet {
-    async fn get_parachain_status(&self) -> Result<StatusCode, Error>;
-
-    async fn get_error_codes(&self) -> Result<Vec<ErrorCode>, Error>;
-
     /// Gets the current active block number of the parachain
     async fn get_current_active_block_number(&self) -> Result<u32, Error>;
 }
 
 #[async_trait]
 impl SecurityPallet for InterBtcParachain {
-    /// Get the current security status of the parachain.
-    /// Should be one of; `Running`, `Error` or `Shutdown`.
-    async fn get_parachain_status(&self) -> Result<StatusCode, Error> {
-        self.query_finalized_or_error(metadata::storage().security().parachain_status())
-            .await
-    }
-
-    /// Return any `ErrorCode`s set in the security module.
-    async fn get_error_codes(&self) -> Result<Vec<ErrorCode>, Error> {
-        Ok(self
-            .query_finalized_or_error(metadata::storage().security().errors())
-            .await?
-            .0)
-    }
-
     /// Gets the current active block number of the parachain
     async fn get_current_active_block_number(&self) -> Result<u32, Error> {
         self.query_finalized_or_default(metadata::storage().security().active_block_count())
@@ -1206,7 +1188,7 @@ pub trait IssuePallet {
     async fn request_issue(&self, amount: u128, vault_id: &VaultId) -> Result<RequestIssueEvent, Error>;
 
     /// Execute a issue request by providing a Bitcoin transaction inclusion proof
-    async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error>;
+    async fn execute_issue(&self, issue_id: H256, raw_proof: &RawTransactionProof) -> Result<(), Error>;
 
     /// Cancel an ongoing issue request
     async fn cancel_issue(&self, issue_id: H256) -> Result<(), Error>;
@@ -1234,13 +1216,12 @@ impl IssuePallet for InterBtcParachain {
         .ok_or(Error::RequestIssueIDNotFound)
     }
 
-    async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
-        self.with_unique_signer(metadata::tx().issue().execute_issue(
-            Static(issue_id),
-            Static(MerkleProof::parse(merkle_proof)?),
-            Static(parse_transaction(raw_tx)?),
-            raw_tx.len() as u32,
-        ))
+    async fn execute_issue(&self, issue_id: H256, raw_proof: &RawTransactionProof) -> Result<(), Error> {
+        self.with_unique_signer(
+            metadata::tx()
+                .issue()
+                .execute_issue(Static(issue_id), build_full_tx_proof(raw_proof)?),
+        )
         .await?;
         Ok(())
     }
@@ -1310,7 +1291,7 @@ pub trait RedeemPallet {
     async fn request_redeem(&self, amount: u128, btc_address: BtcAddress, vault_id: &VaultId) -> Result<H256, Error>;
 
     /// Execute a redeem request by providing a Bitcoin transaction inclusion proof
-    async fn execute_redeem(&self, redeem_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error>;
+    async fn execute_redeem(&self, redeem_id: H256, raw_proof: &RawTransactionProof) -> Result<(), Error>;
 
     /// Cancel an ongoing redeem request
     async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), Error>;
@@ -1341,13 +1322,12 @@ impl RedeemPallet for InterBtcParachain {
         Ok(*redeem_event.redeem_id)
     }
 
-    async fn execute_redeem(&self, redeem_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), Error> {
-        self.with_unique_signer(metadata::tx().redeem().execute_redeem(
-            Static(redeem_id),
-            Static(MerkleProof::parse(merkle_proof)?),
-            Static(parse_transaction(raw_tx)?),
-            raw_tx.len() as u32,
-        ))
+    async fn execute_redeem(&self, redeem_id: H256, raw_proof: &RawTransactionProof) -> Result<(), Error> {
+        self.with_unique_signer(
+            metadata::tx()
+                .redeem()
+                .execute_redeem(Static(redeem_id), build_full_tx_proof(raw_proof)?),
+        )
         .await?;
         Ok(())
     }
@@ -1694,7 +1674,7 @@ impl VaultRegistryPallet for InterBtcParachain {
         self.with_unique_signer(
             metadata::tx()
                 .nomination()
-                .withdraw_collateral(vault_id.clone(), amount, None),
+                .withdraw_collateral(vault_id.clone(), Some(amount), None),
         )
         .await?;
         Ok(())
@@ -1956,4 +1936,19 @@ impl SudoPallet for InterBtcParachain {
         ))
         .await
     }
+}
+
+pub fn build_full_tx_proof(raw_proof: &RawTransactionProof) -> Result<Static<FullTransactionProof>, Error> {
+    Ok(Static(FullTransactionProof {
+        user_tx_proof: PartialTransactionProof {
+            transaction: parse_transaction(&raw_proof.raw_user_tx[..])?,
+            tx_encoded_len: raw_proof.raw_user_tx.len().try_into()?,
+            merkle_proof: MerkleProof::parse(&raw_proof.user_tx_proof[..])?,
+        },
+        coinbase_proof: PartialTransactionProof {
+            transaction: parse_transaction(&raw_proof.raw_coinbase_tx[..])?,
+            tx_encoded_len: raw_proof.raw_coinbase_tx.len().try_into()?,
+            merkle_proof: MerkleProof::parse(&raw_proof.coinbase_tx_proof[..])?,
+        },
+    }))
 }

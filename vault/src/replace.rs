@@ -213,7 +213,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::{
         json, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, Network,
-        PrivateKey, PublicKey, SatPerVbyte, Transaction, TransactionMetadata, Txid,
+        PrivateKey, PublicKey, RawTransactionProof, SatPerVbyte, Transaction, TransactionMetadata, Txid,
     };
     use runtime::{
         AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcReplaceRequest,
@@ -332,7 +332,7 @@ mod tests {
         async fn request_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
         async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
         async fn accept_replace(&self, new_vault: &VaultId, old_vault: &VaultId, amount_btc: u128, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-        async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
+        async fn execute_replace(&self, replace_id: H256, raw_proof: &RawTransactionProof) -> Result<(), RuntimeError>;
         async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
         async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
         async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;

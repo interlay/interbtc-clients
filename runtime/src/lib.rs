@@ -71,8 +71,6 @@ pub const DISABLE_DIFFICULTY_CHECK: &str = "DisableDifficultyCheck";
         ),
         derive_for_type(path = "interbtc_primitives::VaultCurrencyPair", derive = "Eq, PartialEq"),
         derive_for_type(path = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
-        derive_for_type(path = "security::types::ErrorCode", derive = "Eq, PartialEq, Ord, PartialOrd"),
-        derive_for_type(path = "security::types::StatusCode", derive = "Eq, PartialEq"),
         substitute_type(path = "primitive_types::H256", with = "::subxt::utils::Static<crate::H256>"),
         substitute_type(path = "primitive_types::U256", with = "::subxt::utils::Static<crate::U256>"),
         substitute_type(path = "primitive_types::H160", with = "::subxt::utils::Static<crate::H160>"),
@@ -105,6 +103,10 @@ pub const DISABLE_DIFFICULTY_CHECK: &str = "DisableDifficultyCheck";
         substitute_type(
             path = "bitcoin::types::Transaction",
             with = "::subxt::utils::Static<::module_bitcoin::types::Transaction>"
+        ),
+        substitute_type(
+            path = "bitcoin::types::FullTransactionProof",
+            with = "::subxt::utils::Static<::module_bitcoin::types::FullTransactionProof>"
         ),
     )
 )]
@@ -123,8 +125,6 @@ pub const DISABLE_DIFFICULTY_CHECK: &str = "DisableDifficultyCheck";
         ),
         derive_for_type(path = "interbtc_primitives::VaultCurrencyPair", derive = "Eq, PartialEq"),
         derive_for_type(path = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
-        derive_for_type(path = "security::types::ErrorCode", derive = "Eq, PartialEq, Ord, PartialOrd"),
-        derive_for_type(path = "security::types::StatusCode", derive = "Eq, PartialEq"),
         substitute_type(path = "primitive_types::H256", with = "::subxt::utils::Static<crate::H256>"),
         substitute_type(path = "primitive_types::U256", with = "::subxt::utils::Static<crate::U256>"),
         substitute_type(path = "primitive_types::H160", with = "::subxt::utils::Static<crate::H160>"),
@@ -157,6 +157,10 @@ pub const DISABLE_DIFFICULTY_CHECK: &str = "DisableDifficultyCheck";
         substitute_type(
             path = "bitcoin::types::Transaction",
             with = "::subxt::utils::Static<::module_bitcoin::types::Transaction>"
+        ),
+        substitute_type(
+            path = "bitcoin::types::FullTransactionProof",
+            with = "::subxt::utils::Static<::module_bitcoin::types::FullTransactionProof>"
         ),
     )
 )]

@@ -315,12 +315,12 @@ impl<P: IssuePallet + ReplacePallet + UtilFuncs + SecurityPallet + Clone> Cancel
 mod tests {
     use super::*;
     use async_trait::async_trait;
+    use bitcoin::RawTransactionProof;
     use futures::channel::mpsc;
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
-        subxt::utils::Static, AccountId, AssetMetadata, BtcAddress, BtcPublicKey, CurrencyId, ErrorCode,
-        InterBtcIssueRequest, InterBtcReplaceRequest, IssueRequestStatus, RequestIssueEvent, StatusCode, Token,
-        VaultId, DOT, IBTC, INTR,
+        subxt::utils::Static, AccountId, AssetMetadata, BtcAddress, BtcPublicKey, CurrencyId, InterBtcIssueRequest,
+        InterBtcReplaceRequest, IssueRequestStatus, RequestIssueEvent, Token, VaultId, DOT, IBTC, INTR,
     };
 
     macro_rules! assert_err {
@@ -339,7 +339,7 @@ mod tests {
         #[async_trait]
         pub trait IssuePallet {
             async fn request_issue(&self, amount: u128, vault_id: &VaultId) -> Result<RequestIssueEvent, RuntimeError>;
-            async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
+            async fn execute_issue(&self, issue_id: H256, raw_proof: &RawTransactionProof,) -> Result<(), RuntimeError>;
             async fn cancel_issue(&self, issue_id: H256) -> Result<(), RuntimeError>;
             async fn get_issue_request(&self, issue_id: H256) -> Result<InterBtcIssueRequest, RuntimeError>;
             async fn get_vault_issue_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcIssueRequest)>, RuntimeError>;
@@ -353,7 +353,7 @@ mod tests {
             async fn request_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
             async fn accept_replace(&self, new_vault: &VaultId, old_vault: &VaultId, amount_btc: u128, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-            async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
+            async fn execute_replace(&self, replace_id: H256, raw_proof: &RawTransactionProof) -> Result<(), RuntimeError>;
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
             async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
@@ -376,8 +376,6 @@ mod tests {
 
         #[async_trait]
         pub trait SecurityPallet {
-            async fn get_parachain_status(&self) -> Result<StatusCode, RuntimeError>;
-            async fn get_error_codes(&self) -> Result<Vec<ErrorCode>, RuntimeError>;
             async fn get_current_active_block_number(&self) -> Result<u32, RuntimeError>;
         }
     }

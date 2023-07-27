@@ -409,7 +409,7 @@ impl Request {
         // Retry until success or timeout, explicitly handle the cases
         // where the redeem has expired or the rpc has disconnected
         runtime::notify_retry(
-            || (execute)(&parachain_rpc, self.hash, &tx_metadata.proof, &tx_metadata.raw_tx),
+            || (execute)(&parachain_rpc, self.hash, &tx_metadata.proof),
             |result| async {
                 match result {
                     Ok(ok) => Ok(ok),
@@ -670,15 +670,15 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::{
         json, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, Hash, Network,
-        PrivateKey, PublicKey, Transaction, TransactionMetadata, Txid,
+        PrivateKey, PublicKey, RawTransactionProof, Transaction, TransactionMetadata, Txid,
     };
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
         sp_core::H160, AccountId, AssetMetadata, BitcoinBlockHeight, BlockNumber, BtcPublicKey, CurrencyId,
-        Error as RuntimeError, ErrorCode, FeeRateUpdateReceiver, InterBtcRichBlockHeader, InterBtcVault, OracleKey,
-        RawBlockHeader, StatusCode, Token, DOT, IBTC,
+        Error as RuntimeError, FeeRateUpdateReceiver, InterBtcRichBlockHeader, InterBtcVault, OracleKey,
+        RawBlockHeader, Token, DOT, IBTC,
     };
-    use std::{collections::BTreeSet, sync::Arc};
+    use std::sync::Arc;
 
     macro_rules! assert_ok {
         ( $x:expr $(,)? ) => {
@@ -729,7 +729,7 @@ mod tests {
         #[async_trait]
         pub trait RedeemPallet {
             async fn request_redeem(&self, amount: u128, btc_address: BtcAddress, vault_id: &VaultId) -> Result<H256, RuntimeError>;
-            async fn execute_redeem(&self, redeem_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
+            async fn execute_redeem(&self, redeem_id: H256, raw_proof: &RawTransactionProof) -> Result<(), RuntimeError>;
             async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), RuntimeError>;
             async fn get_redeem_request(&self, redeem_id: H256) -> Result<InterBtcRedeemRequest, RuntimeError>;
             async fn get_vault_redeem_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcRedeemRequest)>, RuntimeError>;
@@ -741,7 +741,7 @@ mod tests {
             async fn request_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
             async fn accept_replace(&self, new_vault: &VaultId, old_vault: &VaultId, amount_btc: u128, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-            async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
+            async fn execute_replace(&self, replace_id: H256, raw_proof: &RawTransactionProof) -> Result<(), RuntimeError>;
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
             async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
@@ -767,8 +767,6 @@ mod tests {
 
         #[async_trait]
         pub trait SecurityPallet {
-            async fn get_parachain_status(&self) -> Result<StatusCode, RuntimeError>;
-            async fn get_error_codes(&self) -> Result<Vec<ErrorCode>, RuntimeError>;
             async fn get_current_active_block_number(&self) -> Result<u32, RuntimeError>;
         }
 
@@ -915,7 +913,7 @@ mod tests {
             parachain_rpc
                 .expect_get_current_active_block_number()
                 .returning(move || Ok(current_parachain_height));
-            parachain_rpc.expect_execute_redeem().returning(|_, _, _| Ok(()));
+            parachain_rpc.expect_execute_redeem().returning(|_, _| Ok(()));
             parachain_rpc.expect_wait_for_block_in_relay().returning(|_, _| Ok(()));
 
             parachain_rpc
@@ -933,8 +931,12 @@ mod tests {
             mock_bitcoin.expect_wait_for_transaction_metadata().returning(|_, _| {
                 Ok(TransactionMetadata {
                     txid: Txid::all_zeros(),
-                    proof: vec![],
-                    raw_tx: vec![],
+                    proof: RawTransactionProof {
+                        coinbase_tx_proof: vec![],
+                        raw_coinbase_tx: vec![],
+                        raw_user_tx: vec![],
+                        user_tx_proof: vec![],
+                    },
                     block_height: 0,
                     block_hash: BlockHash::all_zeros(),
                     fee: None,
@@ -1047,10 +1049,7 @@ mod tests {
             .expect_get_current_active_block_number()
             .times(1)
             .returning(|| Ok(50));
-        parachain_rpc
-            .expect_execute_replace()
-            .times(1)
-            .returning(|_, _, _| Ok(()));
+        parachain_rpc.expect_execute_replace().times(1).returning(|_, _| Ok(()));
         parachain_rpc
             .expect_wait_for_block_in_relay()
             .times(1)
@@ -1067,8 +1066,12 @@ mod tests {
         mock_bitcoin.expect_wait_for_transaction_metadata().returning(|_, _| {
             Ok(TransactionMetadata {
                 txid: Txid::all_zeros(),
-                proof: vec![],
-                raw_tx: vec![],
+                proof: RawTransactionProof {
+                    coinbase_tx_proof: vec![],
+                    raw_coinbase_tx: vec![],
+                    raw_user_tx: vec![],
+                    user_tx_proof: vec![],
+                },
                 block_height: 0,
                 block_hash: BlockHash::all_zeros(),
                 fee: None,

@@ -298,12 +298,9 @@ async fn process_transaction_and_execute_issue(
                     return Ok(());
                 }
 
-                // found tx, submit proof
-                let txid = transaction.txid();
-
-                // bitcoin core is currently blocking, no need to try_join
-                let raw_tx = bitcoin_core.get_raw_tx(&txid, &block_hash).await?;
-                let proof = bitcoin_core.get_proof(txid, &block_hash).await?;
+                let tx_metadata = bitcoin_core
+                    .wait_for_transaction_metadata(transaction.txid(), num_confirmations)
+                    .await?;
 
                 tracing::info!(
                     "Executing issue #{:?} on behalf of user {:?} with vault {:?}",
@@ -311,7 +308,7 @@ async fn process_transaction_and_execute_issue(
                     issue.requester.pretty_print(),
                     issue.vault.pretty_print()
                 );
-                match btc_parachain.execute_issue(issue_id, &proof, &raw_tx).await {
+                match btc_parachain.execute_issue(issue_id, &tx_metadata.proof).await {
                     Ok(_) => (),
                     Err(err) if err.is_issue_completed() => {
                         tracing::info!("Issue #{} has already been completed", issue_id);

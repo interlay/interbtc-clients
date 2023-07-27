@@ -84,7 +84,7 @@ where
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_redeem_succeeds() {
-    test_with_vault(|client, vault_id, vault_provider| async move {
+    test_with_vault(|_client, vault_id, vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let user_provider = setup_provider(AccountKeyring::Dave).await;
 
@@ -148,7 +148,7 @@ async fn test_redeem_succeeds() {
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_replace_succeeds() {
-    test_with_vault(|client, old_vault_id, old_vault_provider| async move {
+    test_with_vault(|_client, old_vault_id, old_vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let new_vault_provider = setup_provider(AccountKeyring::Eve).await;
         let new_vault_id = VaultId::new(
@@ -261,7 +261,7 @@ async fn test_replace_succeeds() {
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_withdraw_replace_succeeds() {
-    test_with_vault(|client, old_vault_id, old_vault_provider| async move {
+    test_with_vault(|_client, old_vault_id, old_vault_provider| async move {
         let relayer_provider = setup_provider(AccountKeyring::Bob).await;
         let new_vault_provider = setup_provider(AccountKeyring::Eve).await;
         let new_vault_id = VaultId::new(
@@ -594,7 +594,7 @@ async fn test_issue_overpayment_succeeds() {
                 }
             }),
             user_provider
-                .execute_issue(*issue.issue_id, &metadata.proof, &metadata.raw_tx)
+                .execute_issue(*issue.issue_id, &metadata.proof)
                 .map(Result::unwrap),
         )
         .await;
@@ -1032,7 +1032,7 @@ mod test_with_bitcoind {
             .unwrap();
 
         parachain_rpc
-            .execute_issue(*issue.issue_id, &metadata.proof, &metadata.raw_tx)
+            .execute_issue(*issue.issue_id, &metadata.proof)
             .await
             .unwrap();
     }
