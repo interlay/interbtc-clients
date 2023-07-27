@@ -1,5 +1,9 @@
 use crate::{
-    cancellation::Event, error::Error, execution::Request, metrics::publish_expected_bitcoin_balance,
+    cancellation::Event,
+    error::Error,
+    execution::Request,
+    metrics::publish_expected_bitcoin_balance,
+    services::{spawn_cancelable, DynBitcoinCoreApi, Error as ServiceError, ShutdownSender},
     system::VaultIdManager,
 };
 use bitcoin::Error as BitcoinError;
@@ -8,7 +12,6 @@ use runtime::{
     AcceptReplaceEvent, BtcAddress, CollateralBalancesPallet, ExecuteReplaceEvent, InterBtcParachain, PartialAddress,
     PrettyPrint, ReplacePallet, RequestReplaceEvent, UtilFuncs, VaultId, VaultRegistryPallet,
 };
-use service::{spawn_cancelable, DynBitcoinCoreApi, Error as ServiceError, ShutdownSender};
 use std::time::Duration;
 
 /// Listen for AcceptReplaceEvent directed at this vault and continue the replacement

@@ -11,7 +11,7 @@ use std::{fmt, sync::Arc, time::Duration};
 
 mod cli;
 mod error;
-mod trace;
+pub mod trace;
 
 pub use cli::{LoggingFormat, MonitoringConfig, RestartPolicy, ServiceConfig};
 pub use error::Error;

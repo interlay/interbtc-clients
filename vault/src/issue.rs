@@ -1,6 +1,9 @@
 use crate::{
-    delay::RandomDelay, metrics::publish_expected_bitcoin_balance, system::DatabaseConfig, Error, Event, IssueRequests,
-    VaultIdManager,
+    delay::RandomDelay,
+    metrics::publish_expected_bitcoin_balance,
+    services::{DynBitcoinCoreApi, Error as ServiceError},
+    system::DatabaseConfig,
+    Error, Event, IssueRequests, VaultIdManager,
 };
 use bitcoin::{BlockHash, Error as BitcoinError, Hash, PublicKey, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt, TryFutureExt};
@@ -9,7 +12,6 @@ use runtime::{
     InterBtcIssueRequest, InterBtcParachain, IssuePallet, IssueRequestStatus, PartialAddress, PrettyPrint,
     RequestIssueEvent, UtilFuncs, H256,
 };
-use service::{DynBitcoinCoreApi, Error as ServiceError};
 use sha2::{Digest, Sha256};
 use std::{
     sync::Arc,

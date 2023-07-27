@@ -12,6 +12,7 @@ pub mod process;
 mod redeem;
 pub mod relay;
 mod replace;
+pub mod services;
 mod system;
 mod types;
 

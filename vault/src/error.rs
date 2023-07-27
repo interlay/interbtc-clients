@@ -46,7 +46,7 @@ pub enum Error {
     BroadcastStreamRecvError(#[from] BroadcastStreamRecvError),
 }
 
-impl From<Error> for service::Error<Error> {
+impl From<Error> for crate::services::Error<Error> {
     fn from(err: Error) -> Self {
         Self::Retry(err)
     }

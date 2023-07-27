@@ -2,6 +2,10 @@ use std::{collections::HashMap, convert::TryInto, sync::Arc};
 
 use crate::{
     execution::parachain_blocks_to_bitcoin_blocks_rounded_up,
+    services::{
+        warp::{Rejection, Reply},
+        DynBitcoinCoreApi, Error as ServiceError,
+    },
     system::{VaultData, VaultIdManager},
     Error,
 };
@@ -18,10 +22,6 @@ use runtime::{
     InterBtcParachain, InterBtcRedeemRequest, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet,
     RedeemRequestStatus, ReplacePallet, RuntimeCurrencyInfo, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet,
     H256,
-};
-use service::{
-    warp::{Rejection, Reply},
-    DynBitcoinCoreApi, Error as ServiceError,
 };
 use std::time::Duration;
 use tokio::{sync::RwLock, time::sleep};

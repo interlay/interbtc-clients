@@ -1,4 +1,10 @@
-use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager, YIELD_RATE};
+use crate::{
+    error::Error,
+    metrics::update_bitcoin_metrics,
+    services::{spawn_cancelable, DynBitcoinCoreApi, Error as ServiceError, ShutdownSender},
+    system::VaultData,
+    VaultIdManager, YIELD_RATE,
+};
 use bitcoin::{
     Error as BitcoinError, Hash, SatPerVbyte, Transaction, TransactionExt, TransactionMetadata, Txid,
     BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
@@ -11,7 +17,6 @@ use runtime::{
     RedeemRequestStatus, ReplacePallet, ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet,
     H256,
 };
-use service::{spawn_cancelable, DynBitcoinCoreApi, Error as ServiceError, ShutdownSender};
 use std::{collections::HashMap, convert::TryInto, time::Duration};
 use tokio::time::sleep;
 use tokio_stream::wrappers::BroadcastStream;

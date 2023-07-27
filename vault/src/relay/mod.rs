@@ -1,5 +1,5 @@
+use crate::services::{DynBitcoinCoreApi, Error as ServiceError};
 use runtime::InterBtcParachain;
-use service::{DynBitcoinCoreApi, Error as ServiceError};
 use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
 

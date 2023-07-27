@@ -1,6 +1,11 @@
-use crate::{execution::*, metrics::publish_expected_bitcoin_balance, system::VaultIdManager, Error};
+use crate::{
+    execution::*,
+    metrics::publish_expected_bitcoin_balance,
+    services::{spawn_cancelable, Error as ServiceError, ShutdownSender},
+    system::VaultIdManager,
+    Error,
+};
 use runtime::{InterBtcParachain, RedeemPallet, RequestRedeemEvent};
-use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
 use std::time::Duration;
 /// Listen for RequestRedeemEvent directed at this vault; upon reception, transfer
 /// bitcoin and call execute_redeem

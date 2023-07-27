@@ -5,6 +5,7 @@ use crate::{
     metrics::{poll_metrics, publish_tokio_metrics, PerCurrencyMetrics},
     relay::run_relayer,
     service::*,
+    services::{wait_or_shutdown, DynBitcoinCoreApi, Error as ServiceError, MonitoringConfig, Service, ShutdownSender},
     Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
@@ -22,7 +23,6 @@ use runtime::{
     PrettyPrint, RegisterVaultEvent, StoreMainChainHeaderEvent, TryFromSymbol, UpdateActiveBlockEvent, UtilFuncs,
     VaultCurrencyPair, VaultId, VaultRegistryPallet,
 };
-use service::{wait_or_shutdown, DynBitcoinCoreApi, Error as ServiceError, MonitoringConfig, Service, ShutdownSender};
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 use tokio::{sync::RwLock, time::sleep};
 
@@ -663,7 +663,7 @@ impl VaultService {
         );
 
         let shutdown_clone = self.shutdown.clone();
-        service::spawn_cancelable(self.shutdown.subscribe(), async move {
+        crate::services::spawn_cancelable(self.shutdown.subscribe(), async move {
             tracing::info!("Checking for open requests...");
             match open_request_executor.await {
                 Ok(_) => tracing::info!("Done processing open requests"),

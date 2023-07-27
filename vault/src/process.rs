@@ -6,9 +6,8 @@ use std::{
     str::FromStr,
 };
 
-use crate::Error;
+use crate::{services::Error as ServiceError, Error};
 use runtime::AccountId;
-use service::Error as ServiceError;
 use sysinfo::{Pid, PidExt, ProcessExt, System, SystemExt};
 
 pub trait SystemProcess {

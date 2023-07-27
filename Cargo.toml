@@ -6,7 +6,6 @@ members = [
   "vault",
   "bitcoin",
   "faucet",
-  "service",
   "runner"
 ]
 

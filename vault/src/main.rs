@@ -6,7 +6,6 @@ use runtime::{
     InterBtcSigner, KeyPair, DEFAULT_SPEC_NAME, SS58_PREFIX,
 };
 use secp256k1::{rand::thread_rng, SecretKey};
-use service::{warp, warp::Filter, ConnectionManager, Error as ServiceError, MonitoringConfig, ServiceConfig};
 use signal_hook::consts::*;
 use signal_hook_tokio::Signals;
 use std::{
@@ -19,6 +18,7 @@ use tokio_stream::StreamExt;
 use vault::{
     metrics::{self, increment_restart_counter},
     process::PidFile,
+    services::{warp, warp::Filter, ConnectionManager, Error as ServiceError, MonitoringConfig, ServiceConfig},
     Error, VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION,
 };
 
