@@ -113,14 +113,21 @@ fn get_exponential_backoff() -> ExponentialBackoff {
     }
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Clone, Debug)]
+pub struct RawTransactionProof {
+    pub user_tx_proof: Vec<u8>,
+    pub raw_user_tx: Vec<u8>,
+    pub coinbase_tx_proof: Vec<u8>,
+    pub raw_coinbase_tx: Vec<u8>,
+}
+
 #[derive(PartialEq, Eq, PartialOrd, Clone, Copy, Debug)]
 pub struct SatPerVbyte(pub u64);
 
 #[derive(Debug, Clone)]
 pub struct TransactionMetadata {
     pub txid: Txid,
-    pub proof: Vec<u8>,
-    pub raw_tx: Vec<u8>,
+    pub proof: RawTransactionProof,
     pub block_height: u32,
     pub block_hash: BlockHash,
     pub fee: Option<SignedAmount>,
@@ -885,19 +892,29 @@ impl BitcoinCoreApi for BitcoinCore {
         .await?;
 
         let proof = retry(get_exponential_backoff(), || async {
-            Ok(self.get_proof(txid, &block_hash).await?)
-        })
-        .await?;
+            // fetch coinbase info..
+            let block = self.get_block(&block_hash).await?;
+            let coinbase_tx = block.coinbase().ok_or(Error::CoinbaseFetchingFailure)?;
+            let coinbase_txid = coinbase_tx.txid();
+            let coinbase_tx_proof = self.get_proof(coinbase_txid, &block_hash).await?;
+            let raw_coinbase_tx = self.get_raw_tx(&coinbase_txid, &block_hash).await?;
 
-        let raw_tx = retry(get_exponential_backoff(), || async {
-            Ok(self.get_raw_tx(&txid, &block_hash).await?)
+            // fetch user tx info..
+            let raw_user_tx = self.get_raw_tx(&txid, &block_hash).await?;
+            let user_tx_proof = self.get_proof(txid, &block_hash).await?;
+
+            Ok(RawTransactionProof {
+                raw_coinbase_tx,
+                coinbase_tx_proof,
+                raw_user_tx,
+                user_tx_proof,
+            })
         })
         .await?;
 
         Ok(TransactionMetadata {
             txid,
             proof,
-            raw_tx,
             block_height,
             block_hash,
             fee,

@@ -33,6 +33,7 @@ pub use bitcoin_simulator::MockBitcoinCore;
 pub async fn default_root_provider(key: AccountKeyring) -> (InterBtcParachain, TempDir) {
     let tmp = TempDir::new("btc-parachain-").expect("failed to create tempdir");
     let root_provider = setup_provider(key).await;
+
     try_join(
         root_provider.set_bitcoin_confirmations(1),
         root_provider.set_parachain_confirmations(1),
@@ -81,7 +82,7 @@ pub async fn assert_issue(
         .unwrap();
 
     parachain_rpc
-        .execute_issue(*issue.issue_id, &metadata.proof, &metadata.raw_tx)
+        .execute_issue(*issue.issue_id, &metadata.proof)
         .await
         .unwrap();
 }

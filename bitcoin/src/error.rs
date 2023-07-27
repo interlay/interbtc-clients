@@ -77,6 +77,8 @@ pub enum Error {
     FailedToConstructWalletName,
     #[error("AddressError: {0}")]
     AddressError(#[from] AddressError),
+    #[error("Failed to fetch coinbase tx")]
+    CoinbaseFetchingFailure,
 }
 
 impl Error {

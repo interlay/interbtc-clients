@@ -7,7 +7,7 @@ pub use error::Error;
 
 use async_trait::async_trait;
 use backoff::future::retry;
-use futures::future::{join_all, try_join, try_join_all};
+use futures::future::{join_all, try_join, try_join4, try_join_all};
 use std::{convert::TryFrom, sync::Arc, time::Duration};
 use tokio::{sync::Mutex, time::sleep};
 
@@ -81,6 +81,10 @@ impl BitcoinLight {
     async fn send_transaction(&self, transaction: LockedTransaction) -> Result<Txid, BitcoinError> {
         let txid = self.electrs.send_transaction(transaction.transaction).await?;
         Ok(txid)
+    }
+
+    async fn get_coinbase_txid(&self, block_hash: &BlockHash) -> Result<Txid, BitcoinError> {
+        Ok(self.electrs.get_coinbase_txid(&block_hash).await?)
     }
 }
 
@@ -236,15 +240,28 @@ impl BitcoinCoreApi for BitcoinLight {
         })
         .await?;
 
-        let (proof, raw_tx) = retry(get_exponential_backoff(), || async {
-            Ok(try_join(self.get_proof(txid, &block_hash), self.get_raw_tx(&txid, &block_hash)).await?)
+        let proof = retry(get_exponential_backoff(), || async {
+            let coinbase_txid = self.get_coinbase_txid(&block_hash).await?;
+
+            let (coinbase_tx_proof, raw_coinbase_tx, user_tx_proof, raw_user_tx) = try_join4(
+                self.get_proof(coinbase_txid, &block_hash),
+                self.get_raw_tx(&coinbase_txid, &block_hash),
+                self.get_proof(txid, &block_hash),
+                self.get_raw_tx(&txid, &block_hash),
+            )
+            .await?;
+            Ok(RawTransactionProof {
+                coinbase_tx_proof,
+                raw_coinbase_tx,
+                user_tx_proof,
+                raw_user_tx,
+            })
         })
         .await?;
 
         Ok(TransactionMetadata {
             txid,
             proof,
-            raw_tx,
             block_height,
             block_hash,
             fee: Some(fee),

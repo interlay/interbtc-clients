@@ -48,6 +48,3 @@ sp-trie = { git = "https://github.com/paritytech//substrate", branch = "polkadot
 sp-version = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 sp-wasm-interface = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 sp-weights = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
-
-[patch."https://github.com/paritytech/polkadot"]
-xcm = { git = "https://github.com/paritytech//polkadot", branch = "release-v0.9.42" }

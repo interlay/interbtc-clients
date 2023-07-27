@@ -35,6 +35,9 @@ pub enum Error {
     TryFromIntError(#[from] TryFromIntError),
     #[error("ParseIntError: {0}")]
     ParseIntError(#[from] ParseIntError),
+
+    #[error("No txids in block")]
+    EmptyBlock,
 }
 
 impl Error {
