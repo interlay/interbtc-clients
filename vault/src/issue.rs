@@ -1,12 +1,13 @@
 use crate::{
-    delay::RandomDelay, metrics::publish_expected_bitcoin_balance, Error, Event, IssueRequests, VaultIdManager,
+    delay::RandomDelay, metrics::publish_expected_bitcoin_balance, system::DatabaseConfig, Error, Event, IssueRequests,
+    VaultIdManager,
 };
-use bitcoin::{BlockHash, Error as BitcoinError, PublicKey, Transaction, TransactionExt};
+use bitcoin::{BlockHash, Error as BitcoinError, Hash, PublicKey, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt, TryFutureExt};
 use runtime::{
-    BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, ExecuteIssueEvent, H256Le, InterBtcIssueRequest,
-    InterBtcParachain, IssuePallet, IssueRequestStatus, PartialAddress, PrettyPrint, RequestIssueEvent, UtilFuncs,
-    VaultId, H256,
+    AccountId, BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, ExecuteIssueEvent, H256Le,
+    InterBtcIssueRequest, InterBtcParachain, IssuePallet, IssueRequestStatus, PartialAddress, PrettyPrint,
+    RequestIssueEvent, UtilFuncs, H256,
 };
 use service::{DynBitcoinCoreApi, Error as ServiceError};
 use sha2::{Digest, Sha256};
@@ -82,10 +83,11 @@ struct RescanStatus {
     newest_issue_height: u32,
     queued_rescan_range: Option<(usize, usize)>, // start, end(including)
 }
+
 impl RescanStatus {
     // there was a bug pre-v2 that set rescanning status to an invalid range.
     // by changing the keyname we effectively force a reset
-    const KEY: &str = "rescan-status-v2";
+    const KEY: &str = "rescan-status-v3";
     fn update(&mut self, mut issues: Vec<InterBtcIssueRequest>, current_bitcoin_height: usize) {
         // Only look at issues that haven't been processed yet
         issues.retain(|issue| issue.opentime > self.newest_issue_height);
@@ -133,11 +135,12 @@ impl RescanStatus {
         Some((start, chunk_end))
     }
 
-    fn get(vault_id: &VaultId, db: &crate::system::DatabaseConfig) -> Result<Self, Error> {
-        Ok(db.get(vault_id, Self::KEY)?.unwrap_or_default())
+    fn get(account_id: &AccountId, db: &DatabaseConfig) -> Result<Self, Error> {
+        Ok(db.get(account_id, Self::KEY)?.unwrap_or_default())
     }
-    fn store(&self, vault_id: &VaultId, db: &crate::system::DatabaseConfig) -> Result<(), Error> {
-        db.put(vault_id, Self::KEY, self)?;
+
+    fn store(&self, account_id: &AccountId, db: &DatabaseConfig) -> Result<(), Error> {
+        db.put(account_id, Self::KEY, self)?;
         Ok(())
     }
 }
@@ -145,18 +148,13 @@ impl RescanStatus {
 pub async fn add_keys_from_past_issue_request(
     bitcoin_core: &DynBitcoinCoreApi,
     btc_parachain: &InterBtcParachain,
-    vault_id: &VaultId,
-    db: &crate::system::DatabaseConfig,
+    db: &DatabaseConfig,
 ) -> Result<(), Error> {
-    let mut scanning_status = RescanStatus::get(vault_id, db)?;
-    tracing::info!("initial status: = {scanning_status:?}");
+    let account_id = btc_parachain.get_account_id();
+    let mut scanning_status = RescanStatus::get(&account_id, db)?;
+    tracing::info!("Scanning: {scanning_status:?}");
 
-    let issue_requests: Vec<_> = btc_parachain
-        .get_vault_issue_requests(btc_parachain.get_account_id().clone())
-        .await?
-        .into_iter()
-        .filter(|(_, issue)| &issue.vault == vault_id)
-        .collect();
+    let issue_requests = btc_parachain.get_vault_issue_requests(account_id.clone()).await?;
 
     for (issue_id, request) in issue_requests.clone().into_iter() {
         if let Err(e) = add_new_deposit_key(bitcoin_core, issue_id, request.btc_public_key).await {
@@ -164,7 +162,7 @@ pub async fn add_keys_from_past_issue_request(
         }
     }
 
-    // read height only _after_ the last add_new_deposit_key.If a new block arrives
+    // read height only _after_ the last add_new_deposit_key. If a new block arrives
     // while we rescan, bitcoin core will correctly recognize addressed associated with the
     // privkey
     let btc_end_height = bitcoin_core.get_block_count().await? as usize;
@@ -197,7 +195,7 @@ pub async fn add_keys_from_past_issue_request(
     }
 
     // save progress s.t. we don't rescan pruned range again if we crash now
-    scanning_status.store(vault_id, db)?;
+    scanning_status.store(account_id, db)?;
 
     let mut chunk_size = 1;
     // rescan the blockchain in chunks, so that we can save progress. The code below
@@ -217,7 +215,7 @@ pub async fn add_keys_from_past_issue_request(
             chunk_size = (chunk_size.checked_div(2).ok_or(Error::ArithmeticUnderflow)?).max(1);
         }
 
-        scanning_status.store(vault_id, db)?;
+        scanning_status.store(account_id, db)?;
     }
 
     Ok(())
@@ -283,7 +281,10 @@ async fn process_transaction_and_execute_issue(
                 // at this point we know that the transaction has `num_confirmations` on the bitcoin chain,
                 // but the relay can introduce a delay, so wait until the relay also confirms the transaction.
                 btc_parachain
-                    .wait_for_block_in_relay(H256Le::from_bytes_le(&block_hash), Some(num_confirmations))
+                    .wait_for_block_in_relay(
+                        H256Le::from_bytes_le(block_hash.as_byte_array()),
+                        Some(num_confirmations),
+                    )
                     .await?;
 
                 // wait a random amount of blocks, to avoid all vaults flooding the parachain with
@@ -295,12 +296,9 @@ async fn process_transaction_and_execute_issue(
                     return Ok(());
                 }
 
-                // found tx, submit proof
-                let txid = transaction.txid();
-
-                // bitcoin core is currently blocking, no need to try_join
-                let raw_tx = bitcoin_core.get_raw_tx(&txid, &block_hash).await?;
-                let proof = bitcoin_core.get_proof(txid, &block_hash).await?;
+                let tx_metadata = bitcoin_core
+                    .wait_for_transaction_metadata(transaction.txid(), num_confirmations)
+                    .await?;
 
                 tracing::info!(
                     "Executing issue #{:?} on behalf of user {:?} with vault {:?}",
@@ -308,7 +306,7 @@ async fn process_transaction_and_execute_issue(
                     issue.requester.pretty_print(),
                     issue.vault.pretty_print()
                 );
-                match btc_parachain.execute_issue(issue_id, &proof, &raw_tx).await {
+                match btc_parachain.execute_issue(issue_id, &tx_metadata.proof).await {
                     Ok(_) => (),
                     Err(err) if err.is_issue_completed() => {
                         tracing::info!("Issue #{} has already been completed", issue_id);
@@ -465,9 +463,9 @@ mod tests {
     use super::*;
     use runtime::{
         subxt::utils::Static,
-        AccountId,
         CurrencyId::Token,
         TokenSymbol::{DOT, IBTC, INTR},
+        VaultId,
     };
 
     fn dummy_issues(heights: Vec<(u32, usize)>) -> Vec<InterBtcIssueRequest> {

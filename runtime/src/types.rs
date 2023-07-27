@@ -1,5 +1,8 @@
-pub use crate::utils::{account_id as utils_accountid, multi_signature};
-use crate::{metadata, utils::signer::PairSigner, Config, InterBtcRuntime, RuntimeCurrencyInfo};
+use crate::{
+    metadata,
+    utils::{account_id::AccountId32, signer::PairSigner},
+    Config, InterBtcRuntime, RuntimeCurrencyInfo,
+};
 pub use currency_id::CurrencyIdExt;
 pub use h256_le::RichH256Le;
 pub use metadata_aliases::*;
@@ -12,8 +15,8 @@ pub use sp_core::sr25519::Pair as KeyPair;
 pub use subxt;
 use subxt::storage::{address::Yes, Address};
 
-pub type AccountId = utils_accountid::AccountId32;
-pub type MultiSignature = multi_signature::MultiSignature;
+pub type AccountId = AccountId32;
+pub type MultiSignature = sp_runtime::MultiSignature;
 pub type Balance = primitives::Balance;
 pub type Index = u32;
 pub type BlockNumber = u32;
@@ -39,10 +42,7 @@ mod metadata_aliases {
 
     pub use metadata::runtime_types::interbtc_primitives::oracle::Key as OracleKey;
 
-    pub use metadata::runtime_types::{
-        security::types::{ErrorCode, StatusCode},
-        vault_registry::types::VaultStatus,
-    };
+    pub use metadata::runtime_types::vault_registry::types::VaultStatus;
     pub type InterBtcVault =
         metadata::runtime_types::vault_registry::types::Vault<AccountId, BlockNumber, Balance, CurrencyId, FixedU128>;
     pub type InterBtcVaultStatic = metadata::runtime_types::vault_registry::types::Vault<
@@ -208,9 +208,10 @@ pub trait PrettyPrint {
 
 mod account_id {
     use super::*;
+    use sp_core::crypto::Ss58Codec;
     impl PrettyPrint for AccountId {
         fn pretty_print(&self) -> String {
-            self.to_ss58check()
+            self.0.to_ss58check()
         }
     }
 }

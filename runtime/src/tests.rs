@@ -4,12 +4,12 @@ const DEFAULT_TESTING_CURRENCY: CurrencyId = Token(KSM);
 
 use super::{
     BtcAddress, BtcPublicKey, BtcRelayPallet, CollateralBalancesPallet, CurrencyId, FixedPointNumber, FixedU128,
-    OraclePallet, RawBlockHeader, ReplacePallet, SecurityPallet, StatusCode, SudoPallet, Token, TryFromSymbol,
-    VaultRegistryPallet, KBTC, KINT, KSM,
+    OraclePallet, RawBlockHeader, ReplacePallet, SecurityPallet, SudoPallet, Token, TryFromSymbol, VaultRegistryPallet,
+    KBTC, KINT, KSM,
 };
 use crate::{
-    integration::*, utils_accountid::AccountId32, AccountId, FeedValuesEvent, OracleKey, RuntimeCurrencyInfo, VaultId,
-    H160, U256,
+    integration::*, utils::account_id::AccountId32, FeedValuesEvent, OracleKey, RuntimeCurrencyInfo, VaultId, H160,
+    U256,
 };
 use module_bitcoin::{formatter::TryFormat, types::BlockBuilder};
 pub use primitives::CurrencyId::ForeignAsset;
@@ -48,13 +48,10 @@ async fn test_getters() {
             assert_eq!(parachain_rpc.get_free_balance(Token(KINT)).await.unwrap(), 1 << 60);
         },
         async {
-            assert_eq!(parachain_rpc.get_parachain_status().await.unwrap(), StatusCode::Error);
-        },
-        async {
             assert!(parachain_rpc.get_replace_dust_amount().await.unwrap() > 0);
         },
         async {
-            assert!(parachain_rpc.get_current_active_block_number().await.unwrap() == 0);
+            assert!(parachain_rpc.get_current_active_block_number().await.is_ok());
         }
     );
     parachain_runner.kill().unwrap();

@@ -1,12 +1,13 @@
 mod error;
 mod types;
 
+use bitcoincore_rpc::bitcoin::ScriptBuf;
 pub use error::Error;
 pub use types::*;
 
 use crate::{
     deserialize, opcodes, serialize, Address, Block, BlockHash, BlockHeader, Builder as ScriptBuilder, FromHex,
-    Network, OutPoint, Script, SignedAmount, ToHex, Transaction, Txid, H256,
+    Network, OutPoint, SignedAmount, Transaction, Txid, H256,
 };
 use futures::future::{join_all, try_join};
 use reqwest::{Client, Url};
@@ -135,6 +136,14 @@ impl ElectrsClient {
         Ok(txs)
     }
 
+    pub(crate) async fn get_coinbase_txid(&self, block_hash: &BlockHash) -> Result<Txid, Error> {
+        self.get_and_decode::<Vec<String>>(&format!("/block/{block_hash}/txids"))
+            .await?
+            .first()
+            .ok_or(Error::EmptyBlock)
+            .and_then(|raw_txid| Ok(Txid::from_str(raw_txid)?))
+    }
+
     pub(crate) async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error> {
         let (header, txdata) = try_join(self.get_block_header(hash), self.get_transactions_in_block(hash)).await?;
         Ok(Block { header, txdata })
@@ -185,7 +194,7 @@ impl ElectrsClient {
             .collect::<Result<Vec<_>, Error>>()
     }
 
-    pub(crate) async fn get_script_pubkey(&self, outpoint: OutPoint) -> Result<Script, Error> {
+    pub(crate) async fn get_script_pubkey(&self, outpoint: OutPoint) -> Result<ScriptBuf, Error> {
         let tx: TransactionValue = self
             .get_and_decode(&format!("/tx/{txid}", txid = outpoint.txid))
             .await?;
@@ -215,7 +224,7 @@ impl ElectrsClient {
         let txid = self
             .cli
             .post(url)
-            .body(serialize(&tx).to_hex())
+            .body(hex::encode(serialize(&tx)))
             .send()
             .await?
             .error_for_status()?
@@ -232,7 +241,7 @@ impl ElectrsClient {
             let mut transactions: Vec<TransactionValue> = self
                 .get_and_decode(&format!(
                     "/scripthash/{scripthash}/txs/chain/{last_seen_txid}",
-                    scripthash = script_hash.to_hex()
+                    scripthash = hex::encode(&script_hash)
                 ))
                 .await?;
             let page_size = transactions.len();
@@ -257,7 +266,7 @@ impl ElectrsClient {
     ) -> Result<Option<Txid>, Error> {
         let script = ScriptBuilder::new()
             .push_opcode(opcodes::OP_RETURN)
-            .push_slice(data.as_bytes())
+            .push_slice(&data.as_fixed_bytes())
             .into_script();
 
         let script_hash = {
@@ -302,11 +311,11 @@ mod tests {
     async fn test_electrs(url: &str, script_hex: &str, expected_txid: &str) {
         let script_bytes = Vec::from_hex(script_hex).unwrap();
         let script_hash = Sha256Hash::hash(&script_bytes);
-        let expected_txid = Txid::from_hex(expected_txid).unwrap();
+        let expected_txid = Txid::from_str(expected_txid).unwrap();
 
         let electrs_client = ElectrsClient::new(Some(url.to_owned()), Network::Bitcoin).unwrap();
         let txs = electrs_client
-            .get_txs_by_scripthash(script_hash.to_vec())
+            .get_txs_by_scripthash(script_hash.to_byte_array().to_vec())
             .await
             .unwrap();
         assert!(txs.iter().any(|tx| tx.txid.eq(&expected_txid)));

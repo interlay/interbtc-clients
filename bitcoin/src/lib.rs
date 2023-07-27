@@ -13,26 +13,27 @@ mod iter;
 
 use async_trait::async_trait;
 use backoff::{backoff::Backoff, future::retry, ExponentialBackoff};
-use bitcoincore_rpc::{bitcoin::consensus::encode::serialize_hex, bitcoincore_rpc_json::ScanningDetails};
 pub use bitcoincore_rpc::{
+    bitcoin as bitcoin_primitives,
     bitcoin::{
+        absolute::LockTime,
+        address,
+        address::Payload,
+        block::Header as BlockHeader,
         blockdata::{opcodes::all as opcodes, script::Builder},
         consensus,
         consensus::encode::{deserialize, serialize},
-        hash_types::BlockHash,
-        hashes::{
-            self,
-            hex::{FromHex, ToHex},
-            sha256, Hash,
-        },
-        secp256k1,
+        ecdsa::Signature as EcdsaSig,
+        hash_types::{BlockHash, TxMerkleNode, WPubkeyHash},
+        hashes::{self, hex::FromHex, sha256, Hash},
+        key,
+        merkle_tree::PartialMerkleTree,
+        psbt, secp256k1,
         secp256k1::{constants::PUBLIC_KEY_SIZE, SecretKey},
-        util::{
-            self, address::Payload, key, merkleblock::PartialMerkleTree, psbt, psbt::serialize::Serialize,
-            uint::Uint256,
-        },
-        Address, Amount, Block, BlockHeader, Network, OutPoint, PrivateKey, PubkeyHash, PublicKey, Script, ScriptHash,
-        SignedAmount, Transaction, TxIn, TxMerkleNode, TxOut, Txid, VarInt, WPubkeyHash, WScriptHash,
+        sighash::NonStandardSighashType,
+        util::{self},
+        Address, Amount, Block, Network, OutPoint, PrivateKey, PubkeyHash, PublicKey, Script, ScriptHash, SignedAmount,
+        Transaction, TxIn, TxOut, Txid, VarInt, WScriptHash,
     },
     bitcoincore_rpc_json::{
         CreateRawTransactionInput, FundRawTransactionOptions, GetBlockchainInfoResult, GetTransactionResult,
@@ -42,6 +43,7 @@ pub use bitcoincore_rpc::{
     jsonrpc::{self, error::RpcError, Error as JsonRpcError},
     Auth, Client, Error as BitcoinError, RpcApi,
 };
+use bitcoincore_rpc::{bitcoin::consensus::encode::serialize_hex, bitcoincore_rpc_json::ScanningDetails};
 pub use electrs::{ElectrsClient, Error as ElectrsError};
 pub use error::{BitcoinRpcError, ConversionError, Error};
 pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
@@ -51,6 +53,7 @@ pub use sp_core::H256;
 use std::{
     convert::TryInto,
     future::Future,
+    str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -110,14 +113,21 @@ fn get_exponential_backoff() -> ExponentialBackoff {
     }
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Clone, Debug)]
+pub struct RawTransactionProof {
+    pub user_tx_proof: Vec<u8>,
+    pub raw_user_tx: Vec<u8>,
+    pub coinbase_tx_proof: Vec<u8>,
+    pub raw_coinbase_tx: Vec<u8>,
+}
+
 #[derive(PartialEq, Eq, PartialOrd, Clone, Copy, Debug)]
 pub struct SatPerVbyte(pub u64);
 
 #[derive(Debug, Clone)]
 pub struct TransactionMetadata {
     pub txid: Txid,
-    pub proof: Vec<u8>,
-    pub raw_tx: Vec<u8>,
+    pub proof: RawTransactionProof,
     pub block_height: u32,
     pub block_hash: BlockHash,
     pub fee: Option<SignedAmount>,
@@ -139,6 +149,8 @@ pub trait BitcoinCoreApi {
 
     fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error>;
 
+    fn list_addresses(&self) -> Result<Vec<Address>, Error>;
+
     async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
 
     async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, Error>;
@@ -151,9 +163,9 @@ pub trait BitcoinCoreApi {
 
     async fn get_new_public_key(&self) -> Result<PublicKey, Error>;
 
-    fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, Error>;
+    fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, Error>;
 
-    fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), Error>;
+    fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), Error>;
 
     async fn add_new_deposit_key(&self, public_key: PublicKey, secret_key: Vec<u8>) -> Result<(), Error>;
 
@@ -225,17 +237,8 @@ impl LockedTransaction {
     }
 }
 
-fn parse_bitcoin_network(src: &str) -> Result<Network, Error> {
-    match src {
-        "main" => Ok(Network::Bitcoin),
-        "test" => Ok(Network::Testnet),
-        "regtest" => Ok(Network::Regtest),
-        _ => Err(Error::InvalidBitcoinNetwork),
-    }
-}
-
 struct ConnectionInfo {
-    chain: String,
+    chain: Network,
     version: usize,
 }
 
@@ -283,7 +286,7 @@ async fn connect(rpc: &Client, connection_timeout: Duration) -> Result<Network, 
                         return Err(Error::IncompatibleVersion(version))
                     }
 
-                    return parse_bitcoin_network(&chain);
+                    return Ok(chain);
                 }
                 Err(err) => return Err(err),
             }
@@ -421,7 +424,7 @@ impl BitcoinCore {
 
         if let Some(request_id) = request_id {
             // add the op_return data - bitcoind will add op_return and the length automatically
-            outputs.insert("data".to_string(), serde_json::Value::from(request_id.to_hex()));
+            outputs.insert("data".to_string(), serde_json::Value::from(hex::encode(request_id)));
         }
 
         let args = [
@@ -523,18 +526,33 @@ impl BitcoinCore {
         if self.auto_mine {
             log::debug!("Auto-mining!");
 
-            self.rpc
-                .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
+            self.rpc.generate_to_address(
+                1,
+                &self
+                    .rpc
+                    .get_new_address(None, Some(AddressType::Bech32))?
+                    .require_network(self.network)?,
+            )?;
         }
 
         Ok(txid)
     }
 
     #[cfg(feature = "regtest-manual-mining")]
-    pub fn mine_block(&self) -> Result<BlockHash, Error> {
-        Ok(self
-            .rpc
-            .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?[0])
+    pub fn mine_blocks(&self, block_num: u64, maybe_address: Option<Address>) -> BlockHash {
+        let address = maybe_address.unwrap_or_else(|| {
+            self.rpc
+                .get_new_address(None, Some(AddressType::Bech32))
+                .unwrap()
+                .require_network(self.network)
+                .unwrap()
+        });
+        self.rpc
+            .generate_to_address(block_num, &address)
+            .unwrap()
+            .last()
+            .unwrap()
+            .clone()
     }
 
     async fn with_retry_on_timeout<F, R, T>(&self, call: F) -> Result<T, Error>
@@ -692,6 +710,27 @@ impl BitcoinCoreApi for BitcoinCore {
             .list_transactions(None, max_count.or(Some(DEFAULT_MAX_TX_COUNT)), None, None)?)
     }
 
+    // TODO: remove this once the wallet migration has completed
+    fn list_addresses(&self) -> Result<Vec<Address>, Error> {
+        // Lists groups of addresses which have had their common ownership
+        // made public by common use as inputs or as the resulting change
+        // in past transactions
+        let groupings: Vec<Vec<Vec<serde_json::Value>>> = self.rpc.call("listaddressgroupings", &[])?;
+        let addresses = groupings
+            .into_iter()
+            .flatten()
+            .filter_map(|group| {
+                group
+                    .get(0)
+                    .and_then(|v| v.as_str())
+                    .map(Address::from_str)?
+                    .and_then(|x| x.require_network(self.network))
+                    .ok()
+            })
+            .collect::<Vec<_>>();
+        Ok(addresses)
+    }
+
     /// Get the raw transaction identified by `Txid` and stored
     /// in the specified block.
     ///
@@ -740,28 +779,33 @@ impl BitcoinCoreApi for BitcoinCore {
 
     /// Gets a new address from the wallet
     async fn get_new_address(&self) -> Result<Address, Error> {
-        Ok(self.rpc.get_new_address(None, Some(AddressType::Bech32))?)
+        Ok(self
+            .rpc
+            .get_new_address(None, Some(AddressType::Bech32))?
+            .require_network(self.network)?)
     }
 
     /// Gets a new public key for an address in the wallet
     async fn get_new_public_key(&self) -> Result<PublicKey, Error> {
         let address = self
             .rpc
-            .get_new_address(Some(DERIVATION_KEY_LABEL), Some(AddressType::Bech32))?;
+            .get_new_address(Some(DERIVATION_KEY_LABEL), Some(AddressType::Bech32))?
+            .require_network(self.network)?;
         let address_info = self.rpc.get_address_info(&address)?;
         let public_key = address_info.pubkey.ok_or(Error::MissingPublicKey)?;
         Ok(public_key)
     }
 
-    fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, Error> {
-        let address = Address::p2wpkh(public_key, self.network).map_err(ConversionError::from)?;
-        Ok(self.rpc.dump_private_key(&address)?)
+    fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, Error> {
+        Ok(self.rpc.dump_private_key(address)?)
     }
 
-    fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), Error> {
-        Ok(self
-            .rpc
-            .import_private_key(private_key, Some(DERIVATION_KEY_LABEL), Some(false))?)
+    fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), Error> {
+        Ok(self.rpc.import_private_key(
+            private_key,
+            is_derivation_key.then_some(DERIVATION_KEY_LABEL),
+            Some(false),
+        )?)
     }
 
     /// Derive and import the private key for the master public key and public secret
@@ -848,19 +892,29 @@ impl BitcoinCoreApi for BitcoinCore {
         .await?;
 
         let proof = retry(get_exponential_backoff(), || async {
-            Ok(self.get_proof(txid, &block_hash).await?)
-        })
-        .await?;
+            // fetch coinbase info..
+            let block = self.get_block(&block_hash).await?;
+            let coinbase_tx = block.coinbase().ok_or(Error::CoinbaseFetchingFailure)?;
+            let coinbase_txid = coinbase_tx.txid();
+            let coinbase_tx_proof = self.get_proof(coinbase_txid, &block_hash).await?;
+            let raw_coinbase_tx = self.get_raw_tx(&coinbase_txid, &block_hash).await?;
 
-        let raw_tx = retry(get_exponential_backoff(), || async {
-            Ok(self.get_raw_tx(&txid, &block_hash).await?)
+            // fetch user tx info..
+            let raw_user_tx = self.get_raw_tx(&txid, &block_hash).await?;
+            let user_tx_proof = self.get_proof(txid, &block_hash).await?;
+
+            Ok(RawTransactionProof {
+                raw_coinbase_tx,
+                coinbase_tx_proof,
+                raw_user_tx,
+                user_tx_proof,
+            })
         })
         .await?;
 
         Ok(TransactionMetadata {
             txid,
             proof,
-            raw_tx,
             block_height,
             block_hash,
             fee,
@@ -876,10 +930,7 @@ impl BitcoinCoreApi for BitcoinCore {
                     .extract_return_to_self_address(&address.payload)?
                     .map(|(idx, payload)| {
                         existing_transaction.output.remove(idx);
-                        Address {
-                            payload,
-                            network: self.network(),
-                        }
+                        Address::new(self.network(), payload)
                     });
 
                 let raw_tx = serialize_hex(&existing_transaction);
@@ -900,8 +951,13 @@ impl BitcoinCoreApi for BitcoinCore {
         if self.auto_mine {
             log::debug!("Auto-mining!");
 
-            self.rpc
-                .generate_to_address(1, &self.rpc.get_new_address(None, Some(AddressType::Bech32))?)?;
+            self.rpc.generate_to_address(
+                1,
+                &self
+                    .rpc
+                    .get_new_address(None, Some(AddressType::Bech32))?
+                    .require_network(self.network)?,
+            )?;
         }
 
         Ok(txid)
@@ -1057,13 +1113,7 @@ impl BitcoinCoreApi for BitcoinCore {
 
         // to get from weight to vsize we divide by 4, but round up by first adding 3
         // Note that we can not rely on tx.get_size() since it doesn't 'discount' witness bytes
-        let vsize = tx
-            .weight()
-            .checked_add(3)
-            .ok_or(Error::ArithmeticError)?
-            .checked_div(4)
-            .ok_or(Error::ArithmeticError)?
-            .try_into()?;
+        let vsize = tx.weight().to_vbytes_ceil();
 
         let fee = get_tx_result
             .fee
@@ -1074,7 +1124,7 @@ impl BitcoinCoreApi for BitcoinCore {
 
         log::debug!("fee: {fee}, size: {vsize}");
 
-        let fee_rate = fee.checked_div(vsize).ok_or(Error::ArithmeticError)?;
+        let fee_rate = fee.checked_div(vsize.try_into()?).ok_or(Error::ArithmeticError)?;
         Ok(SatPerVbyte(fee_rate.try_into()?))
     }
 
@@ -1172,7 +1222,7 @@ mod tests {
         let script_hash = Sha256Hash::hash(&raw);
 
         let expected = "6ed3928fdcf7375b9622746eb46f8e97a2832a0c43000e3d86774fecb74ee67e";
-        let expected = Sha256Hash::from_hex(expected).unwrap();
+        let expected = Sha256Hash::from_slice(&hex::decode(expected).unwrap()).unwrap();
 
         assert_eq!(expected, script_hash);
     }

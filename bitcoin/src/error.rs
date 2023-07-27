@@ -1,10 +1,11 @@
 use crate::{BitcoinError, BitcoinLightError, ElectrsError};
 use bitcoincore_rpc::{
     bitcoin::{
+        address::Error as AddressError,
         consensus::encode::Error as BitcoinEncodeError,
         hashes::{hex::Error as HashHexError, Error as HashesError},
+        key::Error as KeyError,
         secp256k1::Error as Secp256k1Error,
-        util::{address::Error as AddressError, key::Error as KeyError},
     },
     jsonrpc::{error::RpcError, Error as JsonRpcError},
 };
@@ -74,6 +75,10 @@ pub enum Error {
     MissingBitcoinFeeInfo,
     #[error("FailedToConstructWalletName")]
     FailedToConstructWalletName,
+    #[error("AddressError: {0}")]
+    AddressError(#[from] AddressError),
+    #[error("Failed to fetch coinbase tx")]
+    CoinbaseFetchingFailure,
 }
 
 impl Error {

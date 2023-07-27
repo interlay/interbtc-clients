@@ -52,18 +52,14 @@ rand = { version = "0.7", optional = true }
 
 [dependencies.primitives]
 git = "https://github.com/interlay/interbtc"
-rev = "2ec5b959a547f28d7bab7799568321c9cff40343"
+rev = "1b90616692dcce55749616b4c60bdab228279909"
 package = "interbtc-primitives"
 
 [dependencies.module-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "2ec5b959a547f28d7bab7799568321c9cff40343"
+rev = "1b90616692dcce55749616b4c60bdab228279909"
 package = "bitcoin"
-
-[dependencies.module-oracle-rpc-runtime-api]
-git = "https://github.com/interlay/interbtc"
-rev = "2ec5b959a547f28d7bab7799568321c9cff40343"
-package = "oracle-rpc-runtime-api"
+features = ["parser"]
 
 [dev-dependencies]
 runtime = { path = ".", features = ["testing-utils"] }

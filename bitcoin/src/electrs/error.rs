@@ -1,6 +1,6 @@
 use bitcoincore_rpc::bitcoin::{
-    consensus::encode::Error as BitcoinEncodeError, hashes::hex::Error as HexError,
-    util::address::Error as BitcoinAddressError,
+    address::Error as BitcoinAddressError, consensus::encode::Error as BitcoinEncodeError,
+    hashes::hex::Error as HexError,
 };
 use reqwest::{Error as ReqwestError, StatusCode};
 use serde_json::Error as SerdeJsonError;
@@ -35,6 +35,9 @@ pub enum Error {
     TryFromIntError(#[from] TryFromIntError),
     #[error("ParseIntError: {0}")]
     ParseIntError(#[from] ParseIntError),
+
+    #[error("No txids in block")]
+    EmptyBlock,
 }
 
 impl Error {

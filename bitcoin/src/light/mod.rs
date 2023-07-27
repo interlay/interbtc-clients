@@ -2,12 +2,12 @@ mod error;
 mod wallet;
 
 pub use crate::{Error as BitcoinError, *};
-use bitcoincore_rpc::bitcoin::{blockdata::constants::WITNESS_SCALE_FACTOR, secp256k1::Scalar};
+use bitcoincore_rpc::bitcoin::secp256k1::Scalar;
 pub use error::Error;
 
 use async_trait::async_trait;
 use backoff::future::retry;
-use futures::future::{join_all, try_join, try_join_all};
+use futures::future::{join_all, try_join, try_join4, try_join_all};
 use std::{convert::TryFrom, sync::Arc, time::Duration};
 use tokio::{sync::Mutex, time::sleep};
 
@@ -82,6 +82,10 @@ impl BitcoinLight {
         let txid = self.electrs.send_transaction(transaction.transaction).await?;
         Ok(txid)
     }
+
+    async fn get_coinbase_txid(&self, block_hash: &BlockHash) -> Result<Txid, BitcoinError> {
+        Ok(self.electrs.get_coinbase_txid(&block_hash).await?)
+    }
 }
 
 #[async_trait]
@@ -133,6 +137,12 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(Default::default())
     }
 
+    // TODO: remove this later
+    fn list_addresses(&self) -> Result<Vec<Address>, BitcoinError> {
+        // don't need to migrate keys
+        Ok(Default::default())
+    }
+
     async fn get_raw_tx(&self, txid: &Txid, _block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError> {
         Ok(self.electrs.get_raw_tx(txid).await?)
     }
@@ -162,11 +172,11 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(self.private_key.public_key(&self.secp_ctx))
     }
 
-    fn dump_derivation_key(&self, _public_key: &PublicKey) -> Result<PrivateKey, BitcoinError> {
-        Ok(self.private_key)
+    fn dump_private_key(&self, _: &Address) -> Result<PrivateKey, BitcoinError> {
+        Err(Error::InvalidAddress.into())
     }
 
-    fn import_derivation_key(&self, _private_key: &PrivateKey) -> Result<(), BitcoinError> {
+    fn import_private_key(&self, _private_key: &PrivateKey, _is_derivation_key: bool) -> Result<(), BitcoinError> {
         // nothing to do
         Ok(())
     }
@@ -230,15 +240,28 @@ impl BitcoinCoreApi for BitcoinLight {
         })
         .await?;
 
-        let (proof, raw_tx) = retry(get_exponential_backoff(), || async {
-            Ok(try_join(self.get_proof(txid, &block_hash), self.get_raw_tx(&txid, &block_hash)).await?)
+        let proof = retry(get_exponential_backoff(), || async {
+            let coinbase_txid = self.get_coinbase_txid(&block_hash).await?;
+
+            let (coinbase_tx_proof, raw_coinbase_tx, user_tx_proof, raw_user_tx) = try_join4(
+                self.get_proof(coinbase_txid, &block_hash),
+                self.get_raw_tx(&coinbase_txid, &block_hash),
+                self.get_proof(txid, &block_hash),
+                self.get_raw_tx(&txid, &block_hash),
+            )
+            .await?;
+            Ok(RawTransactionProof {
+                coinbase_tx_proof,
+                raw_coinbase_tx,
+                user_tx_proof,
+                raw_user_tx,
+            })
         })
         .await?;
 
         Ok(TransactionMetadata {
             txid,
             proof,
-            raw_tx,
             block_height,
             block_hash,
             fee: Some(fee),
@@ -251,10 +274,7 @@ impl BitcoinCoreApi for BitcoinLight {
             .extract_return_to_self_address(&address.payload)?
             .map(|(idx, payload)| {
                 existing_transaction.output.remove(idx);
-                Address {
-                    payload,
-                    network: self.network(),
-                }
+                Address::new(self.network(), payload)
             });
 
         // clear the witnesses for fee estimation
@@ -329,7 +349,7 @@ impl BitcoinCoreApi for BitcoinLight {
 
     async fn fee_rate(&self, txid: Txid) -> Result<SatPerVbyte, BitcoinError> {
         let tx = self.get_transaction(&txid, None).await?;
-        let vsize = tx.weight().div_ceil(WITNESS_SCALE_FACTOR) as u64;
+        let vsize = tx.weight().to_vbytes_ceil();
         let recipients_sum = tx.output.iter().map(|tx_out| tx_out.value).sum::<u64>();
 
         let inputs = try_join_all(tx.input.iter().map(|input| async move {

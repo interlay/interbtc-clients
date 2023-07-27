@@ -28,7 +28,7 @@ signal-hook = "0.3.14"
 signal-hook-tokio = { version = "0.3.1", features = ["futures-v0_3"] }
 serde_json = "1.0.71"
 # note: secp256k1 needs to be the same as the dependency in bitcoincore-rpc
-secp256k1 = { version = "0.24.0", features = ["rand", "rand-std"] }
+secp256k1 = { version = "0.27.0", features = ["rand", "rand-std"] }
 lazy_static = "1.4"
 governor = "0.5.0"
 nonzero_ext = "0.3.0"

@@ -210,7 +210,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::{
         json, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, Network,
-        PrivateKey, PublicKey, SatPerVbyte, Transaction, TransactionMetadata, Txid,
+        PrivateKey, PublicKey, RawTransactionProof, SatPerVbyte, Transaction, TransactionMetadata, Txid,
     };
     use runtime::{
         AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcReplaceRequest,
@@ -238,6 +238,7 @@ mod tests {
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
             fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError>;
             fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, BitcoinError>;
+            fn list_addresses(&self) -> Result<Vec<Address>, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, BitcoinError>;
@@ -246,8 +247,8 @@ mod tests {
             async fn get_pruned_height(&self) -> Result<u64, BitcoinError>;
             async fn get_new_address(&self) -> Result<Address, BitcoinError>;
             async fn get_new_public_key(&self) -> Result<PublicKey, BitcoinError>;
-            fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, BitcoinError>;
-            fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), BitcoinError>;
+            fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, BitcoinError>;
+            fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), BitcoinError>;
             async fn add_new_deposit_key(
                 &self,
                 public_key: PublicKey,
@@ -328,7 +329,7 @@ mod tests {
         async fn request_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
         async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
         async fn accept_replace(&self, new_vault: &VaultId, old_vault: &VaultId, amount_btc: u128, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-        async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
+        async fn execute_replace(&self, replace_id: H256, raw_proof: &RawTransactionProof) -> Result<(), RuntimeError>;
         async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
         async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
         async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
@@ -361,9 +362,12 @@ mod tests {
     #[tokio::test]
     async fn test_handle_replace_request_with_insufficient_balance() {
         let mut mock_bitcoin = MockBitcoin::default();
-        mock_bitcoin
-            .expect_get_new_address()
-            .returning(|| Ok(Address::from_str("bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f").unwrap()));
+        mock_bitcoin.expect_get_new_address().returning(|| {
+            Ok(Address::from_str("bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f")
+                .unwrap()
+                .require_network(Network::Regtest)
+                .unwrap())
+        });
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
 
         let mut parachain_rpc = MockProvider::default();
@@ -389,9 +393,12 @@ mod tests {
     #[tokio::test]
     async fn test_handle_replace_request_with_sufficient_balance() {
         let mut mock_bitcoin = MockBitcoin::default();
-        mock_bitcoin
-            .expect_get_new_address()
-            .returning(|| Ok(Address::from_str("bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f").unwrap()));
+        mock_bitcoin.expect_get_new_address().returning(|| {
+            Ok(Address::from_str("bcrt1q6v2c7q7uv8vu6xle2k9ryfj3y3fuuy4rqnl50f")
+                .unwrap()
+                .require_network(Network::Regtest)
+                .unwrap())
+        });
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
 
         let mut parachain_rpc = MockProvider::default();
