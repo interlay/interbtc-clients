@@ -1,8 +1,6 @@
 use async_trait::async_trait;
 use bitcoin::{sha256, Hash};
-use runtime::{
-    sp_core::crypto::AccountId32, AccountId, Error as RuntimeError, InterBtcParachain, UtilFuncs, VaultRegistryPallet,
-};
+use runtime::{AccountId, Error as RuntimeError, InterBtcParachain, UtilFuncs, VaultRegistryPallet};
 use std::fmt;
 
 #[async_trait]

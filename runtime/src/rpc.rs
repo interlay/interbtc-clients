@@ -15,8 +15,7 @@ use module_bitcoin::{
     parser::{parse_block_header, parse_transaction},
     types::FullTransactionProof,
 };
-use module_oracle_rpc_runtime_api::BalanceWrapper;
-use primitives::UnsignedFixedPoint;
+use primitives::{BalanceWrapper, UnsignedFixedPoint};
 use serde_json::Value;
 use std::{convert::TryInto, future::Future, ops::Range, sync::Arc, time::Duration};
 use subxt::{

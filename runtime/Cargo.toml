@@ -61,16 +61,6 @@ rev = "1b90616692dcce55749616b4c60bdab228279909"
 package = "bitcoin"
 features = ["parser"]
 
-[dependencies.module-btc-relay]
-git = "https://github.com/interlay/interbtc"
-rev = "1b90616692dcce55749616b4c60bdab228279909"
-package = "btc-relay"
-
-[dependencies.module-oracle-rpc-runtime-api]
-git = "https://github.com/interlay/interbtc"
-rev = "1b90616692dcce55749616b4c60bdab228279909"
-package = "oracle-rpc-runtime-api"
-
 [dev-dependencies]
 runtime = { path = ".", features = ["testing-utils"] }
 tempdir = "0.3.7"
