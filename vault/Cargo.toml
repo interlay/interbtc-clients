@@ -52,7 +52,7 @@ runtime = { path = "../runtime" }
 faucet-rpc = { package = "faucet", path = "../faucet" }
 
 # Substrate dependencies
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }
+sp-keyring = "24.0.0"
 
 [dev-dependencies]
 mockall = "0.8.1"
@@ -63,4 +63,4 @@ runtime = { path = "../runtime", features = ["testing-utils"] }
 bitcoin = { path = "../bitcoin", features = ["cli", "regtest-manual-mining"] }
 
 # Substrate dependencies
-frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }
+frame-support = "21.0.0"

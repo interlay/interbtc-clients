@@ -1,10 +1,10 @@
-pub use crate::ShutdownSender;
 use crate::{
     assets::LendingAssets,
     conn::{new_websocket_client, new_websocket_client_with_retry},
     metadata, notify_retry,
     types::*,
-    AccountId, AssetRegistry, CurrencyId, Error, InterBtcRuntime, InterBtcSigner, RetryPolicy, RichH256Le, SubxtError,
+    AccountId, AssetRegistry, CurrencyId, Error, FixedU128 as UnsignedFixedPoint, InterBtcRuntime, InterBtcSigner,
+    RetryPolicy, RichH256Le, ShutdownSender, SubxtError,
 };
 use async_trait::async_trait;
 use bitcoin::RawTransactionProof;
@@ -15,7 +15,7 @@ use module_bitcoin::{
     parser::{parse_block_header, parse_transaction},
     types::FullTransactionProof,
 };
-use primitives::{BalanceWrapper, UnsignedFixedPoint};
+use primitives::BalanceWrapper;
 use serde_json::Value;
 use std::{convert::TryInto, future::Future, ops::Range, sync::Arc, time::Duration};
 use subxt::{
@@ -557,8 +557,7 @@ impl InterBtcParachain {
     }
     #[cfg(test)]
     fn lending_mock_market_from_id(&self, id: u32) -> metadata::runtime_types::loans::types::Market<Balance> {
-        use primitives::{Rate, Ratio};
-        use sp_runtime::FixedPointNumber;
+        use sp_runtime::{FixedPointNumber, FixedU128 as Rate, Permill as Ratio};
 
         metadata::runtime_types::loans::types::Market::<Balance> {
             close_factor: Static(Ratio::from_percent(50)),

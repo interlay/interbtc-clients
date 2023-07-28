@@ -23,7 +23,7 @@ pub type BlockNumber = u32;
 pub type H160 = sp_core::H160;
 pub type H256 = sp_core::H256;
 pub type U256 = sp_core::U256;
-pub type Ratio = primitives::Ratio;
+pub type Ratio = sp_runtime::Permill;
 
 pub type InterBtcSigner = PairSigner<InterBtcRuntime, KeyPair>;
 
@@ -37,12 +37,88 @@ pub(crate) enum StorageMapHasher {
 
 mod metadata_aliases {
     use super::*;
-    pub use metadata::runtime_types::bitcoin::address::PublicKey as BtcPublicKey;
     use subxt::{storage::address::StaticStorageMapKey, utils::Static};
 
-    pub use metadata::runtime_types::interbtc_primitives::oracle::Key as OracleKey;
+    // AssetRegistry
+    pub use metadata::{
+        asset_registry::events::{RegisteredAsset as RegisteredAssetEvent, UpdatedAsset as UpdatedAssetEvent},
+        runtime_types::{
+            interbtc_primitives::CustomMetadata as InterBtcAdditionalMetadata,
+            orml_traits::asset_registry::AssetMetadata as GenericAssetMetadata,
+        },
+    };
+    pub type AssetMetadata = GenericAssetMetadata<Balance, InterBtcAdditionalMetadata>;
 
-    pub use metadata::runtime_types::vault_registry::types::VaultStatus;
+    // BTCRelay
+    pub use metadata::{
+        btc_relay::events::StoreMainChainHeader as StoreMainChainHeaderEvent,
+        runtime_types::{bitcoin::types::H256Le, btc_relay::pallet::Error as BtcRelayPalletError},
+    };
+    pub type InterBtcRichBlockHeader = metadata::runtime_types::btc_relay::types::RichBlockHeader<BlockNumber>;
+    pub use metadata::runtime_types::bitcoin::address::PublicKey as BtcPublicKey;
+    pub type BitcoinBlockHeight = u32;
+
+    // ClientsInfo
+    pub use metadata::runtime_types::clients_info::ClientRelease;
+
+    // Issue
+    pub use metadata::{
+        issue::events::{
+            CancelIssue as CancelIssueEvent, ExecuteIssue as ExecuteIssueEvent, RequestIssue as RequestIssueEvent,
+        },
+        runtime_types::{interbtc_primitives::issue::IssueRequestStatus, issue::pallet::Error as IssuePalletError},
+    };
+    pub type InterBtcIssueRequest =
+        metadata::runtime_types::interbtc_primitives::issue::IssueRequest<AccountId, BlockNumber, Balance, CurrencyId>;
+
+    // Loans
+    pub use metadata::loans::events::{NewMarket as NewMarketEvent, UpdatedMarket as UpdatedMarketEvent};
+    pub type LendingMarket = metadata::runtime_types::loans::types::Market<Balance>;
+
+    // Oracle
+    pub use metadata::{
+        oracle::events::FeedValues as FeedValuesEvent, runtime_types::interbtc_primitives::oracle::Key as OracleKey,
+    };
+
+    // Redeem
+    pub use metadata::{
+        redeem::events::{ExecuteRedeem as ExecuteRedeemEvent, RequestRedeem as RequestRedeemEvent},
+        runtime_types::interbtc_primitives::{redeem::RedeemRequestStatus, replace::ReplaceRequestStatus},
+    };
+    pub type InterBtcRedeemRequest = metadata::runtime_types::interbtc_primitives::redeem::RedeemRequest<
+        AccountId,
+        BlockNumber,
+        Balance,
+        CurrencyId,
+    >;
+
+    // Replace
+    pub use metadata::replace::events::{
+        AcceptReplace as AcceptReplaceEvent, CancelReplace as CancelReplaceEvent,
+        ExecuteReplace as ExecuteReplaceEvent, RequestReplace as RequestReplaceEvent,
+        WithdrawReplace as WithdrawReplaceEvent,
+    };
+    pub type InterBtcReplaceRequest = metadata::runtime_types::interbtc_primitives::replace::ReplaceRequest<
+        AccountId,
+        BlockNumber,
+        Balance,
+        CurrencyId,
+    >;
+
+    // Security
+    pub use metadata::security::events::UpdateActiveBlock as UpdateActiveBlockEvent;
+
+    // System
+    pub use metadata::runtime_types::frame_system::pallet::Error as SystemPalletError;
+
+    // Tokens
+    pub use metadata::tokens::events::Endowed as EndowedEvent;
+
+    // VaultRegistry
+    pub use metadata::{
+        runtime_types::vault_registry::{pallet::Error as VaultRegistryPalletError, types::VaultStatus},
+        vault_registry::events::{LiquidateVault as LiquidateVaultEvent, RegisterVault as RegisterVaultEvent},
+    };
     pub type InterBtcVault =
         metadata::runtime_types::vault_registry::types::Vault<AccountId, BlockNumber, Balance, CurrencyId, FixedU128>;
     pub type InterBtcVaultStatic = metadata::runtime_types::vault_registry::types::Vault<
@@ -52,6 +128,8 @@ mod metadata_aliases {
         CurrencyId,
         Static<FixedU128>,
     >;
+    pub type VaultId = metadata::runtime_types::interbtc_primitives::VaultId<AccountId, CurrencyId>;
+    pub type VaultCurrencyPair = metadata::runtime_types::interbtc_primitives::VaultCurrencyPair<CurrencyId>;
 
     impl From<InterBtcVaultStatic> for InterBtcVault {
         fn from(val: InterBtcVaultStatic) -> Self {
@@ -85,89 +163,15 @@ mod metadata_aliases {
         }
     }
 
-    pub type InterBtcRichBlockHeader = metadata::runtime_types::btc_relay::types::RichBlockHeader<BlockNumber>;
-    pub type BitcoinBlockHeight = u32;
-
-    pub use metadata::{
-        asset_registry::events::{RegisteredAsset as RegisteredAssetEvent, UpdatedAsset as UpdatedAssetEvent},
-        oracle::events::FeedValues as FeedValuesEvent,
-    };
-
-    pub use metadata::loans::events::{NewMarket as NewMarketEvent, UpdatedMarket as UpdatedMarketEvent};
-
-    pub use metadata::issue::events::{
-        CancelIssue as CancelIssueEvent, ExecuteIssue as ExecuteIssueEvent, RequestIssue as RequestIssueEvent,
-    };
-
-    pub use metadata::replace::events::{
-        AcceptReplace as AcceptReplaceEvent, CancelReplace as CancelReplaceEvent,
-        ExecuteReplace as ExecuteReplaceEvent, RequestReplace as RequestReplaceEvent,
-        WithdrawReplace as WithdrawReplaceEvent,
-    };
-
-    pub use metadata::redeem::events::{ExecuteRedeem as ExecuteRedeemEvent, RequestRedeem as RequestRedeemEvent};
-
-    pub use metadata::security::events::UpdateActiveBlock as UpdateActiveBlockEvent;
-
-    pub use metadata::vault_registry::events::{
-        LiquidateVault as LiquidateVaultEvent, RegisterAddress as RegisterAddressEvent,
-        RegisterVault as RegisterVaultEvent,
-    };
-
-    pub use metadata::btc_relay::events::StoreMainChainHeader as StoreMainChainHeaderEvent;
-
-    pub use metadata::tokens::events::Endowed as EndowedEvent;
-
-    pub use metadata::runtime_types::{
-        interbtc_primitives::CustomMetadata as InterBtcAdditionalMetadata,
-        orml_traits::asset_registry::AssetMetadata as GenericAssetMetadata,
-    };
-    pub type AssetMetadata = GenericAssetMetadata<Balance, InterBtcAdditionalMetadata>;
-    pub type LendingMarket = metadata::runtime_types::loans::types::Market<Balance>;
-    pub type KeyStorageAddress<T> = Address<StaticStorageMapKey, T, (), (), Yes>;
-
-    pub use metadata::runtime_types::{
-        btc_relay::pallet::Error as BtcRelayPalletError, frame_system::pallet::Error as SystemPalletError,
-        issue::pallet::Error as IssuePalletError, redeem::pallet::Error as RedeemPalletError,
-        security::pallet::Error as SecurityPalletError, vault_registry::pallet::Error as VaultRegistryPalletError,
-    };
-
-    pub use metadata::runtime_types::bitcoin::types::H256Le;
-
-    pub use metadata::runtime_types::clients_info::ClientRelease;
-
-    pub type InterBtcHeader = <InterBtcRuntime as Config>::Header;
-
-    pub type InterBtcIssueRequest =
-        metadata::runtime_types::interbtc_primitives::issue::IssueRequest<AccountId, BlockNumber, Balance, CurrencyId>;
-    pub use metadata::runtime_types::interbtc_primitives::issue::IssueRequestStatus;
-    pub type InterBtcRedeemRequest = metadata::runtime_types::interbtc_primitives::redeem::RedeemRequest<
-        AccountId,
-        BlockNumber,
-        Balance,
-        CurrencyId,
-    >;
-    pub use metadata::runtime_types::interbtc_primitives::{
-        redeem::RedeemRequestStatus, replace::ReplaceRequestStatus,
-    };
-
-    pub type InterBtcReplaceRequest = metadata::runtime_types::interbtc_primitives::replace::ReplaceRequest<
-        AccountId,
-        BlockNumber,
-        Balance,
-        CurrencyId,
-    >;
-    pub type VaultId = metadata::runtime_types::interbtc_primitives::VaultId<AccountId, CurrencyId>;
-    pub type VaultCurrencyPair = metadata::runtime_types::interbtc_primitives::VaultCurrencyPair<CurrencyId>;
-
     #[cfg(feature = "parachain-metadata-interlay")]
     pub type EncodedCall = metadata::runtime_types::interlay_runtime_parachain::RuntimeCall;
     #[cfg(feature = "parachain-metadata-kintsugi")]
     pub type EncodedCall = metadata::runtime_types::kintsugi_runtime_parachain::RuntimeCall;
 
-    pub use metadata::runtime_types::security::pallet::Call as SecurityCall;
+    pub type InterBtcHeader = <InterBtcRuntime as Config>::Header;
 
     pub use metadata::runtime_types::bounded_collections::bounded_vec::BoundedVec;
+    pub type KeyStorageAddress<T> = Address<StaticStorageMapKey, T, (), (), Yes>;
 }
 
 pub struct RawBlockHeader(pub Vec<u8>);
@@ -337,90 +341,6 @@ mod h256_le {
         }
         pub fn to_hex_le(&self) -> String {
             RichH256Le::to_hex_le(&self.clone().into())
-        }
-    }
-}
-
-mod dispatch_error {
-    use crate::metadata::{
-        runtime_types::{
-            sp_arithmetic::ArithmeticError,
-            sp_runtime::{ModuleError, TokenError, TransactionalError},
-        },
-        DispatchError,
-    };
-
-    type RichTokenError = sp_runtime::TokenError;
-    type RichArithmeticError = sp_arithmetic::ArithmeticError;
-    type RichDispatchError = sp_runtime::DispatchError;
-    type RichModuleError = sp_runtime::ModuleError;
-    type RichTransactionalError = sp_runtime::TransactionalError;
-
-    macro_rules! convert_enum{($src: ident, $dst: ident, $($variant: ident,)*)=> {
-        impl From<$src> for $dst {
-            fn from(src: $src) -> Self {
-                match src {
-                    $($src::$variant => Self::$variant,)*
-                }
-            }
-        }
-    }}
-
-    convert_enum!(
-        RichTokenError,
-        TokenError,
-        FundsUnavailable,
-        OnlyProvider,
-        BelowMinimum,
-        CannotCreate,
-        UnknownAsset,
-        Frozen,
-        Unsupported,
-        CannotCreateHold,
-        NotExpendable,
-    );
-
-    convert_enum!(
-        RichArithmeticError,
-        ArithmeticError,
-        Underflow,
-        Overflow,
-        DivisionByZero,
-    );
-
-    convert_enum!(RichTransactionalError, TransactionalError, LimitReached, NoLayer,);
-
-    impl From<RichDispatchError> for DispatchError {
-        fn from(value: RichDispatchError) -> Self {
-            match value {
-                RichDispatchError::Other(_) => DispatchError::Other,
-                RichDispatchError::CannotLookup => DispatchError::CannotLookup,
-                RichDispatchError::BadOrigin => DispatchError::BadOrigin,
-                RichDispatchError::Module(RichModuleError { index, error, .. }) => {
-                    DispatchError::Module(ModuleError { index, error })
-                }
-                RichDispatchError::ConsumerRemaining => DispatchError::ConsumerRemaining,
-                RichDispatchError::NoProviders => DispatchError::NoProviders,
-                RichDispatchError::TooManyConsumers => DispatchError::TooManyConsumers,
-                RichDispatchError::Token(token_error) => DispatchError::Token(token_error.into()),
-                RichDispatchError::Arithmetic(arithmetic_error) => DispatchError::Arithmetic(arithmetic_error.into()),
-                RichDispatchError::Transactional(transactional_error) => {
-                    DispatchError::Transactional(transactional_error.into())
-                }
-                RichDispatchError::Exhausted => DispatchError::Exhausted,
-                RichDispatchError::Corruption => DispatchError::Corruption,
-                RichDispatchError::Unavailable => DispatchError::Unavailable,
-            }
-        }
-    }
-
-    impl<'de> serde::Deserialize<'de> for DispatchError {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: serde::Deserializer<'de>,
-        {
-            let value = RichDispatchError::deserialize(deserializer)?;
-            Ok(value.into())
         }
     }
 }
