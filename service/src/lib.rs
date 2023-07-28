@@ -110,6 +110,7 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
             // master wallet if we switch to descriptor wallets
             let bitcoin_core_shared =
                 config_copy.new_client_with_network(Some(format!("{prefix}-shared")), network_copy)?;
+            bitcoin_core_shared.create_or_load_wallet().await?;
 
             let constructor = move |vault_id: VaultId| {
                 let collateral_currency: CurrencyId = vault_id.collateral_currency();
