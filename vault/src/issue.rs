@@ -1,8 +1,5 @@
 use crate::{
-    delay::RandomDelay,
-    metrics::publish_expected_bitcoin_balance,
-    services::{DynBitcoinCoreApi, Error as ServiceError},
-    system::DatabaseConfig,
+    delay::RandomDelay, metrics::publish_expected_bitcoin_balance, services::DynBitcoinCoreApi, system::DatabaseConfig,
     Error, Event, IssueRequests, VaultIdManager,
 };
 use bitcoin::{BlockHash, Error as BitcoinError, Hash, PublicKey, Transaction, TransactionExt};
@@ -50,7 +47,7 @@ pub async fn process_issue_requests(
     btc_start_height: u32,
     num_confirmations: u32,
     random_delay: Arc<Box<dyn RandomDelay + Send + Sync>>,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     // NOTE: we should not stream transactions if using the light client
     // since it is quite expensive to fetch all transactions per block
     let mut stream =
@@ -77,7 +74,7 @@ pub async fn process_issue_requests(
     }
 
     // stream closed, restart client
-    Err(ServiceError::ClientShutdown)
+    Err(Error::ClientShutdown)
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, PartialEq, Debug)]
@@ -358,7 +355,7 @@ pub async fn listen_for_issue_requests(
     btc_parachain: InterBtcParachain,
     event_channel: Sender<Event>,
     issue_set: Arc<IssueRequests>,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let btc_parachain = &btc_parachain;
     let event_channel = &event_channel;
     let issue_set = &issue_set;
@@ -414,7 +411,7 @@ pub async fn listen_for_issue_executes(
     btc_parachain: InterBtcParachain,
     event_channel: Sender<Event>,
     issue_set: Arc<IssueRequests>,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let btc_parachain = &btc_parachain;
     let event_channel = &event_channel;
     let issue_set = &issue_set;
@@ -446,7 +443,7 @@ pub async fn listen_for_issue_executes(
 pub async fn listen_for_issue_cancels(
     btc_parachain: InterBtcParachain,
     issue_set: Arc<IssueRequests>,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let issue_set = &issue_set;
     btc_parachain
         .on_event::<CancelIssueEvent, _, _, _>(

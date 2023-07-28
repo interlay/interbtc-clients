@@ -1,7 +1,7 @@
 use crate::{
     error::Error,
     metrics::update_bitcoin_metrics,
-    services::{spawn_cancelable, DynBitcoinCoreApi, Error as ServiceError, ShutdownSender},
+    services::{spawn_cancelable, DynBitcoinCoreApi, ShutdownSender},
     system::VaultData,
     VaultIdManager, YIELD_RATE,
 };
@@ -480,7 +480,7 @@ pub async fn execute_open_requests(
     num_confirmations: u32,
     payment_margin: Duration,
     auto_rbf: bool,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let parachain_rpc = &parachain_rpc;
     let vault_id = parachain_rpc.get_account_id().clone();
 

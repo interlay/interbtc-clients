@@ -1,7 +1,7 @@
 use crate::{
     execution::*,
     metrics::publish_expected_bitcoin_balance,
-    services::{spawn_cancelable, Error as ServiceError, ShutdownSender},
+    services::{spawn_cancelable, ShutdownSender},
     system::VaultIdManager,
     Error,
 };
@@ -23,7 +23,7 @@ pub async fn listen_for_redeem_requests(
     num_confirmations: u32,
     payment_margin: Duration,
     auto_rbf: bool,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     parachain_rpc
         .on_event::<RequestRedeemEvent, _, _, _>(
             |event| async {

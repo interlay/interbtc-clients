@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use backoff::{retry, ExponentialBackoff};
 use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCoreApi, Error as BitcoinError};
 use futures::{future::Either, Future, FutureExt};
 use governor::{Quota, RateLimiter};
@@ -8,13 +9,10 @@ use runtime::{
     RuntimeCurrencyInfo, VaultId,
 };
 use std::{fmt, sync::Arc, time::Duration};
-
 mod cli;
-mod error;
 pub mod trace;
-
+pub use crate::Error;
 pub use cli::{LoggingFormat, MonitoringConfig, RestartPolicy, ServiceConfig};
-pub use error::Error;
 pub use runtime::{ShutdownReceiver, ShutdownSender};
 pub use trace::init_subscriber;
 pub use warp;
@@ -22,7 +20,7 @@ pub use warp;
 pub type DynBitcoinCoreApi = Arc<dyn BitcoinCoreApi + Send + Sync>;
 
 #[async_trait]
-pub trait Service<Config, InnerError> {
+pub trait Service<Config> {
     const NAME: &'static str;
     const VERSION: &'static str;
 
@@ -36,7 +34,7 @@ pub trait Service<Config, InnerError> {
         constructor: Box<dyn Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync>,
         keyname: String,
     ) -> Self;
-    async fn start(&self) -> Result<(), Error<InnerError>>;
+    async fn start(&self) -> Result<(), backoff::Error<Error>>;
 }
 
 pub struct ConnectionManager<Config: Clone, F: Fn()> {
@@ -77,9 +75,7 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
         }
     }
 
-    pub async fn start<S: Service<Config, InnerError>, InnerError: fmt::Display>(
-        &self,
-    ) -> Result<(), Error<InnerError>> {
+    pub async fn start<S: Service<Config>>(&self) -> Result<(), Error> {
         loop {
             tracing::info!("Version: {}", S::VERSION);
             tracing::info!("AccountId: {}", self.signer.account_id.pretty_print());
@@ -137,18 +133,18 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
                 Box::new(constructor),
                 self.db_path.clone(),
             );
-            match service.start().await {
-                Err(err @ Error::Abort(_)) => {
-                    tracing::warn!("Disconnected: {}", err);
-                    return Err(err);
+
+            let backoff = ExponentialBackoff::default();
+
+            backoff::future::retry::<(), Error, _, _, _>(backoff, || async {
+                match service.start().await {
+                    Ok(()) => Ok(()),
+                    //ToDo: log errors only return for Permanent error, others ignore
+                    Err(err) => Err(err),
                 }
-                Err(err) => {
-                    tracing::warn!("Disconnected: {}", err);
-                }
-                _ => {
-                    tracing::warn!("Disconnected");
-                }
-            }
+            })
+            .await?;
+
             // propagate shutdown signal from main tasks
             let _ = shutdown_tx.send(());
 

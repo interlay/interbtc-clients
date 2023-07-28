@@ -6077,6 +6077,7 @@ name = "vault"
 version = "1.1.0"
 dependencies = [
  "async-trait",
+ "backoff",
  "bitcoin 1.1.0",
  "clap",
  "faucet",

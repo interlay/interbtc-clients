@@ -1,4 +1,4 @@
-use crate::services::{DynBitcoinCoreApi, Error as ServiceError};
+use crate::{services::DynBitcoinCoreApi, Error as VaultError};
 use runtime::InterBtcParachain;
 use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
@@ -185,9 +185,7 @@ impl<B: Backing, I: Issuing> Runner<B, I> {
     }
 }
 
-pub async fn run_relayer(
-    runner: Runner<DynBitcoinCoreApi, InterBtcParachain>,
-) -> Result<(), ServiceError<crate::Error>> {
+pub async fn run_relayer(runner: Runner<DynBitcoinCoreApi, InterBtcParachain>) -> Result<(), VaultError> {
     loop {
         match runner.submit_next().await {
             Ok(_) => (),
@@ -195,10 +193,10 @@ pub async fn run_relayer(
                 tracing::info!("Attempted to submit block that already exists")
             }
             Err(Error::RuntimeError(ref err)) if err.is_rpc_disconnect_error() => {
-                return Err(ServiceError::ClientShutdown);
+                return Err(VaultError::ClientShutdown);
             }
             Err(Error::BitcoinError(err)) if err.is_transport_error() => {
-                return Err(ServiceError::ClientShutdown);
+                return Err(VaultError::ClientShutdown);
             }
             Err(err) => {
                 tracing::error!("Failed to submit_next: {}", err);

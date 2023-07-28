@@ -1,6 +1,6 @@
 use crate::{execution::*, system::VaultIdManager};
 use runtime::{InterBtcParachain, RequestRefundEvent};
-use crate::services::{spawn_cancelable, Error as ServiceError, ShutdownSender};
+use crate::services::{spawn_cancelable, ShutdownSender};
 
 /// Listen for RequestRefundEvent directed at this vault; upon reception, transfer
 /// bitcoin and call execute_refund
@@ -19,7 +19,7 @@ pub async fn listen_for_refund_requests(
     num_confirmations: u32,
     process_refunds: bool,
     auto_rbf: bool,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     parachain_rpc
         .on_event::<RequestRefundEvent, _, _, _>(
             |event| async {
