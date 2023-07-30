@@ -600,7 +600,7 @@ impl VaultService {
         // exit if auto-register uses faucet and faucet url not set
         if parsed_auto_register.iter().any(|(_, o)| o.is_none()) && self.config.faucet_url.is_none() {
             // TODO: validate before bitcoin / parachain connections
-            return Err(BackoffError::Permanent(Error::Abort));
+            return Err(BackoffError::Permanent(Error::FaucetUrlNotSet));
         }
 
         let num_confirmations = match self.config.btc_confirmations {
@@ -636,7 +636,7 @@ impl VaultService {
         .into_iter()
         .collect::<Result<(), Error>>()
         {
-            Err(Error::RuntimeError(err)) if err.is_threshold_not_set() => Err(BackoffError::Permanent(Error::Abort)),
+            Err(Error::RuntimeError(err)) if err.is_threshold_not_set() => Err(BackoffError::Permanent(err.into())),
             Err(err) => Err(err.into()),
             Ok(_) => Ok(()),
         }?;
@@ -876,7 +876,6 @@ impl VaultService {
         ];
 
         run_and_monitor_tasks(self.shutdown.clone(), tasks).await?;
-
         Ok(())
     }
 
