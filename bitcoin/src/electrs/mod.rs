@@ -136,6 +136,14 @@ impl ElectrsClient {
         Ok(txs)
     }
 
+    pub(crate) async fn get_coinbase_txid(&self, block_hash: &BlockHash) -> Result<Txid, Error> {
+        self.get_and_decode::<Vec<String>>(&format!("/block/{block_hash}/txids"))
+            .await?
+            .first()
+            .ok_or(Error::EmptyBlock)
+            .and_then(|raw_txid| Ok(Txid::from_str(raw_txid)?))
+    }
+
     pub(crate) async fn get_block(&self, hash: &BlockHash) -> Result<Block, Error> {
         let (header, txdata) = try_join(self.get_block_header(hash), self.get_transactions_in_block(hash)).await?;
         Ok(Block { header, txdata })

@@ -1,5 +1,6 @@
 mod error;
 mod http;
+mod service;
 
 use clap::Parser;
 use error::Error;

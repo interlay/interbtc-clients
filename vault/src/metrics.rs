@@ -2,6 +2,10 @@ use std::{collections::HashMap, convert::TryInto, sync::Arc};
 
 use crate::{
     execution::parachain_blocks_to_bitcoin_blocks_rounded_up,
+    service::{
+        warp::{Rejection, Reply},
+        DynBitcoinCoreApi,
+    },
     system::{VaultData, VaultIdManager},
     Error,
 };
@@ -18,10 +22,6 @@ use runtime::{
     InterBtcParachain, InterBtcRedeemRequest, IssuePallet, IssueRequestStatus, OracleKey, RedeemPallet,
     RedeemRequestStatus, ReplacePallet, RuntimeCurrencyInfo, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet,
     H256,
-};
-use service::{
-    warp::{Rejection, Reply},
-    DynBitcoinCoreApi, Error as ServiceError,
 };
 use std::time::Duration;
 use tokio::{sync::RwLock, time::sleep};
@@ -204,7 +204,7 @@ impl PerCurrencyMetrics {
         vault: &VaultData,
         parachain_rpc: P,
         bitcoin_transactions: Vec<ListTransactionResult>,
-    ) -> Result<(), ServiceError<Error>> {
+    ) -> Result<(), Error> {
         let vault_id = &vault.vault_id;
         // update fee surplus
         if let Ok((redeem_requests, replace_requests)) = try_join!(
@@ -317,7 +317,7 @@ pub async fn metrics_handler() -> Result<impl Reply, Rejection> {
     Ok(metrics)
 }
 
-fn raw_value_as_currency(value: u128, currency: CurrencyId) -> Result<f64, ServiceError<Error>> {
+fn raw_value_as_currency(value: u128, currency: CurrencyId) -> Result<f64, Error> {
     let scaling_factor = currency.one()? as f64;
     Ok(value as f64 / scaling_factor)
 }
@@ -325,7 +325,7 @@ fn raw_value_as_currency(value: u128, currency: CurrencyId) -> Result<f64, Servi
 pub async fn publish_locked_collateral<P: VaultRegistryPallet>(
     vault: &VaultData,
     parachain_rpc: &P,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     if let Ok(actual_collateral) = parachain_rpc.get_vault_total_collateral(vault.vault_id.clone()).await {
         let actual_collateral = raw_value_as_currency(actual_collateral, vault.vault_id.collateral_currency())?;
         vault.metrics.locked_collateral.set(actual_collateral);
@@ -336,7 +336,7 @@ pub async fn publish_locked_collateral<P: VaultRegistryPallet>(
 pub async fn publish_required_collateral<P: VaultRegistryPallet>(
     vault: &VaultData,
     parachain_rpc: &P,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     if let Ok(required_collateral) = parachain_rpc
         .get_required_collateral_for_vault(vault.vault_id.clone())
         .await
@@ -362,7 +362,7 @@ pub async fn update_bitcoin_metrics(
     vault: &VaultData,
     new_fee_entry: Option<SignedAmount>,
     fee_budget: Option<u128>,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     // update the average fee
     if let Some(amount) = new_fee_entry {
         {
@@ -386,7 +386,7 @@ pub async fn update_bitcoin_metrics(
     Ok(())
 }
 
-async fn publish_fee_budget_surplus(vault: &VaultData) -> Result<(), ServiceError<Error>> {
+async fn publish_fee_budget_surplus(vault: &VaultData) -> Result<(), Error> {
     let surplus = *FEE_BUDGET_SURPLUS.data.read().await;
     FEE_BUDGET_SURPLUS
         .gauge
@@ -414,7 +414,7 @@ fn publish_bitcoin_balance(btc_rpc: &DynBitcoinCoreApi) {
 
 async fn publish_native_currency_balance<P: CollateralBalancesPallet + UtilFuncs>(
     parachain_rpc: &P,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let native_currency = parachain_rpc.get_native_currency_id();
     if let Ok(balance) = parachain_rpc.get_free_balance(native_currency).await {
         let balance = raw_value_as_currency(balance, native_currency)?;
@@ -556,7 +556,7 @@ async fn publish_redeem_count<V: VaultDataReader>(vault_id_manager: &V, redeems:
 pub async fn monitor_bridge_metrics(
     parachain_rpc: InterBtcParachain,
     vault_id_manager: VaultIdManager,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let parachain_rpc = &parachain_rpc;
     let vault_id_manager = &vault_id_manager;
     parachain_rpc
@@ -589,7 +589,7 @@ pub async fn monitor_bridge_metrics(
 pub async fn poll_metrics<P: CollateralBalancesPallet + RedeemPallet + IssuePallet + SecurityPallet + UtilFuncs>(
     parachain_rpc: P,
     vault_id_manager: VaultIdManager,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let parachain_rpc = &parachain_rpc;
     let vault_id_manager = &vault_id_manager;
 
@@ -613,7 +613,7 @@ pub async fn poll_metrics<P: CollateralBalancesPallet + RedeemPallet + IssuePall
 pub async fn publish_expected_bitcoin_balance<P: VaultRegistryPallet>(
     vault: &VaultData,
     parachain_rpc: P,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     if let Ok(v) = parachain_rpc.get_vault(&vault.vault_id).await {
         let lowerbound = v.issued_tokens.saturating_sub(v.to_be_redeemed_tokens);
         let upperbound = v.issued_tokens.saturating_add(v.to_be_issued_tokens);
@@ -634,7 +634,7 @@ pub async fn publish_expected_bitcoin_balance<P: VaultRegistryPallet>(
 
 pub async fn publish_tokio_metrics(
     mut metrics_iterators: HashMap<String, impl Iterator<Item = TaskMetrics>>,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let frequency = Duration::from_millis(TOKIO_POLLING_INTERVAL_MS);
     loop {
         for (key, val) in metrics_iterators.iter_mut() {
@@ -661,7 +661,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::{
         json, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, Network,
-        PrivateKey, PublicKey, SatPerVbyte, Transaction, TransactionMetadata, Txid,
+        PrivateKey, PublicKey, RawTransactionProof, SatPerVbyte, Transaction, TransactionMetadata, Txid,
     };
     use jsonrpc_core::serde_json::{Map, Value};
     use runtime::{
@@ -669,9 +669,8 @@ mod tests {
         subxt::utils::Static,
         AccountId, AssetMetadata, AssetRegistry, Balance, BlockNumber, BtcAddress, BtcPublicKey,
         CurrencyId::{self, ForeignAsset, LendToken},
-        Error as RuntimeError, ErrorCode, InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcReplaceRequest,
-        InterBtcVault, LendingAssets, RequestIssueEvent, StatusCode, Token, VaultId, VaultStatus, DOT, H256, IBTC,
-        INTR,
+        Error as RuntimeError, InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcReplaceRequest, InterBtcVault,
+        LendingAssets, RequestIssueEvent, Token, VaultId, VaultStatus, DOT, H256, IBTC, INTR,
     };
 
     mockall::mock! {
@@ -692,7 +691,7 @@ mod tests {
         #[async_trait]
         pub trait IssuePallet {
             async fn request_issue(&self, amount: u128, vault_id: &VaultId) -> Result<RequestIssueEvent, RuntimeError>;
-            async fn execute_issue(&self, issue_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
+            async fn execute_issue(&self, issue_id: H256, raw_proof: &RawTransactionProof) -> Result<(), RuntimeError>;
             async fn cancel_issue(&self, issue_id: H256) -> Result<(), RuntimeError>;
             async fn get_issue_request(&self, issue_id: H256) -> Result<InterBtcIssueRequest, RuntimeError>;
             async fn get_vault_issue_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcIssueRequest)>, RuntimeError>;
@@ -703,7 +702,7 @@ mod tests {
         #[async_trait]
         pub trait RedeemPallet {
             async fn request_redeem(&self, amount: u128, btc_address: BtcAddress, vault_id: &VaultId) -> Result<H256, RuntimeError>;
-            async fn execute_redeem(&self, redeem_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
+            async fn execute_redeem(&self, redeem_id: H256, raw_proof: &RawTransactionProof) -> Result<(), RuntimeError>;
             async fn cancel_redeem(&self, redeem_id: H256, reimburse: bool) -> Result<(), RuntimeError>;
             async fn get_redeem_request(&self, redeem_id: H256) -> Result<InterBtcRedeemRequest, RuntimeError>;
             async fn get_vault_redeem_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcRedeemRequest)>, RuntimeError>;
@@ -742,7 +741,7 @@ mod tests {
             async fn request_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
             async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
             async fn accept_replace(&self, new_vault: &VaultId, old_vault: &VaultId, amount_btc: u128, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-            async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
+            async fn execute_replace(&self, replace_id: H256, raw_proof: &RawTransactionProof) -> Result<(), RuntimeError>;
             async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
             async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
             async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
@@ -753,10 +752,6 @@ mod tests {
 
         #[async_trait]
         pub trait SecurityPallet {
-            async fn get_parachain_status(&self) -> Result<StatusCode, RuntimeError>;
-
-            async fn get_error_codes(&self) -> Result<Vec<ErrorCode>, RuntimeError>;
-
             /// Gets the current active block number of the parachain
             async fn get_current_active_block_number(&self) -> Result<u32, RuntimeError>;
         }

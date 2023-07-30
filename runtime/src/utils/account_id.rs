@@ -3,11 +3,9 @@
 //! Substrate-based blockchains. This wrapper is necessary because the `scale_encode::EncodeAsType` and
 //! `scale_decode::DecodeAsType` traits are not implemented for `sp_core::crypto::AccountId32`,
 //! but they are required for the latest version of the `subxt` crate.
-use base58::{FromBase58, ToBase58};
 use codec::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use sp_core::crypto::{AccountId32 as Sp_AccountId32, Ss58Codec};
-use std::convert::TryInto;
 use subxt::utils::Static;
 
 #[derive(

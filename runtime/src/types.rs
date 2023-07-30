@@ -6,7 +6,6 @@ use crate::{
 pub use currency_id::CurrencyIdExt;
 pub use h256_le::RichH256Le;
 pub use metadata_aliases::*;
-pub use module_btc_relay::{RichBlockHeader, MAIN_CHAIN_ID};
 pub use primitives::{
     CurrencyId,
     CurrencyId::{ForeignAsset, LendToken, Token},
@@ -28,10 +27,8 @@ pub type Ratio = primitives::Ratio;
 
 pub type InterBtcSigner = PairSigner<InterBtcRuntime, KeyPair>;
 
-pub type BtcAddress = module_btc_relay::BtcAddress;
-
+pub type BtcAddress = module_bitcoin::Address;
 pub type FixedU128 = crate::FixedU128;
-
 #[allow(non_camel_case_types)]
 pub(crate) enum StorageMapHasher {
     Blake2_128,
@@ -45,10 +42,7 @@ mod metadata_aliases {
 
     pub use metadata::runtime_types::interbtc_primitives::oracle::Key as OracleKey;
 
-    pub use metadata::runtime_types::{
-        security::types::{ErrorCode, StatusCode},
-        vault_registry::types::VaultStatus,
-    };
+    pub use metadata::runtime_types::vault_registry::types::VaultStatus;
     pub type InterBtcVault =
         metadata::runtime_types::vault_registry::types::Vault<AccountId, BlockNumber, Balance, CurrencyId, FixedU128>;
     pub type InterBtcVaultStatic = metadata::runtime_types::vault_registry::types::Vault<

@@ -6,7 +6,6 @@ members = [
   "vault",
   "bitcoin",
   "faucet",
-  "service",
   "runner"
 ]
 
@@ -18,13 +17,10 @@ sp-keyring = { git = "https://github.com/paritytech//substrate", branch = "polka
 sp-runtime = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 
 [patch."https://github.com/paritytech/substrate"]
-frame-benchmarking = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 frame-support = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 frame-support-procedural = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 frame-support-procedural-tools = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 frame-support-procedural-tools-derive = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
-frame-system = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
-pallet-timestamp = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 sp-api = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 sp-application-crypto = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 sp-arithmetic = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
@@ -42,12 +38,8 @@ sp-staking = { git = "https://github.com/paritytech//substrate", branch = "polka
 sp-state-machine = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 sp-std = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 sp-storage = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
-sp-timestamp = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 sp-tracing = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 sp-trie = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 sp-version = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 sp-wasm-interface = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
 sp-weights = { git = "https://github.com/paritytech//substrate", branch = "polkadot-v0.9.42" }
-
-[patch."https://github.com/paritytech/polkadot"]
-xcm = { git = "https://github.com/paritytech//polkadot", branch = "release-v0.9.42" }

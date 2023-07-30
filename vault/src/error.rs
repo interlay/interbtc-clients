@@ -1,12 +1,12 @@
-use std::string::FromUtf8Error;
-
 use bitcoin::Error as BitcoinError;
 use jsonrpc_core_client::RpcError;
 use parity_scale_codec::Error as CodecError;
 use rocksdb::Error as RocksDbError;
 use runtime::Error as RuntimeError;
 use serde_json::Error as SerdeJsonError;
+use std::{io::Error as IoError, num::ParseIntError, string::FromUtf8Error};
 use thiserror::Error;
+use tokio::task::JoinError as TokioJoinError;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 #[derive(Error, Debug)]
@@ -44,10 +44,20 @@ pub enum Error {
     FromUtf8Error(#[from] FromUtf8Error),
     #[error("BroadcastStreamRecvError: {0}")]
     BroadcastStreamRecvError(#[from] BroadcastStreamRecvError),
-}
-
-impl From<Error> for service::Error<Error> {
-    fn from(err: Error) -> Self {
-        Self::Retry(err)
-    }
+    #[error("Client has shutdown")]
+    ClientShutdown,
+    #[error("OsString parsing error")]
+    OsStringError,
+    #[error("File already exists")]
+    FileAlreadyExists,
+    #[error("There is a services already running on the system, with pid {0}")]
+    ServiceAlreadyRunning(u32),
+    #[error("Process with pid {0} not found")]
+    ProcessNotFound(String),
+    #[error("ParseIntError: {0}")]
+    ParseIntError(#[from] ParseIntError),
+    #[error("TokioError: {0}")]
+    TokioError(#[from] TokioJoinError),
+    #[error("System I/O error: {0}")]
+    IoError(#[from] IoError),
 }

@@ -1,5 +1,9 @@
 use crate::{
-    cancellation::Event, error::Error, execution::Request, metrics::publish_expected_bitcoin_balance,
+    cancellation::Event,
+    error::Error,
+    execution::Request,
+    metrics::publish_expected_bitcoin_balance,
+    service::{spawn_cancelable, DynBitcoinCoreApi, ShutdownSender},
     system::VaultIdManager,
 };
 use bitcoin::Error as BitcoinError;
@@ -8,7 +12,6 @@ use runtime::{
     AcceptReplaceEvent, BtcAddress, CollateralBalancesPallet, ExecuteReplaceEvent, InterBtcParachain, PartialAddress,
     PrettyPrint, ReplacePallet, RequestReplaceEvent, UtilFuncs, VaultId, VaultRegistryPallet,
 };
-use service::{spawn_cancelable, DynBitcoinCoreApi, Error as ServiceError, ShutdownSender};
 use std::time::Duration;
 
 /// Listen for AcceptReplaceEvent directed at this vault and continue the replacement
@@ -26,7 +29,7 @@ pub async fn listen_for_accept_replace(
     num_confirmations: u32,
     payment_margin: Duration,
     auto_rbf: bool,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let parachain_rpc = &parachain_rpc;
     let vault_id_manager = &vault_id_manager;
     let shutdown_tx = &shutdown_tx;
@@ -93,7 +96,7 @@ pub async fn listen_for_replace_requests(
     btc_rpc: VaultIdManager,
     event_channel: Sender<Event>,
     accept_replace_requests: bool,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let parachain_rpc = &parachain_rpc;
     let btc_rpc = &btc_rpc;
     let event_channel = &event_channel;
@@ -185,7 +188,7 @@ pub async fn handle_replace_request<'a, P: CollateralBalancesPallet + ReplacePal
 pub async fn listen_for_execute_replace(
     parachain_rpc: InterBtcParachain,
     event_channel: Sender<Event>,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let event_channel = &event_channel;
     let parachain_rpc = &parachain_rpc;
     parachain_rpc
@@ -210,7 +213,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::{
         json, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, Network,
-        PrivateKey, PublicKey, SatPerVbyte, Transaction, TransactionMetadata, Txid,
+        PrivateKey, PublicKey, RawTransactionProof, SatPerVbyte, Transaction, TransactionMetadata, Txid,
     };
     use runtime::{
         AccountId, Balance, BtcAddress, BtcPublicKey, CurrencyId, Error as RuntimeError, InterBtcReplaceRequest,
@@ -329,7 +332,7 @@ mod tests {
         async fn request_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
         async fn withdraw_replace(&self, vault_id: &VaultId, amount: u128) -> Result<(), RuntimeError>;
         async fn accept_replace(&self, new_vault: &VaultId, old_vault: &VaultId, amount_btc: u128, collateral: u128, btc_address: BtcAddress) -> Result<(), RuntimeError>;
-        async fn execute_replace(&self, replace_id: H256, merkle_proof: &[u8], raw_tx: &[u8]) -> Result<(), RuntimeError>;
+        async fn execute_replace(&self, replace_id: H256, raw_proof: &RawTransactionProof) -> Result<(), RuntimeError>;
         async fn cancel_replace(&self, replace_id: H256) -> Result<(), RuntimeError>;
         async fn get_new_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;
         async fn get_old_vault_replace_requests(&self, account_id: AccountId) -> Result<Vec<(H256, InterBtcReplaceRequest)>, RuntimeError>;

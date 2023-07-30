@@ -4,10 +4,11 @@ use crate::{
     faucet, issue,
     metrics::{poll_metrics, publish_tokio_metrics, PerCurrencyMetrics},
     relay::run_relayer,
-    service::*,
+    service::{wait_or_shutdown, DynBitcoinCoreApi, MonitoringConfig, Service, ShutdownSender, *},
     Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
+use backoff::Error as BackoffError;
 use bitcoin::{Address, ConversionError, Error as BitcoinError, Network, PublicKey};
 use clap::Parser;
 use futures::{
@@ -22,7 +23,6 @@ use runtime::{
     PrettyPrint, RegisterVaultEvent, StoreMainChainHeaderEvent, TryFromSymbol, UpdateActiveBlockEvent, UtilFuncs,
     VaultCurrencyPair, VaultId, VaultRegistryPallet,
 };
-use service::{wait_or_shutdown, DynBitcoinCoreApi, Error as ServiceError, MonitoringConfig, Service, ShutdownSender};
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 use tokio::{sync::RwLock, time::sleep};
 
@@ -131,7 +131,7 @@ async fn active_block_listener(
     parachain_rpc: InterBtcParachain,
     issue_tx: Sender<Event>,
     replace_tx: Sender<Event>,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let issue_tx = &issue_tx;
     let replace_tx = &replace_tx;
     parachain_rpc
@@ -150,7 +150,7 @@ async fn relay_block_listener(
     parachain_rpc: InterBtcParachain,
     issue_tx: Sender<Event>,
     replace_tx: Sender<Event>,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let issue_tx = &issue_tx;
     let replace_tx = &replace_tx;
     parachain_rpc
@@ -356,7 +356,7 @@ impl VaultIdManager {
         Ok(())
     }
 
-    pub async fn listen_for_vault_id_registrations(self) -> Result<(), ServiceError<Error>> {
+    pub async fn listen_for_vault_id_registrations(self) -> Result<(), Error> {
         Ok(self
             .btc_parachain
             .on_event::<RegisterVaultEvent, _, _, _>(
@@ -420,7 +420,7 @@ pub struct VaultService {
 }
 
 #[async_trait]
-impl Service<VaultServiceConfig, Error> for VaultService {
+impl Service<VaultServiceConfig> for VaultService {
     const NAME: &'static str = NAME;
     const VERSION: &'static str = VERSION;
 
@@ -446,15 +446,12 @@ impl Service<VaultServiceConfig, Error> for VaultService {
         )
     }
 
-    async fn start(&self) -> Result<(), ServiceError<Error>> {
+    async fn start(&self) -> Result<(), BackoffError<Error>> {
         self.run_service().await
     }
 }
 
-async fn run_and_monitor_tasks(
-    shutdown_tx: ShutdownSender,
-    items: Vec<(&str, ServiceTask)>,
-) -> Result<(), ServiceError<Error>> {
+async fn run_and_monitor_tasks(shutdown_tx: ShutdownSender, items: Vec<(&str, ServiceTask)>) -> Result<(), Error> {
     let (metrics_iterators, tasks): (HashMap<String, _>, Vec<_>) = items
         .into_iter()
         .filter_map(|(name, task)| {
@@ -487,7 +484,7 @@ async fn run_and_monitor_tasks(
     }
 }
 
-type Task = Pin<Box<dyn Future<Output = Result<(), ServiceError<Error>>> + Send + 'static>>;
+type Task = Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'static>>;
 
 enum ServiceTask {
     Optional(bool, Task),
@@ -497,7 +494,7 @@ enum ServiceTask {
 fn maybe_run<F, E>(should_run: bool, task: F) -> ServiceTask
 where
     F: Future<Output = Result<(), E>> + Send + 'static,
-    E: Into<ServiceError<Error>>,
+    E: Into<Error>,
 {
     ServiceTask::Optional(should_run, Box::pin(task.map_err(|x| x.into())))
 }
@@ -505,7 +502,7 @@ where
 fn run<F, E>(task: F) -> ServiceTask
 where
     F: Future<Output = Result<(), E>> + Send + 'static,
-    E: Into<ServiceError<Error>>,
+    E: Into<Error>,
 {
     ServiceTask::Essential(Box::pin(task.map_err(|x| x.into())))
 }
@@ -584,9 +581,11 @@ impl VaultService {
         Ok(())
     }
 
-    async fn run_service(&self) -> Result<(), ServiceError<Error>> {
-        self.validate_bitcoin_network().await.map_err(ServiceError::Abort)?;
-
+    async fn run_service(&self) -> Result<(), BackoffError<Error>> {
+        //ToDo: remove service error put all errors in error
+        self.validate_bitcoin_network()
+            .await
+            .map_err(|err| BackoffError::Permanent(err))?;
         let account_id = self.btc_parachain.get_account_id().clone();
 
         let parsed_auto_register = self
@@ -596,18 +595,21 @@ impl VaultService {
             .into_iter()
             .map(|(symbol, amount)| Ok((CurrencyId::try_from_symbol(symbol)?, amount)))
             .into_iter()
-            .collect::<Result<Vec<_>, Error>>()
-            .map_err(ServiceError::Abort)?;
+            .collect::<Result<Vec<_>, Error>>()?;
 
         // exit if auto-register uses faucet and faucet url not set
         if parsed_auto_register.iter().any(|(_, o)| o.is_none()) && self.config.faucet_url.is_none() {
             // TODO: validate before bitcoin / parachain connections
-            return Err(ServiceError::Abort(Error::FaucetUrlNotSet));
+            return Err(BackoffError::Permanent(Error::FaucetUrlNotSet));
         }
 
         let num_confirmations = match self.config.btc_confirmations {
             Some(x) => x,
-            None => self.btc_parachain.get_bitcoin_confirmations().await?,
+            None => self
+                .btc_parachain
+                .get_bitcoin_confirmations()
+                .await
+                .map_err(|err| BackoffError::Transient::<Error>(err.into()))?,
         };
         tracing::info!("Using {} bitcoin confirmations", num_confirmations);
 
@@ -634,7 +636,7 @@ impl VaultService {
         .into_iter()
         .collect::<Result<(), Error>>()
         {
-            Err(Error::RuntimeError(err)) if err.is_threshold_not_set() => Err(ServiceError::Abort(err.into())),
+            Err(Error::RuntimeError(err)) if err.is_threshold_not_set() => Err(BackoffError::Permanent(err.into())),
             Err(err) => Err(err.into()),
             Ok(_) => Ok(()),
         }?;
@@ -663,7 +665,7 @@ impl VaultService {
         );
 
         let shutdown_clone = self.shutdown.clone();
-        service::spawn_cancelable(self.shutdown.subscribe(), async move {
+        spawn_cancelable(self.shutdown.subscribe(), async move {
             tracing::info!("Checking for open requests...");
             match open_request_executor.await {
                 Ok(_) => tracing::info!("Done processing open requests"),
@@ -687,7 +689,11 @@ impl VaultService {
         let random_delay: Arc<Box<dyn RandomDelay + Send + Sync>> = if self.config.no_random_delay {
             Arc::new(Box::new(ZeroDelay))
         } else {
-            Arc::new(Box::new(OrderedVaultsDelay::new(self.btc_parachain.clone()).await?))
+            Arc::new(Box::new(
+                OrderedVaultsDelay::new(self.btc_parachain.clone())
+                    .await
+                    .map_err(|err| BackoffError::Transient::<Error>(err.into()))?,
+            ))
         };
 
         let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
@@ -864,12 +870,13 @@ impl VaultService {
                 run(async move {
                     tokio::time::sleep(RESTART_INTERVAL).await;
                     tracing::info!("Initiating periodic restart...");
-                    Err(ServiceError::ClientShutdown)
+                    Err(Error::ClientShutdown)
                 }),
             ),
         ];
 
-        run_and_monitor_tasks(self.shutdown.clone(), tasks).await
+        run_and_monitor_tasks(self.shutdown.clone(), tasks).await?;
+        Ok(())
     }
 
     async fn maybe_register_public_key(&self) -> Result<(), Error> {

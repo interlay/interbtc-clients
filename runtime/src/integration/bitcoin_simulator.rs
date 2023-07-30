@@ -13,8 +13,8 @@ use bitcoin::{
     },
     secp256k1::{self, constants::SECRET_KEY_SIZE, Secp256k1, SecretKey},
     serialize, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, GetBlockResult,
-    Hash, Network, OutPoint, PartialMerkleTree, PrivateKey, PublicKey, SatPerVbyte, Script, Transaction,
-    TransactionExt, TransactionMetadata, TxIn, TxMerkleNode, TxOut, Txid, PUBLIC_KEY_SIZE,
+    Hash, Network, OutPoint, PartialMerkleTree, PrivateKey, PublicKey, RawTransactionProof, SatPerVbyte, Script,
+    Transaction, TransactionExt, TransactionMetadata, TxIn, TxMerkleNode, TxOut, Txid, PUBLIC_KEY_SIZE,
 };
 use rand::{thread_rng, Rng};
 use std::{convert::TryInto, sync::Arc, time::Duration};
@@ -54,7 +54,7 @@ impl MockBitcoinCore {
         ret.parachain_rpc
             .initialize_btc_relay(RawBlockHeader(raw_block_header), 0)
             .await
-            .unwrap();
+            .expect("failed to initialize relay");
 
         // submit blocks in order to prevent the WaitingForRelayerInitialization error in request_issue
         let headers = futures::future::join_all((0..7u32).map(|_| ret.generate_block_with_transaction(&dummy_tx)))
@@ -192,13 +192,28 @@ impl MockBitcoinCore {
     fn generate_coinbase_transaction(address: &BtcAddress, reward: u64, height: u32) -> Transaction {
         let address = ScriptBuf::from(address.to_script_pub_key().as_bytes().to_vec());
 
+        // construct height: see https://github.com/bitcoin/bips/blob/master/bip-0034.mediawiki
+        // first byte is number of bytes in the number (will be 0x03 on main net for the next
+        // 150 or so years with 223-1 blocks), following bytes are little-endian representation
+        // of the number (including a sign bit)
+        let mut height_bytes = height.to_le_bytes().to_vec();
+        for i in (1..4).rev() {
+            // remove trailing zeroes, but always keep first byte even if it's zero
+            if height_bytes[i] == 0 {
+                height_bytes.remove(i);
+            } else {
+                break;
+            }
+        }
+        height_bytes.insert(0, height_bytes.len() as u8);
+
         // note that we set lock_time to height, otherwise we might generate blocks with
         // identical block hashes
         Transaction {
             input: vec![TxIn {
                 previous_output: OutPoint::null(), // coinbase
                 witness: Witness::from_slice::<&[u8]>(&[]),
-                script_sig: Default::default(),
+                script_sig: ScriptBuf::from(height_bytes),
                 sequence: Sequence(u32::max_value()),
             }],
             output: vec![TxOut {
@@ -360,7 +375,16 @@ impl BitcoinCoreApi for MockBitcoinCore {
 
         // part two: info about the transactions (we assume the txid is at index 1)
         let txids = block.txdata.iter().map(|x| x.txid()).collect::<Vec<_>>();
-        let partial_merkle_tree = PartialMerkleTree::from_txids(&txids, &[false, true]);
+        assert_eq!(txids.len(), 2); // expect coinbase and user tx
+
+        let partial_merkle_tree = if txids[0] == txid {
+            PartialMerkleTree::from_txids(&txids, &[true, false])
+        } else if txids[1] == txid {
+            PartialMerkleTree::from_txids(&txids, &[false, true])
+        } else {
+            panic!("txid not in block")
+        };
+
         proof.append(&mut serialize(&partial_merkle_tree));
 
         Ok(proof)
@@ -441,13 +465,20 @@ impl BitcoinCoreApi for MockBitcoinCore {
             tokio::time::sleep(Duration::from_secs(1)).await;
         };
         let block_hash = block.block_hash();
-        let proof = self.get_proof(txid, &block_hash).await.unwrap();
-        let raw_tx = self.get_raw_tx(&txid, &block_hash).await.unwrap();
+        let coinbase_txid = block.coinbase().unwrap().txid();
+        let coinbase_tx_proof = self.get_proof(coinbase_txid, &block_hash).await.unwrap();
+        let raw_coinbase_tx = self.get_raw_tx(&coinbase_txid, &block_hash).await.unwrap();
+        let user_tx_proof = self.get_proof(txid, &block_hash).await.unwrap();
+        let raw_user_tx = self.get_raw_tx(&txid, &block_hash).await.unwrap();
 
         Ok(TransactionMetadata {
             block_hash,
-            proof,
-            raw_tx,
+            proof: RawTransactionProof {
+                user_tx_proof,
+                raw_user_tx,
+                coinbase_tx_proof,
+                raw_coinbase_tx,
+            },
             txid,
             block_height: block_height as u32,
             fee: None,

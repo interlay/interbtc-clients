@@ -1,6 +1,6 @@
 use crate::{
-    delay::RandomDelay, metrics::publish_expected_bitcoin_balance, system::DatabaseConfig, Error, Event, IssueRequests,
-    VaultIdManager,
+    delay::RandomDelay, metrics::publish_expected_bitcoin_balance, service::DynBitcoinCoreApi, system::DatabaseConfig,
+    Error, Event, IssueRequests, VaultIdManager,
 };
 use bitcoin::{BlockHash, Error as BitcoinError, Hash, PublicKey, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt, TryFutureExt};
@@ -9,7 +9,6 @@ use runtime::{
     InterBtcIssueRequest, InterBtcParachain, IssuePallet, IssueRequestStatus, PartialAddress, PrettyPrint,
     RequestIssueEvent, UtilFuncs, H256,
 };
-use service::{DynBitcoinCoreApi, Error as ServiceError};
 use sha2::{Digest, Sha256};
 use std::{
     sync::Arc,
@@ -48,7 +47,7 @@ pub async fn process_issue_requests(
     btc_start_height: u32,
     num_confirmations: u32,
     random_delay: Arc<Box<dyn RandomDelay + Send + Sync>>,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     // NOTE: we should not stream transactions if using the light client
     // since it is quite expensive to fetch all transactions per block
     let mut stream =
@@ -75,7 +74,7 @@ pub async fn process_issue_requests(
     }
 
     // stream closed, restart client
-    Err(ServiceError::ClientShutdown)
+    Err(Error::ClientShutdown)
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, PartialEq, Debug)]
@@ -296,12 +295,9 @@ async fn process_transaction_and_execute_issue(
                     return Ok(());
                 }
 
-                // found tx, submit proof
-                let txid = transaction.txid();
-
-                // bitcoin core is currently blocking, no need to try_join
-                let raw_tx = bitcoin_core.get_raw_tx(&txid, &block_hash).await?;
-                let proof = bitcoin_core.get_proof(txid, &block_hash).await?;
+                let tx_metadata = bitcoin_core
+                    .wait_for_transaction_metadata(transaction.txid(), num_confirmations)
+                    .await?;
 
                 tracing::info!(
                     "Executing issue #{:?} on behalf of user {:?} with vault {:?}",
@@ -309,7 +305,7 @@ async fn process_transaction_and_execute_issue(
                     issue.requester.pretty_print(),
                     issue.vault.pretty_print()
                 );
-                match btc_parachain.execute_issue(issue_id, &proof, &raw_tx).await {
+                match btc_parachain.execute_issue(issue_id, &tx_metadata.proof).await {
                     Ok(_) => (),
                     Err(err) if err.is_issue_completed() => {
                         tracing::info!("Issue #{} has already been completed", issue_id);
@@ -359,7 +355,7 @@ pub async fn listen_for_issue_requests(
     btc_parachain: InterBtcParachain,
     event_channel: Sender<Event>,
     issue_set: Arc<IssueRequests>,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let btc_parachain = &btc_parachain;
     let event_channel = &event_channel;
     let issue_set = &issue_set;
@@ -415,7 +411,7 @@ pub async fn listen_for_issue_executes(
     btc_parachain: InterBtcParachain,
     event_channel: Sender<Event>,
     issue_set: Arc<IssueRequests>,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let btc_parachain = &btc_parachain;
     let event_channel = &event_channel;
     let issue_set = &issue_set;
@@ -447,7 +443,7 @@ pub async fn listen_for_issue_executes(
 pub async fn listen_for_issue_cancels(
     btc_parachain: InterBtcParachain,
     issue_set: Arc<IssueRequests>,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let issue_set = &issue_set;
     btc_parachain
         .on_event::<CancelIssueEvent, _, _, _>(

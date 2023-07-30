@@ -292,7 +292,7 @@ mod tests {
         Block {
             txdata: transactions.into_iter().map(dummy_tx).collect(),
             header: BlockHeader {
-                version: Version::from_consensus(4),
+                version: Version::from_consensus(2),
                 bits: CompactTarget::from_consensus(0),
                 nonce: 0,
                 time: 0,
