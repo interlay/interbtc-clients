@@ -44,8 +44,6 @@ pub enum Error {
     FromUtf8Error(#[from] FromUtf8Error),
     #[error("BroadcastStreamRecvError: {0}")]
     BroadcastStreamRecvError(#[from] BroadcastStreamRecvError),
-
-    //imported from service error
     #[error("Abort Error")]
     Abort,
     #[error("Client has shutdown")]
