@@ -1,6 +1,6 @@
 use crate::{execution::*, system::VaultIdManager};
 use runtime::{InterBtcParachain, RequestRefundEvent};
-use crate::services::{spawn_cancelable, ShutdownSender};
+use crate::service::{spawn_cancelable, ShutdownSender};
 
 /// Listen for RequestRefundEvent directed at this vault; upon reception, transfer
 /// bitcoin and call execute_refund

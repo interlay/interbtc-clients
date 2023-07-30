@@ -3,7 +3,7 @@ use crate::{
     error::Error,
     execution::Request,
     metrics::publish_expected_bitcoin_balance,
-    services::{spawn_cancelable, DynBitcoinCoreApi, ShutdownSender},
+    service::{spawn_cancelable, DynBitcoinCoreApi, ShutdownSender},
     system::VaultIdManager,
 };
 use bitcoin::Error as BitcoinError;

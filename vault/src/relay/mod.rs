@@ -1,4 +1,4 @@
-use crate::{services::DynBitcoinCoreApi, Error as VaultError};
+use crate::{service::DynBitcoinCoreApi, Error as VaultError};
 use runtime::InterBtcParachain;
 use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;

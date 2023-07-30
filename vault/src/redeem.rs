@@ -1,7 +1,7 @@
 use crate::{
     execution::*,
     metrics::publish_expected_bitcoin_balance,
-    services::{spawn_cancelable, ShutdownSender},
+    service::{spawn_cancelable, ShutdownSender},
     system::VaultIdManager,
     Error,
 };

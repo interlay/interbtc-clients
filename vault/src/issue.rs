@@ -1,5 +1,5 @@
 use crate::{
-    delay::RandomDelay, metrics::publish_expected_bitcoin_balance, services::DynBitcoinCoreApi, system::DatabaseConfig,
+    delay::RandomDelay, metrics::publish_expected_bitcoin_balance, service::DynBitcoinCoreApi, system::DatabaseConfig,
     Error, Event, IssueRequests, VaultIdManager,
 };
 use bitcoin::{BlockHash, Error as BitcoinError, Hash, PublicKey, Transaction, TransactionExt};

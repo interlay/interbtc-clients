@@ -1,5 +1,10 @@
+pub use crate::{
+    cli::{LoggingFormat, MonitoringConfig, RestartPolicy, ServiceConfig},
+    trace::init_subscriber,
+    Error,
+};
 use async_trait::async_trait;
-use backoff::{retry, ExponentialBackoff};
+use backoff::ExponentialBackoff;
 use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCoreApi, Error as BitcoinError};
 use futures::{future::Either, Future, FutureExt};
 use governor::{Quota, RateLimiter};
@@ -8,13 +13,8 @@ use runtime::{
     cli::ConnectionOpts as ParachainConfig, CurrencyId, InterBtcParachain as BtcParachain, InterBtcSigner, PrettyPrint,
     RuntimeCurrencyInfo, VaultId,
 };
-use std::{fmt, sync::Arc, time::Duration};
-mod cli;
-pub mod trace;
-pub use crate::Error;
-pub use cli::{LoggingFormat, MonitoringConfig, RestartPolicy, ServiceConfig};
 pub use runtime::{ShutdownReceiver, ShutdownSender};
-pub use trace::init_subscriber;
+use std::{sync::Arc, time::Duration};
 pub use warp;
 
 pub type DynBitcoinCoreApi = Arc<dyn BitcoinCoreApi + Send + Sync>;
@@ -218,12 +218,4 @@ where
     <T as futures::Future>::Output: Send,
 {
     tokio::spawn(run_cancelable(shutdown_rx, future));
-}
-
-pub async fn on_shutdown(shutdown_tx: ShutdownSender, future2: impl Future) {
-    let mut shutdown_rx = shutdown_tx.subscribe();
-    let future1 = shutdown_rx.recv().fuse();
-
-    let _ = future1.await;
-    future2.await;
 }

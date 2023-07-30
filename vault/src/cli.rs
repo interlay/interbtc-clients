@@ -1,4 +1,4 @@
-use crate::services::trace;
+use crate::trace;
 use clap::Parser;
 use std::str::FromStr;
 

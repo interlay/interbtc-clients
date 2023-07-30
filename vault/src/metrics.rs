@@ -2,7 +2,7 @@ use std::{collections::HashMap, convert::TryInto, sync::Arc};
 
 use crate::{
     execution::parachain_blocks_to_bitcoin_blocks_rounded_up,
-    services::{
+    service::{
         warp::{Rejection, Reply},
         DynBitcoinCoreApi,
     },

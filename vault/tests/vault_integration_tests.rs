@@ -18,7 +18,7 @@ use runtime::{
 use serial_test::serial;
 use sp_keyring::AccountKeyring;
 use std::{process::Child, sync::Arc, time::Duration};
-use vault::{self, services::DynBitcoinCoreApi, Event as CancellationEvent, IssueRequests, VaultIdManager, ZeroDelay};
+use vault::{self, service::DynBitcoinCoreApi, Event as CancellationEvent, IssueRequests, VaultIdManager, ZeroDelay};
 
 const TIMEOUT: Duration = Duration::from_secs(90);
 
@@ -32,7 +32,7 @@ where
 {
     let _parachain_runner: Child = start_chain().await.unwrap();
 
-    vault::services::init_subscriber();
+    vault::service::init_subscriber();
     let (parachain_rpc, _tmp_dir) = default_root_provider(AccountKeyring::Alice).await;
 
     parachain_rpc

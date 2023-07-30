@@ -4,8 +4,7 @@ use crate::{
     faucet, issue,
     metrics::{poll_metrics, publish_tokio_metrics, PerCurrencyMetrics},
     relay::run_relayer,
-    service::*,
-    services::{wait_or_shutdown, DynBitcoinCoreApi, MonitoringConfig, Service, ShutdownSender},
+    service::{wait_or_shutdown, DynBitcoinCoreApi, MonitoringConfig, Service, ShutdownSender, *},
     Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
@@ -665,7 +664,7 @@ impl VaultService {
         );
 
         let shutdown_clone = self.shutdown.clone();
-        crate::services::spawn_cancelable(self.shutdown.subscribe(), async move {
+        spawn_cancelable(self.shutdown.subscribe(), async move {
             tracing::info!("Checking for open requests...");
             match open_request_executor.await {
                 Ok(_) => tracing::info!("Done processing open requests"),
@@ -707,7 +706,7 @@ impl VaultService {
         let listen_for_fee_rate_estimate_changes =
             |rpc: InterBtcParachain| async move { rpc.listen_for_fee_rate_changes().await };
 
-        tracing::info!("Starting all services...");
+        tracing::info!("Starting all service...");
         let tasks = vec![
             (
                 "Registered Asset Listener",

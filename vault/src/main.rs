@@ -18,7 +18,7 @@ use tokio_stream::StreamExt;
 use vault::{
     metrics::{self, increment_restart_counter},
     process::PidFile,
-    services::{warp, warp::Filter, ConnectionManager, MonitoringConfig, ServiceConfig},
+    service::{warp, warp::Filter, ConnectionManager, MonitoringConfig, ServiceConfig},
     Error, VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION,
 };
 

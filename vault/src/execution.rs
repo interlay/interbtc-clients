@@ -1,7 +1,7 @@
 use crate::{
     error::Error,
     metrics::update_bitcoin_metrics,
-    services::{spawn_cancelable, DynBitcoinCoreApi, ShutdownSender},
+    service::{spawn_cancelable, DynBitcoinCoreApi, ShutdownSender},
     system::VaultData,
     VaultIdManager, YIELD_RATE,
 };
