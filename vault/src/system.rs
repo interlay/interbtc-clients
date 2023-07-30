@@ -8,6 +8,7 @@ use crate::{
     Event, IssueRequests, CHAIN_HEIGHT_POLLING_INTERVAL,
 };
 use async_trait::async_trait;
+use backoff::Error as BackoffError;
 use bitcoin::{Address, ConversionError, Error as BitcoinError, Network, PublicKey};
 use clap::Parser;
 use futures::{
@@ -445,7 +446,7 @@ impl Service<VaultServiceConfig> for VaultService {
         )
     }
 
-    async fn start(&self) -> Result<(), backoff::Error<Error>> {
+    async fn start(&self) -> Result<(), BackoffError<Error>> {
         self.run_service().await
     }
 }
@@ -580,11 +581,11 @@ impl VaultService {
         Ok(())
     }
 
-    async fn run_service(&self) -> Result<(), backoff::Error<Error>> {
+    async fn run_service(&self) -> Result<(), BackoffError<Error>> {
         //ToDo: remove service error put all errors in error
         self.validate_bitcoin_network()
             .await
-            .map_err(|err| backoff::Error::Permanent(err))?;
+            .map_err(|err| BackoffError::Permanent(err))?;
         let account_id = self.btc_parachain.get_account_id().clone();
 
         let parsed_auto_register = self
@@ -599,7 +600,7 @@ impl VaultService {
         // exit if auto-register uses faucet and faucet url not set
         if parsed_auto_register.iter().any(|(_, o)| o.is_none()) && self.config.faucet_url.is_none() {
             // TODO: validate before bitcoin / parachain connections
-            return Err(backoff::Error::Permanent(Error::Abort));
+            return Err(BackoffError::Permanent(Error::Abort));
         }
 
         let num_confirmations = match self.config.btc_confirmations {
@@ -608,7 +609,7 @@ impl VaultService {
                 .btc_parachain
                 .get_bitcoin_confirmations()
                 .await
-                .map_err(|err| backoff::Error::Transient::<Error>(err.into()))?,
+                .map_err(|err| BackoffError::Transient::<Error>(err.into()))?,
         };
         tracing::info!("Using {} bitcoin confirmations", num_confirmations);
 
@@ -635,7 +636,7 @@ impl VaultService {
         .into_iter()
         .collect::<Result<(), Error>>()
         {
-            Err(Error::RuntimeError(err)) if err.is_threshold_not_set() => Err(backoff::Error::Permanent(Error::Abort)),
+            Err(Error::RuntimeError(err)) if err.is_threshold_not_set() => Err(BackoffError::Permanent(Error::Abort)),
             Err(err) => Err(err.into()),
             Ok(_) => Ok(()),
         }?;
@@ -691,7 +692,7 @@ impl VaultService {
             Arc::new(Box::new(
                 OrderedVaultsDelay::new(self.btc_parachain.clone())
                     .await
-                    .map_err(|err| backoff::Error::Transient::<Error>(err.into()))?,
+                    .map_err(|err| BackoffError::Transient::<Error>(err.into()))?,
             ))
         };
 
@@ -706,7 +707,7 @@ impl VaultService {
         let listen_for_fee_rate_estimate_changes =
             |rpc: InterBtcParachain| async move { rpc.listen_for_fee_rate_changes().await };
 
-        tracing::info!("Starting all service...");
+        tracing::info!("Starting all services...");
         let tasks = vec![
             (
                 "Registered Asset Listener",

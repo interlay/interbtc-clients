@@ -4,7 +4,7 @@ pub use crate::{
     Error,
 };
 use async_trait::async_trait;
-use backoff::ExponentialBackoff;
+use backoff::{Error as BackoffError, ExponentialBackoff};
 use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCoreApi, Error as BitcoinError};
 use futures::{future::Either, Future, FutureExt};
 use governor::{Quota, RateLimiter};
@@ -34,7 +34,7 @@ pub trait Service<Config> {
         constructor: Box<dyn Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync>,
         keyname: String,
     ) -> Self;
-    async fn start(&self) -> Result<(), backoff::Error<Error>>;
+    async fn start(&self) -> Result<(), BackoffError<Error>>;
 }
 
 pub struct ConnectionManager<Config: Clone, F: Fn()> {
@@ -137,10 +137,9 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
 
             let backoff = ExponentialBackoff::default();
 
-            backoff::future::retry::<(), Error, _, _, _>(backoff, || async {
+            backoff::future::retry(backoff, || async {
                 match service.start().await {
                     Ok(()) => Ok(()),
-                    //ToDo: log errors only return for Permanent error, others ignore
                     Err(err) => Err(err),
                 }
             })
