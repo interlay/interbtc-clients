@@ -36,8 +36,8 @@ pub use bitcoincore_rpc::{
         Transaction, TxIn, TxOut, Txid, VarInt, WScriptHash,
     },
     bitcoincore_rpc_json::{
-        CreateRawTransactionInput, FundRawTransactionOptions, GetBlockchainInfoResult, GetTransactionResult,
-        GetTransactionResultDetailCategory, WalletTxInfo,
+        CreateRawTransactionInput, FundRawTransactionOptions, GetBlockchainInfoResult, GetRawTransactionResult,
+        GetTransactionResult, GetTransactionResultDetailCategory, WalletTxInfo,
     },
     json::{self, AddressType, GetBlockResult},
     jsonrpc::{self, error::RpcError, Error as JsonRpcError},
@@ -128,7 +128,6 @@ pub struct SatPerVbyte(pub u64);
 pub struct TransactionMetadata {
     pub txid: Txid,
     pub proof: RawTransactionProof,
-    pub block_height: u32,
     pub block_hash: BlockHash,
     pub fee: Option<SignedAmount>,
 }
@@ -185,6 +184,8 @@ pub trait BitcoinCoreApi {
         &self,
         txid: Txid,
         num_confirmations: u32,
+        block_hash: Option<BlockHash>,
+        is_wallet: bool,
     ) -> Result<TransactionMetadata, Error>;
 
     async fn bump_fee(&self, txid: &Txid, address: Address, fee_rate: SatPerVbyte) -> Result<Txid, Error>;
@@ -867,27 +868,47 @@ impl BitcoinCoreApi for BitcoinCore {
     /// # Arguments
     /// * `txid` - transaction ID
     /// * `num_confirmations` - how many confirmations we need to wait for
+    /// * `block_hash` - optional block hash
     async fn wait_for_transaction_metadata(
         &self,
         txid: Txid,
         num_confirmations: u32,
+        block_hash: Option<BlockHash>,
+        is_wallet: bool,
     ) -> Result<TransactionMetadata, Error> {
-        let (block_height, block_hash, fee) = retry(get_exponential_backoff(), || async {
-            Ok(match self.rpc.get_transaction(&txid, None) {
-                Ok(GetTransactionResult {
-                    info:
-                        WalletTxInfo {
-                            confirmations,
-                            blockhash: Some(hash),
-                            blockheight: Some(height),
-                            ..
-                        },
-                    fee,
-                    ..
-                }) if confirmations >= 0 && confirmations as u32 >= num_confirmations => Ok((height, hash, fee)),
-                Ok(_) => Err(Error::ConfirmationError),
-                Err(e) => Err(e.into()),
-            }?)
+        let (block_hash, fee) = retry(get_exponential_backoff(), || async {
+            if is_wallet {
+                Ok(match self.rpc.get_transaction(&txid, None) {
+                    Ok(GetTransactionResult {
+                        info:
+                            WalletTxInfo {
+                                confirmations,
+                                blockhash: Some(hash),
+                                ..
+                            },
+                        fee,
+                        ..
+                    }) if confirmations >= 0 && confirmations as u32 >= num_confirmations => Ok((hash, fee)),
+                    Ok(_) => Err(Error::ConfirmationError),
+                    Err(e) => {
+                        log::error!("{}", e);
+                        Err(e.into())
+                    }
+                }?)
+            } else {
+                Ok(match self.rpc.get_raw_transaction_info(&txid, block_hash.as_ref()) {
+                    Ok(GetRawTransactionResult {
+                        confirmations: Some(num),
+                        blockhash: Some(hash),
+                        ..
+                    }) if num >= num_confirmations => Ok((hash, None)),
+                    Ok(_) => Err(Error::ConfirmationError),
+                    Err(e) => {
+                        log::error!("{}", e);
+                        Err(e.into())
+                    }
+                }?)
+            }
         })
         .await?;
 
@@ -915,7 +936,6 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(TransactionMetadata {
             txid,
             proof,
-            block_height,
             block_hash,
             fee,
         })
@@ -1005,7 +1025,9 @@ impl BitcoinCoreApi for BitcoinCore {
             .create_and_send_transaction(address, sat, fee_rate, request_id)
             .await?;
 
-        Ok(self.wait_for_transaction_metadata(txid, num_confirmations).await?)
+        Ok(self
+            .wait_for_transaction_metadata(txid, num_confirmations, None, true)
+            .await?)
     }
 
     /// Create or load a wallet on Bitcoin Core.

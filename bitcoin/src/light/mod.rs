@@ -225,15 +225,17 @@ impl BitcoinCoreApi for BitcoinLight {
         &self,
         txid: Txid,
         num_confirmations: u32,
+        _block_hash: Option<BlockHash>,
+        _is_wallet: bool,
     ) -> Result<TransactionMetadata, BitcoinError> {
-        let (block_height, block_hash, fee) = retry(get_exponential_backoff(), || async {
+        let (block_hash, fee) = retry(get_exponential_backoff(), || async {
             Ok(match self.electrs.get_tx_info(&txid).await {
                 Ok(electrs::TxInfo {
                     confirmations,
-                    height,
                     hash,
                     fee,
-                }) if confirmations >= num_confirmations => Ok((height, hash, fee)),
+                    ..
+                }) if confirmations >= num_confirmations => Ok((hash, fee)),
                 Ok(_) => Err(BitcoinError::ConfirmationError),
                 Err(_e) => Err(BitcoinError::ConnectionRefused),
             }?)
@@ -262,7 +264,6 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(TransactionMetadata {
             txid,
             proof,
-            block_height,
             block_hash,
             fee: Some(fee),
         })
@@ -319,7 +320,9 @@ impl BitcoinCoreApi for BitcoinLight {
             .create_and_send_transaction(address, sat, fee_rate, request_id)
             .await?;
 
-        Ok(self.wait_for_transaction_metadata(txid, num_confirmations).await?)
+        Ok(self
+            .wait_for_transaction_metadata(txid, num_confirmations, None, true)
+            .await?)
     }
 
     async fn create_or_load_wallet(&self) -> Result<(), BitcoinError> {

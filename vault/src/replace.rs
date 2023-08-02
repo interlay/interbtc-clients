@@ -264,6 +264,8 @@ mod tests {
                 &self,
                 txid: Txid,
                 num_confirmations: u32,
+                block_hash: Option<BlockHash>,
+                is_wallet: bool,
             ) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_and_send_transaction(
                 &self,

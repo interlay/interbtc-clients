@@ -301,7 +301,8 @@ impl Request {
                     }
                 });
 
-            let wait_for_transaction_metadata = btc_rpc.wait_for_transaction_metadata(txid, num_confirmations);
+            let wait_for_transaction_metadata =
+                btc_rpc.wait_for_transaction_metadata(txid, num_confirmations, None, true);
             futures::pin_mut!(subscription);
 
             let mut metadata_fut = wait_for_transaction_metadata;
@@ -811,7 +812,7 @@ mod tests {
             async fn get_block(&self, hash: &BlockHash) -> Result<Block, BitcoinError>;
             async fn get_block_header(&self, hash: &BlockHash) -> Result<BlockHeader, BitcoinError>;
             async fn get_mempool_transactions<'a>(&'a self) -> Result<Box<dyn Iterator<Item = Result<Transaction, BitcoinError>> + Send + 'a>, BitcoinError>;
-            async fn wait_for_transaction_metadata(&self, txid: Txid, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
+            async fn wait_for_transaction_metadata(&self, txid: Txid, num_confirmations: u32, block_hash: Option<BlockHash>, is_wallet: bool) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_and_send_transaction(&self, address: Address, sat: u64, fee_rate: SatPerVbyte, request_id: Option<H256>) -> Result<Txid, BitcoinError>;
             async fn send_to_address(&self, address: Address, sat: u64, request_id: Option<H256>, fee_rate: SatPerVbyte, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;
@@ -923,20 +924,21 @@ mod tests {
             mock_bitcoin
                 .expect_create_and_send_transaction()
                 .returning(|_, _, _, _| Ok(Txid::all_zeros()));
-            mock_bitcoin.expect_wait_for_transaction_metadata().returning(|_, _| {
-                Ok(TransactionMetadata {
-                    txid: Txid::all_zeros(),
-                    proof: RawTransactionProof {
-                        coinbase_tx_proof: vec![],
-                        raw_coinbase_tx: vec![],
-                        raw_user_tx: vec![],
-                        user_tx_proof: vec![],
-                    },
-                    block_height: 0,
-                    block_hash: BlockHash::all_zeros(),
-                    fee: None,
-                })
-            });
+            mock_bitcoin
+                .expect_wait_for_transaction_metadata()
+                .returning(|_, _, _, _| {
+                    Ok(TransactionMetadata {
+                        txid: Txid::all_zeros(),
+                        proof: RawTransactionProof {
+                            coinbase_tx_proof: vec![],
+                            raw_coinbase_tx: vec![],
+                            raw_user_tx: vec![],
+                            user_tx_proof: vec![],
+                        },
+                        block_hash: BlockHash::all_zeros(),
+                        fee: None,
+                    })
+                });
             mock_bitcoin.expect_list_transactions().returning(|_| Ok(vec![]));
             mock_bitcoin.expect_get_balance().returning(|_| Ok(Amount::ZERO));
             let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
@@ -1058,20 +1060,21 @@ mod tests {
         mock_bitcoin
             .expect_create_and_send_transaction()
             .returning(|_, _, _, _| Ok(Txid::all_zeros()));
-        mock_bitcoin.expect_wait_for_transaction_metadata().returning(|_, _| {
-            Ok(TransactionMetadata {
-                txid: Txid::all_zeros(),
-                proof: RawTransactionProof {
-                    coinbase_tx_proof: vec![],
-                    raw_coinbase_tx: vec![],
-                    raw_user_tx: vec![],
-                    user_tx_proof: vec![],
-                },
-                block_height: 0,
-                block_hash: BlockHash::all_zeros(),
-                fee: None,
-            })
-        });
+        mock_bitcoin
+            .expect_wait_for_transaction_metadata()
+            .returning(|_, _, _, _| {
+                Ok(TransactionMetadata {
+                    txid: Txid::all_zeros(),
+                    proof: RawTransactionProof {
+                        coinbase_tx_proof: vec![],
+                        raw_coinbase_tx: vec![],
+                        raw_user_tx: vec![],
+                        user_tx_proof: vec![],
+                    },
+                    block_hash: BlockHash::all_zeros(),
+                    fee: None,
+                })
+            });
         mock_bitcoin.expect_get_balance().returning(|_| Ok(Amount::ZERO));
         let btc_rpc: DynBitcoinCoreApi = Arc::new(mock_bitcoin);
 

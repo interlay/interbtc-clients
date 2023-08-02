@@ -297,7 +297,7 @@ async fn process_transaction_and_execute_issue(
                 }
 
                 let tx_metadata = bitcoin_core
-                    .wait_for_transaction_metadata(transaction.txid(), num_confirmations)
+                    .wait_for_transaction_metadata(transaction.txid(), num_confirmations, Some(block_hash), false)
                     .await?;
 
                 tracing::info!(
