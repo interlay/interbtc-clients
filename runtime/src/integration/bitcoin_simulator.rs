@@ -284,7 +284,7 @@ impl MockBitcoinCore {
             .await?;
         let txid = self.send_transaction(&tx).await?;
         let metadata = self
-            .wait_for_transaction_metadata(txid, num_confirmations)
+            .wait_for_transaction_metadata(txid, num_confirmations, None, true)
             .await
             .unwrap();
         Ok(metadata)
@@ -454,6 +454,8 @@ impl BitcoinCoreApi for MockBitcoinCore {
         &self,
         txid: Txid,
         _num_confirmations: u32,
+        _block_hash: Option<BlockHash>,
+        _is_wallet: bool,
     ) -> Result<TransactionMetadata, BitcoinError> {
         let (block_height, block) = loop {
             // we have to be careful not to deadlock, so limit the scope of the lock
@@ -480,7 +482,6 @@ impl BitcoinCoreApi for MockBitcoinCore {
                 raw_coinbase_tx,
             },
             txid,
-            block_height: block_height as u32,
             fee: None,
         })
     }
@@ -508,7 +509,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
             .await
             .unwrap();
         let metadata = self
-            .wait_for_transaction_metadata(txid, num_confirmations)
+            .wait_for_transaction_metadata(txid, num_confirmations, None, true)
             .await
             .unwrap();
         Ok(metadata)

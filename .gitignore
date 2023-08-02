@@ -13,3 +13,4 @@ vault-*-metadata
 kv
 *.wif
 .idea/*
+*.db
