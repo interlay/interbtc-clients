@@ -1,6 +1,11 @@
-use crate::{execution::*, metrics::publish_expected_bitcoin_balance, system::VaultIdManager, Error};
+use crate::{
+    execution::*,
+    metrics::publish_expected_bitcoin_balance,
+    service::{spawn_cancelable, ShutdownSender},
+    system::VaultIdManager,
+    Error,
+};
 use runtime::{InterBtcParachain, RedeemPallet, RequestRedeemEvent};
-use service::{spawn_cancelable, Error as ServiceError, ShutdownSender};
 use std::time::Duration;
 /// Listen for RequestRedeemEvent directed at this vault; upon reception, transfer
 /// bitcoin and call execute_redeem
@@ -18,7 +23,7 @@ pub async fn listen_for_redeem_requests(
     num_confirmations: u32,
     payment_margin: Duration,
     auto_rbf: bool,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     parachain_rpc
         .on_event::<RequestRedeemEvent, _, _, _>(
             |event| async {

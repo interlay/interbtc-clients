@@ -1,4 +1,10 @@
+pub use crate::{
+    cli::{LoggingFormat, MonitoringConfig, RestartPolicy, ServiceConfig},
+    trace::init_subscriber,
+    Error,
+};
 use async_trait::async_trait;
+use backoff::Error as BackoffError;
 use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCoreApi, Error as BitcoinError};
 use futures::{future::Either, Future, FutureExt};
 use governor::{Quota, RateLimiter};
@@ -7,22 +13,14 @@ use runtime::{
     cli::ConnectionOpts as ParachainConfig, CurrencyId, InterBtcParachain as BtcParachain, InterBtcSigner, PrettyPrint,
     RuntimeCurrencyInfo, VaultId,
 };
-use std::{fmt, sync::Arc, time::Duration};
-
-mod cli;
-mod error;
-mod trace;
-
-pub use cli::{LoggingFormat, MonitoringConfig, RestartPolicy, ServiceConfig};
-pub use error::Error;
 pub use runtime::{ShutdownReceiver, ShutdownSender};
-pub use trace::init_subscriber;
+use std::{sync::Arc, time::Duration};
 pub use warp;
 
 pub type DynBitcoinCoreApi = Arc<dyn BitcoinCoreApi + Send + Sync>;
 
 #[async_trait]
-pub trait Service<Config, InnerError> {
+pub trait Service<Config> {
     const NAME: &'static str;
     const VERSION: &'static str;
 
@@ -36,7 +34,7 @@ pub trait Service<Config, InnerError> {
         constructor: Box<dyn Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync>,
         keyname: String,
     ) -> Self;
-    async fn start(&self) -> Result<(), Error<InnerError>>;
+    async fn start(&self) -> Result<(), BackoffError<Error>>;
 }
 
 pub struct ConnectionManager<Config: Clone, F: Fn()> {
@@ -77,9 +75,7 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
         }
     }
 
-    pub async fn start<S: Service<Config, InnerError>, InnerError: fmt::Display>(
-        &self,
-    ) -> Result<(), Error<InnerError>> {
+    pub async fn start<S: Service<Config>>(&self) -> Result<(), Error> {
         loop {
             tracing::info!("Version: {}", S::VERSION);
             tracing::info!("AccountId: {}", self.signer.account_id.pretty_print());
@@ -138,10 +134,11 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
                 Box::new(constructor),
                 self.db_path.clone(),
             );
+
             match service.start().await {
-                Err(err @ Error::Abort(_)) => {
+                Err(err @ backoff::Error::Permanent(_)) => {
                     tracing::warn!("Disconnected: {}", err);
-                    return Err(err);
+                    return Err(err.into());
                 }
                 Err(err) => {
                     tracing::warn!("Disconnected: {}", err);
@@ -149,7 +146,8 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
                 _ => {
                     tracing::warn!("Disconnected");
                 }
-            }
+            };
+
             // propagate shutdown signal from main tasks
             let _ = shutdown_tx.send(());
 
@@ -222,12 +220,4 @@ where
     <T as futures::Future>::Output: Send,
 {
     tokio::spawn(run_cancelable(shutdown_rx, future));
-}
-
-pub async fn on_shutdown(shutdown_tx: ShutdownSender, future2: impl Future) {
-    let mut shutdown_rx = shutdown_tx.subscribe();
-    let future1 = shutdown_rx.recv().fuse();
-
-    let _ = future1.await;
-    future2.await;
 }

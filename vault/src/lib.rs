@@ -2,6 +2,8 @@
 #![feature(array_zip)]
 
 mod cancellation;
+mod cli;
+mod connection_manager;
 pub mod delay;
 mod error;
 mod execution;
@@ -13,11 +15,16 @@ mod redeem;
 pub mod relay;
 mod replace;
 mod system;
+mod trace;
 mod types;
 
 pub mod service {
     pub use crate::{
         cancellation::{CancellationScheduler, IssueCanceller, ReplaceCanceller},
+        connection_manager::{
+            init_subscriber, spawn_cancelable, wait_or_shutdown, warp, warp::Filter, ConnectionManager,
+            DynBitcoinCoreApi, MonitoringConfig, Service, ServiceConfig, ShutdownSender,
+        },
         execution::execute_open_requests,
         issue::{
             listen_for_issue_cancels, listen_for_issue_executes, listen_for_issue_requests, process_issue_requests,

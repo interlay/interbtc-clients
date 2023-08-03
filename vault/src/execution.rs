@@ -1,4 +1,10 @@
-use crate::{error::Error, metrics::update_bitcoin_metrics, system::VaultData, VaultIdManager, YIELD_RATE};
+use crate::{
+    error::Error,
+    metrics::update_bitcoin_metrics,
+    service::{spawn_cancelable, DynBitcoinCoreApi, ShutdownSender},
+    system::VaultData,
+    VaultIdManager, YIELD_RATE,
+};
 use bitcoin::{
     Error as BitcoinError, Hash, SatPerVbyte, Transaction, TransactionExt, TransactionMetadata, Txid,
     BLOCK_INTERVAL as BITCOIN_BLOCK_INTERVAL,
@@ -11,7 +17,6 @@ use runtime::{
     RedeemRequestStatus, ReplacePallet, ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet,
     H256,
 };
-use service::{spawn_cancelable, DynBitcoinCoreApi, Error as ServiceError, ShutdownSender};
 use std::{collections::HashMap, convert::TryInto, time::Duration};
 use tokio::time::sleep;
 use tokio_stream::wrappers::BroadcastStream;
@@ -476,7 +481,7 @@ pub async fn execute_open_requests(
     num_confirmations: u32,
     payment_margin: Duration,
     auto_rbf: bool,
-) -> Result<(), ServiceError<Error>> {
+) -> Result<(), Error> {
     let parachain_rpc = &parachain_rpc;
     let vault_id = parachain_rpc.get_account_id().clone();
 

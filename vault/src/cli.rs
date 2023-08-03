@@ -1,3 +1,4 @@
+use crate::trace;
 use clap::Parser;
 use std::str::FromStr;
 
@@ -44,8 +45,8 @@ impl FromStr for LoggingFormat {
 impl LoggingFormat {
     pub fn init_subscriber(&self) {
         match *self {
-            Self::Full => crate::trace::init_subscriber(),
-            Self::Json => crate::trace::init_json_subscriber(),
+            Self::Full => trace::init_subscriber(),
+            Self::Json => trace::init_json_subscriber(),
         }
     }
 }

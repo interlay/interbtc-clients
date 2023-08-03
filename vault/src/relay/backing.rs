@@ -1,7 +1,7 @@
 use super::Error;
+use crate::service::DynBitcoinCoreApi;
 use async_trait::async_trait;
 use bitcoin::{serialize, BitcoinCoreApi, Error as BitcoinError};
-use service::DynBitcoinCoreApi;
 
 #[async_trait]
 pub trait Backing {
