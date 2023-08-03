@@ -582,7 +582,6 @@ impl VaultService {
     }
 
     async fn run_service(&self) -> Result<(), BackoffError<Error>> {
-        //ToDo: remove service error put all errors in error
         self.validate_bitcoin_network()
             .await
             .map_err(|err| BackoffError::Permanent(err))?;
@@ -609,7 +608,7 @@ impl VaultService {
                 .btc_parachain
                 .get_bitcoin_confirmations()
                 .await
-                .map_err(|err| BackoffError::Transient::<Error>(err.into()))?,
+                .map_err(|err| Error::RuntimeError(err))?,
         };
         tracing::info!("Using {} bitcoin confirmations", num_confirmations);
 
@@ -692,7 +691,7 @@ impl VaultService {
             Arc::new(Box::new(
                 OrderedVaultsDelay::new(self.btc_parachain.clone())
                     .await
-                    .map_err(|err| BackoffError::Transient::<Error>(err.into()))?,
+                    .map_err(|err| Error::RuntimeError(err))?,
             ))
         };
 

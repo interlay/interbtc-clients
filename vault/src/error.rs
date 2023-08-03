@@ -61,3 +61,12 @@ pub enum Error {
     #[error("System I/O error: {0}")]
     IoError(#[from] IoError),
 }
+
+impl From<backoff::Error<Error>> for Error {
+    fn from(err: backoff::Error<Error>) -> Self {
+        match err {
+            backoff::Error::Permanent(err) => err,
+            backoff::Error::Transient(err) => err,
+        }
+    }
+}

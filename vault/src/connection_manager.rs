@@ -4,7 +4,7 @@ pub use crate::{
     Error,
 };
 use async_trait::async_trait;
-use backoff::{Error as BackoffError, ExponentialBackoff};
+use backoff::Error as BackoffError;
 use bitcoin::{cli::BitcoinOpts as BitcoinConfig, BitcoinCoreApi, Error as BitcoinError};
 use futures::{future::Either, Future, FutureExt};
 use governor::{Quota, RateLimiter};
@@ -135,15 +135,18 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
                 self.db_path.clone(),
             );
 
-            let backoff = ExponentialBackoff::default();
-
-            backoff::future::retry(backoff, || async {
-                match service.start().await {
-                    Ok(()) => Ok(()),
-                    Err(err) => Err(err),
+            match service.start().await {
+                Err(err @ backoff::Error::Permanent(_)) => {
+                    tracing::warn!("Disconnected: {}", err);
+                    return Err(err.into());
                 }
-            })
-            .await?;
+                Err(err) => {
+                    tracing::warn!("Disconnected: {}", err);
+                }
+                _ => {
+                    tracing::warn!("Disconnected");
+                }
+            };
 
             // propagate shutdown signal from main tasks
             let _ = shutdown_tx.send(());
