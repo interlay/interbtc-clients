@@ -1,4 +1,4 @@
-use bitcoin::{Network, PrivateKey};
+use bitcoin::{BitcoinCoreApi, BlockHash, Network, PrivateKey, Txid};
 use clap::Parser;
 use futures::Future;
 use runtime::{
@@ -12,6 +12,8 @@ use std::{
     io::Write,
     net::{Ipv4Addr, SocketAddr},
     path::PathBuf,
+    str::FromStr,
+    sync::Arc,
 };
 use sysinfo::{System, SystemExt};
 use tokio_stream::StreamExt;
@@ -38,6 +40,8 @@ enum Commands {
     GenerateBitcoinKey(GenerateBitcoinKeyOpts),
     /// Generate the sr25519 parachain key pair.
     GenerateParachainKey(GenerateParachainKeyOpts),
+    /// Get proof for a given txid
+    GetProof(GetProofOpts),
     /// Run the Vault client (default).
     #[clap(name = "run")]
     RunVault(Box<RunVaultOpts>),
@@ -77,6 +81,35 @@ impl GenerateBitcoinKeyOpts {
         let data = wif.as_bytes();
 
         try_write_file(&self.output, data)
+    }
+}
+
+#[derive(Debug, Parser, Clone)]
+struct GetProofOpts {
+    #[clap(long)]
+    txid: String,
+    #[clap(long)]
+    num_confirmations: u32,
+    /// Connection settings for Bitcoin Core.
+    #[clap(flatten)]
+    pub bitcoin: bitcoin::cli::BitcoinOpts,
+}
+
+impl GetProofOpts {
+    pub async fn print_proof(&self) -> Result<(), Error> {
+        let bitcoin_rpc = self.bitcoin.new_walletless(None).await?;
+        let txid = Txid::from_str(&self.txid).unwrap();
+
+        let raw_proof = bitcoin_rpc
+            .wait_for_transaction_metadata(txid, self.num_confirmations, None, false)
+            .await?
+            .proof;
+        println!("user tx: {}", hex::encode(&raw_proof.raw_user_tx));
+        println!("coinbase tx: {}", hex::encode(&raw_proof.raw_coinbase_tx));
+
+        let interlay_proof = runtime::encoded_tx_proof(&raw_proof)?;
+        println!("full proof: {}", hex::encode(interlay_proof));
+        Ok(())
     }
 }
 
@@ -160,6 +193,9 @@ async fn start() -> Result<(), Error> {
         }
         Some(Commands::GenerateParachainKey(opts)) => {
             return opts.generate_and_write();
+        }
+        Some(Commands::GetProof(sub_opts)) => {
+            return sub_opts.print_proof().await;
         }
         _ => (),
     }

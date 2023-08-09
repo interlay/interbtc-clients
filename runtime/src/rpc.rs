@@ -1937,6 +1937,11 @@ impl SudoPallet for InterBtcParachain {
     }
 }
 
+pub fn encoded_tx_proof(raw_proof: &RawTransactionProof) -> Result<Vec<u8>, Error> {
+    let proof = build_full_tx_proof(raw_proof)?;
+    Ok(proof.encode())
+}
+
 pub fn build_full_tx_proof(raw_proof: &RawTransactionProof) -> Result<Static<FullTransactionProof>, Error> {
     Ok(Static(FullTransactionProof {
         user_tx_proof: PartialTransactionProof {

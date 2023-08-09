@@ -7,7 +7,6 @@ use codec::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use sp_core::crypto::{AccountId32 as Sp_AccountId32, Ss58Codec};
 use subxt::utils::Static;
-
 #[derive(
     Hash,
     Clone,
