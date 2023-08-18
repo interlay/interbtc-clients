@@ -79,6 +79,8 @@ pub enum Error {
     AddressError(#[from] AddressError),
     #[error("Failed to fetch coinbase tx")]
     CoinbaseFetchingFailure,
+    #[error("Expected a value in a rpc result that is missing")]
+    MissingValue,
 }
 
 impl Error {

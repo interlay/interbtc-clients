@@ -64,6 +64,8 @@ pub enum Error {
     CurrencyNotFound,
     #[error("Operation not supported on token variant")]
     TokenUnsupported,
+    #[error("Error decoding hex string")]
+    HexDecodeError,
 
     #[error("Client does not support spec_version: expected {0}..{1}, got {2}")]
     InvalidSpecVersion(u32, u32, u32),

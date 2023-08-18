@@ -1,5 +1,5 @@
 use crate::{
-    delay::{OrderedVaultsDelay, RandomDelay, ZeroDelay},
+    delay::{OrderedVaultsDelay, ZeroDelay},
     error::Error,
     faucet, issue,
     metrics::{poll_metrics, publish_tokio_metrics, PerCurrencyMetrics},
@@ -9,7 +9,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use backoff::Error as BackoffError;
-use bitcoin::{Address, ConversionError, Error as BitcoinError, Network, PublicKey};
+use bitcoin::{relay::RandomDelay, Address, ConversionError, Error as BitcoinError, Network, PublicKey};
 use clap::Parser;
 use futures::{
     channel::{mpsc, mpsc::Sender},
@@ -686,7 +686,8 @@ impl VaultService {
         let oldest_issue_btc_height =
             issue::initialize_issue_set(&self.btc_rpc_master_wallet, &self.btc_parachain, &issue_set).await?;
 
-        let random_delay: Arc<Box<dyn RandomDelay + Send + Sync>> = if self.config.no_random_delay {
+        let random_delay: Arc<Box<dyn RandomDelay<Error = RuntimeError> + Send + Sync>> = if self.config.no_random_delay
+        {
             Arc::new(Box::new(ZeroDelay))
         } else {
             Arc::new(Box::new(
@@ -826,7 +827,7 @@ impl VaultService {
                     !self.config.no_bitcoin_block_relay,
                     run_relayer(Runner::new(
                         self.btc_rpc_master_wallet.clone(),
-                        self.btc_parachain.clone(),
+                        self.btc_parachain.clone().into(),
                         Config {
                             start_height: self.config.bitcoin_relay_start_height,
                             max_batch_size: self.config.max_batch_size,

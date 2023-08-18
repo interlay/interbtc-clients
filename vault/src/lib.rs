@@ -31,9 +31,9 @@ pub mod service {
         },
         metrics::monitor_bridge_metrics,
         redeem::listen_for_redeem_requests,
-        relay::{Config, Runner},
         replace::{listen_for_accept_replace, listen_for_execute_replace, listen_for_replace_requests},
     };
+    pub use bitcoin::relay::{Config, Runner};
 }
 use governor::Quota;
 use nonzero_ext::*;
@@ -43,7 +43,7 @@ pub use system::{VaultService, VaultServiceConfig, ABOUT, AUTHORS, NAME, VERSION
 use runtime::{InterBtcParachain, VaultId, VaultRegistryPallet};
 
 pub use crate::{cancellation::Event, error::Error, types::IssueRequests};
-pub use delay::{OrderedVaultsDelay, RandomDelay, ZeroDelay};
+pub use delay::{OrderedVaultsDelay, ZeroDelay};
 pub use system::VaultIdManager;
 
 pub(crate) async fn deposit_collateral(api: &InterBtcParachain, vault_id: &VaultId, amount: u128) -> Result<(), Error> {
