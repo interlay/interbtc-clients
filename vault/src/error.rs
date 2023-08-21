@@ -62,6 +62,15 @@ pub enum Error {
     IoError(#[from] IoError),
 }
 
+impl Error {
+    pub fn to_human(self) -> String {
+        match self {
+            Self::RuntimeError(runtime_error) => runtime_error.to_human(),
+            err => err.to_string(),
+        }
+    }
+}
+
 impl From<backoff::Error<Error>> for Error {
     fn from(err: backoff::Error<Error>) -> Self {
         match err {

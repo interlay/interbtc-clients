@@ -73,12 +73,12 @@ pub async fn listen_for_accept_replace(
                         Err(e) => tracing::error!(
                             "Failed to process accept replace request #{}: {}",
                             *event.replace_id,
-                            e.to_string()
+                            e.to_human()
                         ),
                     }
                 });
             },
-            |error| tracing::error!("Error reading accept_replace_event: {}", error.to_string()),
+            |error| tracing::error!("Error reading accept_replace_event: {}", error.to_human()),
         )
         .await?;
     Ok(())
@@ -133,13 +133,13 @@ pub async fn listen_for_replace_requests(
                                 "[{}] Failed to accept replace request from {}: {}",
                                 vault_id.pretty_print(),
                                 event.old_vault_id.pretty_print(),
-                                e.to_string()
+                                e.to_human()
                             ),
                         }
                     }
                 }
             },
-            |error| tracing::error!("Error reading replace event: {}", error.to_string()),
+            |error| tracing::error!("Error reading replace event: {}", error.to_human()),
         )
         .await?;
     Ok(())
@@ -201,7 +201,7 @@ pub async fn listen_for_execute_replace(
                     let _ = event_channel.clone().send(Event::Executed(*event.replace_id)).await;
                 }
             },
-            |error| tracing::error!("Error reading redeem event: {}", error.to_string()),
+            |error| tracing::error!("Error reading redeem event: {}", error.to_human()),
         )
         .await?;
     Ok(())

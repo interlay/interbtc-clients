@@ -392,14 +392,14 @@ impl InterBtcParachain {
     ///
     /// # Arguments
     /// * `on_error` - callback for decoding errors, is not allowed to take too long
-    pub async fn on_event_error<E: Fn(SubxtError)>(&self, on_error: E) -> Result<(), Error> {
+    pub async fn on_event_error<E: Fn(Error)>(&self, on_error: E) -> Result<(), Error> {
         let mut sub = self.subscribe_events().await?;
 
         loop {
             match sub.next().await {
-                Some(Err(err)) => on_error(err), // report error
-                Some(Ok(_)) => {}                // do nothing
-                None => break Ok(()),            // end of stream
+                Some(Err(err)) => on_error(err.into()), // report error
+                Some(Ok(_)) => {}                       // do nothing
+                None => break Ok(()),                   // end of stream
             }
         }
     }
@@ -420,7 +420,7 @@ impl InterBtcParachain {
         T: StaticEvent + core::fmt::Debug,
         F: FnMut(T) -> R,
         R: Future<Output = ()>,
-        E: Fn(SubxtError),
+        E: Fn(Error),
     {
         let mut sub = self.subscribe_events().await?;
         let (tx, mut rx) = futures::channel::mpsc::channel::<T>(32);
@@ -442,7 +442,7 @@ impl InterBtcParachain {
                                     break;
                                 }
                             }
-                            Err(err) => on_error(err),
+                            Err(err) => on_error(err.into()),
                         }
                     }
                 }

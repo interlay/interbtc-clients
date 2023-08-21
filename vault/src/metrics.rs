@@ -580,7 +580,7 @@ pub async fn monitor_bridge_metrics(
                     }
                 }
             },
-            |error| tracing::error!("Error reading SetExchangeRate event: {}", error.to_string()),
+            |error| tracing::error!("Error reading SetExchangeRate event: {}", error.to_human()),
         )
         .await?;
     Ok(())

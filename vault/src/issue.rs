@@ -66,7 +66,7 @@ pub async fn process_issue_requests(
                     random_delay.clone(),
                 )
                 .map_err(|e| {
-                    tracing::warn!("Failed to execute issue request: {}", e.to_string());
+                    tracing::warn!("Failed to execute issue request: {}", e.to_human());
                 }),
             ),
             Err(err) => return Err(err.into()),
@@ -382,7 +382,7 @@ pub async fn listen_for_issue_requests(
                     let _ = publish_expected_bitcoin_balance(&vault, btc_parachain.clone()).await;
 
                     if let Err(e) = add_new_deposit_key(&vault.btc_rpc, *event.issue_id, event.vault_public_key).await {
-                        tracing::error!("Failed to add new deposit key #{}: {}", *event.issue_id, e.to_string());
+                        tracing::error!("Failed to add new deposit key #{}: {}", *event.issue_id, e.to_human());
                     }
                 }
 
@@ -393,7 +393,7 @@ pub async fn listen_for_issue_requests(
                 );
                 issue_set.insert(*event.issue_id, *event.vault_address).await;
             },
-            |error| tracing::error!("Error reading request issue event: {}", error.to_string()),
+            |error| tracing::error!("Error reading request issue event: {}", error.to_human()),
         )
         .await?;
     Ok(())
@@ -428,7 +428,7 @@ pub async fn listen_for_issue_executes(
                 tracing::trace!("issue #{} executed, no longer watching", *event.issue_id);
                 issue_set.remove(&event.issue_id).await;
             },
-            |error| tracing::error!("Error reading execute issue event: {}", error.to_string()),
+            |error| tracing::error!("Error reading execute issue event: {}", error.to_human()),
         )
         .await?;
     Ok(())
@@ -451,7 +451,7 @@ pub async fn listen_for_issue_cancels(
                 tracing::trace!("issue #{} cancelled, no longer watching", *event.issue_id);
                 issue_set.remove(&event.issue_id).await;
             },
-            |error| tracing::error!("Error reading cancel issue event: {}", error.to_string()),
+            |error| tracing::error!("Error reading cancel issue event: {}", error.to_human()),
         )
         .await?;
     Ok(())

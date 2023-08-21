@@ -64,12 +64,12 @@ pub async fn listen_for_redeem_requests(
                         Err(e) => tracing::error!(
                             "Failed to process redeem request #{}: {}",
                             *event.redeem_id,
-                            e.to_string()
+                            e.to_human()
                         ),
                     }
                 });
             },
-            |error| tracing::error!("Error reading redeem event: {}", error.to_string()),
+            |error| tracing::error!("Error reading redeem event: {}", error.to_human()),
         )
         .await?;
     Ok(())

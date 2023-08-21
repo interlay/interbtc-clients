@@ -1,7 +1,7 @@
 use crate::{
     metadata,
     utils::{account_id::AccountId32, signer::PairSigner},
-    Config, InterBtcRuntime, RuntimeCurrencyInfo,
+    Config, InterBtcRuntime, RuntimeCurrencyInfo, SS58_PREFIX,
 };
 pub use currency_id::CurrencyIdExt;
 pub use h256_le::RichH256Le;
@@ -211,7 +211,7 @@ mod account_id {
     use sp_core::crypto::Ss58Codec;
     impl PrettyPrint for AccountId {
         fn pretty_print(&self) -> String {
-            self.0.to_ss58check()
+            self.0.to_ss58check_with_version(SS58_PREFIX.into())
         }
     }
 }
