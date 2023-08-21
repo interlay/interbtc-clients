@@ -172,8 +172,14 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(self.private_key.public_key(&self.secp_ctx))
     }
 
-    fn dump_private_key(&self, _: &Address) -> Result<PrivateKey, BitcoinError> {
-        Err(Error::InvalidAddress.into())
+    fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, BitcoinError> {
+        self.wallet
+            .key_store
+            .read()
+            .map_err(Into::<Error>::into)?
+            .get(address)
+            .ok_or(Error::NoPrivateKey.into())
+            .cloned()
     }
 
     fn import_private_key(&self, _private_key: &PrivateKey, _is_derivation_key: bool) -> Result<(), BitcoinError> {
