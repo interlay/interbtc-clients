@@ -140,7 +140,7 @@ async fn active_block_listener(
                 let _ = issue_tx.clone().send(Event::ParachainBlock(event.block_number)).await;
                 let _ = replace_tx.clone().send(Event::ParachainBlock(event.block_number)).await;
             },
-            |err| tracing::error!("Error (UpdateActiveBlockEvent): {}", err.to_string()),
+            |err| tracing::error!("Error (UpdateActiveBlockEvent): {}", err.to_human()),
         )
         .await?;
     Ok(())
@@ -159,7 +159,7 @@ async fn relay_block_listener(
                 let _ = issue_tx.clone().send(Event::BitcoinBlock(event.block_height)).await;
                 let _ = replace_tx.clone().send(Event::BitcoinBlock(event.block_height)).await;
             },
-            |err| tracing::error!("Error (StoreMainChainHeaderEvent): {}", err.to_string()),
+            |err| tracing::error!("Error (StoreMainChainHeaderEvent): {}", err.to_human()),
         )
         .await?;
     Ok(())
@@ -311,6 +311,7 @@ impl VaultIdManager {
         // issue keys should be imported separately but we need to iterate
         // through currency specific wallets to get change addresses
         for address in btc_rpc.list_addresses()? {
+            tracing::info!("Found {:?}", address);
             // get private key from currency specific wallet
             let private_key = btc_rpc.dump_private_key(&address)?;
             // import key into main wallet
@@ -367,7 +368,7 @@ impl VaultIdManager {
                         let _ = self.add_vault_id(vault_id).await;
                     }
                 },
-                |err| tracing::error!("Error (RegisterVaultEvent): {}", err.to_string()),
+                |err| tracing::error!("Error (RegisterVaultEvent): {}", err.to_human()),
             )
             .await?)
     }
@@ -619,7 +620,7 @@ impl VaultService {
         // NOTE: this will block if subsequent errors do not trigger shutdown
         let err_listener = wait_or_shutdown(self.shutdown.clone(), async move {
             err_provider
-                .on_event_error(|e| tracing::debug!("Received error event: {}", e))
+                .on_event_error(|e| tracing::debug!("Received error event: {}", e.to_human()))
                 .await?;
             Ok::<_, Error>(())
         });

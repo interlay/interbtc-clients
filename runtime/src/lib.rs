@@ -164,7 +164,6 @@ pub const DISABLE_DIFFICULTY_CHECK: &str = "DisableDifficultyCheck";
         ),
     )
 )]
-
 pub mod metadata {}
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Default, Clone, Decode, Encode)]

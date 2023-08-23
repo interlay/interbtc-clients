@@ -105,6 +105,18 @@ impl From<module_bitcoin::Error> for Error {
 }
 
 impl Error {
+    pub fn to_human(self) -> String {
+        match self {
+            Error::SubxtRuntimeError(SubxtError::Runtime(DispatchError::Module(module_error))) => {
+                match module_error.as_root_error::<crate::metadata::Error>() {
+                    Ok(root_error) => format!("{:?}", root_error),
+                    Err(_) => format!("Unknown error: {:?}", module_error.raw()),
+                }
+            }
+            err => err.to_string(),
+        }
+    }
+
     pub fn is_any_module_err(&self) -> bool {
         matches!(
             self,
