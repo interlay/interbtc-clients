@@ -2,6 +2,7 @@ mod blockcypher;
 mod blockstream;
 mod coingecko;
 mod dia;
+mod dia_fair_price;
 mod gateio;
 mod kraken;
 
@@ -22,6 +23,7 @@ pub use blockcypher::{BlockCypherApi, BlockCypherCli};
 pub use blockstream::{BlockstreamApi, BlockstreamCli};
 pub use coingecko::{CoinGeckoApi, CoinGeckoCli};
 pub use dia::{DiaApi, DiaCli};
+pub use dia_fair_price::{DiaFairPriceApi, DiaFairPriceCli};
 pub use gateio::{GateIoApi, GateIoCli};
 pub use kraken::{KrakenApi, KrakenCli};
 
@@ -38,6 +40,8 @@ pub enum FeedName {
     GateIo,
     CoinGecko,
     Dia,
+    #[serde(rename = "dia_fair_price")]
+    DiaFairPrice,
 }
 
 impl fmt::Display for FeedName {
@@ -80,6 +84,13 @@ impl PriceFeeds {
         if let Some(api) = DiaApi::from_opts(opts) {
             log::info!("🔗 Dia");
             self.feeds.insert(FeedName::Dia, Box::new(api));
+        }
+    }
+
+    pub fn maybe_add_dia_fair_price(&mut self, opts: DiaFairPriceCli) {
+        if let Some(api) = DiaFairPriceApi::from_opts(opts) {
+            log::info!("🔗 DiaFairPrice");
+            self.feeds.insert(FeedName::DiaFairPrice, Box::new(api));
         }
     }
 

@@ -61,6 +61,10 @@ struct Opts {
     #[clap(flatten)]
     dia: feeds::DiaCli,
 
+    /// Connection settings for DiaFairPrice
+    #[clap(flatten)]
+    dia_fair_price: feeds::DiaFairPriceCli,
+
     /// Connection settings for gate.io
     #[clap(flatten)]
     gateio: feeds::GateIoCli,
@@ -177,6 +181,7 @@ async fn _main() -> Result<(), Error> {
     let mut price_feeds = feeds::PriceFeeds::new(currency_store.clone());
     price_feeds.maybe_add_coingecko(opts.coingecko);
     price_feeds.maybe_add_dia(opts.dia);
+    price_feeds.maybe_add_dia_fair_price(opts.dia_fair_price);
     price_feeds.maybe_add_gateio(opts.gateio);
     price_feeds.maybe_add_kraken(opts.kraken);
 
