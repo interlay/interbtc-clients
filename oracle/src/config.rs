@@ -37,7 +37,7 @@ pub struct PriceConfig<Currency> {
     #[serde(default)]
     pub value: Option<f64>,
     // Feeds to consume to calculate this exchange rate.
-    #[serde(default)]
+    #[serde(default = "BTreeMap::new")]
     pub feeds: BTreeMap<FeedName, Vec<CurrencyPair<Currency>>>,
 }
 

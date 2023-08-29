@@ -20,40 +20,76 @@ pub trait CurrencyInfo<Currency> {
     fn decimals(&self, id: &Currency) -> Option<u32>;
 }
 
-#[derive(Default, Debug, Clone, Eq, PartialOrd, Ord)]
-pub struct Currency {
-    symbol: String,
-    path: Option<String>,
+#[derive(Deserialize, Debug, Clone)]
+pub struct Extension {
+    pub(crate) alias: Option<String>,
+    pub(crate) index: Option<usize>,
 }
 
-impl<'de> Deserialize<'de> for Currency {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::Error;
-        let value = String::deserialize(deserializer)?;
-        match value.split('=').collect::<Vec<_>>()[..] {
-            [symbol] => Ok(Self {
-                symbol: symbol.to_string(),
-                path: None,
-            }),
-            [symbol, path] => Ok(Self {
-                symbol: symbol.to_string(),
-                path: Some(path.to_string()),
-            }),
-            _ => Err(Error::custom("Invalid currency")),
-        }
+#[derive(Deserialize, Debug, Clone)]
+pub struct Extended {
+    symbol: String,
+    #[serde(flatten)]
+    pub(crate) ext: Option<Extension>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum Currency {
+    #[serde(deserialize_with = "deserialize_as_string")]
+    Symbol(String),
+    #[serde(deserialize_with = "deserialize_as_tuple")]
+    Path(String, String),
+    Extended(Extended),
+}
+
+fn deserialize_as_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+    let value = String::deserialize(deserializer)?;
+    if value.contains('=') {
+        return Err(Error::custom("Not string"));
+    }
+    Ok(value)
+}
+
+fn deserialize_as_tuple<'de, D>(deserializer: D) -> Result<(String, String), D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+    let value = String::deserialize(deserializer)?;
+    match value.split('=').collect::<Vec<_>>()[..] {
+        [symbol, path] => Ok((symbol.to_string(), path.to_string())),
+        _ => Err(Error::custom("Not tuple")),
     }
 }
 
 impl Currency {
     pub fn symbol(&self) -> String {
-        self.symbol.to_owned()
+        match self {
+            Self::Symbol(symbol) => symbol.to_owned(),
+            Self::Path(symbol, _) => symbol.to_owned(),
+            Self::Extended(extended) => extended.symbol.to_owned(),
+        }
+    }
+
+    pub fn ext(&self) -> Option<Extension> {
+        match self {
+            Self::Symbol(_) => None,
+            Self::Path(_, _) => None,
+            Self::Extended(extended) => extended.ext.to_owned(),
+        }
     }
 
     pub fn path(&self) -> Option<String> {
-        self.path.to_owned()
+        match self {
+            Self::Symbol(_) => None,
+            Self::Path(_, path) => Some(path.to_owned()),
+            Self::Extended(_) => None,
+        }
     }
 }
 
@@ -131,7 +167,7 @@ impl fmt::Display for CurrencyPairAndPrice<Currency> {
     }
 }
 
-impl<Currency: Clone + PartialEq + Ord> CurrencyPairAndPrice<Currency> {
+impl<Currency: Clone + PartialEq> CurrencyPairAndPrice<Currency> {
     pub fn invert(self) -> Self {
         Self {
             pair: self.pair.invert(),
