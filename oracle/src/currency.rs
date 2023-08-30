@@ -20,40 +20,52 @@ pub trait CurrencyInfo<Currency> {
     fn decimals(&self, id: &Currency) -> Option<u32>;
 }
 
-#[derive(Default, Debug, Clone, Eq, PartialOrd, Ord)]
-pub struct Currency {
-    symbol: String,
-    path: Option<String>,
+#[derive(Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum Currency {
+    #[serde(deserialize_with = "deserialize_as_string")]
+    Symbol(String),
+    #[serde(deserialize_with = "deserialize_as_tuple")]
+    Path(String, String),
 }
 
-impl<'de> Deserialize<'de> for Currency {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::Error;
-        let value = String::deserialize(deserializer)?;
-        match value.split('=').collect::<Vec<_>>()[..] {
-            [symbol] => Ok(Self {
-                symbol: symbol.to_string(),
-                path: None,
-            }),
-            [symbol, path] => Ok(Self {
-                symbol: symbol.to_string(),
-                path: Some(path.to_string()),
-            }),
-            _ => Err(Error::custom("Invalid currency")),
-        }
+fn deserialize_as_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+    let value = String::deserialize(deserializer)?;
+    if value.contains('=') {
+        return Err(Error::custom("Not string"));
+    }
+    Ok(value)
+}
+
+fn deserialize_as_tuple<'de, D>(deserializer: D) -> Result<(String, String), D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+    let value = String::deserialize(deserializer)?;
+    match value.split('=').collect::<Vec<_>>()[..] {
+        [symbol, path] => Ok((symbol.to_string(), path.to_string())),
+        _ => Err(Error::custom("Not tuple")),
     }
 }
 
 impl Currency {
     pub fn symbol(&self) -> String {
-        self.symbol.to_owned()
+        match self {
+            Self::Symbol(symbol) => symbol.to_owned(),
+            Self::Path(symbol, _) => symbol.to_owned(),
+        }
     }
 
     pub fn path(&self) -> Option<String> {
-        self.path.to_owned()
+        match self {
+            Self::Symbol(_) => None,
+            Self::Path(_, path) => Some(path.to_owned()),
+        }
     }
 }
 
@@ -131,7 +143,7 @@ impl fmt::Display for CurrencyPairAndPrice<Currency> {
     }
 }
 
-impl<Currency: Clone + PartialEq + Ord> CurrencyPairAndPrice<Currency> {
+impl<Currency: Clone + PartialEq> CurrencyPairAndPrice<Currency> {
     pub fn invert(self) -> Self {
         Self {
             pair: self.pair.invert(),
@@ -270,6 +282,12 @@ mod tests {
 
         // BTC/USD * DOT/BTC = USD/DOT
         assert_reduce!(("BTC" / "USD" @ 19184.24) * ("DOT" / "BTC" @ 0.00032457) = ("USD" / "DOT" @ 0.16060054900429147));
+
+        // BTC/USD * KSM/USD = BTC/KSM
+        assert_reduce!(("BTC" / "USD" @ 27356.159557758947) * ("KSM" / "USD" @ 19.743996225593296) = ("BTC" / "KSM" @ 1385.5431922286498));
+
+        // USD/BTC * USD/KSM = BTC/KSM
+        assert_reduce!(("USD" / "BTC" @ 3.655107115877481e-5) * ("USD" / "KSM" @ 0.05052177613811538) = ("BTC" / "KSM" @ 1382.2242286321239));
     }
 
     #[test]
