@@ -1,6 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
 
-use crate::{feeds::DiaFairPriceExt, CurrencyStore, Error};
+use crate::{CurrencyStore, Error};
 use runtime::{FixedPointNumber, FixedPointTraits::*, FixedU128};
 use serde::Deserialize;
 use std::fmt::{self, Debug};
@@ -21,20 +21,12 @@ pub trait CurrencyInfo<Currency> {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct Extended<Ext> {
-    symbol: String,
-    #[serde(flatten)]
-    pub(crate) ext: Option<Ext>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum Currency {
     #[serde(deserialize_with = "deserialize_as_string")]
     Symbol(String),
     #[serde(deserialize_with = "deserialize_as_tuple")]
     Path(String, String),
-    DiaFairPrice(Extended<DiaFairPriceExt>),
 }
 
 fn deserialize_as_string<'de, D>(deserializer: D) -> Result<String, D::Error>
@@ -66,7 +58,6 @@ impl Currency {
         match self {
             Self::Symbol(symbol) => symbol.to_owned(),
             Self::Path(symbol, _) => symbol.to_owned(),
-            Self::DiaFairPrice(extended) => extended.symbol.to_owned(),
         }
     }
 
@@ -74,15 +65,6 @@ impl Currency {
         match self {
             Self::Symbol(_) => None,
             Self::Path(_, path) => Some(path.to_owned()),
-            Self::DiaFairPrice(_) => None,
-        }
-    }
-
-    pub fn dia_fair_price_ext(&self) -> Option<DiaFairPriceExt> {
-        match self {
-            Self::Symbol(_) => None,
-            Self::Path(_, _) => None,
-            Self::DiaFairPrice(extended) => extended.ext.to_owned(),
         }
     }
 }
@@ -300,6 +282,12 @@ mod tests {
 
         // BTC/USD * DOT/BTC = USD/DOT
         assert_reduce!(("BTC" / "USD" @ 19184.24) * ("DOT" / "BTC" @ 0.00032457) = ("USD" / "DOT" @ 0.16060054900429147));
+
+        // BTC/USD * KSM/USD = BTC/KSM
+        assert_reduce!(("BTC" / "USD" @ 27356.159557758947) * ("KSM" / "USD" @ 19.743996225593296) = ("BTC" / "KSM" @ 1385.5431922286498));
+
+        // USD/BTC * USD/KSM = BTC/KSM
+        assert_reduce!(("USD" / "BTC" @ 3.655107115877481e-5) * ("USD" / "KSM" @ 0.05052177613811538) = ("BTC" / "KSM" @ 1382.2242286321239));
     }
 
     #[test]

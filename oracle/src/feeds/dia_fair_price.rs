@@ -4,13 +4,7 @@ use crate::{config::CurrencyStore, currency::*, Error};
 use async_trait::async_trait;
 use clap::Parser;
 use reqwest::Url;
-use serde::Deserialize;
 use serde_json::Value;
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct DiaFairPriceExt {
-    alias: Option<String>,
-}
 
 #[derive(Parser, Debug, Clone)]
 pub struct DiaFairPriceCli {
@@ -60,11 +54,7 @@ impl DiaFairPriceApi {
         // this allows us to override the expected token name
         // which is helpful when using the xlsd feed of a wrapped token
         // but we want to submit the currency as the underlying (e.g. KBTC -> BTC)
-        let alias = currency_pair
-            .base
-            .dia_fair_price_ext()
-            .and_then(|ext| ext.alias)
-            .unwrap_or(currency_pair.base.symbol());
+        let alias = currency_pair.base.path().unwrap_or(currency_pair.base.symbol());
 
         let url = self.url.clone();
         let data = get_http(url).await?;
