@@ -122,10 +122,7 @@
             "feeds": {
                 "dia_fair_price": [
                     [
-                        {
-                            "symbol": "BTC",
-                            "alias": "KBTC"
-                        },
+                        "BTC=KBTC",
                         "USD"
                     ],
                     [
