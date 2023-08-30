@@ -23,7 +23,7 @@ pub use blockcypher::{BlockCypherApi, BlockCypherCli};
 pub use blockstream::{BlockstreamApi, BlockstreamCli};
 pub use coingecko::{CoinGeckoApi, CoinGeckoCli};
 pub use dia::{DiaApi, DiaCli};
-pub use dia_fair_price::{DiaFairPriceApi, DiaFairPriceCli};
+pub use dia_fair_price::{DiaFairPriceApi, DiaFairPriceCli, DiaFairPriceExt};
 pub use gateio::{GateIoApi, GateIoCli};
 pub use kraken::{KrakenApi, KrakenCli};
 

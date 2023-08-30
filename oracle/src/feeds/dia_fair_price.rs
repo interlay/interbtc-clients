@@ -4,7 +4,13 @@ use crate::{config::CurrencyStore, currency::*, Error};
 use async_trait::async_trait;
 use clap::Parser;
 use reqwest::Url;
+use serde::Deserialize;
 use serde_json::Value;
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct DiaFairPriceExt {
+    alias: Option<String>,
+}
 
 #[derive(Parser, Debug, Clone)]
 pub struct DiaFairPriceCli {
@@ -25,18 +31,13 @@ impl Default for DiaFairPriceApi {
     }
 }
 
-fn extract_response(value: Value, alias: &str, index: usize) -> Option<f64> {
-    let entry = value.get(index)?;
-
-    if matches!(entry.get("Token")?.as_str(), Some(token) if token.to_uppercase() != alias) {
-        // expected index position does not match token
-        return None;
-    }
-
-    entry
+fn extract_response(value: Value, alias: &str) -> Option<f64> {
+    value
+        .as_array()?
+        .into_iter()
+        .find(|entry| matches!(entry.get("Token").and_then(|value| value.as_str()), Some(token) if token.to_uppercase() == alias))?
         .get("FairPrice")?
         .as_f64()
-        .and_then(|x| if x.is_normal() { Some(1.0 / x) } else { None })
 }
 
 impl DiaFairPriceApi {
@@ -53,20 +54,22 @@ impl DiaFairPriceApi {
         currency_pair: CurrencyPair<Currency>,
         _currency_store: &CurrencyStore<String>,
     ) -> Result<CurrencyPairAndPrice<Currency>, Error> {
-        if currency_pair.base.symbol() != "USD" {
+        if currency_pair.quote.symbol() != "USD" {
             return Err(Error::InvalidDiaSymbol);
         }
-        let extension = currency_pair.quote.ext().ok_or(Error::InvalidDiaSymbol)?;
         // this allows us to override the expected token name
         // which is helpful when using the xlsd feed of a wrapped token
         // but we want to submit the currency as the underlying (e.g. KBTC -> BTC)
-        let alias = extension.alias.unwrap_or(currency_pair.quote.symbol());
-        let index = extension.index.ok_or(Error::NoFairPriceIndex)?;
+        let alias = currency_pair
+            .base
+            .dia_fair_price_ext()
+            .and_then(|ext| ext.alias)
+            .unwrap_or(currency_pair.base.symbol());
 
         let url = self.url.clone();
         let data = get_http(url).await?;
 
-        let price = extract_response(data, alias.as_str(), index).ok_or(Error::InvalidResponse)?;
+        let price = extract_response(data, alias.as_str()).ok_or(Error::InvalidResponse)?;
 
         Ok(CurrencyPairAndPrice {
             pair: currency_pair,
@@ -112,9 +115,8 @@ mod tests {
                     }
                 ]),
                 "KBTC",
-                0
             ),
-            Some(1.0 / 27418.406434486784)
+            Some(27418.406434486784)
         )
     }
 }
