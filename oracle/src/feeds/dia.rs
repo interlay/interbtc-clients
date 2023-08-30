@@ -25,10 +25,7 @@ impl Default for DiaApi {
 }
 
 fn extract_response(value: Value) -> Option<f64> {
-    value
-        .get("Price")?
-        .as_f64()
-        .and_then(|x| if x.is_normal() { Some(1.0 / x) } else { None })
+    value.get("Price")?.as_f64()
 }
 
 fn set_token_path(base: &mut Url, token_path: &str) {
@@ -51,10 +48,10 @@ impl DiaApi {
         currency_pair: CurrencyPair<Currency>,
         _currency_store: &CurrencyStore<String>,
     ) -> Result<CurrencyPairAndPrice<Currency>, Error> {
-        if currency_pair.base.symbol() != "USD" {
+        if currency_pair.quote.symbol() != "USD" {
             return Err(Error::InvalidDiaSymbol);
         }
-        let token_path = currency_pair.quote.path().ok_or(Error::InvalidDiaSymbol)?;
+        let token_path = currency_pair.base.path().ok_or(Error::InvalidDiaSymbol)?;
 
         // https://docs.diadata.org/documentation/api-1/api-endpoints#asset-quotation
         let mut url = self.url.clone();
@@ -114,7 +111,7 @@ mod tests {
                 "Time": "2022-10-21T07:35:24Z",
                 "Source": "diadata.org"
             })),
-            Some(1.0 / 5.842649511778436)
+            Some(5.842649511778436)
         )
     }
 }

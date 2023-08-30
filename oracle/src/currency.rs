@@ -1,6 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
 
-use crate::{CurrencyStore, Error};
+use crate::{feeds::DiaFairPriceExt, CurrencyStore, Error};
 use runtime::{FixedPointNumber, FixedPointTraits::*, FixedU128};
 use serde::Deserialize;
 use std::fmt::{self, Debug};
@@ -21,16 +21,10 @@ pub trait CurrencyInfo<Currency> {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct Extension {
-    pub(crate) alias: Option<String>,
-    pub(crate) index: Option<usize>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct Extended {
+pub struct Extended<Ext> {
     symbol: String,
     #[serde(flatten)]
-    pub(crate) ext: Option<Extension>,
+    pub(crate) ext: Option<Ext>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -40,7 +34,7 @@ pub enum Currency {
     Symbol(String),
     #[serde(deserialize_with = "deserialize_as_tuple")]
     Path(String, String),
-    Extended(Extended),
+    DiaFairPrice(Extended<DiaFairPriceExt>),
 }
 
 fn deserialize_as_string<'de, D>(deserializer: D) -> Result<String, D::Error>
@@ -72,15 +66,7 @@ impl Currency {
         match self {
             Self::Symbol(symbol) => symbol.to_owned(),
             Self::Path(symbol, _) => symbol.to_owned(),
-            Self::Extended(extended) => extended.symbol.to_owned(),
-        }
-    }
-
-    pub fn ext(&self) -> Option<Extension> {
-        match self {
-            Self::Symbol(_) => None,
-            Self::Path(_, _) => None,
-            Self::Extended(extended) => extended.ext.to_owned(),
+            Self::DiaFairPrice(extended) => extended.symbol.to_owned(),
         }
     }
 
@@ -88,7 +74,15 @@ impl Currency {
         match self {
             Self::Symbol(_) => None,
             Self::Path(_, path) => Some(path.to_owned()),
-            Self::Extended(_) => None,
+            Self::DiaFairPrice(_) => None,
+        }
+    }
+
+    pub fn dia_fair_price_ext(&self) -> Option<DiaFairPriceExt> {
+        match self {
+            Self::Symbol(_) => None,
+            Self::Path(_, _) => None,
+            Self::DiaFairPrice(extended) => extended.ext.to_owned(),
         }
     }
 }

@@ -47,8 +47,6 @@ pub enum Error {
     NotConfigured(FeedName),
     #[error("Invalid dia symbol")]
     InvalidDiaSymbol,
-    #[error("Index required for fair price feed")]
-    NoFairPriceIndex,
 
     #[error("ReqwestError: {0}")]
     ReqwestError(#[from] ReqwestError),
