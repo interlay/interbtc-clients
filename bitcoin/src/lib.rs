@@ -1094,18 +1094,17 @@ impl BitcoinCoreApi for BitcoinCore {
         for address in addresses.into_iter() {
             let address = address.to_string();
             let all_transactions = self.electrs_client.get_address_tx_history_full(&address).await?;
-            // filter to only import
-            // a) payments in the blockchain (not in mempool), and
-            // b) payments TO the address (as bitcoin core will already know about transactions spending FROM it)
+            // filter to only import payments in the blockchain (not in mempool)
+            // Note that we also import spendings from the address. During normal
+            // operation the wallet should already be aware of these, but after wallet
+            // migrations this is required to prevent double spendings.
             let confirmed_payments_to = all_transactions.into_iter().filter(|tx| {
                 if let Some(status) = &tx.status {
                     if !status.confirmed {
                         return false;
                     }
                 };
-                tx.vout
-                    .iter()
-                    .any(|output| matches!(&output.scriptpubkey_address, Some(addr) if addr == &address))
+                true
             });
             for transaction in confirmed_payments_to {
                 let (raw_tx, raw_merkle_proof) = futures::future::try_join(
