@@ -469,6 +469,11 @@ impl BitcoinCore {
 
             // Make sure signing is successful
             if signed_funded_raw_tx.errors.is_some() {
+                log::warn!(
+                    "Received bitcoin funding errors (complete={}): {:?}",
+                    signed_funded_raw_tx.complete,
+                    signed_funded_raw_tx.errors
+                );
                 return Err(Error::TransactionSigningError);
             }
 
