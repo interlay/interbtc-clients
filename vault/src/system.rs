@@ -308,14 +308,21 @@ impl VaultIdManager {
         }
 
         tracing::info!("Merging wallet for {:?}", vault_id);
+        let all_addresses = btc_rpc.list_addresses()?;
         // issue keys should be imported separately but we need to iterate
         // through currency specific wallets to get change addresses
-        for address in btc_rpc.list_addresses()? {
+        for address in &all_addresses {
             tracing::info!("Found {:?}", address);
             // get private key from currency specific wallet
             let private_key = btc_rpc.dump_private_key(&address)?;
             // import key into main wallet
             btc_rpc_shared.import_private_key(&private_key, false)?;
+        }
+
+        if btc_rpc_shared.get_pruned_height().await? != 0 {
+            // rescan via electrs to import or remove change utxos
+            // this is required because pruned nodes cannot rescan themselves
+            btc_rpc_shared.rescan_electrs_for_addresses(all_addresses).await?;
         }
 
         tracing::info!("Initializing metrics...");
