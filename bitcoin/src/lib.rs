@@ -1160,7 +1160,7 @@ impl BitcoinCoreApi for BitcoinCore {
 pub trait TransactionExt {
     fn get_op_return(&self) -> Option<H256>;
     fn get_op_return_bytes(&self) -> Option<[u8; 34]>;
-    fn get_payment_amount_to(&self, dest: Payload) -> Option<u64>;
+    fn get_largest_payment_amount_to(&self, dest: Payload) -> Option<u64>;
     fn extract_output_addresses(&self) -> Vec<Payload>;
     fn extract_indexed_output_addresses(&self) -> Vec<(usize, Payload)>;
     fn extract_return_to_self_address(&self, destination: &Payload) -> Result<Option<(usize, Payload)>, Error>;
@@ -1187,15 +1187,18 @@ impl TransactionExt for Transaction {
     }
 
     /// Get the amount of btc that self sent to `dest`, if any
-    fn get_payment_amount_to(&self, dest: Payload) -> Option<u64> {
-        self.output.iter().find_map(|uxto| {
-            let payload = Payload::from_script(&uxto.script_pubkey).ok()?;
-            if payload == dest {
-                Some(uxto.value)
-            } else {
-                None
-            }
-        })
+    fn get_largest_payment_amount_to(&self, dest: Payload) -> Option<u64> {
+        self.output
+            .iter()
+            .filter_map(|uxto| {
+                let payload = Payload::from_script(&uxto.script_pubkey).ok()?;
+                if payload == dest {
+                    Some(uxto.value)
+                } else {
+                    None
+                }
+            })
+            .max()
     }
 
     /// return the addresses that are used as outputs with non-zero value in this transaction
