@@ -1,14 +1,13 @@
 #![allow(clippy::enum_variant_names)]
 
-use bitcoin::Error as BitcoinError;
-use runtime::Error as RuntimeError;
+use crate::Error as BitcoinError;
 use thiserror::Error;
 
 #[cfg(test)]
 use std::mem::discriminant;
 
 #[derive(Error, Debug)]
-pub enum Error {
+pub enum Error<RuntimeError> {
     #[error("Client already initialized")]
     AlreadyInitialized,
     #[error("Client has not been initialized")]
@@ -28,13 +27,7 @@ pub enum Error {
 
     #[error("BitcoinError: {0}")]
     BitcoinError(#[from] BitcoinError),
+    // note: we can't have two #[from]s when one is generic. We'll use map_err for the runtime error
     #[error("RuntimeError: {0}")]
-    RuntimeError(#[from] RuntimeError),
-}
-
-#[cfg(test)]
-impl PartialEq for Error {
-    fn eq(&self, other: &Self) -> bool {
-        discriminant(self) == discriminant(other)
-    }
+    RuntimeError(RuntimeError),
 }

@@ -1,4 +1,4 @@
-use crate::{BitcoinCoreApi, BitcoinRpcError, Error};
+use crate::{BitcoinRpcError, DynBitcoinCoreApi, Error};
 use bitcoincore_rpc::{
     bitcoin::{Block, BlockHash, Transaction},
     jsonrpc::Error as JsonRpcError,
@@ -6,9 +6,7 @@ use bitcoincore_rpc::{
 };
 use futures::{prelude::*, stream::StreamExt};
 use log::trace;
-use std::{iter, sync::Arc};
-
-type DynBitcoinCoreApi = Arc<dyn BitcoinCoreApi + Send + Sync>;
+use std::iter;
 
 /// Stream over transactions, starting with this in the mempool and continuing with
 /// transactions from previous in-chain block. The stream ends after the block at

@@ -969,12 +969,11 @@ impl InterBtcParachainExt for InterBtcParachain {
 
 #[cfg(feature = "uses-bitcoind")]
 mod test_with_bitcoind {
-    use bitcoin::{BitcoinCore, BitcoinCoreApi, Hash, Transaction, TransactionExt};
+    use super::*;
+    use bitcoin::{relay::Config, BitcoinCore, BitcoinCoreApi, Hash, Transaction, TransactionExt};
     use runtime::BtcRelayPallet;
     use std::cmp::max;
-    use vault::{delay::ZeroDelay, relay::Config, service::Runner};
-
-    use super::*;
+    use vault::{delay::ZeroDelay, service::Runner};
 
     async fn get_bitcoin_core() -> BitcoinCore {
         use bitcoin::{cli::BitcoinOpts, Network};
@@ -1190,7 +1189,7 @@ mod test_with_bitcoind {
             let height = bitcoin_core.get_block_count().await.unwrap() as u32;
             let relayer = Runner::new(
                 btc_rpc.clone(),
-                user_provider.clone(),
+                user_provider.clone().into(),
                 Config {
                     start_height: Some(max(1, height.saturating_sub(200))), /* important to skip the genesis block
                                                                              * since it has nVersion < 4, so it would

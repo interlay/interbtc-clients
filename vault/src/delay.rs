@@ -1,12 +1,7 @@
 use async_trait::async_trait;
-use bitcoin::{sha256, Hash};
+use bitcoin::{relay::RandomDelay, sha256, Hash};
 use runtime::{AccountId, Error as RuntimeError, InterBtcParachain, UtilFuncs, VaultRegistryPallet};
 use std::fmt;
-
-#[async_trait]
-pub trait RandomDelay: fmt::Debug {
-    async fn delay(&self, seed_data: &[u8; 32]) -> Result<(), RuntimeError>;
-}
 
 #[derive(Clone)]
 pub struct OrderedVaultsDelay {
@@ -38,6 +33,7 @@ impl fmt::Debug for OrderedVaultsDelay {
 
 #[async_trait]
 impl RandomDelay for OrderedVaultsDelay {
+    type Error = RuntimeError;
     /// Calculates a delay based on randomly ordering the vaults by hashing their
     /// account ID with a piece of seed data.
     /// Then awaits a corresponding amount of blocks on the parachain, with
@@ -71,6 +67,7 @@ pub struct ZeroDelay;
 
 #[async_trait]
 impl RandomDelay for ZeroDelay {
+    type Error = RuntimeError;
     async fn delay(&self, _seed_data: &[u8; 32]) -> Result<(), RuntimeError> {
         Ok(())
     }

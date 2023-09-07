@@ -10,6 +10,7 @@ mod addr;
 mod electrs;
 mod error;
 mod iter;
+pub mod relay;
 
 use async_trait::async_trait;
 use backoff::{backoff::Backoff, future::retry, ExponentialBackoff};
@@ -48,6 +49,7 @@ pub use electrs::{ElectrsClient, Error as ElectrsError};
 pub use error::{BitcoinRpcError, ConversionError, Error};
 pub use iter::{reverse_stream_transactions, stream_blocks, stream_in_chain_transactions};
 use log::{info, trace, warn};
+pub use relay::*;
 use serde_json::error::Category as SerdeJsonCategory;
 pub use sp_core::H256;
 use std::{
@@ -100,6 +102,8 @@ const RANDOMIZATION_FACTOR: f64 = 0.25;
 
 const DERIVATION_KEY_LABEL: &str = "derivation-key";
 const DEPOSIT_LABEL: &str = "deposit";
+
+pub type DynBitcoinCoreApi = Arc<dyn BitcoinCoreApi + Send + Sync>;
 
 fn get_exponential_backoff() -> ExponentialBackoff {
     ExponentialBackoff {

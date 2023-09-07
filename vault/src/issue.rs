@@ -1,12 +1,12 @@
 use crate::{
-    delay::RandomDelay, metrics::publish_expected_bitcoin_balance, service::DynBitcoinCoreApi, system::DatabaseConfig,
-    Error, Event, IssueRequests, VaultIdManager,
+    metrics::publish_expected_bitcoin_balance, service::DynBitcoinCoreApi, system::DatabaseConfig, Error, Event,
+    IssueRequests, VaultIdManager,
 };
-use bitcoin::{BlockHash, Error as BitcoinError, Hash, PublicKey, Transaction, TransactionExt};
+use bitcoin::{relay::RandomDelay, BlockHash, Error as BitcoinError, Hash, PublicKey, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt, TryFutureExt};
 use runtime::{
-    AccountId, BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, ExecuteIssueEvent, H256Le,
-    InterBtcIssueRequest, InterBtcParachain, IssuePallet, IssueRequestStatus, PartialAddress, PrettyPrint,
+    AccountId, BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, Error as RuntimeError, ExecuteIssueEvent,
+    H256Le, InterBtcIssueRequest, InterBtcParachain, IssuePallet, IssueRequestStatus, PartialAddress, PrettyPrint,
     RequestIssueEvent, UtilFuncs, H256,
 };
 use sha2::{Digest, Sha256};
@@ -46,7 +46,7 @@ pub async fn process_issue_requests(
     issue_set: Arc<IssueRequests>,
     btc_start_height: u32,
     num_confirmations: u32,
-    random_delay: Arc<Box<dyn RandomDelay + Send + Sync>>,
+    random_delay: Arc<Box<dyn RandomDelay<Error = RuntimeError> + Send + Sync>>,
 ) -> Result<(), Error> {
     // NOTE: we should not stream transactions if using the light client
     // since it is quite expensive to fetch all transactions per block
@@ -228,7 +228,7 @@ async fn process_transaction_and_execute_issue(
     num_confirmations: u32,
     block_hash: BlockHash,
     transaction: Transaction,
-    random_delay: Arc<Box<dyn RandomDelay + Send + Sync>>,
+    random_delay: Arc<Box<dyn RandomDelay<Error = RuntimeError> + Send + Sync>>,
 ) -> Result<(), Error> {
     let addresses: Vec<BtcAddress> = transaction
         .extract_output_addresses()
