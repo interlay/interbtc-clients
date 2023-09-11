@@ -45,7 +45,7 @@ pub enum Error {
     InvalidConfig(Box<PriceConfigError<Currency>>),
     #[error("{0} not configured")]
     NotConfigured(FeedName),
-    #[error("Invalid dia symbol. Base must be USD & quote must be <symbol>=<id>. E.g. STDOT=Moonbeam/0xFA36Fe1dA08C89eC72Ea1F0143a35bFd5DAea108")]
+    #[error("Invalid dia symbol")]
     InvalidDiaSymbol,
 
     #[error("ReqwestError: {0}")]
