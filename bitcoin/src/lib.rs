@@ -1067,6 +1067,7 @@ impl BitcoinCoreApi for BitcoinCore {
 
         for entry in unspent {
             if self.electrs_client.is_tx_output_spent(&entry.txid, entry.vout).await? {
+                log::info!("{}:{} already spent", entry.txid, entry.vout);
                 // skip if already spent
                 continue;
             }
@@ -1077,6 +1078,8 @@ impl BitcoinCoreApi for BitcoinCore {
                 sequence: None,
             })
         }
+
+        log::info!("Sweeping {} from {} utxos", amount, utxos.len());
 
         let mut outputs = serde_json::Map::<String, serde_json::Value>::new();
         outputs.insert(address.to_string(), serde_json::Value::from(amount.to_btc()));
