@@ -105,6 +105,11 @@ impl ElectrsClient {
         Ok(ret)
     }
 
+    pub async fn is_tx_output_spent(&self, txid: &Txid, vout: u32) -> Result<bool, Error> {
+        let spending_value: SpendingValue = self.get_and_decode(&format!("/tx/{txid}/outspend/{vout}")).await?;
+        Ok(spending_value.spent)
+    }
+
     pub async fn get_blocks_tip_height(&self) -> Result<u32, Error> {
         Ok(self.get("/blocks/tip/height").await?.parse()?)
     }

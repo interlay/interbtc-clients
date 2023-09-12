@@ -1,5 +1,6 @@
 #![recursion_limit = "256"]
 #![feature(array_zip)]
+#![feature(is_some_and)]
 
 mod cancellation;
 mod cli;
