@@ -249,8 +249,6 @@ mod tests {
             async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError>;
             async fn get_pruned_height(&self) -> Result<u64, BitcoinError>;
             async fn get_new_address(&self) -> Result<Address, BitcoinError>;
-            async fn get_new_sweep_address(&self) -> Result<Address, BitcoinError>;
-            async fn get_last_sweep_height(&self) -> Result<Option<u32>, BitcoinError>;
             async fn get_new_public_key(&self) -> Result<PublicKey, BitcoinError>;
             fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, BitcoinError>;
             fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), BitcoinError>;
