@@ -305,6 +305,7 @@ impl VaultIdManager {
             Ok(private_key) => {
                 // TODO: remove this after the migration is complete
                 btc_rpc_shared.import_private_key(&private_key, true)?;
+                self.btc_rpc_shared_wallet_v2.import_private_key(&private_key, true)?;
             }
             Err(err) => {
                 tracing::error!("Could not find the derivation key in the bitcoin wallet");
