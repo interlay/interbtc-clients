@@ -53,7 +53,6 @@ pub use sp_core::H256;
 use std::{
     convert::TryInto,
     future::Future,
-    str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };

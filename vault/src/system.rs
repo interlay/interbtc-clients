@@ -9,7 +9,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use backoff::Error as BackoffError;
-use bitcoin::{Address, ConversionError, Error as BitcoinError, Network, PublicKey};
+use bitcoin::{Error as BitcoinError, Network, PublicKey};
 use clap::Parser;
 use futures::{
     channel::{mpsc, mpsc::Sender},

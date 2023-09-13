@@ -2,10 +2,7 @@ use std::{collections::HashMap, convert::TryInto, sync::Arc};
 
 use crate::{
     execution::parachain_blocks_to_bitcoin_blocks_rounded_up,
-    service::{
-        warp::{Rejection, Reply},
-        DynBitcoinCoreApi,
-    },
+    service::warp::{Rejection, Reply},
     system::{VaultData, VaultIdManager},
     Error,
 };
@@ -335,7 +332,7 @@ fn raw_value_as_currency(value: u128, currency: CurrencyId) -> Result<f64, Error
 
 pub async fn publish_locked_collateral<P: VaultRegistryPallet>(
     vault: &VaultData,
-    parachain_rpc: &P,
+    parachain_rpc: P,
 ) -> Result<(), Error> {
     if let Ok(actual_collateral) = parachain_rpc.get_vault_total_collateral(vault.vault_id.clone()).await {
         let actual_collateral = raw_value_as_currency(actual_collateral, vault.vault_id.collateral_currency())?;
@@ -346,7 +343,7 @@ pub async fn publish_locked_collateral<P: VaultRegistryPallet>(
 
 pub async fn publish_required_collateral<P: VaultRegistryPallet>(
     vault: &VaultData,
-    parachain_rpc: &P,
+    parachain_rpc: P,
 ) -> Result<(), Error> {
     if let Ok(required_collateral) = parachain_rpc
         .get_required_collateral_for_vault(vault.vault_id.clone())
@@ -397,7 +394,7 @@ pub async fn update_bitcoin_metrics(
     Ok(())
 }
 
-async fn publish_fee_budget_surplus(vault: &VaultData) -> Result<(), ServiceError<Error>> {
+async fn publish_fee_budget_surplus(vault: &VaultData) -> Result<(), Error> {
     let surplus = *vault.metrics.fee_budget_surplus.data.read().await;
     vault
         .metrics
@@ -671,6 +668,7 @@ pub async fn publish_tokio_metrics(
 #[cfg(all(test, feature = "parachain-metadata-kintsugi"))]
 mod tests {
     use super::*;
+    use crate::connection_manager::DynBitcoinCoreApi;
     use async_trait::async_trait;
     use bitcoin::{
         json, Address, Amount, BitcoinCoreApi, Block, BlockHash, BlockHeader, Error as BitcoinError, Network,
@@ -685,8 +683,6 @@ mod tests {
         Error as RuntimeError, InterBtcIssueRequest, InterBtcRedeemRequest, InterBtcReplaceRequest, InterBtcVault,
         LendingAssets, RequestIssueEvent, Token, VaultId, VaultStatus, DOT, H256, IBTC, INTR,
     };
-    use service::DynBitcoinCoreApi;
-    use std::collections::BTreeSet;
 
     mockall::mock! {
         Provider {}

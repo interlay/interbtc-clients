@@ -1,6 +1,6 @@
 use crate::{
-    delay::RandomDelay, metrics::publish_expected_bitcoin_balance, service::DynBitcoinCoreApi, system::DatabaseConfig,
-    Error, Event, IssueRequests, VaultIdManager,
+    delay::RandomDelay, metrics::publish_expected_bitcoin_balance, service::DynBitcoinCoreApi, Error, Event,
+    IssueRequests, VaultIdManager,
 };
 use bitcoin::{BlockHash, Error as BitcoinError, Hash, PublicKey, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt, TryFutureExt};
