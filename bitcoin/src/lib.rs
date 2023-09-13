@@ -811,7 +811,11 @@ impl BitcoinCoreApi for BitcoinCore {
             .rpc
             .list_transactions(Some(SWEEP_ADDRESS), Some(DEFAULT_MAX_TX_COUNT), None, None)?
             .into_iter()
-            .filter_map(|tx| tx.info.blockheight)
+            // we want to return None if there is no sweep tx for full nodes or new
+            // pruned nodes and we should return an error if any tx is still in the mempool
+            .map(|tx| tx.info.blockheight.ok_or(Error::ConfirmationError))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
             .min())
     }
 
@@ -1080,7 +1084,6 @@ impl BitcoinCoreApi for BitcoinCore {
         }
 
         log::info!("Sweeping {} from {} utxos", amount, utxos.len());
-
         let mut outputs = serde_json::Map::<String, serde_json::Value>::new();
         outputs.insert(address.to_string(), serde_json::Value::from(amount.to_btc()));
 

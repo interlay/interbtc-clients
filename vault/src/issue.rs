@@ -166,7 +166,7 @@ pub async fn add_keys_from_past_issue_request(
     // privkey
     let btc_end_height = bitcoin_core.get_block_count().await? as usize;
     let btc_pruned_start_height = bitcoin_core.get_pruned_height().await? as usize;
-    let btc_max_sweep_height = bitcoin_core.get_last_sweep_height().await?;
+    let btc_last_sweep_height = bitcoin_core.get_last_sweep_height().await?;
 
     let issues = issue_requests.clone().into_iter().map(|(_key, issue)| issue).collect();
     scanning_status.update(issues, btc_end_height);
@@ -184,7 +184,7 @@ pub async fn add_keys_from_past_issue_request(
                     .into_iter()
                     .filter_map(|(_, request)| {
                         // only import if address is AFTER last sweep height and BEFORE current pruning height
-                        if btc_max_sweep_height.is_some_and(|sweep_height| request.btc_height > sweep_height)
+                        if btc_last_sweep_height.map_or(true, |sweep_height| request.btc_height > sweep_height)
                             && (request.btc_height as usize) < btc_pruned_start_height
                         {
                             Some(request.btc_address.to_address(bitcoin_core.network()).ok()?)
