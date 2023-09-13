@@ -327,14 +327,6 @@ impl VaultIdManager {
             btc_rpc_shared.import_private_key(&private_key, false)?;
         }
 
-        // only sweep if using pruned node and there is no sweep tx yet to shared-v2
-        if btc_rpc_shared.get_pruned_height().await? != 0 && self.btc_rpc_shared_wallet_v2.get_last_sweep_height().await?.is_none() {
-            // sweep to old shared wallet which will then sweep again to the v2 wallet
-            let shared_wallet_address = btc_rpc_shared.get_new_address().await?;
-            let txid = btc_rpc.sweep_funds(shared_wallet_address).await?;
-            tracing::info!("Sent sweep tx: {txid}");
-        }
-
         tracing::info!("Initializing metrics...");
         let metrics = PerCurrencyMetrics::new(&vault_id);
         let data = VaultData {
@@ -447,7 +439,7 @@ impl VaultIdManager {
 pub struct VaultService {
     btc_parachain: InterBtcParachain,
     btc_rpc_master_wallet: DynBitcoinCoreApi,
-    btc_rpc_shared_wallet_v2: DynBitcoinCoreApi,
+    btc_rpc_shared_wallet: DynBitcoinCoreApi,
     config: VaultServiceConfig,
     monitoring_config: MonitoringConfig,
     shutdown: ShutdownSender,
@@ -559,7 +551,7 @@ impl VaultService {
         Self {
             btc_parachain: btc_parachain.clone(),
             btc_rpc_master_wallet: btc_rpc_master_wallet.clone(),
-            btc_rpc_shared_wallet_v2: btc_rpc_shared_wallet_v2.clone(),
+            btc_rpc_shared_wallet: btc_rpc_shared_wallet.clone(),
             config,
             monitoring_config,
             shutdown,
@@ -684,7 +676,7 @@ impl VaultService {
 
         tracing::info!("Adding keys from past issues...");
         issue::add_keys_from_past_issue_request(
-            &self.btc_rpc_shared_wallet_v2,
+            &self.btc_rpc_shared_wallet,
             &self.btc_parachain,
             &self.vault_id_manager.db,
         )
