@@ -523,8 +523,8 @@ impl BitcoinCoreApi for MockBitcoinCore {
             .unwrap();
         Ok(metadata)
     }
-    async fn sweep_funds(&self, _address: Address) -> Result<(), BitcoinError> {
-        Ok(())
+    async fn sweep_funds(&self, _address: Address) -> Result<Txid, BitcoinError> {
+        Ok(Txid::all_zeros())
     }
     async fn create_or_load_wallet(&self) -> Result<(), BitcoinError> {
         Ok(())

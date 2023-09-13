@@ -329,14 +329,11 @@ impl VaultIdManager {
         }
 
         // only sweep if using pruned node and there is no sweep tx yet to shared-v2
-        if btc_rpc_shared.get_pruned_height().await? != 0
-            && self.btc_rpc_shared_wallet_v2.get_last_sweep_height().await?.is_none()
-        {
+        if btc_rpc_shared.get_pruned_height().await? != 0 && self.btc_rpc_shared_wallet_v2.get_last_sweep_height().await?.is_none() {
             // sweep to old shared wallet which will then sweep again to the v2 wallet
             let shared_wallet_address = btc_rpc_shared.get_new_address().await?;
-            if let Err(err) = btc_rpc.sweep_funds(shared_wallet_address).await {
-                tracing::error!("Could not sweep funds: {err}");
-            }
+            let txid = btc_rpc.sweep_funds(shared_wallet_address).await?;
+            tracing::info!("Sent sweep tx: {txid}");
         }
 
         tracing::info!("Initializing metrics...");
@@ -389,9 +386,8 @@ impl VaultIdManager {
 
         // sweep funds from shared wallet to shared-v2
         let shared_v2_wallet_address = self.btc_rpc_shared_wallet_v2.get_new_sweep_address().await?;
-        if let Err(err) = self.btc_rpc_shared_wallet.sweep_funds(shared_v2_wallet_address).await {
-            tracing::error!("Could not sweep funds: {err}");
-        }
+        let txid = self.btc_rpc_shared_wallet.sweep_funds(shared_v2_wallet_address).await?;
+        tracing::info!("Sent sweep tx: {txid}");
 
         Ok(())
     }
