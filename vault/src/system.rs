@@ -376,11 +376,10 @@ impl VaultIdManager {
 
     // only run AFTER the separate currency wallet sweeps
     async fn sweep_shared_wallet(&self) -> Result<(), Error> {
-        if self.btc_rpc_shared_wallet.get_pruned_height().await? == 0 {
-            // no need to sweep, full node can rescan
-            return Ok(());
-        } else if self.btc_rpc_shared_wallet_v2.get_last_sweep_height().await?.is_some() {
-            // already has sweep tx
+        if self.btc_rpc_shared_wallet.get_pruned_height().await? == 0
+            || self.btc_rpc_shared_wallet_v2.get_last_sweep_height().await?.is_some()
+        {
+            // no need to sweep, full node can rescan or already has sweep tx
             return Ok(());
         }
 
