@@ -1064,7 +1064,7 @@ impl BitcoinCoreApi for BitcoinCore {
     }
 
     async fn sweep_funds(&self, address: Address) -> Result<Txid, Error> {
-        let unspent = self.rpc.list_unspent(Some(0), None, None, None, None)?;
+        let unspent = self.rpc.list_unspent(None, None, None, None, None)?;
 
         let mut amount = Amount::ZERO;
         let mut utxos = Vec::<json::CreateRawTransactionInput>::new();
