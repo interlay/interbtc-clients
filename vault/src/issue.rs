@@ -86,7 +86,7 @@ struct RescanStatus {
 impl RescanStatus {
     // there was a bug pre-v2 that set rescanning status to an invalid range.
     // by changing the keyname we effectively force a reset
-    const KEY: &str = "rescan-status-v4";
+    const KEY: &str = "rescan-status-v3";
     fn update(&mut self, mut issues: Vec<InterBtcIssueRequest>, current_bitcoin_height: usize) {
         // Only look at issues that haven't been processed yet
         issues.retain(|issue| issue.opentime > self.newest_issue_height);
