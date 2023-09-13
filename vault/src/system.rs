@@ -374,6 +374,7 @@ impl VaultIdManager {
         Ok(())
     }
 
+    // only run AFTER the separate currency wallet sweeps
     async fn sweep_shared_wallet(&self) -> Result<(), Error> {
         if self.btc_rpc_shared_wallet.get_pruned_height().await? == 0 {
             // no need to sweep, full node can rescan
@@ -385,8 +386,15 @@ impl VaultIdManager {
 
         // sweep funds from shared wallet to shared-v2
         let shared_v2_wallet_address = self.btc_rpc_shared_wallet_v2.get_new_sweep_address().await?;
-        if let Err(err) = self.btc_rpc_shared_wallet.sweep_funds(shared_v2_wallet_address).await {
-            tracing::error!("Could not sweep funds: {err}");
+        match self.btc_rpc_shared_wallet.sweep_funds(shared_v2_wallet_address).await {
+            Ok(txid) => {
+                self.btc_rpc_shared_wallet
+                    .wait_for_transaction_metadata(txid, 1, None, true)
+                    .await?;
+            }
+            Err(err) => {
+                tracing::error!("Could not sweep funds: {err}");
+            }
         }
 
         Ok(())
