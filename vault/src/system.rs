@@ -219,7 +219,6 @@ pub struct VaultIdManager {
     btc_parachain: InterBtcParachain,
     btc_rpc_master_wallet: DynBitcoinCoreApi,
     pub(crate) btc_rpc_shared_wallet: DynBitcoinCoreApi,
-    pub(crate) btc_rpc_shared_wallet_v2: DynBitcoinCoreApi,
     // TODO: remove this
     #[allow(clippy::type_complexity)]
     constructor: Arc<Box<dyn Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync>>,
@@ -231,7 +230,6 @@ impl VaultIdManager {
         btc_parachain: InterBtcParachain,
         btc_rpc_master_wallet: DynBitcoinCoreApi,
         btc_rpc_shared_wallet: DynBitcoinCoreApi,
-        btc_rpc_shared_wallet_v2: DynBitcoinCoreApi,
         constructor: impl Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync + 'static,
         db_path: String,
     ) -> Self {
@@ -240,7 +238,6 @@ impl VaultIdManager {
             constructor: Arc::new(Box::new(constructor)),
             btc_rpc_master_wallet,
             btc_rpc_shared_wallet,
-            btc_rpc_shared_wallet_v2,
             btc_parachain,
             db: DatabaseConfig { path: db_path },
         }
@@ -251,7 +248,6 @@ impl VaultIdManager {
         btc_parachain: InterBtcParachain,
         btc_rpc_master_wallet: DynBitcoinCoreApi,
         btc_rpc_shared_wallet: DynBitcoinCoreApi,
-        btc_rpc_shared_wallet_v2: DynBitcoinCoreApi,
         map: HashMap<VaultId, DynBitcoinCoreApi>,
         db_path: &str,
     ) -> Self {
@@ -273,7 +269,6 @@ impl VaultIdManager {
             constructor: Arc::new(Box::new(|_| unimplemented!())),
             btc_rpc_master_wallet,
             btc_rpc_shared_wallet,
-            btc_rpc_shared_wallet_v2,
             btc_parachain,
             db: DatabaseConfig {
                 path: db_path.to_string(),
@@ -317,9 +312,10 @@ impl VaultIdManager {
         }
 
         tracing::info!("Merging wallet for {:?}", vault_id);
+        let all_addresses = btc_rpc.list_addresses()?;
         // issue keys should be imported separately but we need to iterate
         // through currency specific wallets to get change addresses
-        for address in btc_rpc.list_addresses()? {
+        for address in &all_addresses {
             tracing::info!("Found {:?}", address);
             // get private key from currency specific wallet
             let private_key = btc_rpc.dump_private_key(&address)?;
@@ -327,11 +323,17 @@ impl VaultIdManager {
             btc_rpc_shared.import_private_key(&private_key, false)?;
         }
 
+        if btc_rpc_shared.get_pruned_height().await? != 0 {
+            // rescan via electrs to import or remove change utxos
+            // this is required because pruned nodes cannot rescan themselves
+            btc_rpc_shared.rescan_electrs_for_addresses(all_addresses).await?;
+        }
+
         tracing::info!("Initializing metrics...");
         let metrics = PerCurrencyMetrics::new(&vault_id);
         let data = VaultData {
             vault_id: vault_id.clone(),
-            btc_rpc: self.btc_rpc_shared_wallet_v2.clone(),
+            btc_rpc: btc_rpc_shared,
             metrics: metrics.clone(),
         };
         PerCurrencyMetrics::initialize_values(self.btc_parachain.clone(), &data).await;
@@ -363,23 +365,6 @@ impl VaultIdManager {
                 }
             }
         }
-        Ok(())
-    }
-
-    async fn sweep_shared_wallet(&self) -> Result<(), Error> {
-        if self.btc_rpc_shared_wallet.get_pruned_height().await? == 0 {
-            // no need to sweep, full node can rescan
-            return Ok(());
-        } else if self.btc_rpc_shared_wallet_v2.get_last_sweep_height().await?.is_some() {
-            // already has sweep tx
-            return Ok(());
-        }
-
-        // sweep funds from shared wallet to shared-v2
-        let shared_v2_wallet_address = self.btc_rpc_shared_wallet_v2.get_new_sweep_address().await?;
-        let txid = self.btc_rpc_shared_wallet.sweep_funds(shared_v2_wallet_address).await?;
-        tracing::info!("Sent sweep tx: {txid}");
-
         Ok(())
     }
 
@@ -455,7 +440,6 @@ impl Service<VaultServiceConfig> for VaultService {
         btc_parachain: InterBtcParachain,
         btc_rpc_master_wallet: DynBitcoinCoreApi,
         btc_rpc_shared_wallet: DynBitcoinCoreApi,
-        btc_rpc_shared_wallet_v2: DynBitcoinCoreApi,
         config: VaultServiceConfig,
         monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
@@ -466,7 +450,6 @@ impl Service<VaultServiceConfig> for VaultService {
             btc_parachain,
             btc_rpc_master_wallet,
             btc_rpc_shared_wallet,
-            btc_rpc_shared_wallet_v2,
             config,
             monitoring_config,
             shutdown,
@@ -541,7 +524,6 @@ impl VaultService {
         btc_parachain: InterBtcParachain,
         btc_rpc_master_wallet: DynBitcoinCoreApi,
         btc_rpc_shared_wallet: DynBitcoinCoreApi,
-        btc_rpc_shared_wallet_v2: DynBitcoinCoreApi,
         config: VaultServiceConfig,
         monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
@@ -559,7 +541,6 @@ impl VaultService {
                 btc_parachain,
                 btc_rpc_master_wallet,
                 btc_rpc_shared_wallet,
-                btc_rpc_shared_wallet_v2,
                 constructor,
                 db_path,
             ),

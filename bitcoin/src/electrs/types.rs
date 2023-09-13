@@ -66,15 +66,3 @@ pub struct UtxoValue {
     pub status: TransactionStatus,
     pub value: u64,
 }
-
-// https://github.com/Blockstream/electrs/blob/adedee15f1fe460398a7045b292604df2161adc0/src/rest.rs#L448-L457
-#[derive(Deserialize)]
-pub struct SpendingValue {
-    pub spent: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub txid: Option<Txid>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vin: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<TransactionStatus>,
-}

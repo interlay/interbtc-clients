@@ -28,7 +28,6 @@ pub trait Service<Config> {
         btc_parachain: BtcParachain,
         bitcoin_core_master: DynBitcoinCoreApi,
         bitcoin_core_shared: DynBitcoinCoreApi,
-        bitcoin_core_shared_v2: DynBitcoinCoreApi,
         config: Config,
         monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
@@ -108,9 +107,6 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
             let bitcoin_core_shared =
                 config_copy.new_client_with_network(Some(format!("{prefix}-shared")), network_copy)?;
             bitcoin_core_shared.create_or_load_wallet().await?;
-            let bitcoin_core_shared_v2 =
-                config_copy.new_client_with_network(Some(format!("{prefix}-shared-v2")), network_copy)?;
-            bitcoin_core_shared_v2.create_or_load_wallet().await?;
 
             let constructor = move |vault_id: VaultId| {
                 let collateral_currency: CurrencyId = vault_id.collateral_currency();
@@ -132,7 +128,6 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
                 btc_parachain,
                 bitcoin_core_master,
                 bitcoin_core_shared,
-                bitcoin_core_shared_v2,
                 config,
                 self.monitoring_config.clone(),
                 shutdown_tx.clone(),
