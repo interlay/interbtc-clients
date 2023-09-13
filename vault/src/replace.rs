@@ -285,7 +285,7 @@ mod tests {
                 fee_rate: SatPerVbyte,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, BitcoinError>;
-            async fn sweep_funds(&self, address: Address) -> Result<Txid, BitcoinError>;
+            async fn sweep_funds(&self, address: Address) -> Result<(), BitcoinError>;
             async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;
             async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), BitcoinError>;
             async fn rescan_electrs_for_addresses(&self, addresses: Vec<Address>) -> Result<(), BitcoinError>;
