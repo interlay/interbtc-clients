@@ -241,7 +241,6 @@ mod tests {
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, BitcoinError>;
             fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, BitcoinError>;
             fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, BitcoinError>;
-            fn list_addresses(&self) -> Result<Vec<Address>, BitcoinError>;
             async fn get_block_count(&self) -> Result<u64, BitcoinError>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError>;
             async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, BitcoinError>;
@@ -250,8 +249,8 @@ mod tests {
             async fn get_pruned_height(&self) -> Result<u64, BitcoinError>;
             async fn get_new_address(&self) -> Result<Address, BitcoinError>;
             async fn get_new_public_key(&self) -> Result<PublicKey, BitcoinError>;
-            fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, BitcoinError>;
-            fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), BitcoinError>;
+            fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, BitcoinError>;
+            fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), BitcoinError>;
             async fn add_new_deposit_key(
                 &self,
                 public_key: PublicKey,

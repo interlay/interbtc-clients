@@ -137,12 +137,6 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(Default::default())
     }
 
-    // TODO: remove this later
-    fn list_addresses(&self) -> Result<Vec<Address>, BitcoinError> {
-        // don't need to migrate keys
-        Ok(Default::default())
-    }
-
     async fn get_raw_tx(&self, txid: &Txid, _block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError> {
         Ok(self.electrs.get_raw_tx(txid).await?)
     }
@@ -172,17 +166,11 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(self.private_key.public_key(&self.secp_ctx))
     }
 
-    fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, BitcoinError> {
-        self.wallet
-            .key_store
-            .read()
-            .map_err(Into::<Error>::into)?
-            .get(address)
-            .ok_or(Error::NoPrivateKey.into())
-            .cloned()
+    fn dump_derivation_key(&self, _public_key: &PublicKey) -> Result<PrivateKey, BitcoinError> {
+        Ok(self.private_key)
     }
 
-    fn import_private_key(&self, _private_key: &PrivateKey, _is_derivation_key: bool) -> Result<(), BitcoinError> {
+    fn import_derivation_key(&self, _private_key: &PrivateKey) -> Result<(), BitcoinError> {
         // nothing to do
         Ok(())
     }

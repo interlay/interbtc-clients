@@ -151,7 +151,6 @@ pub async fn add_keys_from_past_issue_request(
     let mut scanning_status = RescanStatus::get(vault_id, db)?;
     tracing::info!("initial status: = {scanning_status:?}");
 
-    // TODO: remove filter since we use a shared wallet
     let issue_requests: Vec<_> = btc_parachain
         .get_vault_issue_requests(btc_parachain.get_account_id().clone())
         .await?
@@ -165,7 +164,7 @@ pub async fn add_keys_from_past_issue_request(
         }
     }
 
-    // read height only _after_ the last add_new_deposit_key. If a new block arrives
+    // read height only _after_ the last add_new_deposit_key.If a new block arrives
     // while we rescan, bitcoin core will correctly recognize addressed associated with the
     // privkey
     let btc_end_height = bitcoin_core.get_block_count().await? as usize;
