@@ -253,7 +253,7 @@ mod tests {
                 fee_rate: SatPerVbyte,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
-            async fn sweep_funds(&self, address: Address) -> Result<Txid, Error>;
+            async fn sweep_funds(&self, address: Address) -> Result<(), Error>;
             async fn create_or_load_wallet(&self) -> Result<(), Error>;
             async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error>;
             async fn rescan_electrs_for_addresses(
