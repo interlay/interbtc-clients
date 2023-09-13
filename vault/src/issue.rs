@@ -86,7 +86,7 @@ struct RescanStatus {
 impl RescanStatus {
     // there was a bug pre-v2 that set rescanning status to an invalid range.
     // by changing the keyname we effectively force a reset
-    const KEY: &str = "rescan-status-v3";
+    const KEY: &str = "rescan-status-v4";
     fn update(&mut self, mut issues: Vec<InterBtcIssueRequest>, current_bitcoin_height: usize) {
         // Only look at issues that haven't been processed yet
         issues.retain(|issue| issue.opentime > self.newest_issue_height);
@@ -144,7 +144,7 @@ impl RescanStatus {
     }
 }
 
-pub async fn add_keys_from_past_issue_request(
+pub async fn add_keys_from_past_issue_request_old(
     bitcoin_core: &DynBitcoinCoreApi,
     btc_parachain: &InterBtcParachain,
     db: &DatabaseConfig,
@@ -182,7 +182,88 @@ pub async fn add_keys_from_past_issue_request(
                 issue_requests
                     .into_iter()
                     .filter_map(|(_, request)| {
+                        // only import if BEFORE current pruning height
                         if (request.btc_height as usize) < btc_pruned_start_height {
+                            Some(request.btc_address.to_address(bitcoin_core.network()).ok()?)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect(),
+            )
+            .await?;
+    }
+
+    // save progress s.t. we don't rescan pruned range again if we crash now
+    scanning_status.store(account_id, db)?;
+
+    let mut chunk_size = 1;
+    // rescan the blockchain in chunks, so that we can save progress. The code below
+    // aims to have each chunk take about 10 seconds (arbitrarily chosen value).
+    while let Some((chunk_start, chunk_end)) = scanning_status.process_blocks(chunk_size) {
+        tracing::info!("Rescanning bitcoin chain from {} to {}...", chunk_start, chunk_end);
+
+        let start_time = Instant::now();
+
+        bitcoin_core.rescan_blockchain(chunk_start, chunk_end).await?;
+
+        // with the code below the rescan time should remain between 5 and 20 seconds
+        // after the first couple of rounds.
+        if start_time.elapsed() < Duration::from_secs(10) {
+            chunk_size = chunk_size.saturating_mul(2);
+        } else {
+            chunk_size = (chunk_size.checked_div(2).ok_or(Error::ArithmeticUnderflow)?).max(1);
+        }
+
+        scanning_status.store(account_id, db)?;
+    }
+
+    Ok(())
+}
+
+pub async fn add_keys_from_past_issue_request_new(
+    bitcoin_core: &DynBitcoinCoreApi,
+    btc_parachain: &InterBtcParachain,
+    db: &DatabaseConfig,
+) -> Result<(), Error> {
+    let account_id = btc_parachain.get_account_id();
+    let mut scanning_status = RescanStatus::get(&account_id, db)?;
+    tracing::info!("Scanning: {scanning_status:?}");
+
+    let issue_requests = btc_parachain.get_vault_issue_requests(account_id.clone()).await?;
+
+    for (issue_id, request) in issue_requests.clone().into_iter() {
+        if let Err(e) = add_new_deposit_key(bitcoin_core, issue_id, request.btc_public_key).await {
+            tracing::error!("Failed to add deposit key #{}: {}", issue_id, e.to_string());
+        }
+    }
+
+    // read height only _after_ the last add_new_deposit_key. If a new block arrives
+    // while we rescan, bitcoin core will correctly recognize addressed associated with the
+    // privkey
+    let btc_end_height = bitcoin_core.get_block_count().await? as usize;
+    let btc_pruned_start_height = bitcoin_core.get_pruned_height().await? as usize;
+    let btc_last_sweep_height = bitcoin_core.get_last_sweep_height().await?;
+
+    let issues = issue_requests.clone().into_iter().map(|(_key, issue)| issue).collect();
+    scanning_status.update(issues, btc_end_height);
+
+    // use electrs to scan the portion that is not scannable by bitcoin core
+    if let Some((start, end)) = scanning_status.prune(btc_pruned_start_height) {
+        tracing::info!(
+            "Also checking electrs for issue requests between {} and {}...",
+            start,
+            end
+        );
+        bitcoin_core
+            .rescan_electrs_for_addresses(
+                issue_requests
+                    .into_iter()
+                    .filter_map(|(_, request)| {
+                        // only import if address is AFTER last sweep height and BEFORE current pruning height
+                        if btc_last_sweep_height.map_or(true, |sweep_height| request.btc_height > sweep_height)
+                            && (request.btc_height as usize) < btc_pruned_start_height
+                        {
                             Some(request.btc_address.to_address(bitcoin_core.network()).ok()?)
                         } else {
                             None

@@ -405,6 +405,15 @@ impl BitcoinCoreApi for MockBitcoinCore {
         let address = BtcAddress::P2PKH(H160::from(bytes));
         Ok(address.to_address(Network::Regtest)?)
     }
+
+    async fn get_new_sweep_address(&self) -> Result<Address, BitcoinError> {
+        self.get_new_address().await
+    }
+
+    async fn get_last_sweep_height(&self) -> Result<Option<u32>, BitcoinError> {
+        Ok(None)
+    }
+
     async fn get_new_public_key(&self) -> Result<PublicKey, BitcoinError> {
         let secp = Secp256k1::new();
         let raw_secret_key: [u8; SECRET_KEY_SIZE] = thread_rng().gen();
@@ -514,6 +523,9 @@ impl BitcoinCoreApi for MockBitcoinCore {
             .unwrap();
         Ok(metadata)
     }
+    async fn sweep_funds(&self, _address: Address) -> Result<Txid, BitcoinError> {
+        Ok(Txid::all_zeros())
+    }
     async fn create_or_load_wallet(&self) -> Result<(), BitcoinError> {
         Ok(())
     }
@@ -524,6 +536,7 @@ impl BitcoinCoreApi for MockBitcoinCore {
     async fn rescan_electrs_for_addresses(&self, addresses: Vec<Address>) -> Result<(), BitcoinError> {
         Ok(())
     }
+
     fn get_utxo_count(&self) -> Result<usize, BitcoinError> {
         Ok(0)
     }

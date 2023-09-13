@@ -782,6 +782,8 @@ mod tests {
             async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinError>;
             async fn get_pruned_height(&self) -> Result<u64, BitcoinError>;
             async fn get_new_address(&self) -> Result<Address, BitcoinError>;
+            async fn get_new_sweep_address(&self) -> Result<Address, BitcoinError>;
+            async fn get_last_sweep_height(&self) -> Result<Option<u32>, BitcoinError>;
             async fn get_new_public_key(&self) -> Result<PublicKey, BitcoinError>;
             fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, BitcoinError>;
             fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), BitcoinError>;
@@ -793,6 +795,7 @@ mod tests {
             async fn wait_for_transaction_metadata(&self, txid: Txid, num_confirmations: u32, block_hash: Option<BlockHash>, is_wallet: bool) -> Result<TransactionMetadata, BitcoinError>;
             async fn create_and_send_transaction(&self, address: Address, sat: u64, fee_rate: SatPerVbyte, request_id: Option<H256>) -> Result<Txid, BitcoinError>;
             async fn send_to_address(&self, address: Address, sat: u64, request_id: Option<H256>, fee_rate: SatPerVbyte, num_confirmations: u32) -> Result<TransactionMetadata, BitcoinError>;
+            async fn sweep_funds(&self, address: Address) -> Result<Txid, BitcoinError>;
             async fn create_or_load_wallet(&self) -> Result<(), BitcoinError>;
             async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), BitcoinError>;
             async fn rescan_electrs_for_addresses(&self, addresses: Vec<Address>) -> Result<(), BitcoinError>;
