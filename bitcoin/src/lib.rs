@@ -469,11 +469,6 @@ impl BitcoinCore {
 
             // Make sure signing is successful
             if signed_funded_raw_tx.errors.is_some() {
-                log::warn!(
-                    "Received bitcoin funding errors (complete={}): {:?}",
-                    signed_funded_raw_tx.complete,
-                    signed_funded_raw_tx.errors
-                );
                 return Err(Error::TransactionSigningError);
             }
 
@@ -1097,7 +1092,7 @@ impl BitcoinCoreApi for BitcoinCore {
             // filter to only import
             // a) payments in the blockchain (not in mempool), and
             // b) payments TO the address (as bitcoin core will already know about transactions spending FROM it)
-            let confirmed_payments_to = all_transactions.iter().filter(|tx| {
+            let confirmed_payments_to = all_transactions.into_iter().filter(|tx| {
                 if let Some(status) = &tx.status {
                     if !status.confirmed {
                         return false;
@@ -1117,24 +1112,6 @@ impl BitcoinCoreApi for BitcoinCore {
                     "importprunedfunds",
                     &[serde_json::to_value(raw_tx)?, serde_json::to_value(raw_merkle_proof)?],
                 )?;
-            }
-            // TODO: remove this migration after the next runtime upgrade
-            // filter to remove spent funds, the previous wallet migration caused
-            // signing failures for pruned nodes because they tried to double spend
-            let confirmed_payments_from = all_transactions.iter().filter(|tx| {
-                if let Some(status) = &tx.status {
-                    if !status.confirmed {
-                        return false;
-                    }
-                };
-                tx.vin
-                    .iter()
-                    .filter_map(|input| input.prevout.clone())
-                    .any(|output| matches!(&output.scriptpubkey_address, Some(addr) if addr == &address))
-            });
-            for transaction in confirmed_payments_from {
-                self.rpc
-                    .call("removeprunedfunds", &[serde_json::to_value(transaction.txid)?])?;
             }
         }
         Ok(())
