@@ -459,7 +459,6 @@ impl VaultIdManager {
 pub struct VaultService {
     btc_parachain: InterBtcParachain,
     btc_rpc_master_wallet: DynBitcoinCoreApi,
-    btc_rpc_shared_wallet: DynBitcoinCoreApi,
     btc_rpc_shared_wallet_v2: DynBitcoinCoreApi,
     config: VaultServiceConfig,
     monitoring_config: MonitoringConfig,
@@ -572,7 +571,6 @@ impl VaultService {
         Self {
             btc_parachain: btc_parachain.clone(),
             btc_rpc_master_wallet: btc_rpc_master_wallet.clone(),
-            btc_rpc_shared_wallet: btc_rpc_shared_wallet.clone(),
             btc_rpc_shared_wallet_v2: btc_rpc_shared_wallet_v2.clone(),
             config,
             monitoring_config,
@@ -694,18 +692,10 @@ impl VaultService {
         }?;
 
         // purposefully _after_ maybe_register_vault and _before_ other calls
-        self.vault_id_manager.fetch_vault_ids(self.config.only_migrate).await?;
+        self.vault_id_manager.fetch_vault_ids().await?;
 
         tracing::info!("Adding keys from past issues...");
-        issue::add_keys_from_past_issue_request_old(
-            &self.btc_rpc_shared_wallet,
-            &self.btc_parachain,
-            &self.vault_id_manager.db,
-        )
-        .await?;
-
-        self.vault_id_manager.sweep_shared_wallet().await?;
-        issue::add_keys_from_past_issue_request_new(
+        issue::add_keys_from_past_issue_request(
             &self.btc_rpc_shared_wallet_v2,
             &self.btc_parachain,
             &self.vault_id_manager.db,
