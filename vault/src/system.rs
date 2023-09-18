@@ -125,6 +125,10 @@ pub struct VaultServiceConfig {
     /// the path is generated from the --keyname argument
     #[clap(long)]
     pub db_path: Option<String>,
+
+    /// run the wallet migration, but don't start regular vault services
+    #[clap(long)]
+    pub only_migrate: bool,
 }
 
 async fn active_block_listener(
@@ -349,24 +353,24 @@ impl VaultIdManager {
         Ok(())
     }
 
-    pub async fn fetch_vault_ids(&self) -> Result<(), Error> {
+    pub async fn fetch_vault_ids(&self, only_migrate: bool) -> Result<(), Error> {
         for vault_id in self
             .btc_parachain
             .get_vaults_by_account_id(self.btc_parachain.get_account_id())
             .await?
         {
-            match is_vault_registered(&self.btc_parachain, &vault_id).await {
+            match (only_migrate, is_vault_registered(&self.btc_parachain, &vault_id).await) {
                 // TODO: import keys for liquidated vaults?
-                Err(Error::RuntimeError(RuntimeError::VaultLiquidated)) => {
+                (false, Err(Error::RuntimeError(RuntimeError::VaultLiquidated))) => {
                     tracing::error!(
                         "[{}] Vault is liquidated -- not going to process events for this vault.",
                         vault_id.pretty_print()
                     );
                 }
-                Ok(_) => {
+                (_, Ok(_)) | (true, Err(Error::RuntimeError(RuntimeError::VaultLiquidated))) => {
                     self.add_vault_id(vault_id.clone()).await?;
                 }
-                Err(x) => {
+                (_, Err(x)) => {
                     return Err(x);
                 }
             }
@@ -690,7 +694,7 @@ impl VaultService {
         }?;
 
         // purposefully _after_ maybe_register_vault and _before_ other calls
-        self.vault_id_manager.fetch_vault_ids().await?;
+        self.vault_id_manager.fetch_vault_ids(self.config.only_migrate).await?;
 
         tracing::info!("Adding keys from past issues...");
         issue::add_keys_from_past_issue_request_old(
@@ -707,6 +711,11 @@ impl VaultService {
             &self.vault_id_manager.db,
         )
         .await?;
+
+        if self.config.only_migrate {
+            tracing::info!("Only migrating - quitting now.");
+            return Err(BackoffError::Permanent(Error::ClientShutdown));
+        }
 
         let startup_height = self.await_parachain_block().await?;
 
