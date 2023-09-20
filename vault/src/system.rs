@@ -125,10 +125,6 @@ pub struct VaultServiceConfig {
     /// the path is generated from the --keyname argument
     #[clap(long)]
     pub db_path: Option<String>,
-
-    /// run the wallet migration, but don't start regular vault services
-    #[clap(long)]
-    pub only_migrate: bool,
 }
 
 async fn active_block_listener(
@@ -334,7 +330,7 @@ impl VaultIdManager {
         Ok(())
     }
 
-    pub async fn fetch_vault_ids(&self, only_migrate: bool) -> Result<(), Error> {
+    pub async fn fetch_vault_ids(&self) -> Result<(), Error> {
         for vault_id in self
             .btc_parachain
             .get_vaults_by_account_id(self.btc_parachain.get_account_id())
@@ -347,10 +343,10 @@ impl VaultIdManager {
                         vault_id.pretty_print()
                     );
                 }
-                (_, Ok(_)) | (true, Err(Error::RuntimeError(RuntimeError::VaultLiquidated))) => {
+                Ok(_) => {
                     self.add_vault_id(vault_id.clone()).await?;
                 }
-                (_, Err(x)) => {
+                Err(x) => {
                     return Err(x);
                 }
             }
