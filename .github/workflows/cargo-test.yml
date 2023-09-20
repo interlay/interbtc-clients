@@ -117,7 +117,7 @@ jobs:
           mkdir -p ./target/release/
           mv ./artifacts/${{ matrix.client }} ./target/release/${{ matrix.client }}-${{ matrix.metadata }}
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
 
       - name: Setup docker context for buildx
         id: buildx-context
@@ -177,7 +177,7 @@ jobs:
         with:
           path: artifacts/
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
 
       - name: Setup docker context for buildx
         id: buildx-context
