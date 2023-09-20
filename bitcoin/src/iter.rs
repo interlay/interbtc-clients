@@ -207,18 +207,15 @@ mod tests {
             async fn wait_for_block(&self, height: u32, num_confirmations: u32) -> Result<Block, Error>;
             fn get_balance(&self, min_confirmations: Option<u32>) -> Result<Amount, Error>;
             fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error>;
-            fn list_addresses(&self) -> Result<Vec<Address>, Error>;
             async fn get_block_count(&self) -> Result<u64, Error>;
             async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
             async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, Error>;
             async fn get_proof(&self, txid: Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
             async fn get_block_hash(&self, height: u32) -> Result<BlockHash, Error>;
             async fn get_new_address(&self) -> Result<Address, Error>;
-            async fn get_new_sweep_address(&self) -> Result<Address, Error>;
-            async fn get_last_sweep_height(&self) -> Result<Option<u32>, Error>;
             async fn get_new_public_key(&self) -> Result<PublicKey, Error>;
-            fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, Error>;
-            fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), Error>;
+            fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, Error>;
+            fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), Error>;
             async fn add_new_deposit_key(
                 &self,
                 public_key: PublicKey,
@@ -253,7 +250,6 @@ mod tests {
                 fee_rate: SatPerVbyte,
                 num_confirmations: u32,
             ) -> Result<TransactionMetadata, Error>;
-            async fn sweep_funds(&self, address: Address) -> Result<Txid, Error>;
             async fn create_or_load_wallet(&self) -> Result<(), Error>;
             async fn rescan_blockchain(&self, start_height: usize, end_height: usize) -> Result<(), Error>;
             async fn rescan_electrs_for_addresses(

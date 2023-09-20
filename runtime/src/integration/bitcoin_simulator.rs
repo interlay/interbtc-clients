@@ -341,9 +341,6 @@ impl BitcoinCoreApi for MockBitcoinCore {
     fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, BitcoinError> {
         Ok(vec![])
     }
-    fn list_addresses(&self) -> Result<Vec<Address>, BitcoinError> {
-        Ok(vec![])
-    }
     async fn get_block_count(&self) -> Result<u64, BitcoinError> {
         Ok((self.blocks.read().await.len() - 1).try_into().unwrap())
     }
@@ -405,15 +402,6 @@ impl BitcoinCoreApi for MockBitcoinCore {
         let address = BtcAddress::P2PKH(H160::from(bytes));
         Ok(address.to_address(Network::Regtest)?)
     }
-
-    async fn get_new_sweep_address(&self) -> Result<Address, BitcoinError> {
-        self.get_new_address().await
-    }
-
-    async fn get_last_sweep_height(&self) -> Result<Option<u32>, BitcoinError> {
-        Ok(None)
-    }
-
     async fn get_new_public_key(&self) -> Result<PublicKey, BitcoinError> {
         let secp = Secp256k1::new();
         let raw_secret_key: [u8; SECRET_KEY_SIZE] = thread_rng().gen();
@@ -421,10 +409,10 @@ impl BitcoinCoreApi for MockBitcoinCore {
         let public_key = secp256k1::PublicKey::from_secret_key(&secp, &secret_key);
         Ok(PublicKey::new(public_key))
     }
-    fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, BitcoinError> {
+    fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, BitcoinError> {
         todo!()
     }
-    fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), BitcoinError> {
+    fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), BitcoinError> {
         todo!()
     }
     async fn add_new_deposit_key(&self, _public_key: PublicKey, _secret_key: Vec<u8>) -> Result<(), BitcoinError> {
@@ -523,9 +511,6 @@ impl BitcoinCoreApi for MockBitcoinCore {
             .unwrap();
         Ok(metadata)
     }
-    async fn sweep_funds(&self, _address: Address) -> Result<Txid, BitcoinError> {
-        Ok(Txid::all_zeros())
-    }
     async fn create_or_load_wallet(&self) -> Result<(), BitcoinError> {
         Ok(())
     }
@@ -536,7 +521,6 @@ impl BitcoinCoreApi for MockBitcoinCore {
     async fn rescan_electrs_for_addresses(&self, addresses: Vec<Address>) -> Result<(), BitcoinError> {
         Ok(())
     }
-
     fn get_utxo_count(&self) -> Result<usize, BitcoinError> {
         Ok(0)
     }

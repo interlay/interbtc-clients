@@ -26,9 +26,7 @@ pub trait Service<Config> {
 
     fn new_service(
         btc_parachain: BtcParachain,
-        bitcoin_core_master: DynBitcoinCoreApi,
-        bitcoin_core_shared: DynBitcoinCoreApi,
-        bitcoin_core_shared_v2: DynBitcoinCoreApi,
+        bitcoin_core: DynBitcoinCoreApi,
         config: Config,
         monitoring_config: MonitoringConfig,
         shutdown: ShutdownSender,
@@ -85,7 +83,7 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
             let shutdown_tx = ShutdownSender::new();
 
             let prefix = self.wallet_name.clone().unwrap_or_else(|| "vault".to_string());
-            let bitcoin_core_master = self.bitcoin_config.new_client(Some(format!("{prefix}-master"))).await?;
+            let bitcoin_core = self.bitcoin_config.new_client(Some(format!("{prefix}-master"))).await?;
 
             // only open connection to parachain after bitcoind sync to prevent timeout
             let signer = self.signer.clone();
@@ -100,18 +98,7 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
             .await?;
 
             let config_copy = self.bitcoin_config.clone();
-            let network_copy = bitcoin_core_master.network();
-
-            // use a separate wallet for all bitcoin transactions
-            // to make exporting the private key easier from the
-            // master wallet if we switch to descriptor wallets
-            let bitcoin_core_shared =
-                config_copy.new_client_with_network(Some(format!("{prefix}-shared")), network_copy)?;
-            bitcoin_core_shared.create_or_load_wallet().await?;
-            let bitcoin_core_shared_v2 =
-                config_copy.new_client_with_network(Some(format!("{prefix}-shared-v2")), network_copy)?;
-            bitcoin_core_shared_v2.create_or_load_wallet().await?;
-
+            let network_copy = bitcoin_core.network();
             let constructor = move |vault_id: VaultId| {
                 let collateral_currency: CurrencyId = vault_id.collateral_currency();
                 let wrapped_currency: CurrencyId = vault_id.wrapped_currency();
@@ -130,9 +117,7 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
 
             let service = S::new_service(
                 btc_parachain,
-                bitcoin_core_master,
-                bitcoin_core_shared,
-                bitcoin_core_shared_v2,
+                bitcoin_core,
                 config,
                 self.monitoring_config.clone(),
                 shutdown_tx.clone(),

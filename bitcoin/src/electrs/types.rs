@@ -15,7 +15,7 @@ pub struct TransactionStatus {
 }
 
 // https://github.com/Blockstream/electrs/blob/adedee15f1fe460398a7045b292604df2161adc0/src/rest.rs#L167-L189
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize)]
 pub struct TxInValue {
     pub txid: Txid,
     pub vout: u32,
@@ -33,7 +33,7 @@ pub struct TxInValue {
 }
 
 // https://github.com/Blockstream/electrs/blob/adedee15f1fe460398a7045b292604df2161adc0/src/rest.rs#L239-L270
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize)]
 pub struct TxOutValue {
     pub scriptpubkey: ScriptBuf,
     pub scriptpubkey_asm: String,
@@ -65,16 +65,4 @@ pub struct UtxoValue {
     pub vout: u32,
     pub status: TransactionStatus,
     pub value: u64,
-}
-
-// https://github.com/Blockstream/electrs/blob/adedee15f1fe460398a7045b292604df2161adc0/src/rest.rs#L448-L457
-#[derive(Deserialize)]
-pub struct SpendingValue {
-    pub spent: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub txid: Option<Txid>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vin: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<TransactionStatus>,
 }

@@ -137,12 +137,6 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(Default::default())
     }
 
-    // TODO: remove this later
-    fn list_addresses(&self) -> Result<Vec<Address>, BitcoinError> {
-        // don't need to migrate keys
-        Ok(Default::default())
-    }
-
     async fn get_raw_tx(&self, txid: &Txid, _block_hash: &BlockHash) -> Result<Vec<u8>, BitcoinError> {
         Ok(self.electrs.get_raw_tx(txid).await?)
     }
@@ -168,29 +162,15 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(self.get_change_address()?)
     }
 
-    async fn get_new_sweep_address(&self) -> Result<Address, BitcoinError> {
-        Ok(self.get_change_address()?)
-    }
-
-    async fn get_last_sweep_height(&self) -> Result<Option<u32>, BitcoinError> {
-        Ok(None)
-    }
-
     async fn get_new_public_key(&self) -> Result<PublicKey, BitcoinError> {
         Ok(self.private_key.public_key(&self.secp_ctx))
     }
 
-    fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, BitcoinError> {
-        self.wallet
-            .key_store
-            .read()
-            .map_err(Into::<Error>::into)?
-            .get(address)
-            .ok_or(Error::NoPrivateKey.into())
-            .cloned()
+    fn dump_derivation_key(&self, _public_key: &PublicKey) -> Result<PrivateKey, BitcoinError> {
+        Ok(self.private_key)
     }
 
-    fn import_private_key(&self, _private_key: &PrivateKey, _is_derivation_key: bool) -> Result<(), BitcoinError> {
+    fn import_derivation_key(&self, _private_key: &PrivateKey) -> Result<(), BitcoinError> {
         // nothing to do
         Ok(())
     }
@@ -337,10 +317,6 @@ impl BitcoinCoreApi for BitcoinLight {
         Ok(self
             .wait_for_transaction_metadata(txid, num_confirmations, None, true)
             .await?)
-    }
-
-    async fn sweep_funds(&self, _address: Address) -> Result<Txid, BitcoinError> {
-        Ok(Txid::all_zeros())
     }
 
     async fn create_or_load_wallet(&self) -> Result<(), BitcoinError> {

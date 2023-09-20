@@ -1,13 +1,13 @@
 use crate::{
-    delay::RandomDelay, metrics::publish_expected_bitcoin_balance, service::DynBitcoinCoreApi, system::DatabaseConfig,
-    Error, Event, IssueRequests, VaultIdManager,
+    delay::RandomDelay, metrics::publish_expected_bitcoin_balance, service::DynBitcoinCoreApi, Error, Event,
+    IssueRequests, VaultIdManager,
 };
 use bitcoin::{BlockHash, Error as BitcoinError, Hash, PublicKey, Transaction, TransactionExt};
 use futures::{channel::mpsc::Sender, future, SinkExt, StreamExt, TryFutureExt};
 use runtime::{
-    AccountId, BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, ExecuteIssueEvent, H256Le,
-    InterBtcIssueRequest, InterBtcParachain, IssuePallet, IssueRequestStatus, PartialAddress, PrettyPrint,
-    RequestIssueEvent, UtilFuncs, H256,
+    BtcAddress, BtcPublicKey, BtcRelayPallet, CancelIssueEvent, ExecuteIssueEvent, H256Le, InterBtcIssueRequest,
+    InterBtcParachain, IssuePallet, IssueRequestStatus, PartialAddress, PrettyPrint, RequestIssueEvent, UtilFuncs,
+    VaultId, H256,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -82,11 +82,10 @@ struct RescanStatus {
     newest_issue_height: u32,
     queued_rescan_range: Option<(usize, usize)>, // start, end(including)
 }
-
 impl RescanStatus {
     // there was a bug pre-v2 that set rescanning status to an invalid range.
     // by changing the keyname we effectively force a reset
-    const KEY: &str = "rescan-status-v4";
+    const KEY: &str = "rescan-status-v2";
     fn update(&mut self, mut issues: Vec<InterBtcIssueRequest>, current_bitcoin_height: usize) {
         // Only look at issues that haven't been processed yet
         issues.retain(|issue| issue.opentime > self.newest_issue_height);
@@ -134,26 +133,30 @@ impl RescanStatus {
         Some((start, chunk_end))
     }
 
-    fn get(account_id: &AccountId, db: &DatabaseConfig) -> Result<Self, Error> {
-        Ok(db.get(account_id, Self::KEY)?.unwrap_or_default())
+    fn get(vault_id: &VaultId, db: &crate::system::DatabaseConfig) -> Result<Self, Error> {
+        Ok(db.get(vault_id, Self::KEY)?.unwrap_or_default())
     }
-
-    fn store(&self, account_id: &AccountId, db: &DatabaseConfig) -> Result<(), Error> {
-        db.put(account_id, Self::KEY, self)?;
+    fn store(&self, vault_id: &VaultId, db: &crate::system::DatabaseConfig) -> Result<(), Error> {
+        db.put(vault_id, Self::KEY, self)?;
         Ok(())
     }
 }
 
-pub async fn add_keys_from_past_issue_request_old(
+pub async fn add_keys_from_past_issue_request(
     bitcoin_core: &DynBitcoinCoreApi,
     btc_parachain: &InterBtcParachain,
-    db: &DatabaseConfig,
+    vault_id: &VaultId,
+    db: &crate::system::DatabaseConfig,
 ) -> Result<(), Error> {
-    let account_id = btc_parachain.get_account_id();
-    let mut scanning_status = RescanStatus::get(&account_id, db)?;
-    tracing::info!("Scanning: {scanning_status:?}");
+    let mut scanning_status = RescanStatus::get(vault_id, db)?;
+    tracing::info!("initial status: = {scanning_status:?}");
 
-    let issue_requests = btc_parachain.get_vault_issue_requests(account_id.clone()).await?;
+    let issue_requests: Vec<_> = btc_parachain
+        .get_vault_issue_requests(btc_parachain.get_account_id().clone())
+        .await?
+        .into_iter()
+        .filter(|(_, issue)| &issue.vault == vault_id)
+        .collect();
 
     for (issue_id, request) in issue_requests.clone().into_iter() {
         if let Err(e) = add_new_deposit_key(bitcoin_core, issue_id, request.btc_public_key).await {
@@ -161,7 +164,7 @@ pub async fn add_keys_from_past_issue_request_old(
         }
     }
 
-    // read height only _after_ the last add_new_deposit_key. If a new block arrives
+    // read height only _after_ the last add_new_deposit_key.If a new block arrives
     // while we rescan, bitcoin core will correctly recognize addressed associated with the
     // privkey
     let btc_end_height = bitcoin_core.get_block_count().await? as usize;
@@ -182,7 +185,6 @@ pub async fn add_keys_from_past_issue_request_old(
                 issue_requests
                     .into_iter()
                     .filter_map(|(_, request)| {
-                        // only import if BEFORE current pruning height
                         if (request.btc_height as usize) < btc_pruned_start_height {
                             Some(request.btc_address.to_address(bitcoin_core.network()).ok()?)
                         } else {
@@ -195,7 +197,7 @@ pub async fn add_keys_from_past_issue_request_old(
     }
 
     // save progress s.t. we don't rescan pruned range again if we crash now
-    scanning_status.store(account_id, db)?;
+    scanning_status.store(vault_id, db)?;
 
     let mut chunk_size = 1;
     // rescan the blockchain in chunks, so that we can save progress. The code below
@@ -215,87 +217,7 @@ pub async fn add_keys_from_past_issue_request_old(
             chunk_size = (chunk_size.checked_div(2).ok_or(Error::ArithmeticUnderflow)?).max(1);
         }
 
-        scanning_status.store(account_id, db)?;
-    }
-
-    Ok(())
-}
-
-pub async fn add_keys_from_past_issue_request_new(
-    bitcoin_core: &DynBitcoinCoreApi,
-    btc_parachain: &InterBtcParachain,
-    db: &DatabaseConfig,
-) -> Result<(), Error> {
-    let account_id = btc_parachain.get_account_id();
-    let mut scanning_status = RescanStatus::get(&account_id, db)?;
-    tracing::info!("Scanning: {scanning_status:?}");
-
-    let issue_requests = btc_parachain.get_vault_issue_requests(account_id.clone()).await?;
-
-    for (issue_id, request) in issue_requests.clone().into_iter() {
-        if let Err(e) = add_new_deposit_key(bitcoin_core, issue_id, request.btc_public_key).await {
-            tracing::error!("Failed to add deposit key #{}: {}", issue_id, e.to_string());
-        }
-    }
-
-    // read height only _after_ the last add_new_deposit_key. If a new block arrives
-    // while we rescan, bitcoin core will correctly recognize addressed associated with the
-    // privkey
-    let btc_end_height = bitcoin_core.get_block_count().await? as usize;
-    let btc_pruned_start_height = bitcoin_core.get_pruned_height().await? as usize;
-    let btc_last_sweep_height = bitcoin_core.get_last_sweep_height().await?;
-
-    let issues = issue_requests.clone().into_iter().map(|(_key, issue)| issue).collect();
-    scanning_status.update(issues, btc_end_height);
-
-    // use electrs to scan the portion that is not scannable by bitcoin core
-    if let Some((start, end)) = scanning_status.prune(btc_pruned_start_height) {
-        tracing::info!(
-            "Also checking electrs for issue requests between {} and {}...",
-            start,
-            end
-        );
-        bitcoin_core
-            .rescan_electrs_for_addresses(
-                issue_requests
-                    .into_iter()
-                    .filter_map(|(_, request)| {
-                        // only import if address is AFTER last sweep height and BEFORE current pruning height
-                        if btc_last_sweep_height.map_or(true, |sweep_height| request.btc_height > sweep_height)
-                            && (request.btc_height as usize) < btc_pruned_start_height
-                        {
-                            Some(request.btc_address.to_address(bitcoin_core.network()).ok()?)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect(),
-            )
-            .await?;
-    }
-
-    // save progress s.t. we don't rescan pruned range again if we crash now
-    scanning_status.store(account_id, db)?;
-
-    let mut chunk_size = 1;
-    // rescan the blockchain in chunks, so that we can save progress. The code below
-    // aims to have each chunk take about 10 seconds (arbitrarily chosen value).
-    while let Some((chunk_start, chunk_end)) = scanning_status.process_blocks(chunk_size) {
-        tracing::info!("Rescanning bitcoin chain from {} to {}...", chunk_start, chunk_end);
-
-        let start_time = Instant::now();
-
-        bitcoin_core.rescan_blockchain(chunk_start, chunk_end).await?;
-
-        // with the code below the rescan time should remain between 5 and 20 seconds
-        // after the first couple of rounds.
-        if start_time.elapsed() < Duration::from_secs(10) {
-            chunk_size = chunk_size.saturating_mul(2);
-        } else {
-            chunk_size = (chunk_size.checked_div(2).ok_or(Error::ArithmeticUnderflow)?).max(1);
-        }
-
-        scanning_status.store(account_id, db)?;
+        scanning_status.store(vault_id, db)?;
     }
 
     Ok(())
@@ -543,9 +465,9 @@ mod tests {
     use super::*;
     use runtime::{
         subxt::utils::Static,
+        AccountId,
         CurrencyId::Token,
         TokenSymbol::{DOT, IBTC, INTR},
-        VaultId,
     };
 
     fn dummy_issues(heights: Vec<(u32, usize)>) -> Vec<InterBtcIssueRequest> {

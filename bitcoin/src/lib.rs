@@ -53,7 +53,6 @@ pub use sp_core::H256;
 use std::{
     convert::TryInto,
     future::Future,
-    str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -100,8 +99,6 @@ const RANDOMIZATION_FACTOR: f64 = 0.25;
 
 const DERIVATION_KEY_LABEL: &str = "derivation-key";
 const DEPOSIT_LABEL: &str = "deposit";
-
-const SWEEP_ADDRESS: &str = "sweep-address";
 
 fn get_exponential_backoff() -> ExponentialBackoff {
     ExponentialBackoff {
@@ -150,8 +147,6 @@ pub trait BitcoinCoreApi {
 
     fn list_transactions(&self, max_count: Option<usize>) -> Result<Vec<json::ListTransactionResult>, Error>;
 
-    fn list_addresses(&self) -> Result<Vec<Address>, Error>;
-
     async fn get_raw_tx(&self, txid: &Txid, block_hash: &BlockHash) -> Result<Vec<u8>, Error>;
 
     async fn get_transaction(&self, txid: &Txid, block_hash: Option<BlockHash>) -> Result<Transaction, Error>;
@@ -162,15 +157,11 @@ pub trait BitcoinCoreApi {
 
     async fn get_new_address(&self) -> Result<Address, Error>;
 
-    async fn get_new_sweep_address(&self) -> Result<Address, Error>;
-
-    async fn get_last_sweep_height(&self) -> Result<Option<u32>, Error>;
-
     async fn get_new_public_key(&self) -> Result<PublicKey, Error>;
 
-    fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, Error>;
+    fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, Error>;
 
-    fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), Error>;
+    fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), Error>;
 
     async fn add_new_deposit_key(&self, public_key: PublicKey, secret_key: Vec<u8>) -> Result<(), Error>;
 
@@ -212,8 +203,6 @@ pub trait BitcoinCoreApi {
         fee_rate: SatPerVbyte,
         num_confirmations: u32,
     ) -> Result<TransactionMetadata, Error>;
-
-    async fn sweep_funds(&self, address: Address) -> Result<Txid, Error>;
 
     async fn create_or_load_wallet(&self) -> Result<(), Error>;
 
@@ -370,7 +359,7 @@ impl BitcoinCoreBuilder {
 
 #[derive(Clone)]
 pub struct BitcoinCore {
-    pub rpc: Arc<Client>,
+    rpc: Arc<Client>,
     wallet_name: Option<String>,
     network: Network,
     transaction_creation_lock: Arc<Mutex<()>>,
@@ -482,6 +471,7 @@ impl BitcoinCore {
                     signed_funded_raw_tx.complete,
                     signed_funded_raw_tx.errors
                 );
+
                 return Err(Error::TransactionSigningError);
             }
 
@@ -724,27 +714,6 @@ impl BitcoinCoreApi for BitcoinCore {
             .list_transactions(None, max_count.or(Some(DEFAULT_MAX_TX_COUNT)), None, None)?)
     }
 
-    // TODO: remove this once the wallet migration has completed
-    fn list_addresses(&self) -> Result<Vec<Address>, Error> {
-        // Lists groups of addresses which have had their common ownership
-        // made public by common use as inputs or as the resulting change
-        // in past transactions
-        let groupings: Vec<Vec<Vec<serde_json::Value>>> = self.rpc.call("listaddressgroupings", &[])?;
-        let addresses = groupings
-            .into_iter()
-            .flatten()
-            .filter_map(|group| {
-                group
-                    .get(0)
-                    .and_then(|v| v.as_str())
-                    .map(Address::from_str)?
-                    .and_then(|x| x.require_network(self.network))
-                    .ok()
-            })
-            .collect::<Vec<_>>();
-        Ok(addresses)
-    }
-
     /// Get the raw transaction identified by `Txid` and stored
     /// in the specified block.
     ///
@@ -799,26 +768,6 @@ impl BitcoinCoreApi for BitcoinCore {
             .require_network(self.network)?)
     }
 
-    async fn get_new_sweep_address(&self) -> Result<Address, Error> {
-        Ok(self
-            .rpc
-            .get_new_address(Some(SWEEP_ADDRESS), Some(AddressType::Bech32))?
-            .require_network(self.network)?)
-    }
-
-    async fn get_last_sweep_height(&self) -> Result<Option<u32>, Error> {
-        Ok(self
-            .rpc
-            .list_transactions(Some(SWEEP_ADDRESS), Some(DEFAULT_MAX_TX_COUNT), None, None)?
-            .into_iter()
-            // we want to return None if there is no sweep tx for full nodes or new
-            // pruned nodes and we should return an error if any tx is still in the mempool
-            .map(|tx| tx.info.blockheight.ok_or(Error::ConfirmationError))
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .min())
-    }
-
     /// Gets a new public key for an address in the wallet
     async fn get_new_public_key(&self) -> Result<PublicKey, Error> {
         let address = self
@@ -830,16 +779,15 @@ impl BitcoinCoreApi for BitcoinCore {
         Ok(public_key)
     }
 
-    fn dump_private_key(&self, address: &Address) -> Result<PrivateKey, Error> {
-        Ok(self.rpc.dump_private_key(address)?)
+    fn dump_derivation_key(&self, public_key: &PublicKey) -> Result<PrivateKey, Error> {
+        let address = Address::p2wpkh(public_key, self.network).map_err(ConversionError::from)?;
+        Ok(self.rpc.dump_private_key(&address)?)
     }
 
-    fn import_private_key(&self, private_key: &PrivateKey, is_derivation_key: bool) -> Result<(), Error> {
-        Ok(self.rpc.import_private_key(
-            private_key,
-            is_derivation_key.then_some(DERIVATION_KEY_LABEL),
-            Some(false),
-        )?)
+    fn import_derivation_key(&self, private_key: &PrivateKey) -> Result<(), Error> {
+        Ok(self
+            .rpc
+            .import_private_key(private_key, Some(DERIVATION_KEY_LABEL), Some(false))?)
     }
 
     /// Derive and import the private key for the master public key and public secret
@@ -1063,66 +1011,6 @@ impl BitcoinCoreApi for BitcoinCore {
             .await?)
     }
 
-    async fn sweep_funds(&self, address: Address) -> Result<Txid, Error> {
-        let unspent = self.rpc.list_unspent(Some(0), None, None, None, None)?;
-
-        let mut amount = Amount::ZERO;
-        let mut utxos = Vec::<json::CreateRawTransactionInput>::new();
-
-        for entry in unspent {
-            if self.electrs_client.is_tx_output_spent(&entry.txid, entry.vout).await? {
-                log::info!("{}:{} already spent", entry.txid, entry.vout);
-                // skip if already spent
-                continue;
-            }
-            amount += entry.amount;
-            utxos.push(json::CreateRawTransactionInput {
-                txid: entry.txid,
-                vout: entry.vout,
-                sequence: None,
-            })
-        }
-
-        log::info!("Sweeping {} from {} utxos", amount, utxos.len());
-        let mut outputs = serde_json::Map::<String, serde_json::Value>::new();
-        outputs.insert(address.to_string(), serde_json::Value::from(amount.to_btc()));
-
-        let args = [
-            serde_json::to_value::<&[json::CreateRawTransactionInput]>(&utxos)?,
-            serde_json::to_value(outputs)?,
-            serde_json::to_value(0i64)?, /* locktime - default 0: see https://developer.bitcoin.org/reference/rpc/createrawtransaction.html */
-            serde_json::to_value(true)?, // BIP125-replaceable, aka Replace By Fee (RBF)
-        ];
-        let raw_tx: String = self.rpc.call("createrawtransaction", &args)?;
-
-        let funding_opts = FundRawTransactionOptions {
-            fee_rate: None,
-            add_inputs: Some(false),
-            subtract_fee_from_outputs: Some(vec![0]),
-            ..Default::default()
-        };
-        let funded_raw_tx = self.rpc.fund_raw_transaction(raw_tx, Some(&funding_opts), None)?;
-
-        let signed_funded_raw_tx =
-            self.rpc
-                .sign_raw_transaction_with_wallet(&funded_raw_tx.transaction()?, None, None)?;
-
-        if signed_funded_raw_tx.errors.is_some() {
-            log::warn!(
-                "Received bitcoin funding errors (complete={}): {:?}",
-                signed_funded_raw_tx.complete,
-                signed_funded_raw_tx.errors
-            );
-            return Err(Error::TransactionSigningError);
-        }
-
-        let transaction = signed_funded_raw_tx.transaction()?;
-        let txid = self.rpc.send_raw_transaction(&transaction)?;
-        log::info!("Sent sweep tx: {txid}");
-
-        Ok(txid)
-    }
-
     /// Create or load a wallet on Bitcoin Core.
     async fn create_or_load_wallet(&self) -> Result<(), Error> {
         let wallet_name = if let Some(ref wallet_name) = self.wallet_name {
@@ -1185,7 +1073,7 @@ impl BitcoinCoreApi for BitcoinCore {
             // filter to only import
             // a) payments in the blockchain (not in mempool), and
             // b) payments TO the address (as bitcoin core will already know about transactions spending FROM it)
-            let confirmed_payments_to = all_transactions.iter().filter(|tx| {
+            let confirmed_payments_to = all_transactions.into_iter().filter(|tx| {
                 if let Some(status) = &tx.status {
                     if !status.confirmed {
                         return false;

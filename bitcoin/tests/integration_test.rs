@@ -1,10 +1,6 @@
 #![cfg(feature = "uses-bitcoind")]
 
-use bitcoin::{
-    Amount, Auth, BitcoinCore, BitcoinCoreApi, BitcoinCoreBuilder, Error, Network, PrivateKey, PublicKey, RpcApi,
-};
-use bitcoincore_rpc::json;
-use rand::{distributions::Alphanumeric, Rng};
+use bitcoin::{Auth, BitcoinCore, BitcoinCoreApi, BitcoinCoreBuilder, Error, Network, PrivateKey, PublicKey};
 use regex::Regex;
 use std::env::var;
 
@@ -26,22 +22,6 @@ async fn should_get_new_address() -> Result<(), Error> {
     let re = Regex::new("^(bcrt1|[13])[a-zA-HJ-NP-Z0-9]{25,39}$").unwrap();
     let address = btc_rpc.get_new_address().await?;
     assert!(re.is_match(&address.to_string()));
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn should_list_addresses() -> Result<(), Error> {
-    let btc_rpc = new_bitcoin_core(Some("Alice".to_string()))?;
-    btc_rpc.create_or_load_wallet().await?;
-
-    let address = btc_rpc.get_new_address().await?;
-    btc_rpc.mine_blocks(101, Some(address.clone()));
-
-    assert!(
-        btc_rpc.list_addresses()?.contains(&address),
-        "Address not found in groupings"
-    );
 
     Ok(())
 }
@@ -90,55 +70,6 @@ async fn should_add_new_deposit_key() -> Result<(), Error> {
     .unwrap();
 
     assert!(btc_rpc.wallet_has_public_key(new_public_key).await?);
-
-    Ok(())
-}
-
-fn rand_wallet_name() -> String {
-    rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(7)
-        .map(char::from)
-        .collect()
-}
-
-#[tokio::test]
-async fn should_sweep_funds() -> Result<(), Error> {
-    let btc_rpc1 = new_bitcoin_core(Some(rand_wallet_name()))?;
-    btc_rpc1.create_or_load_wallet().await?;
-
-    let btc_rpc2 = new_bitcoin_core(Some(rand_wallet_name()))?;
-    btc_rpc2.create_or_load_wallet().await?;
-
-    let btc_rpc3 = new_bitcoin_core(Some(rand_wallet_name()))?;
-    btc_rpc3.create_or_load_wallet().await?;
-
-    // blocks must have 100 confirmations for reward to be spent
-    let address1 = btc_rpc1.get_new_address().await?;
-    btc_rpc1.mine_blocks(101, Some(address1));
-
-    let address2 = btc_rpc2.get_new_address().await?;
-    let txid = btc_rpc1.rpc.send_to_address(
-        &address2,
-        Amount::from_sat(100000),
-        None,
-        None,
-        None,
-        None,
-        None,
-        Some(json::EstimateMode::Economical),
-    )?;
-    btc_rpc1.mine_blocks(1, None);
-
-    assert_eq!(btc_rpc2.get_balance(None)?.to_sat(), 100000);
-
-    let address3 = btc_rpc3.get_new_address().await?;
-    let _txid = btc_rpc2.sweep_funds(address3).await?;
-    btc_rpc1.mine_blocks(1, None);
-
-    assert_eq!(btc_rpc2.get_balance(None)?.to_sat(), 0);
-    // balance before minus fees
-    assert_eq!(btc_rpc3.get_balance(None)?.to_sat(), 97800);
 
     Ok(())
 }
