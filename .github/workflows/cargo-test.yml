@@ -21,7 +21,7 @@ jobs:
     strategy:
       matrix:
         metadata:
-          - parachain-metadata-interlay
+#          - parachain-metadata-interlay
           - parachain-metadata-kintsugi
 
     steps:

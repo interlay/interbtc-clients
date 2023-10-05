@@ -1,6 +1,6 @@
 use crate::{types::*, AssetMetadata, Error};
 use lazy_static::lazy_static;
-use primitives::{CurrencyId, CurrencyInfo};
+use primitives::{CurrencyId, CurrencyInfo}; //ToDo: V15 metadata (remove currencyId)
 use std::{
     collections::BTreeMap,
     sync::{Mutex, MutexGuard},

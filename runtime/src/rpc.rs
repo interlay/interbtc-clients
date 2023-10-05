@@ -272,7 +272,7 @@ impl InterBtcParachain {
                     let tx_progress = self
                         .api
                         .tx()
-                        .create_signed_with_nonce(&call, &self.signer, nonce, Default::default())?
+                        .create_signed_with_nonce(&call, &self.signer, nonce as u64, Default::default())?
                         .submit_and_watch()
                         .await?;
 
@@ -1130,7 +1130,7 @@ impl OraclePallet for InterBtcParachain {
         let head = Some(self.get_finalized_block_hash().await?);
         let result: BalanceWrapper<_> = self
             .api
-            .rpc()
+            .rpc() // ToDo: V15 Metadata (import from metadata)
             .request(
                 "oracle_wrappedToCollateral",
                 rpc_params![BalanceWrapper { amount }, currency_id, head],
@@ -1144,7 +1144,7 @@ impl OraclePallet for InterBtcParachain {
         let head = Some(self.get_finalized_block_hash().await?);
         let result: BalanceWrapper<_> = self
             .api
-            .rpc()
+            .rpc() // ToDo: V15 Metadata (import from metadata)
             .request(
                 "oracle_collateralToWrapped",
                 rpc_params![BalanceWrapper { amount }, currency_id, head],
@@ -1608,7 +1608,7 @@ impl VaultRegistryPallet for InterBtcParachain {
         let result = self
             .api
             .rpc()
-            .request("vaultRegistry_getVaultsByAccountId", rpc_params![account_id, head])
+            .request("vaultRegistry_getVaultsByAccountId", rpc_params![account_id, head]) //ToDo: V15 metadata (something can be figured out using get_vaults_by_account_id)
             .await?;
         Ok(result)
     }

@@ -176,7 +176,6 @@ pub struct WrapperKeepOpaque<T> {
 pub struct InterBtcRuntime;
 
 impl Config for InterBtcRuntime {
-    type Index = <SubstrateConfig as Config>::Index;
     type Hash = <SubstrateConfig as Config>::Hash;
     type AccountId = AccountId;
     type Address = Self::AccountId;
