@@ -173,16 +173,32 @@ pub async fn with_timeout<T: Future>(future: T, duration: Duration) -> T::Output
 }
 
 pub async fn start_chain() -> std::io::Result<Child> {
-    let _stop_previous_instance = Command::new("docker")
-        .arg("compose")
-        .arg("rm")
-        .arg("-v")
-        .arg("-s")
-        .arg("-f")
-        .arg("interbtc")
-        .status()
-        .unwrap();
-    let command = Command::new("sh").arg("../scripts/run_parachain_node.sh").spawn();
+    let command = if cfg!(feature = "run-test-with-sudo") {
+        let _stop_previous_instance = Command::new("sudo")
+            .arg("docker")
+            .arg("compose")
+            .arg("rm")
+            .arg("-v")
+            .arg("-s")
+            .arg("-f")
+            .arg("interbtc")
+            .status()
+            .unwrap();
+        Command::new("sh")
+            .arg("../scripts/run_parachain_node_with_sudo.sh")
+            .spawn()
+    } else {
+        let _stop_previous_instance = Command::new("docker")
+            .arg("compose")
+            .arg("rm")
+            .arg("-v")
+            .arg("-s")
+            .arg("-f")
+            .arg("interbtc")
+            .status()
+            .unwrap();
+        Command::new("sh").arg("../scripts/run_parachain_node.sh").spawn()
+    };
     command
 }
 
