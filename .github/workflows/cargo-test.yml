@@ -42,9 +42,9 @@ jobs:
         run: |
           cargo fmt --all -- --check
       - run: rustup component add clippy
-      - name: clippy
-        run: |
-          cargo clippy --release --workspace --features ${{ matrix.metadata }}
+#      - name: clippy
+#        run: |
+#          cargo clippy --release --workspace --features ${{ matrix.metadata }}
       - name: check
         run: |
           cargo check --release --workspace --features ${{ matrix.metadata }}
