@@ -479,7 +479,7 @@ impl InterBtcParachain {
 
         self.api
             .tx()
-            .create_signed_with_nonce(&call, &self.signer, nonce, Default::default())
+            .create_signed_with_nonce(&call, &self.signer, nonce.into(), Default::default())
             .unwrap()
             .submit_and_watch()
             .await
@@ -506,7 +506,7 @@ impl InterBtcParachain {
         // submit tx but don't watch
         self.api
             .tx()
-            .create_signed_with_nonce(&call, &self.signer, nonce, Default::default())
+            .create_signed_with_nonce(&call, &self.signer, nonce.into(), Default::default())
             .unwrap()
             .submit()
             .await
@@ -515,7 +515,7 @@ impl InterBtcParachain {
         // should call with the same nonce
         self.api
             .tx()
-            .create_signed_with_nonce(&call, &self.signer, nonce, Default::default())
+            .create_signed_with_nonce(&call, &self.signer, nonce.into(), Default::default())
             .unwrap()
             .submit_and_watch()
             .await
