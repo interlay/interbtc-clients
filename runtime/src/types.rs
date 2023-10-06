@@ -160,6 +160,8 @@ mod metadata_aliases {
     pub type VaultId = metadata::runtime_types::interbtc_primitives::VaultId<AccountId, CurrencyId>;
     pub type VaultCurrencyPair = metadata::runtime_types::interbtc_primitives::VaultCurrencyPair<CurrencyId>;
 
+    pub type BalanceWrapper = metadata::runtime_types::interbtc_primitives::BalanceWrapper<Balance>;
+
     #[cfg(feature = "parachain-metadata-interlay")]
     pub type EncodedCall = metadata::runtime_types::interlay_runtime_parachain::RuntimeCall;
     #[cfg(feature = "parachain-metadata-kintsugi")]

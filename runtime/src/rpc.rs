@@ -15,7 +15,7 @@ use module_bitcoin::{
     parser::{parse_block_header, parse_transaction},
     types::FullTransactionProof,
 };
-use primitives::{BalanceWrapper, UnsignedFixedPoint};
+use primitives::UnsignedFixedPoint;
 use serde_json::Value;
 use std::{convert::TryInto, future::Future, ops::Range, sync::Arc, time::Duration};
 use subxt::{
@@ -272,7 +272,7 @@ impl InterBtcParachain {
                     let tx_progress = self
                         .api
                         .tx()
-                        .create_signed_with_nonce(&call, &self.signer, nonce as u64, Default::default())?
+                        .create_signed_with_nonce(&call, &self.signer, nonce.into(), Default::default())?
                         .submit_and_watch()
                         .await?;
 
@@ -988,16 +988,17 @@ impl ReplacePallet for InterBtcParachain {
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, InterBtcReplaceRequest)>, Error> {
-        let head = Some(self.get_finalized_block_hash().await?);
-        let result: Vec<H256> = self
-            .api
-            .rpc()
-            .request("replace_getNewVaultReplaceRequests", rpc_params![account_id, head])
+        let head = self.get_finalized_block_hash().await?;
+        let runtime_api_call = metadata::apis().replace_api().get_new_vault_replace_requests(account_id);
+        let result: Vec<Static<H256>> = self.api
+            .runtime_api()
+            .at(head)
+            .call(runtime_api_call)
             .await?;
         join_all(
             result
                 .into_iter()
-                .map(|key| async move { self.get_replace_request(key).await.map(|value| (key, value)) }),
+                .map(|key| async move { self.get_replace_request(*key).await.map(|value| (*key, value)) }),
         )
         .await
         .into_iter()
@@ -1009,16 +1010,17 @@ impl ReplacePallet for InterBtcParachain {
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, InterBtcReplaceRequest)>, Error> {
-        let head = Some(self.get_finalized_block_hash().await?);
-        let result: Vec<H256> = self
-            .api
-            .rpc()
-            .request("replace_getOldVaultReplaceRequests", rpc_params![account_id, head])
+        let head = self.get_finalized_block_hash().await?;
+        let runtime_api_call = metadata::apis().replace_api().get_old_vault_replace_requests(account_id);
+        let result: Vec<Static<H256>> = self.api
+            .runtime_api()
+            .at(head)
+            .call(runtime_api_call)
             .await?;
         join_all(
             result
                 .into_iter()
-                .map(|key| async move { self.get_replace_request(key).await.map(|value| (key, value)) }),
+                .map(|key| async move { self.get_replace_request(*key).await.map(|value| (*key, value)) }),
         )
         .await
         .into_iter()
@@ -1127,29 +1129,33 @@ impl OraclePallet for InterBtcParachain {
 
     /// Converts the amount in btc to dot, based on the current set exchange rate.
     async fn wrapped_to_collateral(&self, amount: u128, currency_id: CurrencyId) -> Result<u128, Error> {
-        let head = Some(self.get_finalized_block_hash().await?);
-        let result: BalanceWrapper<_> = self
-            .api
-            .rpc() // ToDo: V15 Metadata (import from metadata)
-            .request(
-                "oracle_wrappedToCollateral",
-                rpc_params![BalanceWrapper { amount }, currency_id, head],
-            )
-            .await?;
+        let head = self.get_finalized_block_hash().await?;
+
+        // Create a runtime API payload that calls into
+        // `Core_version` function.
+        let runtime_api_call = metadata::apis().oracle_api().wrapped_to_collateral(BalanceWrapper { amount }, currency_id);
+
+        let result: BalanceWrapper = self.api
+            .runtime_api()
+            .at(head)
+            .call(runtime_api_call)
+            .await?.unwrap();
+
         Ok(result.amount)
     }
 
     /// Converts the amount in dot to btc, based on the current set exchange rate.
     async fn collateral_to_wrapped(&self, amount: u128, currency_id: CurrencyId) -> Result<u128, Error> {
-        let head = Some(self.get_finalized_block_hash().await?);
-        let result: BalanceWrapper<_> = self
-            .api
-            .rpc() // ToDo: V15 Metadata (import from metadata)
-            .request(
-                "oracle_collateralToWrapped",
-                rpc_params![BalanceWrapper { amount }, currency_id, head],
-            )
-            .await?;
+        let head = self.get_finalized_block_hash().await?;
+        // Create a runtime API payload that calls into
+        // `Core_version` function.
+        let runtime_api_call = metadata::apis().oracle_api().collateral_to_wrapped(BalanceWrapper { amount }, currency_id);
+
+        let result: BalanceWrapper = self.api
+            .runtime_api()
+            .at(head)
+            .call(runtime_api_call)
+            .await?.unwrap();
 
         Ok(result.amount)
     }
@@ -1240,16 +1246,17 @@ impl IssuePallet for InterBtcParachain {
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, InterBtcIssueRequest)>, Error> {
-        let head = Some(self.get_finalized_block_hash().await?);
-        let result: Vec<H256> = self
-            .api
-            .rpc()
-            .request("issue_getVaultIssueRequests", rpc_params![account_id, head])
+        let head = self.get_finalized_block_hash().await?;
+        let runtime_api_call = metadata::apis().issue_api().get_vault_issue_requests(account_id);
+        let result: Vec<Static<H256>> = self.api
+            .runtime_api()
+            .at(head)
+            .call(runtime_api_call)
             .await?;
         join_all(
             result
                 .into_iter()
-                .map(|key| async move { self.get_issue_request(key).await.map(|value| (key, value)) }),
+                .map(|key| async move { self.get_issue_request(*key).await.map(|value| (*key, value)) }),
         )
         .await
         .into_iter()
@@ -1346,16 +1353,17 @@ impl RedeemPallet for InterBtcParachain {
         &self,
         account_id: AccountId,
     ) -> Result<Vec<(H256, InterBtcRedeemRequest)>, Error> {
-        let head = Some(self.get_finalized_block_hash().await?);
-        let result: Vec<H256> = self
-            .api
-            .rpc()
-            .request("redeem_getVaultRedeemRequests", rpc_params![account_id, head])
+        let head = self.get_finalized_block_hash().await?;
+        let runtime_api_call = metadata::apis().redeem_api().get_vault_redeem_requests(account_id);
+        let result: Vec<Static<H256>> = self.api
+            .runtime_api()
+            .at(head)
+            .call(runtime_api_call)
             .await?;
         join_all(
             result
                 .into_iter()
-                .map(|key| async move { self.get_redeem_request(key).await.map(|value| (key, value)) }),
+                .map(|key| async move { self.get_redeem_request(*key).await.map(|value| (*key, value)) }),
         )
         .await
         .into_iter()
@@ -1470,14 +1478,12 @@ impl BtcRelayPallet for InterBtcParachain {
     /// check that the block with the given block is included in the main chain of the relay, with sufficient
     /// confirmations
     async fn verify_block_header_inclusion(&self, block_hash: H256Le) -> Result<(), Error> {
-        let head = Some(self.get_finalized_block_hash().await?);
-        let result: Result<(), metadata::DispatchError> = self
-            .api
-            .rpc()
-            .request(
-                "btcRelay_verifyBlockHeaderInclusion",
-                rpc_params![Into::<RichH256Le>::into(block_hash), head],
-            )
+        let head = self.get_finalized_block_hash().await?;
+        let runtime_api_call = metadata::apis().btc_relay_api().verify_block_header_inclusion(Into::<RichH256Le>::into(block_hash).into());// V15
+        let result: Result<(), metadata::DispatchError> = self.api
+            .runtime_api()
+            .at(head)
+            .call(runtime_api_call)
             .await?;
 
         result.map_err(|err| {
@@ -1604,12 +1610,16 @@ impl VaultRegistryPallet for InterBtcParachain {
     }
 
     async fn get_vaults_by_account_id(&self, account_id: &AccountId) -> Result<Vec<VaultId>, Error> {
-        let head = Some(self.get_finalized_block_hash().await?);
-        let result = self
-            .api
-            .rpc()
-            .request("vaultRegistry_getVaultsByAccountId", rpc_params![account_id, head]) //ToDo: V15 metadata (something can be figured out using get_vaults_by_account_id)
-            .await?;
+        let head = self.get_finalized_block_hash().await?;
+
+        let runtime_api_call = metadata::apis().vault_registry_api().get_vaults_by_account_id(account_id.clone());
+
+        let result = self.api
+            .runtime_api()
+            .at(head)
+            .call(runtime_api_call)
+            .await?.unwrap();
+
         Ok(result)
     }
 
@@ -1707,55 +1717,48 @@ impl VaultRegistryPallet for InterBtcParachain {
         amount_btc: u128,
         collateral_currency: CurrencyId,
     ) -> Result<u128, Error> {
-        let head = Some(self.get_finalized_block_hash().await?);
-        let result: BalanceWrapper<_> = self
-            .api
-            .rpc()
-            .request(
-                "vaultRegistry_getRequiredCollateralForWrapped",
-                rpc_params![BalanceWrapper { amount: amount_btc }, collateral_currency, head],
-            )
-            .await?;
-
+        let head = self.get_finalized_block_hash().await?;
+        let runtime_api_call = metadata::apis().vault_registry_api().get_required_collateral_for_wrapped(BalanceWrapper {amount: amount_btc}, collateral_currency);// V15
+        let result: BalanceWrapper = self.api
+            .runtime_api()
+            .at(head)
+            .call(runtime_api_call)
+            .await?.unwrap();
         Ok(result.amount)
     }
 
     /// Get the amount of collateral required for the given vault to be at the
     /// current SecureCollateralThreshold with the current exchange rate
     async fn get_required_collateral_for_vault(&self, vault_id: VaultId) -> Result<u128, Error> {
-        let head = Some(self.get_finalized_block_hash().await?);
-        let result: BalanceWrapper<_> = self
-            .api
-            .rpc()
-            .request(
-                "vaultRegistry_getRequiredCollateralForVault",
-                rpc_params![vault_id, head],
-            )
-            .await?;
+        let head = self.get_finalized_block_hash().await?;
+        let runtime_api_call = metadata::apis().vault_registry_api().get_required_collateral_for_vault(vault_id);// V15
+        let result: BalanceWrapper = self.api
+            .runtime_api()
+            .at(head)
+            .call(runtime_api_call)
+            .await?.unwrap();
         Ok(result.amount)
     }
 
     async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, Error> {
-        let head = Some(self.get_finalized_block_hash().await?);
-        let result: BalanceWrapper<_> = self
-            .api
-            .rpc()
-            .request("vaultRegistry_getVaultTotalCollateral", rpc_params![vault_id, head])
-            .await?;
-
+        let head = self.get_finalized_block_hash().await?;
+        let runtime_api_call = metadata::apis().vault_registry_api().get_vault_total_collateral(vault_id);// V15
+        let result: BalanceWrapper = self.api
+            .runtime_api()
+            .at(head)
+            .call(runtime_api_call)
+            .await?.unwrap();
         Ok(result.amount)
     }
 
     async fn get_collateralization_from_vault(&self, vault_id: VaultId, only_issued: bool) -> Result<u128, Error> {
-        let head = Some(self.get_finalized_block_hash().await?);
-        let result: UnsignedFixedPoint = self
-            .api
-            .rpc()
-            .request(
-                "vaultRegistry_getCollateralizationFromVault",
-                rpc_params![vault_id, only_issued, head],
-            )
-            .await?;
+        let head = self.get_finalized_block_hash().await?;
+        let runtime_api_call = metadata::apis().vault_registry_api().get_collateralization_from_vault(vault_id, only_issued);// V15
+        let result: UnsignedFixedPoint = *self.api
+            .runtime_api()
+            .at(head)
+            .call(runtime_api_call)
+            .await?.unwrap();
         Ok(result.into_inner())
     }
 

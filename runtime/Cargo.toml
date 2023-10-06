@@ -13,6 +13,7 @@ testing-utils = [
 parachain-metadata-interlay = []
 parachain-metadata-kintsugi = []
 run-test-with-sudo = []
+run-test-with-specific-node-target = []
 
 [dependencies]
 serde = { version = "1.0.136", features = ["derive"] }
