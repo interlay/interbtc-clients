@@ -187,8 +187,7 @@ pub async fn start_chain() -> std::io::Result<Child> {
         Command::new("sh")
             .arg("../scripts/run_parachain_node_with_sudo.sh")
             .spawn()
-    }
-    else if cfg!(feature = "run-test-with-specific-node-target") {
+    } else if cfg!(feature = "run-test-with-specific-node-target") {
         let _stop_previous_instance = Command::new("sh")
             .arg("-c")
             .arg("lsof -ti :9944 | xargs kill")
@@ -198,8 +197,7 @@ pub async fn start_chain() -> std::io::Result<Child> {
         Command::new("sh")
             .arg("../scripts/run_parachain_node_with_specific_target.sh")
             .spawn()
-    }
-    else {
+    } else {
         let _stop_previous_instance = Command::new("docker")
             .arg("compose")
             .arg("rm")
