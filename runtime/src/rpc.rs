@@ -18,6 +18,8 @@ use module_bitcoin::{
 use primitives::UnsignedFixedPoint;
 use serde_json::Value;
 use std::{convert::TryInto, future::Future, ops::Range, sync::Arc, time::Duration};
+#[cfg(feature = "testing-utils")]
+use subxt::rpc::rpc_params;
 use subxt::{
     blocks::ExtrinsicEvents,
     client::OnlineClient,
