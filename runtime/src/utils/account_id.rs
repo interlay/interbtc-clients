@@ -30,7 +30,7 @@ impl AccountId32 {
 
     pub fn to_sp_core_account_id(&self) -> Sp_AccountId32 {
         let account_id = self.0.clone();
-        (*account_id).clone().into()
+        (*account_id).clone()
     }
 }
 
@@ -73,7 +73,7 @@ impl<'de> Deserialize<'de> for AccountId32 {
 
 impl From<sp_runtime::AccountId32> for AccountId32 {
     fn from(value: sp_runtime::AccountId32) -> Self {
-        AccountId32(Static(value.into()))
+        AccountId32(Static(value))
     }
 }
 impl From<sp_core::sr25519::Public> for AccountId32 {

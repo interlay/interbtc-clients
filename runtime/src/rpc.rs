@@ -23,7 +23,7 @@ use subxt::{
     client::OnlineClient,
     events::StaticEvent,
     metadata::DecodeWithMetadata,
-    rpc::{rpc_params, RpcClientT},
+    rpc::RpcClientT,
     storage::{address::Yes, StorageAddress},
     tx::TxPayload,
     utils::Static,
@@ -1133,9 +1133,15 @@ impl OraclePallet for InterBtcParachain {
             .oracle_api()
             .wrapped_to_collateral(BalanceWrapper { amount }, currency_id);
 
-        let result: BalanceWrapper = self.api.runtime_api().at(head).call(runtime_api_call).await?.unwrap();
+        let result: Result<BalanceWrapper, metadata::DispatchError> =
+            self.api.runtime_api().at(head).call(runtime_api_call).await?;
 
-        Ok(result.amount)
+        let balance: BalanceWrapper = result.map_err(|err| {
+            let dispatch_error = subxt::error::DispatchError::decode_from(err.encode(), self.api.metadata())
+                .unwrap_or(subxt::error::DispatchError::Other);
+            Error::SubxtRuntimeError(SubxtError::Runtime(dispatch_error))
+        })?;
+        Ok(balance.amount)
     }
 
     /// Converts the amount in dot to btc, based on the current set exchange rate.
@@ -1147,9 +1153,16 @@ impl OraclePallet for InterBtcParachain {
             .oracle_api()
             .collateral_to_wrapped(BalanceWrapper { amount }, currency_id);
 
-        let result: BalanceWrapper = self.api.runtime_api().at(head).call(runtime_api_call).await?.unwrap();
+        let result: Result<BalanceWrapper, metadata::DispatchError> =
+            self.api.runtime_api().at(head).call(runtime_api_call).await?;
 
-        Ok(result.amount)
+        let balance: BalanceWrapper = result.map_err(|err| {
+            let dispatch_error = subxt::error::DispatchError::decode_from(err.encode(), self.api.metadata())
+                .unwrap_or(subxt::error::DispatchError::Other);
+            Error::SubxtRuntimeError(SubxtError::Runtime(dispatch_error))
+        })?;
+
+        Ok(balance.amount)
     }
 
     async fn has_updated(&self, key: &OracleKey) -> Result<bool, Error> {
@@ -1702,8 +1715,15 @@ impl VaultRegistryPallet for InterBtcParachain {
         let runtime_api_call = metadata::apis()
             .vault_registry_api()
             .get_required_collateral_for_wrapped(BalanceWrapper { amount: amount_btc }, collateral_currency); // V15
-        let result: BalanceWrapper = self.api.runtime_api().at(head).call(runtime_api_call).await?.unwrap();
-        Ok(result.amount)
+        let result: Result<BalanceWrapper, metadata::DispatchError> =
+            self.api.runtime_api().at(head).call(runtime_api_call).await?;
+
+        let balance: BalanceWrapper = result.map_err(|err| {
+            let dispatch_error = subxt::error::DispatchError::decode_from(err.encode(), self.api.metadata())
+                .unwrap_or(subxt::error::DispatchError::Other);
+            Error::SubxtRuntimeError(SubxtError::Runtime(dispatch_error))
+        })?;
+        Ok(balance.amount)
     }
 
     /// Get the amount of collateral required for the given vault to be at the
@@ -1713,8 +1733,15 @@ impl VaultRegistryPallet for InterBtcParachain {
         let runtime_api_call = metadata::apis()
             .vault_registry_api()
             .get_required_collateral_for_vault(vault_id); // V15
-        let result: BalanceWrapper = self.api.runtime_api().at(head).call(runtime_api_call).await?.unwrap();
-        Ok(result.amount)
+        let result: Result<BalanceWrapper, metadata::DispatchError> =
+            self.api.runtime_api().at(head).call(runtime_api_call).await?;
+
+        let balance: BalanceWrapper = result.map_err(|err| {
+            let dispatch_error = subxt::error::DispatchError::decode_from(err.encode(), self.api.metadata())
+                .unwrap_or(subxt::error::DispatchError::Other);
+            Error::SubxtRuntimeError(SubxtError::Runtime(dispatch_error))
+        })?;
+        Ok(balance.amount)
     }
 
     async fn get_vault_total_collateral(&self, vault_id: VaultId) -> Result<u128, Error> {
@@ -1722,8 +1749,15 @@ impl VaultRegistryPallet for InterBtcParachain {
         let runtime_api_call = metadata::apis()
             .vault_registry_api()
             .get_vault_total_collateral(vault_id); // V15
-        let result: BalanceWrapper = self.api.runtime_api().at(head).call(runtime_api_call).await?.unwrap();
-        Ok(result.amount)
+        let result: Result<BalanceWrapper, metadata::DispatchError> =
+            self.api.runtime_api().at(head).call(runtime_api_call).await?;
+
+        let balance: BalanceWrapper = result.map_err(|err| {
+            let dispatch_error = subxt::error::DispatchError::decode_from(err.encode(), self.api.metadata())
+                .unwrap_or(subxt::error::DispatchError::Other);
+            Error::SubxtRuntimeError(SubxtError::Runtime(dispatch_error))
+        })?;
+        Ok(balance.amount)
     }
 
     async fn get_collateralization_from_vault(&self, vault_id: VaultId, only_issued: bool) -> Result<u128, Error> {
@@ -1731,8 +1765,16 @@ impl VaultRegistryPallet for InterBtcParachain {
         let runtime_api_call = metadata::apis()
             .vault_registry_api()
             .get_collateralization_from_vault(vault_id, only_issued); // V15
-        let result: UnsignedFixedPoint = *self.api.runtime_api().at(head).call(runtime_api_call).await?.unwrap();
-        Ok(result.into_inner())
+        let result: Result<Static<UnsignedFixedPoint>, metadata::DispatchError> =
+            self.api.runtime_api().at(head).call(runtime_api_call).await?;
+
+        let balance: UnsignedFixedPoint = *result.map_err(|err| {
+            let dispatch_error = subxt::error::DispatchError::decode_from(err.encode(), self.api.metadata())
+                .unwrap_or(subxt::error::DispatchError::Other);
+            Error::SubxtRuntimeError(SubxtError::Runtime(dispatch_error))
+        })?;
+
+        Ok(balance.into_inner())
     }
 
     /// For testing purposes only. Sets the current vault client release.

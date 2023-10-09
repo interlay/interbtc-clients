@@ -6,4 +6,5 @@ export BITCOIN_RPC_USER="rpcuser"
 export BITCOIN_RPC_PASS="rpcpassword"
 export ELECTRS_URL="http://localhost:3002"
 sudo docker-compose up -d bitcoind bitcoin-cli electrs
-cargo test test_fund_rich_user_fails --release --workspace --features parachain-metadata-kintsugi --features uses-bitcoind --features run-test-with-specific-node-target -- --nocapture
+cargo test --release --features parachain-metadata-kintsugi --features run-test-with-specific-node-target -- --nocapture
+lsof -ti :9944 | xargs kill
