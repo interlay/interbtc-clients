@@ -128,7 +128,7 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
             match service.start().await {
                 Err(backoff::Error::Permanent(err)) => {
                     tracing::warn!("Disconnected: {}", err);
-                    return Err(err.into());
+                    return Err(err);
                 }
                 Err(backoff::Error::Transient(err)) => {
                     tracing::warn!("Disconnected: {}", err.to_human());

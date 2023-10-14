@@ -84,7 +84,7 @@ impl BitcoinLight {
     }
 
     async fn get_coinbase_txid(&self, block_hash: &BlockHash) -> Result<Txid, BitcoinError> {
-        Ok(self.electrs.get_coinbase_txid(&block_hash).await?)
+        Ok(self.electrs.get_coinbase_txid(block_hash).await?)
     }
 }
 

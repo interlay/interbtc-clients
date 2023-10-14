@@ -19,16 +19,11 @@ impl FromStr for RestartPolicy {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum LoggingFormat {
+    #[default]
     Full,
     Json,
-}
-
-impl Default for LoggingFormat {
-    fn default() -> Self {
-        LoggingFormat::Full
-    }
 }
 
 impl FromStr for LoggingFormat {

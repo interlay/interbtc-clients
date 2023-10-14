@@ -110,7 +110,7 @@ impl Error {
             Error::SubxtRuntimeError(SubxtError::Runtime(DispatchError::Module(module_error))) => {
                 match module_error.as_root_error::<crate::metadata::Error>() {
                     Ok(root_error) => format!("{:?}", root_error),
-                    Err(_) => format!("Unknown error: {:?}", module_error.raw()),
+                    Err(_) => format!("Unknown error: {:?}", module_error.to_string()),
                 }
             }
             err => err.to_string(),

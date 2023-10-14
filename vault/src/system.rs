@@ -568,9 +568,7 @@ impl VaultService {
     }
 
     async fn run_service(&self) -> Result<(), BackoffError<Error>> {
-        self.validate_bitcoin_network()
-            .await
-            .map_err(|err| BackoffError::Permanent(err))?;
+        self.validate_bitcoin_network().await.map_err(BackoffError::Permanent)?;
         let account_id = self.btc_parachain.get_account_id().clone();
 
         let parsed_auto_register = self
@@ -594,7 +592,7 @@ impl VaultService {
                 .btc_parachain
                 .get_bitcoin_confirmations()
                 .await
-                .map_err(|err| Error::RuntimeError(err))?,
+                .map_err(Error::RuntimeError)?,
         };
         tracing::info!("Using {} bitcoin confirmations", num_confirmations);
 
@@ -669,7 +667,7 @@ impl VaultService {
             Arc::new(Box::new(
                 OrderedVaultsDelay::new(self.btc_parachain.clone())
                     .await
-                    .map_err(|err| Error::RuntimeError(err))?,
+                    .map_err(Error::RuntimeError)?,
             ))
         };
 

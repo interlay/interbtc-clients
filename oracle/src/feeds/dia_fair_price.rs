@@ -28,7 +28,7 @@ impl Default for DiaFairPriceApi {
 fn extract_response(value: Value, alias: &str) -> Option<f64> {
     value
         .as_array()?
-        .into_iter()
+        .iter()
         .find(|entry| matches!(entry.get("Token").and_then(|value| value.as_str()), Some(token) if token.to_uppercase() == alias))?
         .get("FairPrice")?
         .as_f64()

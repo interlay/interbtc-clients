@@ -266,7 +266,7 @@ impl ElectrsClient {
     ) -> Result<Option<Txid>, Error> {
         let script = ScriptBuilder::new()
             .push_opcode(opcodes::OP_RETURN)
-            .push_slice(&data.as_fixed_bytes())
+            .push_slice(data.as_fixed_bytes())
             .into_script();
 
         let script_hash = {
