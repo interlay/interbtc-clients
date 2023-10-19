@@ -26,12 +26,22 @@ impl Default for DiaFairPriceApi {
 }
 
 fn extract_response(value: Value, alias: &str) -> Option<f64> {
-    value
+    let entry = value
         .as_array()?
         .into_iter()
-        .find(|entry| matches!(entry.get("Token").and_then(|value| value.as_str()), Some(token) if token.to_uppercase() == alias))?
-        .get("FairPrice")?
-        .as_f64()
+        .find(|entry| matches!(entry.get("Token").and_then(|value| value.as_str()), Some(token) if token.to_uppercase() == alias))?;
+
+    // check if necessary variables exist (for resiliency)
+    {
+        let collateral_ratio = entry.get("Collateralratio")?;
+        (!collateral_ratio.get("IssuedToken")?.is_null()).then_some(())?;
+        (!collateral_ratio.get("LockedToken")?.is_null()).then_some(())?;
+        (!collateral_ratio.get("Ratio")?.is_null()).then_some(())?;
+
+        (!entry.get("BaseAssetPrice")?.is_null()).then_some(())?;
+    }
+
+    entry.get("FairPrice")?.as_f64()
 }
 
 impl DiaFairPriceApi {
@@ -91,22 +101,157 @@ mod tests {
                 json!([
                     {
                         "Token": "KBTC",
-                        "FairPrice": 27418.406434486784,
+                        "FairPrice": 27368.444386909556,
+                        "Collateralratio": {
+                            "IssuedToken": 5.06295411,
+                            "LockedToken": 10.11669883,
+                            "Ratio": 1.9981810243980267
+                        },
                         "BaseAssetSymbol": "BTC",
-                        "BaseAssetPrice": 27418.406434486784,
+                        "BaseAssetPrice": 27368.444386909556,
                         "Issuer": "Interlay"
                     },
                     {
                         "Token": "vKSM",
-                        "FairPrice": 24.611983172737727,
+                        "FairPrice": 23.236193861853113,
+                        "Collateralratio": {
+                            "IssuedToken": 258963.93436582384,
+                            "LockedToken": 325404.742440816,
+                            "Ratio": 1.2565639429200783
+                        },
                         "BaseAssetSymbol": "KSM",
-                        "BaseAssetPrice": 19.827745134261495,
+                        "BaseAssetPrice": 18.491851523174745,
                         "Issuer": "Bifrost"
                     }
                 ]),
                 "KBTC",
             ),
-            Some(27418.406434486784)
+            Some(27368.444386909556)
         )
+    }
+
+    #[test]
+    fn should_not_extract_missing_response() {
+        assert_eq!(
+            extract_response(
+                json!([
+                    {
+                        "Token": "IBTC",
+                        "FairPrice": 27368.444386909556,
+                        "Collateralratio": {
+                            "IssuedToken": 61.5231675,
+                            "LockedToken": 103.26883812,
+                            "Ratio": 1.678535782800845
+                        },
+                        "BaseAssetSymbol": "BTC",
+                        "Issuer": "Interlay"
+                    }
+                ]),
+                "IBTC",
+            ),
+            None
+        );
+
+        assert_eq!(
+            extract_response(
+                json!([
+                    {
+                        "Token": "IBTC",
+                        "FairPrice": 27368.444386909556,
+                        "Collateralratio": {
+                            "IssuedToken": 61.5231675,
+                            "LockedToken": 103.26883812
+                        },
+                        "BaseAssetSymbol": "BTC",
+                        "BaseAssetPrice": 27368.444386909556,
+                        "Issuer": "Interlay"
+                    }
+                ]),
+                "IBTC",
+            ),
+            None
+        );
+
+        assert_eq!(
+            extract_response(
+                json!([
+                    {
+                        "Token": "IBTC",
+                        "FairPrice": 27368.444386909556,
+                        "BaseAssetSymbol": "BTC",
+                        "BaseAssetPrice": 27368.444386909556,
+                        "Issuer": "Interlay"
+                    }
+                ]),
+                "IBTC",
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn should_not_extract_null_response() {
+        assert_eq!(
+            extract_response(
+                json!([
+                    {
+                        "Token": "IBTC",
+                        "FairPrice": 26227.957995921395,
+                        "Collateralratio": {
+                            "IssuedToken": null,
+                            "LockedToken": null,
+                            "Ratio": null
+                        },
+                        "BaseAssetSymbol": "BTC",
+                        "BaseAssetPrice": null,
+                        "Issuer": "Interlay"
+                    }
+                ]),
+                "IBTC",
+            ),
+            None
+        );
+
+        assert_eq!(
+            extract_response(
+                json!([
+                    {
+                        "Token": "IBTC",
+                        "FairPrice": 27431.274823315267,
+                        "Collateralratio": {
+                            "IssuedToken": 61.5231675,
+                            "LockedToken": 103.46858575,
+                            "Ratio": null
+                        },
+                        "BaseAssetSymbol": "BTC",
+                        "BaseAssetPrice": 27431.274823315267,
+                        "Issuer": "Interlay"
+                    }
+                ]),
+                "IBTC",
+            ),
+            None
+        );
+
+        assert_eq!(
+            extract_response(
+                json!([
+                    {
+                        "Token": "IBTC",
+                        "FairPrice": 27431.274823315267,
+                        "Collateralratio": {
+                            "IssuedToken": 61.5231675,
+                            "LockedToken": 103.46858575,
+                            "Ratio": 1.681782488686071
+                        },
+                        "BaseAssetSymbol": "BTC",
+                        "BaseAssetPrice": null,
+                        "Issuer": "Interlay"
+                    }
+                ]),
+                "IBTC",
+            ),
+            None
+        );
     }
 }
