@@ -24,9 +24,8 @@ pub enum ConfigError<Currency> {
 }
 
 #[derive(Error, Debug)]
-#[error("{feed}: {pair} => {error}")]
+#[error("{pair} => {error}")]
 pub struct PriceConfigError<Currency> {
-    pub(crate) feed: FeedName,
     pub(crate) pair: CurrencyPair<Currency>,
     pub(crate) error: ConfigError<Currency>,
 }

@@ -5,9 +5,10 @@ mod feeds;
 
 use backoff::{future::retry_notify, ExponentialBackoff};
 use clap::Parser;
-use config::{CurrencyStore, OracleConfig};
+use config::{CurrencyStore, OracleConfig, PriceConfig};
 use currency::*;
 use error::Error;
+use feeds::CoinGeckoApi;
 use futures::{future::join_all, stream::StreamExt};
 use git_version::git_version;
 use runtime::{
@@ -16,7 +17,7 @@ use runtime::{
 };
 use signal_hook::consts::*;
 use signal_hook_tokio::Signals;
-use std::{path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 use tokio::{join, time::sleep};
 
 const VERSION: &str = git_version!(args = ["--tags"]);
@@ -179,7 +180,7 @@ async fn _main() -> Result<(), Error> {
 
     let currency_store = &oracle_config.currencies;
     let mut price_feeds = feeds::PriceFeeds::new(currency_store.clone());
-    price_feeds.maybe_add_coingecko(opts.coingecko);
+    price_feeds.maybe_add_coingecko(opts.coingecko.clone());
     price_feeds.maybe_add_dia(opts.dia);
     price_feeds.maybe_add_dia_fair_price(opts.dia_fair_price);
     price_feeds.maybe_add_gateio(opts.gateio);
@@ -205,6 +206,8 @@ async fn _main() -> Result<(), Error> {
         .await
         .into_iter()
         .collect::<Result<Vec<_>, _>>()?;
+
+        log::debug!("Collected prices: {:?}", prices);
 
         // get prices above first to prevent websocket timeout
         let shutdown_tx = ShutdownSender::new();
