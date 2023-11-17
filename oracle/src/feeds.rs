@@ -118,21 +118,25 @@ impl PriceFeeds {
             price_config
                 .feeds
                 .into_iter()
-                .map(|(name, route)| {
-                    self.feeds
-                        .get(&name)
-                        .map(|feed| (name.clone(), route, feed))
-                        .ok_or(Error::NotConfigured(name))
+                .map(|x| {
+                    x.into_iter()
+                        .map(|(name, pair)| {
+                            self.feeds
+                                .get(&name)
+                                .map(|feed| (name.clone(), pair, feed))
+                                .ok_or(Error::NotConfigured(name))
+                        })
+                        .collect::<Result<Vec<_>, Error>>()
                 })
                 .collect::<Result<Vec<_>, Error>>()?
                 .into_iter()
-                .map(|(name, route, feed)| {
+                .map(|route| {
                     let currency_pair = currency_pair.clone();
                     async move {
                         let mut currency_pair_and_price = if let Some(currency_pair_and_price) = join_all(
                             route
                                 .into_iter()
-                                .map(|currency_pair| feed.get_price(currency_pair, currency_store)),
+                                .map(|(name, currency_pair, feed)| feed.get_price(currency_pair, currency_store)),
                         )
                         .await
                         .into_iter()
@@ -149,7 +153,6 @@ impl PriceFeeds {
                             currency_pair_and_price = currency_pair_and_price.invert()
                         }
 
-                        log::trace!("Using {:?}: {}", name, currency_pair_and_price);
                         Ok(Some(currency_pair_and_price))
                     }
                 }),
