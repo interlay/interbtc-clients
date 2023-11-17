@@ -37,8 +37,8 @@ pub struct PriceConfig<Currency> {
     #[serde(default)]
     pub value: Option<f64>,
     // Feeds to consume to calculate this exchange rate.
-    #[serde(default = "BTreeMap::new")]
-    pub feeds: BTreeMap<FeedName, Vec<CurrencyPair<Currency>>>,
+    #[serde(default = "Vec::new")]
+    pub feeds: Vec<Vec<(FeedName, CurrencyPair<Currency>)>>,
 }
 
 impl<Currency> PriceConfig<Currency>
@@ -47,12 +47,15 @@ where
 {
     // TODO: validate currencies exist
     pub fn validate(&self) -> Result<(), PriceConfigError<Currency>> {
-        for (name, path) in &self.feeds {
+        for path in self
+            .feeds
+            .iter()
+            .map(|x| x.iter().map(|(_name, pair)| pair.clone()).collect::<Vec<_>>())
+        {
             let end = &match &path.first() {
                 Some(currency_pair) if currency_pair.contains(&self.pair.base) => Ok(self.pair.quote.clone()),
                 Some(currency_pair) if currency_pair.contains(&self.pair.quote) => Ok(self.pair.base.clone()),
                 _ => Err(PriceConfigError {
-                    feed: name.clone(),
                     pair: self.pair.clone(),
                     error: ConfigError::NoStart,
                 }),
@@ -61,7 +64,6 @@ where
             match &path.last() {
                 Some(currency_pair) if currency_pair.contains(end) => Ok(()),
                 _ => Err(PriceConfigError {
-                    feed: name.clone(),
                     pair: self.pair.clone(),
                     error: ConfigError::NoEnd,
                 }),
@@ -70,7 +72,6 @@ where
             for [left, right] in path.windows(2).flat_map(<&[CurrencyPair<Currency>; 2]>::try_from) {
                 if !left.has_shared(right) {
                     return Err(PriceConfigError {
-                        feed: name.clone(),
                         pair: self.pair.clone(),
                         error: ConfigError::NoPath(left.clone(), right.clone()),
                     });
@@ -91,7 +92,7 @@ mod tests {
             PriceConfig {
                 pair: $pair,
                 value: None,
-                feeds: vec![(FeedName::Kraken, vec![$($path),*])].into_iter().collect()
+                feeds: vec![vec![$((FeedName::Kraken, $path)),*]]
             }
             .validate().expect("Config is valid")
         }};
@@ -102,14 +103,13 @@ mod tests {
             let result = PriceConfig {
                 pair: $pair,
                 value: None,
-                feeds: vec![(FeedName::Kraken, vec![$($path),*])].into_iter().collect()
+                feeds: vec![vec![$((FeedName::Kraken, $path)),*]]
             }
             .validate();
             assert!(
                 matches!(
                     result,
                     Err(PriceConfigError{
-                        feed: FeedName::Kraken,
                         pair: _,
                         error: $err
                     })
