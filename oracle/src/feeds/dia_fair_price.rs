@@ -1,6 +1,6 @@
 #![allow(clippy::single_char_pattern)]
 use super::{get_http, PriceFeed};
-use crate::{config::CurrencyStore, currency::*, Error};
+use crate::{config::CurrencyStore, currency::*, feeds::DiaApi, Error};
 use async_trait::async_trait;
 use clap::Parser;
 use reqwest::Url;
