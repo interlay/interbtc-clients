@@ -292,6 +292,7 @@ impl VaultIdManager {
 
         let btc_rpc_master = &self.btc_rpc_master_wallet;
         let btc_rpc_shared = self.btc_rpc_shared_wallet.clone();
+        let btc_rpc_shared_v2 = self.btc_rpc_shared_wallet_v2.clone();
 
         tracing::info!("Adding derivation key...");
         let derivation_key = self
@@ -309,7 +310,7 @@ impl VaultIdManager {
             Ok(private_key) => {
                 // TODO: remove this after the migration is complete
                 btc_rpc_shared.import_private_key(&private_key, true)?;
-                self.btc_rpc_shared_wallet_v2.import_private_key(&private_key, true)?;
+                btc_rpc_shared_v2.import_private_key(&private_key, true)?;
             }
             Err(err) => {
                 tracing::error!("Could not find the derivation key in the bitcoin wallet");
@@ -324,13 +325,14 @@ impl VaultIdManager {
             tracing::info!("Found {:?}", address);
             // get private key from currency specific wallet
             let private_key = btc_rpc.dump_private_key(&address)?;
-            // import key into main wallet
+            // import key into shared wallets
             btc_rpc_shared.import_private_key(&private_key, false)?;
+            btc_rpc_shared_v2.import_private_key(&private_key, false)?;
         }
 
         // only sweep if using pruned node and there is no sweep tx yet to shared-v2
         if btc_rpc_shared.get_pruned_height().await? != 0
-            && self.btc_rpc_shared_wallet_v2.get_last_sweep_height().await?.is_none()
+            && btc_rpc_shared_v2.get_last_sweep_height().await?.is_none()
         {
             // sweep to old shared wallet which will then sweep again to the v2 wallet
             let shared_wallet_address = btc_rpc_shared.get_new_address().await?;
@@ -343,7 +345,7 @@ impl VaultIdManager {
         let metrics = PerCurrencyMetrics::new(&vault_id);
         let data = VaultData {
             vault_id: vault_id.clone(),
-            btc_rpc: self.btc_rpc_shared_wallet_v2.clone(),
+            btc_rpc: btc_rpc_shared_v2,
             metrics: metrics.clone(),
         };
         PerCurrencyMetrics::initialize_values(self.btc_parachain.clone(), &data).await;
