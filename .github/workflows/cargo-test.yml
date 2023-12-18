@@ -63,26 +63,26 @@ jobs:
         run: |
           cargo build --release --workspace --features ${{ matrix.metadata }}
       - name: upload artifacts - vault
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vault-${{ matrix.metadata }}
           path: target/release/vault
           retention-days: 10
       - name: upload artifacts - oracle
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: oracle-${{ matrix.metadata }}
           path: target/release/oracle
           retention-days: 10
       - name: upload artifacts - faucet
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: faucet-${{ matrix.metadata }}
           path: target/release/faucet
           retention-days: 10
       - name: upload artifacts - runner
         if: matrix.metadata == 'parachain-metadata-kintsugi'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: runner
           path: target/release/runner
