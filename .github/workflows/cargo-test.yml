@@ -108,7 +108,7 @@ jobs:
           echo "branch_name=$(echo ${GITHUB_REF##*/})" >> $GITHUB_OUTPUT
           echo "tag=$(echo ${{ matrix.client }}-${{ matrix.metadata }}-)" >> $GITHUB_OUTPUT
           echo "ts=$TS" >> $GITHUB_OUTPUT
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.client }}-${{ matrix.metadata }}
           path: artifacts/
@@ -173,7 +173,7 @@ jobs:
           TS=$(date +%s)
           echo "branch_name=$(echo ${GITHUB_REF##*/})" >> $GITHUB_OUTPUT
           echo "ts=$TS" >> $GITHUB_OUTPUT
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts/
       - name: Set up QEMU
@@ -223,7 +223,7 @@ jobs:
     needs: [test]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
 
