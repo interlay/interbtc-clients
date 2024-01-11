@@ -109,6 +109,18 @@ impl BitcoinOpts {
         }
     }
 
+    pub async fn new_walletless(
+        &self,
+        wallet_name: Option<String>,
+    ) -> Result<Arc<dyn BitcoinCoreApi + Send + Sync>, Error> {
+        let bitcoin_core = self
+            .new_client_builder(wallet_name)
+            .build_and_connect(Duration::from_millis(self.bitcoin_connection_timeout_ms))
+            .await?;
+        bitcoin_core.sync().await?;
+        Ok(Arc::new(bitcoin_core))
+    }
+
     pub fn new_client_with_network(
         &self,
         wallet_name: Option<String>,
