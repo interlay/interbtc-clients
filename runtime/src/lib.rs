@@ -18,36 +18,38 @@ mod tests;
 
 #[cfg(feature = "testing-utils")]
 pub mod integration;
-use subxt::config::SubstrateConfig;
+
 pub mod utils;
+
 pub use addr::PartialAddress;
 pub use assets::{AssetRegistry, LendingAssets, RuntimeCurrencyInfo, TryFromSymbol};
-use codec::{Decode, Encode};
 pub use error::{Error, SubxtError};
 pub use primitives::CurrencyInfo;
 pub use prometheus;
 pub use retry::{notify_retry, RetryPolicy};
-#[cfg(feature = "testing-utils")]
-pub use rpc::SudoPallet;
 pub use rpc::{
     BtcRelayPallet, CollateralBalancesPallet, FeePallet, FeeRateUpdateReceiver, InterBtcParachain, IssuePallet,
-    OraclePallet, RedeemPallet, ReplacePallet, SecurityPallet, TimestampPallet, UtilFuncs, VaultRegistryPallet,
-    DEFAULT_SPEC_NAME, SS58_PREFIX,
+    OraclePallet, RedeemPallet, ReplacePallet, SecurityPallet, SudoPallet, TimestampPallet, UtilFuncs,
+    VaultRegistryPallet, DEFAULT_SPEC_NAME, SS58_PREFIX,
 };
 pub use shutdown::{ShutdownReceiver, ShutdownSender};
-pub use sp_arithmetic::{traits as FixedPointTraits, FixedI128, FixedPointNumber, FixedU128};
 pub use sp_core;
+pub use sp_runtime::{traits as FixedPointTraits, FixedPointNumber, FixedU128};
 pub use std::collections::btree_set::BTreeSet;
-use std::{marker::PhantomData, time::Duration};
-use subxt::{config::polkadot::PolkadotExtrinsicParams, subxt, Config};
 pub use types::*;
+
+use std::time::Duration;
+use subxt::{
+    config::{polkadot::PolkadotExtrinsicParams, SubstrateConfig},
+    subxt, Config,
+};
+
 pub const TX_FEES: u128 = 2000000000;
 pub const MILLISECS_PER_BLOCK: u64 = 12000;
 pub const BLOCK_INTERVAL: Duration = Duration::from_millis(MILLISECS_PER_BLOCK);
 
 pub const BTC_RELAY_MODULE: &str = "BTCRelay";
 pub const ISSUE_MODULE: &str = "Issue";
-pub const SECURITY_MODULE: &str = "Security";
 pub const SYSTEM_MODULE: &str = "System";
 pub const VAULT_REGISTRY_MODULE: &str = "VaultRegistry";
 
@@ -55,7 +57,6 @@ pub const STABLE_BITCOIN_CONFIRMATIONS: &str = "StableBitcoinConfirmations";
 pub const STABLE_PARACHAIN_CONFIRMATIONS: &str = "StableParachainConfirmations";
 pub const DISABLE_DIFFICULTY_CHECK: &str = "DisableDifficultyCheck";
 
-// TODO: possibly substitute CurrencyId, VaultId, H256Le
 #[cfg_attr(
     feature = "parachain-metadata-interlay",
     subxt(
@@ -71,6 +72,11 @@ pub const DISABLE_DIFFICULTY_CHECK: &str = "DisableDifficultyCheck";
         ),
         derive_for_type(path = "interbtc_primitives::VaultCurrencyPair", derive = "Eq, PartialEq"),
         derive_for_type(path = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
+        derive_for_type(path = "sp_runtime::DispatchError", derive = "serde::Deserialize"),
+        derive_for_type(path = "sp_runtime::TransactionalError", derive = "serde::Deserialize"),
+        derive_for_type(path = "sp_arithmetic::ArithmeticError", derive = "serde::Deserialize"),
+        derive_for_type(path = "sp_runtime::TokenError", derive = "serde::Deserialize"),
+        derive_for_type(path = "sp_runtime::ModuleError", derive = "serde::Deserialize"),
         substitute_type(path = "primitive_types::H256", with = "::subxt::utils::Static<crate::H256>"),
         substitute_type(path = "primitive_types::U256", with = "::subxt::utils::Static<crate::U256>"),
         substitute_type(path = "primitive_types::H160", with = "::subxt::utils::Static<crate::H160>"),
@@ -88,10 +94,6 @@ pub const DISABLE_DIFFICULTY_CHECK: &str = "DisableDifficultyCheck";
             with = "::subxt::utils::Static<crate::BtcAddress>"
         ),
         substitute_type(path = "interbtc_primitives::CurrencyId", with = "crate::CurrencyId"),
-        substitute_type(
-            path = "frame_support::traits::misc::WrapperKeepOpaque",
-            with = "::subxt::utils::Static<crate::WrapperKeepOpaque>"
-        ),
         substitute_type(
             path = "bitcoin::types::BlockHeader",
             with = "::subxt::utils::Static<::module_bitcoin::types::BlockHeader>"
@@ -125,6 +127,11 @@ pub const DISABLE_DIFFICULTY_CHECK: &str = "DisableDifficultyCheck";
         ),
         derive_for_type(path = "interbtc_primitives::VaultCurrencyPair", derive = "Eq, PartialEq"),
         derive_for_type(path = "interbtc_primitives::VaultId", derive = "Eq, PartialEq"),
+        derive_for_type(path = "sp_runtime::DispatchError", derive = "serde::Deserialize"),
+        derive_for_type(path = "sp_runtime::TransactionalError", derive = "serde::Deserialize"),
+        derive_for_type(path = "sp_arithmetic::ArithmeticError", derive = "serde::Deserialize"),
+        derive_for_type(path = "sp_runtime::TokenError", derive = "serde::Deserialize"),
+        derive_for_type(path = "sp_runtime::ModuleError", derive = "serde::Deserialize"),
         substitute_type(path = "primitive_types::H256", with = "::subxt::utils::Static<crate::H256>"),
         substitute_type(path = "primitive_types::U256", with = "::subxt::utils::Static<crate::U256>"),
         substitute_type(path = "primitive_types::H160", with = "::subxt::utils::Static<crate::H160>"),
@@ -142,10 +149,6 @@ pub const DISABLE_DIFFICULTY_CHECK: &str = "DisableDifficultyCheck";
             with = "::subxt::utils::Static<crate::BtcAddress>"
         ),
         substitute_type(path = "interbtc_primitives::CurrencyId", with = "crate::CurrencyId"),
-        substitute_type(
-            path = "frame_support::traits::misc::WrapperKeepOpaque",
-            with = "::subxt::utils::Static<crate::WrapperKeepOpaque>"
-        ),
         substitute_type(
             path = "bitcoin::types::BlockHeader",
             with = "::subxt::utils::Static<::module_bitcoin::types::BlockHeader>"
@@ -165,12 +168,6 @@ pub const DISABLE_DIFFICULTY_CHECK: &str = "DisableDifficultyCheck";
     )
 )]
 pub mod metadata {}
-
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Default, Clone, Decode, Encode)]
-pub struct WrapperKeepOpaque<T> {
-    data: Vec<u8>,
-    _phantom: PhantomData<T>,
-}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct InterBtcRuntime;

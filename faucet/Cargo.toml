@@ -45,4 +45,4 @@ serial_test = "0.9.0"
 runtime = { path = "../runtime", features = ["testing-utils"] }
 
 # Substrate dependencies
-sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }
+sp-keyring = "24.0.0"

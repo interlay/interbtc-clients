@@ -1,7 +1,6 @@
 use crate::{
     error::{Error, KeyLoadingError},
-    rpc::ShutdownSender,
-    InterBtcParachain, InterBtcSigner,
+    InterBtcParachain, InterBtcSigner, ShutdownSender,
 };
 use clap::Parser;
 use sp_core::{sr25519, Pair};
