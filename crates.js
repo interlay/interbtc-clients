@@ -1,0 +1,1 @@
+window.ALL_CRATES = ["bitcoin","faucet","oracle","runner","runtime","shared","vault"];

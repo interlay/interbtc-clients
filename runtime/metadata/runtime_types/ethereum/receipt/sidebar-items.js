@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ReceiptV3"],"struct":["EIP658ReceiptData"]};

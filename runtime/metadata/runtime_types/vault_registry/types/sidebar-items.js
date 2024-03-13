@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["VaultStatus","Version"],"struct":["SystemVault","Vault"]};
