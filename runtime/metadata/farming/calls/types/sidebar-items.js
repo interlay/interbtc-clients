@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Claim","Deposit","RemoveRewardSchedule","UpdateRewardSchedule","Withdraw"]};

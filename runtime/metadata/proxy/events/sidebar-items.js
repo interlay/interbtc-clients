@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Announced","ProxyAdded","ProxyExecuted","ProxyRemoved","PureCreated"]};

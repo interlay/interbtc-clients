@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["serde_impl"],"mod":["serde_details"]};
