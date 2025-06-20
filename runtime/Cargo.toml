@@ -6,31 +6,30 @@ edition = "2018"
 
 [features]
 default = []
-testing-utils = [
-    "tempdir",
-    "rand",
-    "frame-support",
-]
+testing-utils = ["tempdir", "rand", "frame-support"]
 parachain-metadata-interlay = []
 parachain-metadata-kintsugi = []
 
 [dependencies]
 serde = { version = "1.0.136", features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+    "derive",
+    "full",
+] }
 async-trait = "0.1.40"
 thiserror = "1.0"
 serde_json = "1.0.71"
 tokio = { version = "1.0", features = ["full"] }
 backoff = { version = "0.3.0", features = ["tokio"] }
 futures = "0.3.5"
-clap = { version = "4.0.17", features = ["derive"]}
+clap = { version = "4.0.17", features = ["derive"] }
 log = "0.4.0"
 url = "2"
 cfg-if = "1.0"
 prometheus = { version = "0.12.0", features = ["process"] }
 lazy_static = "1.4.0"
-scale-decode = { version = "0.7.0",  features = ["derive"] }
-scale-encode = { version = "0.3.0",  features = ["derive"] }
+scale-decode = { version = "0.7.0", features = ["derive"] }
+scale-encode = { version = "0.3.0", features = ["derive"] }
 
 # Substrate dependencies
 sp-core = { version = "21.0.0", default-features = false }
@@ -39,8 +38,18 @@ sp-keyring = "24.0.0"
 frame-support = { version = "21.0.0", optional = true }
 
 # Subxt dependencies
-subxt = { version = "0.29.0", default_features = false,  features = ["jsonrpsee-ws"] }
-jsonrpsee = { version = "0.16", features = ["async-client", "client-ws-transport", "macros", "jsonrpsee-types", "client", "jsonrpsee-ws-client", "jsonrpsee-client-transport"] }
+subxt = { version = "0.29.0", default_features = false, features = [
+    "jsonrpsee-ws",
+] }
+jsonrpsee = { version = "0.16", features = [
+    "async-client",
+    "client-ws-transport",
+    "macros",
+    "jsonrpsee-types",
+    "client",
+    "jsonrpsee-ws-client",
+    "jsonrpsee-client-transport",
+] }
 
 bitcoin = { path = "../bitcoin" }
 
@@ -50,7 +59,7 @@ rand = { version = "0.7", optional = true }
 
 [dependencies.primitives]
 git = "https://github.com/interlay/interbtc"
-rev = "700fcc9b9aab8f5337d62cb8f18c894722cf02f4"
+rev = "4626e80"
 package = "interbtc-primitives"
 default_features = false
 # NOTE: sp-runtime still in lockfile but not used
@@ -59,7 +68,7 @@ features = ["std"]
 
 [dependencies.module-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "700fcc9b9aab8f5337d62cb8f18c894722cf02f4"
+rev = "4626e80"
 package = "bitcoin"
 default_features = false
 features = ["std", "parser"]
