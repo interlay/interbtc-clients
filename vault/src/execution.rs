@@ -656,7 +656,7 @@ pub async fn execute_open_requests(
 fn get_request_for_btc_tx(tx: &Transaction, hash_map: &HashMap<H256, Request>) -> Option<Request> {
     let hash = tx.get_op_return()?;
     let request = hash_map.get(&hash)?;
-    let paid_amount = tx.get_payment_amount_to(request.btc_address.to_payload().ok()?)?;
+    let paid_amount = tx.get_largest_payment_amount_to(request.btc_address.to_payload().ok()?)?;
     if paid_amount as u128 >= request.amount {
         Some(request.clone())
     } else {
