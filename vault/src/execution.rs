@@ -18,6 +18,7 @@ use runtime::{
     H256,
 };
 use std::{collections::HashMap, convert::TryInto, time::Duration};
+use std::str::FromStr;
 use tokio::time::sleep;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -177,14 +178,15 @@ impl Request {
         auto_rbf: bool,
     ) -> Result<(), Error> {
         // ensure the deadline has not expired yet
-        if let Some(ref deadline) = self.deadline {
-            if parachain_rpc.get_current_active_block_number().await? >= deadline.parachain
-                && vault.btc_rpc.get_block_count().await? >= deadline.bitcoin as u64
-            {
-                return Err(Error::DeadlineExpired);
-            }
-        }
-
+        // if let Some(ref deadline) = self.deadline {
+        //     if parachain_rpc.get_current_active_block_number().await? >= deadline.parachain
+        //         && vault.btc_rpc.get_block_count().await? >= deadline.bitcoin as u64
+        //     {
+        //         return Err(Error::DeadlineExpired);
+        //     }
+        // }
+        //
+        println!("calling tx metadata");
         let tx_metadata = self
             .transfer_btc(
                 &parachain_rpc,
@@ -194,8 +196,8 @@ impl Request {
                 auto_rbf,
             )
             .await?;
-
-        let _ = update_bitcoin_metrics(&vault, tx_metadata.fee, self.fee_budget).await;
+        println!("\ntx_metadata: {:?}",tx_metadata);
+        // let _ = update_bitcoin_metrics(&vault, tx_metadata.fee, self.fee_budget).await;
         self.execute(parachain_rpc, tx_metadata).await
     }
 
@@ -216,21 +218,22 @@ impl Request {
         vault_id: VaultId,
         auto_rbf: bool,
     ) -> Result<TransactionMetadata, Error> {
-        let fee_rate = self.get_fee_rate(parachain_rpc).await?;
+        // let fee_rate = self.get_fee_rate(parachain_rpc).await?;
+        //
+        // tracing::debug!("Using fee_rate = {} sat/vByte", fee_rate.0);
+        //
+        // let txid = btc_rpc
+        //     .create_and_send_transaction(
+        //         self.btc_address
+        //             .to_address(btc_rpc.network())
+        //             .map_err(BitcoinError::ConversionError)?,
+        //         self.amount as u64,
+        //         fee_rate,
+        //         Some(self.hash),
+        //     )
+        //     .await?;
 
-        tracing::debug!("Using fee_rate = {} sat/vByte", fee_rate.0);
-
-        let txid = btc_rpc
-            .create_and_send_transaction(
-                self.btc_address
-                    .to_address(btc_rpc.network())
-                    .map_err(BitcoinError::ConversionError)?,
-                self.amount as u64,
-                fee_rate,
-                Some(self.hash),
-            )
-            .await?;
-
+        let txid = Txid::from_str("554fbf37f2d777b8a7c2f0a0a03e7a99995336eca58f6bb8556db4c6489483f3").unwrap();
         self.wait_for_inclusion(parachain_rpc, btc_rpc, num_confirmations, txid, auto_rbf)
             .await
     }
@@ -263,7 +266,7 @@ impl Request {
             let subscription = fee_rate_subscription
                 .map_err(Into::<Error>::into)
                 .and_then(|x| {
-                    tracing::debug!("Received new inclusion fee estimate {}...", x);
+                    println!("Received new inclusion fee estimate {}...", x);
 
                     let ret: Result<SatPerVbyte, _> = x
                         .into_inner()
@@ -292,15 +295,15 @@ impl Request {
                     match btc_rpc.is_in_mempool(txid_copy).await {
                         Ok(false) => {
                             // if not in mempool anymore, don't propagate the event (even if it is an error)
-                            tracing::debug!("Txid not in mempool anymore...");
+                            println!("Txid not in mempool anymore...");
                             None
                         }
                         Ok(true) => {
-                            tracing::debug!("Txid is still in mempool...");
+                            println!("Txid is still in mempool...");
                             Some(x)
                         }
                         Err(e) => {
-                            tracing::warn!("Unexpected bitcoin error: {}", e);
+                            println!("Unexpected bitcoin error: {}", e);
                             Some(Err(e.into()))
                         }
                     }

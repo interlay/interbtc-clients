@@ -24,6 +24,7 @@ use runtime::{
     UtilFuncs, VaultCurrencyPair, VaultId, VaultRegistryPallet,
 };
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
+use sha2::Digest;
 use tokio::{sync::RwLock, time::sleep};
 
 pub const VERSION: &str = git_version!(args = ["--tags"]);
@@ -223,7 +224,7 @@ impl DatabaseConfig {
 pub struct VaultIdManager {
     vault_data: Arc<RwLock<HashMap<VaultId, VaultData>>>,
     btc_parachain: InterBtcParachain,
-    btc_rpc_master_wallet: DynBitcoinCoreApi,
+    pub btc_rpc_master_wallet: DynBitcoinCoreApi,
     // TODO: refactor this
     #[allow(clippy::type_complexity)]
     constructor: Arc<Box<dyn Fn(VaultId) -> Result<DynBitcoinCoreApi, BitcoinError> + Send + Sync>>,
@@ -375,6 +376,8 @@ impl VaultIdManager {
     }
 
     pub async fn get_vault(&self, vault_id: &VaultId) -> Option<VaultData> {
+        println!("vault_id: {:#?}",vault_id);
+        println!("is_empty read: {:#?}",self.vault_data.read().await.is_empty());
         self.vault_data.read().await.get(vault_id).cloned()
     }
 
@@ -573,20 +576,20 @@ impl VaultService {
             .map_err(|err| BackoffError::Permanent(err))?;
         let account_id = self.btc_parachain.get_account_id().clone();
 
-        let parsed_auto_register = self
-            .config
-            .auto_register
-            .clone()
-            .into_iter()
-            .map(|(symbol, amount)| Ok((CurrencyId::try_from_symbol(symbol)?, amount)))
-            .into_iter()
-            .collect::<Result<Vec<_>, Error>>()?;
+        // let parsed_auto_register = self
+        //     .config
+        //     .auto_register
+        //     .clone()
+        //     .into_iter()
+        //     .map(|(symbol, amount)| Ok((CurrencyId::try_from_symbol(symbol)?, amount)))
+        //     .into_iter()
+        //     .collect::<Result<Vec<_>, Error>>()?;
 
         // exit if auto-register uses faucet and faucet url not set
-        if parsed_auto_register.iter().any(|(_, o)| o.is_none()) && self.config.faucet_url.is_none() {
-            // TODO: validate before bitcoin / parachain connections
-            return Err(BackoffError::Permanent(Error::FaucetUrlNotSet));
-        }
+        // if parsed_auto_register.iter().any(|(_, o)| o.is_none()) && self.config.faucet_url.is_none() {
+        //     // TODO: validate before bitcoin / parachain connections
+        //     return Err(BackoffError::Permanent(Error::FaucetUrlNotSet));
+        // }
 
         let num_confirmations = match self.config.btc_confirmations {
             Some(x) => x,
@@ -611,177 +614,177 @@ impl VaultService {
         });
         tokio::task::spawn(err_listener);
 
-        self.maybe_register_public_key().await?;
-        match join_all(
-            parsed_auto_register
-                .iter()
-                .map(|(currency_id, amount)| self.maybe_register_vault(currency_id, amount)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<(), Error>>()
-        {
-            Err(Error::RuntimeError(err)) if err.is_threshold_not_set() => Err(BackoffError::Permanent(err.into())),
-            Err(err) => Err(err.into()),
-            Ok(_) => Ok(()),
-        }?;
+        // self.maybe_register_public_key().await?;
+        // match join_all(
+        //     parsed_auto_register
+        //         .iter()
+        //         .map(|(currency_id, amount)| self.maybe_register_vault(currency_id, amount)),
+        // )
+        // .await
+        // .into_iter()
+        // .collect::<Result<(), Error>>()
+        // {
+        //     Err(Error::RuntimeError(err)) if err.is_threshold_not_set() => Err(BackoffError::Permanent(err.into())),
+        //     Err(err) => Err(err.into()),
+        //     Ok(_) => Ok(()),
+        // }?;
 
         // purposefully _after_ maybe_register_vault and _before_ other calls
-        self.vault_id_manager.fetch_vault_ids().await?;
+        // self.vault_id_manager.fetch_vault_ids().await?;
 
-        let startup_height = self.await_parachain_block().await?;
+        // let startup_height = self.await_parachain_block().await?;
 
-        let open_request_executor = execute_open_requests(
-            self.shutdown.clone(),
-            self.btc_parachain.clone(),
-            self.vault_id_manager.clone(),
-            self.btc_rpc_master_wallet.clone(),
-            num_confirmations,
-            self.config.payment_margin_minutes,
-            self.config.auto_rbf,
-        );
+        // let open_request_executor = execute_open_requests(
+        //     self.shutdown.clone(),
+        //     self.btc_parachain.clone(),
+        //     self.vault_id_manager.clone(),
+        //     self.btc_rpc_master_wallet.clone(),
+        //     num_confirmations,
+        //     self.config.payment_margin_minutes,
+        //     self.config.auto_rbf,
+        // );
 
-        let shutdown_clone = self.shutdown.clone();
-        spawn_cancelable(self.shutdown.subscribe(), async move {
-            tracing::info!("Checking for open requests...");
-            match open_request_executor.await {
-                Ok(_) => tracing::info!("Done processing open requests"),
-                Err(e) => {
-                    tracing::error!("Failed to process open requests: {}", e);
-                    if let Err(err) = shutdown_clone.send(()) {
-                        tracing::error!("Failed to send shutdown signal: {}", err);
-                    }
-                }
-            }
-        });
+        // let shutdown_clone = self.shutdown.clone();
+        // spawn_cancelable(self.shutdown.subscribe(), async move {
+        //     tracing::info!("Checking for open requests...");
+        //     match open_request_executor.await {
+        //         Ok(_) => tracing::info!("Done processing open requests"),
+        //         Err(e) => {
+        //             tracing::error!("Failed to process open requests: {}", e);
+        //             if let Err(err) = shutdown_clone.send(()) {
+        //                 tracing::error!("Failed to send shutdown signal: {}", err);
+        //             }
+        //         }
+        //     }
+        // });
 
         // get the relay chain tip but don't error because the relay may not be initialized
-        let initial_btc_height = self.btc_parachain.get_best_block_height().await.unwrap_or_default();
+        // let initial_btc_height = self.btc_parachain.get_best_block_height().await.unwrap_or_default();
 
         // issue handling
-        let issue_set = Arc::new(IssueRequests::new());
-        let oldest_issue_btc_height =
-            issue::initialize_issue_set(&self.btc_rpc_master_wallet, &self.btc_parachain, &issue_set).await?;
-
-        let random_delay: Arc<Box<dyn RandomDelay + Send + Sync>> = if self.config.no_random_delay {
-            Arc::new(Box::new(ZeroDelay))
-        } else {
-            Arc::new(Box::new(
-                OrderedVaultsDelay::new(self.btc_parachain.clone())
-                    .await
-                    .map_err(|err| Error::RuntimeError(err))?,
-            ))
-        };
-
-        let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
-        let (replace_event_tx, replace_event_rx) = mpsc::channel::<Event>(16);
-
-        let listen_for_registered_assets =
-            |rpc: InterBtcParachain| async move { rpc.listen_for_registered_assets().await };
-
-        let listen_for_lending_markets = |rpc: InterBtcParachain| async move { rpc.listen_for_lending_markets().await };
-
-        let listen_for_fee_rate_estimate_changes =
-            |rpc: InterBtcParachain| async move { rpc.listen_for_fee_rate_changes().await };
+        // let issue_set = Arc::new(IssueRequests::new());
+        // let oldest_issue_btc_height =
+        //     issue::initialize_issue_set(&self.btc_rpc_master_wallet, &self.btc_parachain, &issue_set).await?;
+        //
+        // let random_delay: Arc<Box<dyn RandomDelay + Send + Sync>> = if self.config.no_random_delay {
+        //     Arc::new(Box::new(ZeroDelay))
+        // } else {
+        //     Arc::new(Box::new(
+        //         OrderedVaultsDelay::new(self.btc_parachain.clone())
+        //             .await
+        //             .map_err(|err| Error::RuntimeError(err))?,
+        //     ))
+        // };
+        //
+        // let (issue_event_tx, issue_event_rx) = mpsc::channel::<Event>(32);
+        // let (replace_event_tx, replace_event_rx) = mpsc::channel::<Event>(16);
+        //
+        // let listen_for_registered_assets =
+        //     |rpc: InterBtcParachain| async move { rpc.listen_for_registered_assets().await };
+        //
+        // let listen_for_lending_markets = |rpc: InterBtcParachain| async move { rpc.listen_for_lending_markets().await };
+        //
+        // let listen_for_fee_rate_estimate_changes =
+        //     |rpc: InterBtcParachain| async move { rpc.listen_for_fee_rate_changes().await };
 
         tracing::info!("Starting all services...");
         let tasks = vec![
-            (
-                "Registered Asset Listener",
-                run(listen_for_registered_assets(self.btc_parachain.clone())),
-            ),
-            (
-                "Lending Market Listener",
-                run(listen_for_lending_markets(self.btc_parachain.clone())),
-            ),
-            (
-                "Fee Estimate Listener",
-                run(listen_for_fee_rate_estimate_changes(self.btc_parachain.clone())),
-            ),
-            (
-                "Issue Request Listener",
-                run(listen_for_issue_requests(
-                    self.vault_id_manager.clone(),
-                    self.btc_parachain.clone(),
-                    issue_event_tx.clone(),
-                    issue_set.clone(),
-                )),
-            ),
-            (
-                "Issue Execute Listener",
-                run(listen_for_issue_executes(
-                    self.btc_parachain.clone(),
-                    issue_event_tx.clone(),
-                    issue_set.clone(),
-                )),
-            ),
-            (
-                "Issue Cancel Listener",
-                run(listen_for_issue_cancels(self.btc_parachain.clone(), issue_set.clone())),
-            ),
-            (
-                "Issue Cancel Scheduler",
-                run(CancellationScheduler::new(
-                    self.btc_parachain.clone(),
-                    startup_height,
-                    initial_btc_height,
-                    account_id.clone(),
-                )
-                .handle_cancellation::<IssueCanceller>(issue_event_rx)),
-            ),
-            (
-                "Request Replace Listener",
-                run(listen_for_replace_requests(
-                    self.btc_parachain.clone(),
-                    self.vault_id_manager.clone(),
-                    replace_event_tx.clone(),
-                    !self.config.no_auto_replace,
-                )),
-            ),
-            (
-                "Accept Replace Listener",
-                run(listen_for_accept_replace(
-                    self.shutdown.clone(),
-                    self.btc_parachain.clone(),
-                    self.vault_id_manager.clone(),
-                    num_confirmations,
-                    self.config.payment_margin_minutes,
-                    self.config.auto_rbf,
-                )),
-            ),
-            (
-                "Execute Replace Listener",
-                run(listen_for_execute_replace(
-                    self.btc_parachain.clone(),
-                    replace_event_tx.clone(),
-                )),
-            ),
-            (
-                "Replace Cancellation Scheduler",
-                run(CancellationScheduler::new(
-                    self.btc_parachain.clone(),
-                    startup_height,
-                    initial_btc_height,
-                    account_id.clone(),
-                )
-                .handle_cancellation::<ReplaceCanceller>(replace_event_rx)),
-            ),
-            (
-                "Parachain Block Listener",
-                run(active_block_listener(
-                    self.btc_parachain.clone(),
-                    issue_event_tx.clone(),
-                    replace_event_tx.clone(),
-                )),
-            ),
-            (
-                "Bitcoin Block Listener",
-                run(relay_block_listener(
-                    self.btc_parachain.clone(),
-                    issue_event_tx.clone(),
-                    replace_event_tx.clone(),
-                )),
-            ),
+            // (
+            //     "Registered Asset Listener",
+            //     run(listen_for_registered_assets(self.btc_parachain.clone())),
+            // ),
+            // (
+            //     "Lending Market Listener",
+            //     run(listen_for_lending_markets(self.btc_parachain.clone())),
+            // ),
+            // (
+            //     "Fee Estimate Listener",
+            //     run(listen_for_fee_rate_estimate_changes(self.btc_parachain.clone())),
+            // ),
+            // (
+            //     "Issue Request Listener",
+            //     run(listen_for_issue_requests(
+            //         self.vault_id_manager.clone(),
+            //         self.btc_parachain.clone(),
+            //         issue_event_tx.clone(),
+            //         issue_set.clone(),
+            //     )),
+            // ),
+            // (
+            //     "Issue Execute Listener",
+            //     run(listen_for_issue_executes(
+            //         self.btc_parachain.clone(),
+            //         issue_event_tx.clone(),
+            //         issue_set.clone(),
+            //     )),
+            // ),
+            // (
+            //     "Issue Cancel Listener",
+            //     run(listen_for_issue_cancels(self.btc_parachain.clone(), issue_set.clone())),
+            // ),
+            // (
+            //     "Issue Cancel Scheduler",
+            //     run(CancellationScheduler::new(
+            //         self.btc_parachain.clone(),
+            //         startup_height,
+            //         initial_btc_height,
+            //         account_id.clone(),
+            //     )
+            //     .handle_cancellation::<IssueCanceller>(issue_event_rx)),
+            // ),
+            // (
+            //     "Request Replace Listener",
+            //     run(listen_for_replace_requests(
+            //         self.btc_parachain.clone(),
+            //         self.vault_id_manager.clone(),
+            //         replace_event_tx.clone(),
+            //         !self.config.no_auto_replace,
+            //     )),
+            // ),
+            // (
+            //     "Accept Replace Listener",
+            //     run(listen_for_accept_replace(
+            //         self.shutdown.clone(),
+            //         self.btc_parachain.clone(),
+            //         self.vault_id_manager.clone(),
+            //         num_confirmations,
+            //         self.config.payment_margin_minutes,
+            //         self.config.auto_rbf,
+            //     )),
+            // ),
+            // (
+            //     "Execute Replace Listener",
+            //     run(listen_for_execute_replace(
+            //         self.btc_parachain.clone(),
+            //         replace_event_tx.clone(),
+            //     )),
+            // ),
+            // (
+            //     "Replace Cancellation Scheduler",
+            //     run(CancellationScheduler::new(
+            //         self.btc_parachain.clone(),
+            //         startup_height,
+            //         initial_btc_height,
+            //         account_id.clone(),
+            //     )
+            //     .handle_cancellation::<ReplaceCanceller>(replace_event_rx)),
+            // ),
+            // (
+            //     "Parachain Block Listener",
+            //     run(active_block_listener(
+            //         self.btc_parachain.clone(),
+            //         issue_event_tx.clone(),
+            //         replace_event_tx.clone(),
+            //     )),
+            // ),
+            // (
+            //     "Bitcoin Block Listener",
+            //     run(relay_block_listener(
+            //         self.btc_parachain.clone(),
+            //         issue_event_tx.clone(),
+            //         replace_event_tx.clone(),
+            //     )),
+            // ),
             (
                 "Redeem Request Listener",
                 run(listen_for_redeem_requests(
@@ -793,63 +796,63 @@ impl VaultService {
                     self.config.auto_rbf,
                 )),
             ),
-            (
-                "VaultId Registration Listener",
-                run(self.vault_id_manager.clone().listen_for_vault_id_registrations()),
-            ),
-            (
-                "Bitcoin Relay",
-                maybe_run(
-                    !self.config.no_bitcoin_block_relay,
-                    run_relayer(Runner::new(
-                        self.btc_rpc_master_wallet.clone(),
-                        self.btc_parachain.clone(),
-                        Config {
-                            start_height: self.config.bitcoin_relay_start_height,
-                            max_batch_size: self.config.max_batch_size,
-                            interval: Some(self.config.bitcoin_poll_interval_ms),
-                            btc_confirmations: self.config.bitcoin_relay_confirmations,
-                        },
-                        random_delay.clone(),
-                    )),
-                ),
-            ),
-            (
-                "Issue Executor",
-                maybe_run(
-                    !self.config.no_issue_execution && self.btc_rpc_master_wallet.is_full_node(),
-                    issue::process_issue_requests(
-                        self.btc_rpc_master_wallet.clone(),
-                        self.btc_parachain.clone(),
-                        issue_set.clone(),
-                        oldest_issue_btc_height,
-                        num_confirmations,
-                        random_delay,
-                    ),
-                ),
-            ),
-            (
-                "Bridge Metrics Listener",
-                maybe_run(
-                    !self.monitoring_config.no_prometheus,
-                    monitor_bridge_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
-                ),
-            ),
-            (
-                "Bridge Metrics Poller",
-                maybe_run(
-                    !self.monitoring_config.no_prometheus,
-                    poll_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
-                ),
-            ),
-            (
-                "Restart Timer",
-                run(async move {
-                    tokio::time::sleep(RESTART_INTERVAL).await;
-                    tracing::info!("Initiating periodic restart...");
-                    Err(Error::ClientShutdown)
-                }),
-            ),
+            // (
+            //     "VaultId Registration Listener",
+            //     run(self.vault_id_manager.clone().listen_for_vault_id_registrations()),
+            // ),
+            // (
+            //     "Bitcoin Relay",
+            //     maybe_run(
+            //         !self.config.no_bitcoin_block_relay,
+            //         run_relayer(Runner::new(
+            //             self.btc_rpc_master_wallet.clone(),
+            //             self.btc_parachain.clone(),
+            //             Config {
+            //                 start_height: self.config.bitcoin_relay_start_height,
+            //                 max_batch_size: self.config.max_batch_size,
+            //                 interval: Some(self.config.bitcoin_poll_interval_ms),
+            //                 btc_confirmations: self.config.bitcoin_relay_confirmations,
+            //             },
+            //             random_delay.clone(),
+            //         )),
+            //     ),
+            // ),
+            // (
+            //     "Issue Executor",
+            //     maybe_run(
+            //         !self.config.no_issue_execution && self.btc_rpc_master_wallet.is_full_node(),
+            //         issue::process_issue_requests(
+            //             self.btc_rpc_master_wallet.clone(),
+            //             self.btc_parachain.clone(),
+            //             issue_set.clone(),
+            //             oldest_issue_btc_height,
+            //             num_confirmations,
+            //             random_delay,
+            //         ),
+            //     ),
+            // ),
+            // (
+            //     "Bridge Metrics Listener",
+            //     maybe_run(
+            //         !self.monitoring_config.no_prometheus,
+            //         monitor_bridge_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
+            //     ),
+            // ),
+            // (
+            //     "Bridge Metrics Poller",
+            //     maybe_run(
+            //         !self.monitoring_config.no_prometheus,
+            //         poll_metrics(self.btc_parachain.clone(), self.vault_id_manager.clone()),
+            //     ),
+            // ),
+            // (
+            //     "Restart Timer",
+            //     run(async move {
+            //         tokio::time::sleep(RESTART_INTERVAL).await;
+            //         tracing::info!("Initiating periodic restart...");
+            //         Err(Error::ClientShutdown)
+            //     }),
+            // ),
         ];
 
         run_and_monitor_tasks(self.shutdown.clone(), tasks).await?;
@@ -926,7 +929,11 @@ impl VaultService {
         // has been processed already prior to restarting
         tracing::info!("Waiting for new block...");
         let startup_height = self.btc_parachain.get_current_chain_height().await?;
+        tracing::info!("startup_height: {}",startup_height);
+
         while startup_height == self.btc_parachain.get_current_chain_height().await? {
+            tracing::info!("startup_height: {}",startup_height);
+
             sleep(CHAIN_HEIGHT_POLLING_INTERVAL).await;
         }
         tracing::info!("Got new block...");

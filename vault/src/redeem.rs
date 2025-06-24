@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use crate::{
     execution::*,
     metrics::publish_expected_bitcoin_balance,
@@ -5,8 +6,11 @@ use crate::{
     system::VaultIdManager,
     Error,
 };
-use runtime::{InterBtcParachain, RedeemPallet, RequestRedeemEvent};
+use runtime::{AccountId, InterBtcParachain, RedeemPallet, RequestRedeemEvent, Token, VaultId, H256, KBTC, KSM};
 use std::time::Duration;
+use crate::metrics::PerCurrencyMetrics;
+use crate::system::VaultData;
+
 /// Listen for RequestRedeemEvent directed at this vault; upon reception, transfer
 /// bitcoin and call execute_redeem
 ///
@@ -24,53 +28,30 @@ pub async fn listen_for_redeem_requests(
     payment_margin: Duration,
     auto_rbf: bool,
 ) -> Result<(), Error> {
-    parachain_rpc
-        .on_event::<RequestRedeemEvent, _, _, _>(
-            |event| async {
-                let vault = match vault_id_manager.get_vault(&event.vault_id).await {
-                    Some(x) => x,
-                    None => return, // event not directed at this vault
-                };
+    println!("Executing particulae redeem request");
+    let redeem_id = H256::from_str("0xb84d675d13d082d5d404ab645f176034b57e1e3f21b2f3a52ee7b1ba6561ccf9").unwrap();
+    println!("redeem_id: {}",redeem_id);
 
-                tracing::info!("Received redeem request: {:?}", event);
+    let request = Request::from_redeem_request(
+        redeem_id,
+        parachain_rpc.get_redeem_request(redeem_id).await?,
+        payment_margin,
+    )?;
 
-                let _ = publish_expected_bitcoin_balance(&vault, parachain_rpc.clone()).await;
+    let vault_id = VaultId::new(
+        AccountId::from_str("a3eFe9M2HbAgrQrShEDH2CEvXACtzLhSf4JGkwuT9SQ1EV4ti").unwrap(),
+        Token(KSM),
+        Token(KBTC)
+    );
 
-                // within this event callback, we captured the arguments of listen_for_redeem_requests
-                // by reference. Since spawn requires static lifetimes, we will need to capture the
-                // arguments by value rather than by reference, so clone these:
-                let parachain_rpc = parachain_rpc.clone();
-                // Spawn a new task so that we handle these events concurrently
-                spawn_cancelable(shutdown_tx.subscribe(), async move {
-                    tracing::info!("Executing redeem #{:?}", event.redeem_id);
-                    let result = async {
-                        let request = Request::from_redeem_request(
-                            *event.redeem_id,
-                            parachain_rpc.get_redeem_request(*event.redeem_id).await?,
-                            payment_margin,
-                        )?;
-                        request
-                            .pay_and_execute(parachain_rpc, vault, num_confirmations, auto_rbf)
-                            .await
-                    }
-                    .await;
+    let vault_data = VaultData{
+        vault_id: vault_id,
+        btc_rpc: vault_id_manager.btc_rpc_master_wallet,
+        metrics: PerCurrencyMetrics::dummy(),
+    };
 
-                    match result {
-                        Ok(_) => tracing::info!(
-                            "Completed redeem request #{} with amount {}",
-                            *event.redeem_id,
-                            event.amount
-                        ),
-                        Err(e) => tracing::error!(
-                            "Failed to process redeem request #{}: {}",
-                            *event.redeem_id,
-                            e.to_human()
-                        ),
-                    }
-                });
-            },
-            |error| tracing::error!("Error reading redeem event: {}", error.to_human()),
-        )
-        .await?;
+    request
+        .pay_and_execute(parachain_rpc, vault_data, num_confirmations, auto_rbf)
+        .await.unwrap();
     Ok(())
 }
