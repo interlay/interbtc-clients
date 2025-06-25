@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["account_id","signer"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ExitError","ExitFatal","ExitReason","ExitRevert","ExitSucceed"]};

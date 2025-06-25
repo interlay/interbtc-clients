@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Execute","ForceDefaultXcmVersion","ForceSubscribeVersionNotify","ForceSuspension","ForceUnsubscribeVersionNotify","ForceXcmVersion","LimitedReserveTransferAssets","LimitedTeleportAssets","ReserveTransferAssets","Send","TeleportAssets"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["script_find_and_remove"]};

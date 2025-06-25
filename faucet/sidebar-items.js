@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ABOUT","AUTHORS","NAME","VERSION"],"enum":["ProcMacroHack"],"fn":["main"],"macro":["proc_macro_call"],"mod":["error","http","service"],"struct":["AllowanceConfig","FaucetConfig","Opts"]};

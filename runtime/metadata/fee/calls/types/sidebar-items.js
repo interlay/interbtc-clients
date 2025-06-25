@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["SetCommission","SetIssueFee","SetIssueGriefingCollateral","SetPremiumRedeemFee","SetPunishmentFee","SetRedeemFee","SetReplaceGriefingCollateral","WithdrawRewards"]};

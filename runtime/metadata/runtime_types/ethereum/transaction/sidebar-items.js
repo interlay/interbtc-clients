@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TransactionAction","TransactionV2"],"struct":["AccessListItem","EIP1559Transaction","EIP2930Transaction","LegacyTransaction","TransactionRecoveryId","TransactionSignature"]};

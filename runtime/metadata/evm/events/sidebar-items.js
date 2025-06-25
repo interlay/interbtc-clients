@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Created","CreatedFailed","Executed","ExecutedFailed","Log"]};

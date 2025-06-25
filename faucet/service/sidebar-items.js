@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TerminationStatus"],"fn":["on_shutdown","run_cancelable","wait_or_shutdown"],"opaque":[""],"static":["CALLSITE","META"],"struct":["ShutdownReceiver","ShutdownSender"]};
