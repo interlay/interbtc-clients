@@ -19,6 +19,7 @@ use runtime::{
 };
 use std::{collections::HashMap, convert::TryInto, time::Duration};
 use std::str::FromStr;
+use hex::ToHex;
 use tokio::time::sleep;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -410,6 +411,14 @@ impl Request {
             _ => {}
         }
 
+        println!("hash: {}",self.hash);
+        println!("\n\nraw_user_tx: {:?}",tx_metadata.proof.raw_user_tx.encode_hex::<String>());
+        println!("\n\nuser_tx_proof: {:?}",tx_metadata.proof.user_tx_proof.encode_hex::<String>());
+
+        println!("\n\ncoinbase_tx_proof: {:?}",tx_metadata.proof.coinbase_tx_proof.encode_hex::<String>());
+        println!("\n\nraw_coinbase_tx: {:?}",tx_metadata.proof.raw_coinbase_tx.encode_hex::<String>());
+
+        // panic!("\n\n\n ----- Atlast ----- ");
         // Retry until success or timeout, explicitly handle the cases
         // where the redeem has expired or the rpc has disconnected
         runtime::notify_retry(
