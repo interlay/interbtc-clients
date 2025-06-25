@@ -376,7 +376,7 @@ dependencies = [
 [[package]]
 name = "bitcoin"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=4626e80#4626e806c6a12ea6ecbcce8a08a6e833d84c9d33"
+source = "git+https://github.com/interlay/interbtc?rev=ab4136b#ab4136b66086ca50fc13880feb8b06c93dc70530"
 dependencies = [
  "bitcoin_hashes 0.7.6",
  "hex",
@@ -2224,7 +2224,7 @@ dependencies = [
 [[package]]
 name = "interbtc-primitives"
 version = "1.2.0"
-source = "git+https://github.com/interlay/interbtc?rev=4626e80#4626e806c6a12ea6ecbcce8a08a6e833d84c9d33"
+source = "git+https://github.com/interlay/interbtc?rev=ab4136b#ab4136b66086ca50fc13880feb8b06c93dc70530"
 dependencies = [
  "bitcoin 1.2.0",
  "bstringify",
