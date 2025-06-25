@@ -59,7 +59,7 @@ rand = { version = "0.7", optional = true }
 
 [dependencies.primitives]
 git = "https://github.com/interlay/interbtc"
-rev = "4626e80"
+rev = "77ff884"
 package = "interbtc-primitives"
 default_features = false
 # NOTE: sp-runtime still in lockfile but not used
@@ -68,7 +68,7 @@ features = ["std"]
 
 [dependencies.module-bitcoin]
 git = "https://github.com/interlay/interbtc"
-rev = "4626e80"
+rev = "77ff884"
 package = "bitcoin"
 default_features = false
 features = ["std", "parser"]
