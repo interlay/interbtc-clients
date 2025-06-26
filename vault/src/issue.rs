@@ -250,7 +250,7 @@ async fn process_transaction_and_execute_issue(
             return Ok(());
         };
         // tx has output to address
-        match transaction.get_payment_amount_to(payload) {
+        match transaction.get_largest_payment_amount_to(payload) {
             None => {
                 // this should never happen, so use WARN
                 tracing::warn!(
