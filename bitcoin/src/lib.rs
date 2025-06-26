@@ -73,7 +73,7 @@ pub const DEFAULT_MAX_TX_COUNT: usize = 100_000_000;
 /// the bitcoin core version.
 /// See https://github.com/bitcoin/bitcoin/blob/833add0f48b0fad84d7b8cf9373a349e7aef20b4/src/rpc/net.cpp#L627
 /// and https://github.com/bitcoin/bitcoin/blob/833add0f48b0fad84d7b8cf9373a349e7aef20b4/src/clientversion.h#L33-L37
-pub const BITCOIN_CORE_VERSION_23: usize = 230_000;
+pub const BITCOIN_CORE_VERSION_26: usize = 260_000;
 const NOT_IN_MEMPOOL_ERROR_CODE: i32 = BitcoinRpcError::RpcInvalidAddressOrKey as i32;
 
 // Time to sleep before retry on startup.
@@ -280,7 +280,7 @@ async fn connect(rpc: &Client, connection_timeout: Duration) -> Result<Network, 
                     info!("Connected to {}", chain);
                     info!("Bitcoin version {}", version);
 
-                    if version >= BITCOIN_CORE_VERSION_23 {
+                    if version >= BITCOIN_CORE_VERSION_26 {
                         return Err(Error::IncompatibleVersion(version))
                     }
 
@@ -1033,7 +1033,9 @@ impl BitcoinCoreApi for BitcoinCore {
             } else {
                 info!("Creating wallet {wallet_name}...");
                 // wallet does not exist, create
-                let result = self.rpc.create_wallet(wallet_name, None, None, None, None)?;
+                let result = self
+                    .rpc
+                    .create_wallet(wallet_name, None, None, None, None, Some(false))?;
                 if let Some(warning) = result.warning {
                     if !warning.is_empty() {
                         warn!("Received warning while creating wallet {wallet_name}: {warning}");
