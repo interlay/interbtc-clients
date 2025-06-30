@@ -1321,15 +1321,14 @@ impl RedeemPallet for InterBtcParachain {
     }
 
     async fn execute_redeem(&self, redeem_id: H256, raw_proof: &RawTransactionProof) -> Result<(), Error> {
-        let full_tx_proof = build_full_tx_proof(raw_proof)?;
-        
-        panic!("full_tx_proof: {:#?}",full_tx_proof.coinbase_proof.transaction);
-        // self.with_unique_signer(
-        //     metadata::tx()
-        //         .redeem()
-        //         .execute_redeem(Static(redeem_id), build_full_tx_proof(raw_proof)?),
-        // )
-        // .await?;
+        let redeem_btc_tx = build_full_tx_proof(raw_proof)?;
+        println!("redeem_btc_tx: {:#?}",redeem_btc_tx);
+        self.with_unique_signer(
+            metadata::tx()
+                .redeem()
+                .execute_redeem(Static(redeem_id), build_full_tx_proof(raw_proof)?),
+        )
+            .await?;
         Ok(())
     }
 

@@ -6,7 +6,7 @@ edition = "2018"
 description = "The Vault client intermediates between Bitcoin Core and the BTC Parachain."
 
 [features]
-parachain-metadata-interlay = ["runtime/parachain-metadata-interlay"]
+parachain-metadata-interlay = ["runtime/parachain-metadata-interlay", "bitcoin/light-client"]
 parachain-metadata-kintsugi = ["runtime/parachain-metadata-kintsugi", "bitcoin/light-client"]
 uses-bitcoind = [] # run tests relying on bitcoind regtest node
 

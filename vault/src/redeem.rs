@@ -1,15 +1,15 @@
-use std::str::FromStr;
 use crate::{
     execution::*,
-    metrics::publish_expected_bitcoin_balance,
+    metrics::{publish_expected_bitcoin_balance, PerCurrencyMetrics},
     service::{spawn_cancelable, ShutdownSender},
-    system::VaultIdManager,
+    system::{VaultData, VaultIdManager},
     Error,
 };
-use runtime::{AccountId, InterBtcParachain, RedeemPallet, RequestRedeemEvent, Token, VaultId, H256, KBTC, KSM};
-use std::time::Duration;
-use crate::metrics::PerCurrencyMetrics;
-use crate::system::VaultData;
+use runtime::{
+    AccountId, ForeignAsset, InterBtcParachain, RedeemPallet, RequestRedeemEvent, Token, VaultId, DOT, H256, IBTC,
+    KBTC, KSM,
+};
+use std::{str::FromStr, time::Duration};
 
 /// Listen for RequestRedeemEvent directed at this vault; upon reception, transfer
 /// bitcoin and call execute_redeem
@@ -28,9 +28,11 @@ pub async fn listen_for_redeem_requests(
     payment_margin: Duration,
     auto_rbf: bool,
 ) -> Result<(), Error> {
-    println!("Executing particulae redeem request");
-    let redeem_id = H256::from_str("0xb84d675d13d082d5d404ab645f176034b57e1e3f21b2f3a52ee7b1ba6561ccf9").unwrap();
-    println!("redeem_id: {}",redeem_id);
+    println!("Executing particular redeem request");
+
+    // update redeem id, vault id and btc txid
+    let redeem_id = H256::from_str("0xab6810beb213f6c0e87032acdfa51887ba20166099e4d0d65d2ecbe5433b725b").unwrap();
+    println!("redeem_id: {}", redeem_id);
 
     let request = Request::from_redeem_request(
         redeem_id,
@@ -39,19 +41,20 @@ pub async fn listen_for_redeem_requests(
     )?;
 
     let vault_id = VaultId::new(
-        AccountId::from_str("a3eFe9M2HbAgrQrShEDH2CEvXACtzLhSf4JGkwuT9SQ1EV4ti").unwrap(),
-        Token(KSM),
-        Token(KBTC)
+        AccountId::from_str("wdAMp3A8rznqnuzmpbBq4Hva9UnJAmUyN3AwHuhECsCDdcWtw").unwrap(),
+        ForeignAsset(3),
+        Token(IBTC),
     );
 
-    let vault_data = VaultData{
-        vault_id: vault_id,
+    let vault_data = VaultData {
+        vault_id,
         btc_rpc: vault_id_manager.btc_rpc_master_wallet,
         metrics: PerCurrencyMetrics::dummy(),
     };
 
     request
         .pay_and_execute(parachain_rpc, vault_data, num_confirmations, auto_rbf)
-        .await.unwrap();
+        .await
+        .unwrap();
     Ok(())
 }

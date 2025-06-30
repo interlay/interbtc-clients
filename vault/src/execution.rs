@@ -11,15 +11,14 @@ use bitcoin::{
 };
 use futures::{future::Either, stream::StreamExt, try_join, TryStreamExt};
 use governor::RateLimiter;
+use hex::ToHex;
 use runtime::{
     BtcAddress, BtcRelayPallet, Error as RuntimeError, FixedPointNumber, FixedU128, H256Le, InterBtcParachain,
     InterBtcRedeemRequest, InterBtcReplaceRequest, OraclePallet, PartialAddress, PrettyPrint, RedeemPallet,
     RedeemRequestStatus, ReplacePallet, ReplaceRequestStatus, SecurityPallet, UtilFuncs, VaultId, VaultRegistryPallet,
     H256,
 };
-use std::{collections::HashMap, convert::TryInto, time::Duration};
-use std::str::FromStr;
-use hex::ToHex;
+use std::{collections::HashMap, convert::TryInto, str::FromStr, time::Duration};
 use tokio::time::sleep;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -197,7 +196,7 @@ impl Request {
                 auto_rbf,
             )
             .await?;
-        println!("\ntx_metadata: {:?}",tx_metadata);
+        println!("\ntx_metadata: {:?}", tx_metadata);
         // let _ = update_bitcoin_metrics(&vault, tx_metadata.fee, self.fee_budget).await;
         self.execute(parachain_rpc, tx_metadata).await
     }
@@ -234,7 +233,7 @@ impl Request {
         //     )
         //     .await?;
 
-        let txid = Txid::from_str("554fbf37f2d777b8a7c2f0a0a03e7a99995336eca58f6bb8556db4c6489483f3").unwrap();
+        let txid = Txid::from_str("945d99b05ff8a5515edf5e34ec5eeb4786e6be177581a033f63e577c3d4aa42c").unwrap();
         self.wait_for_inclusion(parachain_rpc, btc_rpc, num_confirmations, txid, auto_rbf)
             .await
     }
@@ -411,12 +410,24 @@ impl Request {
             _ => {}
         }
 
-        println!("hash: {}",self.hash);
-        println!("\n\nraw_user_tx: {:?}",tx_metadata.proof.raw_user_tx.encode_hex::<String>());
-        println!("\n\nuser_tx_proof: {:?}",tx_metadata.proof.user_tx_proof.encode_hex::<String>());
+        println!("hash: {}", self.hash);
+        println!(
+            "\n\nraw_user_tx: {:?}",
+            tx_metadata.proof.raw_user_tx.encode_hex::<String>()
+        );
+        println!(
+            "\n\nuser_tx_proof: {:?}",
+            tx_metadata.proof.user_tx_proof.encode_hex::<String>()
+        );
 
-        println!("\n\ncoinbase_tx_proof: {:?}",tx_metadata.proof.coinbase_tx_proof.encode_hex::<String>());
-        println!("\n\nraw_coinbase_tx: {:?}",tx_metadata.proof.raw_coinbase_tx.encode_hex::<String>());
+        println!(
+            "\n\ncoinbase_tx_proof: {:?}",
+            tx_metadata.proof.coinbase_tx_proof.encode_hex::<String>()
+        );
+        println!(
+            "\n\nraw_coinbase_tx: {:?}",
+            tx_metadata.proof.raw_coinbase_tx.encode_hex::<String>()
+        );
 
         // panic!("\n\n\n ----- Atlast ----- ");
         // Retry until success or timeout, explicitly handle the cases

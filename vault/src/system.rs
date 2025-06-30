@@ -23,8 +23,8 @@ use runtime::{
     RegisterVaultEvent, RuntimeCurrencyInfo, StoreMainChainHeaderEvent, TryFromSymbol, UpdateActiveBlockEvent,
     UtilFuncs, VaultCurrencyPair, VaultId, VaultRegistryPallet,
 };
-use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 use sha2::Digest;
+use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 use tokio::{sync::RwLock, time::sleep};
 
 pub const VERSION: &str = git_version!(args = ["--tags"]);
@@ -376,8 +376,8 @@ impl VaultIdManager {
     }
 
     pub async fn get_vault(&self, vault_id: &VaultId) -> Option<VaultData> {
-        println!("vault_id: {:#?}",vault_id);
-        println!("is_empty read: {:#?}",self.vault_data.read().await.is_empty());
+        println!("vault_id: {:#?}", vault_id);
+        println!("is_empty read: {:#?}", self.vault_data.read().await.is_empty());
         self.vault_data.read().await.get(vault_id).cloned()
     }
 
@@ -682,7 +682,8 @@ impl VaultService {
         // let listen_for_registered_assets =
         //     |rpc: InterBtcParachain| async move { rpc.listen_for_registered_assets().await };
         //
-        // let listen_for_lending_markets = |rpc: InterBtcParachain| async move { rpc.listen_for_lending_markets().await };
+        // let listen_for_lending_markets = |rpc: InterBtcParachain| async move { rpc.listen_for_lending_markets().await
+        // };
         //
         // let listen_for_fee_rate_estimate_changes =
         //     |rpc: InterBtcParachain| async move { rpc.listen_for_fee_rate_changes().await };
@@ -929,10 +930,10 @@ impl VaultService {
         // has been processed already prior to restarting
         tracing::info!("Waiting for new block...");
         let startup_height = self.btc_parachain.get_current_chain_height().await?;
-        tracing::info!("startup_height: {}",startup_height);
+        tracing::info!("startup_height: {}", startup_height);
 
         while startup_height == self.btc_parachain.get_current_chain_height().await? {
-            tracing::info!("startup_height: {}",startup_height);
+            tracing::info!("startup_height: {}", startup_height);
 
             sleep(CHAIN_HEIGHT_POLLING_INTERVAL).await;
         }
