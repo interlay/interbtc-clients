@@ -9,15 +9,15 @@ jobs:
   publish:
     runs-on: [self-hosted, linux]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: git fetch --prune --unshallow
       - name: Install System Dependencies
         run: |
-            sudo apt-get update && sudo apt-get install -y \
-            cmake pkg-config libssl-dev git clang curl libc6-dev protobuf-compiler
+          sudo apt-get update && sudo apt-get install -y \
+          cmake pkg-config libssl-dev git clang curl libc6-dev protobuf-compiler
       - name: Set variables
         run: |
-            echo "TOOLCHAIN=$(rustup show active-toolchain | cut -d " " -f1)" >> $GITHUB_ENV
+          echo "TOOLCHAIN=$(rustup show active-toolchain | cut -d " " -f1)" >> $GITHUB_ENV
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ env.TOOLCHAIN }}
@@ -30,7 +30,7 @@ jobs:
         run: cp .github/docs-index.html target/doc/index.html
       - name: Deploy to GitHub Pages
         if: success()
-        uses: crazy-max/ghaction-github-pages@v3
+        uses: crazy-max/ghaction-github-pages@v4
         with:
           target_branch: gh-pages
           build_dir: target/doc/
