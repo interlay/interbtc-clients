@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AcceptNewIssues","RecoverVaultId","RegisterPublicKey","RegisterVault","ReportUndercollateralizedVault","SetCustomSecureThreshold","SetLiquidationCollateralThreshold","SetMinimumCollateral","SetPremiumRedeemThreshold","SetSecureCollateralThreshold","SetSystemCollateralCeiling"]};

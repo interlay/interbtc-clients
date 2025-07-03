@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Call","CallOldWeight","Instantiate","InstantiateOldWeight","InstantiateWithCode","InstantiateWithCodeOldWeight","RemoveCode","SetCode","UploadCode"]};

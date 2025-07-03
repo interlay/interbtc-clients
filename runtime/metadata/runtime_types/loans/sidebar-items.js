@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Versions"],"mod":["pallet","rate_model","types"]};

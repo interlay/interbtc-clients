@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["COINGECKO_API_KEY_PARAMETER"],"fn":["extract_response"],"opaque":[""],"struct":["CoinGeckoApi","CoinGeckoCli"]};

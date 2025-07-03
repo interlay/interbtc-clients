@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CancelProposal","CancelReferendum","ClearPublicProposals","FastTrack","FastTrackReferendum","Propose","RemoveVote","Second","SpendFromTreasury","TableProposal","Vote"]};

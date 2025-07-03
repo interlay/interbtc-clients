@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["deserialize","deserialize_partial","serialize"],"mod":["encode","params","serde"],"struct":["Params"],"trait":["Decodable","Encodable","ReadExt","WriteExt"]};

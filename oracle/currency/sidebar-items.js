@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Currency"],"fn":["deserialize_as_string","deserialize_as_tuple"],"struct":["CurrencyPair","CurrencyPairAndPrice"],"trait":["CurrencyInfo","ExchangeRate"]};

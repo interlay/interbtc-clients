@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AssetSwap","BootstrapClaim","BootstrapContribute","BootstrapCreated","BootstrapEnd","BootstrapRefund","BootstrapUpdate","ChargeReward","DistributeReward","LiquidityAdded","LiquidityRemoved","NewFeePoint","NewFeeRate","PairCreated","WithdrawReward"]};

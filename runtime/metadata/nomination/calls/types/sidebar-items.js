@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["DepositCollateral","OptInToNomination","OptOutOfNomination","SetNominationEnabled","SetNominationLimit","WithdrawCollateral"]};

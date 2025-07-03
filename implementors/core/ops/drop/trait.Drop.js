@@ -1,0 +1,4 @@
+(function() {var implementors = {
+"runner":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/ops/drop/trait.Drop.html\" title=\"trait core::ops::drop::Drop\">Drop</a> for <a class=\"struct\" href=\"runner/runner/struct.Runner.html\" title=\"struct runner::runner::Runner\">Runner</a>"]],
+"vault":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/ops/drop/trait.Drop.html\" title=\"trait core::ops::drop::Drop\">Drop</a> for <a class=\"struct\" href=\"vault/process/struct.PidFile.html\" title=\"struct vault::process::PidFile\">PidFile</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

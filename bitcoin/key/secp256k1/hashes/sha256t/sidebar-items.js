@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["sha256t_hash_newtype"],"struct":["Hash"],"trait":["Tag"]};
