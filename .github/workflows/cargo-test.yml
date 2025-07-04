@@ -63,26 +63,26 @@ jobs:
         run: |
           cargo build --release --workspace --features ${{ matrix.metadata }}
       - name: upload artifacts - vault
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vault-${{ matrix.metadata }}
           path: target/release/vault
           retention-days: 10
       - name: upload artifacts - oracle
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: oracle-${{ matrix.metadata }}
           path: target/release/oracle
           retention-days: 10
       - name: upload artifacts - faucet
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: faucet-${{ matrix.metadata }}
           path: target/release/faucet
           retention-days: 10
       - name: upload artifacts - runner
         if: matrix.metadata == 'parachain-metadata-kintsugi'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: runner
           path: target/release/runner
@@ -108,7 +108,7 @@ jobs:
           echo "branch_name=$(echo ${GITHUB_REF##*/})" >> $GITHUB_OUTPUT
           echo "tag=$(echo ${{ matrix.client }}-${{ matrix.metadata }}-)" >> $GITHUB_OUTPUT
           echo "ts=$TS" >> $GITHUB_OUTPUT
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.client }}-${{ matrix.metadata }}
           path: artifacts/
@@ -125,7 +125,7 @@ jobs:
           docker context create builders
       - name: Set up Docker Buildx
         id: buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
         with:
           endpoint: builders
 
@@ -149,7 +149,7 @@ jobs:
             type=ref,event=tag,prefix=${{ matrix.client }}-${{ matrix.metadata }}-
       - name: Build and push
         id: docker_build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -173,9 +173,10 @@ jobs:
           TS=$(date +%s)
           echo "branch_name=$(echo ${GITHUB_REF##*/})" >> $GITHUB_OUTPUT
           echo "ts=$TS" >> $GITHUB_OUTPUT
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts/
+          pattern: "!*.dockerbuild"
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -185,7 +186,7 @@ jobs:
           docker context create builders
       - name: Set up Docker Buildx
         id: buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
         with:
           endpoint: builders
 
@@ -208,7 +209,7 @@ jobs:
 
       - name: Build and push
         id: docker_build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -223,9 +224,10 @@ jobs:
     needs: [test]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: "!*.dockerbuild"
 
       - run: |
           cd ./artifacts
@@ -242,7 +244,7 @@ jobs:
 
           git-chglog --output CHANGELOG.md $GITHUB_REF_NAME
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           body_path: CHANGELOG.md
           draft: true
