@@ -13,7 +13,7 @@ light-client = []
 
 [dependencies]
 thiserror = "1.0"
-bitcoincore-rpc = { git = "https://github.com/rust-bitcoin/rust-bitcoincore-rpc", rev = "7bd815f1e1ae721404719ee8e6867064b7c68494" }
+bitcoincore-rpc = { git = "https://github.com/interlay/rust-bitcoincore-rpc", rev = "671a78f638179c8951c9932061fd2bb348313a2c" }
 hex = "0.4.2"
 async-trait = "0.1.40"
 tokio = { version = "1.0", features = ["full"] }
