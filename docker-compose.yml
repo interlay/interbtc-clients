@@ -1,6 +1,7 @@
 services:
     interbtc:
         image: "interlayhq/interbtc:1.25.7-kintsugi"
+        platform: linux/amd64
         command:
             - --rpc-external
             - --ws-external
@@ -12,6 +13,7 @@ services:
             - "9944:9944"
     bitcoind:
         image: "ruimarinho/bitcoin-core:22"
+        platform: linux/amd64
         command:
             - -regtest
             - -server
@@ -24,6 +26,7 @@ services:
             - "18443:18443"
     bitcoin-cli:
         image: "ruimarinho/bitcoin-core:22"
+        platform: linux/amd64
         command:
             - /bin/sh
             - -c
@@ -34,6 +37,7 @@ services:
                 bitcoin-cli -regtest -rpcconnect=bitcoind -rpcwait -rpcuser=rpcuser -rpcpassword=rpcpassword generatetoaddress 101 $${ALICE_ADDRESS}
     electrs:
         image: "interlayhq/electrs:latest"
+        platform: linux/amd64
         command:
             - electrs
             - -vvvv
