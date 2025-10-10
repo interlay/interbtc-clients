@@ -1,4 +1,3 @@
-version: "3.8"
 services:
     interbtc:
         image: "interlayhq/interbtc:1.25.7-kintsugi"
