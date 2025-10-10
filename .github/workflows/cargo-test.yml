@@ -58,6 +58,7 @@ jobs:
           ELECTRS_URL: http://localhost:3002
         run: |
           docker-compose up -d bitcoind bitcoin-cli electrs
+          docker-compose run --rm interbtc --version
           cargo test --release --workspace --features ${{ matrix.metadata }} --features uses-bitcoind
       - name: build
         run: |

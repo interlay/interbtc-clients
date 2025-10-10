@@ -51,7 +51,7 @@ pub async fn setup_provider(key: AccountKeyring) -> InterBtcParachain {
     let parachain_rpc = InterBtcParachain::from_url_with_retry(
         &"ws://127.0.0.1:9944".to_string(),
         signer.clone(),
-        Duration::from_secs(20),
+        Duration::from_secs(100),
         shutdown_tx,
     )
     .await
