@@ -77,6 +77,7 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
 
     pub async fn start<S: Service<Config>>(&self) -> Result<(), Error> {
         loop {
+            tracing::info!("Starting connection manager...");
             tracing::info!("Version: {}", S::VERSION);
             tracing::info!("AccountId: {}", self.signer.account_id.pretty_print());
 
