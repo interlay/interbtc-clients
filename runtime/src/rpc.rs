@@ -150,19 +150,18 @@ impl InterBtcParachain {
 
         let fork_bound = self.get_chain_counter().await.unwrap().saturating_add(1);
 
-        
-
-        let inner_call = metadata::tx().btc_relay().store_block_header(
-            Static(header),
-            fork_bound,
-        );
+        let inner_call = metadata::tx()
+            .btc_relay()
+            .store_block_header(Static(header), fork_bound);
 
         log::info!("Inner call validation: {:?}", self.api.tx().validate(&inner_call));
 
-        let outer_call = metadata::tx().utility().batch(vec![EncodedCall::BTCRelay(metadata::runtime_types::btc_relay::pallet::Call::store_block_header {
-            block_header: Static(header),
-            fork_bound,
-        })]);
+        let outer_call = metadata::tx().utility().batch(vec![EncodedCall::BTCRelay(
+            metadata::runtime_types::btc_relay::pallet::Call::store_block_header {
+                block_header: Static(header),
+                fork_bound,
+            },
+        )]);
         log::info!("outer call validation: {:?}", self.api.tx().validate(&outer_call));
 
         // let
