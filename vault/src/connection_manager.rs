@@ -99,6 +99,8 @@ impl<Config: Clone + Send + 'static, F: Fn()> ConnectionManager<Config, F> {
             )
             .await?;
 
+            btc_parachain.print_debug_info().await;
+
             let config_copy = self.bitcoin_config.clone();
             let network_copy = bitcoin_core_master.network();
 

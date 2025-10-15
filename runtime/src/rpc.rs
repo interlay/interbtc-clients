@@ -7,7 +7,7 @@ use crate::{
     AccountId, AssetRegistry, CurrencyId, Error, InterBtcRuntime, InterBtcSigner, RetryPolicy, RichH256Le, SubxtError,
 };
 use async_trait::async_trait;
-use bitcoin::RawTransactionProof;
+use bitcoin::{FromHex, RawTransactionProof};
 use codec::{Decode, Encode};
 use futures::{future::join_all, stream::StreamExt, FutureExt, SinkExt, Stream};
 use module_bitcoin::{
@@ -17,6 +17,7 @@ use module_bitcoin::{
 };
 use primitives::{BalanceWrapper, UnsignedFixedPoint};
 use serde_json::Value;
+use sp_core::bytes::to_hex;
 use std::{convert::TryInto, future::Future, ops::Range, sync::Arc, time::Duration};
 use subxt::{
     blocks::ExtrinsicEvents,
@@ -138,6 +139,35 @@ impl InterBtcParachain {
         parachain_rpc.store_assets_metadata().await?;
         parachain_rpc.store_lend_tokens().await?;
         Ok(parachain_rpc)
+    }
+
+    pub async fn print_debug_info(&self) {
+        log::info!("metadata hash: {}", to_hex(&self.api.metadata().hasher().hash(), false));
+        // log::info!(""
+        // let batch_hash =
+        let header = RawBlockHeader(Vec::from_hex("010000007de867cc8adc5cc8fb6b898ca4462cf9fd667d7830a275277447e60800000000338f121232e169d3100edd82004dc2a1f0e1f030c6c488fa61eafa930b0528fe021f7449ffff001d36b4af9a").unwrap());
+        let header = parse_block_header(&header.0).unwrap();
+
+        let fork_bound = self.get_chain_counter().await.unwrap().saturating_add(1);
+
+        
+
+        let inner_call = metadata::tx().btc_relay().store_block_header(
+            Static(header),
+            fork_bound,
+        );
+
+        log::info!("Inner call validation: {:?}", self.api.tx().validate(&inner_call));
+
+        let outer_call = metadata::tx().utility().batch(vec![EncodedCall::BTCRelay(metadata::runtime_types::btc_relay::pallet::Call::store_block_header {
+            block_header: Static(header),
+            fork_bound,
+        })]);
+        log::info!("outer call validation: {:?}", self.api.tx().validate(&outer_call));
+
+        // let
+        // let res = btc_parachain.store_block_headers(vec![header]).await;
+        // tracing::info!("res: {:?}", res.map_err(|x| x.to_human()));
     }
 
     #[cfg(feature = "testing-utils")]
